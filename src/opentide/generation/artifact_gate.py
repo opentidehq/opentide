@@ -69,10 +69,6 @@ def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
             rel_path = path.relative_to(repo_root.resolve())
             specs.append((f"{REPO_PREFIX}{rel_path.as_posix()}", path))
 
-    snippet = Path(paths["snippet_file"])
-    if snippet.is_file():
-        specs.append((f"{TIDE_PREFIX}.vscode/Model Templates.code-snippets", snippet))
-
     return specs
 
 

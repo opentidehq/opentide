@@ -6,7 +6,6 @@
   "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/Microsoft Sentinel Template.yaml": "ef0c08ec3a436846a7f8e2b7daabc60bee4a61fc8649176edab6cb614ae61642",
   "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/Sentinel One Template.yaml": "3164c1fae0f14aab2c91cfac144f2707afcb89b53557e125ea2d9582e27cfb58",
   "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/Splunk Enterprise Template.yaml": "1f084ffc2ae9fe27d91352cc674045313db5fc05d0e551bada6475de20624965",
-  "tide:.vscode/Model Templates.code-snippets": "ab89d2ac4598923877d75e0620c9a6df801c90c00dff44cf0f3abd50b4aedb9f",
   "tide:Schemas/Configurations/visibility.schema.json": "68ec162d59a1464a40d4f7d8a2c5dfe828feaa0099e4844258b3d4077e441cdc",
   "tide:Schemas/Detection Objective.schema.json": "a58a3fb61509879d61d0758082601e78646539a6dd544090ab4ab42d624e3eb5",
   "tide:Schemas/MDR Schema.json": "7579108e2252f248a10fe0377b5b3403e2dafce71f081588e9f1ff0b1564e20c",
