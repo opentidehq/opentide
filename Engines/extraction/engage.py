@@ -6,6 +6,7 @@ import yaml
 from pathlib import Path
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
+from Engines.modules.files import IndentFullDumper
 from Engines.modules.tide import DataTide
 
 RESOURCE_PATH = Path(DataTide.Configurations.Global.Paths.Core.resources)
@@ -14,11 +15,6 @@ ENGAGE_DATA = DataTide.Configurations.Resources.engage["matrix"]
 vocab_folder = Path(DataTide.Configurations.Global.Paths.Core.vocabularies)
 out_file = vocab_folder / "MITRE Engage.yaml"
 
-
-class IndentFullDumper(yaml.Dumper):
-
-    def increase_indent(self, flow=False, indentless=False):
-        return super(IndentFullDumper, self).increase_indent(flow, False)
 
 
 df = pd.read_excel(RESOURCE_PATH / ENGAGE_DATA, sheet_name="Activities")

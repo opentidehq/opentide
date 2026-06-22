@@ -80,8 +80,6 @@ def run():
                 case "dom":
                     description = object_data.get("objective", {}).get("description")
                     entry["criticality"] = object_data.get("objective", {}).get("priority")
-                case "cdm":
-                    description = object_data.get("detection", {}).get("guidelines")
                 case "mdr":
                     description = object_data.get("description") or ""
                 case _:
@@ -125,15 +123,8 @@ def run():
 
 
 
-    # Set defaults to accomodate soft transition to DOM.
     if not object_index.get("dom"):
         object_index["dom"] = _empty_model_vocabulary("dom")
-    if not object_index.get("cdm"):
-        object_index["cdm"] = _empty_model_vocabulary("cdm")
-
-    # This allows us to merge existing CDM indexes with the new DOM during transition
-
-    object_index["dom"]["entries"].update(object_index.get("cdm", {}).get("entries", {}))
 
     with open(TIDE_INDEXES_PATH / INDEX_NAME, "w+", encoding="utf-8") as export:
         export.write("")

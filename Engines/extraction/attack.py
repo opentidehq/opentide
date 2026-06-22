@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
+from Engines.modules.files import IndentFullDumper
 from Engines.modules.tide import DataTide
 
 RESOURCES_PATH = Path(DataTide.Configurations.Global.Paths.Index["resources"])
@@ -20,11 +21,6 @@ datasources_vocab = r"ATT&CK Data Sources.yaml"
 mitigations_vocab = r"ATT&CK Mitigations.yaml"
 groups_vocab = vocab_folder / "ATT&CK Groups.yaml"
 
-
-class IndentFullDumper(yaml.Dumper):
-
-    def increase_indent(self, flow=False, indentless=False):
-        return super(IndentFullDumper, self).increase_indent(flow, False)
 
 
 def gen_techniques_vocab(attack_table, out_file, prefix=None):

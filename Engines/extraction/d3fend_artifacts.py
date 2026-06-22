@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
+from Engines.modules.files import IndentFullDumper
 from Engines.modules.tide import DataTide
 
 
@@ -28,11 +29,6 @@ with open(RESOURCES / D3FEND_ONTOLOGY_PATH, encoding="utf8") as file:
 
 voc_artifacts = []
 
-
-class IndentFullDumper(yaml.Dumper):
-
-    def increase_indent(self, flow=False, indentless=False):
-        return super(IndentFullDumper, self).increase_indent(flow, False)
 
 
 for i in D3FEND_ONTOLOGY["@graph"]:

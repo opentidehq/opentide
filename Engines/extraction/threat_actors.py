@@ -9,6 +9,7 @@ import pandas as pd
 import yaml 
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
+from Engines.modules.files import IndentFullDumper
 from Engines.modules.tide import DataTide
 from Engines.modules.logs import log
 
@@ -53,11 +54,6 @@ THREAT_ACTOR_VOCABULARY_TEMPLATE = {
     ],
     "keys": []
 }
-
-class IndentFullDumper(yaml.Dumper):
-
-    def increase_indent(self, flow=False, indentless=False):
-        return super(IndentFullDumper, self).increase_indent(flow, False)
 
 # MISP importer
 def parse_misp_galaxy(galaxy_link:str)->list[dict]:

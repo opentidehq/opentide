@@ -10,15 +10,11 @@ from datetime import datetime
 
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
+from Engines.modules.files import IndentFullDumper
 
 from Engines.modules.logs import log
 from Engines.modules.tide import DataTide
 
-
-class IndentFullDumper(yaml.Dumper):
-
-    def increase_indent(self, flow=False, indentless=False):
-        return super(IndentFullDumper, self).increase_indent(flow, False)
 
 
 DEBUG = False
