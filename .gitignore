@@ -58,6 +58,7 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
+
 # Local secrets and environment
 .env
 .env.*
@@ -84,3 +85,6 @@ generated/
 # External vendored trees (keep tracked sources; ignore local build/cache)
 External/**/node_modules/
 External/**/.cache/
+
+# Hatch-VCS generated version file
+src/opentide/_version.py

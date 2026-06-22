@@ -1,3 +1,5 @@
 """OpenTide DetectionOps engine."""
 
-__version__ = "0.0.0"
+from opentide._version import __version__
+
+__all__ = ["__version__"]
