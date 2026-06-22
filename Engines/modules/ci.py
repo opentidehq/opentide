@@ -12,7 +12,6 @@ from Engines.modules.models import (
 )
 from Engines.modules.registry import OpenTide
 from Engines.modules.models import DetectionPlatforms
-from Engines.modules.loaders.object_loader import ObjectLoader
 from Engines.modules.errors import Errors
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.tide import OpenTide, DebugHelpers

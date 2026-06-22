@@ -126,9 +126,7 @@ class TideDeployment:
             log(
                 "FAILURE",
                 "Was not able to retrieve MDR configuration for targeted system",
-                f"[{data.metadata.uuid}] {data.name} - Available configurations : [{
-                    str(data.configurations)
-                }]",
+                f"[{data.metadata.uuid}] {data.name} - Available configurations : [{data.configurations!s}]",
             )
             raise Exception(NotImplemented)
 
@@ -187,29 +185,19 @@ class TideDeployment:
                         target_tenants.append(tenant)
                         log(
                             "SUCCESS",
-                            f"Adding tenant {
-                                tenant.name
-                            } to the tenant deployment list",
-                            f"Compatible with current deployment plan : {
-                                deployment_strategy
-                            }",
+                            f"Adding tenant {tenant.name} to the tenant deployment list",
+                            f"Compatible with current deployment plan : {deployment_strategy!s}",
                         )
                     else:
                         log(
                             "SKIP",
-                            f"Skipping tenant {
-                                tenant.name
-                            } as is not compatible with current deployment plan",
-                            f"Tenant deployment plan : {
-                                tenant.deployment
-                            }, current deployment plan : {deployment_strategy.name}",
+                            f"Skipping tenant {tenant.name} as is not compatible with current deployment plan",
+                            f"Tenant deployment plan : {tenant.deployment!s}, current deployment plan : {deployment_strategy.name}",
                         )
                 else:
                     log(
                         "SKIP",
-                        f"Skipping tenant {
-                            tenant.name
-                        } as is not defined by MDR tenant list",
+                        f"Skipping tenant {tenant.name} as is not defined by MDR tenant list",
                         str(mdr_tenants),
                     )
 
@@ -223,9 +211,7 @@ class TideDeployment:
                 if tenant.deployment is DeploymentStrategy.MANUAL:
                     log(
                         "SKIP",
-                        f"Skipping tenant {
-                            tenant.name
-                        } as can only be assigned within the MDR defined tenant",
+                        f"Skipping tenant {tenant.name} as can only be assigned within the MDR defined tenant",
                         "You can define custom target tenants under the tenants keyword",
                     )
                     continue
@@ -237,21 +223,14 @@ class TideDeployment:
                     target_tenants.append(tenant)
                     log(
                         "SUCCESS",
-                        f"Adding tenant {
-                            tenant.name} to the tenant deployment list",
-                        f"Compatible with current deployment plan : {
-                            deployment_strategy
-                        }",
+                        f"Adding tenant {tenant.name} to the tenant deployment list",
+                        f"Compatible with current deployment plan : {deployment_strategy!s}",
                     )
                 else:
                     log(
                         "SKIP",
-                        f"Skipping tenant {
-                            tenant.name
-                        } as is not compatible with current deployment plan",
-                        f"Tenant deployment plan : {
-                            tenant.deployment
-                        }, current deployment plan : {deployment_strategy.name}",
+                        f"Skipping tenant {tenant.name} as is not compatible with current deployment plan",
+                        f"Tenant deployment plan : {tenant.deployment!s}, current deployment plan : {deployment_strategy.name}",
                     )
 
         return target_tenants
@@ -298,8 +277,7 @@ class TideDeployment:
             for mod in modifiers:
                 log(
                     "ONGOING",
-                    f"Evaluating modifier {str(mod.name)} {
-                        str(mod.description)}",
+                    f"Evaluating modifier {mod.name!s} {mod.description!s}",
                     str(mod.conditions),
                 )
 
@@ -348,9 +326,7 @@ class TideDeployment:
                                 value = new_value.split("::")[1]
                                 log(
                                     "DEBUG",
-                                    f"Found mod {modification} with operator {
-                                        operator
-                                    } with value {value}",
+                                    f"Found mod {modification} with operator {operator} with value {value}",
                                 )
                                 log("DEBUG", str(raw_mdr_config_flatten))
                                 if modification in raw_mdr_config_flatten:
@@ -374,8 +350,7 @@ class TideDeployment:
                             {modification: new_value})
                         log(
                             "ONGOING",
-                            f"Applying modification {
-                                modification} -> {str(new_value)}",
+                            f"Applying modification {modification} -> {new_value!s}",
                         )
                         if updated_config:
                             raw_mdr_config = self._deep_update(

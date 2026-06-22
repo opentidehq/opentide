@@ -1,0 +1,298 @@
+{
+    "$defs": {
+        "ObjectMetadata": {
+            "additionalProperties": false,
+            "properties": {
+                "uuid": {
+                    "title": "\ud83d\udd11 Uuid",
+                    "type": "string"
+                },
+                "schema": {
+                    "title": "Schema",
+                    "type": "string"
+                },
+                "version": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "integer"
+                        }
+                    ],
+                    "title": "\ud83c\udff7\ufe0f Version"
+                },
+                "created": {
+                    "title": "\ud83d\uddd3\ufe0f Created",
+                    "type": "string"
+                },
+                "modified": {
+                    "title": "\ud83d\uddd3\ufe0f Modified",
+                    "type": "string"
+                },
+                "tlp": {
+                    "title": "\ud83d\udea6 Tlp",
+                    "type": "string"
+                },
+                "author": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "\ud83d\udc69\u200d\ud83d\udcbb Author"
+                },
+                "contributors": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "\ud83d\udc65 Contributors"
+                },
+                "organisation": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Organisation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Organisation"
+                }
+            },
+            "required": [
+                "uuid",
+                "schema",
+                "version",
+                "created",
+                "modified",
+                "tlp"
+            ],
+            "title": "ObjectMetadata",
+            "type": "object"
+        },
+        "ObjectReferences": {
+            "additionalProperties": false,
+            "properties": {
+                "public": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Public"
+                },
+                "internal": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Internal"
+                },
+                "reports": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Reports"
+                }
+            },
+            "title": "ObjectReferences",
+            "type": "object"
+        },
+        "Organisation": {
+            "additionalProperties": false,
+            "properties": {
+                "uuid": {
+                    "title": "\ud83d\udd11 Uuid",
+                    "type": "string"
+                },
+                "name": {
+                    "title": "\ud83c\udfab Name",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "uuid",
+                "name"
+            ],
+            "title": "Organisation",
+            "type": "object"
+        },
+        "ThreatBody": {
+            "additionalProperties": false,
+            "properties": {
+                "description": {
+                    "title": "\ud83d\udd2c Description",
+                    "type": "string"
+                },
+                "severity": {
+                    "title": "\ud83d\udca3 Severity",
+                    "type": "string"
+                },
+                "impact": {
+                    "title": "\ud83d\udca5 Impact",
+                    "type": "string"
+                },
+                "leverage": {
+                    "title": "\ud83e\ude84 Leverage",
+                    "type": "string"
+                },
+                "viability": {
+                    "title": "\ud83c\udfb2 Viability",
+                    "type": "string"
+                },
+                "terrain": {
+                    "title": "\ud83d\udda5\ufe0f Terrain",
+                    "type": "string"
+                },
+                "att&ck": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "title": "\ud83d\udde1\ufe0f Att&Ck",
+                    "type": "array"
+                },
+                "actors": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "\ud83d\udc32 Actors"
+                },
+                "killchain": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "\u26d3\ufe0f Killchain"
+                },
+                "chaining": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "additionalProperties": {
+                                    "type": "string"
+                                },
+                                "type": "object"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Chaining"
+                }
+            },
+            "required": [
+                "description",
+                "severity",
+                "impact",
+                "leverage",
+                "viability",
+                "terrain",
+                "att&ck"
+            ],
+            "title": "ThreatBody",
+            "type": "object"
+        }
+    },
+    "additionalProperties": false,
+    "description": "Code-first threat vector model (replaces raw TVM dict entries).",
+    "properties": {
+        "name": {
+            "title": "\ud83c\udfab Name",
+            "type": "string"
+        },
+        "criticality": {
+            "title": "\ud83d\udd25 Criticality",
+            "type": "string"
+        },
+        "metadata": {
+            "$ref": "#/$defs/ObjectMetadata",
+            "title": "\ud83d\uddc3\ufe0f Metadata"
+        },
+        "threat": {
+            "$ref": "#/$defs/ThreatBody",
+            "title": "\u2623\ufe0f Threat"
+        },
+        "references": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/ObjectReferences"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": "\ud83d\udd17 References"
+        }
+    },
+    "required": [
+        "name",
+        "criticality",
+        "metadata",
+        "threat"
+    ],
+    "title": "ThreatVector",
+    "type": "object"
+}

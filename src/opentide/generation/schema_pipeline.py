@@ -19,25 +19,44 @@ from Engines.modules.models import StatusStrategy
 from Engines.modules.tide import OpenTide
 from Engines.modules.vocabulary import VocabularyDefinition, entry_key_field
 
-GLOBAL_CONFIG = OpenTide.Configurations.Global
+GLOBAL_CONFIG: Any
+VOCAB_INDEX: dict[str, Any]
+CONFIG_INDEX: dict[str, Any]
+PATHS: dict[str, Path]
+SCHEMA_CONFIG: dict[str, Any]
+VOCAB_EXTENSIONS: dict[str, Any]
+METASCHEMAS_FOLDER: Path
+VOCABS_FOLDER: Path
+JSON_SCHEMA_FOLDER: Path
+ICONS: Any
+OBJECT_TYPES: Any
+SUBSCHEMAS_PATH: Path
+RECOMPOSITION: Any
 
-VOCAB_INDEX = OpenTide.Vocabularies.Index
-CONFIG_INDEX = OpenTide.Configurations.Index
-PATHS = resolve_paths()
 
-# Vocabulary Extensions — user-defined entries injected at schema compilation
-# Loaded from [vocabulary] section in schema.toml
-SCHEMA_CONFIG = CONFIG_INDEX.get("schema", {})
-VOCAB_EXTENSIONS = SCHEMA_CONFIG.get("vocabulary", {})
+def _refresh_runtime_context() -> None:
+    """Rebind module globals after env or index changes (tests, reload)."""
+    global GLOBAL_CONFIG, VOCAB_INDEX, CONFIG_INDEX, PATHS
+    global SCHEMA_CONFIG, VOCAB_EXTENSIONS
+    global METASCHEMAS_FOLDER, VOCABS_FOLDER, JSON_SCHEMA_FOLDER
+    global ICONS, OBJECT_TYPES, SUBSCHEMAS_PATH, RECOMPOSITION
 
-# Configuration settings fetching routine
-METASCHEMAS_FOLDER = Path(PATHS["metaschemas"])
-VOCABS_FOLDER = Path(PATHS["vocabularies"])
-JSON_SCHEMA_FOLDER = Path(PATHS["json_schemas"])
-ICONS = OpenTide.Configurations.Documentation.icons
-OBJECT_TYPES = OpenTide.Configurations.Global.objects
-SUBSCHEMAS_PATH = Path(PATHS["subschemas"])
-RECOMPOSITION = GLOBAL_CONFIG.recomposition
+    GLOBAL_CONFIG = OpenTide.Configurations.Global
+    VOCAB_INDEX = OpenTide.Vocabularies.Index
+    CONFIG_INDEX = OpenTide.Configurations.Index
+    PATHS = resolve_paths()
+    SCHEMA_CONFIG = CONFIG_INDEX.get("schema", {})
+    VOCAB_EXTENSIONS = SCHEMA_CONFIG.get("vocabulary", {})
+    METASCHEMAS_FOLDER = Path(PATHS["metaschemas"])
+    VOCABS_FOLDER = Path(PATHS["vocabularies"])
+    JSON_SCHEMA_FOLDER = Path(PATHS["json_schemas"])
+    ICONS = OpenTide.Configurations.Documentation.icons
+    OBJECT_TYPES = OpenTide.Configurations.Global.objects
+    SUBSCHEMAS_PATH = Path(PATHS["subschemas"])
+    RECOMPOSITION = GLOBAL_CONFIG.recomposition
+
+
+_refresh_runtime_context()
 
 
 class VocabularyResolver:
@@ -757,6 +776,7 @@ def gen_json_schema(dictionary):
 
 
 def run():
+    _refresh_runtime_context()
 
     log("TITLE", "Metaschema to JSON Schema Assembler")
     log(

@@ -1,0 +1,513 @@
+{
+    "$defs": {
+        "DetectionExample": {
+            "additionalProperties": false,
+            "properties": {
+                "description": {
+                    "title": "\ud83d\udd2c Description",
+                    "type": "string"
+                },
+                "link": {
+                    "title": "\ud83d\udd17 Link",
+                    "type": "string"
+                },
+                "language": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Language"
+                },
+                "query": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "\ud83d\udd0e Query"
+                }
+            },
+            "required": [
+                "description",
+                "link"
+            ],
+            "title": "DetectionExample",
+            "type": "object"
+        },
+        "DetectionSignal": {
+            "additionalProperties": false,
+            "description": "Nested detection signal within a detection objective.",
+            "properties": {
+                "name": {
+                    "title": "\ud83c\udfab Name",
+                    "type": "string"
+                },
+                "uuid": {
+                    "title": "\ud83d\udd11 Uuid",
+                    "type": "string"
+                },
+                "description": {
+                    "title": "\ud83d\udd2c Description",
+                    "type": "string"
+                },
+                "severity": {
+                    "title": "\ud83d\udca3 Severity",
+                    "type": "string"
+                },
+                "data": {
+                    "$ref": "#/$defs/SignalData",
+                    "title": "Data"
+                },
+                "methodology": {
+                    "title": "Methodology",
+                    "type": "string"
+                },
+                "entities": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "title": "Entities",
+                    "type": "array"
+                },
+                "effort": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Effort"
+                },
+                "detectors": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/ExternalDetector"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Detectors"
+                },
+                "examples": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/DetectionExample"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Examples"
+                },
+                "parent": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Parent"
+                }
+            },
+            "required": [
+                "name",
+                "uuid",
+                "description",
+                "severity",
+                "data",
+                "methodology",
+                "entities"
+            ],
+            "title": "DetectionSignal",
+            "type": "object"
+        },
+        "ExternalDetector": {
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "title": "\ud83c\udfab Name",
+                    "type": "string"
+                },
+                "technology": {
+                    "title": "Technology",
+                    "type": "string"
+                },
+                "description": {
+                    "title": "\ud83d\udd2c Description",
+                    "type": "string"
+                },
+                "link": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "\ud83d\udd17 Link"
+                }
+            },
+            "required": [
+                "name",
+                "technology",
+                "description"
+            ],
+            "title": "ExternalDetector",
+            "type": "object"
+        },
+        "ObjectMetadata": {
+            "additionalProperties": false,
+            "properties": {
+                "uuid": {
+                    "title": "\ud83d\udd11 Uuid",
+                    "type": "string"
+                },
+                "schema": {
+                    "title": "Schema",
+                    "type": "string"
+                },
+                "version": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "integer"
+                        }
+                    ],
+                    "title": "\ud83c\udff7\ufe0f Version"
+                },
+                "created": {
+                    "title": "\ud83d\uddd3\ufe0f Created",
+                    "type": "string"
+                },
+                "modified": {
+                    "title": "\ud83d\uddd3\ufe0f Modified",
+                    "type": "string"
+                },
+                "tlp": {
+                    "title": "\ud83d\udea6 Tlp",
+                    "type": "string"
+                },
+                "author": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "\ud83d\udc69\u200d\ud83d\udcbb Author"
+                },
+                "contributors": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "\ud83d\udc65 Contributors"
+                },
+                "organisation": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Organisation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Organisation"
+                }
+            },
+            "required": [
+                "uuid",
+                "schema",
+                "version",
+                "created",
+                "modified",
+                "tlp"
+            ],
+            "title": "ObjectMetadata",
+            "type": "object"
+        },
+        "ObjectReferences": {
+            "additionalProperties": false,
+            "properties": {
+                "public": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Public"
+                },
+                "internal": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Internal"
+                },
+                "reports": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Reports"
+                }
+            },
+            "title": "ObjectReferences",
+            "type": "object"
+        },
+        "ObjectiveBody": {
+            "additionalProperties": false,
+            "properties": {
+                "priority": {
+                    "title": "\u2757 Priority",
+                    "type": "string"
+                },
+                "type": {
+                    "title": "Type",
+                    "type": "string"
+                },
+                "description": {
+                    "title": "\ud83d\udd2c Description",
+                    "type": "string"
+                },
+                "signals": {
+                    "items": {
+                        "$ref": "#/$defs/DetectionSignal"
+                    },
+                    "title": "Signals",
+                    "type": "array"
+                },
+                "composition": {
+                    "$ref": "#/$defs/ObjectiveComposition",
+                    "title": "Composition"
+                },
+                "investment": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Investment"
+                },
+                "threats": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Threats"
+                },
+                "attack": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Attack"
+                }
+            },
+            "required": [
+                "priority",
+                "type",
+                "description",
+                "signals",
+                "composition"
+            ],
+            "title": "ObjectiveBody",
+            "type": "object"
+        },
+        "ObjectiveComposition": {
+            "additionalProperties": false,
+            "properties": {
+                "strategy": {
+                    "title": "Strategy",
+                    "type": "string"
+                },
+                "description": {
+                    "title": "\ud83d\udd2c Description",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "strategy",
+                "description"
+            ],
+            "title": "ObjectiveComposition",
+            "type": "object"
+        },
+        "Organisation": {
+            "additionalProperties": false,
+            "properties": {
+                "uuid": {
+                    "title": "\ud83d\udd11 Uuid",
+                    "type": "string"
+                },
+                "name": {
+                    "title": "\ud83c\udfab Name",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "uuid",
+                "name"
+            ],
+            "title": "Organisation",
+            "type": "object"
+        },
+        "SignalData": {
+            "additionalProperties": false,
+            "properties": {
+                "availability": {
+                    "title": "Availability",
+                    "type": "string"
+                },
+                "requirements": {
+                    "title": "Requirements",
+                    "type": "string"
+                },
+                "logsources": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "\ud83d\udcd1 Logsources"
+                }
+            },
+            "required": [
+                "availability",
+                "requirements"
+            ],
+            "title": "SignalData",
+            "type": "object"
+        }
+    },
+    "additionalProperties": false,
+    "description": "Code-first detection objective model.",
+    "properties": {
+        "name": {
+            "title": "\ud83c\udfab Name",
+            "type": "string"
+        },
+        "metadata": {
+            "$ref": "#/$defs/ObjectMetadata",
+            "title": "\ud83d\uddc3\ufe0f Metadata"
+        },
+        "objective": {
+            "$ref": "#/$defs/ObjectiveBody",
+            "title": "Objective"
+        },
+        "composition": {
+            "$ref": "#/$defs/ObjectiveComposition",
+            "title": "Composition"
+        },
+        "references": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/ObjectReferences"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": "\ud83d\udd17 References"
+        }
+    },
+    "required": [
+        "name",
+        "metadata",
+        "objective",
+        "composition"
+    ],
+    "title": "DetectionObjective",
+    "type": "object"
+}

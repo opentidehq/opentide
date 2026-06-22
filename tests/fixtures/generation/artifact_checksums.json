@@ -1,0 +1,16 @@
+{
+  "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/Carbon Black Cloud Enterprise EDR Template.yaml": "60ed729a08b835e88ef328394f4a87d987d83ffa014cb340eccfc5e3ec855663",
+  "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/Crowdstrike Falcon Template.yaml": "19318c01466bc96fc690b3c81b6923780a778c323591a8f2aab0460e937d1fb4",
+  "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/HarfangLab Template.yaml": "959e1917847b542c5250a163d64fe8c58e1a9d421ad3bd49147202990291b625",
+  "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/Microsoft Defender for Endpoint Template.yaml": "f277488d82bac88b0a95876f75606ee0dc4d43c4ae84805f094bb91ddac12394",
+  "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/Microsoft Sentinel Template.yaml": "ef0c08ec3a436846a7f8e2b7daabc60bee4a61fc8649176edab6cb614ae61642",
+  "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/Sentinel One Template.yaml": "3164c1fae0f14aab2c91cfac144f2707afcb89b53557e125ea2d9582e27cfb58",
+  "repo:src/opentide/schemas/data/Sub Schemas/MDR Systems Deployment/Templates/Splunk Enterprise Template.yaml": "1f084ffc2ae9fe27d91352cc674045313db5fc05d0e551bada6475de20624965",
+  "tide:Schemas/Configurations/visibility.schema.json": "68ec162d59a1464a40d4f7d8a2c5dfe828feaa0099e4844258b3d4077e441cdc",
+  "tide:Schemas/Detection Objective.schema.json": "a58a3fb61509879d61d0758082601e78646539a6dd544090ab4ab42d624e3eb5",
+  "tide:Schemas/MDR Schema.json": "7579108e2252f248a10fe0377b5b3403e2dafce71f081588e9f1ff0b1564e20c",
+  "tide:Schemas/TVM Schema.json": "d95ecfadaa0eebc797853cee0c56913e9f47811cd7a132d0373b993805f43cb3",
+  "tide:Schemas/Templates/Detection Objective.template.yaml": "74a76fe51a3fd4d044cb94f580afd36afa3d2120450ea6e867d2f252304cb9d9",
+  "tide:Schemas/Templates/MDR TEMPLATE.yaml": "2e589c88af62b02d76d2bdad14f658c60bbb8265172267436f33675de7434844",
+  "tide:Schemas/Templates/TVM TEMPLATE.yaml": "f045e3d202c3861e822d4592fcc6e3bf1300493b01780d532453790a85b0a4f3"
+}

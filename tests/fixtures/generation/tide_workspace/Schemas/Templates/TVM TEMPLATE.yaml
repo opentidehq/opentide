@@ -1,0 +1,53 @@
+name: 
+criticality: 
+#references:
+  #public:
+    #1: 
+  #internal:
+    #a: 
+
+metadata:
+  uuid: 
+  schema: tvm::2.1
+  version: 
+  created: YYYY-MM-DD
+  modified: YYYY-MM-DD
+  tlp: 
+  #author: 
+  #contributors:
+    #-
+  #organisation:
+    #uuid: 
+    #name: 
+
+threat:
+  #actors:
+    #- name: 
+      #sighting: |
+        #...
+      #references:
+        #-
+  #killchain: 
+  att&ck:
+    - 
+  #chaining:
+    #- relation: 
+      #vector: 
+      #description: |
+        #...
+  #cve:
+    #-
+  #misp:
+    #-
+  #surface:
+    #-
+  terrain: |
+    ...
+  severity: 
+  leverage:
+    - 
+  impact:
+    - 
+  viability: 
+  description: |
+    ...
