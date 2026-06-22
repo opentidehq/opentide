@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""Phase 1: decompose tide.py, models.py, deployment.py monoliths into focused modules."""
+
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+
+MODULES = Path(__file__).resolve().parent.parent / "Engines" / "modules"
+
+
+def read_lines(path: Path) -> list[str]:
+    return path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+
+def write_module(path: Path, header: str, body: str, extra_imports: str = "") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    parts = [header.rstrip()]
+    if extra_imports:
+        parts.append(extra_imports.rstrip())
+    parts.append(body.lstrip())
+    content = "\n\n".join(parts)
+    if not content.endswith("\n"):
+        content += "\n"
+    path.write_text(content, encoding="utf-8")
+
+
+def slice_lines(lines: list[str], start: int, end: int | None = None) -> str:
+    """1-based inclusive start, optional 1-based inclusive end."""
+    if end is None:
+        return "".join(lines[start - 1 :])
+    return "".join(lines[start - 1 : end])
+
+
+def decompose_tide() -> None:
+    src = MODULES / "tide.py"
+    lines = read_lines(src)
+    header = slice_lines(lines, 1, 38)
+
+    write_module(MODULES / "environment.py", header, slice_lines(lines, 42, 131))
+    write_module(MODULES / "index.py", header, slice_lines(lines, 133, 317))
+    write_module(MODULES / "loaders/system_loader.py", header, slice_lines(lines, 320, 732))
+    write_module(MODULES / "loaders/config_loader.py", header, slice_lines(lines, 733, 832))
+    write_module(
+        MODULES / "loaders/object_loader.py",
+        header,
+        slice_lines(lines, 833, 1189),
+        "\n".join(
+            [
+                "from Engines.modules.loaders.system_loader import SystemLoader",
+                "from Engines.modules.environment import HelperTide",
+            ]
+        ),
+    )
+    write_module(
+        MODULES / "registry.py",
+        header,
+        slice_lines(lines, 1190, None),
+        "\n".join(
+            [
+                "from Engines.modules.environment import HelperTide",
+                "from Engines.modules.index import IndexTide",
+                "from Engines.modules.loaders.config_loader import ConfigurationsLoader",
+                "from Engines.modules.loaders.object_loader import TideLoader",
+            ]
+        ),
+    )
+    (MODULES / "loaders/__init__.py").write_text("", encoding="utf-8")
+
+    (MODULES / "tide.py").write_text(
+        '''\
+"""Backward-compatibility re-export shim for tide module."""
+
+from Engines.modules.models import DetectionSystems
+from Engines.modules.registry import DataTide
+from Engines.modules.index import IndexTide
+from Engines.modules.environment import HelperTide
+from Engines.modules.loaders.object_loader import TideLoader
+
+__all__ = [
+    "DataTide",
+    "IndexTide",
+    "HelperTide",
+    "TideLoader",
+    "DetectionSystems",
+]
+''',
+        encoding="utf-8",
+    )
+
+
+def decompose_models() -> None:
+    src = MODULES / "models.py"
+    lines = read_lines(src)
+    header = slice_lines(lines, 1, 21)
+
+    write_module(MODULES / "enums.py", header, slice_lines(lines, 23, 78))
+    write_module(
+        MODULES / "system_models.py",
+        header,
+        slice_lines(lines, 80, 130) + slice_lines(lines, 624, 662),
+        "\n".join(
+            [
+                "from Engines.modules.enums import DeploymentStrategy",
+                "from Engines.modules.object_models import TideModels",
+            ]
+        ),
+    )
+    write_module(
+        MODULES / "config_models.py",
+        header,
+        slice_lines(lines, 131, 250),
+        "\n".join(
+            [
+                "from Engines.modules.enums import StatusStrategy",
+                "from Engines.modules.system_models import SystemConfig",
+            ]
+        ),
+    )
+    write_module(MODULES / "object_models.py", header, slice_lines(lines, 251, 622))
+
+    (MODULES / "models.py").write_text(
+        '''\
+"""Backward-compatibility re-export shim for models module."""
+
+from Engines.modules.enums import StatusStrategy, DetectionSystems, DeploymentStrategy
+from Engines.modules.system_models import SystemConfig, TenantDeploymentModel, TenantDeployment
+from Engines.modules.config_models import TideConfigs
+from Engines.modules.object_models import TideDefinitionsModels, TideModels
+
+__all__ = [
+    "StatusStrategy",
+    "DetectionSystems",
+    "DeploymentStrategy",
+    "SystemConfig",
+    "TideConfigs",
+    "TideDefinitionsModels",
+    "TideModels",
+    "TenantDeploymentModel",
+    "TenantDeployment",
+]
+''',
+        encoding="utf-8",
+    )
+
+
+def decompose_deployment() -> None:
+    src = MODULES / "deployment.py"
+    lines = read_lines(src)
+    header = slice_lines(lines, 1, 34)
+
+    write_module(MODULES / "ci.py", header, slice_lines(lines, 81, 119))
+    write_module(
+        MODULES / "git_repo.py",
+        header,
+        slice_lines(lines, 36, 79) + slice_lines(lines, 263, 501),
+        "from Engines.modules.ci import CIEnvironment",
+    )
+
+    utils_extra = "\n".join(
+        [
+            "from Engines.modules.tide import DataTide, HelperTide",
+            "from Engines.modules.models import StatusStrategy, DeploymentStrategy",
+            "from Engines.modules.ci import CIEnvironment",
+            "from Engines.modules.git_repo import TideRepo, modified_mdr_files, diff_calculation",
+            "",
+            "SYSTEMS_CONFIGS_INDEX = DataTide.Configurations.Systems.Index",
+            "DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)",
+        ]
+    )
+    write_module(
+        MODULES / "deployment_utils.py",
+        header,
+        slice_lines(lines, 124, 623),
+        utils_extra,
+    )
+    write_module(
+        MODULES / "deployment_planning.py",
+        header,
+        slice_lines(lines, 625, None),
+        "\n".join(
+            [
+                "from Engines.modules.tide import DataTide, TideLoader",
+                "from Engines.modules.models import (",
+                "    TideDefinitionsModels,",
+                "    TideModels,",
+                "    SystemConfig,",
+                "    DeploymentStrategy,",
+                "    TenantDeployment,",
+                "    TenantDeploymentModel,",
+                "    DetectionSystems,",
+                ")",
+                "from Engines.modules.framework import unroll_dot_dict",
+            ]
+        ),
+    )
+
+    (MODULES / "deployment.py").write_text(
+        '''\
+"""Backward-compatibility re-export shim for deployment module."""
+
+from Engines.modules.ci import CIEnvironment
+from Engines.modules.git_repo import TideRepo, modified_mdr_files, diff_calculation
+from Engines.modules.deployment_utils import (
+    SYSTEMS_CONFIGS_INDEX,
+    DEPRECATED_STATUSES,
+    check_status,
+    make_deploy_plan,
+    enabled_systems,
+    Proxy,
+    ExternalIdHelper,
+)
+from Engines.modules.deployment_planning import TideDeployment
+
+__all__ = [
+    "CIEnvironment",
+    "TideRepo",
+    "modified_mdr_files",
+    "diff_calculation",
+    "SYSTEMS_CONFIGS_INDEX",
+    "DEPRECATED_STATUSES",
+    "check_status",
+    "make_deploy_plan",
+    "enabled_systems",
+    "Proxy",
+    "ExternalIdHelper",
+    "TideDeployment",
+]
+''',
+        encoding="utf-8",
+    )
+
+
+def relocate_system_mixins() -> None:
+    systems_dir = MODULES / "systems"
+    for stem in ("carbon_black_cloud", "splunk"):
+        src = MODULES / f"{stem}.py"
+        dst = systems_dir / f"{stem}.py"
+        shutil.copy2(src, dst)
+        src.write_text(
+            f'''\
+"""Backward-compatibility re-export shim."""
+
+from Engines.modules.systems.{stem} import *  # noqa: F403
+''',
+            encoding="utf-8",
+        )
+
+
+def main() -> None:
+    decompose_tide()
+    decompose_models()
+    decompose_deployment()
+    relocate_system_mixins()
+    print("Phase 1 decomposition complete.")
+
+
+if __name__ == "__main__":
+    main()

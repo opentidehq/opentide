@@ -2,16 +2,20 @@
 
 **OpenTide** (`opentide`) is the PyPI-packaged successor to [CoreTide](https://github.com/OpenTideHQ/CoreTide). This document governs how autonomous agents execute the TideKit transformation programme.
 
+**Mandatory:** All TideKit **implementation** pull requests target [OpenTideHQ/opentide](https://github.com/OpenTideHQ/opentide) only. [OpenTideHQ/CoreTide](https://github.com/OpenTideHQ/CoreTide) issues track programme work; the CoreTide repo remains the spec/source baseline — do not open feature or refactor PRs there (docs and issue updates only).
+
 > **Tracking issues**: [Epic #60](https://github.com/OpenTideHQ/CoreTide/issues/60), phases [#61–#71](https://github.com/OpenTideHQ/CoreTide/issues?q=is%3Aissue+milestone%3A%22Project+TideKit%22).
 
 ## Fleet Ground Rules
 
 | Rule | Detail |
 |------|--------|
-| Base branch | `development` |
+| Implementation repo | [OpenTideHQ/opentide](https://github.com/OpenTideHQ/opentide) **only** — never TideKit code on CoreTide |
+| Tracking / baseline | [OpenTideHQ/CoreTide](https://github.com/OpenTideHQ/CoreTide) issues + spec baseline; CoreTide PRs limited to docs/issues |
+| Base branch | `development` (in **opentide**) |
 | One phase = one agent = one PR | Phases 6 (#67) and 7 (#68) may run in parallel after Phase 5 |
 | Start gate | All **Depends on** phases merged |
-| PR | Target `development`, `Closes #<issue>` |
+| PR | Target `development` on **opentide**; link/close the CoreTide phase issue (#61–#71) |
 
 ## Phase DAG
 
