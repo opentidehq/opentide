@@ -20,12 +20,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install docs dependencies
-        run: uv pip install mkdocs-material
+      - name: Install dependencies
+        run: uv sync --group dev --group docs
 
       - name: Build docs
-        run: mkdocs build --strict
+        run: uv run mkdocs build --strict
 
       - name: Deploy to GitHub Pages
         if: github.ref == 'refs/heads/development'
-        run: mkdocs gh-deploy --force
+        run: uv run mkdocs gh-deploy --force
