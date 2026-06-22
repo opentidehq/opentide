@@ -23,7 +23,7 @@ from Engines.modules.logs import log
 # OpenTide.Schemas.Json / OpenTide.Schemas.Yaml
 
 from Engines.modules.enums import DeploymentStrategy
-from Engines.modules.object_models import TideModels
+from opentide.models.rule import DetectionRule
 
 @dataclass
 class SystemConfig:
@@ -83,7 +83,7 @@ class DeploymentBatch:
     per system
     """
     tenant: SystemConfig.Tenant
-    rules: Sequence[TideModels.DetectionRule]
+    rules: Sequence[DetectionRule]
 
 class TenantDeployment:
 

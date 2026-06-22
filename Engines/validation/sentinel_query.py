@@ -17,14 +17,15 @@ from Engines.modules.plugins import QueryValidator
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.tide import OpenTide
-from Engines.modules.models import TideModels, ConfigurationModels, TenantDeployment
+from opentide.models.rule import DetectionRule
+from Engines.modules.models import ConfigurationModels, TenantDeployment
 from Engines.modules.errors import Errors
 from Engines.modules.deployment import TideDeployment, DetectionPlatforms, DeploymentStrategy, Proxy
 
 class SentinelQueryValidator(QueryValidator):
 
     def check_query(self,
-                    mdr:TideModels.DetectionRule,
+                    mdr:DetectionRule,
                     tenant_config:ConfigurationModels.Systems.Sentinel.Tenant,
                     service:LogsQueryClient):
         mdr_uuid = mdr.metadata.uuid
@@ -93,13 +94,13 @@ class SentinelQueryValidator(QueryValidator):
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
 
 
-    def validate(self, mdr_deployment: Sequence[TideModels.DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
+    def validate(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
         
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
                 loaded_mdr.append(OpenTide.Models.MDR[mdr])
-            elif type(mdr) is TideModels.DetectionRule:
+            elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 

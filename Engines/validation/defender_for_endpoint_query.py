@@ -11,7 +11,8 @@ from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.plugins import QueryValidator
 from Engines.modules.tide import OpenTide, DetectionPlatforms
-from Engines.modules.models import (TideModels,
+from opentide.models.rule import DetectionRule
+from Engines.modules.models import (
                                     DeploymentStrategy,) 
 from Engines.modules.deployment import TideDeployment
 from Engines.modules.systems.defender_for_endpoint import DefenderForEndpointService
@@ -159,7 +160,7 @@ def returned_schema_columns(response:dict)->set[str]:
 class DefenderForEndpointQueryValidator(QueryValidator):
 
     def check_query(self,
-                    mdr:TideModels.DetectionRule,
+                    mdr:DetectionRule,
                     service:DefenderForEndpointService):
         
         config = mdr.configurations.defender_for_endpoint
@@ -192,7 +193,7 @@ class DefenderForEndpointQueryValidator(QueryValidator):
 
 
     def validate(self,
-                 mdr_deployment: Union[Sequence[TideModels.DetectionRule], Sequence[str]],
+                 mdr_deployment: Union[Sequence[DetectionRule], Sequence[str]],
                  deployment_plan:DeploymentStrategy):
         
         if type(mdr_deployment[0]) is str:

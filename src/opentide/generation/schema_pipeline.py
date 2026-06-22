@@ -766,38 +766,39 @@ def run():
         "as per the CoreTIDE schema.",
     )
 
-    # Loops through all source yaml defined in meta_to_json and generates the
-    # corresponding json structure before writing to the associated output file
-    for meta in GLOBAL_CONFIG.metaschemas:
-        if meta in GLOBAL_CONFIG.json_schemas:
-            yaml_input = METASCHEMAS_FOLDER / GLOBAL_CONFIG.metaschemas[meta]
-            json_output = JSON_SCHEMA_FOLDER / GLOBAL_CONFIG.json_schemas[meta]
+    from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS, generate_core_model_schema
 
+    # Core object schemas are generated from Pydantic models (single source of truth).
+    for meta in GLOBAL_CONFIG.metaschemas:
+        if meta not in GLOBAL_CONFIG.json_schemas:
+            continue
+        json_output = JSON_SCHEMA_FOLDER / GLOBAL_CONFIG.json_schemas[meta]
+
+        if meta in CORE_SCHEMA_MODELS:
+            log("ONGOING", f"Generating pydantic json schema for core model: {meta}")
+            cleaned = generate_core_model_schema(meta)
+            placeholders: dict[str, str] = {}
+        else:
+            yaml_input = METASCHEMAS_FOLDER / GLOBAL_CONFIG.metaschemas[meta]
             parsing = yaml.safe_load(open(yaml_input, encoding="utf-8"))
             placeholders = parsing.get("tide.placeholders") or {}
-
             log("ONGOING", "Generating json schema for : " + str(yaml_input))
-
-            # Generate Schema
             generated = gen_json_schema(parsing)
-
-            # Removes the OpenTide reserved schema keys
             cleaned = strip_framework_keywords(generated)
 
-            # Export JSON Schemas
-            log("ONGOING", "Exporting generated schema to : " + str(json_output))
-            output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
-            for placeholder in placeholders:
-                log(
-                    "ONGOING",
-                    f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
-                )
-                output = output.replace(f"${placeholder}", placeholders[placeholder])
+        log("ONGOING", "Exporting generated schema to : " + str(json_output))
+        output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
+        for placeholder in placeholders:
+            log(
+                "ONGOING",
+                f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
+            )
+            output = output.replace(f"${placeholder}", placeholders[placeholder])
 
-            output_file = open((json_output), "w", encoding="utf-8")
-            output_file.write(output)
-            output_file.close()
-            log("SUCCESS", "Correctly exported")
+        output_file = open((json_output), "w", encoding="utf-8")
+        output_file.write(output)
+        output_file.close()
+        log("SUCCESS", "Correctly exported")
 
     log("SUCCESS", "Generated all JSON Schemas")
 

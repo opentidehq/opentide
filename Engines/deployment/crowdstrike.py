@@ -8,21 +8,22 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.tide import OpenTide, DetectionPlatforms
 from Engines.modules.plugins import RuleDeployer
-from Engines.modules.models import (TideModels,
+from opentide.models.rule import DetectionRule
+from Engines.modules.models import (
                                     DeploymentStrategy) 
 from Engines.modules.deployment import TideDeployment, ExternalIdHelper, check_status
 from Engines.modules.logs import log
 from Engines.modules.models import ConfigurationModels, StatusStrategy
 from Engines.modules.errors import Errors
 
-from Engines.modules.systems.crowdstrike import CrowdstrikeService, DetectionRule
+from Engines.modules.systems.crowdstrike import CrowdstrikeService, DetectionRule as CrowdstrikeRule
 
 
 class CrowdstrikeDeploy(RuleDeployer):
 
     def compile_deployment(self,
-                           data:TideModels.DetectionRule,
-                           tenant_config:ConfigurationModels.Systems.Crowdstrike.Tenant)->DetectionRule:
+                           data:DetectionRule,
+                           tenant_config:ConfigurationModels.Systems.Crowdstrike.Tenant)->CrowdstrikeRule:
         """
         Builds the Detection Rule call made to the API
         """
@@ -120,7 +121,7 @@ class CrowdstrikeDeploy(RuleDeployer):
         author = contributors or [data.metadata.author]
         author = ", ".join(author)
         comment = f"Updated by OpenTide Crowdstrike Deployer - Author(s) : {author}"
-        return DetectionRule(name=name, 
+        return CrowdstrikeRule(name=name, 
                              description=description,
                              customer_id=customer_id,
                              tactic=tactic,
@@ -132,7 +133,7 @@ class CrowdstrikeDeploy(RuleDeployer):
                              comment=comment)
     
     def deploy_mdr(self,
-                data:TideModels.DetectionRule,
+                data:DetectionRule,
                 service:CrowdstrikeService,
                 tenant_config:ConfigurationModels.Systems.Crowdstrike.Tenant):
         """
@@ -193,15 +194,15 @@ class CrowdstrikeDeploy(RuleDeployer):
 
 
 
-    def deploy(self, mdr_deployment: Sequence[TideModels.DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
         """
-        Triggers the deployment sequence for a series of MDR uuids or TideModels.DetectionRule Objects
+        Triggers the deployment sequence for a series of MDR uuids or DetectionRule Objects
         """
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
                 loaded_mdr.append(OpenTide.Models.MDR[mdr])
-            elif type(mdr) is TideModels.DetectionRule:
+            elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 

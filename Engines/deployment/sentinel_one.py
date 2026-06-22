@@ -9,19 +9,24 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.tide import OpenTide, DetectionPlatforms, ObjectLoader
 from Engines.modules.plugins import RuleDeployer
-from Engines.modules.models import (TideModels,
+from opentide.models.rule import DetectionRule
+from Engines.modules.models import (
                                     DeploymentStrategy) 
 from Engines.modules.deployment import TideDeployment, ExternalIdHelper, check_status
 from Engines.modules.logs import log
 from Engines.modules.models import ConfigurationModels, StatusStrategy
 
-from Engines.modules.systems.sentinel_one import SentinelOneService, DetectionRule, SeverityMapping
+from Engines.modules.systems.sentinel_one import (
+    SentinelOneService,
+    DetectionRule as SentinelOneApiRule,
+    SeverityMapping,
+)
 
 class SentinelOneDeploy(RuleDeployer):
 
     def compile_deployment(self,
-                           data:TideModels.DetectionRule,
-                           tenant_config:ConfigurationModels.Systems.SentinelOne.Tenant)->DetectionRule:
+                           data: DetectionRule,
+                           tenant_config: ConfigurationModels.Systems.SentinelOne.Tenant) -> SentinelOneApiRule:
         """
         Builds the Detection Rule call made to the API
         """
@@ -74,7 +79,7 @@ class SentinelOneDeploy(RuleDeployer):
         # Condition Section
         cool_off = mdr_config.condition.cool_off
         if cool_off is str:
-            cool_off = DetectionRule.Data.CoolOffSettings(renotifyMinutes=_convert_to_minutes(cool_off))
+            cool_off = SentinelOneApiRule.Data.CoolOffSettings(renotifyMinutes=_convert_to_minutes(cool_off))
 
         # Rule type sanity checker
         if mdr_config.condition.type not in ["Single Event", "Correlation"]:
@@ -86,7 +91,7 @@ class SentinelOneDeploy(RuleDeployer):
                 log("FAILURE", "Missing Single Event section in MDR", data.metadata.uuid)
                 raise Exception
             query = single_event_data.query
-            rule_data = DetectionRule.Data(name=rule_name,
+            rule_data = SentinelOneApiRule.Data(name=rule_name,
                                             queryType="events",
                                             s1ql=query,
                                             severity=rule_severity,
@@ -106,21 +111,21 @@ class SentinelOneDeploy(RuleDeployer):
             sub_queries = []
                         
             for sub_query in correlation_data.sub_queries:
-                sub_queries.append(DetectionRule.Data.CorrelationParams.SubQueries(matchesRequired=sub_query.matches_required,
+                sub_queries.append(SentinelOneApiRule.Data.CorrelationParams.SubQueries(matchesRequired=sub_query.matches_required,
                                                                                    subQuery=sub_query.query))
 
             time_window_config = None
             if correlation_data.time_window:
                 
                 time_window_data = correlation_data.time_window                                    
-                time_window_config = DetectionRule.Data.CorrelationParams.TimeWindow(windowMinutes = _convert_to_minutes(time_window_data))
+                time_window_config = SentinelOneApiRule.Data.CorrelationParams.TimeWindow(windowMinutes = _convert_to_minutes(time_window_data))
 
-            correlation_config = DetectionRule.Data.CorrelationParams(entity=correlation_data.entity,
+            correlation_config = SentinelOneApiRule.Data.CorrelationParams(entity=correlation_data.entity,
                                                                       matchInOrder=correlation_data.match_in_order,
                                                                       subQueries=sub_queries, #type: ignore
                                                                       timeWindow=time_window_config)
             
-            rule_data = DetectionRule.Data(name=rule_name,
+            rule_data = SentinelOneApiRule.Data(name=rule_name,
                                             queryType="correlation",
                                             correlationParams=correlation_config,
                                             severity=rule_severity,
@@ -134,20 +139,20 @@ class SentinelOneDeploy(RuleDeployer):
 
         # Filter Setup
         if tenant_config.setup.site_id:
-            deployment_filter = DetectionRule.Filter(siteIds=[str(tenant_config.setup.site_id)])
+            deployment_filter = SentinelOneApiRule.Filter(siteIds=[str(tenant_config.setup.site_id)])
         elif tenant_config.setup.account_id:
-            deployment_filter = DetectionRule.Filter(accountIds=[str(tenant_config.setup.account_id)])
+            deployment_filter = SentinelOneApiRule.Filter(accountIds=[str(tenant_config.setup.account_id)])
 
-        return DetectionRule(data=rule_data,
+        return SentinelOneApiRule(data=rule_data,
                              filter=deployment_filter)
 
 
 
 
     def deploy_mdr(self,
-                   data:TideModels.DetectionRule,
-                   service:SentinelOneService,
-                   tenant_config:ConfigurationModels.Systems.SentinelOne.Tenant):
+                   data: DetectionRule,
+                   service: SentinelOneService,
+                   tenant_config: ConfigurationModels.Systems.SentinelOne.Tenant):
         """
         Deploys the detection rule : creation, update, deletion and disabling.
         """
@@ -206,18 +211,18 @@ class SentinelOneDeploy(RuleDeployer):
                                            system_name=OpenTide.Configurations.Systems.SentinelOne.platform.identifier)
 
 
-    def deploy(self, mdr_deployment: Sequence[TideModels.DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan: DeploymentStrategy):
         """
-        Triggers the deployment sequence for a series of MDR uuids or TideModels.DetectionRule Objects
+        Triggers the deployment sequence for a series of MDR uuids or DetectionRule objects
         """
         
         log("INFO", "Received deployment information", str(mdr_deployment))
         
         loaded_mdr = []
         for mdr in mdr_deployment:
-            if type(mdr) is str:
+            if isinstance(mdr, str):
                 loaded_mdr.append(OpenTide.Models.MDR[mdr])
-            elif type(mdr) is TideModels.DetectionRule:
+            elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 

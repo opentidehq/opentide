@@ -1,9 +1,9 @@
 import pandas as pd
 from git.repo import Repo
 from Engines.modules.framework import unroll_dot_dict
+from opentide.models.rule import DetectionRule
 from Engines.modules.models import (
     SharedModels,
-    TideModels,
     SystemConfig,
     DeploymentStrategy,
     StatusStrategy,
@@ -34,9 +34,9 @@ DEPRECATED_STATUSES = (StatusStrategy.DELETION,
                         StatusStrategy.DISABLEMENT)
 
 from Engines.modules.tide import OpenTide, ObjectLoader
+from opentide.models.rule import DetectionRule
 from Engines.modules.models import (
     SharedModels,
-    TideModels,
     SystemConfig,
     DeploymentStrategy,
     TenantDeployment,
@@ -101,7 +101,7 @@ class TideDeployment:
             #    raise NotImplemented
 
     def mdr_configuration_resolver(
-        self, data: TideModels.DetectionRule, system: DetectionPlatforms
+        self, data: DetectionRule, system: DetectionPlatforms
     ) -> SharedModels.PlatformConfigurationBase:
         match system:
             case DetectionPlatforms.SENTINEL:
@@ -136,7 +136,7 @@ class TideDeployment:
 
     def tenants_resolver(
         self,
-        data: TideModels.DetectionRule,
+        data: DetectionRule,
         system: DetectionPlatforms,
         deployment_strategy: DeploymentStrategy,
     ) -> Sequence[SystemConfig.Tenant]:
@@ -273,8 +273,8 @@ class TideDeployment:
         return base_dictionary
 
     def modifiers_resolver(
-        self, data: TideModels.DetectionRule, target_tenant: str, system: DetectionPlatforms
-    ) -> TideModels.DetectionRule:
+        self, data: DetectionRule, target_tenant: str, system: DetectionPlatforms
+    ) -> DetectionRule:
         """
         Dynamically modifies MDR data based on
         """
@@ -385,11 +385,13 @@ class TideDeployment:
         raw_data["configurations"].update({system_identifier: raw_mdr_config})
         log("INFO", "New recompiled modified deployment", str(raw_data))
 
-        return ObjectLoader.load_rule(raw_data)
+        from opentide.loading.rule_loader import load_rule_from_dict
+
+        return load_rule_from_dict(raw_data)
 
     def deployment_resolver(
         self,
-        mdr_deployment: Sequence[TideModels.DetectionRule],
+        mdr_deployment: Sequence[DetectionRule],
         system: DetectionPlatforms,
         deployment_strategy: DeploymentStrategy,
     ) -> Sequence[DeploymentBatch]:

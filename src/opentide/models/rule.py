@@ -9,6 +9,8 @@ from pydantic import Field, PrivateAttr
 
 from opentide.models.base import TideModel
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
+from opentide.models.platform import RuleConfigurations
+from opentide.models.response import RuleResponse
 from opentide.models.results import DeploymentResult, ValidationResult
 
 
@@ -38,8 +40,8 @@ class DetectionRule(TideModel):
     platforms: dict[str, dict[str, Any]] = Field(default_factory=dict)
     references: ObjectReferences | None = None
     detection_model: str | None = None
-    response: dict[str, Any] | None = None
-    configurations: dict[str, Any] | None = None
+    response: RuleResponse | None = None
+    configurations: RuleConfigurations | None = None
     file: Path | None = None
 
     _registry: TideRegistry | None = PrivateAttr(default=None)

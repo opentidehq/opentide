@@ -31,7 +31,7 @@ from Engines.modules.models import (DetectionSystems,
                                     TideDefinitionsModels,
                                     TideConfigs,
                                     SystemConfig)
-from Engines.modules.patching import Tide2Patching
+from opentide.indexing.legacy_patch import LegacyObjectPatch
 from Engines.modules.datamodels.objects import Objects
 from Engines.modules.datamodels.configurations import Configurations
 
@@ -93,7 +93,7 @@ class IndexManager:
         added_mdr = list()
         updated_mdr = list()
 
-        patch = Tide2Patching()
+        patch = LegacyObjectPatch()
 
         for mdr in STG_INDEX:
             if mdr not in RECONCILED_INDEX["objects"]["mdr"]:
