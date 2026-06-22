@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 
 from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS
+from opentide.models.base import TideModel
 from opentide.generation.template_engine import (
     emit_template_file,
     gen_template,
@@ -15,7 +16,7 @@ from opentide.generation.template_engine import (
 )
 from opentide.schemas.store import schemas_data_root
 
-CORE_TEMPLATE_MODELS: dict[str, type] = CORE_SCHEMA_MODELS
+CORE_TEMPLATE_MODELS: dict[str, type[TideModel]] = CORE_SCHEMA_MODELS
 
 _CORE_METASCHEMA_FILES: dict[str, str] = {
     "mdr": "MDR Meta Schema.yaml",

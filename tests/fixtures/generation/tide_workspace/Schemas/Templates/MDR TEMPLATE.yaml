@@ -1,0 +1,47 @@
+name: 
+#references:
+  #public:
+    #1: 
+  #internal:
+    #a: 
+
+metadata:
+  uuid: 
+  schema: mdr::2.1
+  version: 
+  created: YYYY-MM-DD
+  modified: YYYY-MM-DD
+  tlp: 
+  #author: 
+  #contributors:
+    #-
+  #organisation:
+    #uuid: 
+    #name: 
+
+description: |
+  ...
+#detection_model: 
+
+response:
+  alert_severity: 
+  #playbook: https://
+  #responders: 
+  #procedure:
+    #analysis: |
+      #...
+    #searches:
+      #- purpose: |
+          #...
+        #system: 
+        #query: |
+          #...
+    #containment: |
+      #...
+
+configurations:
+  #crowdstrike: 
+  #sentinel: 
+  #sentinel_one: 
+  #defender_for_endpoint: 
+  #carbon_black_cloud: 

@@ -98,6 +98,10 @@ def resolve_paths(separate:bool=False):
     PATHS = {
         k: (ROOT.parent / path) for k, path in CORE_CONFIG["paths"]["tide"].items()
     }
+    workspace = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
+    if workspace:
+        tide_root = Path(workspace)
+        PATHS = {k: (tide_root / path) for k, path in CORE_CONFIG["paths"]["tide"].items()}
     CORE_PATHS = {k: (ROOT / path) for k, path in CORE_CONFIG["paths"]["core"].items()}
 
     if separate:

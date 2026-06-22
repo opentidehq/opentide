@@ -1,0 +1,32 @@
+{
+    "tvm": {
+        "metadata": {
+            "field": "tvm",
+            "icon": "\u2623\ufe0f",
+            "name": "Threat Vectors",
+            "description": "Threat Vectors",
+            "model": true
+        },
+        "entries": {}
+    },
+    "dom": {
+        "metadata": {
+            "field": "dom",
+            "icon": "\ud83c\udfaf",
+            "name": "Detection Objectives",
+            "description": "Detection Objectives",
+            "model": true
+        },
+        "entries": {}
+    },
+    "mdr": {
+        "metadata": {
+            "field": "mdr",
+            "icon": "\ud83d\udea8",
+            "name": "Detection Rules",
+            "description": "Detection Rules",
+            "model": true
+        },
+        "entries": {}
+    }
+}

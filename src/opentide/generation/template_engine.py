@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import yaml
 from Engines.modules.files import IndentFullDumper
@@ -75,7 +75,7 @@ def get_required(metaschema: dict[str, Any], required_list: list[str]) -> list[s
 
 
 def definition_handler(entry_point: str) -> dict[str, Any]:
-    return OpenTide.TideSchemas.definitions[entry_point]
+    return cast(dict[str, Any], OpenTide.TideSchemas.definitions[entry_point])
 
 
 def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -96,10 +96,11 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                 definition_required.extend(temp.get("tide.template.force-required", []))
 
             template = gen_template({key.replace("#", ""): temp}, required=definition_required)
-            template = (
+            resolved = (
                 template.get(key) or template.get(key.replace("#", "")) or template.get("#" + key)
             )
-            body[key] = template
+            if resolved is not None:
+                body[key] = resolved
             continue
 
         keyword_type = metaschema[key].get("type") or "string"
@@ -192,7 +193,7 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
             elif metaschema[key].get("format") == "date":
                 content = "YYYY-MM-DD"
             elif metaschema[key].get("format") == "number":
-                content = 3
+                content = "3"
             elif metaschema[key].get("format") == "email":
                 content = "author@domain.com"
             elif metaschema[key].get("format") == "uri":

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 from opentide.models.objective import DetectionObjective, DetectionSignal
 
 
 def load_signal_from_dict(signal: dict[str, Any]) -> DetectionSignal:
     """Convert a raw signal mapping into a typed DetectionSignal."""
-    return DetectionSignal.model_validate(deepcopy(signal))
+    return cast(DetectionSignal, DetectionSignal.model_validate(deepcopy(signal)))
 
 
 def load_objective_from_dict(dom: dict[str, Any]) -> DetectionObjective:

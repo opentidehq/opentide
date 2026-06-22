@@ -76,44 +76,21 @@ def _objective_payload() -> dict[str, Any]:
 def tide_workspace(monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect tide instance outputs into a repo-local workspace for portable CI."""
     TIDE_WORKSPACE.mkdir(parents=True, exist_ok=True)
-    (TIDE_WORKSPACE / "Schemas" / "Templates").mkdir(parents=True, exist_ok=True)
-    (TIDE_WORKSPACE / "Schemas" / "Configurations").mkdir(parents=True, exist_ok=True)
-    (TIDE_WORKSPACE / ".vscode").mkdir(parents=True, exist_ok=True)
+    for rel in (
+        "Schemas",
+        "Schemas/Templates",
+        "Schemas/Configurations",
+        "Schemas/Indexes",
+        "Schemas/Exports",
+        "Objects/Threat Vectors",
+        "Objects/Detection Objectives",
+        "Objects/Detection Rules",
+        "Analytics",
+        ".vscode",
+    ):
+        (TIDE_WORKSPACE / rel).mkdir(parents=True, exist_ok=True)
 
-    import Engines.modules.files as files_mod
-
-    real_resolve = files_mod.resolve_paths
-    tide_keys = {
-        "json_schemas": "Schemas",
-        "templates": "Schemas/Templates",
-        "snippet_file": ".vscode/Model Templates.code-snippets",
-        "tvm": "Objects/Threat Vectors",
-        "dom": "Objects/Detection Objectives",
-        "mdr": "Objects/Detection Rules",
-        "analytics": "Analytics",
-        "tide_indexes": "Schemas/Indexes",
-        "exports": "Schemas/Exports",
-        "custom_configurations": "Configurations",
-    }
-
-    def patched_resolve(separate: bool = False):  # type: ignore[no-untyped-def]
-        paths = real_resolve(separate)
-        if separate:
-            tide_paths, core_paths = paths
-            for key, rel in tide_keys.items():
-                if key in tide_paths:
-                    target = TIDE_WORKSPACE / rel
-                    target.mkdir(parents=True, exist_ok=True)
-                    tide_paths[key] = target
-            return tide_paths, core_paths
-        for key, rel in tide_keys.items():
-            if key in paths:
-                target = TIDE_WORKSPACE / rel
-                target.mkdir(parents=True, exist_ok=True)
-                paths[key] = target
-        return paths
-
-    monkeypatch.setattr(files_mod, "resolve_paths", patched_resolve)
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(TIDE_WORKSPACE.resolve()))
     return TIDE_WORKSPACE
 
 
@@ -172,13 +149,15 @@ def test_template_renderer_run_smoke() -> None:
     template_renderer_run()
 
 
-def test_tide_instance_root_uses_workspace_when_present() -> None:
-    TIDE_WORKSPACE.mkdir(parents=True, exist_ok=True)
+def test_tide_instance_root_uses_workspace_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(TIDE_WORKSPACE.resolve()))
     assert tide_instance_root(ROOT) == TIDE_WORKSPACE.resolve()
 
 
 def _run_generate_py() -> None:
     env = {**os.environ, "TERM_PROGRAM": "vscode"}
+    if workspace := os.environ.get("OPENTIDE_TIDE_WORKSPACE"):
+        env["OPENTIDE_TIDE_WORKSPACE"] = workspace
     result = subprocess.run(
         [sys.executable, "Orchestration/generate.py"],
         cwd=ROOT,

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from Engines.modules.files import resolve_paths
 
@@ -18,9 +19,12 @@ TIDE_WORKSPACE_DIR = "tests/fixtures/generation/tide_workspace"
 
 def tide_instance_root(repo_root: Path) -> Path:
     """Return portable tide instance root (workspace in tests, parent in production)."""
+    workspace_env = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
+    if workspace_env:
+        return Path(workspace_env).resolve()
     workspace = repo_root / TIDE_WORKSPACE_DIR
     if workspace.is_dir():
-        return workspace
+        return workspace.resolve()
     return repo_root.parent
 
 
@@ -62,8 +66,8 @@ def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
     subschema_templates = Path(paths["subschemas"]) / "MDR Systems Deployment" / "Templates"
     if subschema_templates.is_dir():
         for path in sorted(subschema_templates.glob("*.yaml")):
-            rel = path.relative_to(repo_root.resolve())
-            specs.append((f"{REPO_PREFIX}{rel.as_posix()}", path))
+            rel_path = path.relative_to(repo_root.resolve())
+            specs.append((f"{REPO_PREFIX}{rel_path.as_posix()}", path))
 
     snippet = Path(paths["snippet_file"])
     if snippet.is_file():
@@ -90,7 +94,7 @@ def resolve_artifact_path(key: str, *, repo_root: Path) -> Path:
 
 
 def load_checksum_baseline(baseline_path: Path) -> dict[str, str]:
-    return json.loads(baseline_path.read_text(encoding="utf-8"))
+    return cast(dict[str, str], json.loads(baseline_path.read_text(encoding="utf-8")))
 
 
 def write_checksum_baseline(checksums: dict[str, str], baseline_path: Path) -> None:
