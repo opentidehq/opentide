@@ -39,43 +39,32 @@ def test_deleted_files() -> None:
 
 
 def test_indent_full_dumper_centralized() -> None:
-    r = subprocess.run(
-        ["git", "grep", "-n", "class IndentFullDumper", "--", "Engines"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    lines = [line for line in r.stdout.strip().splitlines() if line]
-    assert len(lines) == 1
-    assert lines[0].endswith("class IndentFullDumper(yaml.Dumper):")
-    assert lines[0].startswith("Engines/modules/files.py:")
+    source = (ROOT / "src/opentide/core/files.py").read_text()
+    assert "class IndentFullDumper(yaml.Dumper):" in source
+    engines_shim = (ROOT / "Engines/modules/files.py").read_text()
+    assert "from opentide.core.files import" in engines_shim
+    shim_body = engines_shim.replace("from opentide.core.files import", "")
+    assert "class IndentFullDumper" not in shim_body
 
 
 def test_ordered_yaml_dumper_renamed() -> None:
     r = subprocess.run(
-        ["git", "grep", "-n", "class MyDumper", "--", "Engines"],
+        ["git", "grep", "-n", "class MyDumper", "--", "Engines", "src/opentide"],
         cwd=ROOT,
         capture_output=True,
         text=True,
     )
     assert r.returncode == 1, r.stdout
-    r = subprocess.run(
-        ["git", "grep", "-n", "class OrderedYAMLDumper", "--", "Engines"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    lines = [line for line in r.stdout.strip().splitlines() if line]
-    assert len(lines) == 1
-    assert lines[0].endswith("class OrderedYAMLDumper(IndentFullDumper):")
-    assert lines[0].startswith("Engines/modules/files.py:")
+    source = (ROOT / "src/opentide/core/files.py").read_text()
+    assert "class OrderedYAMLDumper(IndentFullDumper):" in source
     refs = (ROOT / "Engines/mutation/references.py").read_text()
     assert "MyDumper" not in refs
     assert "OrderedYAMLDumper" not in refs
 
 
 def test_seven_platforms_five_validators() -> None:
-    systems = {p.name for p in (ROOT / "Configurations/systems").glob("*.toml")}
+    bundled = ROOT / "src/opentide/data/configurations/platforms"
+    systems = {p.name for p in bundled.glob("*.toml")}
     assert len(systems) == 7
     validators = {
         p.stem.replace("_query", "") for p in (ROOT / "Engines/validation").glob("*_query.py")

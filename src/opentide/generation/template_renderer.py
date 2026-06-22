@@ -10,9 +10,8 @@ import git
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.tide import OpenTide
-
 from opentide.core.logging import log
+from opentide.core.registry import OpenTide
 from opentide.generation.pydantic_templates import (
     core_template_model_keys,
     generate_core_template,

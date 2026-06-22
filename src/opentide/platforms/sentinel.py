@@ -1,7 +1,11 @@
-"""Microsoft Sentinel platform plugin (scaffold)."""
+"""Microsoft Sentinel platform plugin."""
+
+from __future__ import annotations
+
+from typing import Any
 
 
-class Platform:
-    """Sentinel platform adapter placeholder."""
+def declare() -> Any:
+    from Engines.deployment.sentinel import declare as _declare
 
-    name = "sentinel"
+    return _declare()

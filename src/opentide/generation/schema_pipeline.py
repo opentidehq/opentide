@@ -10,15 +10,15 @@ import yaml
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.deployment import enabled_systems
 from Engines.modules.documentation import get_icon
-from Engines.modules.files import resolve_paths
 from Engines.modules.framework import get_type, get_vocab_entry
 from Engines.modules.models import StatusStrategy
-from Engines.modules.tide import OpenTide
 from Engines.modules.vocabulary import VocabularyDefinition, entry_key_field
 
+from opentide.core.files import resolve_paths
 from opentide.core.logging import log
+from opentide.core.registry import OpenTide
+from opentide.platforms.enabled import enabled_systems
 
 GLOBAL_CONFIG: Any
 VOCAB_INDEX: dict[str, Any]

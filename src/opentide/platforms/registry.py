@@ -3,9 +3,23 @@
 from __future__ import annotations
 
 import importlib
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
+from importlib.metadata import entry_points
 from typing import Any, Protocol, cast
+
+from opentide.core.root import get_repo_root
+from opentide.platforms.config import build_system_config
+from opentide.platforms.enabled import enabled_systems
+
+_VALIDATOR_MODULES = {
+    "sentinel": "sentinel_query",
+    "defender_for_endpoint": "defender_for_endpoint_query",
+    "splunk": "splunk_query",
+    "sentinel_one": "sentinel_one_query",
+    "carbon_black_cloud": "carbon_black_cloud_query",
+}
 
 
 class RuleDeployer(Protocol):
@@ -37,6 +51,12 @@ class Platform:
 
 def _class_name(system_key: str) -> str:
     return "".join(part.capitalize() for part in system_key.split("_"))
+
+
+def _ensure_repo_on_path() -> None:
+    root = str(get_repo_root())
+    if root not in sys.path:
+        sys.path.append(root)
 
 
 class PlatformsRegistry:
@@ -74,40 +94,45 @@ class PlatformsRegistry:
         self._instances[name] = platform
         return platform
 
+    def _load_validator(self, system: str) -> QueryValidator | None:
+        module_suffix = _VALIDATOR_MODULES.get(system)
+        if module_suffix is None:
+            return None
+        _ensure_repo_on_path()
+        try:
+            module = importlib.import_module(f"Engines.validation.{module_suffix}")
+            return cast(QueryValidator, module.declare())
+        except Exception:
+            return None
+
     def _ensure_loaded(self) -> None:
         if self._loaded:
             return
-        import sys
 
-        from opentide.core.root import repository_root
+        _ensure_repo_on_path()
+        active = set(enabled_systems())
+        eps = entry_points(group="opentide.platforms")
 
-        root = str(repository_root())
-        if root not in sys.path:
-            sys.path.append(root)
-
-        from Engines.modules.deployment import enabled_systems
-        from Engines.modules.registry import OpenTide as LegacyOpenTide
-
-        for system in LegacyOpenTide.Configuration.Systems.Index:
-            module_name = system
+        for ep in eps:
+            system = ep.name.replace("-", "_")
             try:
-                module = importlib.import_module(f"Engines.deployment.{module_name}")
-                deployer = module.declare()
-                self._deployers[system] = cast(RuleDeployer, deployer)
+                deployer = cast(RuleDeployer, ep.load()())
+                self._deployers[system] = deployer
             except Exception:
                 pass
 
-            try:
-                module = importlib.import_module(f"Engines.validation.{module_name}_query")
-                validator = module.declare()
-                self._validators[system] = cast(QueryValidator, validator)
-            except Exception:
-                pass
+            validator = self._load_validator(system)
+            if validator is not None:
+                self._validators[system] = validator
 
-            config = getattr(LegacyOpenTide.Configuration.Systems, _class_name(system), None)
+            try:
+                config = build_system_config(system)
+            except Exception:
+                config = None
+
             self._instances[system] = Platform(
                 name=system,
-                enabled=system in enabled_systems(),
+                enabled=system in active,
                 config=config,
                 deployer=self._deployers.get(system),
                 validator=self._validators.get(system),
