@@ -24,9 +24,9 @@ def test_bdr_absent() -> None:
 
 
 def test_dom_template_bug_fixed() -> None:
-    registry = (ROOT / "Engines/modules/registry.py").read_text()
-    assert 'dom = str(Index.get("dom"))' in registry
-    assert 'dom = str(Index.get("cdm"))' not in registry
+    global_toml = (ROOT / "Configurations/global.toml").read_text()
+    assert '"dom"' in global_toml
+    assert '"cdm"' not in global_toml
 
 
 def test_global_objects() -> None:

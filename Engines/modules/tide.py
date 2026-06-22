@@ -1,29 +1,34 @@
-"""Backward-compatibility re-export shim for tide module."""
+"""Backward-compatibility re-export shim — delegates to opentide core."""
 
-from Engines.modules.enums import DetectionPlatforms
-DetectionSystems = DetectionPlatforms  # legacy
+from opentide.core.index_manager import IndexManager
+from opentide.core.registry import OpenTide
 
-from Engines.modules.registry import OpenTide
-DataTide = OpenTide  # legacy
-
-from Engines.modules.index import IndexManager
-IndexTide = IndexManager  # legacy
+DataTide = OpenTide
 
 from Engines.modules.environment import DebugHelpers
-HelperTide = DebugHelpers  # legacy
+
+HelperTide = DebugHelpers
+
+from Engines.modules.enums import DetectionPlatforms
+
+DetectionSystems = DetectionPlatforms
+
+IndexTide = IndexManager
 
 from Engines.modules.loaders.object_loader import ObjectLoader
-TideLoader = ObjectLoader  # legacy
+
+TideLoader = ObjectLoader
+
 
 def _platforms():
-    from Engines.modules.platforms import Platforms
-    OpenTide.Platforms = Platforms
-    return Platforms
+    return OpenTide.Platforms
+
 
 def __getattr__(name: str):
     if name == "Platforms":
         return _platforms()
     raise AttributeError(name)
+
 
 __all__ = [
     "OpenTide",

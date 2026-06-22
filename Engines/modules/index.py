@@ -44,56 +44,20 @@ class IndexManager:
     """
     @staticmethod
     def reload():
-        """Force a re-import of the tide module to refresh the in-memory index.
+        """Refresh the in-memory index via opentide IndexManager."""
+        from opentide.core.index_manager import IndexManager as OTIndexManager
+        from opentide.core.registry import OpenTide
 
-        DataTide is implemented as a self-initializing dataclass that captures
-        the repository index at import time and then remains static. When the
-        underlying index changes during a long-running process (for example
-        during orchestration), calling this function removes the module from
-        ``sys.modules`` so a subsequent import will re-run the module top-level
-        code and create a fresh DataTide instance using the updated index.
+        log("WARNING", "OpenTide re-indexation")
+        log("INFO", "The repository will be reindexed to update OpenTide")
+        OTIndexManager.reload()
+        OpenTide.reload()
 
-        This method has the side effect of re-executing module import-time
-        actions; callers should ensure that it is safe to reload the module in
-        their runtime environment.
-        """
-        log("WARNING", "DataTide re-indexation")
-        log("INFO", "The repository will be reindexed to update DataTide")
-        del sys.modules["Engines.modules.tide"]
-        from Engines.modules.tide import DataTide
-
-    @cache #Memoization as load() is called multiple times as DataTide initializes
     @staticmethod
     def load() -> Dict[str, dict]:
-        """Load the OpenTide instance index from disk or generate it in memory.
+        from opentide.core.index_manager import IndexManager as OTIndexManager
 
-        The loader will:
-        1. Load or generate the base index
-        2. Reconcile with staging index if present and load fresh configurations
-
-        Returns:
-            A dictionary representing the full TIDE index structure with fresh 
-            configurations from staging reconciliation.
-
-        Raises:
-            Exception: If the index cannot be loaded or generated in memory.
-        """
-        EXPECTED_INDEX_PATH = ROOT / "index.json"
-        INDEX_PATH = Path(os.getenv("INDEX_PATH") or EXPECTED_INDEX_PATH)
-
-        print("📂 Index not found in memory, first seeking index file...")
-        if os.path.isfile(INDEX_PATH):
-            _tide_index = json.load(open(INDEX_PATH))
-        else:
-            # Generate index in memory
-            print("💽 Could not find index file, generating it in memory")
-            _tide_index = indexer()
-            if not _tide_index:
-                raise Exception("INDEX COULD NOT BE LOADED IN MEMORY")
-        
-        # Reconcile with staging index if present
-        _tide_index = IndexManager.reconcile_staging(_tide_index)
-        return _tide_index
+        return OTIndexManager.load()
 
     @staticmethod
     def reconcile_staging(index):
