@@ -389,7 +389,9 @@ def info_cmd(
 @app.command("migrate")
 def migrate_cmd(
     ctx: typer.Context,
-    check: bool = typer.Option(False, "--check", help="Report legacy patterns without changing files"),
+    check: bool = typer.Option(
+        False, "--check", help="Report legacy patterns without changing files"
+    ),
     apply: bool = typer.Option(False, "--apply", help="Rewrite known legacy patterns in place"),
 ) -> None:
     """Scan or rewrite legacy submodule imports and Orchestration script calls."""
@@ -404,7 +406,10 @@ def migrate_cmd(
         return
     findings = scan_repo(repo)
     if check or not apply:
-        emit_success(cli, {"message": "Migration scan complete", "findings": findings, "count": len(findings)})
+        emit_success(
+            cli,
+            {"message": "Migration scan complete", "findings": findings, "count": len(findings)},
+        )
 
 
 def main() -> None:
