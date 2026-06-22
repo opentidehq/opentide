@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from opentide.models.base import TideModel
 
@@ -81,7 +81,7 @@ def parse_platform_config(platform: str, payload: dict[str, Any]) -> PlatformCon
     model = PLATFORM_CONFIG_MODELS.get(platform)
     if model is None:
         raise ValueError(f"Unknown platform {platform!r}")
-    return model.model_validate(payload)
+    return cast(PlatformConfigBase, model.model_validate(payload))
 
 
 class RuleConfigurations(TideModel):
@@ -101,4 +101,4 @@ class RuleConfigurations(TideModel):
         for key, value in platforms.items():
             if key in PLATFORM_CONFIG_MODELS and value:
                 kwargs[key] = parse_platform_config(key, value)
-        return cls.model_validate(kwargs)
+        return cast(RuleConfigurations, cls.model_validate(kwargs))

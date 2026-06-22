@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from opentide.core import index_manager as index_mod
 from opentide.core import runtime
@@ -265,7 +265,7 @@ class _DeploymentConfig:
             sys.path.append(root)
         from Engines.modules.loaders.config_loader import ConfigurationsLoader
 
-        return ConfigurationsLoader.load_statuses(self.Index["statuses"])
+        return cast(list[Any], ConfigurationsLoader.load_statuses(self.Index["statuses"]))
 
     @property
     def debug(self) -> dict[str, Any]:
@@ -391,7 +391,7 @@ class _VocabulariesAccessor:
             sys.path.append(root)
         from Engines.modules.vocabulary import VocabularyLoader
 
-        return VocabularyLoader.load_index(self._index.get("vocabs"))
+        return cast(dict[str, Any], VocabularyLoader.load_index(self._index.get("vocabs")))
 
 
 @dataclass(frozen=True)
@@ -446,19 +446,19 @@ class _ModelsAccessor:
 
     @property
     def mdr(self) -> dict[str, Any]:
-        return self.Index.get("mdr", {})
+        return cast(dict[str, Any], self.Index.get("mdr", {}))
 
     @property
     def dom(self) -> dict[str, Any]:
-        return self.Index.get("dom", {})
+        return cast(dict[str, Any], self.Index.get("dom", {}))
 
     @property
     def tvm(self) -> dict[str, Any]:
-        return self.Index.get("tvm", {})
+        return cast(dict[str, Any], self.Index.get("tvm", {}))
 
     @property
     def signal(self) -> dict[str, Any]:
-        return self.Index.get("signal", {})
+        return cast(dict[str, Any], self.Index.get("signal", {}))
 
     @property
     def files(self) -> dict[str, Any]:

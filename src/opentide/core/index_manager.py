@@ -6,7 +6,7 @@ import json
 import os
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from opentide.core.root import repository_root
 
@@ -53,7 +53,7 @@ class IndexManager:
         index = indexer()
         if not index:
             raise RuntimeError("INDEX COULD NOT BE LOADED IN MEMORY")
-        return index
+        return cast(dict[str, Any], index)
 
     @classmethod
     def reconcile_staging(cls, index: dict[str, Any]) -> dict[str, Any]:
@@ -66,7 +66,7 @@ class IndexManager:
             sys.path.append(root_str)
         from Engines.modules.index import IndexManager as LegacyIndexManager
 
-        return LegacyIndexManager.reconcile_staging(deepcopy(index))
+        return cast(dict[str, Any], LegacyIndexManager.reconcile_staging(deepcopy(index)))
 
     @classmethod
     def return_paths(cls, tier: str = "all") -> dict[str, Any]:
@@ -78,7 +78,7 @@ class IndexManager:
             sys.path.append(root_str)
         from Engines.modules.index import IndexManager as LegacyIndexManager
 
-        return LegacyIndexManager.return_paths(tier=tier)
+        return cast(dict[str, Any], LegacyIndexManager.return_paths(tier=tier))
 
     @classmethod
     def compute_chains(cls, tvm: dict[str, Any]) -> dict[str, Any]:
@@ -90,4 +90,4 @@ class IndexManager:
             sys.path.append(root_str)
         from Engines.modules.index import IndexManager as LegacyIndexManager
 
-        return LegacyIndexManager.compute_chains(tvm)
+        return cast(dict[str, Any], LegacyIndexManager.compute_chains(tvm))

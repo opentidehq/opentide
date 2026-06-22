@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from pydantic.json_schema import GenerateJsonSchema
 
 from opentide.models.base import TideModel
@@ -14,9 +16,9 @@ class TideSchemaGenerator(GenerateJsonSchema):
         return True
 
 
-def model_json_schema(model: type[TideModel]) -> dict:
+def model_json_schema(model: type[TideModel]) -> dict[str, Any]:
     """Generate JSON Schema for a TideModel subclass."""
-    return model.model_json_schema(schema_generator=TideSchemaGenerator)
+    return cast(dict[str, Any], model.model_json_schema(schema_generator=TideSchemaGenerator))
 
 
 def run() -> None:
