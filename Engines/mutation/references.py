@@ -28,12 +28,6 @@ REF_TEMPLATE = """#references:
 """
 
 
-class OrderedYAMLDumper(yaml.Dumper):
-
-    def increase_indent(self, flow=False, indentless=False):
-        return super(OrderedYAMLDumper, self).increase_indent(flow, False)
-
-
 def upgrade_refs(old_refs):
 
     new = dict()

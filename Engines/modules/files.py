@@ -2,6 +2,7 @@ import sys
 import git
 import os
 import toml
+import yaml
 from pathlib import Path
 from collections.abc import MutableMapping as Map
 from typing import overload, Tuple, Literal
@@ -144,9 +145,6 @@ def safe_file_name(string: str, safe_mode: bool = True) -> str:
 # DEBUG Check resulting configuration
 #with open("config_out.json", "w+") as DEBUG:
 #    json.dump(resolve_configurations(), DEBUG, indent=4)
-
-
-import yaml
 
 
 class IndentFullDumper(yaml.Dumper):
