@@ -275,8 +275,6 @@ def backlink_resolver(model_uuid:str,
 
     if model_type == "tvm":
         hover_content = model_value(model_uuid, "description")
-    if model_type == "cdm":
-        hover_content = model_value(model_uuid, "guidelines")
     if model_type == "dom":
         objective_data = DataTide.Models.DOM[model_uuid]
         hover_content = objective_data.objective.description

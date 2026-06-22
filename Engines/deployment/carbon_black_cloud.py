@@ -109,9 +109,9 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudEngineInit, DeployMDR):
             tags.append(config_data["status"])
 
             if "detection_model" in data.keys():
-                cdm = data["detection_model"]
+                detection_model = data["detection_model"]
                 techniques = techniques_resolver(uuid)
-                tags.append(cdm)
+                tags.append(detection_model)
                 tags.extend(techniques)
 
             if "tags" in config_data.keys():
@@ -121,8 +121,8 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudEngineInit, DeployMDR):
             severity = self.SEVERITY_MAPPING[data["response"]["alert_severity"]]
 
             # TODO Introduce optional deployment mode where one report can group MDR together
-            # To implement, the id of the CDM should be the unique ID of the report.
-            # The report title should be updated against CDM name on each push.
+            # To implement, the id of the detection model should be the unique ID of the report.
+            # The report title should be updated against detection model name on each push.
             selected_watchlist = config_data.get("watchlist") or self.DEFAULT_WATCHLIST
             selected_report = config_data.get("report") or name
             

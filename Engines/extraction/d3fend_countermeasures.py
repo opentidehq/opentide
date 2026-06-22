@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
+from Engines.modules.files import IndentFullDumper
 from Engines.modules.tide import DataTide
 
 RESOURCES = Path(DataTide.Configurations.Global.Paths.Core.resources)
@@ -26,11 +27,6 @@ D3FEND_COUNTERMEASURES = (
     .to_dict(orient="records")
 )
 
-
-class IndentFullDumper(yaml.Dumper):
-
-    def increase_indent(self, flow=False, indentless=False):
-        return super(IndentFullDumper, self).increase_indent(flow, False)
 
 
 voc_countermeasures = list()

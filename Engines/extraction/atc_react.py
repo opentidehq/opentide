@@ -12,16 +12,12 @@ lib_folder = Path(CONFIG["paths"]["core"]["vocabularies"])
 out_file = lib_folder / actions_vocab
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
+from Engines.modules.files import IndentFullDumper
 from Engines.modules.tide import DataTide
 
 RESOURCES = Path(DataTide.Configurations.Global.Paths.Index["resources"])
 ATC_REACT = RESOURCES / "atc-react"
 
-
-class IndentFullDumper(yaml.Dumper):
-
-    def increase_indent(self, flow=False, indentless=False):
-        return super(IndentFullDumper, self).increase_indent(flow, False)
 
 
 def normalize_react_title(

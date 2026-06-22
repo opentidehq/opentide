@@ -144,3 +144,12 @@ def safe_file_name(string: str, safe_mode: bool = True) -> str:
 # DEBUG Check resulting configuration
 #with open("config_out.json", "w+") as DEBUG:
 #    json.dump(resolve_configurations(), DEBUG, indent=4)
+
+
+import yaml
+
+
+class IndentFullDumper(yaml.Dumper):
+
+    def increase_indent(self, flow=False, indentless=False):
+        return super(IndentFullDumper, self).increase_indent(flow, False)

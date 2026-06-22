@@ -327,14 +327,11 @@ def relations_table(
         if direction == "downstream":
 
             if model_type == "tvm":
-                trunk_data["cdm"] = (
-                    None if "cdm" not in trunk_data else trunk_data["cdm"]
-                )
                 trunk_data["dom"] = (
                     None if "dom" not in trunk_data else trunk_data["dom"]
                 )
 
-            if model_type in ["tvm", "dom", "cdm"]:
+            if model_type in ["tvm", "dom"]:
                 trunk_data["mdr"] = (
                     None if "mdr" not in trunk_data else trunk_data["mdr"]
                 )
@@ -346,7 +343,7 @@ def relations_table(
 
 
         elif direction == "upstream":
-            if model_type in ["mdr", "dom", "cdm"]:
+            if model_type in ["mdr", "dom"]:
                 trunk_data["tvm"] = (
                     None if "tvm" not in trunk_data else trunk_data["tvm"]
                 )
@@ -357,9 +354,6 @@ def relations_table(
                 )
 
             if model_type in ["mdr"]:
-                trunk_data["cdm"] = (
-                    None if "cdm" not in trunk_data else trunk_data["cdm"]
-                )
                 trunk_data["dom"] = (
                     None if "dom" not in trunk_data else trunk_data["dom"]
                 )

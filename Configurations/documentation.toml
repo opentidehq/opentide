@@ -1,4 +1,4 @@
-scope = [ "tvm", "cdm" ]
+scope = [ "tvm", "dom", "mdr" ]
 skip_model_keys = ["description",
                             "guidelines",
                             "terrain",
@@ -32,12 +32,10 @@ proxy = false
 tvm = "Threat Vectors"
 dom = "Detection Objectives"
 signal = "Detection Objective Signals"
-cdm = "Detection Models"
 mdr = "Detection Rules"
 
 [titles]
 tvm = "Threat Vector Schema"
-cdm = "Detection Model Schema"
 dom = "Detection Objective Schema"
 mdr = "Detection Rules Schema"
 
@@ -45,7 +43,6 @@ mdr = "Detection Rules Schema"
 tvm = "☣️"
 dom = "🎯"
 signal = "📡"
-cdm = "🛡️"
 mdr = "🚨"
 vocab = "📒"
 metaschema = "🏗️"
