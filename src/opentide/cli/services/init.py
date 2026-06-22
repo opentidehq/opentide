@@ -129,7 +129,9 @@ def _copy_ci_workflows(target: Path, options: InitOptions) -> None:
     elif options.ci is CiPlatform.azure:
         src = root / "Pipelines" / "Azure" / "opentide.yml"
         if src.is_file():
-            (target / "azure-pipelines.yml").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+            (target / "azure-pipelines.yml").write_text(
+                src.read_text(encoding="utf-8"), encoding="utf-8"
+            )
 
 
 def _copy_ai_assets(target: Path, options: InitOptions) -> None:
@@ -218,7 +220,9 @@ def run_interactive_init(ctx: CliContext, base_path: Path) -> dict[str, object]:
             except ValueError:
                 log("WARNING", f"Unknown platform skipped: {token}")
 
-    ci_choice = Prompt.ask("CI/CD platform", choices=["github", "gitlab", "azure", "none"], default="github")
+    ci_choice = Prompt.ask(
+        "CI/CD platform", choices=["github", "gitlab", "azure", "none"], default="github"
+    )
     options.ci = CiPlatform(ci_choice)
     options.staging = Confirm.ask("Enable staging deployments on PRs?", default=True)
     options.promotion = Confirm.ask("Enable automatic status promotion?", default=True)

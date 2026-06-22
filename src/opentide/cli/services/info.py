@@ -12,11 +12,11 @@ if TYPE_CHECKING:
 
 
 def collect_info(
-  ctx: CliContext,
-  *,
-  platform: DetectionPlatform | None = None,
-  section: str | None = None,
-  technique: str | None = None,
+    ctx: CliContext,
+    *,
+    platform: DetectionPlatform | None = None,
+    section: str | None = None,
+    technique: str | None = None,
 ) -> dict[str, Any]:
     """Collect system information about the detection repository."""
     ctx.apply_environment()

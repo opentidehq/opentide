@@ -102,6 +102,9 @@ def run_generate(
     ctx.apply_environment()
     if phase is None:
         run_generate_all(staging=staging)
-        return {"message": "Full generation pipeline completed", "phases": [p.value for p in _PHASE_ORDER]}
+        return {
+            "message": "Full generation pipeline completed",
+            "phases": [p.value for p in _PHASE_ORDER],
+        }
     run_generate_phase(phase, staging=staging)
     return {"message": f"Generation phase {phase.value} completed", "phase": phase.value}

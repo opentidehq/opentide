@@ -39,8 +39,12 @@ app = typer.Typer(
 @app.callback()
 def main_callback(
     ctx: typer.Context,
-    repo: str | None = typer.Option(None, "--repo", envvar="OPENTIDE_REPO_ROOT", help="Repository root"),
-    data: str | None = typer.Option(None, "--data", envvar="OPENTIDE_DATA_ROOT", help="Bundled data root"),
+    repo: str | None = typer.Option(
+        None, "--repo", envvar="OPENTIDE_REPO_ROOT", help="Repository root"
+    ),
+    data: str | None = typer.Option(
+        None, "--data", envvar="OPENTIDE_DATA_ROOT", help="Bundled data root"
+    ),
     debug: bool = typer.Option(False, "--debug", envvar="DEBUG", help="Enable debug logging"),
     no_color: bool = typer.Option(False, "--no-color", help="Disable Rich colour output"),
     json_output: bool = typer.Option(False, "--json", help="Machine-readable JSON output"),
@@ -68,7 +72,9 @@ def init_cmd(
     name: str | None = typer.Option(None, "--name"),
     org: str | None = typer.Option(None, "--org"),
     description: str | None = typer.Option(None, "--description"),
-    platform: list[DetectionPlatform] = typer.Option([], "--platform", help="Platforms (repeatable)"),
+    platform: list[DetectionPlatform] = typer.Option(
+        [], "--platform", help="Platforms (repeatable)"
+    ),
     ci: CiPlatform = typer.Option(CiPlatform.github, "--ci"),
     staging: bool = typer.Option(True, "--staging/--no-staging"),
     promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
@@ -79,7 +85,9 @@ def init_cmd(
     mcp_config: bool = typer.Option(False, "--mcp-config"),
     agent_skills: bool = typer.Option(False, "--agent-skills"),
     statuses: str | None = typer.Option(None, "--statuses"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Non-interactive with provided/default flags"),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Non-interactive with provided/default flags"
+    ),
 ) -> None:
     """Interactive or scripted detection repository onboarding."""
     cli = get_context(ctx)

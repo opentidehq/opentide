@@ -45,7 +45,9 @@ def run_deploy(
         log("TITLE", "Pre-deployment Routine")
         PromoteMDR().promote(pre_deployment)
 
-    deployment_list = make_deploy_plan(deployment_plan, wide_scope=wide, keep_deprecated=keep_deprecated)
+    deployment_list = make_deploy_plan(
+        deployment_plan, wide_scope=wide, keep_deprecated=keep_deprecated
+    )
 
     if platform is not None:
         platform_key = platform.value

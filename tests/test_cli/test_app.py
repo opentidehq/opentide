@@ -12,7 +12,17 @@ runner = CliRunner()
 def test_cli_help_lists_commands() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for command in ("init", "generate", "validate", "deploy", "document", "mutate", "export", "extract", "info"):
+    for command in (
+        "init",
+        "generate",
+        "validate",
+        "deploy",
+        "document",
+        "mutate",
+        "export",
+        "extract",
+        "info",
+    ):
         assert command in result.stdout
 
 
