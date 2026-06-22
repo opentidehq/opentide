@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -154,20 +152,25 @@ def test_tide_instance_root_uses_workspace_env(monkeypatch: pytest.MonkeyPatch) 
     assert tide_instance_root(ROOT) == TIDE_WORKSPACE.resolve()
 
 
-def _run_generate_py() -> None:
-    env = {**os.environ, "TERM_PROGRAM": "vscode"}
-    if workspace := os.environ.get("OPENTIDE_TIDE_WORKSPACE"):
-        env["OPENTIDE_TIDE_WORKSPACE"] = workspace
-    result = subprocess.run(
-        [sys.executable, "Orchestration/generate.py"],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        pytest.fail(f"generate.py failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+def _run_generation_pipeline() -> None:
+    """Run the generation stages that produce gated artifacts (no pandas-heavy exports)."""
+    os.environ.setdefault("TERM_PROGRAM", "vscode")
+
+    from opentide.core.index_manager import IndexManager
+    from opentide.core.registry import OpenTide
+    from opentide.generation.schema import run as generate_schemas
+    from opentide.generation.template import run as generate_templates
+    from opentide.indexing.object_vocab import run as generate_object_vocab
+
+    generate_object_vocab()
+    generate_templates()
+    IndexManager.reload()
+    OpenTide.reload()
+    generate_schemas()
+
+    from Engines.framework import vscode_snippets
+
+    vscode_snippets.run()
 
 
 def test_generate_py_artifact_byte_checksum_gate(tide_workspace: Path) -> None:
@@ -176,7 +179,7 @@ def test_generate_py_artifact_byte_checksum_gate(tide_workspace: Path) -> None:
     if not ARTIFACT_BASELINE.is_file():
         pytest.fail("Missing generation artifact baseline checksum file")
     expected = load_checksum_baseline(ARTIFACT_BASELINE)
-    _run_generate_py()
+    _run_generation_pipeline()
     verify_generation_checksums(expected, repo_root=ROOT)
 
 
