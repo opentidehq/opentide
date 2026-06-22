@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, cast
 
+from pydantic import Field
+
 from opentide.models.base import TideModel
 
 
@@ -12,6 +14,11 @@ class PlatformConfigBase(TideModel):
 
     enabled: bool = False
     name: str = ""
+    platform_schema: str | None = Field(default=None, alias="schema")
+    status: str | None = None
+    flags: list[str] | None = None
+    tenants: list[str] | None = None
+    contributors: list[str] | None = None
 
 
 class SentinelConfig(PlatformConfigBase):
