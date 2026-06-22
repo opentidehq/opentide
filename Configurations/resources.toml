@@ -1,0 +1,18 @@
+[attack]
+enterprise = "attack/enterprise-attack-v17.1.xlsx"
+mobile = "attack/mobile-attack-v17.1.xlsx"
+ics = "attack/ics-attack-v17.1.xlsx"
+
+[d3fend]
+ontology = "d3fend/d3fend-ontology.json"
+countermeasures = "d3fend/d3fend.csv"
+
+[engage] #https://engage.mitre.org/learn-more-data/
+matrix = "engage/Engage-Data-V1.0.xlsx"
+
+[nist]
+data = "nist/NIST Cybersecurity Framework.xlsx"
+
+[misp]
+[misp.galaxies]
+threat_actors = "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"

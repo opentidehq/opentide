@@ -1,0 +1,32 @@
+[templates]
+# Allows to insert templates by interacting with the JSON
+# schema and the template generation algorithm.
+# In metaschema, the special keyword tide.config.template is used
+# to point to the schema path. We prefer to use scoped, non nested
+# keys to avoid confusing the TOML parser with structures too complicated. 
+"mdr::description" = """
+"""
+
+"mdr::response::procedure::analysis" = """
+"""
+
+"mdr::response::procedure::containment" = """
+"""
+
+"mdr::exclusions::reason" = """
+"""
+
+[vocabulary]
+# Vocabulary Extensions
+# Allows users to inject custom entries into vocabularies at schema
+# compilation time. Extensions appear in JSON Schema enums and VS Code
+# autocomplete alongside core vocabulary entries.
+#
+# Each sub-key matches a vocabulary field name (e.g. surface, techniques).
+# Entries follow the same structure as vocabulary keys items.
+#
+# Example:
+# [[vocabulary.surface]]
+# name = "cloud::OVHcloud"
+# description = "OVHcloud public cloud services"
+# "tide.vocab.stages" = "cloud"
