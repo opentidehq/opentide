@@ -1,236 +1,165 @@
-# CoreTide Copilot Instructions
+# OpenTide Copilot Instructions
 
 ## Project Identity
 
-CoreTide is the open-source DetectionOps backend engine for the OpenTide framework. It powers detection-as-code deployment across 7+ security platforms (Microsoft Sentinel, Crowdstrike, Splunk, Defender for Endpoint, Sentinel One, Carbon Black Cloud, HarfangLab). Built and firetested for 2+ years at the European Commission before open-sourcing.
+**OpenTide** (`opentide`) is the DetectionOps engine for the OpenTide framework — a versioned Python package on PyPI that powers detection-as-code deployment across seven security platforms. It is the successor to [CoreTide](https://github.com/OpenTideHQ/CoreTide), which was historically consumed as a git submodule.
 
-CoreTide is **not** the content — it is the **engine**. Client OpenTide instances inject detection content (YAML objects) into CoreTide for validation, indexing, deployment, and documentation generation. CoreTide is consumed as a git submodule by client repositories.
+OpenTide is **not** the detection content. Client repositories hold YAML objects (rules, threat vectors, objectives); OpenTide validates, indexes, deploys, and documents that content.
+
+**Programme**: [Project TideKit](https://github.com/OpenTideHQ/CoreTide/issues/60) — tracked phases [#61–#71](https://github.com/OpenTideHQ/CoreTide/issues?q=is%3Aissue+milestone%3A%22Project+TideKit%22). Agents: read [`AGENTS.md`](../AGENTS.md) before implementing a phase.
 
 ---
 
 ## Architecture Overview
 
+### Target Package Layout (post-Phase 5)
+
+```
+src/opentide/
+├── core/           # registry.py (OpenTide), index.py, environment.py, loaders/
+├── models/         # DetectionRule, ThreatVector, DetectionObjective (Pydantic)
+├── platforms/      # Per-platform deployer + validator packages
+├── generation/     # schemas, templates, snippets, index builder
+├── validation/     # Schema + query validators
+├── documentation/  # Wiki generation
+├── cli/            # Typer CLI (opentide)
+├── mcp_server/     # FastMCP server (opentide-mcp)
+└── data/           # Bundled TOML configs, vocabulary, external frameworks
+```
+
 ### Core Data Flow
 
 ```
-YAML Objects (TVMs, DOMs, MDRs)
-    → Indexing (objects_indexer → index.json)
-    → Framework Generation (JSON Schemas, Templates, VS Code Snippets)
+YAML objects (rules, objectives, threats)
+    → Indexing (index_builder → index.json)
+    → Generation (JSON Schemas, templates, VS Code snippets)
     → Validation (schema, UUID, query)
-    → Deployment (per-system plugin deployers)
-    → Documentation (markdown wiki generation)
+    → Deployment (per-platform deployers)
+    → Documentation (markdown wiki)
 ```
 
-### Central Abstraction: DataTide
+### Central Abstraction: OpenTide
 
-`DataTide` (in `Engines/modules/tide.py`) is a **frozen dataclass registry** — the single programmatic entry point to all data:
+`OpenTide` (in `opentide.core.registry`) is the singleton registry — the programmatic entry point:
 
 ```python
-DataTide.Models.MDR          # Dict[uuid] → MDR objects
-DataTide.Models.TVM          # Threat Vector Models
-DataTide.Models.DOM          # Detection Objectives
-DataTide.Configurations.Systems.Sentinel  # Sentinel config
-DataTide.Vocabularies.Index  # Vocabulary definitions
-DataTide.JsonSchemas.mdr     # JSON Schema for validation
+from opentide import OpenTide
+
+OpenTide.initialise()
+rule = OpenTide.Rules[uuid]
+rule.deploy("sentinel")
+rule.validate()
+
+OpenTide.Platforms.Sentinel.deployer.deploy([uuid])
+OpenTide.Platforms.Sentinel.validator.validate([uuid])
 ```
 
 Key traits:
-- Self-initialises at import time by loading `index.json`
-- Frozen (`frozen=True`) dataclasses — fully immutable
-- Refreshable via `IndexTide.reload()` when the repository changes
-- Uses `@cache` memoisation for lazy loading
+- Lazy-loaded after `initialise()` — no import-time side effects (post-Phase 4)
+- Pydantic models with delegation methods for deploy/validate/document
+- Platform-centric access via `OpenTide.Platforms.{Name}`
 
-### Plugin Architecture
+### Platform Capability Matrix
 
-Each supported detection system implements a deployment plugin:
+| Platform | Deploy | Query validate |
+|----------|:------:|:--------------:|
+| Sentinel | ✅ | ✅ KQL |
+| Defender for Endpoint | ✅ | ✅ KQL |
+| Splunk | ✅ | ✅ SPL |
+| SentinelOne | ✅ | ✅ S1QL |
+| Carbon Black Cloud | ✅ | ✅ Lucene |
+| CrowdStrike | ✅ | ❌ |
+| HarfangLab | ✅ | ❌ |
 
+CrowdStrike and HarfangLab have `.can_validate is False` and `.validator is None`. Never fake query validation for these platforms.
+
+### Plugin Registration
+
+Platforms register via entry points (`opentide.platforms` group) and `declare()`:
+
+```python
+def declare():
+    OpenTide.Platforms.register(SentinelPlatform)
 ```
-Engines/deployment/{system}.py   → Deployer implementation
-Configurations/systems/{system}.toml → System configuration
-Engines/validation/{system}_query.py → Query syntax validator (optional)
-Engines/modules/systems/{system}.py  → System-specific helpers (optional)
-```
-
-Plugins are discovered dynamically by `PluginEnginesLoader`, which imports only enabled systems and registers them via a `declare()` function into the `DeployTide` singleton. Adding a new platform requires no changes to core engine code.
-
-### Configuration Pipeline
-
-```
-TOML file
-    → Raw dict (HelperTide.fetch_config_envvar resolves $ENV_VAR placeholders)
-    → SystemLoader.load_*_config() (extracts common fields)
-    → System-specific TideLoader (converts to typed dataclasses)
-    → Frozen dataclass in DataTide.Configurations.Systems.{System}
-```
-
-### Index-Driven Architecture
-
-- `index.json` is the single source of truth (snapshot of repo state)
-- Generated by the indexer, which traverses all YAML files and builds a nested dict
-- All objects are UUID-keyed: `{uuid: {metadata, data}}`
-- Staging reconciliation: PR changes create `staging_index.json`, merged with production via version comparison
 
 ---
 
-## Repository Structure
+## CLI & MCP
 
+```bash
+opentide validate --platform sentinel --all
+opentide deploy --platform splunk --dry-run
+opentide generate
+opentide init ./my-detections
 ```
-CoreTide/
-├── Engines/                # Core Python execution engine
-│   ├── modules/            # Shared modules (the heart of CoreTide)
-│   │   ├── tide.py         # DataTide, IndexTide, HelperTide, SystemLoader, TideLoader (~1700 lines)
-│   │   ├── models.py       # Enums (StatusStrategy, DeploymentStrategy, DetectionSystems) & config models
-│   │   ├── plugins.py      # Plugin interfaces (DeployEngine, ValidationEngine, PluginEnginesLoader)
-│   │   ├── deployment.py   # CI/CD context (CIEnvironment, TideRepo), deployment planning
-│   │   ├── errors.py       # Custom exception hierarchy (TideErrors.*)
-│   │   ├── logs.py         # Rich ANSI logging (log(), Dialog, ANSI classes)
-│   │   ├── framework.py    # Utility helpers (unroll_dot_dict, metaschema traversal)
-│   │   ├── validation.py   # Input sanitisation (email, URL, IP, UUID, hash patterns)
-│   │   ├── files.py        # File I/O and config resolution
-│   │   ├── datamodels/     # Strongly-typed data models
-│   │   │   ├── objects.py  # Objects.DetectionObjective, Signal, Composition
-│   │   │   └── configurations.py  # Configurations.Visibility (assets, logsources, detectors)
-│   │   └── systems/        # Per-system helper modules (kql.py, sentinel.py, etc.)
-│   ├── deployment/         # System deployer plugins (one .py per platform)
-│   ├── validation/         # Validators (schema, UUID, query per platform, CVE)
-│   ├── indexing/           # Index generation (objects_indexer, staging, revisions)
-│   ├── framework/          # Framework generators (JSON schemas, templates, VS Code snippets)
-│   ├── documentation/      # Markdown wiki generation (per-object docs, navigation)
-│   ├── export/             # ATT&CK Navigator layer, table exports
-│   ├── mutation/           # Object mutations (promotion, file renaming, reference updates)
-│   └── templates/          # Template files used during generation
-├── Framework/              # Meta Schemas and Vocabulary definitions
-│   ├── Meta Schemas/       # YAML metaschema definitions for all object types
-│   ├── Log Sources/        # Log source definitions
-│   └── Vocabulary/         # Controlled vocabulary lists
-├── Orchestration/          # CLI entry points (pipeline scripts)
-│   ├── generate.py         # Index → Templates → Schemas → Revisions → Snippets → Exports
-│   ├── validate.py         # ID uniqueness → UUID format → Schema validation
-│   ├── deploy.py           # Status promotion → Plugin deployment → Metadata sync
-│   ├── document.py         # Wiki generation orchestration
-│   ├── validate_query.py   # Per-platform query validation
-│   └── mutate.py           # Object mutation operations
-├── Configurations/         # TOML configuration files
-│   ├── global.toml         # Path mappings, naming conventions, data field mappings
-│   ├── deployment.toml     # Status lifecycle, deployment strategies, promotion rules
-│   ├── schema.toml         # Template extensions, vocabulary overrides
-│   ├── documentation.toml  # Doc generation settings (scope, wiki structure)
-│   ├── visibility.toml     # Asset, log source, detector definitions
-│   ├── sharing.toml        # Sharing/export settings
-│   ├── resources.toml      # External framework paths (ATT&CK, D3FEND, NIST)
-│   └── systems/            # Per-platform TOML configs (tenants, credentials, feature flags)
-├── External/               # External framework references (ATT&CK, D3FEND, NIST, ENGAGE, OSM)
-├── Pipelines/              # CI/CD reusable workflow templates
-│   ├── GitHub/             # GitHub Actions reusable workflows
-│   ├── Gitlab/             # GitLab CI modules
-│   └── Azure/              # Azure Pipelines templates
-└── .github/workflows/      # GitHub Actions workflow definitions (callable workflows)
+
+```json
+{ "mcpServers": { "opentide": { "command": "opentide-mcp" } } }
 ```
+
+MCP exposes detection catalogue resources and content-creation tools (search, validate, deploy). Infrastructure operations (generate, document, mutate) are CLI-only.
 
 ---
 
 ## Coding Conventions
 
 ### Language & Style
-- **British English** throughout all code, comments, logs, and documentation (favour, realise, colour, etc.)
-- **snake_case** for variables, functions, methods
-- **CamelCase** for classes
-- **SCREAMING_CASE** for constants and enum members
-- `*_config` suffix for raw TOML/dict data before transformation
-- `*Index` suffix for nested dataclass registries
+- **British English** throughout (favour, behaviour, initialise)
+- **snake_case** functions/variables; **CamelCase** classes
+- Type hints on all signatures; `Optional[T]` for nullable (3.10 compat)
+- Pydantic v2 models: `frozen`, `extra="forbid"`, `populate_by_name`
 
-### Type System
-- Python 3.10+ features: `Literal`, `Never`, `Union`, pattern matching (`match/case`)
-- Heavy `@overload` usage for polymorphic function signatures
-- `Optional[]` for nullable values
-- `Sequence[]`, `Mapping[]` for collection types
-- Frozen dataclasses (`frozen=True`) for immutable registries; non-frozen for mutable configs
-- Deep nesting convention: `TideConfigs.Systems.Sentinel.Tenant.Setup`
+### Logging & Errors
+- Use `log(LEVEL, ...)` from `opentide.core.logs` — never `print()`
+- `TideErrors` hierarchy for exceptions — never bare `except:`
 
-### Logging
-- Use the structured `log(LEVEL, *messages)` function from `Engines/modules/logs.py`
-- Levels: `TITLE`, `SECTION`, `INFO`, `ONGOING`, `SUCCESS`, `SKIP`, `FAILURE`, `WARNING`, `FATAL`, `DEBUG`
-- Emoji indicators are used throughout for visual clarity
-- ANSI colour formatting via the `ANSI` class
-- Use `Dialog` for formatted bordered output
+### Secrets & Paths
+- `$ENV_VAR` placeholders in TOML resolved via environment helpers
+- Bundled data: `importlib.resources` / `OPENTIDE_DATA_ROOT`
+- Client content root: `OPENTIDE_REPO_ROOT`
 
-### Error Handling
-- Custom exception hierarchy rooted at `TideErrors` (in `Engines/modules/errors.py`)
-- Never use bare `except` — always use explicit exception types
-- Validation failures → `log("FATAL", ...)` + raise
-- Missing environment variables → `FATAL` in production, `SKIP` in debug mode
-- System-specific errors: `DetectionRuleCreationFailed`, `DetectionRuleUpdateFailed`, `TenantConnectionError`, etc.
-
-### Environment & Configuration
-- Strings starting with `$` in TOML configs are resolved via `HelperTide.fetch_config_envvar()`
-- Debug mode detected via `TERM_PROGRAM == "vscode"` or `DEBUG` env var
-- Local secrets fallback module used in debug mode
-- CI platform detected via env vars: `GITHUB_ACTIONS`, `CI` (Gitlab), `TF_BUILD` (Azure)
-
-### Imports & Path Resolution
-- All modules use `sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))` to ensure imports work from any working directory
-- Imports reference `Engines.*` as absolute paths from the repository root
-- `ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))` for file system operations
-
-### Testing & Validation
-- Validation is pipeline-driven, not unit-test-based
-- `VALIDATION_ERROR_RAISED` / `VALIDATION_WARNING_RAISED` env vars track validation state
-- Exit code 19 used for GitLab CI soft failures (warns but does not block)
-- GitHub Actions uses `::warning::` annotations
+### Legacy Compatibility (transition period)
+```python
+# Deprecated — emits DeprecationWarning
+from Engines.modules.tide import DataTide  # shim → OpenTide
+```
 
 ---
 
-## Key Design Patterns
+## Agent Workflow
 
-### Plugin Registration
-```python
-# Each deployer module implements:
-def declare():
-    DeployTide.register(SystemDeployer)  # Registers into the singleton
+When implementing TideKit work:
 
-# PluginEnginesLoader dynamically imports only enabled systems
-```
+1. Pick the lowest unblocked phase from [AGENTS.md](../AGENTS.md)
+2. Read the GitHub issue's Agent Execution Contract on [OpenTideHQ/CoreTide](https://github.com/OpenTideHQ/CoreTide/issues)
+3. Branch `refactor/tidekit-phase<N>-<slug>` or `feat/tidekit-phase<N>-<slug>` from `development`
+4. One phase per PR; conventional commits; `Closes #<issue>` in PR body
+5. Run phase verification commands before opening PR
 
-### Frozen Dataclass Registries
-All core data structures are frozen dataclasses with deep nesting. Never mutate DataTide or its children after initialisation. Use `IndexTide.reload()` to refresh.
-
-### Status Lifecycle
-Objects move through status stages defined in `deployment.toml`:
-- `DESIGN` → `INERT` (no deployment)
-- `REVIEW` → `PREVIEW` (PR deployment)
-- `PRODUCTION` → `RELEASE` (trunk deployment)
-- `DEPRECATED` → `DISABLEMENT` (disable/delete rule)
-- `RETIRED` → `DELETION` (remove from target)
-
-### Multi-Tenant Deployment
-Systems support multiple tenants with per-tenant deployment strategies. Rule IDs are tracked per tenant (via `rule_id_bundle` or legacy `rule_id::<tenant>` format).
-
-### Conditional Deployment via Modifiers
-`SystemConfig.Modifiers` control deployment behaviour based on status, flags, tenants, and defaults. This allows fine-grained control without branching logic.
+See `.github/instructions/tidekit-phase.instructions.md` and `.github/instructions/testing.instructions.md`.
 
 ---
 
 ## What NOT to Do
 
-- **Do not modify** `Engines/modules/tide.py` DataTide structure without understanding cascading effects across all consumers
-- **Do not bypass** `HelperTide.fetch_config_envvar()` for secret resolution — always use the established pattern
-- **Do not add** new detection platforms without implementing the full plugin interface (`DeployMDR.deploy()`, `declare()`, TOML config)
-- **Do not mutate** frozen dataclass instances — use `IndexTide.reload()` or create new instances
-- **Do not hard-code** system-specific logic in shared modules — use `Engines/modules/systems/` or `Engines/deployment/`
-- **Do not use** `print()` for operational output — use `log()` with appropriate levels
-- **Do not skip** schema validation when creating or modifying object loaders
-- **Do not create** new top-level directories — the structure is intentional and fixed
+- Do not modify `OpenTide` registry structure without understanding all consumers
+- Do not bypass env-var secret resolution patterns
+- Do not add platforms without full deployer + TOML config (+ validator if applicable)
+- Do not mutate frozen/Pydantic models in place — reload via index refresh
+- Do not hard-code platform logic in shared modules — use `platforms/` packages
+- Do not bundle multiple TideKit phases in one PR
+- Do not claim CrowdStrike/HarfangLab support query syntax validation
 
 ---
 
-## Common Tasks Reference
+## Common Tasks
 
-| Task | Entry Point | Key Modules |
+| Task | Entry point | Key modules |
 |------|-------------|-------------|
-| Generate indexes & schemas | `Orchestration/generate.py` | `Engines/indexing/`, `Engines/framework/` |
-| Validate objects | `Orchestration/validate.py` | `Engines/validation/` |
-| Deploy rules | `Orchestration/deploy.py` | `Engines/deployment/`, `Engines/modules/plugins.py` |
-| Generate docs | `Orchestration/document.py` | `Engines/documentation/` |
-| Add new system | Create deployer + TOML config + optional query validator | `Engines/deployment/`, `Configurations/systems/` |
-| Mutate objects | `Orchestration/mutate.py` | `Engines/mutation/` |
-| Validate queries | `Orchestration/validate_query.py` | `Engines/validation/{system}_query.py` |
+| Generate indexes & schemas | `opentide generate` | `generation/` |
+| Validate objects | `opentide validate` | `validation/` |
+| Deploy rules | `opentide deploy` | `platforms/*/deployer.py` |
+| Generate docs | `opentide document` | `documentation/` |
+| Add platform | deployer + config + optional validator | `platforms/`, `data/configurations/platforms/` |
+| Run tests | `pytest` | `tests/` — see `docs/TEST_PLAN.md` |
+| Migrate client repo | `docs/migration/MIGRATION.md` | — |
