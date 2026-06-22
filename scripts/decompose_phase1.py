@@ -45,8 +45,12 @@ def decompose_tide() -> None:
         MODULES / "loaders/object_loader.py",
         header,
         slice_lines(lines, 833, 1189),
-        "from Engines.modules.loaders.system_loader import SystemLoader
-from Engines.modules.environment import HelperTide",
+        "\n".join(
+            [
+                "from Engines.modules.loaders.system_loader import SystemLoader",
+                "from Engines.modules.environment import HelperTide",
+            ]
+        ),
     )
     write_module(
         MODULES / "registry.py",
