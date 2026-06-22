@@ -1,0 +1,19 @@
+site_name: OpenTide
+site_description: DetectionOps engine documentation
+repo_url: https://github.com/OpenTideHQ/opentide
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - Migration: getting-started/migration.md
+  - CLI: cli/index.md
+  - MCP: mcp/index.md
+  - Concepts:
+      - Platforms: concepts/platforms.md
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
