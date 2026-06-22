@@ -9,12 +9,26 @@ description = "OpenTide — DetectionOps engine (PyPI package)"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
 dependencies = [
     "pyyaml",
     "ruamel.yaml",
     "pydantic>=2.0",
     "GitPython",
     "toml",
+    "structlog>=24.0",
+    "rich>=13.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +42,20 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.9",
+    "ty>=0.0.9",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+    "types-PyYAML",
+    "types-toml",
+    "pandas>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.9",
+    "ty>=0.0.9",
     "mypy>=1.13",
     "pre-commit>=4.0",
     "types-PyYAML",
@@ -91,3 +119,12 @@ packages = ["opentide", "opentide.models"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
+
+[tool.ty.src]
+include = ["src/opentide"]
+
+[tool.ty.rules]
+# Tide domain models intentionally shadow Pydantic BaseModel.validate (instance delegation).
+# Redundant casts retained for mypy migration baseline; ty treats them as warnings.
+invalid-method-override = "warn"
+redundant-cast = "ignore"

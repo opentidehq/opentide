@@ -6,7 +6,7 @@ import json
 import os
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from opentide.core.root import repository_root
 
@@ -69,7 +69,7 @@ class IndexManager:
         return cast(dict[str, Any], LegacyIndexManager.reconcile_staging(deepcopy(index)))
 
     @classmethod
-    def return_paths(cls, tier: str = "all") -> dict[str, Any]:
+    def return_paths(cls, tier: Literal["all", "core", "tide"] = "all") -> dict[str, Any]:
         import sys
 
         root = repository_root()

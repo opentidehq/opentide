@@ -42,5 +42,5 @@ def field_json_schema_extra(field: FieldInfo) -> dict[str, Any]:
     """Return Tide-specific metadata attached to a model field."""
     extra = field.json_schema_extra
     if isinstance(extra, dict):
-        return extra
+        return cast(dict[str, Any], extra)
     return {}

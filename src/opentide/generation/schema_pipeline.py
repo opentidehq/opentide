@@ -14,10 +14,11 @@ from Engines.modules.deployment import enabled_systems
 from Engines.modules.documentation import get_icon
 from Engines.modules.files import resolve_paths
 from Engines.modules.framework import get_type, get_vocab_entry
-from Engines.modules.logs import log
 from Engines.modules.models import StatusStrategy
 from Engines.modules.tide import OpenTide
 from Engines.modules.vocabulary import VocabularyDefinition, entry_key_field
+
+from opentide.core.logging import log
 
 GLOBAL_CONFIG: Any
 VOCAB_INDEX: dict[str, Any]
@@ -447,7 +448,7 @@ _Vocabulary_ : `{source_vocab}`
             descriptions: list[str] = []
             for status in OpenTide.Configurations.Deployment.statuses:
                 enums.append(status.name)
-                strategy = status.strategy.name  # type: ignore
+                strategy = status.strategy.name
                 desc = (
                     f"**Strategy** : `{strategy}` "
                     f"- _{StatusStrategy[strategy].value}_"
