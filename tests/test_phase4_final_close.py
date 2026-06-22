@@ -160,9 +160,7 @@ def _run_generation_pipeline() -> None:
     from opentide.core.registry import OpenTide
     from opentide.generation.schema import run as generate_schemas
     from opentide.generation.template import run as generate_templates
-    from opentide.indexing.object_vocab import run as generate_object_vocab
 
-    generate_object_vocab()
     generate_templates()
     IndexManager.reload()
     OpenTide.reload()
@@ -185,6 +183,7 @@ def test_generate_py_artifact_byte_checksum_gate(tide_workspace: Path) -> None:
 
 def test_collect_generation_checksums_matches_baseline_file(tide_workspace: Path) -> None:
     del tide_workspace
+    _run_generation_pipeline()
     expected = json.loads(ARTIFACT_BASELINE.read_text(encoding="utf-8"))
     actual = collect_generation_checksums(ROOT)
     assert set(actual) == set(expected)
