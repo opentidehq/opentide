@@ -51,7 +51,11 @@ def replace_strings_in_file(file_path: Path | str, strings: list[str], replaceme
 
 def remove_blanks(path: Path | str) -> bool:
     file_path = Path(path)
-    clean = "".join(line for line in file_path.read_text(encoding="utf-8").splitlines(keepends=True) if not line.isspace())
+    clean = "".join(
+        line
+        for line in file_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if not line.isspace()
+    )
     file_path.write_text(clean, encoding="utf-8")
     return True
 
@@ -93,9 +97,7 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
 
             template = gen_template({key.replace("#", ""): temp}, required=definition_required)
             template = (
-                template.get(key)
-                or template.get(key.replace("#", ""))
-                or template.get("#" + key)
+                template.get(key) or template.get(key.replace("#", "")) or template.get("#" + key)
             )
             body[key] = template
             continue
@@ -242,7 +244,10 @@ def make_spaces(template_path: Path | str, metaschema: dict[str, Any]) -> bool:
 
 def indent_template(template_path: Path | str, identation: int) -> bool:
     path = Path(template_path)
-    indented = [" " * identation + line for line in path.read_text(encoding="utf-8").splitlines(keepends=True)]
+    indented = [
+        " " * identation + line
+        for line in path.read_text(encoding="utf-8").splitlines(keepends=True)
+    ]
     path.write_text("".join(indented), encoding="utf-8")
     return True
 

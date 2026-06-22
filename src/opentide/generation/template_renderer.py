@@ -31,11 +31,7 @@ RECOMPOSITION = OpenTide.Configurations.Global.recomposition
 def _ensure_tide_index() -> None:
     """Ensure OpenTide index includes metaschemas/subschemas for template generation."""
     index = getattr(OpenTide, "_index", None)
-    if (
-        not getattr(OpenTide, "_initialised", False)
-        or index is None
-        or "subschemas" not in index
-    ):
+    if not getattr(OpenTide, "_initialised", False) or index is None or "subschemas" not in index:
         OpenTide.reload()
 
 

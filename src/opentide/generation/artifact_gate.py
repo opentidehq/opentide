@@ -13,6 +13,15 @@ from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS
 
 TIDE_PREFIX = "tide:"
 REPO_PREFIX = "repo:"
+TIDE_WORKSPACE_DIR = "tests/fixtures/generation/tide_workspace"
+
+
+def tide_instance_root(repo_root: Path) -> Path:
+    """Return portable tide instance root (workspace in tests, parent in production)."""
+    workspace = repo_root / TIDE_WORKSPACE_DIR
+    if workspace.is_dir():
+        return workspace
+    return repo_root.parent
 
 
 def _sha256(path: Path) -> str:
@@ -50,9 +59,7 @@ def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
         rel = f"Schemas/Configurations/{Path(rel_name).name}"
         specs.append((f"{TIDE_PREFIX}{rel}", json_dir / "Configurations" / Path(rel_name).name))
 
-    subschema_templates = (
-        Path(paths["subschemas"]) / "MDR Systems Deployment" / "Templates"
-    )
+    subschema_templates = Path(paths["subschemas"]) / "MDR Systems Deployment" / "Templates"
     if subschema_templates.is_dir():
         for path in sorted(subschema_templates.glob("*.yaml")):
             rel = path.relative_to(repo_root.resolve())
@@ -78,7 +85,7 @@ def resolve_artifact_path(key: str, *, repo_root: Path) -> Path:
     if key.startswith(REPO_PREFIX):
         return (repo_root / key.removeprefix(REPO_PREFIX)).resolve()
     if key.startswith(TIDE_PREFIX):
-        return (repo_root.parent / key.removeprefix(TIDE_PREFIX)).resolve()
+        return (tide_instance_root(repo_root) / key.removeprefix(TIDE_PREFIX)).resolve()
     raise KeyError(f"Unknown artifact key prefix: {key}")
 
 

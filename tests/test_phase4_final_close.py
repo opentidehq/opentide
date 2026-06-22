@@ -12,8 +12,10 @@ from typing import Any
 import pytest
 
 from opentide.generation.artifact_gate import (
+    TIDE_WORKSPACE_DIR,
     collect_generation_checksums,
     load_checksum_baseline,
+    tide_instance_root,
     verify_generation_checksums,
 )
 from opentide.generation.pydantic_templates import (
@@ -29,6 +31,7 @@ from opentide.models.objective import DetectionObjective, DetectionSignal
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_BASELINE = ROOT / "tests/fixtures/generation/artifact_checksums.json"
+TIDE_WORKSPACE = ROOT / TIDE_WORKSPACE_DIR
 
 
 def _metadata() -> dict[str, Any]:
@@ -67,6 +70,51 @@ def _objective_payload() -> dict[str, Any]:
             "signals": [_signal_payload()],
         },
     }
+
+
+@pytest.fixture
+def tide_workspace(monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Redirect tide instance outputs into a repo-local workspace for portable CI."""
+    TIDE_WORKSPACE.mkdir(parents=True, exist_ok=True)
+    (TIDE_WORKSPACE / "Schemas" / "Templates").mkdir(parents=True, exist_ok=True)
+    (TIDE_WORKSPACE / "Schemas" / "Configurations").mkdir(parents=True, exist_ok=True)
+    (TIDE_WORKSPACE / ".vscode").mkdir(parents=True, exist_ok=True)
+
+    import Engines.modules.files as files_mod
+
+    real_resolve = files_mod.resolve_paths
+    tide_keys = {
+        "json_schemas": "Schemas",
+        "templates": "Schemas/Templates",
+        "snippet_file": ".vscode/Model Templates.code-snippets",
+        "tvm": "Objects/Threat Vectors",
+        "dom": "Objects/Detection Objectives",
+        "mdr": "Objects/Detection Rules",
+        "analytics": "Analytics",
+        "tide_indexes": "Schemas/Indexes",
+        "exports": "Schemas/Exports",
+        "custom_configurations": "Configurations",
+    }
+
+    def patched_resolve(separate: bool = False):  # type: ignore[no-untyped-def]
+        paths = real_resolve(separate)
+        if separate:
+            tide_paths, core_paths = paths
+            for key, rel in tide_keys.items():
+                if key in tide_paths:
+                    target = TIDE_WORKSPACE / rel
+                    target.mkdir(parents=True, exist_ok=True)
+                    tide_paths[key] = target
+            return tide_paths, core_paths
+        for key, rel in tide_keys.items():
+            if key in paths:
+                target = TIDE_WORKSPACE / rel
+                target.mkdir(parents=True, exist_ok=True)
+                paths[key] = target
+        return paths
+
+    monkeypatch.setattr(files_mod, "resolve_paths", patched_resolve)
+    return TIDE_WORKSPACE
 
 
 def test_legacy_loader_modules_removed() -> None:
@@ -124,6 +172,11 @@ def test_template_renderer_run_smoke() -> None:
     template_renderer_run()
 
 
+def test_tide_instance_root_uses_workspace_when_present() -> None:
+    TIDE_WORKSPACE.mkdir(parents=True, exist_ok=True)
+    assert tide_instance_root(ROOT) == TIDE_WORKSPACE.resolve()
+
+
 def _run_generate_py() -> None:
     env = {**os.environ, "TERM_PROGRAM": "vscode"}
     result = subprocess.run(
@@ -135,14 +188,12 @@ def _run_generate_py() -> None:
         check=False,
     )
     if result.returncode != 0:
-        pytest.fail(
-            "generate.py failed\n"
-            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-        )
+        pytest.fail(f"generate.py failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}")
 
 
-def test_generate_py_artifact_byte_checksum_gate() -> None:
+def test_generate_py_artifact_byte_checksum_gate(tide_workspace: Path) -> None:
     """CI gate: generate.py outputs must remain byte-stable."""
+    del tide_workspace  # fixture activates path patching
     if not ARTIFACT_BASELINE.is_file():
         pytest.fail("Missing generation artifact baseline checksum file")
     expected = load_checksum_baseline(ARTIFACT_BASELINE)
@@ -150,7 +201,8 @@ def test_generate_py_artifact_byte_checksum_gate() -> None:
     verify_generation_checksums(expected, repo_root=ROOT)
 
 
-def test_collect_generation_checksums_matches_baseline_file() -> None:
+def test_collect_generation_checksums_matches_baseline_file(tide_workspace: Path) -> None:
+    del tide_workspace
     expected = json.loads(ARTIFACT_BASELINE.read_text(encoding="utf-8"))
     actual = collect_generation_checksums(ROOT)
     assert set(actual) == set(expected)
