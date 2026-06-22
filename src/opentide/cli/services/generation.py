@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
 _PHASE_ORDER: tuple[GeneratePhase, ...] = (
-    GeneratePhase.index,
+    GeneratePhase.object_vocab,
     GeneratePhase.templates,
     GeneratePhase.schemas,
     GeneratePhase.revisions,
@@ -30,7 +30,7 @@ def run_generate_phase(phase: GeneratePhase, *, staging: bool = False) -> None:
 
         os.environ["INDEX_OUTPUT"] = "cache"
 
-    if phase is GeneratePhase.index:
+    if phase is GeneratePhase.object_vocab:
         from opentide.indexing.object_vocab import run as generate_object_vocab
 
         log("TITLE", "Object vocabulary generation")

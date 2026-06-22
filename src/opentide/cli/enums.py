@@ -32,7 +32,7 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 class GeneratePhase(str, Enum):
     """Generation pipeline phases."""
 
-    index = "index"
+    object_vocab = "index"
     templates = "templates"
     schemas = "schemas"
     revisions = "revisions"

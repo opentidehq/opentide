@@ -10,7 +10,7 @@ from opentide.core.registry import OpenTide
 
 def run(output: Path | None = None) -> Path:
     """Generate an Excel playbook mapping for production MDRs."""
-    import pandas as pd
+    import pandas as pd  # type: ignore[import-untyped]
 
     OpenTide.initialise()
     playbook_mapping: list[dict[str, str]] = []
