@@ -20,9 +20,9 @@ def test_bdr_absent() -> None:
 
 
 def test_dom_template_bug_fixed() -> None:
-    tide = (ROOT / "Engines/modules/tide.py").read_text()
-    assert 'dom = str(Index.get("dom"))' in tide
-    assert 'dom = str(Index.get("cdm"))' not in tide
+    registry = (ROOT / "Engines/modules/registry.py").read_text()
+    assert 'dom = str(Index.get("dom"))' in registry
+    assert 'dom = str(Index.get("cdm"))' not in registry
 
 
 def test_global_objects() -> None:
