@@ -1,99 +1,54 @@
-from jsonschema import Draft7Validator
-from tabulate import tabulate
-import os
-import git
-import sys
-import json
-import uuid
+"""Schema validation — Pydantic model_validate pipeline."""
 
+from __future__ import annotations
+
+import os
+import sys
+
+import git
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.tide import OpenTide
+from tabulate import tabulate
+
+from opentide.core.registry import OpenTide
+from opentide.validation.pipeline import validate_all_objects
 from Engines.modules.logs import log
 
-JSONSCHEMAS_INDEX = OpenTide.JsonSchemas.Index
-MODELS_INDEX = OpenTide.Models.Index
 
+def run() -> None:
+    log("TITLE", "Pydantic Schema Validation")
+    log("INFO", "Validates all OpenTide objects via model_validate()")
 
-def run():
+    OpenTide.initialise()
+    errors = validate_all_objects(OpenTide.Index["objects"])
 
-    log("TITLE", "JSON Schema Validation")
-    log("INFO", "Validates all CoreTIDE objects against their respective json schemas")
-
-    errorslist = {}
-    stats = dict()
+    stats: dict[str, int] = {}
     overall = 0
 
-    for schema in JSONSCHEMAS_INDEX:
-        log("INFO", f"Validating objects of type: {schema}")
-        count = 0
+    for schema in OpenTide.Index["objects"]:
+        count = len(OpenTide.Index["objects"].get(schema, {}))
+        stats[schema.upper()] = count
+        overall += count
 
-        if schema in MODELS_INDEX:
-            schema_data = JSONSCHEMAS_INDEX[schema]
-            v = Draft7Validator(schema_data)
+    for uuid, error_list in errors.items():
+        for error in error_list:
+            log("FATAL", f"Failed validation for object {uuid}", error)
 
-            for model in MODELS_INDEX[schema]:
-                count += 1
-
-                body = MODELS_INDEX[schema][model]
-                metadata = body.get("metadata") or body["meta"]
-                metadata["created"] = str(metadata["created"])
-                metadata["modified"] = str(metadata["modified"])
-
-                # YAML supports int as keys, JSON doesn't. jsonschema team
-                # decided not to support serialization, which creates a lot
-                # of difficulties validating public references.
-                # Solution is to remove public refs, and validate it separately.
-                # Other parts of the reference will work as they don't use ints as key.
-                public_refs = None
-
-                if type(body.get("references")) is dict:
-                    if body.get("references", {}).get("public"):
-                        public_refs = body["references"].pop("public")
-                        if body["references"] == {}:
-                            del body["references"]
-
-                
-                errors = list()
-                errors = sorted(v.iter_errors(body), key=lambda e: e.path)
-
-                if public_refs:
-                    for ref in public_refs:
-                        if type(ref) is not int:
-                            errors.append(
-                                f"Reference '{ref}' in public references should be an integer"
-                            )
-
-                if len(errors) != 0:
-                    name = f"{body['name']} ({model})"
-                    errorslist[name] = errors
-
-            stats[schema.upper()] = count
-            overall += count
-
-    for model_name in errorslist:
-        for error in errorslist[model_name]:
-            if type(error) is not str:
-                error = error.message.replace("\n", "")
-                if len(error) > 160:
-                    error = error[:160] + f" [...Truncated Error Message]"
-            log("FATAL", f"Failed validation in Object - {model_name}", error)
-
-    if len(errorslist) != 0:
-        log("FATAL", "Failed Schema Validation",
-            "CoreTIDE objects currently do not match up to the metaschemas",
-            "Review the files before running the validation again" )
+    if errors:
+        log(
+            "FATAL",
+            "Failed Schema Validation",
+            "OpenTide objects currently do not match Pydantic models",
+            "Review the files before running the validation again",
+        )
         os.environ["VALIDATION_ERROR_RAISED"] = "True"
-
     else:
         statstable = [["Category", "Count"]]
-
-        for y in stats:
-            statstable.append([y, stats[y]])
+        for key in stats:
+            statstable.append([key, stats[key]])
         statstable = tabulate(statstable, headers="firstrow")
-
-        log("SUCCESS", f"Successfully verified {overall} coretide objects")
+        log("SUCCESS", f"Successfully verified {overall} OpenTide objects")
         print(statstable)
 
 
