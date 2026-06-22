@@ -19,8 +19,7 @@ SUBSCHEMAS_FOLDER = Path(PATHS["subschemas"])
 RECOMPOSITION = OpenTide.Configurations.Global.recomposition
 
 
-
-def fetch_config_template(dot_path:str)->str:
+def fetch_config_template(dot_path: str) -> str:
     print(dot_path)
     config_index = OpenTide.Configurations.Index
     config_path = dot_path.split(".")
@@ -32,14 +31,16 @@ def fetch_config_template(dot_path:str)->str:
             key = config_path[config_path.index(key) + 1]
         else:
             raise ValueError(f"Key : {key} could not be found in path {dot_path}")
-    
+
     try:
         return str(config_index[key]).strip()
     except:
-        log("WARNING",
+        log(
+            "WARNING",
             "Could not the expected template",
             dot_path,
-            "This is non blocking, but check why the template could not be fetched")
+            "This is non blocking, but check why the template could not be fetched",
+        )
         return ""
 
 
@@ -91,9 +92,7 @@ def get_required(metaschema, required_list):
                 if r := metaschema[key].get("required"):
                     required_list.extend(r)
                     required_list.extend(
-                        get_required(
-                            metaschema[key]["properties"], required_list=required_list
-                        )
+                        get_required(metaschema[key]["properties"], required_list=required_list)
                     )
                 if fr := metaschema[key].get("tide.template.force-required"):
                     required_list.extend(fr)
@@ -109,9 +108,7 @@ def definition_handler(entry_point):
 def gen_template(metaschema, required):
     body = {}
     for key in metaschema:
-        
         if not metaschema[key].get("tide.template.hide"):
-
             if metadef := metaschema[key.replace("#", "")].get("tide.meta.definition"):
                 if key not in required:
                     key = "#" + key
@@ -124,9 +121,7 @@ def gen_template(metaschema, required):
                     definition_required = temp.get("required", [])
                     definition_required.extend(temp.get("tide.template.force-required", []))
 
-                template = gen_template(
-                    {key.replace("#", ""): temp}, required=definition_required
-                )
+                template = gen_template({key.replace("#", ""): temp}, required=definition_required)
                 template = (
                     template.get(key)
                     or template.get(key.replace("#", ""))
@@ -145,7 +140,7 @@ def gen_template(metaschema, required):
 
                 if keyword_type == "object":
                     if key not in required:
-                        if config:=metaschema[key].get("tide.template.config.required"):
+                        if config := metaschema[key].get("tide.template.config.required"):
                             if fetch_config_template(config) == "False":
                                 key = "#" + key
                         else:
@@ -166,16 +161,9 @@ def gen_template(metaschema, required):
                         body[key] = recomp_entries
 
                     else:
-                        if (
-                            "additionalProperties"
-                            in metaschema[key.replace("#", "")].keys()
-                        ):
+                        if "additionalProperties" in metaschema[key.replace("#", "")].keys():
                             if (
-                                type(
-                                    metaschema[key.replace("#", "")][
-                                        "additionalProperties"
-                                    ]
-                                )
+                                type(metaschema[key.replace("#", "")]["additionalProperties"])
                                 is not bool
                             ):
                                 sample = (
@@ -192,9 +180,9 @@ def gen_template(metaschema, required):
                             first_item = list(
                                 metaschema[key.replace("#", "")]["patternProperties"]
                             )[0]
-                            sample = metaschema[key.replace("#", "")][
-                                "patternProperties"
-                            ][first_item].get("example")
+                            sample = metaschema[key.replace("#", "")]["patternProperties"][
+                                first_item
+                            ].get("example")
 
                             if sample not in metaschema[key.replace("#", "")].get(
                                 "patternProperties"
@@ -216,7 +204,6 @@ def gen_template(metaschema, required):
                     "items" in metaschema[key].keys()
                     and "properties" in metaschema[key].get("items").keys()
                 ):
-
                     if key in required:
                         sub_req = metaschema[key]["items"]["required"]
 
@@ -234,33 +221,30 @@ def gen_template(metaschema, required):
                     # will be replaced
                     if sub_req == []:
                         first_key = list(values)[0]
-                        commented_first_key = "Comment out " + first_key.replace(
-                            "#", ""
-                        )
+                        commented_first_key = "Comment out " + first_key.replace("#", "")
                         values = {commented_first_key: values.pop(first_key), **values}
 
                     body[key] = [values]
 
                 else:
-
                     content = "blank"
 
-                    # Additional custom requirements checks, easiest to resolve it at this 
+                    # Additional custom requirements checks, easiest to resolve it at this
                     # final level
                     local_required = False
                     if key in required:
                         local_required = True
 
-                    if config:=metaschema[key].get("tide.template.config.required"):
+                    if config := metaschema[key].get("tide.template.config.required"):
                         enabled = fetch_config_template(config)
                         if enabled == "True":
                             local_required = True
                         elif enabled == "False":
                             local_required = False
-                            
-                    if config_path:=metaschema[key].get("tide.template.config.default.enabled"):
+
+                    if config_path := metaschema[key].get("tide.template.config.default.enabled"):
                         if fetch_config_template(config_path) != "False":
-                            if config_path:=metaschema[key].get("tide.template.config.default"):
+                            if config_path := metaschema[key].get("tide.template.config.default"):
                                 content = fetch_config_template(config_path)
                                 if metaschema[key].get("tide.template.multiline"):
                                     if not content:
@@ -270,7 +254,9 @@ def gen_template(metaschema, required):
                                         content = content.replace("\n\n", "\nforce_space")
                                     else:
                                         # When commented out, newlines are respected as-is
-                                        content = "\n".join(["#" + line for line in content.split("\n")])
+                                        content = "\n".join(
+                                            ["#" + line for line in content.split("\n")]
+                                        )
 
                                     content = "|\n'" + content
 
@@ -326,9 +312,7 @@ def make_spaces(template_path, metaschema):
         key = line.split(":")[0].replace(" ", "")
         force_space = True if "force_space" in line else False
         no_space = True if "no-space" in line else False
-        spacer = get_value_metaschema(
-            key.replace("#", ""), metaschema, "tide.template.spacer"
-        )
+        spacer = get_value_metaschema(key.replace("#", ""), metaschema, "tide.template.spacer")
         key_type = get_value_metaschema(key.replace("#", ""), metaschema, "type")
         if key_type == "object" or spacer or force_space:
             if spacer != False:
@@ -372,14 +356,13 @@ def run():
     )
 
     for meta in (m := OpenTide.Configurations.Global.metaschemas):
-
         if meta in (t := OpenTide.Configurations.Global.templates):
             template_path = Path(PATHS["templates"]) / t[meta]
 
             log("ONGOING", "Generating template", str(meta))
 
             parsed = OpenTide.TideSchemas.Index[meta]
-            placeholders:dict = parsed.get("tide.placeholders") or {}
+            placeholders: dict = parsed.get("tide.placeholders") or {}
             required = get_required(parsed["properties"], parsed["required"])
             required.extend(parsed.get("tide.template.force-required") or [])
             template = gen_template(parsed["properties"], required)
@@ -389,10 +372,12 @@ def run():
 
             replace_strings_in_file(template_path, ["- Comment out"], "#-")
             replace_strings_in_file(template_path, ["blank", "'"], "")
-            replace_strings_in_file(template_path, ["spacer"], '    ')
+            replace_strings_in_file(template_path, ["spacer"], "    ")
 
             for placeholder in placeholders:
-                replace_strings_in_file(template_path, [f"${placeholder}"], placeholders[placeholder])
+                replace_strings_in_file(
+                    template_path, [f"${placeholder}"], placeholders[placeholder]
+                )
 
             remove_blanks(template_path)
             make_spaces(template_path, parsed["properties"])
@@ -417,10 +402,7 @@ def run():
 
                 subchema_template_name = f"{subschema_name} Template.yaml"
                 subschema_template_path = (
-                    SUBSCHEMAS_FOLDER
-                    / subschema_type_folder
-                    / "Templates"
-                    / subchema_template_name
+                    SUBSCHEMAS_FOLDER / subschema_type_folder / "Templates" / subchema_template_name
                 )
 
                 parsed = OpenTide.TideSchemas.subschemas[recomp][entry]
@@ -439,9 +421,7 @@ def run():
                         Dumper=IndentFullDumper,
                     )
 
-                replace_strings_in_file(
-                    subschema_template_path, ["- Comment out"], "#-"
-                )
+                replace_strings_in_file(subschema_template_path, ["- Comment out"], "#-")
                 replace_strings_in_file(subschema_template_path, ["blank", "'"], "")
                 remove_blanks(subschema_template_path)
                 make_spaces(subschema_template_path, parsed["properties"])

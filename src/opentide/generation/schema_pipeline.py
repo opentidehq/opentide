@@ -135,9 +135,16 @@ _Vocabulary_ : `{source_vocab}`
 """
 
         _HINT_ABBREVS = (
-            (" and ", " & "), (" without ", " w/o "), (" with ", " w/ "),
-            (" to ", " "), (" of ", " "), (" a ", " "), (" an ", " "),
-            ("Use", " "), ("used", " "), ("Using", " "),
+            (" and ", " & "),
+            (" without ", " w/o "),
+            (" with ", " w/ "),
+            (" to ", " "),
+            (" of ", " "),
+            (" a ", " "),
+            (" an ", " "),
+            ("Use", " "),
+            ("used", " "),
+            ("Using", " "),
         )
 
         def __init__(
@@ -150,9 +157,7 @@ _Vocabulary_ : `{source_vocab}`
             self.vocab = vocab
             self.scoped = scoped
             self.no_wrap = no_wrap
-            self.filter_stages: list | None = (
-                [stages] if isinstance(stages, str) else stages
-            )
+            self.filter_stages: list | None = [stages] if isinstance(stages, str) else stages
             self.enum: list[str] = []
             self.enum_description: list[str] = []
             self._hints: list[str] = []
@@ -209,11 +214,7 @@ _Vocabulary_ : `{source_vocab}`
                     value = key
                     if self.scoped and data.get("tide.vocab.stages"):
                         raw_stages = data["tide.vocab.stages"]
-                        stage = (
-                            raw_stages[0]
-                            if isinstance(raw_stages, list)
-                            else raw_stages
-                        )
+                        stage = raw_stages[0] if isinstance(raw_stages, list) else raw_stages
                         value = stage + "::" + key
                     if self._emit(value, key, data) and self._hints_enabled:
                         self._hints.append(self._search_hint(value, data))
@@ -223,7 +224,8 @@ _Vocabulary_ : `{source_vocab}`
                     stages = [raw] if not isinstance(raw, list) else raw
                     matching = (
                         [s for s in stages if s in self.filter_stages]
-                        if self.filter_stages else stages
+                        if self.filter_stages
+                        else stages
                     )
                     if not self.scoped:
                         if not self.filter_stages or matching:
@@ -231,7 +233,8 @@ _Vocabulary_ : `{source_vocab}`
                     elif matching:
                         for stage in matching:
                             self._emit(
-                                stage + "::" + key, key,
+                                stage + "::" + key,
+                                key,
                                 {**data, "tide.vocab.stages": stage},
                             )
 
@@ -277,9 +280,7 @@ _Vocabulary_ : `{source_vocab}`
                 or ""
             )
             source_vocab = (
-                vocab_def.metadata.name
-                if (vocab_def := VOCAB_INDEX.get(self.vocab))
-                else None
+                vocab_def.metadata.name if (vocab_def := VOCAB_INDEX.get(self.vocab)) else None
             )
             link = key.get("link") or ""
             stage = key.get("tide.vocab.stages") or ""
@@ -291,14 +292,10 @@ _Vocabulary_ : `{source_vocab}`
                 crit = key.get("criticality")
                 crit_icon = get_icon("criticality")
                 if not crit:
-                    criticality = (
-                        f"{crit_icon} **Criticality** : No Criticality Assigned"
-                    )
+                    criticality = f"{crit_icon} **Criticality** : No Criticality Assigned"
                 else:
                     crit_value_icon = get_vocab_entry("criticality", crit, "icon")
-                    criticality = (
-                        f"{crit_icon} **Criticality** : {crit_value_icon} {crit}"
-                    )
+                    criticality = f"{crit_icon} **Criticality** : {crit_value_icon} {crit}"
 
             if tlp:
                 tlp = f" | **{get_icon(tlp, vocab='tlp')}TLP:{tlp.upper()}**"
@@ -307,15 +304,19 @@ _Vocabulary_ : `{source_vocab}`
                 if stage_text:
                     stage = stage_text
                 else:
-                    stage = "`{}`".format(
-                        ", ".join(stage) if isinstance(stage, list) else stage
-                    )
+                    stage = "`{}`".format(", ".join(stage) if isinstance(stage, list) else stage)
 
             return self._DROPDOWN.format(
-                icon=icon, name=display, id_icon=ICONS["id"],
-                identifier=identifier, source_vocab=source_vocab,
-                criticality=criticality, tlp=tlp, stage=stage,
-                link=link, description=description,
+                icon=icon,
+                name=display,
+                id_icon=ICONS["id"],
+                identifier=identifier,
+                source_vocab=source_vocab,
+                criticality=criticality,
+                tlp=tlp,
+                stage=stage,
+                link=link,
+                description=description,
             )
 
         def _stage_doc(self, stages: str | list) -> str:
@@ -360,9 +361,7 @@ _Vocabulary_ : `{source_vocab}`
 
             for ls in visibility.logsources:
                 base = (
-                    f"### {ls.name}\n"
-                    f"**System**: {ls.system}\n"
-                    f"**Description**: {ls.description}\n\n"
+                    f"### {ls.name}\n**System**: {ls.system}\n**Description**: {ls.description}\n\n"
                 )
                 if ls.assets:
                     base += "### Associated Assets:\n"
@@ -372,10 +371,12 @@ _Vocabulary_ : `{source_vocab}`
                 if ls.tenants:
                     for tenant in ls.tenants:
                         enums.append(f"{ls.system}::{tenant}::{ls.name}")
-                        descriptions.append(base.replace(
-                            "**System**:",
-                            f"**System**: {ls.system}\n**Tenant**: {tenant}",
-                        ))
+                        descriptions.append(
+                            base.replace(
+                                "**System**:",
+                                f"**System**: {ls.system}\n**Tenant**: {tenant}",
+                            )
+                        )
                 else:
                     enums.append(f"{ls.system}::{ls.name}")
                     descriptions.append(base)
@@ -398,10 +399,7 @@ _Vocabulary_ : `{source_vocab}`
             descriptions: list[str] = []
 
             for det in visibility.detectors:
-                base = (
-                    f"### {det.name}\n"
-                    f"**Description**: {det.description}\n\n"
-                )
+                base = f"### {det.name}\n**Description**: {det.description}\n\n"
                 if det.references:
                     base += "### References:\n"
                     for ref in det.references:
@@ -461,17 +459,14 @@ _Vocabulary_ : `{source_vocab}`
                         name = tenant.get("name").strip()
                         if param_key in tenant.get("parameters", {}):
                             result.extend(
-                                name + "::" + i.strip()
-                                for i in tenant["parameters"][param_key]
+                                name + "::" + i.strip() for i in tenant["parameters"][param_key]
                             )
                     return result
                 if key in config_index:
                     config_index = config_index[key]
                     key = parts[parts.index(key) + 1]
                 else:
-                    raise ValueError(
-                        f"Key : {key} could not be found in path {self.dot_path}"
-                    )
+                    raise ValueError(f"Key : {key} could not be found in path {self.dot_path}")
             if type(config_index[key]) is list:
                 return config_index[key]
             raise ValueError(
@@ -507,8 +502,7 @@ _Vocabulary_ : `{source_vocab}`
                     str(system_config),
                 )
                 raise ValueError(
-                    f"System Configuration for {self.system} "
-                    f"does not contain a tenants section"
+                    f"System Configuration for {self.system} does not contain a tenants section"
                 )
 
             enums: list[str] = []
@@ -522,29 +516,17 @@ _Vocabulary_ : `{source_vocab}`
                         str(tc),
                     )
                     raise ValueError("Missing name field in tenant definition")
-                log("INFO", f"Discovered tenant definition {name}",
-                    tc.get("description", ""))
+                log("INFO", f"Discovered tenant definition {name}", tc.get("description", ""))
                 enums.append(name)
                 descriptions.append(tc.get("description", "No Description"))
             return enums, descriptions
 
 
-def strip_framework_keywords(dictionary:dict)->dict:
-    """
-    The metaschema is a superset of JSON Schema in YAML, and thus has extra keys
-    useful for other purposes (documentation, template etc.). They should
-    not break JSON Schemas, but will lead to warnings and is cleaner to remove.
-    """
-    # dict_foo is used to avoid errors when iterating and modifying the same
-    # dictionary
-    dict_foo = dictionary.copy()
-    for field in dict_foo.keys():
-        if field.startswith("tide."):
-            del dictionary[field]
-        else:
-            if type(dict_foo[field]) is dict:
-                strip_framework_keywords(dictionary[field])
-    return dictionary
+def strip_framework_keywords(dictionary: dict) -> dict:
+    """Backward-compatible wrapper — implementation in schema_utils."""
+    from opentide.generation.schema_utils import strip_framework_keywords as _strip
+
+    return _strip(dictionary)
 
 
 def recomposition_handler(entry_point):
@@ -567,9 +549,7 @@ def recomposition_handler(entry_point):
             recomp_identifier = entry
             recomposition[recomp_identifier] = dict()
             recomposition[recomp_identifier]["title"] = data[config_keyword]["name"]
-            recomposition[recomp_identifier]["description"] = data[config_keyword][
-                "description"
-            ]
+            recomposition[recomp_identifier]["description"] = data[config_keyword]["description"]
             recomposition[recomp_identifier]["type"] = "object"
 
             recomp_source = data[config_keyword]["subschema"] + ".yaml"
@@ -606,7 +586,6 @@ def gen_json_schema(dictionary):
         query = field
         # checks if the key is a dict
         if type(dict_foo[field]) == dict:
-
             if "tide.meta.definition" in dict_foo[field].keys():
                 if (metadef := dict_foo[field]["tide.meta.definition"]) is True:
                     temp = OpenTide.TideSchemas.definitions[field]
@@ -664,7 +643,7 @@ def gen_json_schema(dictionary):
                         dictionary[field]["items"]["enum"] = enums
                         dictionary[field]["items"]["markdownEnumDescriptions"] = descriptions
                         dictionary[field]["items"]["uniqueItems"] = True
-                
+
                 # Handles retrieval of detectors
                 if dict_foo[field].get("tide.config.visibility.detectors"):
                     detectors_result = VocabularyResolver.Detectors().resolve()
@@ -681,7 +660,7 @@ def gen_json_schema(dictionary):
 
                 # Handles the case when a list of values has to be fetched from
                 # the configuration files.
-                if config_fetch:=dict_foo[field].get("tide.config.parameter-list"):
+                if config_fetch := dict_foo[field].get("tide.config.parameter-list"):
                     values_list = VocabularyResolver.Parameters(config_fetch).resolve()
                     if dict_foo[field].get("type") == "string":
                         dictionary[field]["enum"] = values_list
@@ -702,8 +681,10 @@ def gen_json_schema(dictionary):
                         dictionary[field]["items"]["uniqueItems"] = True
 
                 # Special handling to specifically get the available tenants
-                if system:=dict_foo[field].get("tide.config.system.tenants"):
-                    values_list, descriptions_list = VocabularyResolver.SystemTenants(system).resolve()
+                if system := dict_foo[field].get("tide.config.system.tenants"):
+                    values_list, descriptions_list = VocabularyResolver.SystemTenants(
+                        system
+                    ).resolve()
                     if dict_foo[field].get("type") == "string":
                         dictionary[field]["enum"] = values_list
                         dictionary[field]["markdownEnumDescriptions"] = descriptions_list
@@ -714,7 +695,7 @@ def gen_json_schema(dictionary):
                         dictionary[field]["items"]["markdownEnumDescriptions"] = descriptions_list
 
                 # Special handling to specifically get the available statuses
-                if system:=dict_foo[field].get("tide.config.statuses"):
+                if system := dict_foo[field].get("tide.config.statuses"):
                     values_list, descriptions_list = VocabularyResolver.Statuses().resolve()
                     if dict_foo[field].get("type") == "string":
                         dictionary[field]["enum"] = values_list
@@ -726,7 +707,7 @@ def gen_json_schema(dictionary):
                         dictionary[field]["markdownEnumDescriptions"] = descriptions_list
 
                 # Handles vocabularies
-                if vocab:=dict_foo[field].get("tide.vocab"):
+                if vocab := dict_foo[field].get("tide.vocab"):
                     if type(vocab) is str:
                         # Add icon if available to title
                         icon = get_icon(query)
@@ -737,17 +718,19 @@ def gen_json_schema(dictionary):
                     scoped = dict_foo[field].get("tide.vocab.scoped")
                     hint_no_wrap = dict_foo[field].get("tide.vocab.hints.no-wrap")
                     stages = dict_foo[field].get("tide.vocab.stages")
-        
+
                     # Normalize vocabs to list to support all variants
                     vocabs = [vocab] if type(vocab) is not list else vocab
-                    
+
                     temp = {}
                     enum = []
                     markdown_enum = []
                     for vocab in vocabs:
                         new_enum, new_markdown_enum = VocabularyResolver.Vocabulary(
-                            vocab, stages=stages,
-                            no_wrap=hint_no_wrap, scoped=scoped,
+                            vocab,
+                            stages=stages,
+                            no_wrap=hint_no_wrap,
+                            scoped=scoped,
                         ).resolve()
                         enum.extend(new_enum)
                         markdown_enum.extend(new_markdown_enum)
@@ -759,9 +742,7 @@ def gen_json_schema(dictionary):
                     # to be selected
                     field_types = dict_foo[field].get("type")
                     if field_types:
-                        field_types = (
-                            [field_types] if isinstance(field_types, str) else field_types
-                        )
+                        field_types = [field_types] if isinstance(field_types, str) else field_types
                     if field_types is None or "string" in field_types:
                         dictionary[field].update(temp)
                     elif "array" in field_types:
@@ -787,17 +768,15 @@ def run():
     # Loops through all source yaml defined in meta_to_json and generates the
     # corresponding json structure before writing to the associated output file
     for meta in GLOBAL_CONFIG.metaschemas:
-
         if meta in GLOBAL_CONFIG.json_schemas:
-
             yaml_input = METASCHEMAS_FOLDER / GLOBAL_CONFIG.metaschemas[meta]
             json_output = JSON_SCHEMA_FOLDER / GLOBAL_CONFIG.json_schemas[meta]
-            
+
             parsing = yaml.safe_load(open(yaml_input, encoding="utf-8"))
             placeholders = parsing.get("tide.placeholders") or {}
 
             log("ONGOING", "Generating json schema for : " + str(yaml_input))
-            
+
             # Generate Schema
             generated = gen_json_schema(parsing)
 
@@ -808,7 +787,10 @@ def run():
             log("ONGOING", "Exporting generated schema to : " + str(json_output))
             output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
             for placeholder in placeholders:
-                log("ONGOING", f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}")
+                log(
+                    "ONGOING",
+                    f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
+                )
                 output = output.replace(f"${placeholder}", placeholders[placeholder])
 
             output_file = open((json_output), "w", encoding="utf-8")
@@ -834,7 +816,6 @@ def run():
 
         for meta in config_metaschemas:
             if meta in config_json_schemas:
-
                 yaml_input = METASCHEMAS_FOLDER / config_metaschemas[meta]
                 json_output = JSON_SCHEMA_FOLDER / config_json_schemas[meta]
 
@@ -853,7 +834,10 @@ def run():
                 log("ONGOING", "Exporting generated schema to : " + str(json_output))
                 output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
                 for placeholder in placeholders:
-                    log("ONGOING", f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}")
+                    log(
+                        "ONGOING",
+                        f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
+                    )
                     output = output.replace(f"${placeholder}", placeholders[placeholder])
 
                 output_file = open((json_output), "w", encoding="utf-8")

@@ -7,14 +7,13 @@ from typing import Any
 
 from opentide.generation.doc_generator import export_schema_docs, generate_model_doc
 from opentide.generation.schema import TideSchemaGenerator, model_json_schema
-from opentide.generation.schema_pipeline import (
-    VocabularyResolver,
-    strip_framework_keywords,
-)
+from opentide.generation.schema_utils import strip_framework_keywords
 from opentide.loading.rule_loader import load_rule_from_dict
 from opentide.models.platform import SentinelConfig
 from opentide.models.rule import DetectionRule
 from opentide.schemas.store import definitions_path, metaschemas_path, schemas_data_root
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_schemas_data_root_exists() -> None:
@@ -29,12 +28,13 @@ def test_metaschemas_path_points_to_bundled_data() -> None:
 
 
 def test_framework_meta_schemas_directory_removed() -> None:
-    assert not Path("Framework/Meta Schemas").exists()
+    assert not (ROOT / "Framework/Meta Schemas").exists()
 
 
 def test_vocabulary_resolver_class_in_opentide() -> None:
-    assert VocabularyResolver.__name__ == "VocabularyResolver"
-    engines_source = Path("Engines/framework/json_schemas.py").read_text()
+    pipeline_source = (ROOT / "src/opentide/generation/schema_pipeline.py").read_text()
+    assert "class VocabularyResolver" in pipeline_source
+    engines_source = (ROOT / "Engines/framework/json_schemas.py").read_text()
     assert "class EnumResolver" not in engines_source
     assert "class VocabularyResolver" not in engines_source
 
