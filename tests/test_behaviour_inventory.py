@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 
 import pytest
-
 from tests.behaviour_inventory import load_behaviour_ids, module_for_behaviour
 
 
