@@ -12,14 +12,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from Engines.modules.vocabulary import (  # noqa: E402
+    VocabularyDefinition,
+    VocabularyEntry,
+    VocabularyLoader,
+    VocabularyLoadError,
+    VocabularyMetadata,
     entry_key_field,
     normalize_stages,
     parse_yaml_vocabulary,
-    VocabularyDefinition,
-    VocabularyEntry,
-    VocabularyLoadError,
-    VocabularyLoader,
-    VocabularyMetadata,
 )
 
 
