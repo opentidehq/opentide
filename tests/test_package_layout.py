@@ -87,6 +87,9 @@ def test_platform_entry_points_registered() -> None:
 
 
 def test_legacy_engines_tide_shim_warns() -> None:
+    import sys
+
+    sys.modules.pop("Engines.modules.tide", None)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         importlib.import_module("Engines.modules.tide")
