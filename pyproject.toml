@@ -37,9 +37,17 @@ sentinel = []
 splunk = []
 crowdstrike = []
 carbon-black = []
-cli = []
-mcp = []
+cli = [
+    "typer[all]>=0.12",
+]
+mcp = [
+    "mcp>=1.0",
+    "fastmcp>=2.0",
+]
 dev = [
+    "typer[all]>=0.12",
+    "mcp>=1.0",
+    "fastmcp>=2.0",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.9",
@@ -49,10 +57,14 @@ dev = [
     "types-PyYAML",
     "types-toml",
     "pandas>=2.0",
+    "openpyxl>=3.1",
 ]
 
 [dependency-groups]
 dev = [
+    "typer[all]>=0.12",
+    "mcp>=1.0",
+    "fastmcp>=2.0",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.9",
@@ -62,6 +74,7 @@ dev = [
     "types-PyYAML",
     "types-toml",
     "pandas>=2.0",
+    "openpyxl>=3.1",
 ]
 
 [project.scripts]
@@ -120,6 +133,9 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "src/opentide/generation/schema_pipeline.py" = ["E501", "SIM", "UP", "B", "E712", "E721", "E722", "F841"]
 "src/opentide/generation/template_renderer.py" = ["E501", "SIM", "UP", "B", "E712", "E722", "F841"]
 "src/opentide/generation/template_engine.py" = ["E501", "SIM", "UP", "B", "E712", "E722", "F841"]
+"src/opentide/cli/__init__.py" = ["B008", "E501"]
+"src/opentide/cli/services/*.py" = ["E501", "SIM"]
+"tests/test_cli/*.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"

@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -31,3 +33,17 @@ def pytest_unconfigure(config: object) -> None:
     if _repo_patcher is not None:
         _repo_patcher.stop()
         _repo_patcher = None
+
+
+@pytest.fixture(autouse=True)
+def _reset_opentide_registry() -> None:
+    """Prevent CLI integration tests from polluting singleton state."""
+    yield
+    from opentide.core.registry import OpenTide
+
+    OpenTide._initialised = False  # noqa: SLF001
+    OpenTide._objects_loaded = False  # noqa: SLF001
+    OpenTide._index = None  # noqa: SLF001
+    OpenTide._rules = {}
+    OpenTide._threats = {}
+    OpenTide._objectives = {}
