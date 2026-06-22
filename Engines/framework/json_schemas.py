@@ -16,6 +16,7 @@ from Engines.modules.tide import OpenTide
 from Engines.modules.models import StatusStrategy
 from Engines.modules.files import resolve_paths
 from Engines.modules.deployment import enabled_systems
+from Engines.modules.vocabulary import VocabularyDefinition, entry_key_field
 
 GLOBAL_CONFIG = OpenTide.Configurations.Global
 
@@ -155,6 +156,7 @@ _Vocabulary_ : `{source_vocab}`
             self.enum: list[str] = []
             self.enum_description: list[str] = []
             self._hints: list[str] = []
+            self._hint_descriptions: list[str] = []
             self._hints_enabled = False
 
         # --- Public API -----------------------------------------------
@@ -168,15 +170,16 @@ _Vocabulary_ : `{source_vocab}`
 
         # --- Ingestion ------------------------------------------------
 
-        def _ingest(self, vocab_data: dict | None):
-            """Ingest entries from a vocabulary data dict (core index)."""
+        def _ingest(self, vocab_data: VocabularyDefinition | None):
+            """Ingest entries from a vocabulary definition (core index)."""
             if not vocab_data:
                 log("WARNING", "Could not retrieve vocabulary", self.vocab)
                 return
-            metadata = vocab_data["metadata"]
+            metadata = vocab_data.metadata
             self._hints_enabled = metadata.get("vocab.search_hints", True)
-            is_model = metadata.get("model") or (self.vocab in OBJECT_TYPES)
-            self._process(vocab_data["entries"], is_model=is_model)
+            is_model = metadata.model or (self.vocab in OBJECT_TYPES)
+            entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
+            self._process(entries, is_model=is_model)
 
         def _ingest_extensions(self):
             """Ingest user-defined extensions from ``schema.toml``."""
@@ -184,10 +187,11 @@ _Vocabulary_ : `{source_vocab}`
             if not extensions:
                 return
             log("DEBUG", f"Processing {len(extensions)} extension(s) for", self.vocab)
-            ext_meta = VOCAB_INDEX.get(self.vocab, {}).get("metadata", {})
-            is_model = ext_meta.get("model") or (self.vocab in OBJECT_TYPES)
+            ext_vocab = VOCAB_INDEX.get(self.vocab)
+            ext_meta = ext_vocab.metadata if ext_vocab else None
+            is_model = (ext_meta.model if ext_meta else False) or (self.vocab in OBJECT_TYPES)
 
-            key_field = "id" if is_model else "name"
+            key_field = entry_key_field(model=is_model)
             normalised = {}
             for ext in extensions:
                 d = ext.copy()
@@ -207,6 +211,7 @@ _Vocabulary_ : `{source_vocab}`
                         value = data["tide.vocab.stages"] + "::" + key
                     if self._emit(value, key, data) and self._hints_enabled:
                         self._hints.append(self._search_hint(value, data))
+                        self._hint_descriptions.append(self.enum_description[-1])
                 else:
                     raw = data.get("tide.vocab.stages", [])
                     stages = [raw] if not isinstance(raw, list) else raw
@@ -238,7 +243,7 @@ _Vocabulary_ : `{source_vocab}`
                 self.enum = [""]
             if self._hints and self._hints_enabled:
                 self.enum.extend(self._hints)
-                self.enum_description.extend(self.enum_description)
+                self.enum_description.extend(self._hint_descriptions)
             return self.enum, self.enum_description
 
         # --- Formatting -----------------------------------------------
@@ -261,12 +266,14 @@ _Vocabulary_ : `{source_vocab}`
 
             icon = (
                 key.get("icon")
-                or VOCAB_INDEX.get(self.vocab, {}).get("metadata", {}).get("icon")
+                or (vocab_def.metadata.icon if (vocab_def := VOCAB_INDEX.get(self.vocab)) else "")
                 or ICONS.get(self.vocab)
                 or ""
             )
             source_vocab = (
-                VOCAB_INDEX.get(self.vocab, {}).get("metadata", {}).get("name")
+                vocab_def.metadata.name
+                if (vocab_def := VOCAB_INDEX.get(self.vocab))
+                else None
             )
             link = key.get("link") or ""
             stage = key.get("tide.vocab.stages") or ""
@@ -306,10 +313,8 @@ _Vocabulary_ : `{source_vocab}`
             )
 
         def _stage_doc(self, stages: str | list) -> str:
-            vocab_stages = (
-                VOCAB_INDEX.get(self.vocab, {})
-                .get("metadata", {}).get("stages")
-            )
+            vocab_def = VOCAB_INDEX.get(self.vocab)
+            vocab_stages = vocab_def.metadata.get("stages") if vocab_def else None
             if not vocab_stages:
                 log("WARNING", f"Could not find stages in vocabulary {self.vocab}")
                 return ""
@@ -746,10 +751,10 @@ def gen_json_schema(dictionary):
                     # When no field type is present, assume it's a direct string
                     # When the type is set to string, oneOf allows only one value
                     # to be selected
-                    field_types =dict_foo[field].get("type")
+                    field_types = dict_foo[field].get("type")
                     if field_types:
                         field_types = (
-                            [field_types] if type(field_types) is str() else field_types
+                            [field_types] if isinstance(field_types, str) else field_types
                         )
                     if field_types is None:
                         dictionary[field].update(temp)

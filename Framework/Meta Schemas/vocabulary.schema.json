@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opentide.dev/schemas/vocabulary.schema.json",
+  "title": "OpenTide Vocabulary YAML",
+  "type": "object",
+  "required": ["name", "field", "keys"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "field": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "icon": { "type": "string" },
+    "model": { "type": "boolean" },
+    "keys": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "anyOf": [{ "required": ["id"] }, { "required": ["name"] }]
+      }
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "icon": { "type": "string" }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
