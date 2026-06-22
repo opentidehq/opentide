@@ -386,6 +386,27 @@ def info_cmd(
         Console().print(table)
 
 
+@app.command("migrate")
+def migrate_cmd(
+    ctx: typer.Context,
+    check: bool = typer.Option(False, "--check", help="Report legacy patterns without changing files"),
+    apply: bool = typer.Option(False, "--apply", help="Rewrite known legacy patterns in place"),
+) -> None:
+    """Scan or rewrite legacy submodule imports and Orchestration script calls."""
+    from opentide.cli.migrate import apply_migrations, scan_repo
+
+    cli = get_context(ctx)
+    cli.apply_environment()
+    repo = cli.repo
+    if apply:
+        changed = apply_migrations(repo)
+        emit_success(cli, {"message": "Migration applied", "changed_files": changed})
+        return
+    findings = scan_repo(repo)
+    if check or not apply:
+        emit_success(cli, {"message": "Migration scan complete", "findings": findings, "count": len(findings)})
+
+
 def main() -> None:
     """Console script entry point."""
     app()
