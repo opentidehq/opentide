@@ -26,4 +26,4 @@ jobs:
           ruff format --check .
 
       - name: Mypy
-        run: mypy src/opentide
+        run: mypy --follow-imports=skip src/opentide

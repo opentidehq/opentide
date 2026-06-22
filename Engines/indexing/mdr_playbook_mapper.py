@@ -4,13 +4,13 @@ import sys
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
 playbook_mapping = list()
 
-for mdr in DataTide.Models.mdr:
+for mdr in OpenTide.Models.mdr:
 
-    content = DataTide.Models.mdr[mdr]
+    content = OpenTide.Models.mdr[mdr]
 
     if content["status"] == "PRODUCTION":
 

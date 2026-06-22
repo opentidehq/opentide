@@ -10,8 +10,8 @@ from typing import Dict
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
-from Engines.modules.deployment import TideRepo
+from Engines.modules.tide import OpenTide
+from Engines.modules.deployment import GitRepository
 
 @dataclass
 class RevisionTracker:
@@ -32,11 +32,11 @@ class RevisionIndexer:
 
     def __init__(self):
 
-        self.TIDE_INDEXES_PATH = Path(DataTide.Configurations.Global.Paths.Tide.tide_indexes)
-        self.OBJECT_SCOPE = DataTide.Configurations.Global.objects
-        self.OBJECT_NAMES = DataTide.Configurations.Documentation.object_names
-        self.INDEX_NAME = DataTide.Configurations.Global.indexes.revisions
-        self.INDEX_PATH = self.TIDE_INDEXES_PATH / self.INDEX_NAME
+        self.INDEX_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.tide_indexes)
+        self.OBJECT_SCOPE = OpenTide.Configurations.Global.objects
+        self.OBJECT_NAMES = OpenTide.Configurations.Documentation.object_names
+        self.INDEX_NAME = OpenTide.Configurations.Global.indexes.revisions
+        self.INDEX_PATH = self.INDEX_PATH / self.INDEX_NAME
         if not os.path.exists(self.INDEX_PATH):
             json.dump({}, open(self.INDEX_PATH, "w+"))
         self.RAW_REVISIONS_INDEX = json.load(open(self.INDEX_PATH))
@@ -68,7 +68,7 @@ class RevisionIndexer:
         return parsed_index
 
     def _new_revision(self, object_author:str="")->RevisionTracker:
-        commit_details = TideRepo().last_commit_details
+        commit_details = GitRepository().last_commit_details
         return RevisionTracker(date=datetime.today().strftime('%Y-%m-%d'),
                                 message=commit_details.message,
                                 author=commit_details.author,
@@ -76,7 +76,7 @@ class RevisionIndexer:
 
     def _create_entry(self, object:str, object_type:str):
 
-        object_data = DataTide.Models.Index[object_type][object]
+        object_data = OpenTide.Models.Index[object_type][object]
         object_version = str(object_data.get("metadata", {}).get("version"))
         if not object_version:
             log("FATAL", "Missing Object version, can't proceed")
@@ -110,7 +110,7 @@ class RevisionIndexer:
         
         updated_index = dict()
         for object_type in self.OBJECT_SCOPE:
-            object_index = DataTide.Models.Index.get(object_type)
+            object_index = OpenTide.Models.Index.get(object_type)
             if not object_index:
                 log("FAILURE",
                     "Could not find a current indexable set of OpenTide object for the type",

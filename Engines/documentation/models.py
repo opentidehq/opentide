@@ -35,18 +35,18 @@ from Engines.modules.documentation_components import (
 )
 from Engines.modules.files import safe_file_name
 from Engines.modules.graphs import relationships_graph, chaining_graph
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.logs import log
 from Engines.modules.deployment import Proxy, CIEnvironment
 from Engines.templates.models import MODEL_DOC_TEMPLATE
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
-MODELS_DOCS_PATH = Path(DataTide.Configurations.Global.Paths.Core.models_docs_folder)
-MODELS_SCOPE = DataTide.Configurations.Documentation.scope
-MODELS_INDEX = DataTide.Models.Index
-MODELS_NAME = DataTide.Configurations.Documentation.object_names
+MODELS_DOCS_PATH = Path(OpenTide.Configurations.Global.Paths.Core.models_docs_folder)
+MODELS_SCOPE = OpenTide.Configurations.Documentation.scope
+MODELS_INDEX = OpenTide.Models.Index
+MODELS_NAME = OpenTide.Configurations.Documentation.object_names
 
-if DataTide.Configurations.Documentation.cve.get("proxy"):
+if OpenTide.Configurations.Documentation.cve.get("proxy"):
     Proxy.set_proxy()
 else:
     Proxy.unset_proxy()
@@ -67,7 +67,7 @@ def documentation(model):
     else:
         title = "# " + title
         
-    model_datafield = DataTide.Configurations.Global.data_fields[model_type]
+    model_datafield = OpenTide.Configurations.Global.data_fields[model_type]
     criticality = criticality_doc(model["criticality"])
     metadata = model.get("metadata") or model.get("meta") or {}
     metadata = {k: v for k, v in metadata.items() if k != "tlp"}

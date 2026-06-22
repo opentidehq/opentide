@@ -2,18 +2,20 @@ import pandas as pd
 from git.repo import Repo
 from Engines.modules.framework import unroll_dot_dict
 from Engines.modules.models import (
-    TideDefinitionsModels,
+    SharedModels,
     TideModels,
     SystemConfig,
     DeploymentStrategy,
     StatusStrategy,
     TenantDeployment,
-    TenantDeploymentModel,
+    DeploymentBatch,
 )
-from Engines.modules.tide import DataTide, DetectionSystems, TideLoader
-from Engines.modules.errors import TideErrors
+from Engines.modules.registry import OpenTide
+from Engines.modules.models import DetectionPlatforms
+from Engines.modules.loaders.object_loader import ObjectLoader
+from Engines.modules.errors import Errors
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, HelperTide
+from Engines.modules.tide import OpenTide, DebugHelpers
 from Engines.modules.logs import log
 import sys
 import os
@@ -29,7 +31,7 @@ from dataclasses import asdict, dataclass
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 
-SYSTEMS_CONFIGS_INDEX = DataTide.Configurations.Systems.Index
+SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION,
                         StatusStrategy.DISABLEMENT)
 
@@ -61,7 +63,7 @@ class CIEnvironment:
         elif os.getenv("CI"):
             log("SUCCESS", "Discovered CI Environment to be Gitlab CI")
             return self.CIPlatforms.GitlabCI
-        elif HelperTide.is_debug():
+        elif DebugHelpers.is_debug():
             log("SUCCESS", "Discover CI Environment to be Local")
             return self.CIPlatforms.LocalDebug
         else:

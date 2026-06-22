@@ -7,14 +7,14 @@ from mitrecve import crawler
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.deployment import Proxy
 
-TVM_MODEL_FIELD = DataTide.Configurations.Global.data_fields["tvm"]
+TVM_MODEL_FIELD = OpenTide.Configurations.Global.data_fields["tvm"]
 
 
 def run():
-    if DataTide.Configurations.Documentation.cve.get("proxy"):
+    if OpenTide.Configurations.Documentation.cve.get("proxy"):
         Proxy.set_proxy()
     else:
         Proxy.unset_proxy()
@@ -26,7 +26,7 @@ def run():
     )
 
     error_list = []
-    for tvm in (index := DataTide.Models.tvm):
+    for tvm in (index := OpenTide.Models.tvm):
         tvm_data = index[tvm]
         tvm_name = tvm_data["name"]
         tvm_id = tvm_data.get("metadata",{}).get("uuid")

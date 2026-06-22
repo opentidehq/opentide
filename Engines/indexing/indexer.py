@@ -20,34 +20,34 @@ def indexer(write_index=False) -> dict:
     SKIPS = ["ram", "mdrv2"]
     RESOLVED_CONFIGURATIONS = resolve_configurations()
 
-    TIDE_CONFIG = RESOLVED_CONFIGURATIONS["global"]
+    CORE_CONFIG = RESOLVED_CONFIGURATIONS["global"]
 
-    DATA_FIELD = TIDE_CONFIG["data_fields"]
+    DATA_FIELD = CORE_CONFIG["data_fields"]
 
-    RAW_TIDE_PATHS = TIDE_CONFIG["paths"]["tide"]
-    RAW_CORE_PATHS = TIDE_CONFIG["paths"]["core"]
-    RAW_PATHS = RAW_CORE_PATHS | RAW_TIDE_PATHS
+    RAW_PATHS = CORE_CONFIG["paths"]["tide"]
+    RAW_CORE_PATHS = CORE_CONFIG["paths"]["core"]
+    RAW_PATHS = RAW_CORE_PATHS | RAW_PATHS
 
-    TIDE_PATHS, CORE_PATHS = resolve_paths(separate=True)
-    PATHS = TIDE_PATHS | CORE_PATHS
+    PATHS, CORE_PATHS = resolve_paths(separate=True)
+    PATHS = PATHS | CORE_PATHS
 
     log("DEBUG", "Loaded all paths")
     VOCABULARIES_PATH = PATHS["vocabularies"]
     METASCHEMA_PATH = PATHS["metaschemas"]
-    METASCHEMAS = TIDE_CONFIG["metaschemas"]
+    METASCHEMAS = CORE_CONFIG["metaschemas"]
     JSONSCHEMAS_PATH = PATHS["json_schemas"]
-    JSONSCHEMAS = TIDE_CONFIG["json_schemas"]
+    JSONSCHEMAS = CORE_CONFIG["json_schemas"]
     SUBSCHEMAS_PATH = PATHS["subschemas"]
     DEFINITIONS_PATH = PATHS["definitions"]
-    RECOMPOSITION = TIDE_CONFIG["recomposition"]
+    RECOMPOSITION = CORE_CONFIG["recomposition"]
     TEMPLATES_PATH = PATHS["templates"]
-    TEMPLATES = TIDE_CONFIG["templates"]
-    TIDE_INDEXES_PATH = PATHS["tide_indexes"]
+    TEMPLATES = CORE_CONFIG["templates"]
+    INDEX_PATH = PATHS["tide_indexes"]
     
     @dataclass
     class IndexPaths:
-        OBJECTS_INDEX_PATH = TIDE_INDEXES_PATH / "objects.json"
-        REVISIONS_INDEX_PATH = TIDE_INDEXES_PATH / "revisions.json"
+        OBJECTS_INDEX_PATH = INDEX_PATH / "objects.json"
+        REVISIONS_INDEX_PATH = INDEX_PATH / "revisions.json"
 
 
     OUTPUT_PATH = PATHS["index_output"]
@@ -67,10 +67,10 @@ def indexer(write_index=False) -> dict:
     log("INFO", "Resolving and indexing", "paths")
     index["paths"] = dict()
     index["paths"].update(PATHS)
-    index["paths"]["tide"] = TIDE_PATHS
+    index["paths"]["tide"] = PATHS
     index["paths"]["core"] = CORE_PATHS
     index["paths"]["raw"] = RAW_PATHS
-    index["paths"]["raw"]["tide"] = RAW_TIDE_PATHS
+    index["paths"]["raw"]["tide"] = RAW_PATHS
     index["paths"]["raw"]["core"] = RAW_CORE_PATHS
 
     log("INFO", "Resolving and index", "configurations")
@@ -259,7 +259,7 @@ def indexer(write_index=False) -> dict:
                             model_cat_index[identifier] = model_body
                             files_index[identifier] = model
 
-                            # Creating a sub-index for signals so we can more easily search in them through DataTide
+                            # Creating a sub-index for signals so we can more easily search in them through OpenTide
                             # We copy each signal to avoid polluting the DOM data with the 'parent' field
                             if meta_name == "dom":
                                 signals = model_body.get("objective",{}).get("signals", [])

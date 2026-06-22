@@ -7,18 +7,18 @@ import pandas as pd
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.files import IndentFullDumper
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
-RESOURCES = Path(DataTide.Configurations.Global.Paths.Core.resources)
+RESOURCES = Path(OpenTide.Configurations.Global.Paths.Core.resources)
 
-D3FEND_COUNTERMEASURES_PATH = DataTide.Configurations.Resources.d3fend[
+D3FEND_COUNTERMEASURES_PATH = OpenTide.Configurations.Resources.d3fend[
     "countermeasures"
 ]
 
 # Used to create links to the countermeasure page
 COUNTERMEASURES_LINK = "https://d3fend.mitre.org/technique/"
 
-VOCABS_PATH = Path(DataTide.Configurations.Global.Paths.Core.vocabularies)
+VOCABS_PATH = Path(OpenTide.Configurations.Global.Paths.Core.vocabularies)
 OUT_NAME = "D3FEND Countermeasures.yaml"
 
 D3FEND_COUNTERMEASURES = (

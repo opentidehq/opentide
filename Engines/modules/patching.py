@@ -16,11 +16,11 @@ class Tide2Patching:
     Class encapsulating all relevant behaviours to patch Tide 1 objects into Tide 2
     """
     def __init__(self):
-        TIDE_PATHS, CORE_PATHS = resolve_paths(separate=True)
-        PATHS = TIDE_PATHS | CORE_PATHS
-        TIDE_INDEXES_PATH = PATHS["tide_indexes"]
+        PATHS, CORE_PATHS = resolve_paths(separate=True)
+        PATHS = PATHS | CORE_PATHS
+        INDEX_PATH = PATHS["tide_indexes"]
         try:
-            self.LEGACY_UUID_MAPPING = json.load(open(TIDE_INDEXES_PATH / "legacy_uuid_mapping.json"))
+            self.LEGACY_UUID_MAPPING = json.load(open(INDEX_PATH / "legacy_uuid_mapping.json"))
             log("SUCCESS", "Found a legacy ID to UUID Mapping")
         except:
             log("SKIP", "Did not find a legacy id to uuid mapping")

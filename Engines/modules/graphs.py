@@ -21,9 +21,9 @@ from Engines.modules.documentation import (
     DOCUMENTATION_TARGET,
     CIEnvironment
 )
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
-CHAINING_INDEX = DataTide.Models.chaining
+CHAINING_INDEX = OpenTide.Models.chaining
 
 def mermaid_sanitizer(string:str)->str:
     """

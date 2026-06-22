@@ -7,10 +7,10 @@ from uuid import UUID
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.files import resolve_configurations
 
-MODELS_INDEX = DataTide.Models.Index
+MODELS_INDEX = OpenTide.Models.Index
 CONFIGURATIONS = resolve_configurations()
 MODELS_TYPES = CONFIGURATIONS["global"]["objects"]
 

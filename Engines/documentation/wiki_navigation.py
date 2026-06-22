@@ -29,21 +29,21 @@ from Engines.modules.documentation import (
     DOCUMENTATION_TARGET,
 )
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.deployment import CIEnvironment, DEPRECATED_STATUSES
 
-COVER_PAGES_ENABLED = DataTide.Configurations.Documentation.model_cover_pages
+COVER_PAGES_ENABLED = OpenTide.Configurations.Documentation.model_cover_pages
 
-MODELS_INDEX = DataTide.Models.Index
-METASCHEMAS_INDEX = DataTide.TideSchemas.Index
-ICONS = DataTide.Configurations.Documentation.icons
+MODELS_INDEX = OpenTide.Models.Index
+METASCHEMAS_INDEX = OpenTide.TideSchemas.Index
+ICONS = OpenTide.Configurations.Documentation.icons
 
-PATHS_CONFIG = DataTide.Configurations.Global.Paths.Index
+PATHS_CONFIG = OpenTide.Configurations.Global.Paths.Index
 
-MODELS_DOCS_PATH = Path(str(DataTide.Configurations.Global.Paths.Core.models_docs_folder).replace(" ", "-"))
-MODELS_SCOPE = DataTide.Configurations.Documentation.scope
-MODELS_NAME = DataTide.Configurations.Documentation.object_names
+MODELS_DOCS_PATH = Path(str(OpenTide.Configurations.Global.Paths.Core.models_docs_folder).replace(" ", "-"))
+MODELS_SCOPE = OpenTide.Configurations.Documentation.scope
+MODELS_NAME = OpenTide.Configurations.Documentation.object_names
 
 CHARS_CLIP = 150
 NAV_INDEX_FIELDS = {
@@ -298,7 +298,7 @@ CENTER_TEXT = """
 def construct_navigation_index(model):
 
     icon = ICONS[model]
-    model_title = DataTide.Configurations.Documentation.object_names[model]
+    model_title = OpenTide.Configurations.Documentation.object_names[model]
     nav_index = str()
 
 

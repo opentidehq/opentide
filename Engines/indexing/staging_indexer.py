@@ -17,12 +17,12 @@ from Engines.modules.deployment import modified_mdr_files, DeploymentStrategy
 from Engines.modules.files import resolve_paths
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
-TIDE_CONFIG = toml.load(
+CORE_CONFIG = toml.load(
     open(ROOT / "Configurations/global.toml", encoding="utf-8")
 )
 PATHS = resolve_paths()
 PROJECT_NAME = os.getenv("CI_PROJECT_NAME")
-STG_INDEX_PATH = ROOT / TIDE_CONFIG["paths"]["core"]["staging_index_output"]
+STG_INDEX_PATH = ROOT / CORE_CONFIG["paths"]["core"]["staging_index_output"]
 
 DEPLOYMENT_PLAN = os.getenv("DEPLOYMENT_PLAN")
 

@@ -6,7 +6,7 @@ from typing import Optional, List
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
-from Engines.modules.models import TideDefinitionsModels
+from Engines.modules.models import SharedModels
 
 
 @dataclass
@@ -131,11 +131,11 @@ class Objects:
 
         name: str
         """Name of the OpenTide Detection Objective"""
-        metadata: TideDefinitionsModels.TideObjectMetadata
+        metadata: SharedModels.ObjectMetadata
         """Metadata about the detection objective"""
         objective: Objective
         """Core objective definition including signals and composition"""
         composition: Objective.Composition
         """Strategy for composing detection signals"""
-        references: Optional[TideDefinitionsModels.TideObjectReferences] = None
+        references: Optional[SharedModels.ObjectReferences] = None
         """Optional references for this detection objective"""

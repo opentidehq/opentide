@@ -10,12 +10,12 @@ from Engines.modules.deployment import (
     DeploymentStrategy,
     CIEnvironment,
 )
-from Engines.modules.logs import log, ANSI, coretide_intro
+from Engines.modules.logs import log, ANSI, print_banner
 from Engines.modules.plugins import DeployTide
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.framework import keep_active_mdr
 
-print(coretide_intro())
+print(print_banner())
 print(f"""
 {ANSI.Colors.BLUE}{ANSI.Formatting.ITALICS}{ANSI.Formatting.BOLD}
 CoreTide Detection Rules Query Validation
@@ -43,9 +43,9 @@ if len(deployment_list) == 0:  # In case of no deployments possible, fail gracio
 for system in deployment_list:
     # TODO Temp support while we support both MDRv3 and MDRv4 deployers
     try:
-        system_name = DataTide.Configurations.Systems.Index[system]["tide"]["name"]
+        system_name = OpenTide.Configurations.Systems.Index[system]["tide"]["name"]
     except:
-        system_name = DataTide.Configurations.Systems.Index[system]["platform"]["name"]
+        system_name = OpenTide.Configurations.Systems.Index[system]["platform"]["name"]
 
     log("TITLE", f"Query Validation - {system_name}")
     log("INFO", "Validating the query in the MDR against the system")

@@ -2,18 +2,18 @@ import pandas as pd
 from git.repo import Repo
 from Engines.modules.framework import unroll_dot_dict
 from Engines.modules.models import (
-    TideDefinitionsModels,
+    SharedModels,
     TideModels,
     SystemConfig,
     DeploymentStrategy,
     StatusStrategy,
     TenantDeployment,
-    TenantDeploymentModel,
+    DeploymentBatch,
 )
-from Engines.modules.tide import DataTide, DetectionSystems, TideLoader
-from Engines.modules.errors import TideErrors
+from Engines.modules.tide import OpenTide, DetectionPlatforms, ObjectLoader
+from Engines.modules.errors import Errors
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, HelperTide
+from Engines.modules.tide import OpenTide, DebugHelpers
 from Engines.modules.logs import log
 import sys
 import os
@@ -29,50 +29,50 @@ from dataclasses import asdict, dataclass
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 
-SYSTEMS_CONFIGS_INDEX = DataTide.Configurations.Systems.Index
+SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION,
                         StatusStrategy.DISABLEMENT)
 
-from Engines.modules.tide import DataTide, TideLoader
+from Engines.modules.tide import OpenTide, ObjectLoader
 from Engines.modules.models import (
-    TideDefinitionsModels,
+    SharedModels,
     TideModels,
     SystemConfig,
     DeploymentStrategy,
     TenantDeployment,
-    TenantDeploymentModel,
-    DetectionSystems,
+    DeploymentBatch,
+    DetectionPlatforms,
 )
 from Engines.modules.framework import unroll_dot_dict
 
 class TideDeployment:
-    def __init__(self, deployment, system: DetectionSystems, strategy):
+    def __init__(self, deployment, system: DetectionPlatforms, strategy):
         match system:
-            case DetectionSystems.SPLUNK:
+            case DetectionPlatforms.SPLUNK:
                 self.rule_deployment: Sequence[TenantDeployment.Splunk] = ( # type:ignore
                     self.deployment_resolver(deployment, system, strategy)
                 )  
-            case DetectionSystems.SENTINEL:
+            case DetectionPlatforms.SENTINEL:
                 self.rule_deployment: Sequence[TenantDeployment.Sentinel] = ( # type:ignore
                     self.deployment_resolver(deployment, system, strategy) 
                 )
-            case DetectionSystems.CARBON_BLACK_CLOUD:
+            case DetectionPlatforms.CARBON_BLACK_CLOUD:
                 self.rule_deployment: Sequence[TenantDeployment.CarbonBlackCloud] = ( # type:ignore
                     self.deployment_resolver(deployment, system, strategy)
                 )
-            case DetectionSystems.DEFENDER_FOR_ENDPOINT:
+            case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
                 self.rule_deployment: Sequence[TenantDeployment.DefenderForEndpoint] = ( # type:ignore
                     self.deployment_resolver(deployment, system, strategy)
                 )
-            case DetectionSystems.SENTINEL_ONE:
+            case DetectionPlatforms.SENTINEL_ONE:
                 self.rule_deployment: Sequence[TenantDeployment.SentinelOne] = ( # type:ignore
                     self.deployment_resolver(deployment, system, strategy)
                 ) 
-            case DetectionSystems.CROWDSTRIKE:
+            case DetectionPlatforms.CROWDSTRIKE:
                 self.rule_deployment: Sequence[TenantDeployment.Crowdstrike] = (
                     self.deployment_resolver(deployment, system, strategy) # type:ignore
                 )
-            case DetectionSystems.HARFANGLAB:
+            case DetectionPlatforms.HARFANGLAB:
                 self.rule_deployment: Sequence[TenantDeployment.HarfangLab] = (
                     self.deployment_resolver(deployment, system, strategy) # type:ignore
                 )
@@ -81,38 +81,38 @@ class TideDeployment:
                     f"System {system} is not implemented by TideDeployment"
                 )
 
-    def system_configuration_resolver(self, system: DetectionSystems):  # type:ignore
+    def system_configuration_resolver(self, system: DetectionPlatforms):  # type:ignore
         match system:
-            # case DetectionSystems.SPLUNK:
-            #    return DataTide.Configurations.Systems.Splunk
-            # case DetectionSystems.CARBON_BLACK_CLOUD:
-            #    return DataTide.Configurations.Systems.CarbonBlackCloud
-            case DetectionSystems.SENTINEL:
-                return DataTide.Configurations.Systems.Sentinel
-            case DetectionSystems.DEFENDER_FOR_ENDPOINT:
-                return DataTide.Configurations.Systems.DefenderForEndpoint
-            case DetectionSystems.SENTINEL_ONE:
-                return DataTide.Configurations.Systems.SentinelOne
-            case DetectionSystems.CROWDSTRIKE:
-                return DataTide.Configurations.Systems.Crowdstrike
-            case DetectionSystems.HARFANGLAB:
-                return DataTide.Configurations.Systems.HarfangLab
+            # case DetectionPlatforms.SPLUNK:
+            #    return OpenTide.Configurations.Systems.Splunk
+            # case DetectionPlatforms.CARBON_BLACK_CLOUD:
+            #    return OpenTide.Configurations.Systems.CarbonBlackCloud
+            case DetectionPlatforms.SENTINEL:
+                return OpenTide.Configurations.Systems.Sentinel
+            case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
+                return OpenTide.Configurations.Systems.DefenderForEndpoint
+            case DetectionPlatforms.SENTINEL_ONE:
+                return OpenTide.Configurations.Systems.SentinelOne
+            case DetectionPlatforms.CROWDSTRIKE:
+                return OpenTide.Configurations.Systems.Crowdstrike
+            case DetectionPlatforms.HARFANGLAB:
+                return OpenTide.Configurations.Systems.HarfangLab
             # case _:
             #    raise NotImplemented
 
     def mdr_configuration_resolver(
-        self, data: TideModels.MDR, system: DetectionSystems
-    ) -> TideDefinitionsModels.SystemConfigurationModel:
+        self, data: TideModels.DetectionRule, system: DetectionPlatforms
+    ) -> SharedModels.PlatformConfigurationBase:
         match system:
-            case DetectionSystems.SENTINEL:
+            case DetectionPlatforms.SENTINEL:
                 mdr_config = data.configurations.sentinel
-            case DetectionSystems.DEFENDER_FOR_ENDPOINT:
+            case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
                 mdr_config = data.configurations.defender_for_endpoint
-            case DetectionSystems.SENTINEL_ONE:
+            case DetectionPlatforms.SENTINEL_ONE:
                 mdr_config = data.configurations.sentinel_one
-            case DetectionSystems.CROWDSTRIKE:
+            case DetectionPlatforms.CROWDSTRIKE:
                 mdr_config = data.configurations.crowdstrike
-            case DetectionSystems.HARFANGLAB:
+            case DetectionPlatforms.HARFANGLAB:
                 mdr_config = data.configurations.harfanglab
             case _:
                 log(
@@ -136,8 +136,8 @@ class TideDeployment:
 
     def tenants_resolver(
         self,
-        data: TideModels.MDR,
-        system: DetectionSystems,
+        data: TideModels.DetectionRule,
+        system: DetectionPlatforms,
         deployment_strategy: DeploymentStrategy,
     ) -> Sequence[SystemConfig.Tenant]:
         """
@@ -273,8 +273,8 @@ class TideDeployment:
         return base_dictionary
 
     def modifiers_resolver(
-        self, data: TideModels.MDR, target_tenant: str, system: DetectionSystems
-    ) -> TideModels.MDR:
+        self, data: TideModels.DetectionRule, target_tenant: str, system: DetectionPlatforms
+    ) -> TideModels.DetectionRule:
         """
         Dynamically modifies MDR data based on
         """
@@ -385,21 +385,21 @@ class TideDeployment:
         raw_data["configurations"].update({system_identifier: raw_mdr_config})
         log("INFO", "New recompiled modified deployment", str(raw_data))
 
-        return TideLoader.load_mdr(raw_data)
+        return ObjectLoader.load_rule(raw_data)
 
     def deployment_resolver(
         self,
-        mdr_deployment: Sequence[TideModels.MDR],
-        system: DetectionSystems,
+        mdr_deployment: Sequence[TideModels.DetectionRule],
+        system: DetectionPlatforms,
         deployment_strategy: DeploymentStrategy,
-    ) -> Sequence[TenantDeploymentModel]:
+    ) -> Sequence[DeploymentBatch]:
         deployment = list()
         tenants_data = dict()
         tenants_mapping = dict()
 
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                mdr = DataTide.Models.MDR[mdr]
+                mdr = OpenTide.Models.MDR[mdr]
 
             tenants = self.tenants_resolver(mdr, system, deployment_strategy)
 
@@ -413,7 +413,7 @@ class TideDeployment:
 
         for tenant in tenants_mapping:
             deployment.append(
-                TenantDeploymentModel(
+                DeploymentBatch(
                     tenant=tenants_data[tenant], rules=tenants_mapping[tenant]
                 )
             )

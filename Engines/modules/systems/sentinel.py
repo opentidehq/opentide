@@ -11,17 +11,17 @@ from azure.identity import ClientSecretCredential
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.tide import DataTide, HelperTide
+from Engines.modules.tide import OpenTide, DebugHelpers
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.deployment import Proxy
-from Engines.modules.models import TideConfigs
+from Engines.modules.models import ConfigurationModels
 
 
 
 class SentinelService:
     
-    def __init__(self, tenant_config:TideConfigs.Systems.Sentinel.Tenant):
+    def __init__(self, tenant_config:ConfigurationModels.Systems.Sentinel.Tenant):
         self.setup = tenant_config.setup
         if self.setup.proxy:
             Proxy.set_proxy()

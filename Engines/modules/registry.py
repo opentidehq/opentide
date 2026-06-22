@@ -26,10 +26,10 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.indexing.indexer import indexer
 from Engines.modules.logs import log
-from Engines.modules.models import (DetectionSystems,
+from Engines.modules.models import (DetectionPlatforms,
                                     TideModels,
-                                    TideDefinitionsModels,
-                                    TideConfigs,
+                                    SharedModels,
+                                    ConfigurationModels,
                                     SystemConfig)
 from Engines.modules.patching import Tide2Patching
 from Engines.modules.datamodels.objects import Objects
@@ -37,56 +37,78 @@ from Engines.modules.datamodels.configurations import Configurations
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.environment import HelperTide
-from Engines.modules.index import IndexTide
+from Engines.modules.environment import DebugHelpers
+from Engines.modules.index import IndexManager
 from Engines.modules.loaders.config_loader import ConfigurationsLoader
-from Engines.modules.loaders.object_loader import TideLoader
+from Engines.modules.loaders.object_loader import ObjectLoader
 
-class DataTide:
+class OpenTide:
     """Unified programmatic interface to access all data in the
-    TIDE instance. Calling this class triggers an indexation of the
+    OpenTide instance. Calling this class triggers an indexation of the
     entire repository and stores it in memory.
 
-    DataTide execution model as a self-initializing dataclass means
-    it will fetch all index data dynamically when the tide module is first
+    OpenTide execution model as a self-initializing dataclass means
+    it will fetch all index data dynamically when the registry module is first
     imported in the execution environment, then freeze this state. To
-    refresh DataTide, call `IndexTide.reload()` , a new DataTide object
-    will be initialized. 
+    refresh OpenTide, call ``IndexManager.reload()``; a new OpenTide object
+    will be initialized.
     """
 
-    # Index = _retrieve_index
-    """Return the raw index content"""
+    Index = IndexManager.load()
 
-    Index = IndexTide.load()
-    
+    _objects = dict(Index["objects"])
+    _rules_raw = dict(_objects["mdr"])
+    _threats_raw = dict(_objects["tvm"])
+    _objectives_raw = dict(_objects.get("dom", {}))
+    _signals_raw = dict(_objects.get("signal", {}))
+
+    Rules = {
+        uuid: ObjectLoader.load_rule(deepcopy(data))
+        for uuid, data in dict(_rules_raw).items()
+    }
+    Threats = dict(_threats_raw)
+    Objectives = (
+        {
+            uuid: ObjectLoader.load_objective(deepcopy(data))
+            for uuid, data in dict(_objectives_raw).items()
+        }
+        if _objectives_raw
+        else {}
+    )
+
     @dataclass(frozen=True)
     class Models:
-        """TIDE Lookups Interface.
+        """Legacy object collections — prefer OpenTide.Rules / .Threats / .Objectives."""
 
-        Exposes all the configurations of the instance
-        """
-        Index = dict(IndexTide.load()["objects"])
-        """Index containing model types"""
-        tvm = dict(Index["tvm"])
-        """Threat Vector Models Data Index"""
-        dom = dict(Index.get("dom", {}))
-        """Detection Objectives Raw Index"""
-        DOM = {uuid:TideLoader.load_dom(deepcopy(data)) for (uuid, data) in dict(Index.copy().get("dom", {})).items()} if dom else None
-        """Detection Objectives Pre-Loaded Index"""
-        signal = dict(Index.get("signal", {}))
-        """Detection Objectives Signals Raw Index"""
-        Signal = {uuid:TideLoader.load_signal(deepcopy(data)) for (uuid, data) in dict(Index.copy().get("signal", {})).items()} if signal else None 
-        """Detection Objectives Signals Pre-Loaded Index"""
-        mdr = dict(Index["mdr"])
-        """Managed Detection Rules Data Index"""
-        # We need to do a deepcopy to ensure that loading steps aren't modifying the original data
-        MDR = {uuid:TideLoader.load_mdr(deepcopy(data)) for (uuid, data) in dict(Index.copy()["mdr"]).items()} 
-        """Model Mapped Managed Detection Rules Data Index"""
-        chaining = IndexTide.compute_chains(tvm)
-        """Index of all chaining relationships"""
-        FlatIndex =  tvm | dom | signal | mdr
-        """Flat Key Value pair structure of all UUIDs in the index"""
-        files = dict(IndexTide.load()["files"])
+        _model_index = dict(IndexManager.load()["objects"])
+        Index = dict(_model_index)
+        tvm = dict(_model_index["tvm"])
+        dom = dict(_model_index.get("dom", {}))
+        DOM = (
+            {
+                uuid: ObjectLoader.load_objective(deepcopy(data))
+                for uuid, data in dict(_model_index.get("dom", {})).items()
+            }
+            if dom
+            else None
+        )
+        signal = dict(_model_index.get("signal", {}))
+        Signal = (
+            {
+                uuid: ObjectLoader.load_signal(deepcopy(data))
+                for uuid, data in dict(_model_index.get("signal", {})).items()
+            }
+            if signal
+            else None
+        )
+        mdr = dict(_model_index["mdr"])
+        MDR = {
+            uuid: ObjectLoader.load_rule(deepcopy(data))
+            for uuid, data in dict(_model_index["mdr"]).items()
+        }
+        chaining = IndexManager.compute_chains(tvm)
+        FlatIndex = tvm | dom | signal | mdr
+        files = dict(IndexManager.load()["files"])
     
     @dataclass(frozen=True)
     class Vocabularies:
@@ -95,70 +117,76 @@ class DataTide:
         Exposes the vocabularies used across the instance
         """
 
-        Index = dict(IndexTide.load()["vocabs"])
+        Index = dict(IndexManager.load()["vocabs"])
 
-    @dataclass(frozen=True)
-    class Indexes:
+    class IndexCatalog:
         """
         Interface to compiled indexes
         """
-        Index = dict(IndexTide.load()["indexes"])
-        revisions = dict(Index.get("revisions", {})) #TODO Loader class for revisions
-        objects = dict(Index.get("objects", {}))
+        Index = dict(IndexManager.load()["indexes"])
+        raw = dict(Index.get("objects", {}))
+        revisions = dict(Index.get("revisions", {}))
+        compiled = dict(Index.get("objects", {}))
 
+    # Legacy alias
+    Indexes = IndexCatalog
 
     @dataclass(frozen=True)
-    class JsonSchemas:
+    class Schemas:
         """
-        Interface to all the JSON Schemas generated from TideS
+        Interface to all the JSON Schemas generated from meta-schemas
         """
 
-        Index = dict(IndexTide.load()["json_schemas"])
-        tvm = dict(Index.get("tvm", {}))
-        """Threat Vector Model JSON Schema"""
-        dom = dict(Index.get("dom", {}))
-        """Detection Objective Model JSON Schema"""
-        mdr = dict(Index.get("mdr", {}))
-        """Managed Detection Rule JSON Schema"""
+        Index = dict(IndexManager.load()["json_schemas"])
+        threats = dict(Index.get("tvm", {}))
+        objectives = dict(Index.get("dom", {}))
+        rules = dict(Index.get("mdr", {}))
+        # Legacy keys
+        tvm = threats
+        dom = objectives
+        mdr = rules
+
+    # Legacy alias
+    JsonSchemas = Schemas
 
     @dataclass(frozen=True)
     class Templates:
         """
-        Interface to all the templates generated from TideSchemas
+        Interface to all the templates generated from meta-schemas
         """
 
-        Index = dict(IndexTide.load()["templates"])
-        tvm = str(Index.get("tvm"))
-        """Threat Vector Model Object Template"""
+        Index = dict(IndexManager.load()["templates"])
+        threats = str(Index.get("tvm"))
+        objectives = str(Index.get("dom"))
+        rules = str(Index.get("mdr"))
         dom = str(Index.get("dom"))
-        """Detection Objective Model Object Template"""
-        mdr = str(Index.get("mdr"))
-        """Managed Detection Rule Object Template"""
+        tvm = threats
+        mdr = rules
 
     @dataclass(frozen=True)
-    class TideSchemas:
-        """OpenTide Meta Schema Interface.
+    class MetaSchemas:
+        """OpenTide meta-schema interface."""
 
-        Exposes the different schemas used across the instance
-        """
+        Index = dict(IndexManager.load()["metaschemas"])
+        subschemas = dict(IndexManager.load()["subschemas"])
+        definitions = dict(IndexManager.load()["definitions"])
+        templates = dict(IndexManager.load()["templates"])
+        threats = dict(Index["tvm"])
+        objectives = dict(Index.get("dom", {}))
+        rules = dict(Index["mdr"])
+        rules_v2 = dict(Index.get("mdrv2", {}))
+        tvm = threats
+        dom = objectives
+        mdr = rules
+        mdrv2 = rules_v2
 
-        Index = dict(IndexTide.load()["metaschemas"])
-        subschemas = dict(IndexTide.load()["subschemas"])
-        definitions = dict(IndexTide.load()["definitions"])
-        templates = dict(IndexTide.load()["templates"])
-        tvm = dict(Index["tvm"])
-        """Threat Vector Model Tide Schema"""
-        dom = dict(Index.get("dom", {}))
-        """Detection Objective Model Tide Schema"""
-        mdr = dict(Index["mdr"])
-        """Managed Detection Rule Tide Schema"""
-        mdrv2 = dict(Index.get("mdrv2", {}))
-        """DEPRECATED - Legacy MDR Version for backward compatibility use cases"""
+    # Legacy alias
+    TideSchemas = MetaSchemas
 
     @dataclass(frozen=True)
-    class Configurations:
-        Index = dict(IndexTide.load()["configurations"])
-        DEBUG = HelperTide.is_debug()
+    class Configuration:
+        Index = dict(IndexManager.load()["configurations"])
+        DEBUG = DebugHelpers.is_debug()
         """Discovers whether the current execution context is considered
         to be a debugging one"""
         
@@ -175,7 +203,7 @@ class DataTide:
                 attack_layer: str
                 table: str
 
-            Index = dict(IndexTide.load()["configurations"]["global"])
+            Index = dict(IndexManager.load()["configurations"]["global"])
             objects = Index["objects"]
             indexes = Indexes(**dict(Index["indexes"]))
             exports = Exports(**dict(Index["exports"]))
@@ -189,8 +217,8 @@ class DataTide:
 
             @dataclass(frozen=True)
             class Paths:
-                Index = IndexTide.return_paths(tier="all")
-                _raw = dict(IndexTide.load()["paths"]["raw"])
+                Index = IndexManager.return_paths(tier="all")
+                _raw = dict(IndexManager.load()["paths"]["raw"])
                 """Paths without the proper absolute calculation.
                 Only use for specific use cases, for any others prefer
                 the other attributes which are precomputed"""
@@ -199,50 +227,52 @@ class DataTide:
                 class Core:
                     """Paths to Tide Internals"""
 
-                    Index = IndexTide.return_paths(tier="core")
-                    _raw = dict(IndexTide.load()["paths"]["raw"]["core"])
+                    _path_index = IndexManager.return_paths(tier="core")
+                    Index = _path_index
+                    _raw = dict(IndexManager.load()["paths"]["raw"]["core"])
                     """Paths without the proper absolute calculation.
                     Only use for specific use cases, for any others prefer
                     the other attributes which are precomputed"""
-                    vocabularies = Index["vocabularies"]
-                    configurations = Index["configurations"]
-                    metaschemas = Index["configurations"]
-                    subschemas = Index["subschemas"]
-                    definitions = Index["definitions"]
-                    wiki_docs_folder = Index["wiki_docs_folder"]
-                    models_docs_folder = Index["models_docs_folder"]
-                    schemas_docs_folder = Index["schemas_docs_folder"]
-                    vocabularies_docs = Index["vocabularies_docs"]
-                    resources = Index["resources"]
+                    vocabularies = _path_index["vocabularies"]
+                    configurations = _path_index["configurations"]
+                    metaschemas = _path_index["configurations"]
+                    subschemas = _path_index["subschemas"]
+                    definitions = _path_index["definitions"]
+                    wiki_docs_folder = _path_index["wiki_docs_folder"]
+                    models_docs_folder = _path_index["models_docs_folder"]
+                    schemas_docs_folder = _path_index["schemas_docs_folder"]
+                    vocabularies_docs = _path_index["vocabularies_docs"]
+                    resources = _path_index["resources"]
 
                 @dataclass(frozen=True)
                 class Tide:
                     """Paths to Tide Content, Models, and Artifacts at
                     the top level directory"""
 
-                    Index = IndexTide.return_paths(tier="tide")
-                    _raw = dict(IndexTide.load()["paths"]["raw"]["tide"])
+                    _path_index = IndexManager.return_paths(tier="tide")
+                    Index = _path_index
+                    _raw = dict(IndexManager.load()["paths"]["raw"]["tide"])
                     """Paths without the proper absolute calculation.
                     Only use for specific use cases, for any others prefer
                     the other attributes which are precomputed"""
                     
-                    tvm = Index["tvm"]
-                    dom = Index.get("dom")
-                    mdr = Index["mdr"]
-                    analytics = Index["analytics"]
-                    snippet_file = Index["snippet_file"]
-                    json_schemas = Index["json_schemas"]
-                    templates = Index["templates"]
-                    tide_indexes = Index["tide_indexes"]
-                    exports = Index["exports"]
+                    tvm = _path_index["tvm"]
+                    dom = _path_index.get("dom")
+                    mdr = _path_index["mdr"]
+                    analytics = _path_index["analytics"]
+                    snippet_file = _path_index["snippet_file"]
+                    json_schemas = _path_index["json_schemas"]
+                    templates = _path_index["templates"]
+                    tide_indexes = _path_index["tide_indexes"]
+                    exports = _path_index["exports"]
 
         @dataclass(frozen=True)
         class Systems:
-            Index = dict(IndexTide.load()["configurations"]["systems"])
+            Index = dict(IndexManager.load()["configurations"]["systems"])
 
             @dataclass(frozen=True)
             class Splunk:
-                Index = dict(IndexTide.load()["configurations"]["systems"]["splunk"])
+                Index = dict(IndexManager.load()["configurations"]["systems"]["splunk"])
                 tide = dict(Index["tide"])
                 setup = dict(Index["setup"])
                 secrets = dict(Index["secrets"])
@@ -252,7 +282,7 @@ class DataTide:
             @dataclass(frozen=True)
             class CarbonBlackCloud:
                 Index = dict(
-                    IndexTide.load()["configurations"]["systems"]["carbon_black_cloud"]
+                    IndexManager.load()["configurations"]["systems"]["carbon_black_cloud"]
                 )
                 tide = dict(Index["tide"])
                 setup = dict(Index["setup"])
@@ -260,56 +290,56 @@ class DataTide:
                 validation = dict(Index["validation"])
 
             @dataclass
-            class Sentinel(TideConfigs.Systems.Sentinel):
+            class Sentinel(ConfigurationModels.Systems.Sentinel):
                 raw = dict(
-                    IndexTide.load()["configurations"]["systems"]["sentinel"]
+                    IndexManager.load()["configurations"]["systems"]["sentinel"]
                 )
-                platform = TideLoader.load_platform_config(dict(raw["platform"]), DetectionSystems.SENTINEL)
-                modifiers = TideLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
-                tenants = TideLoader.load_tenants_config(raw["tenants"], DetectionSystems.SENTINEL) if raw.get("tenants") else None
+                platform = ObjectLoader.load_platform_config(dict(raw["platform"]), DetectionPlatforms.SENTINEL)
+                modifiers = ObjectLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
+                tenants = ObjectLoader.load_tenants_config(raw["tenants"], DetectionPlatforms.SENTINEL) if raw.get("tenants") else None
 
             @dataclass
-            class DefenderForEndpoint(TideConfigs.Systems.DefenderForEndpoint):
+            class DefenderForEndpoint(ConfigurationModels.Systems.DefenderForEndpoint):
                 raw = dict(
-                    IndexTide.load()["configurations"]["systems"]["defender_for_endpoint"]
+                    IndexManager.load()["configurations"]["systems"]["defender_for_endpoint"]
                 )
-                platform = TideLoader.load_platform_config(dict(raw["platform"]), DetectionSystems.DEFENDER_FOR_ENDPOINT)
-                modifiers = TideLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
-                tenants = TideLoader.load_tenants_config(raw["tenants"], DetectionSystems.DEFENDER_FOR_ENDPOINT) if raw.get("tenants") else None
+                platform = ObjectLoader.load_platform_config(dict(raw["platform"]), DetectionPlatforms.DEFENDER_FOR_ENDPOINT)
+                modifiers = ObjectLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
+                tenants = ObjectLoader.load_tenants_config(raw["tenants"], DetectionPlatforms.DEFENDER_FOR_ENDPOINT) if raw.get("tenants") else None
 
             @dataclass
-            class SentinelOne(TideConfigs.Systems.SentinelOne):
+            class SentinelOne(ConfigurationModels.Systems.SentinelOne):
                 raw = dict(
-                    IndexTide.load()["configurations"]["systems"]["sentinel_one"]
+                    IndexManager.load()["configurations"]["systems"]["sentinel_one"]
                 )
-                platform = TideLoader.load_platform_config(dict(raw["platform"]), DetectionSystems.SENTINEL_ONE)
-                modifiers = TideLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
-                tenants = TideLoader.load_tenants_config(raw["tenants"], DetectionSystems.SENTINEL_ONE) if raw.get("tenants") else None
+                platform = ObjectLoader.load_platform_config(dict(raw["platform"]), DetectionPlatforms.SENTINEL_ONE)
+                modifiers = ObjectLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
+                tenants = ObjectLoader.load_tenants_config(raw["tenants"], DetectionPlatforms.SENTINEL_ONE) if raw.get("tenants") else None
 
             @dataclass
-            class Crowdstrike(TideConfigs.Systems.Crowdstrike):
+            class Crowdstrike(ConfigurationModels.Systems.Crowdstrike):
                 raw = dict(
-                    IndexTide.load()["configurations"]["systems"]["crowdstrike"]
+                    IndexManager.load()["configurations"]["systems"]["crowdstrike"]
                 )
-                platform = TideLoader.load_platform_config(dict(raw["platform"]), DetectionSystems.CROWDSTRIKE)
-                modifiers = TideLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
-                tenants = TideLoader.load_tenants_config(raw["tenants"], DetectionSystems.CROWDSTRIKE) if raw.get("tenants") else None
+                platform = ObjectLoader.load_platform_config(dict(raw["platform"]), DetectionPlatforms.CROWDSTRIKE)
+                modifiers = ObjectLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
+                tenants = ObjectLoader.load_tenants_config(raw["tenants"], DetectionPlatforms.CROWDSTRIKE) if raw.get("tenants") else None
 
             @dataclass
-            class HarfangLab(TideConfigs.Systems.HarfangLab):
+            class HarfangLab(ConfigurationModels.Systems.HarfangLab):
                 raw = dict(
-                    IndexTide.load()["configurations"]["systems"]["harfanglab"]
+                    IndexManager.load()["configurations"]["systems"]["harfanglab"]
                 )
-                platform = TideLoader.load_platform_config(dict(raw["platform"]), DetectionSystems.HARFANGLAB)
-                modifiers = TideLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
-                tenants = TideLoader.load_tenants_config(raw["tenants"], DetectionSystems.HARFANGLAB) if raw.get("tenants") else None
+                platform = ObjectLoader.load_platform_config(dict(raw["platform"]), DetectionPlatforms.HARFANGLAB)
+                modifiers = ObjectLoader.load_modifiers_config(raw["modifiers"]) if raw.get("modifiers") else None
+                tenants = ObjectLoader.load_tenants_config(raw["tenants"], DetectionPlatforms.HARFANGLAB) if raw.get("tenants") else None
 
         @dataclass(frozen=True)
         class Documentation:
             """Parameters describing how documentation should be generated."""
 
 
-            Index = dict(IndexTide.load()["configurations"]["documentation"])
+            Index = dict(IndexManager.load()["configurations"]["documentation"])
             scope = list(Index["scope"])
             skip_model_keys = list(Index["skip_model_keys"])
             skip_vocabularies = list(Index["skip_model_keys"])
@@ -321,7 +351,7 @@ class DataTide:
             titles = dict(Index["titles"])
             icons = dict(Index["icons"])
             models_docs_folder:Path = Path(
-                IndexTide.load()["configurations"]["global"]["paths"]["core"][
+                IndexManager.load()["configurations"]["global"]["paths"]["core"][
                     "models_docs_folder"
                 ]
             )
@@ -329,7 +359,7 @@ class DataTide:
         @dataclass(frozen=True)
         class Resources:
             """Parameters pointing to External resources used by engines."""
-            Index = dict(IndexTide.load()["configurations"]["resources"])
+            Index = dict(IndexManager.load()["configurations"]["resources"])
             attack = dict(Index["attack"])
             d3fend = dict(Index["d3fend"])
             engage = dict(Index["engage"])
@@ -340,7 +370,7 @@ class DataTide:
         class Deployment:
             """Generic deployment parameters."""
 
-            Index = dict(IndexTide.load()["configurations"]["deployment"])
+            Index = dict(IndexManager.load()["configurations"]["deployment"])
             statuses = ConfigurationsLoader.load_statuses(Index["statuses"])
             promotion = dict(Index["promotion"])
             default_responders = str(Index["default_responders"])
@@ -350,15 +380,34 @@ class DataTide:
         @dataclass(frozen=True)
         class Visibility:
             """OpenTide instance visibility configuration including logsources, assets, and detectors"""
-            Index = dict(IndexTide.load()["configurations"]["visibility"])
+            Index = dict(IndexManager.load()["configurations"]["visibility"])
             visibility = ConfigurationsLoader.load_visibility(Index)
             assets = visibility.assets if visibility else None
             detectors = visibility.detectors if visibility else None
             logsources = visibility.logsources if visibility else None
 
-        """TIDE Configuration Interface.
+        @dataclass(frozen=True)
+        class Schema:
+            Index = dict(IndexManager.load()["configurations"].get("schema", {}))
 
-        Exposes all the configurations of the instance
-        """
-        Index = dict(IndexTide.load()["configurations"])
-        """Contains all configurations"""
+        @dataclass(frozen=True)
+        class Sharing:
+            Index = dict(IndexManager.load()["configurations"].get("sharing", {}))
+
+        Index = dict(IndexManager.load()["configurations"])
+
+    # Legacy alias
+    Configurations = Configuration
+
+    @staticmethod
+    def initialise() -> None:
+        """Explicit initialisation hook (index loads at import time)."""
+        IndexManager.load()
+
+
+# Legacy alias
+DataTide = OpenTide
+
+from Engines.modules.platforms import Platforms
+
+OpenTide.Platforms = Platforms

@@ -2,18 +2,18 @@ import pandas as pd
 from git.repo import Repo
 from Engines.modules.framework import unroll_dot_dict
 from Engines.modules.models import (
-    TideDefinitionsModels,
+    SharedModels,
     TideModels,
     SystemConfig,
     DeploymentStrategy,
     StatusStrategy,
     TenantDeployment,
-    TenantDeploymentModel,
+    DeploymentBatch,
 )
-from Engines.modules.tide import DataTide, DetectionSystems, TideLoader
-from Engines.modules.errors import TideErrors
+from Engines.modules.tide import OpenTide, DetectionPlatforms, ObjectLoader
+from Engines.modules.errors import Errors
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, HelperTide
+from Engines.modules.tide import OpenTide, DebugHelpers
 from Engines.modules.logs import log
 import sys
 import os
@@ -29,20 +29,20 @@ from dataclasses import asdict, dataclass
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 
-SYSTEMS_CONFIGS_INDEX = DataTide.Configurations.Systems.Index
+SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION,
                         StatusStrategy.DISABLEMENT)
 
-from Engines.modules.tide import DataTide, HelperTide
+from Engines.modules.tide import OpenTide, DebugHelpers
 from Engines.modules.models import StatusStrategy, DeploymentStrategy
 from Engines.modules.ci import CIEnvironment
-from Engines.modules.git_repo import TideRepo, modified_mdr_files, diff_calculation
+from Engines.modules.git_repo import GitRepository, modified_mdr_files, diff_calculation
 
-SYSTEMS_CONFIGS_INDEX = DataTide.Configurations.Systems.Index
+SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
 
 def check_status(status_name:str)->StatusStrategy:
-    statuses_definitions = DataTide.Configurations.Deployment.statuses
+    statuses_definitions = OpenTide.Configurations.Deployment.statuses
     for status in statuses_definitions:
         if status.name == status_name:
             if type(status.strategy) is str:
@@ -93,7 +93,7 @@ def make_deploy_plan(
     deploy_mdr = dict()
 
     if plan == "FULL":
-        MDR_PATH = Path(DataTide.Configurations.Global.Paths.Tide.mdr)
+        MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.mdr)
         mdr_files = [MDR_PATH / mdr for mdr in os.listdir(MDR_PATH)]
         log(
             "ONGOING",
@@ -181,8 +181,8 @@ def make_deploy_plan(
 
 
 def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
-    MDR_PATH = Path(DataTide.Configurations.Global.Paths.Tide.mdr)
-    MDR_PATH_RAW = DataTide.Configurations.Global.Paths.Tide._raw["mdr"]
+    MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.mdr)
+    MDR_PATH_RAW = OpenTide.Configurations.Global.Paths.Tide._raw["mdr"]
     MDR_PATH_RAW = MDR_PATH_RAW.replace(r"/", r"\/")
 
     mdr_path_regex = rf"^.*{MDR_PATH_RAW}[^\/]+(\.yaml|\.yml)$"
@@ -217,7 +217,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
 
     TARGET_CI = CIEnvironment().environment
 
-    repo = TideRepo().repository
+    repo = GitRepository().repository
 
     match TARGET_CI:
         case CIEnvironment.CIPlatforms.GitHubActions:
@@ -265,7 +265,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                         "You may not have a sufficient Checkout Depth configuration",
                         "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR",
                     )
-                    raise TideErrors
+                    raise Errors
 
         case CIEnvironment.CIPlatforms.GitlabCI:
             log("INFO", "Identified Gitlab CI as the CI Runtime Platform")
@@ -345,7 +345,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                         "You may not have a sufficient OpenTide.Repo.Checkout.Depth configuration",
                         "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR",
                     )
-                    raise TideErrors
+                    raise Errors
 
             else:
                 log(
@@ -449,8 +449,8 @@ class Proxy:
             return
 
         log("ONGOING", "Setting environment proxy according to CI variables")
-        PROXY_CONFIG = DataTide.Configurations.Deployment.proxy
-        PROXY_CONFIG = HelperTide.fetch_config_envvar(PROXY_CONFIG)
+        PROXY_CONFIG = OpenTide.Configurations.Deployment.proxy
+        PROXY_CONFIG = DebugHelpers.fetch_config_envvar(PROXY_CONFIG)
         proxy_user = PROXY_CONFIG.get("proxy_user")
         proxy_pass = PROXY_CONFIG.get("proxy_password")
         proxy_host = PROXY_CONFIG.get("proxy_host")
@@ -491,8 +491,8 @@ class ExternalIdHelper:
         Removes an existing external ID. Mostly used in rule deletion workflows
         """
         file_path = (
-            DataTide.Configurations.Global.Paths.Tide.mdr
-            / DataTide.Models.files[mdr_uuid]
+            OpenTide.Configurations.Global.Paths.Tide.mdr
+            / OpenTide.Models.files[mdr_uuid]
         )
         with open(file_path, "r", encoding="utf-8") as mdr_file:
             content = mdr_file.readlines()
@@ -516,8 +516,8 @@ class ExternalIdHelper:
         Adds a new rule_id::<tenant>::<id> key to store IDs generated by the target system
         """
         file_path = (
-            DataTide.Configurations.Global.Paths.Tide.mdr
-            / DataTide.Models.files[mdr_uuid]
+            OpenTide.Configurations.Global.Paths.Tide.mdr
+            / OpenTide.Models.files[mdr_uuid]
         )
         with open(file_path, "r", encoding="utf-8") as mdr_file:
             content = mdr_file.readlines()

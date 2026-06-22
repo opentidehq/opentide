@@ -12,15 +12,15 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.framework import get_vocab_entry, get_type
 from Engines.modules.documentation import get_icon
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.models import StatusStrategy
 from Engines.modules.files import resolve_paths
 from Engines.modules.deployment import enabled_systems
 
-GLOBAL_CONFIG = DataTide.Configurations.Global
+GLOBAL_CONFIG = OpenTide.Configurations.Global
 
-VOCAB_INDEX = DataTide.Vocabularies.Index
-CONFIG_INDEX = DataTide.Configurations.Index
+VOCAB_INDEX = OpenTide.Vocabularies.Index
+CONFIG_INDEX = OpenTide.Configurations.Index
 PATHS = resolve_paths()
 
 # Vocabulary Extensions — user-defined entries injected at schema compilation
@@ -32,8 +32,8 @@ VOCAB_EXTENSIONS = SCHEMA_CONFIG.get("vocabulary", {})
 METASCHEMAS_FOLDER = Path(PATHS["metaschemas"])
 VOCABS_FOLDER = Path(PATHS["vocabularies"])
 JSON_SCHEMA_FOLDER = Path(PATHS["json_schemas"])
-ICONS = DataTide.Configurations.Documentation.icons
-TIDE_MODELS = DataTide.Configurations.Global.objects
+ICONS = OpenTide.Configurations.Documentation.icons
+OBJECT_TYPES = OpenTide.Configurations.Global.objects
 SUBSCHEMAS_PATH = Path(PATHS["subschemas"])
 RECOMPOSITION = GLOBAL_CONFIG.recomposition
 
@@ -62,7 +62,7 @@ class EnumResolver:
     @staticmethod
     def _visibility():
         """Return the visibility configuration, or ``None``."""
-        return DataTide.Configurations.Visibility.visibility
+        return OpenTide.Configurations.Visibility.visibility
 
     @staticmethod
     def _asset_map(visibility_data):
@@ -175,7 +175,7 @@ _Vocabulary_ : `{source_vocab}`
                 return
             metadata = vocab_data["metadata"]
             self._hints_enabled = metadata.get("vocab.search_hints", True)
-            is_model = metadata.get("model") or (self.vocab in TIDE_MODELS)
+            is_model = metadata.get("model") or (self.vocab in OBJECT_TYPES)
             self._process(vocab_data["entries"], is_model=is_model)
 
         def _ingest_extensions(self):
@@ -185,7 +185,7 @@ _Vocabulary_ : `{source_vocab}`
                 return
             log("DEBUG", f"Processing {len(extensions)} extension(s) for", self.vocab)
             ext_meta = VOCAB_INDEX.get(self.vocab, {}).get("metadata", {})
-            is_model = ext_meta.get("model") or (self.vocab in TIDE_MODELS)
+            is_model = ext_meta.get("model") or (self.vocab in OBJECT_TYPES)
 
             key_field = "id" if is_model else "name"
             normalised = {}
@@ -274,7 +274,7 @@ _Vocabulary_ : `{source_vocab}`
             description = key.get("description") or ""
 
             criticality = ""
-            if (get_type(identifier, mute=True) or "") in TIDE_MODELS:
+            if (get_type(identifier, mute=True) or "") in OBJECT_TYPES:
                 crit = key.get("criticality")
                 crit_icon = get_icon("criticality")
                 if not crit:
@@ -416,7 +416,7 @@ _Vocabulary_ : `{source_vocab}`
         def resolve(self) -> tuple[list[str], list[str]]:
             enums: list[str] = []
             descriptions: list[str] = []
-            for status in DataTide.Configurations.Deployment.statuses:
+            for status in OpenTide.Configurations.Deployment.statuses:
                 enums.append(status.name)
                 strategy = status.strategy.name  # type: ignore
                 desc = (
@@ -438,7 +438,7 @@ _Vocabulary_ : `{source_vocab}`
             self.dot_path = dot_path
 
         def resolve(self) -> list:
-            config_index = DataTide.Configurations.Index
+            config_index = OpenTide.Configurations.Index
             parts = self.dot_path.split(".")
             key = parts[0]
             while key != parts[-1]:
@@ -478,7 +478,7 @@ _Vocabulary_ : `{source_vocab}`
             self.system = system
 
         def resolve(self) -> tuple[list[str], list[str]]:
-            config = DataTide.Configurations.Index
+            config = OpenTide.Configurations.Index
             system_config = config.get("systems", {}).get(self.system)
             if not system_config:
                 log(
@@ -518,7 +518,7 @@ _Vocabulary_ : `{source_vocab}`
             return enums, descriptions
 
 
-def remove_tide_keywords(dictionary:dict)->dict:
+def strip_framework_keywords(dictionary:dict)->dict:
     """
     The metaschema is a superset of JSON Schema in YAML, and thus has extra keys
     useful for other purposes (documentation, template etc.). They should
@@ -532,14 +532,14 @@ def remove_tide_keywords(dictionary:dict)->dict:
             del dictionary[field]
         else:
             if type(dict_foo[field]) is dict:
-                remove_tide_keywords(dictionary[field])
+                strip_framework_keywords(dictionary[field])
     return dictionary
 
 
 def recomposition_handler(entry_point):
 
     recompositions = CONFIG_INDEX[entry_point]
-    subschema_folder = DataTide.Configurations.Global.recomposition[entry_point]
+    subschema_folder = OpenTide.Configurations.Global.recomposition[entry_point]
     recomposition = dict()
     # Generate a list of pivots
     for entry in recompositions:
@@ -598,9 +598,9 @@ def gen_json_schema(dictionary):
 
             if "tide.meta.definition" in dict_foo[field].keys():
                 if (metadef := dict_foo[field]["tide.meta.definition"]) is True:
-                    temp = DataTide.TideSchemas.definitions[field]
+                    temp = OpenTide.TideSchemas.definitions[field]
                 else:
-                    temp = DataTide.TideSchemas.definitions[metadef]
+                    temp = OpenTide.TideSchemas.definitions[metadef]
 
                 if deprecation_message := dict_foo[field].get("tide.meta.deprecation"):
                     temp["title"] = "⚠️ DEPRECATION WARNING"
@@ -793,7 +793,7 @@ def run():
             generated = gen_json_schema(parsing)
 
             # Removes the OpenTide reserved schema keys
-            cleaned = remove_tide_keywords(generated)
+            cleaned = strip_framework_keywords(generated)
 
             # Export JSON Schemas
             log("ONGOING", "Exporting generated schema to : " + str(json_output))
@@ -838,7 +838,7 @@ def run():
                 generated = gen_json_schema(parsing)
 
                 # Removes the OpenTide reserved schema keys
-                cleaned = remove_tide_keywords(generated)
+                cleaned = strip_framework_keywords(generated)
 
                 # Export JSON Schemas
                 log("ONGOING", "Exporting generated schema to : " + str(json_output))

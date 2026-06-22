@@ -9,13 +9,13 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.framework import techniques_resolver
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide
-from Engines.modules.plugins import DeployMDR
-from Engines.modules.carbon_black_cloud import CarbonBlackCloudEngineInit
+from Engines.modules.tide import OpenTide
+from Engines.modules.plugins import RuleDeployer
+from Engines.modules.carbon_black_cloud import CarbonBlackCloudConnection
 from Engines.modules.deployment import check_status
 from Engines.modules.models import StatusStrategy
 
-class CarbonBlackCloudDeploy(CarbonBlackCloudEngineInit, DeployMDR):
+class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
 
     def deploy_mdr(self, data):
         """
@@ -250,7 +250,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudEngineInit, DeployMDR):
 
         # Start deployment routine
         for mdr in deployment:
-            mdr_data = DataTide.Models.mdr[mdr]
+            mdr_data = OpenTide.Models.mdr[mdr]
 
             # Check if modified MDR contains a platform entry (by safety, but should not happen since orchestrator will filter for the platform)
             if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"].keys():

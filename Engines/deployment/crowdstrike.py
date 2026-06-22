@@ -6,23 +6,23 @@ from typing import Sequence
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, DetectionSystems
-from Engines.modules.plugins import DeployMDR
+from Engines.modules.tide import OpenTide, DetectionPlatforms
+from Engines.modules.plugins import RuleDeployer
 from Engines.modules.models import (TideModels,
                                     DeploymentStrategy) 
 from Engines.modules.deployment import TideDeployment, ExternalIdHelper, check_status
 from Engines.modules.logs import log
-from Engines.modules.models import TideConfigs, StatusStrategy
-from Engines.modules.errors import TideErrors
+from Engines.modules.models import ConfigurationModels, StatusStrategy
+from Engines.modules.errors import Errors
 
 from Engines.modules.systems.crowdstrike import CrowdstrikeService, DetectionRule
 
 
-class CrowdstrikeDeploy(DeployMDR):
+class CrowdstrikeDeploy(RuleDeployer):
 
     def compile_deployment(self,
-                           data:TideModels.MDR,
-                           tenant_config:TideConfigs.Systems.Crowdstrike.Tenant)->DetectionRule:
+                           data:TideModels.DetectionRule,
+                           tenant_config:ConfigurationModels.Systems.Crowdstrike.Tenant)->DetectionRule:
         """
         Builds the Detection Rule call made to the API
         """
@@ -43,13 +43,13 @@ class CrowdstrikeDeploy(DeployMDR):
                     log("FATAL",
                         "Could not map severity to expected Crowdstrike values",
                         "Expected Informational, Low, Medium, High or Critical")
-                    raise TideErrors.TideConfigurationErrors("Invalid Severity")
+                    raise Errors.TideConfigurationErrors("Invalid Severity")
         
         configuration = data.configurations.crowdstrike
         if not configuration:
             log("FATAL",
                 f"[{data.metadata.uuid}] {data.name} does not contain a crowdstrike section")
-            raise TideErrors.TideConfigurationErrors("Missing Crowdstrike Section")
+            raise Errors.TideConfigurationErrors("Missing Crowdstrike Section")
         name = configuration.details.name or data.name
         description = configuration.details.description or data.description
         #Customer ID must be lowercase, and without the -XX suffix
@@ -71,14 +71,14 @@ class CrowdstrikeDeploy(DeployMDR):
                 "outcome value not expected",
                 str(outcome),
                 "Expects detection or incident")
-            raise TideErrors.TideConfigurationErrors("Invalid Crowdstrike outcome value")
+            raise Errors.TideConfigurationErrors("Invalid Crowdstrike outcome value")
         
         if trigger_mode not in ["verbose", "summary"]:
             log("FATAL",
                 "trigger value not expected",
                 str(outcome),
                 "Expects verbose or summary")
-            raise TideErrors.TideConfigurationErrors("Invalid Crowdstrike outcome value")
+            raise Errors.TideConfigurationErrors("Invalid Crowdstrike outcome value")
         
         search = DetectionRule.Search(outcome=outcome, #type: ignore
                                         filter=filter,
@@ -132,15 +132,15 @@ class CrowdstrikeDeploy(DeployMDR):
                              comment=comment)
     
     def deploy_mdr(self,
-                data:TideModels.MDR,
+                data:TideModels.DetectionRule,
                 service:CrowdstrikeService,
-                tenant_config:TideConfigs.Systems.Crowdstrike.Tenant):
+                tenant_config:ConfigurationModels.Systems.Crowdstrike.Tenant):
         """
         Deploys the detection rule : creation, update, deletion and disabling.
         """
         mdr_config = data.configurations.crowdstrike
         if not mdr_config:
-            raise TideErrors.TideSystemConfigurationErrors("Missing Crowdstrike")
+            raise Errors.TideSystemConfigurationErrors("Missing Crowdstrike")
     
         rule = self.compile_deployment(data=data, tenant_config=tenant_config)
 
@@ -189,24 +189,24 @@ class CrowdstrikeDeploy(DeployMDR):
                 ExternalIdHelper.insert_id(rule_id=rule_id,
                                            tenant_name=tenant_config.name,
                                            mdr_uuid=data.metadata.uuid,
-                                           system_name=DataTide.Configurations.Systems.Crowdstrike.platform.identifier)
+                                           system_name=OpenTide.Configurations.Systems.Crowdstrike.platform.identifier)
 
 
 
-    def deploy(self, mdr_deployment: Sequence[TideModels.MDR] | list[str], deployment_plan:DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[TideModels.DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
         """
-        Triggers the deployment sequence for a series of MDR uuids or TideModels.MDR Objects
+        Triggers the deployment sequence for a series of MDR uuids or TideModels.DetectionRule Objects
         """
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                loaded_mdr.append(DataTide.Models.MDR[mdr])
-            elif type(mdr) is TideModels.MDR:
+                loaded_mdr.append(OpenTide.Models.MDR[mdr])
+            elif type(mdr) is TideModels.DetectionRule:
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 
         deployment = TideDeployment(deployment=mdr_deployment,
-                                    system=DetectionSystems.CROWDSTRIKE,
+                                    system=DetectionPlatforms.CROWDSTRIKE,
                                     strategy=deployment_plan)
 
         for tenant_deployment in deployment.rule_deployment:

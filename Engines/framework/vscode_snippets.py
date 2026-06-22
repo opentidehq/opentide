@@ -6,16 +6,16 @@ import sys
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
 # Config fetch routine
-ICONS = DataTide.Configurations.Documentation.icons
-PATHS = DataTide.Configurations.Global.Paths.Index
-SNIPPETS_PATH = DataTide.Configurations.Global.Paths.Tide.snippet_file
+ICONS = OpenTide.Configurations.Documentation.icons
+PATHS = OpenTide.Configurations.Global.Paths.Index
+SNIPPETS_PATH = OpenTide.Configurations.Global.Paths.Tide.snippet_file
 
-RECOMPOSITION = DataTide.Configurations.Global.recomposition
-SUBSCHEMAS_FOLDER = Path(DataTide.Configurations.Global.Paths.Core.subschemas)
-CONFIG_INDEX = DataTide.Configurations.Index
+RECOMPOSITION = OpenTide.Configurations.Global.recomposition
+SUBSCHEMAS_FOLDER = Path(OpenTide.Configurations.Global.Paths.Core.subschemas)
+CONFIG_INDEX = OpenTide.Configurations.Index
 
 
 def vs_code_snippet_generator(template_path, prefix, blanks=0):
@@ -68,14 +68,14 @@ def run():
 
     snippets = {}
 
-    for model in DataTide.Configurations.Global.metaschemas:
+    for model in OpenTide.Configurations.Global.metaschemas:
 
-        if model in (t := DataTide.Configurations.Global.templates):
+        if model in (t := OpenTide.Configurations.Global.templates):
             # Extracts parameters from dictionaries, that will be represented in snippet
             # description = CONFIG["artifacts"]["snippets"]["models"][model]["description"]
             model_icon = ICONS.get(model, "")
 
-            full_name = DataTide.Configurations.Documentation.object_names[model]
+            full_name = OpenTide.Configurations.Documentation.object_names[model]
             keyword = f"{model_icon} {full_name} Template"
             template_path = Path(PATHS["templates"]) / t[model]
 

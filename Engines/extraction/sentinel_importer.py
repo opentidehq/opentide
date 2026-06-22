@@ -10,7 +10,7 @@ from Engines.modules.systems.sentinel import (
     SentinelService,
 )
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
 
 GROUPING_CONFIGURATION = """
@@ -170,7 +170,7 @@ SENTINEL = """
     {query}
 """
 
-if not DataTide.Configurations.Systems.Sentinel.tenants:
+if not OpenTide.Configurations.Systems.Sentinel.tenants:
     log("FATAL", "You must first have Sentinel tenants configured to initiate the import")
     raise Exception 
 
@@ -186,7 +186,7 @@ def sanitize_filename(name):
             sanitized_name += char
     return sanitized_name
 
-for tenant in DataTide.Configurations.Systems.Sentinel.tenants:  # type: ignore
+for tenant in OpenTide.Configurations.Systems.Sentinel.tenants:  # type: ignore
     service = SentinelService(tenant).connect() #type: ignore
     rules = service.alert_rules.list(resource_group_name=tenant.setup.resource_group, # type: ignore
                                     workspace_name=tenant.setup.workspace_name # type: ignore

@@ -337,17 +337,17 @@ def log(
             margin=20)
 
     #Using an envvar allows to get around circular dependency issues
-    if os.getenv("TIDE_DEBUG_ENABLED") or os.environ.get("TERM_PROGRAM") == "vscode":
+    if os.getenv("DEBUG_ENABLED") or os.environ.get("TERM_PROGRAM") == "vscode":
         log_message = ANSI.stripper(log_message)
 
-    if category == "DEBUG" and os.getenv("TIDE_DEBUG_ENABLED"):
+    if category == "DEBUG" and os.getenv("DEBUG_ENABLED"):
         print(log_message, flush=True)
 
     elif category != "DEBUG":
         print(log_message, flush=True)
 
 
-def coretide_intro():
+def print_banner():
     BLUE = ANSI.Colors.DARK_BLUE
     YELLOW = ANSI.Colors.ORANGE
     STOP = ANSI.Formatting.STOP
@@ -371,3 +371,7 @@ def coretide_intro():
 """
 
     return intro
+
+
+# Legacy alias
+coretide_intro = print_banner

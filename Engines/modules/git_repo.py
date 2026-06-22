@@ -10,10 +10,10 @@ from Engines.modules.models import (
     TenantDeployment,
     TenantDeploymentModel,
 )
-from Engines.modules.tide import DataTide, DetectionSystems, TideLoader
-from Engines.modules.errors import TideErrors
+from Engines.modules.tide import OpenTide, DetectionPlatforms, ObjectLoader
+from Engines.modules.errors import Errors
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, HelperTide
+from Engines.modules.environment import DebugHelpers
 from Engines.modules.logs import log
 import sys
 import os
@@ -29,13 +29,13 @@ from dataclasses import asdict, dataclass
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 
-SYSTEMS_CONFIGS_INDEX = DataTide.Configurations.Systems.Index
+SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION,
                         StatusStrategy.DISABLEMENT)
 
 from Engines.modules.ci import CIEnvironment
 
-class TideRepo:
+class GitRepository:
 
     def __init__(self):
         self.repository = self._initialize_repository()
@@ -80,8 +80,8 @@ class TideRepo:
                                  sha = str(commit.hexsha))
 
 def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
-    MDR_PATH = Path(DataTide.Configurations.Global.Paths.Tide.mdr)
-    MDR_PATH_RAW = DataTide.Configurations.Global.Paths.Tide._raw["mdr"]
+    MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.mdr)
+    MDR_PATH_RAW = OpenTide.Configurations.Global.Paths.Tide._raw["mdr"]
     MDR_PATH_RAW = MDR_PATH_RAW.replace(r"/", r"\/")
 
     mdr_path_regex = rf"^.*{MDR_PATH_RAW}[^\/]+(\.yaml|\.yml)$"
@@ -164,7 +164,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                         "You may not have a sufficient Checkout Depth configuration",
                         "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR",
                     )
-                    raise TideErrors
+                    raise Errors
 
         case CIEnvironment.CIPlatforms.GitlabCI:
             log("INFO", "Identified Gitlab CI as the CI Runtime Platform")
@@ -244,7 +244,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                         "You may not have a sufficient OpenTide.Repo.Checkout.Depth configuration",
                         "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR",
                     )
-                    raise TideErrors
+                    raise Errors
 
             else:
                 log(
@@ -317,4 +317,8 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
     log("INFO", "Computed diff scope", ", ".join(scope))
 
     return scope
+
+
+# Legacy alias
+TideRepo = GitRepository
 

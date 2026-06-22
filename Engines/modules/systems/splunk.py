@@ -15,10 +15,10 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, HelperTide
+from Engines.modules.tide import OpenTide, DebugHelpers
 from Engines.modules.deployment import Proxy
 
-class SplunkEngineInit(ABC):
+class SplunkConnection(ABC):
     """
     Utility class used to initialize all constant relevant to operations with Splunk 
     """
@@ -28,9 +28,9 @@ class SplunkEngineInit(ABC):
         # Writes each parameter successively to saved search to identify blocking element
         self.DEBUG_STEP = True if self.DEBUG else False
 
-        SPLUNK_CONFIG = DataTide.Configurations.Systems.Splunk
-        SPLUNK_SETUP = HelperTide.fetch_config_envvar(SPLUNK_CONFIG.setup)
-        SPLUNK_SECRETS = HelperTide.fetch_config_envvar(SPLUNK_CONFIG.secrets)
+        SPLUNK_CONFIG = OpenTide.Configurations.Systems.Splunk
+        SPLUNK_SETUP = DebugHelpers.fetch_config_envvar(SPLUNK_CONFIG.setup)
+        SPLUNK_SECRETS = DebugHelpers.fetch_config_envvar(SPLUNK_CONFIG.secrets)
         
         self.DEFAULT_CONFIG = SPLUNK_CONFIG.defaults
         self.DEPLOYER_IDENTIFIER = "splunk"
@@ -54,7 +54,7 @@ class SplunkEngineInit(ABC):
         self.SPLUNK_DEFAULT_ACTIONS = SPLUNK_SETUP.get("default_actions") or []        
         
         self.TIMERANGE_MODE = correct_timerange_mode(SPLUNK_SETUP.get("frequency_scheduling", ""))
-        self.SPLUNK_SUBSCHEMA = DataTide.TideSchemas.subschemas["systems"][
+        self.SPLUNK_SUBSCHEMA = OpenTide.TideSchemas.subschemas["systems"][
             self.DEPLOYER_IDENTIFIER
         ]["properties"]
 

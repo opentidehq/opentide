@@ -1,3 +1,11 @@
+  schema: crowdstrike::2.0
+  status: 
+  #contributors:
+    #-
+  #tenants:
+    #-
+  #flags:
+    #-
   
   details:
     #name: 

@@ -7,16 +7,16 @@ from pathlib import Path
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.files import IndentFullDumper
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
 
-RESOURCES = Path(DataTide.Configurations.Global.Paths.Core.resources)
+RESOURCES = Path(OpenTide.Configurations.Global.Paths.Core.resources)
 
-D3FEND_ONTOLOGY_PATH = DataTide.Configurations.Resources.d3fend["ontology"]
-D3FEND_COUNTERMEASURES_PATH = DataTide.Configurations.Resources.d3fend[
+D3FEND_ONTOLOGY_PATH = OpenTide.Configurations.Resources.d3fend["ontology"]
+D3FEND_COUNTERMEASURES_PATH = OpenTide.Configurations.Resources.d3fend[
     "countermeasures"
 ]
-VOCABS_PATH = Path(DataTide.Configurations.Global.Paths.Core.vocabularies)
+VOCABS_PATH = Path(OpenTide.Configurations.Global.Paths.Core.vocabularies)
 # Used to create links to the artifact page
 DAOLINK = "https://d3fend.mitre.org/dao/artifact/"
 # Used by some artifacts "see also" entries

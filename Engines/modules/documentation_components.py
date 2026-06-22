@@ -8,16 +8,16 @@ from typing import Tuple, Literal
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.tide import DataTide, IndexTide
+from Engines.modules.tide import OpenTide, IndexManager
 from Engines.modules.deployment import CIEnvironment
 from Engines.modules.framework import techniques_resolver
 from Engines.modules.documentation import rich_attack_links
 
-CONFIG = DataTide.Configurations
-INDEX = DataTide.Index
-SKIP_KEYS = DataTide.Configurations.Documentation.skip_model_keys
+CONFIG = OpenTide.Configurations
+INDEX = OpenTide.Index
+SKIP_KEYS = OpenTide.Configurations.Documentation.skip_model_keys
 DOCUMENTATION_TARGET = CIEnvironment()._check_ci_environment()
-DEFINITIONS_INDEX = DataTide.TideSchemas.definitions
+DEFINITIONS_INDEX = OpenTide.TideSchemas.definitions
 
 from Engines.modules.framework import (
     relations_downstream,
@@ -111,7 +111,7 @@ def _dom_downstream_rules_table(dom_id: str) -> str:
 
 
 def status_enriched(status_name:str)->str:
-    statuses = DataTide.Configurations.Deployment.statuses
+    statuses = OpenTide.Configurations.Deployment.statuses
     for status in statuses:
         if status_name == status.name:
             strategy = status.strategy.name #type: ignore
@@ -190,7 +190,7 @@ def frontmatter_doc(object_name:str, object_uuid:str)->str:
     
     if CIEnvironment()._check_ci_environment() is not CIEnvironment.CIPlatforms.GitlabCI:
         return ""    
-    if DataTide.Configurations.Documentation.gitlab.get("uuid_permalinks", False):
+    if OpenTide.Configurations.Documentation.gitlab.get("uuid_permalinks", False):
         return f"---\ntitle: {get_icon(get_type(object_uuid))} {object_name}\n---"
     else:
         return ""

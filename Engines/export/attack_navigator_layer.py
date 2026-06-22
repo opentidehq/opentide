@@ -8,7 +8,7 @@ from typing import Optional, Literal
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.framework import techniques_resolver
 
 @dataclass
@@ -47,8 +47,8 @@ class TechniqueIndexEntry:
 class AttackNavigatorLayer:
 
     def __init__(self):
-        self.EXPORT_PATH = DataTide.Configurations.Global.Paths.Tide.exports
-        self.EXPORT_FILE_NAME = DataTide.Configurations.Global.exports.attack_layer
+        self.EXPORT_PATH = OpenTide.Configurations.Global.Paths.Tide.exports
+        self.EXPORT_FILE_NAME = OpenTide.Configurations.Global.exports.attack_layer
         self.EXPORT_FILE_PATH = self.EXPORT_PATH / self.EXPORT_FILE_NAME
 
     def create_layer(self):
@@ -60,9 +60,9 @@ class AttackNavigatorLayer:
 
         match model_type:
             case "tvm":
-                index = DataTide.Models.tvm
+                index = OpenTide.Models.tvm
             case "mdr":
-                index = DataTide.Models.mdr
+                index = OpenTide.Models.mdr
 
         technique_mapping:dict[str, TechniqueIndexEntry] = {}
 
