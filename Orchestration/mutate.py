@@ -12,7 +12,6 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.logs import log, ANSI, coretide_intro
 from Engines.mutation import (
     file_name,
-    remove_cdm_validation,
     references,
     security_domain
 )
@@ -27,7 +26,6 @@ CoreTide Data Mutation
 """)
 
 file_name.run()
-remove_cdm_validation.run()
 references.run()
 security_domain.run()
 

@@ -384,7 +384,6 @@ def parents(id: str) -> list:
     parent_mappings = {
         "dom": {"data": "objective", "parent": "threats"},
         "signal": {"parent": "parent"},
-        "cdm": {"data": "detection", "parent": "vectors"},
         "mdr": {"parent": "detection_model"},
     }
 
@@ -420,10 +419,9 @@ def childs(model_id: str) -> list:
     implementations = []
 
     mappings = {
-        "tvm": {"child_types": ["cdm", "dom"], "data_sections": ["detection", "objective"], "references": ["vectors", "threats"]},
+        "tvm": {"child_types": ["dom"], "data_sections": ["detection", "objective"], "references": ["vectors", "threats"]},
         "dom": {"child_types": ["signal", "mdr"], "references": ["detection_model", "parent"]},
         "signal": {"child_types": ["mdr"], "references": ["detection_model"]},
-        "cdm": {"child_types": ["mdr"], "references": ["detection_model"]},
     }
 
     model_type = get_type(model_id)
@@ -548,7 +546,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
             "coretide"
         )
         if not parent_id:
-            return []  # Case when there is no parent CDM
+            return []  # Case when there is no parent detection model
         else:
             if recursive:
                 techniques.extend(techniques_resolver(parent_id))
@@ -567,17 +565,6 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
             else:
                 return techniques
 
-    if model_type == "cdm":
-        if "att&ck" in model_body["detection"]:
-            techniques = [model_body["detection"]["att&ck"]]
-        else:
-            parent_ids = model_body["detection"]["vectors"]
-            if recursive:
-                for parent_id in parent_ids:
-                    techniques.extend(techniques_resolver(parent_id))
-            else:
-                return techniques
-
     if model_type == "tvm":
         techniques = model_body["threat"]["att&ck"]
 
@@ -592,7 +579,7 @@ def relations_downstream(id):
 
     tree = {}
     
-    if get_type(id) in ["signal", "cdm"]:
+    if get_type(id) in ["signal"]:
         tree = keep_active_mdr(childs(id))
     elif get_type(id) == "dom":
         for child in childs(id):

@@ -122,10 +122,6 @@ def documentation(model):
         if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI:
             GitlabMarkdown.negative_diff(relation_graph)
 
-    if model_type == "cdm":
-        tuning = model[model_datafield]["tuning"].replace("\n", "\n> ")
-        expand_description += f"\n\n## 🔧 Tuning \n\n > {tuning}"
-
     if model_type == "tvm":
 
         terrain = model[model_datafield]["terrain"].replace("\n", "\n> ")

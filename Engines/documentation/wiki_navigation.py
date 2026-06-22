@@ -74,22 +74,6 @@ NAV_INDEX_FIELDS = {
         "threats",
         "implementations"
     ],
-    "cdm": [
-        "uuid",
-        "name",
-        "criticality",
-        "tlp",
-        "att&ck",
-        "guidelines",
-        "modified",
-        "vectors",
-        "implementations",
-        "criticality",
-        "methods",
-        "datasources",
-        "collection",
-        "artifacts",
-    ],
     "mdr": [
         "uuid",
         "name",
@@ -190,20 +174,7 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
                 actors_list = ", ".join(actors_list)
                 row[value] = actors_list
 
-            elif model_type == "cdm" and value == "vectors":
-                vectors = model_value_doc(entry, "vectors")
-                if vectors:
-                    vectors = [vectors] if type(vectors) is str else vectors
-                    vectors_links = []
-                    for vector in vectors:
-                        object_backlink = str(backlink_resolver(str(vector), hover=False))
-                        object_backlink = object_backlink.replace("../", "./")
-                        vectors_links.append(object_backlink)
-                    row[value] = ", ".join(vectors_links)
-                else:
-                    row[value] = "❔ No Object Mapped"
-
-            elif model_type == "dom" and value == "threats":
+                        elif model_type == "dom" and value == "threats":
                 vectors = model_value_doc(entry, "threats")
                 if vectors:
                     vectors = [vectors] if type(vectors) is str else vectors
