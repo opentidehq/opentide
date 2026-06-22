@@ -6,7 +6,8 @@ import json
 import git
 
 from dataclasses import dataclass, asdict, is_dataclass
-from typing import Literal, Never, ClassVar, Sequence, overload, Any, Optional
+from typing import Literal, ClassVar, Sequence, overload, Any, Optional
+from Engines.modules._typing import Never
 from enum import Enum, auto
 from datetime import datetime, timedelta
 from pprint import pprint
