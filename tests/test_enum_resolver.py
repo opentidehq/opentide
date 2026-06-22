@@ -57,10 +57,12 @@ def test_finalise_appends_hint_descriptions_for_model_vocab() -> None:
             "rule-1": VocabularyEntry(name="Rule One", description="First rule"),
         },
     )
-    with patch("Engines.framework.json_schemas.VOCAB_INDEX", {"mdr": model_vocab}):
-        with patch("Engines.framework.json_schemas.OBJECT_TYPES", ["mdr"]):
-            resolver = EnumResolver.Vocabulary("mdr", no_wrap=True)
-            enum, descriptions = resolver.resolve()
+    with (
+        patch("Engines.framework.json_schemas.VOCAB_INDEX", {"mdr": model_vocab}),
+        patch("Engines.framework.json_schemas.OBJECT_TYPES", ["mdr"]),
+    ):
+        resolver = EnumResolver.Vocabulary("mdr", no_wrap=True)
+        enum, descriptions = resolver.resolve()
 
     assert len(enum) == len(descriptions)
     assert len(enum) == 2
