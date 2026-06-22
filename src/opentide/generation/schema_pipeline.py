@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-import json
+from typing import Any, cast
 import sys
 from pathlib import Path
 
@@ -468,7 +466,7 @@ _Vocabulary_ : `{source_vocab}`
                 else:
                     raise ValueError(f"Key : {key} could not be found in path {self.dot_path}")
             if type(config_index[key]) is list:
-                return config_index[key]
+                return cast(list[Any], config_index[key])
             raise ValueError(
                 f"Config path {self.dot_path} must be a valid path to a list parameter"
             )
