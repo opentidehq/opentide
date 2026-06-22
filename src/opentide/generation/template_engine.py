@@ -12,7 +12,7 @@ from Engines.modules.tide import OpenTide
 
 
 def _config_index() -> dict[str, Any]:
-    return OpenTide.Configurations.Index
+    return cast(dict[str, Any], OpenTide.Configurations.Index)
 
 
 def fetch_config_template(dot_path: str) -> str:
