@@ -181,7 +181,7 @@ def test_core_schema_models_cover_primary_objects() -> None:
 
 
 def test_generate_core_model_schema_returns_object_schema() -> None:
-    schema = generate_core_model_schema("mdr")
+    schema = generate_core_model_schema("mdr", enrich=False)
     assert schema["type"] == "object"
     assert "properties" in schema
 

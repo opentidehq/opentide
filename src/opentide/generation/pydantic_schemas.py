@@ -20,14 +20,15 @@ CORE_SCHEMA_MODELS: dict[str, type[TideModel]] = {
 }
 
 
-def generate_core_model_schema(model_key: str) -> dict[str, Any]:
+def generate_core_model_schema(model_key: str, *, enrich: bool = True) -> dict[str, Any]:
     """Generate a JSON Schema dict for a core object model."""
     model = CORE_SCHEMA_MODELS[model_key]
     raw = model_json_schema(model)
-    from opentide.generation.schema_pipeline import gen_json_schema
+    if enrich:
+        from opentide.generation.schema_pipeline import gen_json_schema
 
-    enriched = gen_json_schema(raw)
-    return strip_framework_keywords(enriched)
+        raw = gen_json_schema(raw)
+    return strip_framework_keywords(raw)
 
 
 def export_core_model_schema(model_key: str, output_path: Path) -> None:
