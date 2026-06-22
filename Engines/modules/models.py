@@ -20,15 +20,6 @@ from Engines.modules.logs import log
 # OpenTide.Vocabularies.
 # OpenTide.Schemas.Json / OpenTide.Schemas.Yaml
 
-class BaseModels:
-
-    class Enums:
-        ...
-    class Objects:
-        ...
-    class Deployment:
-        ...
-
 class StatusStrategy(Enum):
     INERT = "Does not interact with deployment"
     RELEASE = "Deployment from the default branch (also called trunk, or main branch)"

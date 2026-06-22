@@ -119,10 +119,6 @@ class TableExporter:
                 if techniques:=object_data["objective"].get("att&ck"):
                     attack = ", ".join(techniques)
 
-            case "cdm":
-                description = object_data["detection"].get("guidelines")
-                if techniques:=object_data["detection"].get("att&ck"):
-                    attack = ", ".join(techniques)
             case "mdr":
                 description = object_data["description"]
 

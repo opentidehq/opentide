@@ -1,6 +1,5 @@
 import git
 import sys
-import os
 import json
 
 from dataclasses import dataclass, asdict
@@ -57,13 +56,11 @@ class AttackNavigatorLayer:
         full_layer = self.assemble_full_layer(technique_layer=technique_layer)
         self.export_layer(layer=full_layer)
 
-    def map_objects_and_techniques(self, model_type:Literal["tvm", "cdm", "mdr"])->dict[str, TechniqueIndexEntry]:
+    def map_objects_and_techniques(self, model_type:Literal["tvm", "mdr"])->dict[str, TechniqueIndexEntry]:
 
         match model_type:
             case "tvm":
                 index = DataTide.Models.tvm
-            case "cdm":
-                index = DataTide.Models.cdm
             case "mdr":
                 index = DataTide.Models.mdr
 
@@ -80,69 +77,52 @@ class AttackNavigatorLayer:
                 else:
                     technique_mapping[technique] = TechniqueIndexEntry(objects_names=[f"[{model_type.upper()}] " + name], objects_uuids=[uuid])
 
-        #log("ONGOING", "Compiled mapping index for object type", model_type, str(technique_mapping))
-
         return technique_mapping
-    
+
     def generate_technique_layer(self)->list[TechniqueLayer]:
-        
+
         tvm_techniques = self.map_objects_and_techniques(model_type="tvm")
-        cdm_techniques = self.map_objects_and_techniques(model_type="cdm")
         mdr_techniques = self.map_objects_and_techniques(model_type="mdr")
 
         technique_layer:list[TechniqueLayer] = []
 
         for technique in tvm_techniques:
             mapping_detail = tvm_techniques[technique]
-            #Technique mapped by TVM, not downstream
-            if technique not in cdm_techniques:
+            if technique not in mdr_techniques:
                 log("INFO", f"{technique} only at TVM level, found in : ", str(mapping_detail.objects_names))
                 technique_layer.append(TechniqueLayer(techniqueID=technique,
                                                       color=LayerColor.red,
                                                       comment=", ".join(mapping_detail.objects_names)))
-            #Technique also mapped in CDMs
             else:
-                cdm_mapping_detail = cdm_techniques[technique]
-                cdm_updated_mapping = TechniqueIndexEntry(objects_names= mapping_detail.objects_names + cdm_mapping_detail.objects_names,
-                                                        objects_uuids= mapping_detail.objects_uuids + cdm_mapping_detail.objects_uuids)
-                                   
-                #Technique also mapped by MDRs
-                if technique in mdr_techniques:
+                mdr_mapping_detail = mdr_techniques[technique]
+                updated_mapping = TechniqueIndexEntry(
+                    objects_names=mapping_detail.objects_names + mdr_mapping_detail.objects_names,
+                    objects_uuids=mapping_detail.objects_uuids + mdr_mapping_detail.objects_uuids,
+                )
+                log("INFO", f"{technique} Fully Mapped, found in : ", str(updated_mapping.objects_names))
+                technique_layer.append(TechniqueLayer(techniqueID=technique,
+                                                      color=LayerColor.green,
+                                                      comment=", ".join(updated_mapping.objects_names)))
 
-                    mdr_mapping_detail = mdr_techniques[technique]
-                    mdr_updated_mapping = TechniqueIndexEntry(objects_names= cdm_mapping_detail.objects_names + mdr_mapping_detail.objects_names,
-                                        objects_uuids= cdm_mapping_detail.objects_uuids + mdr_mapping_detail.objects_uuids)
-                    log("INFO", f"{technique} Fully Mapped, found in : ", str(mdr_updated_mapping.objects_names))
-                    technique_layer.append(TechniqueLayer(techniqueID=technique,
-                                                        color=LayerColor.green,
-                                                        comment=", ".join(mdr_updated_mapping.objects_names)))
-                #Stops at CDM level
-                else:
-                    log("INFO", f"{technique} mapped at TVM level and MDR level, found in : ", str(cdm_updated_mapping.objects_names))
-                    technique_layer.append(TechniqueLayer(techniqueID=technique,
-                                    color=LayerColor.purple,
-                                    comment=", ".join(cdm_updated_mapping.objects_names)))
-
-        # Edge case, when CDM override TVM with new techniques
-        for technique in cdm_techniques:
+        for technique in mdr_techniques:
             if technique in tvm_techniques:
                 continue
 
-            cdm_mapping_detail = cdm_techniques[technique]
+            mdr_mapping_detail = mdr_techniques[technique]
+            log("INFO", f"{technique} only at MDR level, found in : ", str(mdr_mapping_detail.objects_names))
             technique_layer.append(TechniqueLayer(techniqueID=technique,
-                            color=LayerColor.purple,
-                            comment=", ".join(cdm_mapping_detail.objects_names)))
+                            color=LayerColor.blue,
+                            comment=", ".join(mdr_mapping_detail.objects_names)))
 
         return technique_layer
 
 
     def assemble_full_layer(self, technique_layer:list[TechniqueLayer])->NavigatorLayer:
-        
+
         legend = list()
         legend.append(LegendEntry(label="TVM Only", color=LayerColor.red))
-        legend.append(LegendEntry(label="TVM + CDM", color=LayerColor.purple))
         legend.append(LegendEntry(label="Full Coverage", color=LayerColor.green))
-        legend.append(LegendEntry(label="CDM Only - Needs to be checked", color=LayerColor.blue))
+        legend.append(LegendEntry(label="MDR Only - Needs to be checked", color=LayerColor.blue))
         return NavigatorLayer(versions={"layer": "4.5"},
                               techniques=technique_layer,
                               legendItems=legend)

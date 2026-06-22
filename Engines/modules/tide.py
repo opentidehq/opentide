@@ -1222,8 +1222,6 @@ class DataTide:
         """Detection Objectives Signals Raw Index"""
         Signal = {uuid:TideLoader.load_signal(deepcopy(data)) for (uuid, data) in dict(Index.copy().get("signal", {})).items()} if signal else None 
         """Detection Objectives Signals Pre-Loaded Index"""
-        cdm = dict(Index["cdm"])
-        """Cyber Detection Models Data Index"""
         mdr = dict(Index["mdr"])
         """Managed Detection Rules Data Index"""
         # We need to do a deepcopy to ensure that loading steps aren't modifying the original data
@@ -1231,7 +1229,7 @@ class DataTide:
         """Model Mapped Managed Detection Rules Data Index"""
         chaining = IndexTide.compute_chains(tvm)
         """Index of all chaining relationships"""
-        FlatIndex =  tvm | dom | signal | cdm | mdr
+        FlatIndex =  tvm | dom | signal | mdr
         """Flat Key Value pair structure of all UUIDs in the index"""
         files = dict(IndexTide.load()["files"])
     
@@ -1265,8 +1263,6 @@ class DataTide:
         """Threat Vector Model JSON Schema"""
         dom = dict(Index.get("dom", {}))
         """Detection Objective Model JSON Schema"""
-        cdm = dict(Index.get("cdm", {}))
-        """Cyber Detection Model JSON Schema"""
         mdr = dict(Index.get("mdr", {}))
         """Managed Detection Rule JSON Schema"""
 
@@ -1279,10 +1275,8 @@ class DataTide:
         Index = dict(IndexTide.load()["templates"])
         tvm = str(Index.get("tvm"))
         """Threat Vector Model Object Template"""
-        dom = str(Index.get("cdm"))
+        dom = str(Index.get("dom"))
         """Detection Objective Model Object Template"""
-        cdm = str(Index.get("cdm"))
-        """Cyber Detection Model Object Template"""
         mdr = str(Index.get("mdr"))
         """Managed Detection Rule Object Template"""
 
@@ -1301,8 +1295,6 @@ class DataTide:
         """Threat Vector Model Tide Schema"""
         dom = dict(Index.get("dom", {}))
         """Detection Objective Model Tide Schema"""
-        cdm = dict(Index["cdm"])
-        """Cyber Detection Model Tide Schema"""
         mdr = dict(Index["mdr"])
         """Managed Detection Rule Tide Schema"""
         mdrv2 = dict(Index.get("mdrv2", {}))
@@ -1381,7 +1373,6 @@ class DataTide:
                     
                     tvm = Index["tvm"]
                     dom = Index.get("dom")
-                    cdm = Index["cdm"]
                     mdr = Index["mdr"]
                     analytics = Index["analytics"]
                     snippet_file = Index["snippet_file"]

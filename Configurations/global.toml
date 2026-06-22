@@ -1,9 +1,8 @@
-objects = [ "tvm", "cdm", "dom", "mdr" ]
+objects = [ "tvm", "dom", "mdr" ]
 
 [paths.tide]
 tvm = "Objects/Threat Vectors/"
 dom = "Objects/Detection Objectives/"
-cdm = "Objects/Detection Models/"
 mdr = "Objects/Detection Rules/"
 analytics = "Analytics/"
 snippet_file = ".vscode/Model Templates.code-snippets"
@@ -38,7 +37,6 @@ table = "Objects Table.csv"
 [metaschemas]
 tvm = "Threat Vector.metaschema.yaml"
 dom = "Detection Objective.metaschema.yaml"
-cdm = "CDM Meta Schema.yaml"
 mdr = "MDR Meta Schema.yaml"
 
 [recomposition]
@@ -53,17 +51,14 @@ visibility = "Configurations/visibility.schema.json"
 [json_schemas]
 tvm = "TVM Schema.json"
 dom = "Detection Objective.schema.json"
-cdm = "CDM Schema.json"
 mdr = "MDR Schema.json"
 
 [data_fields]
 tvm = "threat"
 dom = "objective"
-cdm = "detection"
 mdr = "rule"
 
 [templates]
 tvm = "TVM TEMPLATE.yaml"
 dom = "Detection Objective.template.yaml"
-cdm = "CDM TEMPLATE.yaml"
 mdr = "MDR TEMPLATE.yaml"

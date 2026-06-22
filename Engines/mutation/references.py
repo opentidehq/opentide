@@ -12,7 +12,7 @@ from Engines.modules.files import resolve_paths
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 PATHS = resolve_paths()
-MODELS_SCOPE = ["tvm", "cdm", "mdr"]
+MODELS_SCOPE = ["tvm", "mdr"]
 MODELS_FOLDER = dict()
 
 for model in MODELS_SCOPE:
@@ -28,10 +28,10 @@ REF_TEMPLATE = """#references:
 """
 
 
-class MyDumper(yaml.Dumper):
+class OrderedYAMLDumper(yaml.Dumper):
 
     def increase_indent(self, flow=False, indentless=False):
-        return super(MyDumper, self).increase_indent(flow, False)
+        return super(OrderedYAMLDumper, self).increase_indent(flow, False)
 
 
 def upgrade_refs(old_refs):

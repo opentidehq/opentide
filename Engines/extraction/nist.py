@@ -7,6 +7,7 @@ from pathlib import Path
 import unicodedata
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
+from Engines.modules.files import IndentFullDumper
 from Engines.modules.tide import DataTide
 
 RESOURCES = DataTide.Configurations.Global.Paths.Core.resources
@@ -15,11 +16,6 @@ VOCABS_PATH = DataTide.Configurations.Global.Paths.Core.vocabularies
 
 nist_vocab = r"NIST Cybersecurity Framework.yaml"
 
-
-class IndentFullDumper(yaml.Dumper):
-
-    def increase_indent(self, flow=False, indentless=False):
-        return super(IndentFullDumper, self).increase_indent(flow, False)
 
 
 df = pd.read_excel(RESOURCES / NIST_DATA)
