@@ -76,11 +76,28 @@ rg -i '\bcdm\b|\bbdr\b' --glob '!*.md' | wc -l
 python -c "from Engines.modules.tide import DataTide"
 
 # Phase 5 (#66)
-pip install -e . && python -c "from opentide import OpenTide"
+uv sync --group dev && uv run python -c "from opentide import OpenTide"
 
 # Phase 9 (#71)
-pip install -e ".[dev]" && pytest --cov=opentide --cov-fail-under=80
+uv sync --group dev && uv run pytest --cov=opentide --cov-fail-under=80
 ```
+
+## Developer toolchain (uv + ruff + ty)
+
+Dependency management uses [uv](https://docs.astral.sh/uv/). A lockfile (`uv.lock`) is committed; sync before any local work:
+
+```bash
+uv sync --group dev          # install runtime + dev deps into .venv
+uv run pytest tests/ -v      # run tests
+uv run ruff check src tests  # lint
+uv run ruff format src tests # format
+uv run ty check src/opentide # primary type checker (Astral ty)
+uv run mypy --follow-imports=skip src/opentide  # migration baseline only
+```
+
+CI runs `uv sync --group dev` on Python **3.10–3.14** (3.10 retained until infra PR validates 3.14; drop oldest after green matrix). **ty** is the primary type checker in CI; **mypy** remains during migration and will be removed once ty coverage is complete.
+
+Structured logging lives in `opentide.core.logging` (structlog + Rich). Legacy `Engines/modules/logs.py` is a thin shim — new code must import from `opentide.core.logging`.
 
 Full commands in each issue and [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md).
 

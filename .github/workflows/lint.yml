@@ -12,18 +12,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install package
-        run: pip install -e ".[dev]"
+      - name: Install dependencies
+        run: uv sync --group dev
 
       - name: Ruff
         run: |
-          ruff check .
-          ruff format --check .
+          uv run ruff check src tests
+          uv run ruff format --check src tests
 
-      - name: Mypy
-        run: mypy --follow-imports=skip src/opentide
+      - name: Ty (primary)
+        run: uv run ty check src/opentide --output-format github
+
+      - name: Mypy (migration baseline)
+        run: uv run mypy --follow-imports=skip src/opentide

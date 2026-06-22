@@ -67,7 +67,7 @@ class DetectionRule(TideModel):
         deployer.deploy([uuid])
         return DeploymentResult(platform=platform, uuids=[uuid], dry_run=False)
 
-    def validate(self) -> ValidationResult:
+    def validate(self) -> ValidationResult:  # ty: ignore[invalid-method-override]
         if self._registry is None:
             raise RuntimeError("DetectionRule.validate() requires a bound registry")
         return self._registry.validate_rule(self)
