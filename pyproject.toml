@@ -32,6 +32,7 @@ dev = [
     "pre-commit>=4.0",
     "types-PyYAML",
     "types-toml",
+    "pandas>=2.0",
 ]
 
 [project.scripts]
