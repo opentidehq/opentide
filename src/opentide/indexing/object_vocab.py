@@ -73,8 +73,7 @@ def build_object_vocabularies(
             entry["description"] = description
             entry = {k: v for k, v in entry.items() if v is not None}
             entry = {
-                k: v.replace("\n ", " ") if isinstance(v, str) else v
-                for k, v in entry.items()
+                k: v.replace("\n ", " ") if isinstance(v, str) else v for k, v in entry.items()
             }
             entries[_uuid] = entry
 

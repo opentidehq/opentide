@@ -67,9 +67,7 @@ def build_system_config(system: str, raw: dict[str, Any] | None = None) -> Any:
 
     raw_config = dict(raw)
     platform_payload = dict(raw_config.get("platform", {}))
-    platform = (
-        parse_platform_config(platform_key, platform_payload) if platform_payload else None
-    )
+    platform = parse_platform_config(platform_key, platform_payload) if platform_payload else None
     return SimpleNamespace(
         raw=raw_config,
         platform=platform,

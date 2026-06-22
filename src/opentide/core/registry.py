@@ -182,9 +182,7 @@ class OpenTideRegistry:
 OpenTide = OpenTideRegistry()
 
 
-def _resolve_file(
-    category: str, filename: str | None, index: dict[str, Any]
-) -> Path | None:
+def _resolve_file(category: str, filename: str | None, index: dict[str, Any]) -> Path | None:
     if not filename:
         return None
     paths = index["paths"]
@@ -498,10 +496,7 @@ class _ModelsAccessor:
             sys.path.append(root)
         from Engines.modules.loaders.object_loader import ObjectLoader
 
-        return {
-            uuid: ObjectLoader.load_rule(deepcopy(data))
-            for uuid, data in self.mdr.items()
-        }
+        return {uuid: ObjectLoader.load_rule(deepcopy(data)) for uuid, data in self.mdr.items()}
 
 
 @dataclass(frozen=True)

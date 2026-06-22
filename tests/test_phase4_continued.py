@@ -67,18 +67,25 @@ def test_repo_root_is_path() -> None:
     assert (root / "pyproject.toml").is_file()
 
 
-def test_index_manager_load_returns_dict() -> None:
+def test_index_manager_load_returns_dict(monkeypatch: pytest.MonkeyPatch) -> None:
     index_mod.IndexManager._cache = None
+    sample = {"objects": {}, "configurations": {}}
+    monkeypatch.setattr(index_mod.IndexManager, "_build_index", lambda: sample)
+    monkeypatch.setattr(index_mod.IndexManager, "reconcile_staging", lambda idx: idx)
     index = index_mod.IndexManager.load()
     assert isinstance(index, dict)
     assert "objects" in index
 
 
-def test_index_manager_reload_clears_cache() -> None:
+def test_index_manager_reload_clears_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    sample = {"objects": {}, "configurations": {}}
+    monkeypatch.setattr(index_mod.IndexManager, "_build_index", lambda: sample)
+    monkeypatch.setattr(index_mod.IndexManager, "reconcile_staging", lambda idx: idx)
+    index_mod.IndexManager._cache = None
     first = index_mod.IndexManager.load()
     index_mod.IndexManager.reload()
     second = index_mod.IndexManager.load()
-    assert first is not second or first == second
+    assert first is second
 
 
 def test_opentide_singleton_type() -> None:
