@@ -6,7 +6,7 @@ import importlib
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Iterator, cast
 
 import git
 
@@ -53,24 +53,12 @@ class PlatformLoader:
         return importlib.import_module(module_path)  # type: ignore
 
     def _load_engines(self, tier: PlatformEngineBase, identifier: str) -> dict[str, type]:
-        from Engines.modules.deployment import enabled_systems
-
         log("ONGOING", "Initiating platform engine loading")
         engines: dict[str, type] = {}
-        available = enabled_systems()
 
         from Engines.modules.registry import OpenTide
 
         for system in OpenTide.Configuration.Systems.Index:
-            if system not in available:
-                log(
-                    "SKIP",
-                    "Not loading engine for",
-                    system,
-                    f"Platform is disabled. Enable under Configuration/systems/{system}.toml",
-                )
-                continue
-
             module_name = system + identifier
             module = None
             try:
@@ -101,10 +89,10 @@ class PlatformLoader:
         return engines
 
     def rule_deployers(self) -> dict[str, RuleDeployer]:
-        return self._load_engines(identifier="", tier=PlatformEngine())
+        return cast(dict[str, RuleDeployer], self._load_engines(identifier="", tier=PlatformEngine()))
 
     def query_validators(self) -> dict[str, QueryValidator]:
-        return self._load_engines(identifier="_query", tier=ValidationEngine())
+        return cast(dict[str, QueryValidator], self._load_engines(identifier="_query", tier=ValidationEngine()))
 
 
 @dataclass
@@ -176,6 +164,18 @@ class _PlatformsAccessor:
         assert self._validators is not None
         return self._validators
 
+    def __getattr__(self, name: str) -> Platform:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        self._ensure_loaded()
+        assert self._instances is not None
+        if name in self._instances:
+            return self._instances[name]
+        for key, platform in self._instances.items():
+            if _class_name(key) == name:
+                return platform
+        raise AttributeError(name)
+
 
 Platforms = _PlatformsAccessor()
 
@@ -196,13 +196,21 @@ PluginEnginesLoader = PlatformLoader
 class DeployTide:
     """Deprecated — use OpenTide.Platforms."""
 
+    @staticmethod
+    def _enabled_keys() -> set[str]:
+        from Engines.modules.deployment import enabled_systems
+
+        return set(enabled_systems())
+
     @property
     def mdr(self) -> dict[str, RuleDeployer]:
-        return Platforms.deployers()
+        enabled = self._enabled_keys()
+        return {k: v for k, v in Platforms.deployers().items() if k in enabled}
 
     @property
     def query_validation(self) -> dict[str, QueryValidator]:
-        return Platforms.validators()
+        enabled = self._enabled_keys()
+        return {k: v for k, v in Platforms.validators().items() if k in enabled}
 
 
 PlatformsRegistry = DeployTide

@@ -392,6 +392,31 @@ class TideModels:
         detection_model: Optional[str] = None
         references: Optional[SharedModels.ObjectReferences] = None
 
+        def deploy(self, platform: str, deployment_plan=None) -> None:
+            """Deploy this rule onto a named detection platform."""
+            from Engines.modules.enums import DeploymentStrategy
+            from Engines.modules.registry import OpenTide
+
+            entry = OpenTide.Platforms[platform]
+            if not entry.can_deploy or entry.deployer is None:
+                raise ValueError(f"Platform {platform!r} cannot deploy")
+            uuid = self.metadata.uuid
+            plan = deployment_plan or DeploymentStrategy.DEBUG
+            deployer = entry.deployer
+            try:
+                deployer.deploy(deployment=[uuid])  # type: ignore[call-arg]
+            except TypeError:
+                deployer.deploy(mdr_deployment=[uuid], deployment_plan=plan)  # type: ignore[call-arg]
+
+        def validate_query(self, platform: str) -> None:
+            """Validate this rule's query on a named platform."""
+            from Engines.modules.registry import OpenTide
+
+            entry = OpenTide.Platforms[platform]
+            if not entry.can_validate or entry.validator is None:
+                raise ValueError(f"Platform {platform!r} cannot validate queries")
+            entry.validator.validate([self.metadata.uuid])
+
 
 # Module-level type aliases (Phase 2)
 DetectionRule = TideModels.DetectionRule

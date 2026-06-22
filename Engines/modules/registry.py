@@ -407,3 +407,7 @@ class OpenTide:
 
 # Legacy alias
 DataTide = OpenTide
+
+from Engines.modules.platforms import Platforms
+
+OpenTide.Platforms = Platforms

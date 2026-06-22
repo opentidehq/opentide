@@ -23,7 +23,7 @@ def __getattr__(name: str):
         from Engines.modules.platforms import Platforms
         from Engines.modules.registry import OpenTide
 
-        OpenTide.Platforms = Platforms
+        OpenTide.Platforms = Platforms  # type: ignore[attr-defined]
         return OpenTide
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
