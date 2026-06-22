@@ -10,12 +10,16 @@ SCAN = ("Engines", "Configurations", "Orchestration")
 
 
 def test_cdm_absent() -> None:
-    r = subprocess.run(["git", "grep", "-in", r"\bcdm\b", "--", *SCAN], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run(
+        ["git", "grep", "-in", r"\bcdm\b", "--", *SCAN], cwd=ROOT, capture_output=True, text=True
+    )
     assert r.returncode == 1, r.stdout
 
 
 def test_bdr_absent() -> None:
-    r = subprocess.run(["git", "grep", "-in", r"\bbdr\b", "--", *SCAN], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run(
+        ["git", "grep", "-in", r"\bbdr\b", "--", *SCAN], cwd=ROOT, capture_output=True, text=True
+    )
     assert r.returncode == 1, r.stdout
 
 
@@ -73,5 +77,13 @@ def test_ordered_yaml_dumper_renamed() -> None:
 def test_seven_platforms_five_validators() -> None:
     systems = {p.name for p in (ROOT / "Configurations/systems").glob("*.toml")}
     assert len(systems) == 7
-    validators = {p.stem.replace("_query", "") for p in (ROOT / "Engines/validation").glob("*_query.py")}
-    assert validators == {"carbon_black_cloud", "defender_for_endpoint", "sentinel", "sentinel_one", "splunk"}
+    validators = {
+        p.stem.replace("_query", "") for p in (ROOT / "Engines/validation").glob("*_query.py")
+    }
+    assert validators == {
+        "carbon_black_cloud",
+        "defender_for_endpoint",
+        "sentinel",
+        "sentinel_one",
+        "splunk",
+    }
