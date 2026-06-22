@@ -1,7 +1,11 @@
-"""Splunk platform plugin (scaffold)."""
+"""Splunk Enterprise platform plugin."""
+
+from __future__ import annotations
+
+from typing import Any
 
 
-class Platform:
-    """Splunk platform adapter placeholder."""
+def declare() -> Any:
+    from Engines.deployment.splunk import declare as _declare
 
-    name = "splunk"
+    return _declare()

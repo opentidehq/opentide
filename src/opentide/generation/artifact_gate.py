@@ -8,8 +8,7 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
-from Engines.modules.files import resolve_paths
-
+from opentide.core.files import resolve_paths
 from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS
 
 TIDE_PREFIX = "tide:"

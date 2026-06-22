@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Any, Callable, cast
 
 import yaml
-from Engines.modules.files import IndentFullDumper
-from Engines.modules.tide import OpenTide
 
+from opentide.core.files import IndentFullDumper
 from opentide.core.logging import log as default_log
+from opentide.core.registry import OpenTide
 
 
 def _config_index() -> dict[str, Any]:

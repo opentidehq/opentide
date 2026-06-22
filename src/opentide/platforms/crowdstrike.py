@@ -1,7 +1,11 @@
-"""CrowdStrike platform plugin (scaffold)."""
+"""CrowdStrike Falcon platform plugin."""
+
+from __future__ import annotations
+
+from typing import Any
 
 
-class Platform:
-    """CrowdStrike platform adapter placeholder."""
+def declare() -> Any:
+    from Engines.deployment.crowdstrike import declare as _declare
 
-    name = "crowdstrike"
+    return _declare()

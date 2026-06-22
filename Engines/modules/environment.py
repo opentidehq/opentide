@@ -8,13 +8,13 @@ from typing import (
     Dict,
     Literal,
     Mapping,
-    Never,
     Optional,
     Sequence,
     Tuple,
     Union,
     overload,
 )
+from Engines.modules._typing import Never
 from functools import cache
 from abc import ABC
 from importlib import import_module

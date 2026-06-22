@@ -605,6 +605,7 @@ dependencies = [
     { name = "ruamel-yaml" },
     { name = "structlog" },
     { name = "toml" },
+    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -653,6 +654,7 @@ requires-dist = [
     { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.9" },
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "types-toml", marker = "extra == 'dev'" },
+    { name = "typing-extensions", specifier = ">=4.0" },
 ]
 provides-extras = ["carbon-black", "cli", "crowdstrike", "dev", "mcp", "sentinel", "splunk"]
 

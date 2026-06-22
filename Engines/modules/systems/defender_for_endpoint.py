@@ -6,7 +6,8 @@ import json
 import git
 
 from dataclasses import dataclass, asdict
-from typing import Literal, Never, ClassVar, Sequence, overload, Any, Optional
+from typing import Literal, ClassVar, Sequence, overload, Any, Optional
+from Engines.modules._typing import Never
 from enum import Enum, auto
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))

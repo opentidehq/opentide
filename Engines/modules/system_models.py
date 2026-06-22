@@ -6,7 +6,8 @@ from tokenize import String
 import git
 
 from dataclasses import dataclass
-from typing import Literal, Never, Optional, List, Sequence, Mapping, Any, Union
+from typing import Literal, Optional, List, Sequence, Mapping, Any, Union
+from Engines.modules._typing import Never
 from enum import Enum, auto
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))

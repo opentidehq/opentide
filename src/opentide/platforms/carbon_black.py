@@ -1,7 +1,11 @@
-"""Carbon Black platform plugin (scaffold)."""
+"""Carbon Black Cloud platform plugin."""
+
+from __future__ import annotations
+
+from typing import Any
 
 
-class Platform:
-    """Carbon Black platform adapter placeholder."""
+def declare() -> Any:
+    from Engines.deployment.carbon_black_cloud import declare as _declare
 
-    name = "carbon-black"
+    return _declare()
