@@ -66,9 +66,9 @@ def resolve_configurations() -> dict[str, dict]:
     unified_configs = (
         core_configs.copy()
     )  # Copy since deep merge modifies the dict in place
-    custom_configs = fetch_configs(CUSTOM_CONFIGURATIONS_PATH)
-
-    deep_merge(unified_configs, custom_configs)
+    if CUSTOM_CONFIGURATIONS_PATH.is_dir():
+        custom_configs = fetch_configs(CUSTOM_CONFIGURATIONS_PATH)
+        deep_merge(unified_configs, custom_configs)
 
     return unified_configs
 

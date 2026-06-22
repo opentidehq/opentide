@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
@@ -12,16 +13,30 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from Engines.framework.json_schemas import EnumResolver  # noqa: E402
-from Engines.modules.vocabulary import (  # noqa: E402
-    VocabularyDefinition,
-    VocabularyEntry,
-    VocabularyMetadata,
+if TYPE_CHECKING:
+    from Engines.modules.vocabulary import VocabularyDefinition
+
+pytestmark_behavioral = pytest.mark.skipif(
+    sys.version_info < (3, 11),
+    reason="EnumResolver behavioral tests import Engines stack requiring typing.Never (3.11+)",
 )
+
+
+def _import_enum_resolver():
+    """Import EnumResolver after conftest pins the repository root."""
+    from Engines.framework.json_schemas import EnumResolver as resolver_cls
+
+    return resolver_cls
 
 
 @pytest.fixture
 def impact_vocab() -> VocabularyDefinition:
+    from Engines.modules.vocabulary import (
+        VocabularyDefinition,
+        VocabularyEntry,
+        VocabularyMetadata,
+    )
+
     return VocabularyDefinition(
         metadata=VocabularyMetadata(
             name="Impact",
@@ -36,7 +51,9 @@ def impact_vocab() -> VocabularyDefinition:
     )
 
 
+@pytestmark_behavioral
 def test_finalise_does_not_duplicate_descriptions(impact_vocab: VocabularyDefinition) -> None:
+    EnumResolver = _import_enum_resolver()
     with patch("Engines.framework.json_schemas.VOCAB_INDEX", {"impact": impact_vocab}):
         resolver = EnumResolver.Vocabulary("impact", no_wrap=True)
         enum, descriptions = resolver.resolve()
@@ -45,7 +62,15 @@ def test_finalise_does_not_duplicate_descriptions(impact_vocab: VocabularyDefini
     assert len(descriptions) == len(set(descriptions)) or descriptions.count(descriptions[0]) == 1
 
 
+@pytestmark_behavioral
 def test_finalise_appends_hint_descriptions_for_model_vocab() -> None:
+    from Engines.modules.vocabulary import (
+        VocabularyDefinition,
+        VocabularyEntry,
+        VocabularyMetadata,
+    )
+
+    EnumResolver = _import_enum_resolver()
     model_vocab = VocabularyDefinition(
         metadata=VocabularyMetadata(
             name="Rules",
