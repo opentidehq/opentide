@@ -12,6 +12,11 @@ class PlatformConfigBase(TideModel):
 
     enabled: bool = False
     name: str = ""
+    schema: str | None = None
+    status: str | None = None
+    flags: list[str] | None = None
+    tenants: list[str] | None = None
+    contributors: list[str] | None = None
 
 
 class SentinelConfig(PlatformConfigBase):

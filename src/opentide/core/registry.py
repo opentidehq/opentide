@@ -485,18 +485,10 @@ class _ModelsAccessor:
         return self.signal
 
     def _typed_mdr(self) -> dict[str, Any]:
-        """Legacy-compatible MDR access — raw dicts until deployers migrate."""
-        import sys
-        from copy import deepcopy
+        """Typed MDR access for deployers — compat loader until full Pydantic nesting."""
+        from opentide.loading.rule_loader import load_rule_compat
 
-        from opentide.core.root import repository_root
-
-        root = str(repository_root())
-        if root not in sys.path:
-            sys.path.append(root)
-        from Engines.modules.loaders.object_loader import ObjectLoader
-
-        return {uuid: ObjectLoader.load_rule(deepcopy(data)) for uuid, data in self.mdr.items()}
+        return {uuid: load_rule_compat(data) for uuid, data in self.mdr.items()}
 
 
 @dataclass(frozen=True)

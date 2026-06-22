@@ -77,6 +77,11 @@ exclude = [
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+# Ported from Engines/framework — behavioural preservation; style cleanup deferred to Phase 9
+"src/opentide/generation/schema_pipeline.py" = ["E501", "SIM", "UP", "B", "E712", "E721", "E722", "F841"]
+"src/opentide/generation/template_renderer.py" = ["E501", "SIM", "UP", "B", "E712", "E722", "F841"]
+
 [tool.mypy]
 python_version = "3.10"
 mypy_path = "src"

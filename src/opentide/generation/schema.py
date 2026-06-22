@@ -22,14 +22,7 @@ def model_json_schema(model: type[TideModel]) -> dict[str, Any]:
 
 
 def run() -> None:
-    """Generate JSON schemas via the legacy pipeline (migration in progress)."""
-    import sys
+    """Generate JSON schemas from Pydantic-backed pipeline."""
+    from opentide.generation.schema_pipeline import run as pipeline_run
 
-    from opentide.core.root import repository_root
-
-    root = str(repository_root())
-    if root not in sys.path:
-        sys.path.append(root)
-    from Engines.framework import json_schemas
-
-    json_schemas.run()
+    pipeline_run()
