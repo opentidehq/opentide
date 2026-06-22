@@ -64,7 +64,9 @@ class OpenTideRegistry:
         self._rules = {}
         for uuid, data in objects.get("mdr", {}).items():
             file_path = _resolve_file("mdr", files.get(uuid), self._index)
-            rule = DetectionRule.from_yaml_dict(data, file=file_path)
+            from opentide.loading.rule_loader import load_rule_from_dict
+
+            rule = load_rule_from_dict(data, file=file_path)
             self._rules[uuid] = rule.bind_registry(self)
 
         self._threats = {}
@@ -125,7 +127,9 @@ class OpenTideRegistry:
         return validate_object(rule, "mdr")
 
     def document_rule(self, rule: DetectionRule) -> str:
-        return f"# {rule.name}\n\n{rule.description}"
+        from opentide.documentation.rule_export import document_detection_rule
+
+        return document_detection_rule(rule)
 
     def promote_rule(self, rule: DetectionRule, target_status: str) -> None:
         raise NotImplementedError("promote_rule requires Orchestration/mutate integration")
@@ -473,7 +477,7 @@ class _ModelsAccessor:
         return {**self.tvm, **self.dom, **self.signal, **self.mdr}
 
     @property
-    def MDR(self) -> dict[str, Any]:
+    def MDR(self) -> dict[str, DetectionRule]:
         return self._typed_mdr()
 
     @property
@@ -484,11 +488,19 @@ class _ModelsAccessor:
     def Signal(self) -> dict[str, Any]:
         return self.signal
 
-    def _typed_mdr(self) -> dict[str, Any]:
-        """Typed MDR access for deployers — compat loader until full Pydantic nesting."""
-        from opentide.loading.rule_loader import load_rule_compat
+    def _typed_mdr(self) -> dict[str, DetectionRule]:
+        """Typed MDR access for deployers."""
+        from opentide.loading.rule_loader import load_rule_from_dict
 
-        return {uuid: load_rule_compat(data) for uuid, data in self.mdr.items()}
+        if self._rules:
+            return dict(self._rules)
+
+        files = self._index.get("files", {})
+        typed: dict[str, DetectionRule] = {}
+        for uuid, data in self.mdr.items():
+            file_path = _resolve_file("mdr", files.get(uuid), self._index)
+            typed[uuid] = load_rule_from_dict(data, file=file_path)
+        return typed
 
 
 @dataclass(frozen=True)

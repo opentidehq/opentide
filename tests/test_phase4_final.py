@@ -74,6 +74,9 @@ def test_load_rule_from_dict_minimal() -> None:
                 "name": "S",
                 "schema": "platform::sentinel::1.0",
                 "status": "STAGING",
+                "query": "SecurityEvent | take 1",
+                "scheduling": {"frequency": "PT1H", "lookback": "PT2H"},
+                "alert": {"title": "T", "suppression": False},
             },
         },
     }

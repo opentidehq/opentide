@@ -85,6 +85,16 @@ if DOCUMENTATION_TARGET in TARGET_WITH_DASH_PATHS:
 start_time = time.time()
 
 def documentation(mdr):
+    from opentide.models.rule import DetectionRule
+
+    if isinstance(mdr, DetectionRule):
+        mdr = mdr.model_dump(by_alias=True, exclude_none=True)
+        if mdr.get("configurations"):
+            mdr["configurations"] = {
+                key: value
+                for key, value in mdr["configurations"].items()
+                if value is not None
+            }
 
     doc = str()
     mdr_configs = mdr["configurations"]
@@ -340,11 +350,16 @@ def run():
         shutil.rmtree(MDR_WIKI_PATH)
     MDR_WIKI_PATH.mkdir(parents=True)
 
-    for mdr_uuid in MODELS_INDEX["mdr"]:
+    from opentide.core.registry import OpenTide
+
+    OpenTide.initialise()
+    rules = OpenTide.Rules
+
+    for mdr_uuid, rule in rules.items():
         
         # Make a file name based on MDR data
-        mdr_data = MODELS_INDEX["mdr"][mdr_uuid]
-        mdr_name = mdr_data.get("name")
+        mdr_data = rule.model_dump(by_alias=True, exclude_none=True)
+        mdr_name = rule.name
 
         log("ONGOING",
             "Generating MDR Documentation",
@@ -363,7 +378,7 @@ def run():
             
         doc_path = MDR_WIKI_PATH / doc_file_name
 
-        document = documentation(mdr_data)
+        document = documentation(rule)
 
         # Replace whitespace in file name as it becomes a path in the Gitlab Wiki
         if DOCUMENTATION_TARGET in TARGET_WITH_DASH_PATHS:

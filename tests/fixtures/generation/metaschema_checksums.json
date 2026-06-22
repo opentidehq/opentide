@@ -1,0 +1,5 @@
+{
+  "src/opentide/schemas/data/MDR Meta Schema.yaml": "0eb6f40cdbc83920a17ace9ce677ba6e9c8dd0a7fd738efd99d5d4626956400b",
+  "src/opentide/schemas/data/Detection Objective.metaschema.yaml": "f4f9b1878fec23d003ec78884e9e2ba5a86d3a1322deda8bf01dac0b3c87720c",
+  "src/opentide/schemas/data/Threat Vector.metaschema.yaml": "833df0ae42175ed14bbd3ad7d9d915386f69f7162cc62356baae4a36f6344efc"
+}

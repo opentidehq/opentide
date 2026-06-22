@@ -9,23 +9,26 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.tide import OpenTide, DetectionPlatforms, ObjectLoader
 from Engines.modules.plugins import RuleDeployer
-from Engines.modules.models import (TideModels,
+from opentide.models.rule import DetectionRule
+from Engines.modules.models import (
                                     DeploymentStrategy,
                                     StatusStrategy) 
 from Engines.modules.deployment import TideDeployment, check_status
 from Engines.modules.systems.kql import compile_kql_query
 from Engines.modules.logs import log
 
-from Engines.modules.systems.defender_for_endpoint import (DetectionRule,
-                                                           Severity,
-                                                           SeverityMapping,
-                                                           DefenderForEndpointService)
+from Engines.modules.systems.defender_for_endpoint import (
+    DetectionRule as DefenderApiRule,
+    Severity,
+    SeverityMapping,
+    DefenderForEndpointService,
+)
     
 
 
 class DefenderForEndpointDeploy(RuleDeployer):
     
-    def deploy_mdr(self, data:TideModels.DetectionRule, service:DefenderForEndpointService, tenant:str):
+    def deploy_mdr(self, data:DetectionRule, service:DefenderForEndpointService, tenant:str):
 
         def lower_first_character(string:str)->str:
             return string[0].lower() + string[1:]
@@ -40,11 +43,11 @@ class DefenderForEndpointDeploy(RuleDeployer):
 
         if mdr_config.actions:
             @dataclass
-            class ResponseAction(DetectionRule.DetectionAction.ResponseAction):...
+            class ResponseAction(DefenderApiRule.DetectionAction.ResponseAction):...
             @dataclass
-            class ResponseActionIsolateDevice(DetectionRule.DetectionAction.ResponseActionIsolateDevice):...
+            class ResponseActionIsolateDevice(DefenderApiRule.DetectionAction.ResponseActionIsolateDevice):...
             @dataclass
-            class ResponseActionFileActions(DetectionRule.DetectionAction.ResponseActionFileActions):...
+            class ResponseActionFileActions(DefenderApiRule.DetectionAction.ResponseActionFileActions):...
 
             if device_actions:=mdr_config.actions.devices:
                 if isolation_type:=device_actions.isolate_device:
@@ -104,7 +107,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
         if mdr_config.impacted_entities:
             
             @dataclass
-            class ImpactedAsset(DetectionRule.DetectionAction.AlertTemplate.ImpactedAsset):...
+            class ImpactedAsset(DefenderApiRule.DetectionAction.AlertTemplate.ImpactedAsset):...
 
             if identifier:=mdr_config.impacted_entities.device:
                 impacted_assets.append(ImpactedAsset(odata_type="#microsoft.graph.security.impactedDeviceAsset",
@@ -121,7 +124,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
         if mdr_config.alert.severity:
             severity = SeverityMapping[mdr_config.alert.severity].value
         else:
-            severity = data.response.alert_severity
+            severity = data.response.alert_severity if data.response else "Informational"
             severity = SeverityMapping[severity].value
 
         # Remove spaces in category
@@ -131,7 +134,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
         alert_description = mdr_config.alert.description or data.description
 
         # Compile Alert Template
-        alert_template = DetectionRule.DetectionAction.AlertTemplate(title = mdr_config.alert.title or data.name,
+        alert_template = DefenderApiRule.DetectionAction.AlertTemplate(title = mdr_config.alert.title or data.name,
                                                                     description=alert_description,
                                                                     severity=severity, 
                                                                     category=category,
@@ -150,11 +153,11 @@ class DefenderForEndpointDeploy(RuleDeployer):
         log("INFO", "Final compiled query", query)
 
         # Compile Detection Rule
-        rule = DetectionRule(displayName=data.name,
+        rule = DefenderApiRule(displayName=data.name,
                             isEnabled=is_enabled,
-                            queryCondition=DetectionRule.QueryCondition(queryText=query),
-                            schedule=DetectionRule.Schedule(period=scheduling), # type: ignore
-                            detectionAction=DetectionRule.DetectionAction(alertTemplate=alert_template,
+                            queryCondition=DefenderApiRule.QueryCondition(queryText=query),
+                            schedule=DefenderApiRule.Schedule(period=scheduling), # type: ignore
+                            detectionAction=DefenderApiRule.DetectionAction(alertTemplate=alert_template,
                                                                             responseActions=response_actions))
 
         if mdr_config.rule_id:
@@ -224,7 +227,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
                     mdr_file.writelines(updated_content)
 
     
-    def deploy(self, mdr_deployment: Sequence[TideModels.DetectionRule], deployment_plan:DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[DetectionRule], deployment_plan:DeploymentStrategy):
         
         mdr_deployment = [OpenTide.Models.MDR[uuid] for uuid in mdr_deployment]
 

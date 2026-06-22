@@ -9,7 +9,8 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.tide import OpenTide, DetectionPlatforms
 from Engines.modules.plugins import RuleDeployer
-from Engines.modules.models import (TideModels,
+from opentide.models.rule import DetectionRule
+from Engines.modules.models import (
                                     DeploymentStrategy) 
 from Engines.modules.deployment import TideDeployment, check_status
 from Engines.modules.logs import log
@@ -59,7 +60,7 @@ class HarfangLabDeploy(RuleDeployer):
 
     def compile_sigma_deployment(
         self,
-        data: TideModels.DetectionRule,
+        data: DetectionRule,
         tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant
     ) -> SigmaRule:
         """
@@ -152,7 +153,7 @@ class HarfangLabDeploy(RuleDeployer):
 
     def compile_yara_deployment(
         self,
-        data: TideModels.DetectionRule,
+        data: DetectionRule,
         tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant
     ) -> YaraRule:
         """
@@ -332,7 +333,7 @@ class HarfangLabDeploy(RuleDeployer):
 
     def deploy_mdr(
         self,
-        data: TideModels.DetectionRule,
+        data: DetectionRule,
         service: HarfangLabService,
         tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant
     ):
@@ -383,11 +384,11 @@ class HarfangLabDeploy(RuleDeployer):
 
     def deploy(
         self,
-        mdr_deployment: Sequence[TideModels.DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | list[str],
         deployment_plan: DeploymentStrategy
     ):
         """
-        Triggers the deployment sequence for a series of MDR uuids or TideModels.DetectionRule Objects
+        Triggers the deployment sequence for a series of MDR uuids or DetectionRule Objects
         """
         log("INFO", "Received HarfangLab deployment information", str(mdr_deployment))
         
@@ -396,7 +397,7 @@ class HarfangLabDeploy(RuleDeployer):
         for mdr in mdr_deployment:
             if isinstance(mdr, str):
                 loaded_mdr.append(OpenTide.Models.MDR[mdr])
-            elif isinstance(mdr, TideModels.DetectionRule):
+            elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 

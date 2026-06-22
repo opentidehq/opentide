@@ -31,7 +31,6 @@ from Engines.modules.models import (DetectionSystems,
                                     TideDefinitionsModels,
                                     TideConfigs,
                                     SystemConfig)
-from Engines.modules.patching import Tide2Patching
 from Engines.modules.datamodels.objects import Objects
 from Engines.modules.datamodels.configurations import Configurations
 

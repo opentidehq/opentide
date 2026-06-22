@@ -15,7 +15,8 @@ from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
 from Engines.modules.tide import OpenTide, DetectionPlatforms
 from Engines.modules.plugins import RuleDeployer
-from Engines.modules.models import (TideModels,
+from opentide.models.rule import DetectionRule
+from Engines.modules.models import (
                                     ConfigurationModels,TenantDeployment,
                                     DeploymentStrategy,
                                     StatusStrategy) 
@@ -30,7 +31,7 @@ class SentinelDeploy(RuleDeployer):
 
     def compile_deployment(self,
                            service: SecurityInsights,
-                           data:TideModels.DetectionRule,
+                           data:DetectionRule,
                            tenant:str):
 
         rule = service.alert_rules.models.ScheduledAlertRule()
@@ -231,7 +232,7 @@ class SentinelDeploy(RuleDeployer):
         return rule
 
     def deploy_mdr(self,
-                data:TideModels.DetectionRule,
+                data:DetectionRule,
                 service:SecurityInsights,
                 tenant_config:ConfigurationModels.Systems.Sentinel.Tenant):
         """
@@ -275,15 +276,15 @@ class SentinelDeploy(RuleDeployer):
         log("SUCCESS", "Deployed MDR Successfully", mdr_name)
         return True
 
-    def deploy(self, mdr_deployment: Sequence[TideModels.DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
         """
-        Triggers the deployment sequence for a series of MDR uuids or TideModels.DetectionRule Objects
+        Triggers the deployment sequence for a series of MDR uuids or DetectionRule Objects
         """
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
                 loaded_mdr.append(OpenTide.Models.MDR[mdr])
-            elif type(mdr) is TideModels.DetectionRule:
+            elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 

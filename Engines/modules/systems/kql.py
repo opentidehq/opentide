@@ -1,10 +1,10 @@
 from typing import Optional, Sequence, Union
 
+from opentide.models.platform_configs import DefenderExclusion, SentinelExclusion
 from Engines.modules.logs import log
-from Engines.modules.models import TideModels
 
-MDE_Exclusion = TideModels.DetectionRule.Configurations.DefenderForEndpoint.Exclusion
-Sentinel_Exclusion = TideModels.DetectionRule.Configurations.Sentinel.Exclusion
+MDE_Exclusion = DefenderExclusion
+Sentinel_Exclusion = SentinelExclusion
 KQLExclusion = Union[MDE_Exclusion, Sentinel_Exclusion]
 
 
