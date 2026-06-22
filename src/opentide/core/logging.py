@@ -153,9 +153,7 @@ def log(
 
     if category == "TITLE":
         title = Text(message, justify="center")
-        _console.print(
-            Panel(title, title="OpenTide", border_style="magenta", padding=(0, 2))
-        )
+        _console.print(Panel(title, title="OpenTide", border_style="magenta", padding=(0, 2)))
         return
 
     if category == "FATAL":
