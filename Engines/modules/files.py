@@ -151,3 +151,7 @@ class IndentFullDumper(yaml.Dumper):
 
     def increase_indent(self, flow=False, indentless=False):
         return super(IndentFullDumper, self).increase_indent(flow, False)
+
+
+class OrderedYAMLDumper(IndentFullDumper):
+    """YAML dumper preserving key order with full indentation."""
