@@ -1,0 +1,37 @@
+name: "Detect MDR Changes"
+description: "Detect any changes to managed detection rules"
+outputs:
+  mdr_changes:
+    description: "Whether detection rules have changed"
+    value: ${{ steps.detect_mdr_changes.outputs.CHANGES }}
+runs:
+  using: "composite"
+  steps:
+    - name: Detect changes
+      id: detect_mdr_changes
+      shell: bash
+      run: |
+        echo "::group::Detect MDR Changes"
+        # Ensure the parent commit exists
+        if ! git rev-parse HEAD^ >/dev/null 2>&1; then
+          echo "::warning::Cannot compute diff because HEAD has no parent commit."
+          echo "::warning::This usually happens when the InitTide template is cloned for the first time and is expected."
+          echo "::warning::On subsequent commits, this should not appear."
+          echo "CHANGES=false" >> "$GITHUB_OUTPUT"
+          echo "::endgroup::"
+          exit 0
+        fi
+
+        # List files changed in the last commit
+        CHANGED=$(git diff --name-only HEAD^ HEAD)
+        echo "::debug::Changed files: $CHANGED"
+
+        # Grep for the directory with a leading ^ to avoid false positives
+        if echo "$CHANGED" | grep -q '^Objects/Detection Rules/'; then
+          echo "::notice::MDR changes detected — downstream steps will execute"
+          echo "CHANGES=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::No MDR changes detected — downstream steps will be skipped"
+          echo "CHANGES=false" >> "$GITHUB_OUTPUT"
+        fi
+        echo "::endgroup::"

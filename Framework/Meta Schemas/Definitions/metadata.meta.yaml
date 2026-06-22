@@ -1,0 +1,103 @@
+title: Metadata
+type: object
+tide.template.spacer: true
+description: Non technical indicators helping with overall data management
+required:
+  - uuid
+  - schema
+  - version
+  - tlp
+  - created
+  - modified
+
+anyOf:
+  - required: [author]
+  - required: [organisation]
+
+properties:
+
+  uuid: 
+    title: UUID
+    type: string
+    format: uuid
+    description: According to UUIDv4 specification. You can use https://www.uuidgenerator.net/version4 to generate UUIDs.
+    example: 323d548d-17ca-46fa-a7c7-de43302456a1
+    pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+  
+  schema:
+    title: Schema Identifier
+    type: string
+    icon: 🧱
+    description: Identifier of the schema at its current version 
+    default: $SCHEMA_VERSION
+    pattern: ^[a-z]{3}::[1-9].[0-9]$
+
+  version:
+    title: Version
+    type: integer
+    description: Latest revision of the model object, always in integer 
+    example: 3
+
+  created:  
+    title: Creation Date
+    type: string
+    format: date
+    description: Creation date of initial version
+    example: 2022-09-12
+
+  modified:
+    title: Last Modification
+    type: string
+    format: date
+    description: Creation date of the latest version
+    example: 2022-09-13
+
+  tlp:
+    title: Traffic Light Protocol 2.0
+    type: string
+    tide.vocab: true
+    description: "The Traffic Light Protocol - or short: TLP - was designed with the objective to create a favorable classification scheme for sharing sensitive information while keeping the control over its distribution at the same time." 
+    example: green
+
+  author:
+    title: Model author
+    type: string
+    description: Creator of latest version
+    example: amine.besson@ext.ec.europa.eu
+
+  contributors:
+    title: Contributors
+    type: array
+    description: Individuals who supported creating, enriching or informing the information contained in the document. 
+    items:
+      type: string
+  
+  organisation:
+    title: Sharing Organisation
+    description: Details about the organisation who created and/or maintains the object
+    tide.template.config.required: sharing.organisation.enabled
+    tide.template.spacer: false
+    type: object
+
+    required:
+      - uuid
+      - name
+    
+    properties:
+
+      uuid:
+        title: Organisation UUID
+        description: UUID of the Sharing Organisation, version 4
+        type: string
+        pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+        tide.template.config.required: sharing.organisation.enabled
+        tide.template.config.default: sharing.organisation.uuid
+        tide.template.config.default.enabled: sharing.organisation.enabled
+
+      name: 
+        title: Organisation Name
+        description: Name of the Sharing Organisation
+        type: string
+        tide.template.config.required: sharing.organisation.enabled
+        tide.template.config.default: sharing.organisation.name
+        tide.template.config.default.enabled: sharing.organisation.enabled

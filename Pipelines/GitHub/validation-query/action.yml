@@ -1,0 +1,22 @@
+name: "Query Validation"
+description: "Run OpenTide Query Validation"
+
+inputs:
+  deployment_plan:
+    description: "STAGING/PRODUCTION"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate Query
+      id: validate_query
+      env:
+        DEPLOYMENT_PLAN: ${{ inputs.deployment_plan }}
+      shell: bash
+      run: |
+        echo "::group::Query Validation (${{ inputs.deployment_plan }})"
+        echo "::notice::Starting query validation for deployment plan: ${{ inputs.deployment_plan }}"
+        cd coretide/Orchestration
+        python validate_query.py
+        echo "::endgroup::"
+        echo "::notice::Query validation completed successfully"

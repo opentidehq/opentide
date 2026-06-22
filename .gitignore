@@ -57,3 +57,30 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Local secrets and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets/
+
+# OpenTide client / detection instance checkouts (injected alongside CoreTide)
+*-repo/
+*sentinel-repo/
+*client-repo/
+client-instances/
+instances/
+local-instance/
+
+# Generated / staging outputs from engines and pipelines
+staging/
+output/
+generated/
+*.log
+
+# External vendored trees (keep tracked sources; ignore local build/cache)
+External/**/node_modules/
+External/**/.cache/

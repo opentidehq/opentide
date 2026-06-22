@@ -1,0 +1,9 @@
+  schema: carbon_black_cloud::2.0
+  status: 
+  #contributors:
+    #-
+  #report: 
+  #tags:
+    #-
+  query: |
+    ...

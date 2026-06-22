@@ -1,0 +1,97 @@
+scope = [ "tvm", "cdm" ]
+skip_model_keys = ["description",
+                            "guidelines",
+                            "terrain",
+                            "tuning",
+                            "att&ck",
+                            "actors",
+                            "vectors",
+                            "justification",
+                            "chaining",
+                            "cve"]
+
+skip_vocabularies = ["mitigation",
+                    "logsources",
+                    "nist",
+                    "att&ck"]
+
+model_cover_pages = true #Creates a cover page for the Object sub-folder
+                         #only supported in Gitlab Wiki and Azure DevOps Wiki
+
+
+[gitlab]
+uuid_permalinks = true   #All markdown files are named using UUIDs to create 
+                         #a permanent URL link. YAML frontmatter is used for page titles.
+
+[cve]
+default_db_link = "https://nvd.nist.gov/vuln/detail/"
+retrieve_details = true
+proxy = false
+
+[object_names]
+tvm = "Threat Vectors"
+dom = "Detection Objectives"
+signal = "Detection Objective Signals"
+cdm = "Detection Models"
+mdr = "Detection Rules"
+
+[titles]
+tvm = "Threat Vector Schema"
+cdm = "Detection Model Schema"
+dom = "Detection Objective Schema"
+mdr = "Detection Rules Schema"
+
+[icons]
+tvm = "☣️"
+dom = "🎯"
+signal = "📡"
+cdm = "🛡️"
+mdr = "🚨"
+vocab = "📒"
+metaschema = "🏗️"
+metadata = "🗃️"
+id = "🔑"
+uuid = "🔑"
+name = "🎫"
+title = "🎫"
+references = "🔗"
+meta = "✍"
+version = "🏷️"
+created = "🗓️"
+modified = "🗓️"
+configurations = "🛠️"
+author = "👩‍💻"
+priority = "❗"
+actor = "👹"
+threat = "☣️"
+detection = "🛡️"
+alert = "🚨"
+request = "🏛️"
+description = "🔬"
+affiliations = "👥"
+aliases = "🍀"
+guidelines = "🧪"
+tuning = "🔧"
+terrain = "🖥️"
+playbook = "👣"
+home = "⚜️"
+misp = "🌌"
+stix = "☢️"
+cve = "❤️‍🩹"
+link = "🔗"
+logsources = "📑"
+fields = "🔖"
+atomics = "⚛️"
+systems = "🔩"
+subschemas = "🧩"
+tags = "🏷️"
+contributors = "👥"
+scheduling = "⏲"
+timeframe = "⏱️"
+frequency = "⏱"
+lookback = "⌛"
+duration = "⌛"
+throttling = "🗜️"
+threshold = "⚖️"
+query = "🔎"
+

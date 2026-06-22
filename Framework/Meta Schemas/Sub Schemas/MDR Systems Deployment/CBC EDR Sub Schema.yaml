@@ -1,0 +1,76 @@
+required: 
+  #- schema #To be enabled at a later date. Must be part of the public release
+  - status
+  - query
+
+tide.template.force-required:
+  - schema
+
+properties:
+
+  schema:
+    title: Schema identifier and version
+    type: string
+    description: Identifier of the schema at its current version 
+    const: carbon_black_cloud::2.0
+
+  status: 
+    title: Status of the use-case
+    type: string
+    description: Define the status according to use case development life cycle process
+    tide.config.statuses: True
+
+  contributors:
+    title: Development Contributors
+    type: array
+    description: Individuals who supported creating, enriching or tuning the detection. 
+    items:
+      type: string
+      format: email
+
+  organizations: 
+    title: Organizations
+    icon: 🏢
+    description: Override the default organizations the deployment will configure the reports onto.
+    type: array
+    tide.template.hide: True
+    tide.config.parameter-list: systems.carbon_black_cloud.setup.organizations
+
+  watchlist: 
+    title: Watchlist
+    icon: 🔎
+    tide.template.hide: True
+    description: Override the default watchlist the report is added to.
+    type: string
+    example: Advanced_Threats
+
+  report: 
+    title: Threat Report
+    icon: ⚠️
+    description: |
+      Default logic is to add the MDR to a report automatically generated from the same name.
+      It is also possible to deploy to a report with a different name.
+    type: string
+    example: Sudo Escalation Techniques
+
+  tags: 
+    title: Custom tags
+    type: array
+    description: Carbon black query IOC
+    items:
+      type: string
+  
+  severity:
+    title: Custom Severity Score
+    description: Allows to override the default severity mapping from the MDR with a custom value.
+    type: integer
+    minimum: 1
+    maximum: 10
+    tide.template.hide: true
+
+  query: 
+    title: Carbon Black Cloud Detection Rule
+    type: string
+    tide.template.multiline : True
+    description: Carbon black query IOC
+    example: process_md5:6d7c8a951af6ad6835c029b3cb88d333
