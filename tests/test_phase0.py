@@ -47,11 +47,27 @@ def test_indent_full_dumper_centralized() -> None:
     assert lines[0].startswith("Engines/modules/files.py:")
 
 
-def test_no_duplicate_yaml_dumpers_in_references() -> None:
+def test_ordered_yaml_dumper_renamed() -> None:
+    r = subprocess.run(
+        ["git", "grep", "-n", "class MyDumper", "--", "Engines"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 1, r.stdout
+    r = subprocess.run(
+        ["git", "grep", "-n", "class OrderedYAMLDumper", "--", "Engines"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    lines = [line for line in r.stdout.strip().splitlines() if line]
+    assert len(lines) == 1
+    assert lines[0].endswith("class OrderedYAMLDumper(IndentFullDumper):")
+    assert lines[0].startswith("Engines/modules/files.py:")
     refs = (ROOT / "Engines/mutation/references.py").read_text()
     assert "MyDumper" not in refs
     assert "OrderedYAMLDumper" not in refs
-    assert "IndentFullDumper" not in refs
 
 
 def test_seven_platforms_five_validators() -> None:
