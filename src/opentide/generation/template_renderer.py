@@ -22,10 +22,15 @@ from opentide.generation.template_engine import (
     get_required,
 )
 
-CONFIG_INDEX = OpenTide.Configurations.Index
-PATHS = OpenTide.Configurations.Global.Paths.Index
-SUBSCHEMAS_FOLDER = Path(PATHS["subschemas"])
-RECOMPOSITION = OpenTide.Configurations.Global.recomposition
+
+def _refresh_renderer_context() -> None:
+    """Rebind renderer paths after env or index changes (tests, reload)."""
+    global CONFIG_INDEX, PATHS, SUBSCHEMAS_FOLDER, RECOMPOSITION
+
+    CONFIG_INDEX = OpenTide.Configurations.Index
+    PATHS = OpenTide.Configurations.Global.Paths.Index
+    SUBSCHEMAS_FOLDER = Path(PATHS["subschemas"])
+    RECOMPOSITION = OpenTide.Configurations.Global.recomposition
 
 
 def _ensure_tide_index() -> None:
@@ -37,6 +42,7 @@ def _ensure_tide_index() -> None:
 
 def run() -> None:
     _ensure_tide_index()
+    _refresh_renderer_context()
     log("TITLE", "Generate Templates from Pydantic Core Models")
     log(
         "INFO",

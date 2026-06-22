@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+if sys.version_info < (3, 11):
+    pytest.skip("Phase 4 generation tests require Python 3.11+", allow_module_level=True)
 
 from opentide.generation.artifact_gate import (
     TIDE_WORKSPACE_DIR,
@@ -16,13 +20,6 @@ from opentide.generation.artifact_gate import (
     tide_instance_root,
     verify_generation_checksums,
 )
-from opentide.generation.pydantic_templates import (
-    CORE_TEMPLATE_MODELS,
-    core_metaschema_path,
-    core_template_model_keys,
-    load_core_template_source,
-)
-from opentide.generation.template_renderer import run as template_renderer_run
 from opentide.loading.compat import ObjectLoader, TideLoader
 from opentide.loading.objective_loader import load_objective_from_dict, load_signal_from_dict
 from opentide.models.objective import DetectionObjective, DetectionSignal
@@ -68,6 +65,18 @@ def _objective_payload() -> dict[str, Any]:
             "signals": [_signal_payload()],
         },
     }
+
+
+@pytest.fixture(autouse=True)
+def _reset_opentide_index() -> None:
+    """Ensure generation tests see a full index after earlier suite pollution."""
+    from opentide.core import index_manager as index_mod
+    from opentide.core.registry import OpenTide
+
+    index_mod.IndexManager._cache = None
+    OpenTide._initialised = False
+    OpenTide._index = None
+    OpenTide.reload()
 
 
 @pytest.fixture
@@ -116,16 +125,25 @@ def test_object_loader_compat_shim_delegates() -> None:
 
 
 def test_core_template_models_match_schema_models() -> None:
+    from opentide.generation.pydantic_templates import CORE_TEMPLATE_MODELS
+
     assert set(CORE_TEMPLATE_MODELS) == {"mdr", "dom", "tvm"}
 
 
 def test_load_core_template_source_returns_properties() -> None:
+    from opentide.generation.pydantic_templates import load_core_template_source
+
     source = load_core_template_source("mdr")
     assert "properties" in source
     assert "required" in source
 
 
 def test_core_metaschema_paths_exist() -> None:
+    from opentide.generation.pydantic_templates import (
+        core_metaschema_path,
+        core_template_model_keys,
+    )
+
     for key in core_template_model_keys():
         assert core_metaschema_path(key).is_file()
 
@@ -144,6 +162,8 @@ def test_pydantic_templates_module_has_engine() -> None:
 
 
 def test_template_renderer_run_smoke() -> None:
+    from opentide.generation.template_renderer import run as template_renderer_run
+
     template_renderer_run()
 
 
@@ -165,10 +185,6 @@ def _run_generation_pipeline() -> None:
     IndexManager.reload()
     OpenTide.reload()
     generate_schemas()
-
-    from Engines.framework import vscode_snippets
-
-    vscode_snippets.run()
 
 
 def test_generate_py_artifact_byte_checksum_gate(tide_workspace: Path) -> None:

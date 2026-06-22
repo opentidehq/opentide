@@ -19,25 +19,30 @@ from Engines.modules.models import StatusStrategy
 from Engines.modules.tide import OpenTide
 from Engines.modules.vocabulary import VocabularyDefinition, entry_key_field
 
-GLOBAL_CONFIG = OpenTide.Configurations.Global
 
-VOCAB_INDEX = OpenTide.Vocabularies.Index
-CONFIG_INDEX = OpenTide.Configurations.Index
-PATHS = resolve_paths()
+def _refresh_runtime_context() -> None:
+    """Rebind module globals after env or index changes (tests, reload)."""
+    global GLOBAL_CONFIG, VOCAB_INDEX, CONFIG_INDEX, PATHS
+    global SCHEMA_CONFIG, VOCAB_EXTENSIONS
+    global METASCHEMAS_FOLDER, VOCABS_FOLDER, JSON_SCHEMA_FOLDER
+    global ICONS, OBJECT_TYPES, SUBSCHEMAS_PATH, RECOMPOSITION
 
-# Vocabulary Extensions — user-defined entries injected at schema compilation
-# Loaded from [vocabulary] section in schema.toml
-SCHEMA_CONFIG = CONFIG_INDEX.get("schema", {})
-VOCAB_EXTENSIONS = SCHEMA_CONFIG.get("vocabulary", {})
+    GLOBAL_CONFIG = OpenTide.Configurations.Global
+    VOCAB_INDEX = OpenTide.Vocabularies.Index
+    CONFIG_INDEX = OpenTide.Configurations.Index
+    PATHS = resolve_paths()
+    SCHEMA_CONFIG = CONFIG_INDEX.get("schema", {})
+    VOCAB_EXTENSIONS = SCHEMA_CONFIG.get("vocabulary", {})
+    METASCHEMAS_FOLDER = Path(PATHS["metaschemas"])
+    VOCABS_FOLDER = Path(PATHS["vocabularies"])
+    JSON_SCHEMA_FOLDER = Path(PATHS["json_schemas"])
+    ICONS = OpenTide.Configurations.Documentation.icons
+    OBJECT_TYPES = OpenTide.Configurations.Global.objects
+    SUBSCHEMAS_PATH = Path(PATHS["subschemas"])
+    RECOMPOSITION = GLOBAL_CONFIG.recomposition
 
-# Configuration settings fetching routine
-METASCHEMAS_FOLDER = Path(PATHS["metaschemas"])
-VOCABS_FOLDER = Path(PATHS["vocabularies"])
-JSON_SCHEMA_FOLDER = Path(PATHS["json_schemas"])
-ICONS = OpenTide.Configurations.Documentation.icons
-OBJECT_TYPES = OpenTide.Configurations.Global.objects
-SUBSCHEMAS_PATH = Path(PATHS["subschemas"])
-RECOMPOSITION = GLOBAL_CONFIG.recomposition
+
+_refresh_runtime_context()
 
 
 class VocabularyResolver:
@@ -757,6 +762,7 @@ def gen_json_schema(dictionary):
 
 
 def run():
+    _refresh_runtime_context()
 
     log("TITLE", "Metaschema to JSON Schema Assembler")
     log(

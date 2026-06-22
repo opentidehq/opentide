@@ -7,11 +7,12 @@ from typing import Any, Callable, cast
 
 import yaml
 from Engines.modules.files import IndentFullDumper
-from Engines.modules.framework import get_value_metaschema
 from Engines.modules.logs import log as default_log
 from Engines.modules.tide import OpenTide
 
-CONFIG_INDEX = OpenTide.Configurations.Index
+
+def _config_index() -> dict[str, Any]:
+    return OpenTide.Configurations.Index
 
 
 def fetch_config_template(dot_path: str) -> str:
@@ -118,8 +119,9 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
             if "recomposition" in metaschema[key.replace("#", "")].keys():
                 recomp_cat = metaschema[key.replace("#", "")]["recomposition"]
                 recomp_entries: dict[str, str] = {}
-                for entry in CONFIG_INDEX[recomp_cat]:
-                    recomp_entry = CONFIG_INDEX[recomp_cat][entry]
+                config_index = _config_index()
+                for entry in config_index[recomp_cat]:
+                    recomp_entry = config_index[recomp_cat][entry]
                     try:
                         if recomp_entry["tide"]["enabled"] is True:
                             recomp_entries[f"#{entry}"] = "blank"
@@ -229,6 +231,8 @@ def make_spaces(template_path: Path | str, metaschema: dict[str, Any]) -> bool:
         key = line.split(":")[0].replace(" ", "")
         force_space = "force_space" in line
         no_space = "no-space" in line
+        from Engines.modules.framework import get_value_metaschema
+
         spacer = get_value_metaschema(key.replace("#", ""), metaschema, "tide.template.spacer")
         key_type = get_value_metaschema(key.replace("#", ""), metaschema, "type")
         if key_type == "object" or spacer or force_space:
