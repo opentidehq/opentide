@@ -208,7 +208,13 @@ _Vocabulary_ : `{source_vocab}`
                 if is_model:
                     value = key
                     if self.scoped and data.get("tide.vocab.stages"):
-                        value = data["tide.vocab.stages"] + "::" + key
+                        raw_stages = data["tide.vocab.stages"]
+                        stage = (
+                            raw_stages[0]
+                            if isinstance(raw_stages, list)
+                            else raw_stages
+                        )
+                        value = stage + "::" + key
                     if self._emit(value, key, data) and self._hints_enabled:
                         self._hints.append(self._search_hint(value, data))
                         self._hint_descriptions.append(self.enum_description[-1])
