@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import git
 
@@ -21,6 +22,11 @@ from opentide.generation.template_engine import (
     gen_template,
     get_required,
 )
+
+CONFIG_INDEX: dict[str, Any]
+PATHS: dict[str, Any]
+SUBSCHEMAS_FOLDER: Path
+RECOMPOSITION: Any
 
 
 def _refresh_renderer_context() -> None:

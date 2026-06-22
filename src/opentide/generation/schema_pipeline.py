@@ -19,6 +19,20 @@ from Engines.modules.models import StatusStrategy
 from Engines.modules.tide import OpenTide
 from Engines.modules.vocabulary import VocabularyDefinition, entry_key_field
 
+GLOBAL_CONFIG: Any
+VOCAB_INDEX: dict[str, Any]
+CONFIG_INDEX: dict[str, Any]
+PATHS: dict[str, Path]
+SCHEMA_CONFIG: dict[str, Any]
+VOCAB_EXTENSIONS: dict[str, Any]
+METASCHEMAS_FOLDER: Path
+VOCABS_FOLDER: Path
+JSON_SCHEMA_FOLDER: Path
+ICONS: Any
+OBJECT_TYPES: Any
+SUBSCHEMAS_PATH: Path
+RECOMPOSITION: Any
+
 
 def _refresh_runtime_context() -> None:
     """Rebind module globals after env or index changes (tests, reload)."""
