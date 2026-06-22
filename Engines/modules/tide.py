@@ -2,6 +2,7 @@
 
 from opentide.core.index_manager import IndexManager
 from opentide.core.registry import OpenTide
+from opentide.loading.compat import ObjectLoader, TideLoader
 
 DataTide = OpenTide
 
@@ -14,10 +15,6 @@ from Engines.modules.enums import DetectionPlatforms
 DetectionSystems = DetectionPlatforms
 
 IndexTide = IndexManager
-
-from Engines.modules.loaders.object_loader import ObjectLoader
-
-TideLoader = ObjectLoader
 
 
 def _platforms():

@@ -212,3 +212,8 @@ def test_pydantic_schema_pipeline_source_uses_core_models() -> None:
     source = (ROOT / "src/opentide/generation/schema_pipeline.py").read_text()
     assert "CORE_SCHEMA_MODELS" in source
     assert "generate_core_model_schema" in source
+
+
+def test_legacy_object_system_loaders_removed() -> None:
+    assert not (ROOT / "Engines/modules/loaders/object_loader.py").exists()
+    assert not (ROOT / "Engines/modules/loaders/system_loader.py").exists()

@@ -74,8 +74,10 @@ class OpenTideRegistry:
             self._threats[uuid] = ThreatVector.from_yaml_dict(data)
 
         self._objectives = {}
+        from opentide.loading.objective_loader import load_objective_from_dict
+
         for uuid, data in objects.get("dom", {}).items():
-            self._objectives[uuid] = DetectionObjective.from_yaml_dict(data)
+            self._objectives[uuid] = load_objective_from_dict(data)
 
     @property
     def Rules(self) -> dict[str, DetectionRule]:
