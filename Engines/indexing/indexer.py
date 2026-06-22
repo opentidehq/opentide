@@ -14,7 +14,6 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.files import resolve_paths, resolve_configurations
 from Engines.modules.logs import log
-from Engines.modules.patching import Tide2Patching
 
 def indexer(write_index=False) -> dict:
     SKIPS = ["ram", "mdrv2"]
@@ -217,10 +216,8 @@ def indexer(write_index=False) -> dict:
 
     objects_index = dict()
     files_index = dict()
-    objects_index["signal"] = dict() #Preassigning 
+    objects_index["signal"] = dict()
 
-    #TODO Backward compatibility measure. To remove.
-    patch = Tide2Patching()
     for meta_name in METASCHEMAS:
         if meta_name not in SKIPS:
             model_cat_index = dict()
@@ -245,10 +242,7 @@ def indexer(write_index=False) -> dict:
 
                     if not model.endswith(".debug.yaml"):
                         model_body = yaml.safe_load(open(model_path, encoding="utf-8"))
-                        
-                        #TODO Backward compatibility measure. To remove.
-                        model_body = patch.tide_1_patch(model_body, meta_name)
-                        
+
                         identifier = model_body.get("uuid") or model_body.get("metadata",{}).get("uuid")
                         if not identifier:
                             log("FATAL", "Missing identifier from model in file", model)

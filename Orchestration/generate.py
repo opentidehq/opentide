@@ -3,11 +3,15 @@ import sys
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
+from opentide.core.registry import OpenTide
+from opentide.core.index_manager import IndexManager
 from Engines.modules.logs import log, ANSI, print_banner
-from Engines.modules.tide import IndexManager
-from Engines.indexing import objects_indexer
+from opentide.indexing.object_vocab import run as generate_object_vocab
+from opentide.generation.template import run as generate_templates
 from Engines.indexing.revisions import RevisionIndexer
-from Engines.framework import templates
+from opentide.generation.schema import run as generate_schemas
+from Engines.export import attack_navigator_layer
+from Engines.export.table_export import TableExporter
 
 print(print_banner())
 print(f"""
@@ -22,16 +26,17 @@ log(
     "Generate entries in Tide namespace containing model data supportive of other generation routines",
 )
 
-objects_indexer.run()
-templates.run()
+generate_object_vocab()
+generate_templates()
 
 IndexManager.reload()
-from Engines.framework import json_schemas, vscode_snippets
-from Engines.export import attack_navigator_layer
-from Engines.export.table_export import TableExporter
+OpenTide.reload()
 
-json_schemas.run()
+generate_schemas()
 RevisionIndexer().run()
+
+from Engines.framework import vscode_snippets
+
 vscode_snippets.run()
 attack_navigator_layer.run()
 TableExporter().run()

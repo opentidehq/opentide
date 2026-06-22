@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from opentide.models.base import TideModel
 
@@ -24,6 +24,13 @@ class ObjectMetadata(TideModel):
     author: str | None = None
     contributors: list[str] | None = None
     organisation: Organisation | None = None
+
+    @field_validator("created", "modified", mode="before")
+    @classmethod
+    def _coerce_dates(cls, value: Any) -> str:
+        if hasattr(value, "isoformat"):
+            return str(value)
+        return str(value)
 
 
 class ObjectReferences(TideModel):

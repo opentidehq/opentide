@@ -37,6 +37,9 @@ class DetectionRule(TideModel):
     techniques: list[str] = Field(default_factory=list)
     platforms: dict[str, dict[str, Any]] = Field(default_factory=dict)
     references: ObjectReferences | None = None
+    detection_model: str | None = None
+    response: dict[str, Any] | None = None
+    configurations: dict[str, Any] | None = None
     file: Path | None = None
 
     _registry: TideRegistry | None = PrivateAttr(default=None)
