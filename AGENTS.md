@@ -80,9 +80,53 @@ pip install -e ".[dev]" && pytest --cov=opentide --cov-fail-under=80
 
 Full commands in each issue and [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md).
 
+## Backlog sync (mandatory)
+
+Every agent **must** keep [OpenTideHQ/CoreTide](https://github.com/OpenTideHQ/CoreTide) TideKit issues current while working in this repo. Planning stays on CoreTide; implementation lands here.
+
+### When to update
+
+| Event | Action |
+|-------|--------|
+| Open a PR | Comment on the parent phase issue (#61–#71) with PR URL and checklist progress |
+| Push significant progress | Update the same phase-issue comment or add a short progress reply |
+| Merge a phase PR to `development` | Mark phase **Merged** on its issue; refresh epic [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) orchestration snapshot |
+| Blocked on human action | Note blocker on epic #60 and the phase issue |
+
+### How
+
+```bash
+gh issue comment <phase-issue> --repo OpenTideHQ/CoreTide --body "$(cat <<'EOF'
+## Status: PR open
+
+**PR**: https://github.com/OpenTideHQ/opentide/pull/<N>
+**Branch**: `<branch>`
+**Phase progress**:
+- [x] CDM removed from configs
+- [ ] IndentFullDumper consolidated
+- [ ] CI green
+
+**Verification**: `pytest tests/ -v` — 4 passed
+EOF
+)"
+```
+
+After a phase merges, post a fresh orchestration snapshot on epic #60 (see [`.github/instructions/backlog-sync.instructions.md`](.github/instructions/backlog-sync.instructions.md)).
+
+### Labels
+
+Keep `tidekit` and `agent-ready` on groomed phase issues. Do not remove labels when commenting.
+
+### Status values
+
+Use exactly one of: **Not started** · **In progress** · **PR open** · **Merged**
+
+Do **not** close phase issues until the corresponding work is merged to `development` in this repo.
+
 ## Supporting Docs
 
 - [`.github/copilot-instructions.md`](.github/copilot-instructions.md)
+- [`.github/instructions/backlog-sync.instructions.md`](.github/instructions/backlog-sync.instructions.md)
 - [`.github/instructions/tidekit-phase.instructions.md`](.github/instructions/tidekit-phase.instructions.md)
 - [`.github/instructions/testing.instructions.md`](.github/instructions/testing.instructions.md)
 - [`docs/migration/MIGRATION.md`](docs/migration/MIGRATION.md)
