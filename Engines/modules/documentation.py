@@ -158,23 +158,23 @@ def get_icon(
     elif value in ICONS:
         return str(ICONS[value])
 
-    elif value in VOCAB_INDEX.keys():
-        return VOCAB_INDEX[value].get("metadata", {}).get("icon") or ""
+    elif value in VOCAB_INDEX:
+        return VOCAB_INDEX[value].metadata.icon or ""
 
-    elif vocab and vocab in VOCAB_INDEX.keys():
-        vocab_data = VOCAB_INDEX[vocab]["entries"]
+    elif vocab and vocab in VOCAB_INDEX:
+        vocabulary = VOCAB_INDEX[vocab]
         lookup_value = strip_vocab_stage_prefix(vocab, value)
-        entry = vocab_data.get(lookup_value) or {}
+        entry = vocabulary.entries.get(lookup_value)
 
-        if "icon" in entry.keys():
-            return entry["icon"]
+        if entry and entry.icon:
+            return entry.icon
         elif parent_icon is True:
-            return VOCAB_INDEX[vocab]["metadata"].get("icon") or ""
+            return vocabulary.metadata.icon or ""
 
         elif legacy:
-            for v in vocab_data:
-                if vocab_data[v].get("legacy") == value:
-                    return vocab_data[v].get("icon") or ""
+            for entry in vocabulary.entries.values():
+                if entry.get("legacy") == value:
+                    return entry.icon or ""
         else:
             return ""
     else:
@@ -185,17 +185,17 @@ def make_attack_link(
     technique: str, fmt: Literal["full", "compact"] = "full", hover=True
 ) -> str:
 
-    details = VOCAB_INDEX["att&ck"]["entries"][technique]
-    technique_link = details["link"]
+    details = VOCAB_INDEX["att&ck"].entries[technique]
+    technique_link = details.link
 
     if fmt == "full":
-        link_title = technique + " : " + details["name"]
+        link_title = technique + " : " + details.name
 
     elif fmt == "compact":
         link_title = technique
 
     if hover:
-        technique_description = details["description"]
+        technique_description = details.description
         technique_link += f" '{sanitize_hover(technique_description)[:150]}'"
 
     link = f"[{link_title}]({technique_link})"
@@ -367,7 +367,7 @@ def get_field_title(field, metaschema, icon=True):
                         vocab_name = metaschema[field]["tide.vocab"]
                     else:
                         vocab_name = field
-                    title = VOCAB_INDEX[vocab_name]["metadata"]["name"]
+                    title = VOCAB_INDEX[vocab_name].metadata.name
                 
                 elif definition:=metaschema[field].get("tide.meta.definition"):
                     definition_schema = DEFINITIONS_INDEX[definition]
@@ -422,20 +422,20 @@ def get_vocab_description(vocab, key):
 
 
 def make_vocab_link(field, key):
-    if field not in VOCAB_INDEX.keys():
+    if field not in VOCAB_INDEX:
         return key
 
     lookup_key = strip_vocab_stage_prefix(field, key)
-    entry = VOCAB_INDEX[field]["entries"].get(lookup_key)
-    vocab_reference = VOCAB_INDEX[field]["metadata"].get("reference")
+    entry = VOCAB_INDEX[field].entries.get(lookup_key)
+    vocab_reference = VOCAB_INDEX[field].metadata.get("reference")
 
     key = (get_icon(key, vocab=field, parent_icon=False) or "") + " " + key
 
     if entry is None:
         return f"`{key}`"
 
-    if "link" in entry.keys():
-        link = "[`" + key + "`]" + "(" + entry["link"] + ")"
+    if entry.link:
+        link = "[`" + key + "`]" + "(" + entry.link + ")"
     elif vocab_reference is not None:
         link = "[`" + key + "`]" + "(" + vocab_reference.split(",")[0] + ")"
     else:

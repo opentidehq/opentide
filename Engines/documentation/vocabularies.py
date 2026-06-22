@@ -16,7 +16,7 @@ from Engines.modules.documentation import (
 from Engines.modules.tide import OpenTide
 from Engines.modules.logs import log
 from Engines.modules.deployment import CIEnvironment
-from Engines.templates.models import VOCABS_DOC_TEMPLATE
+from Engines.modules.vocabulary import VocabularyDefinition
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
@@ -26,7 +26,7 @@ VOCAB_DOCS_PATH = Path(OpenTide.Configurations.Global.Paths.Core.vocabularies_do
 SKIP_VOCABS = OpenTide.Configurations.Documentation.skip_vocabularies
 
 
-def make_vocab_doc(vocab_field, vocabulary):
+def make_vocab_doc(vocab_field, vocabulary: VocabularyDefinition):
     """
     Parses a vocabulary file and returns the markdown documentation for the
     field
@@ -42,7 +42,7 @@ def make_vocab_doc(vocab_field, vocabulary):
     gen_toc : markdown links that make up the table of content
     """
     # Generate a dataframe of the possible keys for the field, with ID as index
-    keys = vocabulary["entries"]
+    keys = {key: entry.as_dict() for key, entry in vocabulary.entries.items()}
 
     df = pd.DataFrame.from_dict(keys).transpose()
 
@@ -81,10 +81,10 @@ def make_vocab_doc(vocab_field, vocabulary):
     rename_mapping = {c: f"{get_icon(c)} {c.capitalize()}" for c in df.columns}
     df = df.rename(columns=rename_mapping)
 
-    name = vocabulary["metadata"]["name"]
+    name = vocabulary.metadata.name
     field = vocab_field
-    vocab_description = vocabulary["metadata"]["description"]
-    stages = vocabulary["metadata"].get("stages") or ""
+    vocab_description = vocabulary.metadata.description
+    stages = vocabulary.metadata.get("stages") or ""
 
     if stages:
         if type(stages) is list and type(stages[0]) is str:
@@ -144,19 +144,15 @@ def run():
             log("SKIP", f"Skipping vocab as is in skip list",voc)
         else:
             vocabulary = VOCAB_INDEX[voc]
-            if (
-                not isinstance(vocabulary, dict)
-                or not isinstance(vocabulary.get("metadata"), dict)
-                or not isinstance(vocabulary.get("entries"), dict)
-            ):
+            if not isinstance(vocabulary, VocabularyDefinition):
                 log(
                     "WARNING",
                     "Skipping malformed vocabulary documentation source",
                     voc,
-                    "Vocabulary sources must expose both metadata and entries",
+                    "Vocabulary sources must be typed VocabularyDefinition instances",
                 )
                 continue
-            if  vocabulary["metadata"].get("model", False):
+            if vocabulary.metadata.model:
                 log("SKIP",
                     "Not creating vocabulary documentation, was detected as an OpenTIDE model index",
                     voc)
@@ -164,7 +160,7 @@ def run():
             else:
                 icon = get_icon(voc) or ICONS["vocab"] or ""
                 print(f"{icon} Generating Vocabulary Documentation for field : {voc}...")
-                if not vocabulary["entries"]:
+                if not vocabulary.entries:
                     log("SKIP", "The vocabulary is empty, will not document", voc)
                 else:
                     documentation, name = make_vocab_doc(voc, vocabulary)

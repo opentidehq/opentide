@@ -39,6 +39,7 @@ ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.environment import DebugHelpers
 from Engines.modules.index import IndexManager
+from Engines.modules.vocabulary import VocabularyLoader
 from Engines.modules.loaders.config_loader import ConfigurationsLoader
 from Engines.modules.loaders.object_loader import ObjectLoader
 
@@ -117,7 +118,7 @@ class OpenTide:
         Exposes the vocabularies used across the instance
         """
 
-        Index = dict(IndexManager.load()["vocabs"])
+        Index = VocabularyLoader.load_index(IndexManager.load().get("vocabs"))
 
     class IndexCatalog:
         """

@@ -227,19 +227,18 @@ def vocab_metadata(vocab: str, field=None) -> str | dict:
     If field is set to None returns the entire metadata
     """
 
-    if vocab not in VOCAB_INDEX.keys():
+    if vocab not in VOCAB_INDEX:
         return ""
 
-    vocab_data = VOCAB_INDEX[vocab]["metadata"]
+    metadata = VOCAB_INDEX[vocab].metadata
 
     if field:
-        if field not in vocab_data:
+        value = metadata.get(field)
+        if value in (None, ""):
             log("FAILURE", f"{field} does not exist in vocab", vocab)
             return ""
-        else:
-            return vocab_data.get(field)
-    else:
-        return vocab_data
+        return value
+    return metadata.to_dict()
 
 def get_vocab_stage_details(vocabulary:str, stage_identifier:str)->None|Tuple[str,str]:
     """
@@ -252,7 +251,7 @@ def get_vocab_stage_details(vocabulary:str, stage_identifier:str)->None|Tuple[st
             vocabulary)
         return None
 
-    stages_section = VOCAB_INDEX[vocabulary]["metadata"].get("stages")
+    stages_section = VOCAB_INDEX[vocabulary].metadata.get("stages")
     if not stages_section:
         log("FAILURE",
             "The requested vocabulary does not contain a stage section",
@@ -278,7 +277,7 @@ def strip_vocab_stage_prefix(vocab: str, identifier: str) -> str:
     appears in the index (``Windows::Desktop``).
     """
     if "::" in identifier and vocab in VOCAB_INDEX:
-        stages = VOCAB_INDEX[vocab]["metadata"].get("stages") or []
+        stages = VOCAB_INDEX[vocab].metadata.get("stages") or []
         stage_ids = {s["id"] for s in stages if "id" in s}
         first_segment = identifier.split("::")[0]
         if first_segment in stage_ids:
@@ -294,47 +293,39 @@ def get_vocab_entry(vocab, identifier, field=None, newlines=False):
     identifier.
     """
 
-    if vocab not in VOCAB_INDEX.keys():
+    if vocab not in VOCAB_INDEX:
         return ""
 
     identifier = strip_vocab_stage_prefix(vocab, identifier)
+    vocabulary = VOCAB_INDEX[vocab]
 
-    if identifier in VOCAB_INDEX[vocab]["entries"].keys():
-        entry_data = VOCAB_INDEX[vocab]["entries"][identifier]
+    if identifier in vocabulary.entries:
+        entry = vocabulary.entries[identifier]
 
         if field is None:
-            return entry_data
+            return entry.as_dict()
 
-        elif field in entry_data.keys():
-            data = entry_data[field]
-            if newlines is False and type(data) == str:
-                return data.replace("\n", "")
-            else:
-                return data
-        else:
+        value = entry.get(field)
+        if value in (None, ""):
             print(
                 f"⚠️ Could not retrieve parameter [ {field} ] for entry with identifier [ {identifier} ] from vocabulary data of : {vocab}"
             )
             return ""
+        if newlines is False and isinstance(value, str):
+            return value.replace("\n", "")
+        return value
 
     # Lookup for legacy entries in vocab if all things fail
-    else:
-        vocab_data = VOCAB_INDEX[vocab]["entries"]
-        for v in vocab_data:
-            if vocab_data[v].get("legacy") == identifier:
-                entry_data = VOCAB_INDEX[vocab]["entries"][identifier]
-                if field is None:
-                    return entry_data
-
-                if field is None:
-                    return entry_data
-
-                elif field in entry_data.keys():
-                    data = entry_data[field]
-                    if newlines is False:
-                        return data.replace("\n", "")
-                    else:
-                        return data
+    for entry_key, entry in vocabulary.entries.items():
+        if entry.get("legacy") == identifier:
+            if field is None:
+                return entry.as_dict()
+            value = entry.get(field)
+            if value in (None, ""):
+                return ""
+            if newlines is False and isinstance(value, str):
+                return value.replace("\n", "")
+            return value
 
     print(
         f"⚠️ Could not retrieve identifier [ {identifier} ] from vocabulary data of : {vocab}"
