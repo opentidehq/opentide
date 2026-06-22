@@ -134,17 +134,13 @@ def make_deploy_plan(
                             deploy_mdr.setdefault(system, []).append(mdr_uuid)
                             log(
                                 "SUCCESS",
-                                f"[{system.upper()}][{
-                                    platform_status
-                                }] Identified MDR to deploy in {plan}",
+                                f"[{system.upper()}][{platform_status}] Identified MDR to deploy in {plan}",
                                 name,
                             )
                         else:
                             log(
                                 "WARNING",
-                                f"[{system.upper()}][{
-                                    platform_status
-                                }] Skipping as cannot be deployed in {plan}",
+                                f"[{system.upper()}][{platform_status}] Skipping as cannot be deployed in {plan}",
                                 name,
                             )
 
@@ -156,17 +152,13 @@ def make_deploy_plan(
                             deploy_mdr.setdefault(system, []).append(mdr_uuid)
                             log(
                                 "SUCCESS",
-                                f"[{system.upper()}][{
-                                    platform_status
-                                }] Identified MDR to deploy in {plan}",
+                                f"[{system.upper()}][{platform_status}] Identified MDR to deploy in {plan}",
                                 name,
                             )
                         else:
                             log(
                                 "WARNING",
-                                f"[{system.upper()}][{
-                                    platform_status
-                                }] Skipping as cannot be deployed in {plan}",
+                                f"[{system.upper()}][{platform_status}] Skipping as cannot be deployed in {plan}",
                                 name,
                             )
 
@@ -294,9 +286,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
             else:
                 log(
                     "FATAL",
-                    f"Illegal Deployment Plan {
-                        str(plan)
-                    } passed to diff_calculation algorithm",
+                    f"Illegal Deployment Plan {plan!s} passed to diff_calculation algorithm",
                 )
                 raise KeyError
 
@@ -350,9 +340,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
             else:
                 log(
                     "FATAL",
-                    f"Illegal Deployment Plan {
-                        str(plan)
-                    } passed to diff_calculation algorithm",
+                    f"Illegal Deployment Plan {plan!s} passed to diff_calculation algorithm",
                 )
                 raise KeyError
 

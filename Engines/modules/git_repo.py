@@ -193,9 +193,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
             else:
                 log(
                     "FATAL",
-                    f"Illegal Deployment Plan {
-                        str(plan)
-                    } passed to diff_calculation algorithm",
+                    f"Illegal Deployment Plan {plan!s} passed to diff_calculation algorithm",
                 )
                 raise KeyError
 
@@ -249,9 +247,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
             else:
                 log(
                     "FATAL",
-                    f"Illegal Deployment Plan {
-                        str(plan)
-                    } passed to diff_calculation algorithm",
+                    f"Illegal Deployment Plan {plan!s} passed to diff_calculation algorithm",
                 )
                 raise KeyError
 
