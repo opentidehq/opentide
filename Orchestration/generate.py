@@ -3,13 +3,13 @@ import sys
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.logs import log, ANSI, coretide_intro
-from Engines.modules.tide import IndexTide
+from Engines.modules.logs import log, ANSI, print_banner
+from Engines.modules.tide import IndexManager
 from Engines.indexing import objects_indexer
 from Engines.indexing.revisions import RevisionIndexer
 from Engines.framework import templates
 
-print(coretide_intro())
+print(print_banner())
 print(f"""
 {ANSI.Colors.BLUE}{ANSI.Formatting.ITALICS}{ANSI.Formatting.BOLD}
 CoreTide Meta Model Compilation
@@ -25,7 +25,7 @@ log(
 objects_indexer.run()
 templates.run()
 
-IndexTide.reload()
+IndexManager.reload()
 from Engines.framework import json_schemas, vscode_snippets
 from Engines.export import attack_navigator_layer
 from Engines.export.table_export import TableExporter

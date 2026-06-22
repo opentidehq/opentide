@@ -10,18 +10,18 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.plugins import ValidateQuery
-from Engines.modules.tide import DataTide, DetectionSystems
+from Engines.modules.plugins import QueryValidator
+from Engines.modules.tide import OpenTide, DetectionPlatforms
 from Engines.modules.models import (TideModels,
                                     DeploymentStrategy,
-                                    TideConfigs) 
+                                    ConfigurationModels) 
 from Engines.modules.deployment import TideDeployment
 from Engines.modules.systems.sentinel_one import SentinelOneService
 
-class SentinelOneValidateQuery(ValidateQuery):
+class SentinelOneQueryValidator(QueryValidator):
 
     def check_query(self,
-                    mdr:TideModels.MDR,
+                    mdr:TideModels.DetectionRule,
                     service:SentinelOneService):
         
         config = mdr.configurations.sentinel_one
@@ -51,19 +51,19 @@ class SentinelOneValidateQuery(ValidateQuery):
                     os.environ["VALIDATION_ERROR_RAISED"] = "True" 
 
     def validate(self,
-                 mdr_deployment: Union[Sequence[TideModels.MDR], Sequence[str]],
+                 mdr_deployment: Union[Sequence[TideModels.DetectionRule], Sequence[str]],
                  deployment_plan:DeploymentStrategy):
         
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                loaded_mdr.append(DataTide.Models.MDR[mdr])
-            elif type(mdr) is TideModels.MDR:
+                loaded_mdr.append(OpenTide.Models.MDR[mdr])
+            elif type(mdr) is TideModels.DetectionRule:
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 
         deployment = TideDeployment(deployment=mdr_deployment,
-                                    system=DetectionSystems.SENTINEL_ONE,
+                                    system=DetectionPlatforms.SENTINEL_ONE,
                                     strategy=deployment_plan)
         
         for tenant_deployment in deployment.rule_deployment:
@@ -79,7 +79,7 @@ class SentinelOneValidateQuery(ValidateQuery):
                                 service=service)
 
 def declare():
-    return SentinelOneValidateQuery()
+    return SentinelOneQueryValidator()
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    SentinelOneValidateQuery().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG)
+    SentinelOneQueryValidator().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG)

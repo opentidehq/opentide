@@ -8,21 +8,21 @@ from Engines.modules.files import IndentFullDumper
 
 from Engines.modules.framework import get_value_metaschema
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
 # Configuration settings fetching routine
-CONFIG_INDEX = DataTide.Configurations.Index
-PATHS = DataTide.Configurations.Global.Paths.Index
+CONFIG_INDEX = OpenTide.Configurations.Index
+PATHS = OpenTide.Configurations.Global.Paths.Index
 
 METASCHEMAS_FOLDER = Path(PATHS["metaschemas"])
 SUBSCHEMAS_FOLDER = Path(PATHS["subschemas"])
-RECOMPOSITION = DataTide.Configurations.Global.recomposition
+RECOMPOSITION = OpenTide.Configurations.Global.recomposition
 
 
 
 def fetch_config_template(dot_path:str)->str:
     print(dot_path)
-    config_index = DataTide.Configurations.Index
+    config_index = OpenTide.Configurations.Index
     config_path = dot_path.split(".")
     key = config_path[0]
     while key != config_path[-1]:
@@ -102,7 +102,7 @@ def get_required(metaschema, required_list):
 
 
 def definition_handler(entry_point):
-    definition = DataTide.TideSchemas.definitions[entry_point]
+    definition = OpenTide.TideSchemas.definitions[entry_point]
     return definition
 
 
@@ -371,14 +371,14 @@ def run():
         "for documentation, snippets etc. and make correct model creation easier",
     )
 
-    for meta in (m := DataTide.Configurations.Global.metaschemas):
+    for meta in (m := OpenTide.Configurations.Global.metaschemas):
 
-        if meta in (t := DataTide.Configurations.Global.templates):
+        if meta in (t := OpenTide.Configurations.Global.templates):
             template_path = Path(PATHS["templates"]) / t[meta]
 
             log("ONGOING", "Generating template", str(meta))
 
-            parsed = DataTide.TideSchemas.Index[meta]
+            parsed = OpenTide.TideSchemas.Index[meta]
             placeholders:dict = parsed.get("tide.placeholders") or {}
             required = get_required(parsed["properties"], parsed["required"])
             required.extend(parsed.get("tide.template.force-required") or [])
@@ -423,7 +423,7 @@ def run():
                     / subchema_template_name
                 )
 
-                parsed = DataTide.TideSchemas.subschemas[recomp][entry]
+                parsed = OpenTide.TideSchemas.subschemas[recomp][entry]
 
                 log("ONGOING", "Generating template", subschema_name)
                 required = get_required(parsed["properties"], parsed["required"])

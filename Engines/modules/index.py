@@ -37,7 +37,7 @@ from Engines.modules.datamodels.configurations import Configurations
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-class IndexTide:
+class IndexManager:
     """
     Helper class for callable Index related functions. Designed to power
     `DataTide` initialization routine.
@@ -92,7 +92,7 @@ class IndexTide:
                 raise Exception("INDEX COULD NOT BE LOADED IN MEMORY")
         
         # Reconcile with staging index if present
-        _tide_index = IndexTide.reconcile_staging(_tide_index)
+        _tide_index = IndexManager.reconcile_staging(_tide_index)
         return _tide_index
 
     @staticmethod
@@ -216,9 +216,13 @@ class IndexTide:
         """
 
         if tier == "all":
-            return IndexTide.load()["paths"]
+            return IndexManager.load()["paths"]
         if tier == "core":
-            return IndexTide.load()["paths"]["core"]
+            return IndexManager.load()["paths"]["core"]
         if tier == "tide":
-            return IndexTide.load()["paths"]["tide"]
+            return IndexManager.load()["paths"]["tide"]
+
+
+# Legacy alias
+IndexTide = IndexManager
 

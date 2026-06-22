@@ -13,24 +13,24 @@ from Engines.modules.systems.sentinel import (
 from Engines.modules.framework import get_vocab_entry, techniques_resolver
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, DetectionSystems
-from Engines.modules.plugins import DeployMDR
+from Engines.modules.tide import OpenTide, DetectionPlatforms
+from Engines.modules.plugins import RuleDeployer
 from Engines.modules.models import (TideModels,
-                                    TideConfigs,TenantDeployment,
+                                    ConfigurationModels,TenantDeployment,
                                     DeploymentStrategy,
                                     StatusStrategy) 
 from Engines.modules.deployment import TideDeployment, check_status
 from Engines.modules.systems.kql import compile_kql_query
-from Engines.modules.errors import TideErrors
+from Engines.modules.errors import Errors
 
 from azure.mgmt.securityinsight import SecurityInsights
 
 
-class SentinelDeploy(DeployMDR):
+class SentinelDeploy(RuleDeployer):
 
     def compile_deployment(self,
                            service: SecurityInsights,
-                           data:TideModels.MDR,
+                           data:TideModels.DetectionRule,
                            tenant:str):
 
         rule = service.alert_rules.models.ScheduledAlertRule()
@@ -64,15 +64,15 @@ class SentinelDeploy(DeployMDR):
             rule.suppression_enabled = False
             rule.suppression_duration = iso_duration_timedelta("1h") #Requires a default value, even if disabled
         else:
-            raise TideErrors.TideMDRDataModelErrors("Suppression set to true, must be false or int")
+            raise Errors.TideMDRDataModelErrors("Suppression set to true, must be false or int")
         
         if configuration.scheduling.nrt is True:
             rule.kind = "NRT"
         else:
             if not configuration.scheduling.frequency:
-                raise TideErrors.TideMDRDataModelErrors("Missing frequency")
+                raise Errors.TideMDRDataModelErrors("Missing frequency")
             if not configuration.scheduling.lookback:
-                raise TideErrors.TideMDRDataModelErrors("Missing lookback")
+                raise Errors.TideMDRDataModelErrors("Missing lookback")
 
             rule.query_frequency = iso_duration_timedelta(
                 configuration.scheduling.frequency
@@ -123,7 +123,7 @@ class SentinelDeploy(DeployMDR):
 
         # Event Grouping
         if not configuration.grouping:
-            raise TideErrors.TideMDRDataModelErrors("Missing Grouping > Event")
+            raise Errors.TideMDRDataModelErrors("Missing Grouping > Event")
         log("INFO", "Event grouping configuration", configuration.grouping.event)
         event_grouping = service.alert_rules.models.EventGroupingSettings()
         event_grouping.aggregation_kind = configuration.grouping.event
@@ -143,7 +143,7 @@ class SentinelDeploy(DeployMDR):
         grouping_lookback = configuration.grouping.alert.grouping_lookback
         if grouping_enabled:
             if not grouping_lookback:
-                raise TideErrors.TideMDRDataModelErrors("Missing Grouping Lookback")
+                raise Errors.TideMDRDataModelErrors("Missing Grouping Lookback")
             grouping_lookback = iso_duration_timedelta(
                 grouping_lookback
             )
@@ -231,15 +231,15 @@ class SentinelDeploy(DeployMDR):
         return rule
 
     def deploy_mdr(self,
-                data:TideModels.MDR,
+                data:TideModels.DetectionRule,
                 service:SecurityInsights,
-                tenant_config:TideConfigs.Systems.Sentinel.Tenant):
+                tenant_config:ConfigurationModels.Systems.Sentinel.Tenant):
         """
         Deploys the detection rule : creation, update, deletion and disabling.
         """
 
         if not data.configurations.sentinel:
-            raise TideErrors.TideSystemConfigurationErrors("Missing Sentinel")
+            raise Errors.TideSystemConfigurationErrors("Missing Sentinel")
 
         mdr_name = data.name
         mdr_uuid = data.metadata.uuid
@@ -275,20 +275,20 @@ class SentinelDeploy(DeployMDR):
         log("SUCCESS", "Deployed MDR Successfully", mdr_name)
         return True
 
-    def deploy(self, mdr_deployment: Sequence[TideModels.MDR] | list[str], deployment_plan:DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[TideModels.DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
         """
-        Triggers the deployment sequence for a series of MDR uuids or TideModels.MDR Objects
+        Triggers the deployment sequence for a series of MDR uuids or TideModels.DetectionRule Objects
         """
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                loaded_mdr.append(DataTide.Models.MDR[mdr])
-            elif type(mdr) is TideModels.MDR:
+                loaded_mdr.append(OpenTide.Models.MDR[mdr])
+            elif type(mdr) is TideModels.DetectionRule:
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 
         deployment = TideDeployment(deployment=mdr_deployment,
-                                    system=DetectionSystems.SENTINEL,
+                                    system=DetectionPlatforms.SENTINEL,
                                     strategy=deployment_plan)
 
         for tenant_deployment in deployment.rule_deployment: #type:ignore 

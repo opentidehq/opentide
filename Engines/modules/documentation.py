@@ -14,7 +14,7 @@ from Engines.modules.framework import (
     strip_vocab_stage_prefix,
 )
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.deployment import CIEnvironment
 
 # Wiki Environments that require replacing all spaces in file names with
@@ -23,21 +23,21 @@ TARGET_WITH_DASH_PATHS = [CIEnvironment.CIPlatforms.AzurePipeline,
                             CIEnvironment.CIPlatforms.GitlabCI]
 
 
-VOCAB_INDEX = DataTide.Vocabularies.Index
+VOCAB_INDEX = OpenTide.Vocabularies.Index
 DOCUMENTATION_TARGET = CIEnvironment()._check_ci_environment()
 log("INFO", "Identified CI Environment", str(DOCUMENTATION_TARGET.name))
 if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI:
-    UUID_PERMALINKS = DataTide.Configurations.Documentation.gitlab.get("uuid_permalinks", False)
+    UUID_PERMALINKS = OpenTide.Configurations.Documentation.gitlab.get("uuid_permalinks", False)
     log("INFO", "Enabling UUID Permalinking for Gitlab target")
 else:
     log("INFO", "Disabling UUID Permalinking for Gitlab target")
     UUID_PERMALINKS = False
 
-ICONS = DataTide.Configurations.Documentation.icons
-DOCUMENTATION_CONFIG = DataTide.Configurations.Documentation
-CONFIG_INDEX = DataTide.Configurations.Index
-DEFINITIONS_INDEX = DataTide.TideSchemas.definitions
-MODELS_INDEX = DataTide.Models.Index
+ICONS = OpenTide.Configurations.Documentation.icons
+DOCUMENTATION_CONFIG = OpenTide.Configurations.Documentation
+CONFIG_INDEX = OpenTide.Configurations.Index
+DEFINITIONS_INDEX = OpenTide.TideSchemas.definitions
+MODELS_INDEX = OpenTide.Models.Index
 
 FOLD = """
 <details>
@@ -276,12 +276,12 @@ def backlink_resolver(model_uuid:str,
     if model_type == "tvm":
         hover_content = model_value(model_uuid, "description")
     if model_type == "dom":
-        objective_data = DataTide.Models.DOM[model_uuid]
+        objective_data = OpenTide.Models.DOM[model_uuid]
         hover_content = objective_data.objective.description
 
     if model_type == "signal":
-        signal_data = DataTide.Models.Signal[model_uuid]
-        objective_data = DataTide.Models.DOM[signal_data.parent]
+        signal_data = OpenTide.Models.Signal[model_uuid]
+        objective_data = OpenTide.Models.DOM[signal_data.parent]
         if current_page:
             # If we're on the current DOM page, we should just do an anchor and no need to add
             # the full context
@@ -313,7 +313,7 @@ def backlink_resolver(model_uuid:str,
     if DOCUMENTATION_TARGET in TARGET_WITH_DASH_PATHS:
         if UUID_PERMALINKS:
             if model_type == "signal":
-                signal_data = DataTide.Models.Signal[model_uuid]
+                signal_data = OpenTide.Models.Signal[model_uuid]
                 parent_uuid = signal_data.parent
                 file_link = doc_path + parent_uuid
             else:

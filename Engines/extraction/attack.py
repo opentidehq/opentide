@@ -7,15 +7,15 @@ from pathlib import Path
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.files import IndentFullDumper
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
-RESOURCES_PATH = Path(DataTide.Configurations.Global.Paths.Index["resources"])
-ATTACK_RESOURCES = DataTide.Configurations.Resources.attack
+RESOURCES_PATH = Path(OpenTide.Configurations.Global.Paths.Index["resources"])
+ATTACK_RESOURCES = OpenTide.Configurations.Resources.attack
 enterprise = RESOURCES_PATH / ATTACK_RESOURCES["enterprise"]
 mobile = RESOURCES_PATH / ATTACK_RESOURCES["mobile"]
 ics = RESOURCES_PATH / ATTACK_RESOURCES["ics"]
 
-vocab_folder = Path(DataTide.Configurations.Global.Paths.Core.vocabularies)
+vocab_folder = Path(OpenTide.Configurations.Global.Paths.Core.vocabularies)
 techniques_vocab = r"ATT&CK Techniques.yaml"
 datasources_vocab = r"ATT&CK Data Sources.yaml"
 mitigations_vocab = r"ATT&CK Mitigations.yaml"

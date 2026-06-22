@@ -47,8 +47,8 @@ def decompose_tide() -> None:
         slice_lines(lines, 833, 1189),
         "\n".join(
             [
-                "from Engines.modules.loaders.system_loader import SystemLoader",
-                "from Engines.modules.environment import HelperTide",
+                "from Engines.modules.loaders.system_loader import PlatformConfigLoader",
+                "from Engines.modules.environment import DebugHelpers",
             ]
         ),
     )
@@ -58,10 +58,10 @@ def decompose_tide() -> None:
         slice_lines(lines, 1190, None),
         "\n".join(
             [
-                "from Engines.modules.environment import HelperTide",
-                "from Engines.modules.index import IndexTide",
+                "from Engines.modules.environment import DebugHelpers",
+                "from Engines.modules.index import IndexManager",
                 "from Engines.modules.loaders.config_loader import ConfigurationsLoader",
-                "from Engines.modules.loaders.object_loader import TideLoader",
+                "from Engines.modules.loaders.object_loader import ObjectLoader",
             ]
         ),
     )
@@ -71,18 +71,18 @@ def decompose_tide() -> None:
         '''\
 """Backward-compatibility re-export shim for tide module."""
 
-from Engines.modules.models import DetectionSystems
-from Engines.modules.registry import DataTide
-from Engines.modules.index import IndexTide
-from Engines.modules.environment import HelperTide
-from Engines.modules.loaders.object_loader import TideLoader
+from Engines.modules.models import DetectionPlatforms
+from Engines.modules.registry import OpenTide
+from Engines.modules.index import IndexManager
+from Engines.modules.environment import DebugHelpers
+from Engines.modules.loaders.object_loader import ObjectLoader
 
 __all__ = [
-    "DataTide",
-    "IndexTide",
-    "HelperTide",
-    "TideLoader",
-    "DetectionSystems",
+    "OpenTide",
+    "IndexManager",
+    "DebugHelpers",
+    "ObjectLoader",
+    "DetectionPlatforms",
 ]
 ''',
         encoding="utf-8",
@@ -123,20 +123,20 @@ def decompose_models() -> None:
         '''\
 """Backward-compatibility re-export shim for models module."""
 
-from Engines.modules.enums import StatusStrategy, DetectionSystems, DeploymentStrategy
-from Engines.modules.system_models import SystemConfig, TenantDeploymentModel, TenantDeployment
-from Engines.modules.config_models import TideConfigs
-from Engines.modules.object_models import TideDefinitionsModels, TideModels
+from Engines.modules.enums import StatusStrategy, DetectionPlatforms, DeploymentStrategy
+from Engines.modules.system_models import SystemConfig, DeploymentBatch, TenantDeployment
+from Engines.modules.config_models import ConfigurationModels
+from Engines.modules.object_models import SharedModels, TideModels
 
 __all__ = [
     "StatusStrategy",
-    "DetectionSystems",
+    "DetectionPlatforms",
     "DeploymentStrategy",
     "SystemConfig",
-    "TideConfigs",
-    "TideDefinitionsModels",
+    "ConfigurationModels",
+    "SharedModels",
     "TideModels",
-    "TenantDeploymentModel",
+    "DeploymentBatch",
     "TenantDeployment",
 ]
 ''',
@@ -159,12 +159,12 @@ def decompose_deployment() -> None:
 
     utils_extra = "\n".join(
         [
-            "from Engines.modules.tide import DataTide, HelperTide",
+            "from Engines.modules.tide import OpenTide, DebugHelpers",
             "from Engines.modules.models import StatusStrategy, DeploymentStrategy",
             "from Engines.modules.ci import CIEnvironment",
-            "from Engines.modules.git_repo import TideRepo, modified_mdr_files, diff_calculation",
+            "from Engines.modules.git_repo import GitRepository, modified_mdr_files, diff_calculation",
             "",
-            "SYSTEMS_CONFIGS_INDEX = DataTide.Configurations.Systems.Index",
+            "SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index",
             "DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)",
         ]
     )
@@ -180,15 +180,15 @@ def decompose_deployment() -> None:
         slice_lines(lines, 625, None),
         "\n".join(
             [
-                "from Engines.modules.tide import DataTide, TideLoader",
+                "from Engines.modules.tide import OpenTide, ObjectLoader",
                 "from Engines.modules.models import (",
-                "    TideDefinitionsModels,",
+                "    SharedModels,",
                 "    TideModels,",
                 "    SystemConfig,",
                 "    DeploymentStrategy,",
                 "    TenantDeployment,",
-                "    TenantDeploymentModel,",
-                "    DetectionSystems,",
+                "    DeploymentBatch,",
+                "    DetectionPlatforms,",
                 ")",
                 "from Engines.modules.framework import unroll_dot_dict",
             ]
@@ -200,7 +200,7 @@ def decompose_deployment() -> None:
 """Backward-compatibility re-export shim for deployment module."""
 
 from Engines.modules.ci import CIEnvironment
-from Engines.modules.git_repo import TideRepo, modified_mdr_files, diff_calculation
+from Engines.modules.git_repo import GitRepository, modified_mdr_files, diff_calculation
 from Engines.modules.deployment_utils import (
     SYSTEMS_CONFIGS_INDEX,
     DEPRECATED_STATUSES,
@@ -214,7 +214,7 @@ from Engines.modules.deployment_planning import TideDeployment
 
 __all__ = [
     "CIEnvironment",
-    "TideRepo",
+    "GitRepository",
     "modified_mdr_files",
     "diff_calculation",
     "SYSTEMS_CONFIGS_INDEX",

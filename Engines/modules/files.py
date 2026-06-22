@@ -93,17 +93,17 @@ def resolve_paths(separate:bool=False):
     ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
     # Fetch configs, as paths may have been modified by the custom config
     CONFIGS = resolve_configurations()
-    TIDE_CONFIG = CONFIGS["global"]
+    CORE_CONFIG = CONFIGS["global"]
 
-    TIDE_PATHS = {
-        k: (ROOT.parent / path) for k, path in TIDE_CONFIG["paths"]["tide"].items()
+    PATHS = {
+        k: (ROOT.parent / path) for k, path in CORE_CONFIG["paths"]["tide"].items()
     }
-    CORE_PATHS = {k: (ROOT / path) for k, path in TIDE_CONFIG["paths"]["core"].items()}
+    CORE_PATHS = {k: (ROOT / path) for k, path in CORE_CONFIG["paths"]["core"].items()}
 
     if separate:
-        return TIDE_PATHS, CORE_PATHS
+        return PATHS, CORE_PATHS
     else:
-        return TIDE_PATHS | CORE_PATHS
+        return PATHS | CORE_PATHS
 
 
 def safe_file_name(string: str, safe_mode: bool = True) -> str:

@@ -13,17 +13,17 @@ from Engines.modules.documentation import (
     DOCUMENTATION_TARGET,
     TARGET_WITH_DASH_PATHS
 )
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.logs import log
 from Engines.modules.deployment import CIEnvironment
 from Engines.templates.models import VOCABS_DOC_TEMPLATE
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-VOCAB_INDEX = DataTide.Vocabularies.Index
-ICONS = DataTide.Configurations.Documentation.icons
-VOCAB_DOCS_PATH = Path(DataTide.Configurations.Global.Paths.Core.vocabularies_docs)
-SKIP_VOCABS = DataTide.Configurations.Documentation.skip_vocabularies
+VOCAB_INDEX = OpenTide.Vocabularies.Index
+ICONS = OpenTide.Configurations.Documentation.icons
+VOCAB_DOCS_PATH = Path(OpenTide.Configurations.Global.Paths.Core.vocabularies_docs)
+SKIP_VOCABS = OpenTide.Configurations.Documentation.skip_vocabularies
 
 
 def make_vocab_doc(vocab_field, vocabulary):

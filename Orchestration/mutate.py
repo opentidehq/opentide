@@ -9,7 +9,7 @@ toolchain_start_time = datetime.now()
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.logs import log, ANSI, coretide_intro
+from Engines.modules.logs import log, ANSI, print_banner
 from Engines.mutation import (
     file_name,
     references,
@@ -18,7 +18,7 @@ from Engines.mutation import (
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-print(coretide_intro())
+print(print_banner())
 print(f"""
 {ANSI.Colors.BLUE}{ANSI.Formatting.ITALICS}{ANSI.Formatting.BOLD}
 CoreTide Data Mutation

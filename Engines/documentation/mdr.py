@@ -30,7 +30,7 @@ from Engines.modules.documentation_components import (
     reference_doc,
     status_enriched
 )
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.logs import log
 from Engines.modules.graphs import relationships_graph
 from Engines.modules.deployment import enabled_systems, CIEnvironment
@@ -42,10 +42,10 @@ from Engines.modules.documentation import (
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-DEFAULT_RESPONDERS = DataTide.Configurations.Deployment.default_responders
-SYSTEMS_CONFIG = DataTide.Configurations.Systems.Index
-VOCAB_INDEX = DataTide.Vocabularies.Index
-MODELS_INDEX = DataTide.Models.Index
+DEFAULT_RESPONDERS = OpenTide.Configurations.Deployment.default_responders
+SYSTEMS_CONFIG = OpenTide.Configurations.Systems.Index
+VOCAB_INDEX = OpenTide.Vocabularies.Index
+MODELS_INDEX = OpenTide.Models.Index
 MDR_ICON = get_icon("mdr")
 
 QUERY_FOLD = """
@@ -61,16 +61,16 @@ QUERY_FOLD = """
 """
 
 # Fetch metaschema
-MDR_METASCHEMA = DataTide.TideSchemas.mdr["properties"]
+MDR_METASCHEMA = OpenTide.TideSchemas.mdr["properties"]
 
 
-WIKI = Path(DataTide.Configurations.Global.Paths.Core.models_docs_folder)
-MDR_WIKI_PATH = WIKI / DataTide.Configurations.Documentation.object_names["mdr"]
+WIKI = Path(OpenTide.Configurations.Global.Paths.Core.models_docs_folder)
+MDR_WIKI_PATH = WIKI / OpenTide.Configurations.Documentation.object_names["mdr"]
 
 
 # Fetch relevant subschemas
 # Since we mutate SYSTEMS_SUBSCHEMA, creates conflict with other Engines.modules. hence the copy()
-SYSTEMS_SUBSCHEMAS = DataTide.TideSchemas.subschemas["systems"].copy()
+SYSTEMS_SUBSCHEMAS = OpenTide.TideSchemas.subschemas["systems"].copy()
 for sub in SYSTEMS_SUBSCHEMAS.copy():
     new_data = SYSTEMS_SUBSCHEMAS[sub]["properties"]
     SYSTEMS_SUBSCHEMAS.pop(sub)

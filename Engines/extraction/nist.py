@@ -8,11 +8,11 @@ import unicodedata
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.files import IndentFullDumper
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
-RESOURCES = DataTide.Configurations.Global.Paths.Core.resources
-NIST_DATA = DataTide.Configurations.Resources.nist["data"]
-VOCABS_PATH = DataTide.Configurations.Global.Paths.Core.vocabularies
+RESOURCES = OpenTide.Configurations.Global.Paths.Core.resources
+NIST_DATA = OpenTide.Configurations.Resources.nist["data"]
+VOCABS_PATH = OpenTide.Configurations.Global.Paths.Core.vocabularies
 
 nist_vocab = r"NIST Cybersecurity Framework.yaml"
 

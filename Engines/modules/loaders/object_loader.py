@@ -26,10 +26,10 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.indexing.indexer import indexer
 from Engines.modules.logs import log
-from Engines.modules.models import (DetectionSystems,
+from Engines.modules.models import (DetectionPlatforms,
                                     TideModels,
-                                    TideDefinitionsModels,
-                                    TideConfigs,
+                                    SharedModels,
+                                    ConfigurationModels,
                                     SystemConfig)
 from Engines.modules.patching import Tide2Patching
 from Engines.modules.datamodels.objects import Objects
@@ -37,10 +37,10 @@ from Engines.modules.datamodels.configurations import Configurations
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.loaders.system_loader import SystemLoader
-from Engines.modules.environment import HelperTide
+from Engines.modules.loaders.system_loader import PlatformConfigLoader
+from Engines.modules.environment import DebugHelpers
 
-class TideLoader:
+class ObjectLoader:
 
     @staticmethod
     def load_signal(signal: dict) -> Objects.DetectionObjective.Objective.Signal:
@@ -72,7 +72,7 @@ class TideLoader:
 
 
     @staticmethod
-    def load_dom(dom: dict) -> Objects.DetectionObjective:
+    def load_objective(dom: dict) -> Objects.DetectionObjective:
         """Transform a raw Detection Objective dictionary into a strongly-typed dataclass.
         
         Args:
@@ -102,10 +102,10 @@ class TideLoader:
 
         try:
             # Process metadata and references
-            metadata = TideDefinitionsModels.TideObjectMetadata(**dom.pop("metadata"))
+            metadata = SharedModels.ObjectMetadata(**dom.pop("metadata"))
             references = None
             if "references" in dom:
-                references = TideDefinitionsModels.TideObjectReferences(**dom.pop("references"))
+                references = SharedModels.ObjectReferences(**dom.pop("references"))
 
             # Process objective section
             objective_data = dom.pop("objective")
@@ -122,7 +122,7 @@ class TideLoader:
                 
             signals = []
             for signal in objective_data.pop("signals"):
-                signals.append(TideLoader.load_signal(signal))
+                signals.append(ObjectLoader.load_signal(signal))
                 
             # Process composition - required
             if "composition" not in objective_data:
@@ -156,22 +156,22 @@ class TideLoader:
 
 
     @staticmethod
-    def load_mdr(mdr:dict)->TideModels.MDR:
-        """Convert a raw MDR mapping from the index into a TideModels.MDR object.
+    def load_rule(mdr:dict)->TideModels.DetectionRule:
+        """Convert a raw MDR mapping from the index into a TideModels.DetectionRule object.
 
         This function takes the raw dictionary representation of a Managed
         Detection Rule (MDR) as produced by the indexer or loaded from TOML
         files and transforms nested fields into the project's typed model
         classes. It handles metadata, optional organisation metadata,
         response/procedure/searches conversion, references and per-system
-        configurations by delegating to the SystemLoader helpers.
+        configurations by delegating to the PlatformConfigLoader helpers.
 
         Args:
             mdr: A dictionary representing an MDR entry from the index. The
                 mapping is copied internally to avoid mutating the original.
 
         Returns:
-            A ``TideModels.MDR`` instance populated with parsed nested
+            A ``TideModels.DetectionRule`` instance populated with parsed nested
             structures and typed sub-objects.
         """
 
@@ -181,9 +181,9 @@ class TideLoader:
         organisation = metadata.pop("organisation", None)
 
         if organisation:
-            organisation = TideDefinitionsModels.TideObjectMetadata.Organisation(**organisation)
+            organisation = SharedModels.ObjectMetadata.Organisation(**organisation)
         
-        metadata = TideDefinitionsModels.TideObjectMetadata(**metadata,
+        metadata = SharedModels.ObjectMetadata(**metadata,
                                                             organisation=organisation)
         
         response_config = mdr.pop("response", {})
@@ -195,28 +195,28 @@ class TideLoader:
                 if searches_data:
                     searches = []
                     for search in searches_data:
-                        searches.append(TideModels.MDR.Response.Procedure.Search(**search))
-                procedure = TideModels.MDR.Response.Procedure(**procedure,
+                        searches.append(TideModels.DetectionRule.Response.Procedure.Search(**search))
+                procedure = TideModels.DetectionRule.Response.Procedure(**procedure,
                                                               searches=searches)
-            response = TideModels.MDR.Response(**response_config,
+            response = TideModels.DetectionRule.Response(**response_config,
                                                procedure=procedure)
 
-        references = TideDefinitionsModels.TideObjectReferences(**mdr.pop("references", {}))
+        references = SharedModels.ObjectReferences(**mdr.pop("references", {}))
 
-        configurations = TideModels.MDR.Configurations()
+        configurations = TideModels.DetectionRule.Configurations()
         system_configurations:dict[str,Any] = mdr.pop("configurations")
         if system_configurations.get("sentinel"):
-            configurations.sentinel = SystemLoader.sentinel(system_configurations.pop("sentinel"))
+            configurations.sentinel = PlatformConfigLoader.sentinel(system_configurations.pop("sentinel"))
         if system_configurations.get("defender_for_endpoint"):
-            configurations.defender_for_endpoint = SystemLoader.defender_for_endpoint(system_configurations.pop("defender_for_endpoint"))
+            configurations.defender_for_endpoint = PlatformConfigLoader.defender_for_endpoint(system_configurations.pop("defender_for_endpoint"))
         if system_configurations.get("sentinel_one"):
-            configurations.sentinel_one = SystemLoader.sentinel_one(system_configurations.pop("sentinel_one"))
+            configurations.sentinel_one = PlatformConfigLoader.sentinel_one(system_configurations.pop("sentinel_one"))
         if system_configurations.get("crowdstrike"):
-            configurations.crowdstrike = SystemLoader.crowdstrike(system_configurations.pop("crowdstrike"))
+            configurations.crowdstrike = PlatformConfigLoader.crowdstrike(system_configurations.pop("crowdstrike"))
         if system_configurations.get("harfanglab"):
-            configurations.harfanglab = SystemLoader.harfanglab(system_configurations.pop("harfanglab"))
+            configurations.harfanglab = PlatformConfigLoader.harfanglab(system_configurations.pop("harfanglab"))
 
-        return TideModels.MDR(**mdr,
+        return TideModels.DetectionRule(**mdr,
                                 metadata=metadata,
                                 response=response,
                                 references=references,
@@ -224,21 +224,21 @@ class TideLoader:
 
     @overload
     @staticmethod
-    def load_platform_config(platform_config:dict, system:Literal[DetectionSystems.SENTINEL])->TideConfigs.Systems.Sentinel.Platform: ...
+    def load_platform_config(platform_config:dict, system:Literal[DetectionPlatforms.SENTINEL])->ConfigurationModels.Systems.Sentinel.Platform: ...
     @overload
     @staticmethod
-    def load_platform_config(platform_config:dict, system:Literal[DetectionSystems.CROWDSTRIKE])->TideConfigs.Systems.Crowdstrike.Platform: ...
+    def load_platform_config(platform_config:dict, system:Literal[DetectionPlatforms.CROWDSTRIKE])->ConfigurationModels.Systems.Crowdstrike.Platform: ...
     @overload
     @staticmethod
-    def load_platform_config(platform_config:dict, system:Literal[DetectionSystems.SENTINEL_ONE])->TideConfigs.Systems.SentinelOne.Platform: ...
+    def load_platform_config(platform_config:dict, system:Literal[DetectionPlatforms.SENTINEL_ONE])->ConfigurationModels.Systems.SentinelOne.Platform: ...
     @overload
     @staticmethod
-    def load_platform_config(platform_config:dict, system:Literal[DetectionSystems.DEFENDER_FOR_ENDPOINT])->TideConfigs.Systems.DefenderForEndpoint.Platform: ...
+    def load_platform_config(platform_config:dict, system:Literal[DetectionPlatforms.DEFENDER_FOR_ENDPOINT])->ConfigurationModels.Systems.DefenderForEndpoint.Platform: ...
     @overload
     @staticmethod
-    def load_platform_config(platform_config:dict, system:Literal[DetectionSystems.HARFANGLAB])->TideConfigs.Systems.HarfangLab.Platform: ...
+    def load_platform_config(platform_config:dict, system:Literal[DetectionPlatforms.HARFANGLAB])->ConfigurationModels.Systems.HarfangLab.Platform: ...
     @staticmethod
-    def load_platform_config(platform_config:dict, system:DetectionSystems):
+    def load_platform_config(platform_config:dict, system:DetectionPlatforms):
         """Load and type a platform configuration for a given detection system.
 
         The function validates that a platform configuration mapping is
@@ -250,7 +250,7 @@ class TideLoader:
         Args:
             platform_config: Mapping containing platform-specific configuration
                 values.
-            system: A ``DetectionSystems`` enum value identifying the target
+            system: A ``DetectionPlatforms`` enum value identifying the target
                 system for which the platform configuration should be loaded.
 
         Returns:
@@ -267,20 +267,20 @@ class TideLoader:
             raise NotImplementedError("Missing Configuration Segment")
 
         match system:
-            case DetectionSystems.CROWDSTRIKE:
-                return TideConfigs.Systems.Crowdstrike.Platform(**platform_config)
+            case DetectionPlatforms.CROWDSTRIKE:
+                return ConfigurationModels.Systems.Crowdstrike.Platform(**platform_config)
 
-            case DetectionSystems.SENTINEL:
-                return TideConfigs.Systems.Sentinel.Platform(**platform_config)
+            case DetectionPlatforms.SENTINEL:
+                return ConfigurationModels.Systems.Sentinel.Platform(**platform_config)
 
-            case DetectionSystems.DEFENDER_FOR_ENDPOINT:
-                return TideConfigs.Systems.DefenderForEndpoint.Platform(**platform_config)
+            case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
+                return ConfigurationModels.Systems.DefenderForEndpoint.Platform(**platform_config)
 
-            case DetectionSystems.SENTINEL_ONE:
-                return TideConfigs.Systems.SentinelOne.Platform(**platform_config)
+            case DetectionPlatforms.SENTINEL_ONE:
+                return ConfigurationModels.Systems.SentinelOne.Platform(**platform_config)
 
-            case DetectionSystems.HARFANGLAB:
-                return TideConfigs.Systems.HarfangLab.Platform(**platform_config)
+            case DetectionPlatforms.HARFANGLAB:
+                return ConfigurationModels.Systems.HarfangLab.Platform(**platform_config)
 
             case _:
                 return SystemConfig.Platform(**platform_config)
@@ -332,19 +332,19 @@ class TideLoader:
         return modifiers
 
     @staticmethod
-    def load_tenants_config(tenants_config:Sequence[dict], platform:DetectionSystems):
+    def load_tenants_config(tenants_config:Sequence[dict], platform:DetectionPlatforms):
         """Load tenant configurations for a specific detection system.
 
         Each tenant mapping must contain a ``setup`` section which may include
         environment-variable placeholders. This helper resolves secrets via
-        ``HelperTide.fetch_config_envvar``, converts system-specific setup and
+        ``DebugHelpers.fetch_config_envvar``, converts system-specific setup and
         parameter blocks into typed dataclasses and returns a list of
         ``SystemConfig.Tenant`` instances.
 
         Args:
             tenants_config: Sequence of tenant mappings from the platform
                 configuration.
-            platform: A ``DetectionSystems`` enum value indicating how to parse
+            platform: A ``DetectionPlatforms`` enum value indicating how to parse
                 each tenant's setup block.
 
         Returns:
@@ -368,25 +368,25 @@ class TideLoader:
                     "Ensure that the setup section is correctly entered in platform configuration TOML file")
                 raise NotImplementedError("Missing Configuration Segment")
 
-            setup_with_secrets = HelperTide.fetch_config_envvar(tenant.pop("setup"))
+            setup_with_secrets = DebugHelpers.fetch_config_envvar(tenant.pop("setup"))
             parameters = tenant.pop("parameters", None)
             match platform:
-                case DetectionSystems.SENTINEL:
-                    setup = TideConfigs.Systems.Sentinel.Tenant.Setup(**setup_with_secrets)
+                case DetectionPlatforms.SENTINEL:
+                    setup = ConfigurationModels.Systems.Sentinel.Tenant.Setup(**setup_with_secrets)
 
-                case DetectionSystems.DEFENDER_FOR_ENDPOINT:
+                case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
                     if parameters:
-                        parameters = TideConfigs.Systems.DefenderForEndpoint.Tenant.Parameters(**parameters)
-                    setup = TideConfigs.Systems.DefenderForEndpoint.Tenant.Setup(**setup_with_secrets)
+                        parameters = ConfigurationModels.Systems.DefenderForEndpoint.Tenant.Parameters(**parameters)
+                    setup = ConfigurationModels.Systems.DefenderForEndpoint.Tenant.Setup(**setup_with_secrets)
 
-                case DetectionSystems.SENTINEL_ONE:
-                    setup = TideConfigs.Systems.SentinelOne.Tenant.Setup(**setup_with_secrets)
+                case DetectionPlatforms.SENTINEL_ONE:
+                    setup = ConfigurationModels.Systems.SentinelOne.Tenant.Setup(**setup_with_secrets)
 
-                case DetectionSystems.CROWDSTRIKE:
-                    setup = TideConfigs.Systems.Crowdstrike.Tenant.Setup(**setup_with_secrets)
+                case DetectionPlatforms.CROWDSTRIKE:
+                    setup = ConfigurationModels.Systems.Crowdstrike.Tenant.Setup(**setup_with_secrets)
 
-                case DetectionSystems.HARFANGLAB:
-                    setup = TideConfigs.Systems.HarfangLab.Tenant.Setup(**setup_with_secrets)
+                case DetectionPlatforms.HARFANGLAB:
+                    setup = ConfigurationModels.Systems.HarfangLab.Tenant.Setup(**setup_with_secrets)
 
                 case _:
                     raise NotImplementedError(f"Platform {platform.name} is not recognized")
@@ -396,4 +396,10 @@ class TideLoader:
                                                parameters=parameters)) #type: ignore
 
         return tenants
+
+
+# Legacy aliases
+TideLoader = ObjectLoader
+ObjectLoader.load_mdr = ObjectLoader.load_rule  # type: ignore[attr-defined]
+ObjectLoader.load_dom = ObjectLoader.load_objective  # type: ignore[attr-defined]
 

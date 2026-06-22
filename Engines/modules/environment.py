@@ -37,7 +37,7 @@ from Engines.modules.datamodels.configurations import Configurations
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-class HelperTide:
+class DebugHelpers:
     @staticmethod
     def is_debug() -> bool:
         """
@@ -82,7 +82,7 @@ class HelperTide:
         #Allows to print all errors at once before raising exception
         missing_envvar_error = False
         
-        if HelperTide.is_debug():
+        if DebugHelpers.is_debug():
             try:
                 import_module("Engines.modules.local_secrets")
             except:
@@ -104,7 +104,7 @@ class HelperTide:
                         config_secrets[sec] = os.environ.get(env_variable, "")
                         log("SUCCESS", "Fetched environment secret", env_variable)
                     else:
-                        if HelperTide.is_debug():
+                        if DebugHelpers.is_debug():
                             log("SKIP", 
                                 "Could not find expected environment variable",
                                 config_secrets[sec],
@@ -126,4 +126,8 @@ class HelperTide:
                 "This may not be a critical issue, for example if you didn't enable a particular system")
 
         return config_secrets
+
+
+# Legacy alias
+HelperTide = DebugHelpers
 

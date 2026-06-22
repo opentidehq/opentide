@@ -26,10 +26,10 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.indexing.indexer import indexer
 from Engines.modules.logs import log
-from Engines.modules.models import (DetectionSystems,
+from Engines.modules.models import (DetectionPlatforms,
                                     TideModels,
-                                    TideDefinitionsModels,
-                                    TideConfigs,
+                                    SharedModels,
+                                    ConfigurationModels,
                                     SystemConfig)
 from Engines.modules.patching import Tide2Patching
 from Engines.modules.datamodels.objects import Objects
@@ -39,17 +39,17 @@ ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 class ConfigurationsLoader:
     @staticmethod
-    def load_statuses(statuses_configuration:list[dict])->Sequence[TideConfigs.Deployment.Status]:
+    def load_statuses(statuses_configuration:list[dict])->Sequence[ConfigurationModels.Deployment.Status]:
         """
-        Converts a list of status configuration dictionaries into a sequence of TideConfigs.Deployment.Status objects.
+        Converts a list of status configuration dictionaries into a sequence of ConfigurationModels.Deployment.Status objects.
         Args:
             statuses_configuration (list[dict]): A list of dictionaries where each dictionary contains the parameters 
-                                                   to instantiate a TideConfigs.Deployment.Status object.
+                                                   to instantiate a ConfigurationModels.Deployment.Status object.
         Returns:
-            Sequence[TideConfigs.Deployment.Status]: A sequence of TideConfigs.Deployment.Status instances created 
+            Sequence[ConfigurationModels.Deployment.Status]: A sequence of ConfigurationModels.Deployment.Status instances created 
                                                        from the provided configuration dictionaries.
         """
-        Status = TideConfigs.Deployment.Status
+        Status = ConfigurationModels.Deployment.Status
         parsed_configuration = list()
         for status_configuration in statuses_configuration:
             parsed_configuration.append(Status(**status_configuration))

@@ -20,10 +20,10 @@ from Engines.modules.logs import log
 # OpenTide.Vocabularies.
 # OpenTide.Schemas.Json / OpenTide.Schemas.Yaml
 
-class TideDefinitionsModels:
+class SharedModels:
 
     @dataclass
-    class TideObjectMetadata:
+    class ObjectMetadata:
         
         @dataclass
         class Organisation:
@@ -41,13 +41,13 @@ class TideDefinitionsModels:
         organisation: Optional[Organisation] = None
 
     @dataclass
-    class TideObjectReferences:
+    class ObjectReferences:
         public: Optional[Mapping[int, str]] = None
         internal: Optional[Mapping[str, str]] = None
         reports: Optional[Sequence[str]] = None
 
     @dataclass
-    class SystemConfigurationModel:
+    class PlatformConfigurationBase:
         schema: str
         status: str
         flags: Optional[list[Never] | list[str]]
@@ -58,7 +58,7 @@ class TideDefinitionsModels:
 class TideModels:
 
     @dataclass
-    class MDR:
+    class DetectionRule:
     
         @dataclass
         class Response:
@@ -83,7 +83,7 @@ class TideModels:
         class Configurations:
             
             @dataclass
-            class SentinelOne(TideDefinitionsModels.SystemConfigurationModel):
+            class SentinelOne(SharedModels.PlatformConfigurationBase):
                 @dataclass
                 class Details:
                     name: Optional[str] = None
@@ -124,7 +124,7 @@ class TideModels:
                 rule_id_bundle: Optional[Mapping[str, int]] = None
 
             @dataclass
-            class DefenderForEndpoint(TideDefinitionsModels.SystemConfigurationModel):
+            class DefenderForEndpoint(SharedModels.PlatformConfigurationBase):
                 @dataclass
                 class Alert:
                     category: str
@@ -203,7 +203,7 @@ class TideModels:
             
             
             @dataclass
-            class Crowdstrike(TideDefinitionsModels.SystemConfigurationModel):
+            class Crowdstrike(SharedModels.PlatformConfigurationBase):
                 @dataclass
                 class Details:
                     trigger: str
@@ -227,11 +227,11 @@ class TideModels:
                 rule_id_bundle: Optional[Mapping[str, str]] = None
 
             @dataclass
-            class Splunk(TideDefinitionsModels.SystemConfigurationModel):
+            class Splunk(SharedModels.PlatformConfigurationBase):
                 ...
 
             @dataclass
-            class Sentinel(TideDefinitionsModels.SystemConfigurationModel):
+            class Sentinel(SharedModels.PlatformConfigurationBase):
                 
                 @dataclass
                 class Template:
@@ -320,11 +320,11 @@ class TideModels:
                 entities: Optional[Sequence[EntityMapping]] = None
 
             @dataclass
-            class CarbonBlackCloud(TideDefinitionsModels.SystemConfigurationModel):
+            class CarbonBlackCloud(SharedModels.PlatformConfigurationBase):
                 ...
 
             @dataclass
-            class HarfangLab(TideDefinitionsModels.SystemConfigurationModel):
+            class HarfangLab(SharedModels.PlatformConfigurationBase):
                 """HarfangLab MDR Configuration supporting Sigma and YARA rules"""
                 
                 @dataclass
@@ -385,10 +385,19 @@ class TideModels:
             harfanglab: Optional[HarfangLab] = None
 
         name: str
-        metadata: TideDefinitionsModels.TideObjectMetadata
+        metadata: SharedModels.ObjectMetadata
         description: str
         response: Response
         configurations: Configurations
         detection_model: Optional[str] = None
-        references: Optional[TideDefinitionsModels.TideObjectReferences] = None
+        references: Optional[SharedModels.ObjectReferences] = None
+
+
+# Module-level type aliases (Phase 2)
+DetectionRule = TideModels.DetectionRule
+ThreatVector = dict  # raw threat vector index entries
+
+# Legacy aliases
+TideDefinitionsModels = SharedModels
+TideModels.MDR = TideModels.DetectionRule  # type: ignore[attr-defined]
 

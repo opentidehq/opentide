@@ -8,7 +8,7 @@ from dataclasses import dataclass
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.systems.defender_for_endpoint import DefenderForEndpointService 
-from Engines.modules.models import TideConfigs
+from Engines.modules.models import ConfigurationModels
 
 class DefenderForEndpointImporter(DefenderForEndpointService):
     
@@ -18,13 +18,13 @@ class DefenderForEndpointImporter(DefenderForEndpointService):
 
 
 #TODO - Iterate over available tenants. For import exercises - update those values manually for now
-setup = TideConfigs.Systems.DefenderForEndpoint.Tenant.Setup(proxy=False,
+setup = ConfigurationModels.Systems.DefenderForEndpoint.Tenant.Setup(proxy=False,
                                                              ssl=True,
                                                              tenant_id="",
                                                              client_id="",
                                                              client_secret="",)
 
-tenant = TideConfigs.Systems.DefenderForEndpoint.Tenant(name="",
+tenant = ConfigurationModels.Systems.DefenderForEndpoint.Tenant(name="",
                                                         description="",
                                                         deployment="",
                                                         setup=setup)

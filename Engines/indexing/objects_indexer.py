@@ -6,14 +6,14 @@ from pathlib import Path
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
-TIDE_INDEXES_PATH = Path(DataTide.Configurations.Global.Paths.Tide.tide_indexes)
-ICONS = DataTide.Configurations.Documentation.icons
+INDEX_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.tide_indexes)
+ICONS = OpenTide.Configurations.Documentation.icons
 
 
 def _empty_model_vocabulary(object_type):
-    index_name = DataTide.Configurations.Documentation.object_names[object_type]
+    index_name = OpenTide.Configurations.Documentation.object_names[object_type]
     return {
         "metadata": {
             "field": object_type,
@@ -33,15 +33,15 @@ def run():
         "Creates Vocabulary like schema CoreTIDE models, so they can be used within JSON Schema for validation.",
     )
 
-    OBJECT_SCOPE = DataTide.Configurations.Global.objects
-    ICONS = DataTide.Configurations.Documentation.icons
-    INDEX_NAME = DataTide.Configurations.Global.indexes.objects
+    OBJECT_SCOPE = OpenTide.Configurations.Global.objects
+    ICONS = OpenTide.Configurations.Documentation.icons
+    INDEX_NAME = OpenTide.Configurations.Global.indexes.objects
     
     object_index = {}
 
     for object_type in OBJECT_SCOPE:
 
-        index_name = DataTide.Configurations.Documentation.object_names[object_type]
+        index_name = OpenTide.Configurations.Documentation.object_names[object_type]
         metadata = {
             "field": object_type,
             "icon": ICONS.get(object_type, ""),
@@ -50,7 +50,7 @@ def run():
             "model": True,
         }
         entries = {}
-        registry = DataTide.Models.Index.get(object_type)
+        registry = OpenTide.Models.Index.get(object_type)
         object_index[object_type] = {}
         object_index[object_type]["metadata"] = metadata
         object_index[object_type]["entries"] = entries
@@ -126,7 +126,7 @@ def run():
     if not object_index.get("dom"):
         object_index["dom"] = _empty_model_vocabulary("dom")
 
-    with open(TIDE_INDEXES_PATH / INDEX_NAME, "w+", encoding="utf-8") as export:
+    with open(INDEX_PATH / INDEX_NAME, "w+", encoding="utf-8") as export:
         export.write("")
         json.dump(object_index, export, indent=4)
 

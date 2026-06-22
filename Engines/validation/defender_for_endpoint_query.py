@@ -9,8 +9,8 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.plugins import ValidateQuery
-from Engines.modules.tide import DataTide, DetectionSystems
+from Engines.modules.plugins import QueryValidator
+from Engines.modules.tide import OpenTide, DetectionPlatforms
 from Engines.modules.models import (TideModels,
                                     DeploymentStrategy,) 
 from Engines.modules.deployment import TideDeployment
@@ -156,10 +156,10 @@ def returned_schema_columns(response:dict)->set[str]:
     returned_columns.discard(None)
     return returned_columns
 
-class DefenderForEndpointValidateQuery(ValidateQuery):
+class DefenderForEndpointQueryValidator(QueryValidator):
 
     def check_query(self,
-                    mdr:TideModels.MDR,
+                    mdr:TideModels.DetectionRule,
                     service:DefenderForEndpointService):
         
         config = mdr.configurations.defender_for_endpoint
@@ -192,14 +192,14 @@ class DefenderForEndpointValidateQuery(ValidateQuery):
 
 
     def validate(self,
-                 mdr_deployment: Union[Sequence[TideModels.MDR], Sequence[str]],
+                 mdr_deployment: Union[Sequence[TideModels.DetectionRule], Sequence[str]],
                  deployment_plan:DeploymentStrategy):
         
         if type(mdr_deployment[0]) is str:
-            mdr_deployment = [DataTide.Models.MDR[uuid] for uuid in mdr_deployment]
+            mdr_deployment = [OpenTide.Models.MDR[uuid] for uuid in mdr_deployment]
 
         deployment = TideDeployment(deployment=mdr_deployment,
-                                    system=DetectionSystems.DEFENDER_FOR_ENDPOINT,
+                                    system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,
                                     strategy=deployment_plan)
         
         for tenant_deployment in deployment.rule_deployment:
@@ -210,7 +210,7 @@ class DefenderForEndpointValidateQuery(ValidateQuery):
                                 service=service)
 
 def declare():
-    return DefenderForEndpointValidateQuery()
+    return DefenderForEndpointQueryValidator()
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    DefenderForEndpointValidateQuery().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG)
+    DefenderForEndpointQueryValidator().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG)

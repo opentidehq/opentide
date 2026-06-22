@@ -27,7 +27,7 @@ from Engines.modules.documentation_components import (
     relations_table,
     reference_doc,
 )
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.logs import log
 from Engines.modules.graphs import relationships_graph
 from Engines.modules.deployment import CIEnvironment
@@ -43,8 +43,8 @@ from Engines.modules.documentation import (
 class DetectionObjectivesWiki:
 
     def __init__(self):
-        WIKI_PATH = Path(DataTide.Configurations.Global.Paths.Core.models_docs_folder)
-        self.DOCUMENTATION_PATH = WIKI_PATH / DataTide.Configurations.Documentation.object_names["dom"]
+        WIKI_PATH = Path(OpenTide.Configurations.Global.Paths.Core.models_docs_folder)
+        self.DOCUMENTATION_PATH = WIKI_PATH / OpenTide.Configurations.Documentation.object_names["dom"]
         if DOCUMENTATION_TARGET in TARGET_WITH_DASH_PATHS:
             self.DOCUMENTATION_PATH = Path(str(self.DOCUMENTATION_PATH).replace(" ", "-"))
             log("INFO",
@@ -53,11 +53,11 @@ class DetectionObjectivesWiki:
 
 
     def create_wiki(self):
-        if not DataTide.Models.DOM:
+        if not OpenTide.Models.DOM:
             return
         self._recreate_folder()
-        for objective in DataTide.Models.DOM:
-            objective_content = DataTide.Models.DOM[objective]
+        for objective in OpenTide.Models.DOM:
+            objective_content = OpenTide.Models.DOM[objective]
             wiki_content = self._create_wiki_page(objective_content)
             self._export(objective_content, wiki_content)
     
@@ -130,7 +130,7 @@ class DetectionObjectivesWiki:
         class Fetchers:
             
             def asset(self, asset_name:str)->None|Configurations.Visibility.Asset:
-                assets = DataTide.Configurations.Visibility.assets
+                assets = OpenTide.Configurations.Visibility.assets
                 if not assets:
                     return None
                 for asset in assets:
@@ -139,7 +139,7 @@ class DetectionObjectivesWiki:
                 return None
 
             def detector(self, technology_name:str)->None|Configurations.Visibility.Detector:
-                detectors = DataTide.Configurations.Visibility.detectors
+                detectors = OpenTide.Configurations.Visibility.detectors
                 if not detectors:
                     return None
                 for technology in detectors:
@@ -148,7 +148,7 @@ class DetectionObjectivesWiki:
                 return None
 
             def logsource(self, logsource_name:str)->None|Configurations.Visibility.LogSource:
-                logsources = DataTide.Configurations.Visibility.logsources
+                logsources = OpenTide.Configurations.Visibility.logsources
                 if not logsources:
                     return None
                 

@@ -13,10 +13,10 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide
-from Engines.modules.models import TideConfigs
+from Engines.modules.tide import OpenTide
+from Engines.modules.models import ConfigurationModels
 from Engines.modules.deployment import Proxy
-from Engines.modules.errors import TideErrors
+from Engines.modules.errors import Errors
 
 
 class GlobalState(Enum):
@@ -230,9 +230,9 @@ class HarfangLabService:
     Initialized on a single tenant basis.
     """
 
-    def __init__(self, tenant_config: TideConfigs.Systems.HarfangLab.Tenant) -> None:
+    def __init__(self, tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant) -> None:
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = DataTide.Configurations.Systems.HarfangLab.platform.identifier
+        self.DEPLOYER_IDENTIFIER = OpenTide.Configurations.Systems.HarfangLab.platform.identifier
         self.tenant_config = tenant_config
         
         base_url = self.tenant_config.setup.url.rstrip("/")
@@ -264,14 +264,14 @@ class HarfangLabService:
                     "Received code [401], Unauthorized access",
                     str(response.text),
                     "Check your API token configuration")
-                raise TideErrors.TideTenantConfigurationMissingPermissions
+                raise Errors.TideTenantConfigurationMissingPermissions
 
             case 403:
                 log("FATAL",
                     "Received code [403], Forbidden",
                     str(response.text),
                     "Check your API permissions")
-                raise TideErrors.TideTenantConfigurationMissingPermissions
+                raise Errors.TideTenantConfigurationMissingPermissions
 
             case 404:
                 log("FATAL",
@@ -315,8 +315,8 @@ class HarfangLabService:
                 log("WARNING", "Could not extract rule ID from response", str(e))
                 return rule.source_id
         else:
-            self._http_errors(response, TideErrors.DetectionRuleCreationFailed)
-            raise TideErrors.DetectionRuleCreationFailed
+            self._http_errors(response, Errors.DetectionRuleCreationFailed)
+            raise Errors.DetectionRuleCreationFailed
 
     def update_sigma_rule(self, rule: SigmaRule, rule_id: str) -> None:
         """
@@ -343,7 +343,7 @@ class HarfangLabService:
         if response.status_code == 200:
             log("SUCCESS", f"Updated Sigma rule: {rule.name}", str(rule_id))
         else:
-            self._http_errors(response, TideErrors.DetectionRuleUpdateFailed)
+            self._http_errors(response, Errors.DetectionRuleUpdateFailed)
 
     def delete_sigma_rule(self, rule_id: str) -> None:
         """
@@ -364,7 +364,7 @@ class HarfangLabService:
         if response.status_code in [200, 204]:
             log("SUCCESS", f"Deleted Sigma rule with ID {rule_id}")
         else:
-            self._http_errors(response, TideErrors.DetectionRuleDeletionFailed)
+            self._http_errors(response, Errors.DetectionRuleDeletionFailed)
 
     def disable_sigma_rule(self, rule_id: str) -> None:
         """
@@ -391,7 +391,7 @@ class HarfangLabService:
         if response.status_code == 200:
             log("SUCCESS", f"Disabled Sigma rule with ID {rule_id}")
         else:
-            self._http_errors(response, TideErrors.DetectionRuleDisablingFailed)
+            self._http_errors(response, Errors.DetectionRuleDisablingFailed)
 
     @staticmethod
     def map_action_to_global_state(action: str) -> str:
@@ -505,7 +505,7 @@ class HarfangLabService:
                 log("SUCCESS", f"Created Sigma rule: {rule.name}", str(rule_id))
                 return
         
-        self._http_errors(response, TideErrors.DetectionRuleCreationFailed)
+        self._http_errors(response, Errors.DetectionRuleCreationFailed)
 
     def create_or_update_yara_rule(self, rule: YaraRule, rule_id: str) -> None:
         """
@@ -541,7 +541,7 @@ class HarfangLabService:
             log("SUCCESS", f"Created/Updated YARA rule: {rule.name}", str(rule_id))
             return
         
-        self._http_errors(response, TideErrors.DetectionRuleCreationFailed)
+        self._http_errors(response, Errors.DetectionRuleCreationFailed)
 
     def delete_yara_rule(self, rule_id: str) -> None:
         """
@@ -562,4 +562,4 @@ class HarfangLabService:
         if response.status_code in [200, 204]:
             log("SUCCESS", f"Deleted YARA rule with ID {rule_id}")
         else:
-            self._http_errors(response, TideErrors.DetectionRuleDeletionFailed)
+            self._http_errors(response, Errors.DetectionRuleDeletionFailed)

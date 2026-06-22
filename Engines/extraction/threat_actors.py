@@ -10,13 +10,13 @@ import yaml
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.files import IndentFullDumper
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.logs import log
 
-RESOURCES_PATH = Path(DataTide.Configurations.Global.Paths.Index["resources"])
-ATTACK_RESOURCES = DataTide.Configurations.Resources.attack
-MISP_RESOURCES = DataTide.Configurations.Resources.misp
-VOCABULARY_PATH = DataTide.Configurations.Global.Paths.Core.vocabularies
+RESOURCES_PATH = Path(OpenTide.Configurations.Global.Paths.Index["resources"])
+ATTACK_RESOURCES = OpenTide.Configurations.Resources.attack
+MISP_RESOURCES = OpenTide.Configurations.Resources.misp
+VOCABULARY_PATH = OpenTide.Configurations.Global.Paths.Core.vocabularies
 
 ATTACK_ENTERPRISE_EXCEL = RESOURCES_PATH / ATTACK_RESOURCES["enterprise"]
 ATTACK_ICS = RESOURCES_PATH / ATTACK_RESOURCES["ics"]

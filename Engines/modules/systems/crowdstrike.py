@@ -15,10 +15,10 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide
-from Engines.modules.models import TideConfigs
+from Engines.modules.tide import OpenTide
+from Engines.modules.models import ConfigurationModels
 from Engines.modules.deployment import Proxy
-from Engines.modules.errors import TideErrors
+from Engines.modules.errors import Errors
 
 class SeverityMapping(Enum):
     Informational = 10
@@ -73,11 +73,11 @@ class CrowdstrikeService:
     tenant basis.
     """
 
-    def __init__(self, tenant_config:TideConfigs.Systems.Crowdstrike.Tenant) -> None:
+    def __init__(self, tenant_config:ConfigurationModels.Systems.Crowdstrike.Tenant) -> None:
 
 
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = DataTide.Configurations.Systems.SentinelOne.platform.identifier
+        self.DEPLOYER_IDENTIFIER = OpenTide.Configurations.Systems.SentinelOne.platform.identifier
         self.tenant_config = tenant_config
         BASE_URL = self._get_base_api(self.tenant_config.setup.api)
         self.OAUTH_TOKEN_ENDPOINT = BASE_URL + "/oauth2/token"
@@ -112,7 +112,7 @@ class CrowdstrikeService:
                 log("FATAL",
                     "The configured Crowdstrike API domain isn't valid",
                     "Expects : US-1 , US-2 , EU-1 , US-GOV-1 , US-GOV-2")
-                raise TideErrors.TideSystemConfigurationErrors("Invalid API Domain")
+                raise Errors.TideSystemConfigurationErrors("Invalid API Domain")
 
     def _get_access_token(self, client_id:str, client_secret:str):
         
@@ -134,7 +134,7 @@ class CrowdstrikeService:
                 f"Cannot authenticate against {self.tenant_config.name} - Error Code {response.status_code}",
                 str(response.json()),
                 f"client_id: {client_id}, client_secret: {client_secret[:10]}...")
-            raise TideErrors.TenantConnectionError("Cannot authenticate with the tenant configuration")
+            raise Errors.TenantConnectionError("Cannot authenticate with the tenant configuration")
 
     def create_detection_rule(self, rule:DetectionRule)->str:
 
@@ -156,13 +156,13 @@ class CrowdstrikeService:
                 log("FATAL",
                     "The rule id was not present in the response body",
                     str(response.json()))
-                raise TideErrors.DetectionRulesOperationErrors("Could not retrieve rule ID") 
+                raise Errors.DetectionRulesOperationErrors("Could not retrieve rule ID") 
             
         else:
             log("FATAL",
                 f"Was not able to create rule against tenant {self.tenant_config.name} - Error Code {response.status_code}",
                 str(response.json()))
-            raise TideErrors.DetectionRuleCreationFailed("Could not create rule")
+            raise Errors.DetectionRuleCreationFailed("Could not create rule")
 
     def update_detection_rule(self, rule_id: str, rule:DetectionRule):
         
@@ -184,7 +184,7 @@ class CrowdstrikeService:
                 f"Was not able to create update rule with id {rule_id} against tenant {self.tenant_config.name} - Error Code {response.status_code}",
                 str(response.json()))
             log("INFO", "Request body", str(rule_body))
-            raise TideErrors.DetectionRuleUpdateFailed("Could not update rule")
+            raise Errors.DetectionRuleUpdateFailed("Could not update rule")
 
 
     def delete_detection_rule(self, rule_id:str):
@@ -206,4 +206,4 @@ class CrowdstrikeService:
                 f"Against tenant {self.tenant_config.name}",
                 "Verify API permission, and check if the rule was not already removed from the console")
 
-            raise TideErrors.DetectionRuleDeletionFailed("Could not delete rule")
+            raise Errors.DetectionRuleDeletionFailed("Could not delete rule")

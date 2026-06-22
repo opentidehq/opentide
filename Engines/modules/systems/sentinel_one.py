@@ -14,10 +14,10 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide
-from Engines.modules.models import TideConfigs
+from Engines.modules.tide import OpenTide
+from Engines.modules.models import ConfigurationModels
 from Engines.modules.deployment import Proxy
-from Engines.modules.errors import TideErrors
+from Engines.modules.errors import Errors
 
 
     
@@ -83,11 +83,11 @@ class SentinelOneService:
     tenant basis.
     """
 
-    def __init__(self, tenant_config:TideConfigs.Systems.SentinelOne.Tenant) -> None:
+    def __init__(self, tenant_config:ConfigurationModels.Systems.SentinelOne.Tenant) -> None:
 
 
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = DataTide.Configurations.Systems.SentinelOne.platform.identifier
+        self.DEPLOYER_IDENTIFIER = OpenTide.Configurations.Systems.SentinelOne.platform.identifier
         self.tenant_config = tenant_config
         
         self.CUSTOM_DETECTION_RULES_ENDPOINT = self.tenant_config.setup.url + "/web/api/v2.1/cloud-detection/rules"
@@ -115,7 +115,7 @@ class SentinelOneService:
                     "Received code [401], Unauthorized access",
                     str(response.text),
                     "Check your configuration and API permissions again")
-                raise TideErrors.TideTenantConfigurationMissingPermissions
+                raise Errors.TideTenantConfigurationMissingPermissions
 
             case 404:
                 log("FATAL",
@@ -164,7 +164,7 @@ class SentinelOneService:
                     "Double check your query on the Sentinel One Event Search interface")
                 return False
             case _:
-                self._http_errors(response, error=TideErrors.TideQueryValidationError)
+                self._http_errors(response, error=Errors.TideQueryValidationError)
             
                 
     def create_update_detection_rule(self, rule:DetectionRule, rule_id:Optional[int]=None)->int:
@@ -184,13 +184,13 @@ class SentinelOneService:
         if rule_id:
             log("ONGOING", "Executing API call to update STAR Custom Rule with id", str(rule_id))
             endpoint += f"/{rule_id}"
-            error = TideErrors.DetectionRuleCreationFailed
+            error = Errors.DetectionRuleCreationFailed
             request = self.session.put(url=endpoint,
                                         verify=self.tenant_config.setup.ssl,
                                         data=rule_body)
         else:
             log("ONGOING", "Executing API call to create STAR Custom Rule")
-            error = TideErrors.DetectionRuleCreationFailed
+            error = Errors.DetectionRuleCreationFailed
             request = self.session.post(url=endpoint,
                                         verify=self.tenant_config.setup.ssl,
                                         data=rule_body)
@@ -218,7 +218,7 @@ class SentinelOneService:
 
             case _:
                 self._http_errors(request,
-                                  error=TideErrors.DetectionRuleDisablingFailed)
+                                  error=Errors.DetectionRuleDisablingFailed)
 
 
     def delete_detection_rule(self, rule_id:int):
@@ -236,4 +236,4 @@ class SentinelOneService:
 
             case _:
                 self._http_errors(request,
-                                  error=TideErrors.DetectionRuleDeletionFailed)
+                                  error=Errors.DetectionRuleDeletionFailed)

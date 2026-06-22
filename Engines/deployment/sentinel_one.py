@@ -7,21 +7,21 @@ from dataclasses import asdict
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, DetectionSystems, TideLoader
-from Engines.modules.plugins import DeployMDR
+from Engines.modules.tide import OpenTide, DetectionPlatforms, ObjectLoader
+from Engines.modules.plugins import RuleDeployer
 from Engines.modules.models import (TideModels,
                                     DeploymentStrategy) 
 from Engines.modules.deployment import TideDeployment, ExternalIdHelper, check_status
 from Engines.modules.logs import log
-from Engines.modules.models import TideConfigs, StatusStrategy
+from Engines.modules.models import ConfigurationModels, StatusStrategy
 
 from Engines.modules.systems.sentinel_one import SentinelOneService, DetectionRule, SeverityMapping
 
-class SentinelOneDeploy(DeployMDR):
+class SentinelOneDeploy(RuleDeployer):
 
     def compile_deployment(self,
-                           data:TideModels.MDR,
-                           tenant_config:TideConfigs.Systems.SentinelOne.Tenant)->DetectionRule:
+                           data:TideModels.DetectionRule,
+                           tenant_config:ConfigurationModels.Systems.SentinelOne.Tenant)->DetectionRule:
         """
         Builds the Detection Rule call made to the API
         """
@@ -145,9 +145,9 @@ class SentinelOneDeploy(DeployMDR):
 
 
     def deploy_mdr(self,
-                   data:TideModels.MDR,
+                   data:TideModels.DetectionRule,
                    service:SentinelOneService,
-                   tenant_config:TideConfigs.Systems.SentinelOne.Tenant):
+                   tenant_config:ConfigurationModels.Systems.SentinelOne.Tenant):
         """
         Deploys the detection rule : creation, update, deletion and disabling.
         """
@@ -203,12 +203,12 @@ class SentinelOneDeploy(DeployMDR):
                 ExternalIdHelper.insert_id(rule_id=rule_id,
                                            tenant_name=tenant_config.name,
                                            mdr_uuid=data.metadata.uuid,
-                                           system_name=DataTide.Configurations.Systems.SentinelOne.platform.identifier)
+                                           system_name=OpenTide.Configurations.Systems.SentinelOne.platform.identifier)
 
 
-    def deploy(self, mdr_deployment: Sequence[TideModels.MDR] | list[str], deployment_plan:DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[TideModels.DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
         """
-        Triggers the deployment sequence for a series of MDR uuids or TideModels.MDR Objects
+        Triggers the deployment sequence for a series of MDR uuids or TideModels.DetectionRule Objects
         """
         
         log("INFO", "Received deployment information", str(mdr_deployment))
@@ -216,13 +216,13 @@ class SentinelOneDeploy(DeployMDR):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                loaded_mdr.append(DataTide.Models.MDR[mdr])
-            elif type(mdr) is TideModels.MDR:
+                loaded_mdr.append(OpenTide.Models.MDR[mdr])
+            elif type(mdr) is TideModels.DetectionRule:
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 
         deployment = TideDeployment(deployment=mdr_deployment,
-                                    system=DetectionSystems.SENTINEL_ONE,
+                                    system=DetectionPlatforms.SENTINEL_ONE,
                                     strategy=deployment_plan)
 
         for tenant_deployment in deployment.rule_deployment:

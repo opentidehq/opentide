@@ -13,9 +13,9 @@ out_file = lib_folder / actions_vocab
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.files import IndentFullDumper
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
-RESOURCES = Path(DataTide.Configurations.Global.Paths.Index["resources"])
+RESOURCES = Path(OpenTide.Configurations.Global.Paths.Index["resources"])
 ATC_REACT = RESOURCES / "atc-react"
 
 

@@ -10,7 +10,7 @@ from typing import Sequence
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.framework import childs, parents, get_vocab_entry
 
 import pandas as pd
@@ -35,10 +35,10 @@ class TableExporter:
 
     def __init__(self):
 
-        self.TIDE_EXPORTS_PATH = Path(DataTide.Configurations.Global.Paths.Tide.exports)
-        self.OBJECT_SCOPE = DataTide.Configurations.Global.objects
-        self.OBJECT_NAMES = DataTide.Configurations.Documentation.object_names
-        self.EXPORT_NAME = DataTide.Configurations.Global.exports.table
+        self.TIDE_EXPORTS_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.exports)
+        self.OBJECT_SCOPE = OpenTide.Configurations.Global.objects
+        self.OBJECT_NAMES = OpenTide.Configurations.Documentation.object_names
+        self.EXPORT_NAME = OpenTide.Configurations.Global.exports.table
         self.EXPORT_PATH = self.TIDE_EXPORTS_PATH / self.EXPORT_NAME
 
     def run(self):
@@ -81,7 +81,7 @@ class TableExporter:
 
     def _create_entry(self, object:str, object_type:str)->TableEntry:
 
-        object_data = DataTide.Models.Index[object_type][object]
+        object_data = OpenTide.Models.Index[object_type][object]
         
         uuid = object
         name = object_data["name"]
@@ -141,7 +141,7 @@ class TableExporter:
         dataset = list()
         for object_type in self.OBJECT_SCOPE:
 
-            object_index = DataTide.Models.Index.get(object_type)
+            object_index = OpenTide.Models.Index.get(object_type)
             if not object_index:
                 log("FAILURE",
                     "Could not find a current indexable set of OpenTide object for the type",

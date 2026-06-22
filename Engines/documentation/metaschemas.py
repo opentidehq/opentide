@@ -17,19 +17,19 @@ from Engines.modules.documentation import (
     DOCUMENTATION_TARGET,
     TARGET_WITH_DASH_PATHS)
 from Engines.modules.logs import log
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.deployment import CIEnvironment
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-METASCHEMAS_INDEX = DataTide.TideSchemas.Index
-SUBSCHEMAS_INDEX = DataTide.TideSchemas.subschemas
-TEMPLATES_INDEX = DataTide.Templates.Index
+METASCHEMAS_INDEX = OpenTide.TideSchemas.Index
+SUBSCHEMAS_INDEX = OpenTide.TideSchemas.subschemas
+TEMPLATES_INDEX = OpenTide.Templates.Index
 
 # Configuration settings fetching routine
-SCHEMA_DOCS_PATH = Path(DataTide.Configurations.Global.Paths.Core.schemas_docs_folder)
-DOC_TITLES = DataTide.Configurations.Documentation.titles
-ICONS = DataTide.Configurations.Documentation.icons
+SCHEMA_DOCS_PATH = Path(OpenTide.Configurations.Global.Paths.Core.schemas_docs_folder)
+DOC_TITLES = OpenTide.Configurations.Documentation.titles
+ICONS = OpenTide.Configurations.Documentation.icons
 
 # Columns of the dataframe which will constructs the table
 columns = ["Field", "Name", "Description", "Type", "Example"]
@@ -97,7 +97,7 @@ def gen_schema_md(metaschema, template, model_type=None):
     return documentation
 
 def definition_handler(entry_point):
-    return DataTide.TideSchemas.definitions[entry_point]
+    return OpenTide.TideSchemas.definitions[entry_point]
 
 def construct_meta_doc_data(metaschema, assembly=[], depth=0):
 

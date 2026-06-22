@@ -3,8 +3,8 @@ from typing import Optional, Sequence, Union
 from Engines.modules.logs import log
 from Engines.modules.models import TideModels
 
-MDE_Exclusion = TideModels.MDR.Configurations.DefenderForEndpoint.Exclusion
-Sentinel_Exclusion = TideModels.MDR.Configurations.Sentinel.Exclusion
+MDE_Exclusion = TideModels.DetectionRule.Configurations.DefenderForEndpoint.Exclusion
+Sentinel_Exclusion = TideModels.DetectionRule.Configurations.Sentinel.Exclusion
 KQLExclusion = Union[MDE_Exclusion, Sentinel_Exclusion]
 
 

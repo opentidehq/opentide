@@ -10,7 +10,7 @@ import pandas as pd
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.splunk import (
-    SplunkEngineInit,
+    SplunkConnection,
     connect_splunk,
     cron_to_timeframe,
     create_query,
@@ -22,13 +22,13 @@ from Engines.modules.framework import (
 )
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 from Engines.modules.models import StatusStrategy
 from Engines.modules.deployment import check_status
-from Engines.modules.plugins import DeployMDR
+from Engines.modules.plugins import RuleDeployer
 
 
-class SplunkDeploy(SplunkEngineInit, DeployMDR):
+class SplunkDeploy(SplunkConnection, RuleDeployer):
 
     def config_mdr(self, mdr):
         """
@@ -387,7 +387,7 @@ class SplunkDeploy(SplunkEngineInit, DeployMDR):
 
         # Start deployment routine
         for mdr in deployment:
-            mdr_data = DataTide.Models.mdr[mdr]
+            mdr_data = OpenTide.Models.mdr[mdr]
 
             # Check if modified MDR contains a platform entry (by safety, but should not happen since
             # the orchestrator will filter for the platform)

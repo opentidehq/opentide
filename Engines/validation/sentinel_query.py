@@ -13,23 +13,23 @@ from azure.core.exceptions import HttpResponseError, ClientAuthenticationError, 
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.plugins import ValidateQuery
+from Engines.modules.plugins import QueryValidator
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide
-from Engines.modules.models import TideModels, TideConfigs, TenantDeployment
-from Engines.modules.errors import TideErrors
-from Engines.modules.deployment import TideDeployment, DetectionSystems, DeploymentStrategy, Proxy
+from Engines.modules.tide import OpenTide
+from Engines.modules.models import TideModels, ConfigurationModels, TenantDeployment
+from Engines.modules.errors import Errors
+from Engines.modules.deployment import TideDeployment, DetectionPlatforms, DeploymentStrategy, Proxy
 
-class SentinelValidateQuery(ValidateQuery):
+class SentinelQueryValidator(QueryValidator):
 
     def check_query(self,
-                    mdr:TideModels.MDR,
-                    tenant_config:TideConfigs.Systems.Sentinel.Tenant,
+                    mdr:TideModels.DetectionRule,
+                    tenant_config:ConfigurationModels.Systems.Sentinel.Tenant,
                     service:LogsQueryClient):
         mdr_uuid = mdr.metadata.uuid
         if not mdr.configurations.sentinel:
-            raise TideErrors.TideMDRDataModelErrors("Missing Sentinel")
+            raise Errors.TideMDRDataModelErrors("Missing Sentinel")
         
         query:str = mdr.configurations.sentinel.query
         if not query:
@@ -93,13 +93,13 @@ class SentinelValidateQuery(ValidateQuery):
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
 
 
-    def validate(self, mdr_deployment: Sequence[TideModels.MDR] | list[str], deployment_plan:DeploymentStrategy):
+    def validate(self, mdr_deployment: Sequence[TideModels.DetectionRule] | list[str], deployment_plan:DeploymentStrategy):
         
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                loaded_mdr.append(DataTide.Models.MDR[mdr])
-            elif type(mdr) is TideModels.MDR:
+                loaded_mdr.append(OpenTide.Models.MDR[mdr])
+            elif type(mdr) is TideModels.DetectionRule:
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 
@@ -107,7 +107,7 @@ class SentinelValidateQuery(ValidateQuery):
         
         
         deployment = TideDeployment(deployment=mdr_deployment,
-                                    system=DetectionSystems.SENTINEL,
+                                    system=DetectionPlatforms.SENTINEL,
                                     strategy=deployment_plan)
 
 
@@ -156,7 +156,7 @@ class SentinelValidateQuery(ValidateQuery):
 
 
 def declare():
-    return SentinelValidateQuery()
+    return SentinelQueryValidator()
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    SentinelValidateQuery().validate(["5e791284-684c-4245-9ac7-cf00a1d041d6"], DeploymentStrategy.DEBUG)
+    SentinelQueryValidator().validate(["5e791284-684c-4245-9ac7-cf00a1d041d6"], DeploymentStrategy.DEBUG)

@@ -1,5 +1,5 @@
 
-class TideErrors(Exception):
+class Errors(Exception):
     """
     Container for all custom OpenTIDE errors
     """
@@ -85,3 +85,7 @@ class TideErrors(Exception):
         Raised when the MDR query failed validation
         """
         ...
+
+
+# Legacy alias
+TideErrors = Errors

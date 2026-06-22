@@ -8,11 +8,11 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.plugins import ValidateQuery
-from Engines.modules.tide import DataTide
-from Engines.modules.carbon_black_cloud import CarbonBlackCloudEngineInit
+from Engines.modules.plugins import QueryValidator
+from Engines.modules.tide import OpenTide
+from Engines.modules.carbon_black_cloud import CarbonBlackCloudConnection
 
-class CarbonBlackCloudValidateQuery(CarbonBlackCloudEngineInit, ValidateQuery):
+class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator):
 
     def check_query(self, mdr:dict, service:CBCloudAPI):
         query:str = mdr["configurations"]["carbon_black_cloud"].get("query")
@@ -58,7 +58,7 @@ class CarbonBlackCloudValidateQuery(CarbonBlackCloudEngineInit, ValidateQuery):
 
         # Start deployment routine
         for mdr in deployment:
-            mdr_data:dict = DataTide.Models.mdr[mdr]
+            mdr_data:dict = OpenTide.Models.mdr[mdr]
             mdr_uuid = mdr_data.get('uuid') or mdr_data["metadata"]["uuid"]
 
             # Check if modified MDR contains a platform entry (by safety, but should not happen since
@@ -77,7 +77,7 @@ class CarbonBlackCloudValidateQuery(CarbonBlackCloudEngineInit, ValidateQuery):
 
 
 def declare():
-    return CarbonBlackCloudValidateQuery()
+    return CarbonBlackCloudQueryValidator()
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    CarbonBlackCloudValidateQuery().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)
+    CarbonBlackCloudQueryValidator().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)

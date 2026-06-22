@@ -13,8 +13,8 @@ from Engines.modules.files import resolve_paths
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-TIDE_CONFIG = toml.load(open(ROOT / "Configurations/global.toml", encoding="utf-8"))
-METASCHEMAS = TIDE_CONFIG["metaschemas"]
+CORE_CONFIG = toml.load(open(ROOT / "Configurations/global.toml", encoding="utf-8"))
+METASCHEMAS = CORE_CONFIG["metaschemas"]
 SKIPS = ["logsources", "ram", "mdrv2"]
 
 PATHS = resolve_paths()

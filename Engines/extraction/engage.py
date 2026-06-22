@@ -7,12 +7,12 @@ from pathlib import Path
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 from Engines.modules.files import IndentFullDumper
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
-RESOURCE_PATH = Path(DataTide.Configurations.Global.Paths.Core.resources)
-ENGAGE_DATA = DataTide.Configurations.Resources.engage["matrix"]
+RESOURCE_PATH = Path(OpenTide.Configurations.Global.Paths.Core.resources)
+ENGAGE_DATA = OpenTide.Configurations.Resources.engage["matrix"]
 
-vocab_folder = Path(DataTide.Configurations.Global.Paths.Core.vocabularies)
+vocab_folder = Path(OpenTide.Configurations.Global.Paths.Core.vocabularies)
 out_file = vocab_folder / "MITRE Engage.yaml"
 
 

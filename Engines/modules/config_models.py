@@ -11,7 +11,7 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
 
-# TODO - Re-Architect Uber Class by merging this and DataTide
+# TODO - Re-Architect Uber Class by merging this and OpenTide
 
 # OpenTide.Models. #DataModels
 # OpenTide.Objects. #Returning Models
@@ -24,7 +24,7 @@ from Engines.modules.enums import StatusStrategy
 from Engines.modules.system_models import SystemConfig
 
 @dataclass
-class TideConfigs:
+class ConfigurationModels:
 
     @dataclass
     class Deployment:
@@ -142,4 +142,10 @@ class TideConfigs:
 
             tenants: Optional[Sequence[Tenant]]
 
+
+# Legacy alias
+ConfigurationModels = ConfigurationModels
+
+# Legacy alias
+ConfigurationModels = ConfigurationModels
 

@@ -7,13 +7,13 @@ from dataclasses import asdict
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, DetectionSystems
-from Engines.modules.plugins import DeployMDR
+from Engines.modules.tide import OpenTide, DetectionPlatforms
+from Engines.modules.plugins import RuleDeployer
 from Engines.modules.models import (TideModels,
                                     DeploymentStrategy) 
 from Engines.modules.deployment import TideDeployment, check_status
 from Engines.modules.logs import log
-from Engines.modules.models import TideConfigs, StatusStrategy
+from Engines.modules.models import ConfigurationModels, StatusStrategy
 
 from Engines.modules.systems.harfanglab import (
     HarfangLabService,
@@ -51,7 +51,7 @@ OS_TO_FILE_CONTEXT = {
 }
 
 
-class HarfangLabDeploy(DeployMDR):
+class HarfangLabDeploy(RuleDeployer):
     """
     Deployer for HarfangLab EDR.
     Supports both Sigma rules (behavioral detection) and YARA rules (memory/file scanning).
@@ -59,8 +59,8 @@ class HarfangLabDeploy(DeployMDR):
 
     def compile_sigma_deployment(
         self,
-        data: TideModels.MDR,
-        tenant_config: TideConfigs.Systems.HarfangLab.Tenant
+        data: TideModels.DetectionRule,
+        tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant
     ) -> SigmaRule:
         """
         Builds the Sigma Rule for deployment to HarfangLab API.
@@ -152,8 +152,8 @@ class HarfangLabDeploy(DeployMDR):
 
     def compile_yara_deployment(
         self,
-        data: TideModels.MDR,
-        tenant_config: TideConfigs.Systems.HarfangLab.Tenant
+        data: TideModels.DetectionRule,
+        tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant
     ) -> YaraRule:
         """
         Builds the YARA Rule for deployment to HarfangLab API.
@@ -332,9 +332,9 @@ class HarfangLabDeploy(DeployMDR):
 
     def deploy_mdr(
         self,
-        data: TideModels.MDR,
+        data: TideModels.DetectionRule,
         service: HarfangLabService,
-        tenant_config: TideConfigs.Systems.HarfangLab.Tenant
+        tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant
     ):
         """
         Deploys the detection rule: creation, update, deletion, and disabling.
@@ -383,11 +383,11 @@ class HarfangLabDeploy(DeployMDR):
 
     def deploy(
         self,
-        mdr_deployment: Sequence[TideModels.MDR] | list[str],
+        mdr_deployment: Sequence[TideModels.DetectionRule] | list[str],
         deployment_plan: DeploymentStrategy
     ):
         """
-        Triggers the deployment sequence for a series of MDR uuids or TideModels.MDR Objects
+        Triggers the deployment sequence for a series of MDR uuids or TideModels.DetectionRule Objects
         """
         log("INFO", "Received HarfangLab deployment information", str(mdr_deployment))
         
@@ -395,14 +395,14 @@ class HarfangLabDeploy(DeployMDR):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if isinstance(mdr, str):
-                loaded_mdr.append(DataTide.Models.MDR[mdr])
-            elif isinstance(mdr, TideModels.MDR):
+                loaded_mdr.append(OpenTide.Models.MDR[mdr])
+            elif isinstance(mdr, TideModels.DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
 
         deployment = TideDeployment(
             deployment=mdr_deployment,
-            system=DetectionSystems.HARFANGLAB,
+            system=DetectionPlatforms.HARFANGLAB,
             strategy=deployment_plan
         )
 

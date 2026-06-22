@@ -26,10 +26,10 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.indexing.indexer import indexer
 from Engines.modules.logs import log
-from Engines.modules.models import (DetectionSystems,
+from Engines.modules.models import (DetectionPlatforms,
                                     TideModels,
-                                    TideDefinitionsModels,
-                                    TideConfigs,
+                                    SharedModels,
+                                    ConfigurationModels,
                                     SystemConfig)
 from Engines.modules.patching import Tide2Patching
 from Engines.modules.datamodels.objects import Objects
@@ -37,17 +37,17 @@ from Engines.modules.datamodels.configurations import Configurations
 
 ROOT = Path(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-class SystemLoader:
+class PlatformConfigLoader:
 
     @staticmethod
-    def _base_configuration(mdr_config:dict[str, Any])->Tuple[dict[str, Any], TideDefinitionsModels.SystemConfigurationModel]:
+    def _base_configuration(mdr_config:dict[str, Any])->Tuple[dict[str, Any], SharedModels.PlatformConfigurationBase]:
         """Extract common top-level configuration fields from an MDR config.
 
         Many MDR system-specific configuration blocks share a small set of
         common keys: ``schema``, ``status``, ``tenants``, ``flags`` and
         ``contributors``. This helper pops those values from the provided
         mapping and returns a tuple containing the remaining mapping and a
-        populated SystemConfigurationModel instance.
+        populated PlatformConfigurationBase instance.
 
         Args:
             mdr_config: A mutable mapping with MDR configuration fields. The
@@ -56,11 +56,11 @@ class SystemLoader:
         Returns:
             A tuple (remaining_config, BaseConfigModel) where ``remaining_config``
             is the original mapping with the common fields removed and
-            ``BaseConfigModel`` is a TideDefinitionsModels.SystemConfigurationModel
+            ``BaseConfigModel`` is a SharedModels.PlatformConfigurationBase
             constructed from the popped values.
         """
 
-        BaseConfigModel = TideDefinitionsModels.SystemConfigurationModel
+        BaseConfigModel = SharedModels.PlatformConfigurationBase
         schema = mdr_config.pop("schema", None)
         status = mdr_config.pop("status", None)
         tenants:list[str] = mdr_config.pop("tenants", None)
@@ -107,11 +107,11 @@ class SystemLoader:
         return mdr_config, rule_id_bundle
 
     @staticmethod
-    def sentinel(mdr_config: dict[str, Any]) -> TideModels.MDR.Configurations.Sentinel:
+    def sentinel(mdr_config: dict[str, Any]) -> TideModels.DetectionRule.Configurations.Sentinel:
         """Build a Sentinel system configuration object from raw MDR config.
 
         This function maps the dictionary structure used in the index/TOML
-        files into a strongly-typed ``TideModels.MDR.Configurations.Sentinel``
+        files into a strongly-typed ``TideModels.DetectionRule.Configurations.Sentinel``
         instance. It extracts shared base configuration values, converts any
         nested structures (template, trigger, scheduling, alert, grouping,
         entities) to their corresponding dataclass representations and returns
@@ -123,13 +123,13 @@ class SystemLoader:
                 mutated (popped) while the function extracts nested fields.
 
         Returns:
-            A ``TideModels.MDR.Configurations.Sentinel`` instance populated
+            A ``TideModels.DetectionRule.Configurations.Sentinel`` instance populated
             from the provided configuration mapping.
         """
 
-        Sentinel = TideModels.MDR.Configurations.Sentinel
+        Sentinel = TideModels.DetectionRule.Configurations.Sentinel
 
-        mdr_config, base_config = SystemLoader._base_configuration(mdr_config)
+        mdr_config, base_config = PlatformConfigLoader._base_configuration(mdr_config)
 
         query = mdr_config.pop("query")
 
@@ -206,10 +206,10 @@ class SystemLoader:
         )
 
     @staticmethod
-    def crowdstrike(mdr_config:dict[str, Any])->TideModels.MDR.Configurations.Crowdstrike:
+    def crowdstrike(mdr_config:dict[str, Any])->TideModels.DetectionRule.Configurations.Crowdstrike:
         """Build a Crowdstrike system configuration object from raw MDR config.
 
-        Transforms the provided mapping into a ``TideModels.MDR.Configurations.Crowdstrike``
+        Transforms the provided mapping into a ``TideModels.DetectionRule.Configurations.Crowdstrike``
         instance by extracting the base configuration values, resolving any
         external rule id bundle, and converting nested detail and schedule
         structures.
@@ -218,13 +218,13 @@ class SystemLoader:
             mdr_config: A mapping containing crowdstrike configuration fields.
 
         Returns:
-            A ``TideModels.MDR.Configurations.Crowdstrike`` instance.
+            A ``TideModels.DetectionRule.Configurations.Crowdstrike`` instance.
         """
 
-        Crowdstrike = TideModels.MDR.Configurations.Crowdstrike
+        Crowdstrike = TideModels.DetectionRule.Configurations.Crowdstrike
 
-        mdr_config, base_config = SystemLoader._base_configuration(mdr_config)
-        mdr_config, rule_id_bundle = SystemLoader._external_rule_id(mdr_config)
+        mdr_config, base_config = PlatformConfigLoader._base_configuration(mdr_config)
+        mdr_config, rule_id_bundle = PlatformConfigLoader._external_rule_id(mdr_config)
         
         details = Crowdstrike.Details(**mdr_config.pop("details"))
         schedule = Crowdstrike.Schedule(**mdr_config.pop("schedule"))
@@ -241,25 +241,25 @@ class SystemLoader:
                            query=query)
 
     @staticmethod
-    def sentinel_one(mdr_config:dict[str, Any])->TideModels.MDR.Configurations.SentinelOne:
+    def sentinel_one(mdr_config:dict[str, Any])->TideModels.DetectionRule.Configurations.SentinelOne:
         """Build a SentinelOne system configuration object from raw MDR config.
 
         Parses details, condition (including single_event and correlation
         subqueries), optional cool-off settings and response information, and
-        returns a populated ``TideModels.MDR.Configurations.SentinelOne``
+        returns a populated ``TideModels.DetectionRule.Configurations.SentinelOne``
         instance.
 
         Args:
             mdr_config: A mapping containing sentinel_one configuration fields.
 
         Returns:
-            A ``TideModels.MDR.Configurations.SentinelOne`` instance.
+            A ``TideModels.DetectionRule.Configurations.SentinelOne`` instance.
         """
 
-        SentinelOne = TideModels.MDR.Configurations.SentinelOne
+        SentinelOne = TideModels.DetectionRule.Configurations.SentinelOne
         
-        mdr_config, base_config = SystemLoader._base_configuration(mdr_config)
-        mdr_config, rule_id_bundle = SystemLoader._external_rule_id(mdr_config)
+        mdr_config, base_config = PlatformConfigLoader._base_configuration(mdr_config)
+        mdr_config, rule_id_bundle = PlatformConfigLoader._external_rule_id(mdr_config)
         
         details = None
         if mdr_config.get("details"):
@@ -297,11 +297,11 @@ class SystemLoader:
                            response=response)
 
     @staticmethod
-    def defender_for_endpoint(mdr_config:dict[str, Any])->TideModels.MDR.Configurations.DefenderForEndpoint:
+    def defender_for_endpoint(mdr_config:dict[str, Any])->TideModels.DetectionRule.Configurations.DefenderForEndpoint:
         """Build a Defender for Endpoint system configuration from raw MDR config.
 
         Converts the dictionary representation into a
-        ``TideModels.MDR.Configurations.DefenderForEndpoint`` instance. This
+        ``TideModels.DetectionRule.Configurations.DefenderForEndpoint`` instance. This
         includes parsing nested alert, impacted_entities, scope and response
         actions structures. The function supports legacy per-tenant ``rule_id::``
         keys and will assemble a rule id bundle if present.
@@ -311,12 +311,12 @@ class SystemLoader:
                 fields.
 
         Returns:
-            A ``TideModels.MDR.Configurations.DefenderForEndpoint`` instance.
+            A ``TideModels.DetectionRule.Configurations.DefenderForEndpoint`` instance.
         """
 
-        DefenderForEndpoint = TideModels.MDR.Configurations.DefenderForEndpoint
+        DefenderForEndpoint = TideModels.DetectionRule.Configurations.DefenderForEndpoint
 
-        mdr_config, base_config = SystemLoader._base_configuration(mdr_config)
+        mdr_config, base_config = PlatformConfigLoader._base_configuration(mdr_config)
         #TODO Migrate to new rule ID bundle method
         
         rule_id_bundle = {}
@@ -382,7 +382,7 @@ class SystemLoader:
                                     exclusions=exclusions)
 
     @staticmethod
-    def harfanglab(mdr_config: dict[str, Any]) -> TideModels.MDR.Configurations.HarfangLab:
+    def harfanglab(mdr_config: dict[str, Any]) -> TideModels.DetectionRule.Configurations.HarfangLab:
         """Build a HarfangLab system configuration object from raw MDR config.
 
         Parses sigma and yara rule configurations, along with common HarfangLab
@@ -392,12 +392,12 @@ class SystemLoader:
             mdr_config: A mapping containing harfanglab configuration fields.
 
         Returns:
-            A ``TideModels.MDR.Configurations.HarfangLab`` instance.
+            A ``TideModels.DetectionRule.Configurations.HarfangLab`` instance.
         """
-        HarfangLab = TideModels.MDR.Configurations.HarfangLab
+        HarfangLab = TideModels.DetectionRule.Configurations.HarfangLab
         
-        mdr_config, base_config = SystemLoader._base_configuration(mdr_config)
-        mdr_config, rule_id_bundle = SystemLoader._external_rule_id(mdr_config)
+        mdr_config, base_config = PlatformConfigLoader._base_configuration(mdr_config)
+        mdr_config, rule_id_bundle = PlatformConfigLoader._external_rule_id(mdr_config)
         
         # Extract HarfangLab-specific fields (REQUIRED, but provide defaults for backwards compatibility)
         maturity = mdr_config.pop("maturity", "Experimental")
@@ -449,4 +449,7 @@ class SystemLoader:
             rule_id_bundle=rule_id_bundle if rule_id_bundle else None  # type: ignore
         )
 
+
+# Legacy alias
+SystemLoader = PlatformConfigLoader
 

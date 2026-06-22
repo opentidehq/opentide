@@ -13,10 +13,10 @@ sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide
-from Engines.modules.models import TideConfigs
+from Engines.modules.tide import OpenTide
+from Engines.modules.models import ConfigurationModels
 from Engines.modules.deployment import Proxy
-from Engines.modules.errors import TideErrors
+from Engines.modules.errors import Errors
 
 class Severity(str, Enum):
     informational = "informational"
@@ -94,10 +94,10 @@ class DefenderForEndpointService:
     Interface to connect and deploy MDRs to MDE. Initialized on a single
     tenant basis.
     """
-    def __init__(self, tenant_config:TideConfigs.Systems.DefenderForEndpoint.Tenant) -> None:
+    def __init__(self, tenant_config:ConfigurationModels.Systems.DefenderForEndpoint.Tenant) -> None:
 
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = DataTide.Configurations.Systems.DefenderForEndpoint.platform.identifier
+        self.DEPLOYER_IDENTIFIER = OpenTide.Configurations.Systems.DefenderForEndpoint.platform.identifier
         self.OAUTH_TOKEN_ENDPOINT = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
         self.GRAPH_API_ENDPOINT = "https://graph.microsoft.com/beta/security"
         self.DETECTION_RULES_ENDPOINT = self.GRAPH_API_ENDPOINT + "/rules/detectionRules"
@@ -140,7 +140,7 @@ class DefenderForEndpointService:
                 f"Cannot authenticate against {self.tenant_config.name}",
                 str(response.json()),
                 f"client_id: {client_id}, tenant_id: {tenant_id}, client_secret: {client_secret[:10]}...")
-            raise TideErrors.TenantConnectionError("Cannot authenticate with the tenant configuration")
+            raise Errors.TenantConnectionError("Cannot authenticate with the tenant configuration")
 
     
     def _safer_configuation(self, rule:DetectionRule)->DetectionRule:
@@ -242,7 +242,7 @@ class DefenderForEndpointService:
                 os.environ["DEPLOYMENT_WARNING_RAISED"]
                 return int(request.json()["id"])
             else:
-                raise TideErrors.DetectionRuleCreationFailed
+                raise Errors.DetectionRuleCreationFailed
 
     def update_detection_rule(self, rule:DetectionRule, rule_id:int):
         
@@ -262,7 +262,7 @@ class DefenderForEndpointService:
             log("FATAL",
                 f"Failed to update detection rule with id {rule_id} in tenant {self.tenant_config.name} ({url})",
                 str(request.json()), str(rule_body))
-            raise TideErrors.DetectionRuleUpdateFailed
+            raise Errors.DetectionRuleUpdateFailed
 
     def delete_detection_rule(self, rule_id:int):
         request = self.session.delete(url=self.DETECTION_RULES_ENDPOINT + f"/{rule_id}",
@@ -273,4 +273,4 @@ class DefenderForEndpointService:
             log("FATAL",
                 f"Failed to delete detection rule with id {rule_id} in tenant {self.tenant_config.name}",
                 "Double check scope permissions, and whether the ID actually exists")
-            raise TideErrors.DetectionRuleDeletionFailed
+            raise Errors.DetectionRuleDeletionFailed

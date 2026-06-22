@@ -10,13 +10,13 @@ import pandas as pd
 
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
-from Engines.modules.splunk import connect_splunk, create_query, SplunkEngineInit
-from Engines.modules.plugins import ValidateQuery
+from Engines.modules.splunk import connect_splunk, create_query, SplunkConnection
+from Engines.modules.plugins import QueryValidator
 from Engines.modules.logs import log
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide
+from Engines.modules.tide import OpenTide
 
-class SplunkValidateQuery(SplunkEngineInit, ValidateQuery):
+class SplunkQueryValidator(SplunkConnection, QueryValidator):
 
     def check_query(self, mdr:dict, service:client.Service):
         mdr_uuid = mdr.get("uuid") or mdr["metadata"]["uuid"]
@@ -96,7 +96,7 @@ class SplunkValidateQuery(SplunkEngineInit, ValidateQuery):
             )
         # Start deployment routine
         for mdr in deployment:
-            mdr_data:dict = DataTide.Models.mdr[mdr]
+            mdr_data:dict = OpenTide.Models.mdr[mdr]
             mdr_uuid = mdr_data.get("uuid") or mdr_data["metadata"]["uuid"]
 
             # Check if modified MDR contains a platform entry (by safety, but should not happen since
@@ -114,7 +114,7 @@ class SplunkValidateQuery(SplunkEngineInit, ValidateQuery):
                 )
 
 def declare():
-    return SplunkValidateQuery()    
+    return SplunkQueryValidator()    
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    SplunkValidateQuery().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)
+    SplunkQueryValidator().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)

@@ -7,8 +7,8 @@ from dataclasses import dataclass
 sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from Engines.modules.debug import DebugEnvironment
-from Engines.modules.tide import DataTide, DetectionSystems, TideLoader
-from Engines.modules.plugins import DeployMDR
+from Engines.modules.tide import OpenTide, DetectionPlatforms, ObjectLoader
+from Engines.modules.plugins import RuleDeployer
 from Engines.modules.models import (TideModels,
                                     DeploymentStrategy,
                                     StatusStrategy) 
@@ -23,9 +23,9 @@ from Engines.modules.systems.defender_for_endpoint import (DetectionRule,
     
 
 
-class DefenderForEndpointDeploy(DeployMDR):
+class DefenderForEndpointDeploy(RuleDeployer):
     
-    def deploy_mdr(self, data:TideModels.MDR, service:DefenderForEndpointService, tenant:str):
+    def deploy_mdr(self, data:TideModels.DetectionRule, service:DefenderForEndpointService, tenant:str):
 
         def lower_first_character(string:str)->str:
             return string[0].lower() + string[1:]
@@ -181,7 +181,7 @@ class DefenderForEndpointDeploy(DeployMDR):
                     str(rule_id))
                 
                 service.delete_detection_rule(rule_id)
-                file_path = DataTide.Configurations.Global.Paths.Tide.mdr / DataTide.Models.files[data.metadata.uuid]
+                file_path = OpenTide.Configurations.Global.Paths.Tide.mdr / OpenTide.Models.files[data.metadata.uuid]
                 with open(file_path, "r", encoding="utf-8") as mdr_file:
                     content = mdr_file.readlines()
 
@@ -203,7 +203,7 @@ class DefenderForEndpointDeploy(DeployMDR):
         
             else:
                 rule_id = service.create_detection_rule(rule)
-                file_path = DataTide.Configurations.Global.Paths.Tide.mdr / DataTide.Models.files[data.metadata.uuid]
+                file_path = OpenTide.Configurations.Global.Paths.Tide.mdr / OpenTide.Models.files[data.metadata.uuid]
                 with open(file_path, "r", encoding="utf-8") as mdr_file:
                     content = mdr_file.readlines()
                 
@@ -224,12 +224,12 @@ class DefenderForEndpointDeploy(DeployMDR):
                     mdr_file.writelines(updated_content)
 
     
-    def deploy(self, mdr_deployment: Sequence[TideModels.MDR], deployment_plan:DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[TideModels.DetectionRule], deployment_plan:DeploymentStrategy):
         
-        mdr_deployment = [DataTide.Models.MDR[uuid] for uuid in mdr_deployment]
+        mdr_deployment = [OpenTide.Models.MDR[uuid] for uuid in mdr_deployment]
 
         deployment = TideDeployment(deployment=mdr_deployment,
-                                    system=DetectionSystems.DEFENDER_FOR_ENDPOINT,
+                                    system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,
                                     strategy=deployment_plan)
         for tenant_deployment in deployment.rule_deployment:
             service = DefenderForEndpointService(tenant_deployment.tenant) #type: ignore

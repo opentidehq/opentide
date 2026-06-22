@@ -12,14 +12,14 @@ from Engines.modules.deployment import (enabled_systems,
                                         make_deploy_plan,
                                         DeploymentStrategy,
                                         CIEnvironment)
-from Engines.modules.logs import log, ANSI, coretide_intro
-from Engines.modules.tide import IndexTide
+from Engines.modules.logs import log, ANSI, print_banner
+from Engines.modules.tide import IndexManager
 from Engines.mutation.promotion import PromoteMDR
 
 
 os.environ["INDEX_OUTPUT"] = "cache"
 
-print(coretide_intro())
+print(print_banner())
 print(f"""
 {ANSI.Colors.BLUE}{ANSI.Formatting.ITALICS}{ANSI.Formatting.BOLD}
 CoreTide Detection Deployment
@@ -60,9 +60,9 @@ if len(deployment_list) == 0:  # In case of no deployments possible, fail gracio
         exit()
 
 # Need reindexation after MDR promotion is complete.
-IndexTide.reload()
+IndexManager.reload()
 
-# Need to import later so DataTide has been correctly
+# Need to import later so OpenTide has been correctly
 # Refreshed post-promotion, and thus can correctly set
 # global modules variables.
 from Engines.modules.plugins import DeployTide
