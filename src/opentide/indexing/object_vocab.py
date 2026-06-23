@@ -1,9 +1,11 @@
 """Object vocabulary generation — inline replacement for objects_indexer."""
 
 from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any
+
 from opentide.core.index_manager import IndexManager
 
 

@@ -1,26 +1,24 @@
 from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any, cast
-import yaml
+
 from opentide.core.files import resolve_paths
+from opentide.core.logging import log
 from opentide.core.registry import OpenTide
 from opentide.documentation.core import get_icon
 from opentide.generation.framework import get_type, get_vocab_entry
 from opentide.generation.vocabulary import VocabularyDefinition, entry_key_field
-from opentide.models.legacy import StatusStrategy
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.enabled import enabled_systems
-import structlog
-from opentide.core.logging.console import emit_section
 
-logger = structlog.get_logger("opentide.generation.schema_pipeline")
 GLOBAL_CONFIG: Any
 VOCAB_INDEX: dict[str, Any]
 CONFIG_INDEX: dict[str, Any]
 PATHS: dict[str, Path]
 SCHEMA_CONFIG: dict[str, Any]
 VOCAB_EXTENSIONS: dict[str, Any]
-METASCHEMAS_FOLDER: Path
 VOCABS_FOLDER: Path
 JSON_SCHEMA_FOLDER: Path
 ICONS: Any
@@ -33,20 +31,20 @@ def _refresh_runtime_context() -> None:
     """Rebind module globals after env or index changes (tests, reload)."""
     global GLOBAL_CONFIG, VOCAB_INDEX, CONFIG_INDEX, PATHS
     global SCHEMA_CONFIG, VOCAB_EXTENSIONS
-    global METASCHEMAS_FOLDER, VOCABS_FOLDER, JSON_SCHEMA_FOLDER
+    global VOCABS_FOLDER, JSON_SCHEMA_FOLDER
     global ICONS, OBJECT_TYPES, SUBSCHEMAS_PATH, RECOMPOSITION
+
     GLOBAL_CONFIG = OpenTide.Configurations.Global
     VOCAB_INDEX = OpenTide.Vocabularies.Index
     CONFIG_INDEX = OpenTide.Configurations.Index
     PATHS = resolve_paths()
     SCHEMA_CONFIG = CONFIG_INDEX.get("schema", {})
     VOCAB_EXTENSIONS = SCHEMA_CONFIG.get("vocabulary", {})
-    METASCHEMAS_FOLDER = Path(PATHS["metaschemas"])
     VOCABS_FOLDER = Path(PATHS["vocabularies"])
     JSON_SCHEMA_FOLDER = Path(PATHS["json_schemas"])
     ICONS = OpenTide.Configurations.Documentation.icons
     OBJECT_TYPES = OpenTide.Configurations.Global.objects
-    SUBSCHEMAS_PATH = Path(PATHS["subschemas"])
+    SUBSCHEMAS_PATH = Path(PATHS.get("platform_templates", PATHS.get("subschemas", ".")))
     RECOMPOSITION = GLOBAL_CONFIG.recomposition
 
 
@@ -70,6 +68,10 @@ class VocabularyResolver:
         VocabularyResolver.SystemTenants("splunk").resolve()
     """
 
+    # ------------------------------------------------------------------
+    # Shared visibility helpers
+    # ------------------------------------------------------------------
+
     @staticmethod
     def _visibility():
         """Return the visibility configuration, or ``None``."""
@@ -87,13 +89,25 @@ class VocabularyResolver:
         """Format a single asset entry as markdown."""
         asset = asset_map.get(asset_name)
         if not asset:
-            return f"\n- ⚠️ **{asset_name}**\n  - _Warning_: Asset not found in configuration\n  - _Action Required_: Define this asset in the assets section"
-        text = f"\n- **{asset.name}**\n  - _Criticality_: {asset.criticality}\n  - _Description_: {asset.description}"
+            return (
+                f"\n- ⚠️ **{asset_name}**"
+                f"\n  - _Warning_: Asset not found in configuration"
+                f"\n  - _Action Required_: Define this asset in the assets section"
+            )
+        text = (
+            f"\n- **{asset.name}**"
+            f"\n  - _Criticality_: {asset.criticality}"
+            f"\n  - _Description_: {asset.description}"
+        )
         if asset.custom_details:
             text += "\n  - _Custom Details_:"
             for k, v in asset.custom_details.items():
                 text += f"\n    - {k}: {v}"
         return text
+
+    # ==================================================================
+    # Vocabulary
+    # ==================================================================
 
     class Vocabulary:
         """Resolve vocabulary entries into JSON Schema enum arrays.
@@ -113,7 +127,25 @@ class VocabularyResolver:
         """
 
         _STAGE_DESC_LIMIT = 300
-        _DROPDOWN = "\n### {icon} {name}\n\n{id_icon} **Identifier** : `{identifier}`\n\n_Vocabulary_ : `{source_vocab}`\n\n{criticality} {tlp}\n\n{stage}\n\n{link}\n\n---\n\n{description}\n"
+
+        _DROPDOWN = """
+### {icon} {name}
+
+{id_icon} **Identifier** : `{identifier}`
+
+_Vocabulary_ : `{source_vocab}`
+
+{criticality} {tlp}
+
+{stage}
+
+{link}
+
+---
+
+{description}
+"""
+
         _HINT_ABBREVS = (
             (" and ", " & "),
             (" without ", " w/o "),
@@ -144,21 +176,25 @@ class VocabularyResolver:
             self._hint_descriptions: list[str] = []
             self._hints_enabled = False
 
+        # --- Public API -----------------------------------------------
+
         def resolve(self) -> tuple[list[str], list[str]]:
             """Resolve core + extension entries → ``(enum, descriptions)``."""
-            logger.debug("resolving_vocab_enums_for", detail=self.vocab)
+            log("DEBUG", "Resolving vocab enums for", self.vocab)
             self._ingest(VOCAB_INDEX.get(self.vocab))
             self._ingest_extensions()
             return self._finalise()
 
+        # --- Ingestion ------------------------------------------------
+
         def _ingest(self, vocab_data: VocabularyDefinition | None):
             """Ingest entries from a vocabulary definition (core index)."""
             if not vocab_data:
-                logger.warning("could_not_retrieve_vocabulary", detail=self.vocab)
+                log("WARNING", "Could not retrieve vocabulary", self.vocab)
                 return
             metadata = vocab_data.metadata
             self._hints_enabled = metadata.get("vocab.search_hints", True)
-            is_model = metadata.model or self.vocab in OBJECT_TYPES
+            is_model = metadata.model or (self.vocab in OBJECT_TYPES)
             entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
             self._process(entries, is_model=is_model)
 
@@ -167,23 +203,18 @@ class VocabularyResolver:
             extensions = VOCAB_EXTENSIONS.get(self.vocab, [])
             if not extensions:
                 return
-            logger.debug(
-                "event",
-                detail=f"Processing {len(extensions)} extension(s) for",
-                context_1=self.vocab,
-            )
+            log("DEBUG", f"Processing {len(extensions)} extension(s) for", self.vocab)
             ext_vocab = VOCAB_INDEX.get(self.vocab)
             ext_meta = ext_vocab.metadata if ext_vocab else None
-            is_model = (ext_meta.model if ext_meta else False) or self.vocab in OBJECT_TYPES
+            is_model = (ext_meta.model if ext_meta else False) or (self.vocab in OBJECT_TYPES)
+
             key_field = entry_key_field(model=is_model)
             normalised = {}
             for ext in extensions:
                 d = ext.copy()
                 key = d.pop(key_field, None)
                 if not key:
-                    logger.warning(
-                        "event", detail=f"Extension missing '{key_field}'", context_1=self.vocab
-                    )
+                    log("WARNING", f"Extension missing '{key_field}'", self.vocab)
                     continue
                 normalised[key] = d
             self._process(normalised, is_model=is_model)
@@ -214,13 +245,15 @@ class VocabularyResolver:
                     elif matching:
                         for stage in matching:
                             self._emit(
-                                stage + "::" + key, key, {**data, "tide.vocab.stages": stage}
+                                stage + "::" + key,
+                                key,
+                                {**data, "tide.vocab.stages": stage},
                             )
 
         def _emit(self, value: str, entry_key: str, data: dict) -> bool:
             """Append *value* if not already present (de-duplicate)."""
             if value in self.enum:
-                logger.info("event", detail=f"Skipping duplicate in vocab {self.vocab}", arg0=value)
+                log("INFO", f"Skipping duplicate in vocab {self.vocab}", value)
                 return False
             self.enum.append(value)
             self.enum_description.append(self._dropdown(entry_key, data))
@@ -232,7 +265,9 @@ class VocabularyResolver:
             if self._hints and self._hints_enabled:
                 self.enum.extend(self._hints)
                 self.enum_description.extend(self._hint_descriptions)
-            return (self.enum, self.enum_description)
+            return self.enum, self.enum_description
+
+        # --- Formatting -----------------------------------------------
 
         def _search_hint(self, value: str, data: dict) -> str:
             tips = data.get("name") or ""
@@ -249,6 +284,7 @@ class VocabularyResolver:
             display = key.get("name") or name
             if display.islower():
                 display = display.title()
+
             icon = (
                 key.get("icon")
                 or (vocab_def.metadata.icon if (vocab_def := VOCAB_INDEX.get(self.vocab)) else "")
@@ -262,6 +298,7 @@ class VocabularyResolver:
             stage = key.get("tide.vocab.stages") or ""
             tlp = key.get("tlp") or ""
             description = key.get("description") or ""
+
             criticality = ""
             if (get_type(identifier, mute=True) or "") in OBJECT_TYPES:
                 crit = key.get("criticality")
@@ -271,6 +308,7 @@ class VocabularyResolver:
                 else:
                     crit_value_icon = get_vocab_entry("criticality", crit, "icon")
                     criticality = f"{crit_icon} **Criticality** : {crit_value_icon} {crit}"
+
             if tlp:
                 tlp = f" | **{get_icon(tlp, vocab='tlp')}TLP:{tlp.upper()}**"
             if stage:
@@ -279,6 +317,7 @@ class VocabularyResolver:
                     stage = stage_text
                 else:
                     stage = "`{}`".format(", ".join(stage) if isinstance(stage, list) else stage)
+
             return self._DROPDOWN.format(
                 icon=icon,
                 name=display,
@@ -296,7 +335,7 @@ class VocabularyResolver:
             vocab_def = VOCAB_INDEX.get(self.vocab)
             vocab_stages = vocab_def.metadata.get("stages") if vocab_def else None
             if not vocab_stages:
-                logger.warning("event", detail=f"Could not find stages in vocabulary {self.vocab}")
+                log("WARNING", f"Could not find stages in vocabulary {self.vocab}")
                 return ""
             if isinstance(stages, str):
                 stages = [stages]
@@ -317,6 +356,10 @@ class VocabularyResolver:
                     break
             return "".join(parts)
 
+    # ==================================================================
+    # Logsources
+    # ==================================================================
+
     class Logsources:
         """Resolve log source entries from visibility configuration."""
 
@@ -327,6 +370,7 @@ class VocabularyResolver:
             asset_map = VocabularyResolver._asset_map(visibility)
             enums: list[str] = []
             descriptions: list[str] = []
+
             for ls in visibility.logsources:
                 base = (
                     f"### {ls.name}\n**System**: {ls.system}\n**Description**: {ls.description}\n\n"
@@ -335,18 +379,25 @@ class VocabularyResolver:
                     base += "### Associated Assets:\n"
                     for a in ls.assets:
                         base += VocabularyResolver._format_asset(a, asset_map) + "\n"
+
                 if ls.tenants:
                     for tenant in ls.tenants:
                         enums.append(f"{ls.system}::{tenant}::{ls.name}")
                         descriptions.append(
                             base.replace(
-                                "**System**:", f"**System**: {ls.system}\n**Tenant**: {tenant}"
+                                "**System**:",
+                                f"**System**: {ls.system}\n**Tenant**: {tenant}",
                             )
                         )
                 else:
                     enums.append(f"{ls.system}::{ls.name}")
                     descriptions.append(base)
-            return (enums, descriptions)
+
+            return enums, descriptions
+
+    # ==================================================================
+    # Detectors
+    # ==================================================================
 
     class Detectors:
         """Resolve external detector entries from visibility configuration."""
@@ -358,6 +409,7 @@ class VocabularyResolver:
             asset_map = VocabularyResolver._asset_map(visibility)
             enums: list[str] = []
             descriptions: list[str] = []
+
             for det in visibility.detectors:
                 base = f"### {det.name}\n**Description**: {det.description}\n\n"
                 if det.references:
@@ -369,9 +421,15 @@ class VocabularyResolver:
                     base += "### Monitored Assets:\n"
                     for a in det.assets:
                         base += VocabularyResolver._format_asset(a, asset_map) + "\n"
+
                 enums.append(det.name)
                 descriptions.append(base)
-            return (enums, descriptions)
+
+            return enums, descriptions
+
+    # ==================================================================
+    # Statuses
+    # ==================================================================
 
     class Statuses:
         """Resolve deployment statuses from configuration."""
@@ -382,9 +440,17 @@ class VocabularyResolver:
             for status in OpenTide.Configurations.Deployment.statuses:
                 enums.append(status.name)
                 strategy = status.strategy.name
-                desc = f"**Strategy** : `{strategy}` - _{StatusStrategy[strategy].value}_\n\n{status.description}"
+                desc = (
+                    f"**Strategy** : `{strategy}` "
+                    f"- _{StatusStrategy[strategy].value}_"
+                    f"\n\n{status.description}"
+                )
                 descriptions.append(desc)
-            return (enums, descriptions)
+            return enums, descriptions
+
+    # ==================================================================
+    # Parameters
+    # ==================================================================
 
     class Parameters:
         """Resolve a configuration parameter list by dot-path."""
@@ -405,7 +471,7 @@ class VocabularyResolver:
                         name = tenant.get("name").strip()
                         if param_key in tenant.get("parameters", {}):
                             result.extend(
-                                (name + "::" + i.strip() for i in tenant["parameters"][param_key])
+                                name + "::" + i.strip() for i in tenant["parameters"][param_key]
                             )
                     return result
                 if key in config_index:
@@ -419,6 +485,10 @@ class VocabularyResolver:
                 f"Config path {self.dot_path} must be a valid path to a list parameter"
             )
 
+    # ==================================================================
+    # SystemTenants
+    # ==================================================================
+
     class SystemTenants:
         """Resolve system tenant entries from configuration."""
 
@@ -429,38 +499,36 @@ class VocabularyResolver:
             config = OpenTide.Configurations.Index
             system_config = config.get("systems", {}).get(self.system)
             if not system_config:
-                logger.critical(
-                    "fatal_error",
-                    detail=f"Could not retrieve configuration for system {self.system}",
-                    context_1=f"Indexed Configurations : {str(config.keys())}",
+                log(
+                    "FATAL",
+                    f"Could not retrieve configuration for system {self.system}",
+                    f"Indexed Configurations : {str(config.keys())}",
                 )
                 raise ValueError(f"Missing configuration for system {self.system}")
-            tenants: list[dict] = system_config.get("tenants")
+
+            tenants: list[dict] = system_config.get("tenants") or []
             if not tenants:
-                logger.critical(
-                    "cannot_retrieve_a_tenants_section_within_the_system_configuratio",
-                    detail=str(system_config),
+                log(
+                    "INFO",
+                    f"No tenants configured for system {self.system}; returning empty tenant list",
                 )
-                raise ValueError(
-                    f"System Configuration for {self.system} does not contain a tenants section"
-                )
+                return [], []
+
             enums: list[str] = []
             descriptions: list[str] = []
             for tc in tenants:
                 name = tc.get("name")
                 if not name:
-                    logger.critical(
-                        "cannot_retrieve_a_tenant_name_in_tenant_definition", detail=str(tc)
+                    log(
+                        "FATAL",
+                        "Cannot retrieve a tenant name in tenant definition",
+                        str(tc),
                     )
                     raise ValueError("Missing name field in tenant definition")
-                logger.info(
-                    "event",
-                    detail=f"Discovered tenant definition {name}",
-                    context_1=tc.get("description", ""),
-                )
+                log("INFO", f"Discovered tenant definition {name}", tc.get("description", ""))
                 enums.append(name)
                 descriptions.append(tc.get("description", "No Description"))
-            return (enums, descriptions)
+            return enums, descriptions
 
 
 def strip_framework_keywords(dictionary: dict) -> dict:
@@ -471,26 +539,28 @@ def strip_framework_keywords(dictionary: dict) -> dict:
 
 
 def recomposition_handler(entry_point):
+    from opentide.generation.pydantic_metaschema import build_platform_schema_source
+    from opentide.models.platform_schema import platform_model_for_key
+
     recompositions = CONFIG_INDEX[entry_point]
-    subschema_folder = OpenTide.Configurations.Global.recomposition[entry_point]
     recomposition = dict()
     for entry in recompositions:
         data = recompositions[entry]
-        enabled = False
         if data.get("tide"):
             config_keyword = "tide"
         else:
             config_keyword = "platform"
-        if data[config_keyword]["enabled"] == True:
+
+        if data[config_keyword]["enabled"] is True:
             recomp_identifier = entry
             recomposition[recomp_identifier] = dict()
             recomposition[recomp_identifier]["title"] = data[config_keyword]["name"]
             recomposition[recomp_identifier]["description"] = data[config_keyword]["description"]
             recomposition[recomp_identifier]["type"] = "object"
-            recomp_source = data[config_keyword]["subschema"] + ".yaml"
-            recomp_source_path = SUBSCHEMAS_PATH / subschema_folder / recomp_source
-            recomp_data = yaml.safe_load(open(recomp_source_path, encoding="utf-8"))
+            platform_model = platform_model_for_key(entry)
+            recomp_data = build_platform_schema_source(platform_model)
             recomposition[recomp_identifier].update(recomp_data)
+
     return recomposition
 
 
@@ -518,37 +588,64 @@ def gen_json_schema(dictionary):
     icon = ""
     for field in dict_foo.keys():
         query = field
+        # checks if the key is a dict
         if type(dict_foo[field]) == dict:
             if "tide.meta.definition" in dict_foo[field].keys():
-                if (metadef := dict_foo[field]["tide.meta.definition"]) is True:
-                    temp = OpenTide.TideSchemas.definitions[field]
+                from opentide.generation.pydantic_metaschema import (
+                    DEFINITION_MODELS,
+                    build_model_schema_source,
+                )
+
+                metadef = dict_foo[field]["tide.meta.definition"]
+                if metadef is True:
+                    definition_model = DEFINITION_MODELS[field]
                 else:
-                    temp = OpenTide.TideSchemas.definitions[metadef]
+                    definition_model = DEFINITION_MODELS[str(metadef)]
+                temp = build_model_schema_source(definition_model)
+
                 if deprecation_message := dict_foo[field].get("tide.meta.deprecation"):
                     temp["title"] = "⚠️ DEPRECATION WARNING"
                     temp["description"] = "⚠️ DEPRECATED : " + deprecation_message
+
                 dictionary[field] = temp
+
                 gen_json_schema({field: dictionary[field]})
+
             else:
                 title = dict_foo[field].get("title")
+
                 if "icon" in dictionary[field].keys():
                     icon = dictionary[field]["icon"]
                 else:
                     icon = get_icon(field)
+
                 if title:
                     if icon:
                         dictionary[field]["title"] = f"{icon} {title}"
                     else:
                         dictionary[field]["title"] = title
+
                 if deprecation_message := dict_foo[field].get("tide.meta.deprecation"):
                     dict_foo[field]["title"] = "⚠️ DEPRECATION WARNING"
                     dict_foo[field]["description"] = "⚠️ DEPRECATED : " + deprecation_message
+
+                # If additionalProperties is not configured, we force it to
+                # False. This prevents the users from adding invalid keys (
+                # typos, or indentation error for example that
+                # wouldn't be flagged by the validation, and not be processed
+                # correctly.
                 if dict_foo[field].get("type") == "object":
                     if not dict_foo[field].get("additionalProperties"):
                         dictionary[field]["additionalProperties"] = False
+
+                # If within that dict a key is called coretide, the dict will receive
+                # fields generated from the libraries to allow multi or single
+                # field validation with JSON Schema
                 if "recomposition" in dict_foo[field].keys():
                     temp = recomposition_handler(dict_foo[field]["recomposition"])
                     dictionary[field]["properties"] = temp
+
+                # Handles retrieval of logsources
                 if dict_foo[field].get("tide.config.visibility.logsources"):
                     logsources_result = VocabularyResolver.Logsources().resolve()
                     if logsources_result:
@@ -557,6 +654,8 @@ def gen_json_schema(dictionary):
                         dictionary[field]["items"]["enum"] = enums
                         dictionary[field]["items"]["markdownEnumDescriptions"] = descriptions
                         dictionary[field]["items"]["uniqueItems"] = True
+
+                # Handles retrieval of detectors
                 if dict_foo[field].get("tide.config.visibility.detectors"):
                     detectors_result = VocabularyResolver.Detectors().resolve()
                     if detectors_result:
@@ -569,6 +668,9 @@ def gen_json_schema(dictionary):
                             dictionary[field]["items"]["enum"] = enums
                             dictionary[field]["items"]["markdownEnumDescriptions"] = descriptions
                             dictionary[field]["items"]["uniqueItems"] = True
+
+                # Handles the case when a list of values has to be fetched from
+                # the configuration files.
                 if config_fetch := dict_foo[field].get("tide.config.parameter-list"):
                     values_list = VocabularyResolver.Parameters(config_fetch).resolve()
                     if dict_foo[field].get("type") == "string":
@@ -577,6 +679,9 @@ def gen_json_schema(dictionary):
                         dictionary[field]["items"] = {}
                         dictionary[field]["items"]["enum"] = values_list
                         dictionary[field]["items"]["uniqueItems"] = True
+
+                # Handles the case where we want to dynamically return a list
+                # of available systems
                 if dict_foo[field].get("tide.config.systems::enabled"):
                     values_list = enabled_systems()
                     if dict_foo[field].get("type") == "string":
@@ -585,6 +690,8 @@ def gen_json_schema(dictionary):
                         dictionary[field]["items"] = {}
                         dictionary[field]["items"]["enum"] = values_list
                         dictionary[field]["items"]["uniqueItems"] = True
+
+                # Special handling to specifically get the available tenants
                 if system := dict_foo[field].get("tide.config.system.tenants"):
                     values_list, descriptions_list = VocabularyResolver.SystemTenants(
                         system
@@ -597,6 +704,8 @@ def gen_json_schema(dictionary):
                         dictionary[field]["items"]["enum"] = values_list
                         dictionary[field]["items"]["uniqueItems"] = True
                         dictionary[field]["items"]["markdownEnumDescriptions"] = descriptions_list
+
+                # Special handling to specifically get the available statuses
                 if system := dict_foo[field].get("tide.config.statuses"):
                     values_list, descriptions_list = VocabularyResolver.Statuses().resolve()
                     if dict_foo[field].get("type") == "string":
@@ -607,8 +716,11 @@ def gen_json_schema(dictionary):
                         dictionary[field]["items"]["enum"] = values_list
                         dictionary[field]["items"]["uniqueItems"] = True
                         dictionary[field]["markdownEnumDescriptions"] = descriptions_list
+
+                # Handles vocabularies
                 if vocab := dict_foo[field].get("tide.vocab"):
                     if type(vocab) is str:
+                        # Add icon if available to title
                         icon = get_icon(query)
                         if icon:
                             dictionary[field]["title"] = icon + " " + dictionary[field]["title"]
@@ -617,18 +729,28 @@ def gen_json_schema(dictionary):
                     scoped = dict_foo[field].get("tide.vocab.scoped")
                     hint_no_wrap = dict_foo[field].get("tide.vocab.hints.no-wrap")
                     stages = dict_foo[field].get("tide.vocab.stages")
+
+                    # Normalize vocabs to list to support all variants
                     vocabs = [vocab] if type(vocab) is not list else vocab
+
                     temp = {}
                     enum = []
                     markdown_enum = []
                     for vocab in vocabs:
                         new_enum, new_markdown_enum = VocabularyResolver.Vocabulary(
-                            vocab, stages=stages, no_wrap=hint_no_wrap, scoped=scoped
+                            vocab,
+                            stages=stages,
+                            no_wrap=hint_no_wrap,
+                            scoped=scoped,
                         ).resolve()
                         enum.extend(new_enum)
                         markdown_enum.extend(new_markdown_enum)
                     temp["enum"] = enum
                     temp["markdownEnumDescriptions"] = markdown_enum
+
+                    # When no field type is present, assume it's a direct string
+                    # When the type is set to string, oneOf allows only one value
+                    # to be selected
                     field_types = dict_foo[field].get("type")
                     if field_types:
                         field_types = [field_types] if isinstance(field_types, str) else field_types
@@ -637,82 +759,96 @@ def gen_json_schema(dictionary):
                     elif "array" in field_types:
                         dictionary[field]["items"] = temp
                         dictionary[field]["uniqueItems"] = True
+
                 else:
                     gen_json_schema(dictionary[field])
+
     return dictionary
 
 
 def run():
     _refresh_runtime_context()
-    emit_section("Metaschema to JSON Schema Assembler")
-    logger.info("generates_json_schemas_from_metaschema_files_dynamically_looking")
+
+    log("TITLE", "Pydantic JSON Schema Assembler")
+    log(
+        "INFO",
+        "Generates JSON Schemas from Pydantic models, dynamically looking up Vocabulary values.",
+    )
+
     from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS, generate_core_model_schema
 
+    # Core object schemas are generated from Pydantic models (single source of truth).
     for meta in GLOBAL_CONFIG.metaschemas:
         if meta not in GLOBAL_CONFIG.json_schemas:
             continue
         json_output = JSON_SCHEMA_FOLDER / GLOBAL_CONFIG.json_schemas[meta]
+
         if meta in CORE_SCHEMA_MODELS:
-            logger.info(
-                "step_in_progress", detail=f"Generating pydantic json schema for core model: {meta}"
-            )
+            log("ONGOING", f"Generating pydantic json schema for core model: {meta}")
             cleaned = generate_core_model_schema(meta)
             placeholders: dict[str, str] = {}
         else:
-            yaml_input = METASCHEMAS_FOLDER / GLOBAL_CONFIG.metaschemas[meta]
-            parsing = yaml.safe_load(open(yaml_input, encoding="utf-8"))
-            placeholders = parsing.get("tide.placeholders") or {}
-            logger.info(
-                "step_in_progress", detail="Generating json schema for : " + str(yaml_input)
-            )
-            generated = gen_json_schema(parsing)
-            cleaned = strip_framework_keywords(generated)
-        logger.info(
-            "step_in_progress", detail="Exporting generated schema to : " + str(json_output)
-        )
+            log("SKIP", f"No Pydantic schema registered for meta key: {meta}")
+            continue
+
+        log("ONGOING", "Exporting generated schema to : " + str(json_output))
         output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
         for placeholder in placeholders:
-            logger.info(
-                "step_in_progress",
-                detail=f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
+            log(
+                "ONGOING",
+                f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
             )
             output = output.replace(f"${placeholder}", placeholders[placeholder])
-        output_file = open(json_output, "w", encoding="utf-8")
+
+        output_file = open((json_output), "w", encoding="utf-8")
         output_file.write(output)
         output_file.close()
-        logger.info("correctly_exported")
-    logger.info("generated_all_json_schemas")
-    config_metaschemas = GLOBAL_CONFIG.config_metaschemas
+        log("SUCCESS", "Correctly exported")
+
+    log("SUCCESS", "Generated all JSON Schemas")
+
+    # Configuration Schemas from Pydantic models
     config_json_schemas = GLOBAL_CONFIG.config_json_schemas
-    if config_metaschemas:
-        emit_section("Configuration Schema Assembler")
-        logger.info("generates_json_schemas_from_configuration_meta_schema_files_dyna")
-        for meta in config_metaschemas:
-            if meta in config_json_schemas:
-                yaml_input = METASCHEMAS_FOLDER / config_metaschemas[meta]
-                json_output = JSON_SCHEMA_FOLDER / config_json_schemas[meta]
-                parsing = yaml.safe_load(open(yaml_input, encoding="utf-8"))
-                placeholders = parsing.get("tide.placeholders") or {}
-                logger.info(
-                    "step_in_progress", detail="Generating config schema for : " + str(yaml_input)
+
+    if config_json_schemas:
+        log("TITLE", "Configuration Schema Assembler")
+        log(
+            "INFO",
+            "Generates JSON Schemas from Pydantic configuration models.",
+        )
+
+        for meta in config_json_schemas:
+            json_output = JSON_SCHEMA_FOLDER / config_json_schemas[meta]
+
+            if meta == "visibility":
+                from opentide.generation.pydantic_metaschema import build_model_schema_source
+                from opentide.models.visibility import VisibilityConfig
+
+                parsing = build_model_schema_source(VisibilityConfig)
+                placeholders: dict[str, str] = {}
+            else:
+                continue
+
+            log("ONGOING", f"Generating config schema for : {meta}")
+
+            generated = gen_json_schema(parsing)
+            cleaned = strip_framework_keywords(generated)
+
+            log("ONGOING", "Exporting generated schema to : " + str(json_output))
+            output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
+            for placeholder in placeholders:
+                log(
+                    "ONGOING",
+                    f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
                 )
-                generated = gen_json_schema(parsing)
-                cleaned = strip_framework_keywords(generated)
-                logger.info(
-                    "step_in_progress", detail="Exporting generated schema to : " + str(json_output)
-                )
-                output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
-                for placeholder in placeholders:
-                    logger.info(
-                        "step_in_progress",
-                        detail=f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
-                    )
-                    output = output.replace(f"${placeholder}", placeholders[placeholder])
-                output_file = open(json_output, "w", encoding="utf-8")
-                output_file.write(output)
-                output_file.close()
-                logger.info("correctly_exported")
-        logger.info("generated_all_configuration_schemas")
+                output = output.replace(f"${placeholder}", placeholders[placeholder])
+
+            output_file = open((json_output), "w", encoding="utf-8")
+            output_file.write(output)
+            output_file.close()
+            log("SUCCESS", "Correctly exported")
+
+        log("SUCCESS", "Generated all Configuration Schemas")
 
 
 if __name__ == "__main__":

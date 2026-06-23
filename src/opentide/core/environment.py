@@ -2,37 +2,53 @@ import os
 import sys
 from pathlib import Path
 import json
-from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple, Union, overload
+from typing import (
+    Any,
+    Dict,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    overload,
+)
 from opentide.core.typing import Never
 from functools import cache
 from abc import ABC
 from importlib import import_module
 from copy import deepcopy
+
 from dataclasses import dataclass, asdict
+
+
 from opentide.indexing.indexer import indexer
-from opentide.models.legacy import DetectionSystems, TideModels, TideDefinitionsModels, TideConfigs, SystemConfig
+from opentide.core.logging import log
+from opentide.models.deployment_enums import DetectionSystems
+from opentide.models.system_config import ConfigurationModels, SystemConfig
 from opentide.loading.objects import Objects
 from opentide.loading.configurations import Configurations
 from opentide.core.root import get_repo_root
-import structlog
-logger = structlog.get_logger('opentide.core.environment')
+
 ROOT = get_repo_root()
 
 class DebugHelpers:
-
     @staticmethod
     def is_debug() -> bool:
         """
         Provides an interface to discover whether the current execution
         context is considered to be in a debugging scenario.
         """
-        if os.environ.get('DEBUG') == True or os.environ.get('TERM_PROGRAM') == 'vscode':
+        if (
+            os.environ.get("DEBUG") == True
+            or os.environ.get("TERM_PROGRAM") == "vscode"
+        ):
             return True
         else:
             return False
 
     @staticmethod
-    def fetch_config_envvar(config_secrets: dict[str, str]) -> dict[str, Any]:
+    def fetch_config_envvar(config_secrets: dict[str,str]) -> dict[str, Any]:
         """Resolve and replace environment-variable placeholders in a config mapping.
 
         Many configuration files in TIDE use strings that begin with ``$`` to indicate
@@ -58,28 +74,55 @@ class DebugHelpers:
               ``opentide.core.local_secrets`` is imported (if present) to help
               set environment variables for local development.
         """
+        #Allows to print all errors at once before raising exception
         missing_envvar_error = False
+        
         if DebugHelpers.is_debug():
             try:
-                import_module('opentide.core.local_secrets')
+                import_module("opentide.core.local_secrets")
             except:
-                logger.error('could_not_find_local_python_file_at_opentide_core_local_secrets', detail='Parts of this module may not work properly', advice='Refer to the relevant TOML conguration file to find which variables may be necessary')
+                log("FAILURE",
+                    "Could not find local python file at `opentide.core.local_secrets` to set secret environment variables",
+                    "Parts of this module may not work properly",
+                    "Refer to the relevant TOML conguration file to find which variables may be necessary")
+
+
         for sec in config_secrets.copy():
             if not config_secrets[sec]:
-                logger.info('did_not_found_an_entry_for', arg0=sec, advice='If there are deployment issue, review if it is relevant to configure')
+                log("SKIP", "Did not found an entry for", sec,
+                    "If there are deployment issue, review if it is relevant to configure")
                 continue
             if type(config_secrets[sec]) == str:
-                if config_secrets[sec].startswith('$'):
-                    if config_secrets[sec].removeprefix('$') in os.environ:
-                        env_variable = str(config_secrets.pop(sec)).removeprefix('$')
-                        config_secrets[sec] = os.environ.get(env_variable, '')
-                        logger.info('fetched_environment_secret', arg0=env_variable)
-                    elif DebugHelpers.is_debug():
-                        logger.info('could_not_find_expected_environment_variable', detail=config_secrets[sec], advice='Debug Mode identified, continuing - remember that this may break some deployments')
+                if config_secrets[sec].startswith("$"):
+                    if config_secrets[sec].removeprefix("$") in os.environ:
+                        env_variable = str(config_secrets.pop(sec)).removeprefix("$")
+                        config_secrets[sec] = os.environ.get(env_variable, "")
+                        log("SUCCESS", "Fetched environment secret", env_variable)
                     else:
-                        logger.critical('could_not_find_expected_environment_variable', detail=config_secrets[sec], advice='Review configuration file and execution environment')
-                        missing_envvar_error = True
+                        if DebugHelpers.is_debug():
+                            log("SKIP", 
+                                "Could not find expected environment variable",
+                                config_secrets[sec],
+                                "Debug Mode identified, continuing - remember that this may break some deployments")
+                        else:
+                            log(
+                                "FATAL",
+                                "Could not find expected environment variable",
+                                config_secrets[sec],
+                                "Review configuration file and execution environment",
+                            )
+                            missing_envvar_error = True
+
         if missing_envvar_error:
-            logger.critical('some_environment_variable_specified_in_configuration_files_were', detail='Check your CI settings to ensure these environment variables are properly injected', advice="This may not be a critical issue, for example if you didn't enable a particular system")
+            log("FATAL",
+                "Some environment variable specified in configuration files were not found"
+                "Review the previous errors to find which ones were missing",
+                "Check your CI settings to ensure these environment variables are properly injected",
+                "This may not be a critical issue, for example if you didn't enable a particular system")
+
         return config_secrets
+
+
+# Legacy alias
 HelperTide = DebugHelpers
+

@@ -1,14 +1,17 @@
 """Validation services for the CLI."""
 
 from __future__ import annotations
+
 import os
 from typing import TYPE_CHECKING, Any, cast
+
+import structlog
+
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
 from opentide.cli.output import emit, emit_error
+from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
 from opentide.validation.pipeline import validate_all_objects
-import structlog
-from opentide.core.logging.console import emit_section
 
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
@@ -134,7 +137,7 @@ def validate_query_platform(
         system_name = LegacyOpenTide.Configurations.Systems.Index[platform]["tide"]["name"]
     except Exception:
         system_name = LegacyOpenTide.Configurations.Systems.Index[platform]["platform"]["name"]
-    emit_section("Query Validation - {}")
+    emit_section(f"Query Validation - {system_name}")
     validator = cast(Any, query_validators[platform])
     try:
         validator.validate(deployment=deployment_list[platform])

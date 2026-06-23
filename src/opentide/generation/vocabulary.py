@@ -1,11 +1,13 @@
 """Typed vocabulary models, loader, and YAML validation."""
 
 from __future__ import annotations
+
 from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from pathlib import Path
 from typing import Any
+
 import structlog
 
 logger = structlog.get_logger("opentide.generation.vocabulary")
@@ -193,7 +195,7 @@ def parse_yaml_vocabulary(raw: Mapping[str, Any], *, source: str = "") -> Vocabu
 def _build_metadata(raw: Mapping[str, Any], *, field: str) -> VocabularyMetadata:
     known = {"name", "description", "icon", "model", "stages"}
     stages_raw = raw.get("stages") or []
-    stages = tuple((dict(stage) for stage in stages_raw if isinstance(stage, Mapping)))
+    stages = tuple(dict(stage) for stage in stages_raw if isinstance(stage, Mapping))
     extra = {key: value for key, value in raw.items() if key not in known}
     return VocabularyMetadata(
         name=str(raw.get("name", "")),

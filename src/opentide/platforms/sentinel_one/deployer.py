@@ -5,9 +5,10 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DetectionPlatforms, ObjectLoader
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
-from opentide.models.legacy import DeploymentStrategy
+from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.deployment import TideDeployment, ExternalIdHelper, check_status
-from opentide.models.legacy import ConfigurationModels, StatusStrategy
+from opentide.models.system_config import ConfigurationModels
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.sentinel_one.client import SentinelOneService, DetectionRule as SentinelOneApiRule, SeverityMapping
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel_one.deployer')

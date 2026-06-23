@@ -1,29 +1,24 @@
-"""Paths to bundled schema, definition, and subschema data."""
+"""Paths to bundled schema assets and generated output directories."""
 
 from __future__ import annotations
+
 from importlib.resources import files
 from pathlib import Path
+
 from opentide.core.root import get_data_root
 
 
 def schemas_data_root() -> Path:
-    """Root directory for code-first schema assets."""
+    """Root directory for code-first schema assets (generated outputs only)."""
     bundled = Path(__file__).resolve().parent / "data"
     if bundled.is_dir():
         return bundled
     return get_data_root() / "schemas"
 
 
-def metaschemas_path() -> Path:
+def generated_schemas_path() -> Path:
+    """Directory for generated JSON schema artifacts."""
     return schemas_data_root()
-
-
-def subschemas_path() -> Path:
-    return schemas_data_root() / "Sub Schemas"
-
-
-def definitions_path() -> Path:
-    return schemas_data_root() / "Definitions"
 
 
 def vocabulary_root() -> Path:

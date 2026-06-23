@@ -16,7 +16,7 @@ DOCUMENTATION_TARGET = CIEnvironment()._check_ci_environment()
 DEFINITIONS_INDEX = OpenTide.TideSchemas.definitions
 from opentide.generation.framework import relations_downstream, relations_upstream, get_type, get_vocab_entry, vocab_metadata, relations_list, childs, keep_active_mdr
 from opentide.documentation.core import get_icon, get_vocab_description, get_field_title, backlink_resolver, make_vocab_link, GitlabMarkdown, object_name
-from opentide.models.legacy import StatusStrategy
+from opentide.models.deployment_enums import StatusStrategy
 GET_CVE_DETAILS = CONFIG.Documentation.cve['retrieve_details']
 CVE_DB_LINK = CONFIG.Documentation.cve['default_db_link']
 FOOTER_CAPTION = 'Generated from CoreTIDE Indexed Data @ '

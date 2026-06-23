@@ -1,8 +1,11 @@
 """Per-platform configuration Pydantic models — schema ``platform::<name>::1.0``."""
 
 from __future__ import annotations
+
 from typing import Any, ClassVar, Literal, cast
+
 from pydantic import Field
+
 from opentide.models.base import TideModel
 from opentide.models.platform_configs import (
     CrowdstrikeDetails,

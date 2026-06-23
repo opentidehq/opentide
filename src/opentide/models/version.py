@@ -1,7 +1,9 @@
 """Schema version parsing and migration chain mechanics."""
 
 from __future__ import annotations
+
 from collections.abc import Callable, Mapping, Sequence
+
 from pydantic import BaseModel, field_validator
 
 MigrationFn = Callable[[Mapping[str, object]], dict[str, object]]

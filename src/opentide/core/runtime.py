@@ -1,8 +1,10 @@
 """Runtime context flags replacing the legacy Environment monolith."""
 
 from __future__ import annotations
+
 import os
 from pathlib import Path
+
 from opentide.core.root import repository_root
 
 

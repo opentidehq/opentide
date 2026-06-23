@@ -1,14 +1,15 @@
 """Shared template emission engine — YAML text generation utilities."""
 
 from __future__ import annotations
-from pathlib import Path
-from typing import Any, cast
-import yaml
-from opentide.core.files import IndentFullDumper
-from opentide.core.registry import OpenTide
-import structlog
 
-logger = structlog.get_logger("opentide.generation.template_engine")
+from pathlib import Path
+from typing import Any, Callable, cast
+
+import yaml
+
+from opentide.core.files import IndentFullDumper
+from opentide.core.logging import log as default_log
+from opentide.core.registry import OpenTide
 
 
 def _config_index() -> dict[str, Any]:
@@ -25,13 +26,15 @@ def fetch_config_template(dot_path: str) -> str:
             key = config_path[config_path.index(key) + 1]
         else:
             raise ValueError(f"Key : {key} could not be found in path {dot_path}")
+
     try:
         return str(config_index[key]).strip()
     except Exception:
-        logger.warning(
-            "could_not_the_expected_template",
-            arg0=dot_path,
-            advice="This is non blocking, but check why the template could not be fetched",
+        default_log(
+            "WARNING",
+            "Could not the expected template",
+            dot_path,
+            "This is non blocking, but check why the template could not be fetched",
         )
         return ""
 
@@ -51,11 +54,9 @@ def replace_strings_in_file(file_path: Path | str, strings: list[str], replaceme
 def remove_blanks(path: Path | str) -> bool:
     file_path = Path(path)
     clean = "".join(
-        (
-            line
-            for line in file_path.read_text(encoding="utf-8").splitlines(keepends=True)
-            if not line.isspace()
-        )
+        line
+        for line in file_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if not line.isspace()
     )
     file_path.write_text(clean, encoding="utf-8")
     return True
@@ -76,7 +77,9 @@ def get_required(metaschema: dict[str, Any], required_list: list[str]) -> list[s
 
 
 def definition_handler(entry_point: str) -> dict[str, Any]:
-    return cast(dict[str, Any], OpenTide.TideSchemas.definitions[entry_point])
+    from opentide.generation.pydantic_metaschema import DEFINITION_MODELS, build_model_schema_source
+
+    return build_model_schema_source(DEFINITION_MODELS[entry_point])
 
 
 def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -95,6 +98,7 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                 temp = definition_handler(metadef)
                 definition_required = list(temp.get("required", []))
                 definition_required.extend(temp.get("tide.template.force-required", []))
+
             template = gen_template({key.replace("#", ""): temp}, required=definition_required)
             resolved = (
                 template.get(key) or template.get(key.replace("#", "")) or template.get("#" + key)
@@ -102,9 +106,11 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
             if resolved is not None:
                 body[key] = resolved
             continue
+
         keyword_type = metaschema[key].get("type") or "string"
         if isinstance(keyword_type, list):
             keyword_type = str(keyword_type[0])
+
         if keyword_type == "object":
             if key not in required:
                 if config := metaschema[key].get("tide.template.config.required"):
@@ -112,6 +118,7 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                         key = "#" + key
                 else:
                     key = "#" + key
+
             if "recomposition" in metaschema[key.replace("#", "")].keys():
                 recomp_cat = metaschema[key.replace("#", "")]["recomposition"]
                 recomp_entries: dict[str, str] = {}
@@ -129,9 +136,9 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                 field = metaschema[key.replace("#", "")]
                 if "additionalProperties" in field.keys():
                     if not isinstance(field["additionalProperties"], bool):
-                        sample = field.get("additionalProperties", {}).get("example")
+                        sample = field.get("additionalProperties", {}).get("example") or "example"
                         if sample not in field.get("additionalProperties", {}).get("required", []):
-                            sample = "#" + sample
+                            sample = "#" + str(sample)
                         body[key] = {sample: "blank"}
                 if "patternProperties" in field:
                     first_item = list(field["patternProperties"])[0]
@@ -143,14 +150,17 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                     body[key] = {sample: "blank"} if sample else {}
                 elif "properties" in field:
                     body[key] = gen_template(field.get("properties", {}), required=required)
+
         elif "items" in metaschema[key].keys() and "properties" in metaschema[key].get("items", {}):
             if key in required:
                 sub_req = metaschema[key]["items"]["required"]
             else:
                 key = "#" + key
                 sub_req = []
+
             values = gen_template(
-                metaschema[key.replace("#", "")]["items"]["properties"], required=sub_req
+                metaschema[key.replace("#", "")]["items"]["properties"],
+                required=sub_req,
             )
             if sub_req == [] and values:
                 first_key = list(values)[0]
@@ -160,12 +170,14 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
         else:
             content = "blank"
             local_required = key in required
+
             if config := metaschema[key].get("tide.template.config.required"):
                 enabled = fetch_config_template(config)
                 if enabled == "True":
                     local_required = True
                 elif enabled == "False":
                     local_required = False
+
             if config_path := metaschema[key].get("tide.template.config.default.enabled"):
                 if fetch_config_template(config_path) != "False":
                     if config_path := metaschema[key].get("tide.template.config.default"):
@@ -178,6 +190,7 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                             else:
                                 content = "\n".join(["#" + line for line in content.split("\n")])
                             content = "|\n'" + content
+
             if metaschema[key].get("tide.template.required") is True:
                 local_required = True
             if metaschema[key].get("tide.template.required") is False:
@@ -196,8 +209,10 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                 content = metaschema[key]["default"]
             elif "const" in metaschema[key]:
                 content = metaschema[key]["const"]
+
             if metaschema[key].get("tide.template.no-space"):
                 content = "no-space" + str(content)
+
             if keyword_type == "array":
                 if not local_required:
                     key = "#" + key
@@ -207,6 +222,7 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                 if not local_required:
                     key = "#" + key
                 body[key] = content
+
     return body
 
 
@@ -218,12 +234,12 @@ def make_spaces(template_path: Path | str, metaschema: dict[str, Any]) -> bool:
         key = line.split(":")[0].replace(" ", "")
         force_space = "force_space" in line
         no_space = "no-space" in line
-        from opentide.generation.framework import get_value_metaschema
+        from opentide.generation.pydantic_metaschema import lookup_schema_extra
 
-        spacer = get_value_metaschema(key.replace("#", ""), metaschema, "tide.template.spacer")
-        key_type = get_value_metaschema(key.replace("#", ""), metaschema, "type")
+        spacer = lookup_schema_extra(metaschema, key.replace("#", ""), "tide.template.spacer")
+        key_type = lookup_schema_extra(metaschema, key.replace("#", ""), "type")
         if key_type == "object" or spacer or force_space:
-            if spacer is not False and (not no_space):
+            if spacer is not False and not no_space:
                 spaced.append("\n")
             if force_space:
                 line = line.replace("force_space", "")
@@ -251,16 +267,20 @@ def emit_template_file(
     placeholders: dict[str, str] | None = None,
     spacing_properties: dict[str, Any],
     indent: int | None,
+    log: Callable[..., Any] | None = None,
 ) -> None:
     """Write a generated template YAML file with post-processing."""
     template_path.parent.mkdir(parents=True, exist_ok=True)
     with template_path.open("w+", encoding="utf-8") as output:
         yaml.dump(template_body, output, sort_keys=False, Dumper=IndentFullDumper)
+
     replace_strings_in_file(template_path, ["- Comment out"], "#-")
     replace_strings_in_file(template_path, ["blank", "'"], "")
     replace_strings_in_file(template_path, ["spacer"], "    ")
+
     for placeholder, value in (placeholders or {}).items():
         replace_strings_in_file(template_path, [f"${placeholder}"], value)
+
     remove_blanks(template_path)
     make_spaces(template_path, spacing_properties)
     if indent is not None:

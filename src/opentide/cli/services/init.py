@@ -1,13 +1,16 @@
 """Repository scaffolding for opentide init."""
 
 from __future__ import annotations
+
 import json
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
-from opentide.cli.enums import CiPlatform, DetectionPlatform
+
 import structlog
+
+from opentide.cli.enums import CiPlatform, DetectionPlatform
 
 logger = structlog.get_logger("opentide.cli.services.init")
 if TYPE_CHECKING:
@@ -56,7 +59,7 @@ def _write_readme(target: Path, options: InitOptions) -> None:
     name = options.name or target.name
     org = options.org or "Security Operations"
     description = options.description or "Detection-as-code repository powered by OpenTide"
-    content = f"# {name}\n\n{description}\n\n**Organisation:** {org}\n\n## Quick start\n\n```bash\nopentide validate\nopentide generate\nopentide deploy --platform sentinel --dry-run\n```\n\n## Platforms\n\n{chr(10).join((f'- {p.value}' for p in options.platforms)) or '- (configure platforms in Configurations/)'}\n"
+    content = f"# {name}\n\n{description}\n\n**Organisation:** {org}\n\n## Quick start\n\n```bash\nopentide validate\nopentide generate\nopentide deploy --platform sentinel --dry-run\n```\n\n## Platforms\n\n{chr(10).join(f'- {p.value}' for p in options.platforms) or '- (configure platforms in Configurations/)'}\n"
     (target / "README.md").write_text(content, encoding="utf-8")
 
 
@@ -96,23 +99,13 @@ def _scaffold_directories(target: Path) -> None:
         (target / rel).mkdir(parents=True, exist_ok=True)
 
 
-def _copy_ci_workflows(target: Path, options: InitOptions) -> None:
-    root = _repo_template_root()
-    if options.ci is CiPlatform.github:
-        src = root / ".github" / "workflows"
-        if src.is_dir():
-            for workflow in src.glob("*.yml"):
-                shutil.copy2(workflow, target / ".github" / "workflows" / workflow.name)
-    elif options.ci is CiPlatform.gitlab:
-        src = root / "Pipelines" / "Gitlab" / "tide.yml"
-        if src.is_file():
-            shutil.copy2(src, target / ".gitlab-ci.yml")
-    elif options.ci is CiPlatform.azure:
-        src = root / "Pipelines" / "Azure" / "opentide.yml"
-        if src.is_file():
-            (target / "azure-pipelines.yml").write_text(
-                src.read_text(encoding="utf-8"), encoding="utf-8"
-            )
+def _write_ci_workflows(target: Path, options: InitOptions) -> None:
+    from opentide.ci.models import CiRenderOptions
+    from opentide.cli.services.ci_generator import write_ci
+
+    if options.ci is CiPlatform.none:
+        return
+    write_ci(target, CiRenderOptions.from_init_options(options))
 
 
 def _copy_ai_assets(target: Path, options: InitOptions) -> None:
@@ -145,7 +138,7 @@ def run_init(options: InitOptions) -> dict[str, object]:
     _scaffold_directories(target)
     _write_gitignore(target)
     _write_readme(target, options)
-    _copy_ci_workflows(target, options)
+    _write_ci_workflows(target, options)
     _copy_ai_assets(target, options)
     logger.info("repository_created", detail=str(target))
     return {

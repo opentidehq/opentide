@@ -1,7 +1,9 @@
 """Mutation services for the CLI."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
+
 import structlog
 
 logger = structlog.get_logger("opentide.cli.services.mutate")
@@ -21,6 +23,7 @@ def run_mutate_all() -> None:
 def run_mutate_promote(files: list[str] | None = None) -> None:
     """Promote MDR status for modified files."""
     from pathlib import Path
+
     from opentide.deployment import DeploymentStrategy, modified_mdr_files
     from opentide.mutation.promotion import PromoteMDR
 

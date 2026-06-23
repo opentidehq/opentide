@@ -1,47 +1,30 @@
 name: 
-#references:
-  #public:
-    #1: 
-  #internal:
-    #a: 
 
 metadata:
   uuid: 
-  schema: mdr::2.1
+  schema: 
   version: 
-  created: YYYY-MM-DD
-  modified: YYYY-MM-DD
+  created: 
+  modified: 
   tlp: 
-  #author: 
-  #contributors:
-    #-
-  #organisation:
-    #uuid: 
-    #name: 
+  #author: null
+  #contributors: null
+  #organisation: null
 
 description: |
   ...
-#detection_model: 
+#status: STAGING
+#severity: Informational
+#techniques:
+  #-
 
-response:
-  alert_severity: 
-  #playbook: https://
-  #responders: 
-  #procedure:
-    #analysis: |
-      #...
-    #searches:
-      #- purpose: |
-          #...
-        #system: 
-        #query: |
-          #...
-    #containment: |
-      #...
-
-configurations:
-  #crowdstrike: 
-  #sentinel: 
-  #sentinel_one: 
-  #defender_for_endpoint: 
-  #carbon_black_cloud: 
+#platforms:
+  #example: 
+#references:
+  #public: null
+  #internal: null
+  #reports: null
+#detection_model: null
+response: null
+configurations: null
+#file: null

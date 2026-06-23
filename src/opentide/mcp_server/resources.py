@@ -1,8 +1,10 @@
 """MCP resource providers."""
 
 from __future__ import annotations
+
 import json
 from typing import Any
+
 from opentide.core.registry import OpenTide
 from opentide.mcp_server.catalog import ensure_initialised, get_object
 

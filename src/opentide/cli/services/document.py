@@ -1,9 +1,12 @@
 """Documentation generation services."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
-from opentide.cli.enums import DocumentScope
+
 import structlog
+
+from opentide.cli.enums import DocumentScope
 from opentide.core.logging.console import emit_section
 
 logger = structlog.get_logger("opentide.cli.services.document")
@@ -11,7 +14,7 @@ if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 _SCOPE_RUNNERS: dict[DocumentScope, tuple[str, str]] = {
     DocumentScope.vocabularies: ("opentide.documentation.vocabularies", "run"),
-    DocumentScope.metaschemas: ("opentide.documentation.metaschemas", "run"),
+    DocumentScope.metaschemas: ("opentide.documentation.schema_docs", "run"),
     DocumentScope.models: ("opentide.documentation.models", "run"),
     DocumentScope.objectives: ("opentide.documentation.dom", "run"),
     DocumentScope.rules: ("opentide.documentation.mdr", "run"),

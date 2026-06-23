@@ -1,6 +1,7 @@
 """Schema documentation generator — model introspection for wiki export."""
 
 from __future__ import annotations
+
 from opentide.models.base import TideModel
 
 

@@ -1,8 +1,10 @@
 """Detection objective (DOM) loading — Pydantic-only signal/objective parsing."""
 
 from __future__ import annotations
+
 from copy import deepcopy
 from typing import Any, cast
+
 from opentide.models.objective import DetectionObjective, DetectionSignal
 
 

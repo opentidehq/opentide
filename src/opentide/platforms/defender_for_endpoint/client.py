@@ -8,7 +8,7 @@ from opentide.core.typing import Never
 from enum import Enum, auto
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
-from opentide.models.legacy import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels
 from opentide.deployment import Proxy
 from opentide.core.errors import Errors
 import structlog

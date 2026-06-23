@@ -1,7 +1,9 @@
 """System information services."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
+
 from opentide.cli.enums import DetectionPlatform
 from opentide.core.registry import OpenTide
 

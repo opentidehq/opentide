@@ -11,7 +11,7 @@ from opentide.platforms.plugins import QueryValidator
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
 from opentide.models.rule import DetectionRule
-from opentide.models.legacy import ConfigurationModels, TenantDeployment
+from opentide.models.system_config import ConfigurationModels, TenantDeployment
 from opentide.core.errors import Errors
 from opentide.deployment import TideDeployment, DetectionPlatforms, DeploymentStrategy, Proxy
 import structlog

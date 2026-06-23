@@ -7,7 +7,7 @@ from opentide.core.registry import OpenTide
 from opentide.platforms.plugins import RuleDeployer
 from opentide.platforms.carbon_black.client import CarbonBlackCloudConnection
 from opentide.deployment import check_status
-from opentide.models.legacy import StatusStrategy
+from opentide.models.deployment_enums import StatusStrategy
 import structlog
 logger = structlog.get_logger('opentide.platforms.carbon_black.deployer')
 

@@ -1,0 +1,17 @@
+  #enabled: false
+  #name: 
+  #schema: null
+  status: null
+  #flags: null
+  #tenants: null
+  #contributors: null
+  
+  query: |
+    ...
+  alert: 
+  impacted_entities: 
+  scheduling: 
+  #rule_id: null
+  #actions: null
+  #scope: null
+  #exclusions: null

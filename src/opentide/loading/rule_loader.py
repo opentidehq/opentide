@@ -1,9 +1,11 @@
 """Detection rule loading — Pydantic-only rule parsing."""
 
 from __future__ import annotations
+
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
+
 from opentide.loading.platform_loader import load_platform_config
 from opentide.models.metadata import ObjectReferences
 from opentide.models.platform import PLATFORM_CONFIG_MODELS, RuleConfigurations

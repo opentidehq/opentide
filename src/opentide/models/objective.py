@@ -1,7 +1,9 @@
 """Detection objective (DOM) Pydantic models — schema ``objective::1.0``."""
 
 from __future__ import annotations
+
 from typing import Any, ClassVar, cast
+
 from opentide.models.base import TideModel
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 

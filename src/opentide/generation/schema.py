@@ -1,15 +1,18 @@
 """JSON Schema generation — TideSchemaGenerator entry point."""
 
 from __future__ import annotations
+
 from typing import Any, cast
+
 from pydantic.json_schema import CoreSchema, GenerateJsonSchema
+
 from opentide.models.base import TideModel
 
 
 class TideSchemaGenerator(GenerateJsonSchema):
     """Custom Pydantic JSON Schema generator preserving Tide metadata."""
 
-    def field_title_should_be_set(self, schema: CoreSchema) -> bool:
+    def field_title_should_be_set(self, schema: CoreSchema) -> bool:  # ty: ignore[invalid-method-override]
         return True
 
 

@@ -1,9 +1,12 @@
 """Detection rule (MDR) Pydantic model — schema ``rule::1.0``."""
 
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Any, ClassVar, Protocol, cast
+
 from pydantic import Field, PrivateAttr
+
 from opentide.models.base import TideModel
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.platform import RuleConfigurations

@@ -1,9 +1,11 @@
 """Per-platform system configuration loading for ``Platform.config``."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
+
 from opentide.core.index_manager import IndexManager
 from opentide.models.platform import parse_platform_config
 

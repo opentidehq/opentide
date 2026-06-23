@@ -1,11 +1,13 @@
 """Legacy Tide 1 → Tide 2 object patching for staging reconciliation."""
 
 from __future__ import annotations
+
 import json
 import os
 import uuid
 from pathlib import Path
 from typing import Any
+
 from opentide.core.root import repository_root
 
 

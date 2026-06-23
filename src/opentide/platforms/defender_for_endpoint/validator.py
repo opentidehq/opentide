@@ -6,7 +6,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.platforms.plugins import QueryValidator
 from opentide.core.registry import OpenTide, DetectionPlatforms
 from opentide.models.rule import DetectionRule
-from opentide.models.legacy import DeploymentStrategy
+from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.deployment import TideDeployment
 from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService
 import structlog

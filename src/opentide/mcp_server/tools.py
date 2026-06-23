@@ -1,7 +1,9 @@
 """MCP tool implementations."""
 
 from __future__ import annotations
+
 from typing import Any
+
 from opentide.core.registry import OpenTide
 from opentide.mcp_server.catalog import (
     coverage_analysis,

@@ -1,6 +1,7 @@
 """CLI enumerations and platform name mapping."""
 
 from __future__ import annotations
+
 from enum import Enum
 
 

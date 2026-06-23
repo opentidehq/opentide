@@ -22,6 +22,8 @@ def test_cli_help_lists_commands() -> None:
         "export",
         "extract",
         "info",
+        "ci",
+        "migrate",
     ):
         assert command in result.stdout
 

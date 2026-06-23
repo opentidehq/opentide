@@ -4,9 +4,10 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
-from opentide.models.legacy import DeploymentStrategy
+from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.deployment import TideDeployment, ExternalIdHelper, check_status
-from opentide.models.legacy import ConfigurationModels, StatusStrategy
+from opentide.models.system_config import ConfigurationModels
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.core.errors import Errors
 from opentide.platforms.crowdstrike.client import CrowdstrikeService, DetectionRule as CrowdstrikeRule
 import structlog

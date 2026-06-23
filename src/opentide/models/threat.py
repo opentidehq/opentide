@@ -1,8 +1,11 @@
 """Threat vector (TVM) Pydantic models — schema ``threat::1.0``."""
 
 from __future__ import annotations
+
 from typing import Any, ClassVar, cast
+
 from pydantic import Field, model_validator
+
 from opentide.models.base import TideModel
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 

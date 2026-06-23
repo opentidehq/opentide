@@ -1,14 +1,16 @@
 """OpenTide programmatic registry — explicit lifecycle and typed object access."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
+
 from opentide.core import index_manager as index_mod
 from opentide.core import runtime
-from opentide.core.environment import DebugHelpers
-from opentide.loading.compat import ObjectLoader
-from opentide.models.deployment_enums import DetectionPlatforms
+from opentide.core.environment import DebugHelpers  # noqa: F401
+from opentide.loading.compat import ObjectLoader  # noqa: F401
+from opentide.models.deployment_enums import DetectionPlatforms  # noqa: F401
 from opentide.models.objective import DetectionObjective
 from opentide.models.results import ValidationResult
 from opentide.models.rule import DetectionRule
@@ -260,6 +262,7 @@ class _DeploymentConfig:
     @property
     def statuses(self) -> list[Any]:
         import sys
+
         from opentide.core.root import repository_root
 
         root = str(repository_root())
@@ -285,6 +288,7 @@ class _VisibilityConfig:
     @property
     def visibility(self) -> Any:
         import sys
+
         from opentide.core.root import repository_root
 
         root = str(repository_root())
@@ -384,6 +388,7 @@ class _VocabulariesAccessor:
     @property
     def Index(self) -> dict[str, Any]:
         import sys
+
         from opentide.core.root import repository_root
 
         root = str(repository_root())

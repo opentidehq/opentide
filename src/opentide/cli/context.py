@@ -1,10 +1,12 @@
 """CLI runtime context and environment wiring."""
 
 from __future__ import annotations
+
 import contextvars
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
 from opentide.core.root import get_data_root, get_repo_root
 
 _cli_context: contextvars.ContextVar[CliContext | None] = contextvars.ContextVar(

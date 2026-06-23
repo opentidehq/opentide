@@ -1,11 +1,14 @@
 """Deployment services for the CLI."""
 
 from __future__ import annotations
+
 import os
 from typing import TYPE_CHECKING, Any, cast
+
+import structlog
+
 from opentide.cli.enums import DetectionPlatform
 from opentide.core.index_manager import IndexManager
-import structlog
 from opentide.core.logging.console import emit_section
 
 logger = structlog.get_logger("opentide.cli.services.deploy")

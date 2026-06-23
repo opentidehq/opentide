@@ -5,9 +5,10 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
-from opentide.models.legacy import DeploymentStrategy
+from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.deployment import TideDeployment, check_status
-from opentide.models.legacy import ConfigurationModels, StatusStrategy
+from opentide.models.system_config import ConfigurationModels
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.harfanglab.client import HarfangLabService, SigmaRule, YaraRule, SigmaRuleBuilder
 import structlog
 logger = structlog.get_logger('opentide.platforms.harfanglab.deployer')

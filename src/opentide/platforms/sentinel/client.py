@@ -8,7 +8,7 @@ from azure.identity import ClientSecretCredential
 from opentide.core.registry import OpenTide, DebugHelpers
 from opentide.core.debug import DebugEnvironment
 from opentide.deployment import Proxy
-from opentide.models.legacy import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel.client')
 

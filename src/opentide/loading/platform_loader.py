@@ -1,8 +1,10 @@
 """Platform configuration parsing — replaces PlatformConfigLoader."""
 
 from __future__ import annotations
+
 from copy import deepcopy
 from typing import Any, cast
+
 from opentide.models.platform import (
     CarbonBlackConfig,
     CrowdstrikeConfig,

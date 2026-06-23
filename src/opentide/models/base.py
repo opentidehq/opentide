@@ -1,7 +1,9 @@
 """Pydantic base types for code-first OpenTide models."""
 
 from __future__ import annotations
+
 from typing import Any, cast
+
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.fields import FieldInfo
 

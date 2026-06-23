@@ -1,8 +1,10 @@
 """Catalog search and analysis helpers for the MCP server."""
 
 from __future__ import annotations
+
 import re
 from typing import Any
+
 from opentide.core.registry import OpenTide
 
 _UUID_RE = re.compile(

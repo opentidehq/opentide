@@ -1,6 +1,7 @@
 """Enabled platform discovery from merged configuration."""
 
 from __future__ import annotations
+
 from opentide.core.files import resolve_configurations
 
 SYSTEM_KEYS = (

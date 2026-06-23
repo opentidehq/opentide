@@ -108,6 +108,8 @@ scripts/
 
 Bundled data lives under `src/opentide/data/` (configurations, vocabulary, external, log_sources). There are **no** legacy root folders (`Configurations/`, `Framework/`, `External/`, `Orchestration/`, `Engines/` at repo root).
 
+Client detection repositories get CI from **`opentide init --ci github|gitlab|azure`** or **`opentide ci generate`** — generated pipeline files call the `opentide` CLI via PyPI install. Do not copy or maintain CoreTide-coupled workflow trees in client repos.
+
 Structured logging lives in `opentide.core.logging` (structlog + Rich). Legacy `src/Engines/modules/logs.py` is a thin shim — new code must import from `opentide.core.logging`.
 
 Full commands in each issue and [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md).

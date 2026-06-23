@@ -1,9 +1,12 @@
 """Export services for the CLI."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
-from opentide.cli.enums import ExportTarget
+
 import structlog
+
+from opentide.cli.enums import ExportTarget
 from opentide.core.logging.console import emit_section
 
 logger = structlog.get_logger("opentide.cli.services.export")

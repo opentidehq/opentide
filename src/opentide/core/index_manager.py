@@ -1,11 +1,13 @@
 """Index loading without import-time side effects or module reload hacks."""
 
 from __future__ import annotations
+
 import json
 import os
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Literal, cast
+
 from opentide.core.root import repository_root
 
 
@@ -19,13 +21,16 @@ class IndexManager:
         """Load index from disk or build in memory."""
         if cls._cache is not None:
             return cls._cache
+
         root = repository_root()
         expected = root / "index.json"
         index_path = Path(os.getenv("INDEX_PATH") or expected)
+
         if index_path.is_file():
             index = json.loads(index_path.read_text(encoding="utf-8"))
         else:
             index = cls._build_index()
+
         cls._cache = cls.reconcile_staging(index)
         return cls._cache
 

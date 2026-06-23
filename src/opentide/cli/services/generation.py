@@ -1,12 +1,15 @@
 """Generation pipeline services for the CLI."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
+
+import structlog
+
 from opentide.cli.enums import GeneratePhase
 from opentide.core.index_manager import IndexManager
-from opentide.core.registry import OpenTide
-import structlog
 from opentide.core.logging.console import emit_section
+from opentide.core.registry import OpenTide
 
 logger = structlog.get_logger("opentide.cli.services.generation")
 if TYPE_CHECKING:

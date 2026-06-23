@@ -1,12 +1,14 @@
 """Platform registry — deployers, validators, and per-platform config."""
 
 from __future__ import annotations
+
 import importlib
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import Any, Protocol, cast
+
 from opentide.core.root import get_repo_root
 from opentide.platforms.config import build_system_config
 from opentide.platforms.enabled import enabled_systems
@@ -48,7 +50,7 @@ class Platform:
 
 
 def _class_name(system_key: str) -> str:
-    return "".join((part.capitalize() for part in system_key.split("_")))
+    return "".join(part.capitalize() for part in system_key.split("_"))
 
 
 def _ensure_repo_on_path() -> None:

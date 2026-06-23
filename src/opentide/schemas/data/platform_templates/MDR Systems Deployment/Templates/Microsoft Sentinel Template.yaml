@@ -1,0 +1,17 @@
+  #enabled: false
+  #name: 
+  #schema: null
+  status: null
+  #flags: null
+  #tenants: null
+  #contributors: null
+  
+  query: |
+    ...
+  scheduling: 
+  alert: 
+  #exclusions: null
+  #template: null
+  trigger: null
+  grouping: null
+  entities: null

@@ -1,7 +1,9 @@
 """OpenTide MCP server — FastMCP entry point."""
 
 from __future__ import annotations
+
 from mcp.server.fastmcp import FastMCP
+
 from opentide.mcp_server import resources as res
 from opentide.mcp_server.tools import (
     tool_coverage,
