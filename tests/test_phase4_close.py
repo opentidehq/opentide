@@ -205,7 +205,7 @@ def test_bundled_metaschema_byte_checksum_gate() -> None:
 
 
 def test_tide2_patching_module_removed() -> None:
-    assert not (ROOT / "Engines/modules/patching.py").exists()
+    assert not (ROOT / "src/Engines/modules/patching.py").exists()
 
 
 def test_pydantic_schema_pipeline_source_uses_core_models() -> None:
@@ -215,5 +215,5 @@ def test_pydantic_schema_pipeline_source_uses_core_models() -> None:
 
 
 def test_legacy_object_system_loaders_removed() -> None:
-    assert not (ROOT / "Engines/modules/loaders/object_loader.py").exists()
-    assert not (ROOT / "Engines/modules/loaders/system_loader.py").exists()
+    assert not (ROOT / "src/Engines/modules/loaders/object_loader.py").exists()
+    assert not (ROOT / "src/Engines/modules/loaders/system_loader.py").exists()

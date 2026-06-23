@@ -15,7 +15,7 @@ Phase 4 ([#65](https://github.com/OpenTideHQ/CoreTide/issues/65)) creates `docs/
 pip install -e ".[dev]"
 pytest --cov=opentide --cov-fail-under=80
 ruff check src/opentide tests/
-mypy --strict src/opentide/core
+uv run ty check src/opentide
 ```
 
 ## Layout

@@ -73,21 +73,26 @@ def _bundled_platform_configs() -> dict[str, dict]:
 
 
 def resolve_configurations() -> dict[str, dict]:
-    """Merge bundled, core, and optional parent-instance configuration TOMLs."""
-    root = get_repo_root()
-    core_path = root / "Configurations"
-    custom_path = root.parent / "Configurations"
+    """Merge bundled, optional repo, and parent-instance configuration TOMLs."""
+    data_root = get_data_root()
+    unified = _fetch_configs(data_root / "configurations")
+    if "global" not in unified:
+        raise KeyError("Bundled global.toml missing from opentide.data.configurations")
 
-    unified = _fetch_configs(core_path)
     if "systems" not in unified:
         unified["systems"] = {}
     bundled = _bundled_platform_configs()
     if bundled:
         _deep_merge(unified["systems"], bundled)
 
-    if custom_path.is_dir():
-        custom = _fetch_configs(custom_path)
-        _deep_merge(unified, custom)
+    root = get_repo_root()
+    repo_configs = root / "Configurations"
+    if repo_configs.is_dir():
+        _deep_merge(unified, _fetch_configs(repo_configs))
+
+    parent_configs = root.parent / "Configurations"
+    if parent_configs.is_dir() and parent_configs != repo_configs:
+        _deep_merge(unified, _fetch_configs(parent_configs))
 
     return unified
 
@@ -119,6 +124,7 @@ def resolve_paths(separate: bool = False):
     core_paths["vocabularies"] = data_root / "vocabulary"
     core_paths["resources"] = data_root / "external"
     core_paths["platform_configs"] = data_root / "configurations" / "platforms"
+    core_paths["log_sources"] = data_root / "log_sources"
 
     if separate:
         return paths, core_paths

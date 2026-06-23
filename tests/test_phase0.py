@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCAN = ("Engines", "Configurations", "Orchestration")
+SCAN = ("src/Engines",)
 
 
 def test_cdm_absent() -> None:
@@ -24,24 +24,27 @@ def test_bdr_absent() -> None:
 
 
 def test_dom_template_bug_fixed() -> None:
-    global_toml = (ROOT / "Configurations/global.toml").read_text()
+    global_toml = (ROOT / "src/opentide/data/configurations/global.toml").read_text()
     assert '"dom"' in global_toml
     assert '"cdm"' not in global_toml
 
 
 def test_global_objects() -> None:
-    assert 'objects = [ "tvm", "dom", "mdr" ]' in (ROOT / "Configurations/global.toml").read_text()
+    assert (
+        'objects = [ "tvm", "dom", "mdr" ]'
+        in (ROOT / "src/opentide/data/configurations/global.toml").read_text()
+    )
 
 
 def test_deleted_files() -> None:
-    assert not (ROOT / "Engines/mutation/remove_cdm_validation.py").exists()
+    assert not (ROOT / "src/Engines/mutation/remove_cdm_validation.py").exists()
     assert not (ROOT / "Framework/Meta Schemas/CDM Meta Schema.yaml").exists()
 
 
 def test_indent_full_dumper_centralized() -> None:
     source = (ROOT / "src/opentide/core/files.py").read_text()
     assert "class IndentFullDumper(yaml.Dumper):" in source
-    engines_shim = (ROOT / "Engines/modules/files.py").read_text()
+    engines_shim = (ROOT / "src/Engines/modules/files.py").read_text()
     assert "from opentide.core.files import" in engines_shim
     shim_body = engines_shim.replace("from opentide.core.files import", "")
     assert "class IndentFullDumper" not in shim_body
@@ -49,7 +52,7 @@ def test_indent_full_dumper_centralized() -> None:
 
 def test_ordered_yaml_dumper_renamed() -> None:
     r = subprocess.run(
-        ["git", "grep", "-n", "class MyDumper", "--", "Engines", "src/opentide"],
+        ["git", "grep", "-n", "class MyDumper", "--", "src/Engines", "src/opentide"],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -57,7 +60,7 @@ def test_ordered_yaml_dumper_renamed() -> None:
     assert r.returncode == 1, r.stdout
     source = (ROOT / "src/opentide/core/files.py").read_text()
     assert "class OrderedYAMLDumper(IndentFullDumper):" in source
-    refs = (ROOT / "Engines/mutation/references.py").read_text()
+    refs = (ROOT / "src/Engines/mutation/references.py").read_text()
     assert "MyDumper" not in refs
     assert "OrderedYAMLDumper" not in refs
 
@@ -67,7 +70,7 @@ def test_seven_platforms_five_validators() -> None:
     systems = {p.name for p in bundled.glob("*.toml")}
     assert len(systems) == 7
     validators = {
-        p.stem.replace("_query", "") for p in (ROOT / "Engines/validation").glob("*_query.py")
+        p.stem.replace("_query", "") for p in (ROOT / "src/Engines/validation").glob("*_query.py")
     }
     assert validators == {
         "carbon_black_cloud",

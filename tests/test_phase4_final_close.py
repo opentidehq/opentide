@@ -102,8 +102,8 @@ def tide_workspace(monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_legacy_loader_modules_removed() -> None:
-    assert not (ROOT / "Engines/modules/loaders/object_loader.py").exists()
-    assert not (ROOT / "Engines/modules/loaders/system_loader.py").exists()
+    assert not (ROOT / "src/Engines/modules/loaders/object_loader.py").exists()
+    assert not (ROOT / "src/Engines/modules/loaders/system_loader.py").exists()
 
 
 def test_load_signal_from_dict_typed() -> None:
