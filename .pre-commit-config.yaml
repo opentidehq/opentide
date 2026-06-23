@@ -1,4 +1,21 @@
+# Install: uv sync --group dev && uv run pre-commit install --install-hooks
+# Installs both pre-commit (fast) and pre-push (pytest) hooks.
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]  # allow custom YAML tags in GitHub Actions
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.6
     hooks:
@@ -14,3 +31,19 @@ repos:
         language: system
         pass_filenames: false
         files: ^src/opentide/
+
+      - id: pytest
+        name: pytest (CI parity, no coverage)
+        entry: uv run pytest tests/ --no-cov -q
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(src/opentide/|tests/)
+
+      - id: mkdocs-strict
+        name: mkdocs build --strict (docs only)
+        entry: bash -c 'uv sync --group docs --quiet && uv run mkdocs build --strict'
+        language: system
+        pass_filenames: false
+        files: ^(docs/|mkdocs\.yml)
+        stages: [pre-push]
