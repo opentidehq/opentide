@@ -4,10 +4,10 @@ import json
 from typing import Literal, Union, Optional
 
 
+from opentide.generation.pydantic_metaschema import lookup_schema_extra
 from opentide.generation.framework import (
     get_type,
     model_value,
-    get_value_metaschema,
     get_vocab_entry,
     strip_vocab_stage_prefix,
 )
@@ -147,7 +147,7 @@ def get_icon(
 ) -> str:  # type:ignore
 
     if metaschema:
-        meta_icon = get_value_metaschema(value, metaschema, "icon")
+        meta_icon = lookup_schema_extra(metaschema, value, "icon")
         if meta_icon:
             return str(meta_icon)
         else:

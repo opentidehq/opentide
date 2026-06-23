@@ -1,13 +1,13 @@
 import os
 import uuid
 import sys
-from typing import Literal, overload, Tuple
+from typing import Any, Literal, Tuple, overload
 
 
 from opentide.core.registry import OpenTide
 from opentide.core.logging import log
 
-DEFINITIONS_INDEX = OpenTide.TideSchemas.definitions
+DEFINITIONS_INDEX: dict[str, Any] = {}
 VOCAB_INDEX = OpenTide.Vocabularies.Index
 MODELS_INDEX = OpenTide.Models.Index
 CHAINING_INDEX = OpenTide.Models.chaining
@@ -57,137 +57,22 @@ def key_value_transform(kv_store_list: list) -> dict:
     return kv_store
 
 
-# def rename_param_nest(nest, schema):
-#
-#    nest_copy= nest.copy()
-#
-#    for item in nest_copy:
-#        if type(nest_copy[item]) == list:
-#            parameter_name = get_value_metaschema(item, schema, "tide.mdr.parameter")
-#
-#            # Case for key:value format
-#            if get_value_metaschema(item, schema, "key_value_store"):
-#                nest[parameter_name] = key_value_transform(nest.pop(item))
-#
-#            else:
-#                nest[parameter_name] = nest.pop(item)
-#                for elem in nest_copy[item]:
-#                    rename_param_nest(elem,schema)
-#
-#        elif type(nest_copy[item]) == dict:
-#            parameter_name = get_value_metaschema(item, schema, "tide.mdr.parameter")
-#            nest[parameter_name] = nest.pop(item)
-#            rename_param_nest(nest[parameter_name], schema)
-#
-#        else:
-#            parameter_name = get_value_metaschema(item, schema, "tide.mdr.parameter")
-#            temp = nest[item] #Avoids conflicts if coretide name and param names are the same
-#            nest.pop(item)
-#            nest[parameter_name] = temp
-#
-#    return nest
-
-
-def get_value_metaschema(
-    field, metaschema: dict, retrieve: str | Literal["tide.meta"], scope=None
-):
-    """
-    Retreives any field from the metaschema at any depth
-
-    Parameters
-    ----------
-    field : from which the corresponding title will be retrieved
-    metaschema : search space
-    retrieve: the key to be retrieved.
-    scope: Allows to first narrow down a search namespace. Useful to allow for keys named in the same way at different
-    nesting levels throughout the template
-
-    Returns
-    -------
-    title: the title of the field to research.
-
-    """
-    if not metaschema:
-        return None
-
-    if scope:
-        scoped_meta = get_value_metaschema(scope, metaschema, retrieve="tide.meta")
-        if scope == "threat_objects":
-            return get_value_metaschema(field, scoped_meta, retrieve)  # type: ignore
-
-    if field in metaschema.keys():
-        if retrieve == "tide.meta":
-            return {field: metaschema[field]}
-        else:
-            return metaschema[field].get(retrieve)
-
-    else:
-        for key in metaschema.keys():
-            if metadef := metaschema[key].get("tide.meta.definition"):
-                if metadef is True:
-                    definition = DEFINITIONS_INDEX[key]
-                else:
-                    definition = DEFINITIONS_INDEX[metadef]
-                if field == key:
-                    return DEFINITIONS_INDEX[key].get(retrieve)
-                elif (
-                    get_value_metaschema(field, definition.get("properties"), retrieve)
-                    != None
-                ):
-                    return get_value_metaschema(
-                        field, definition.get("properties"), retrieve
-                    )
-
-            if (
-                metaschema[key].get("type") == "object"
-                and "recomposition" not in metaschema[key].keys()
-            ):
-                if "additionalProperties" not in metaschema[key].keys():
-                    # Trick since recursive function would not return for all
-                    # occurence, would break on first return. If the return is not
-                    # None, it means it's the title and thus returns.
-                    if (
-                        get_value_metaschema(
-                            field, metaschema[key].get("properties"), retrieve
-                        )
-                        != None
-                    ):
-                        return get_value_metaschema(
-                            field, metaschema[key].get("properties"), retrieve
-                        )
-
-            # Handle case for arrays of items
-            if (
-                metaschema[key].get("type") == "array"
-                and "properties" in metaschema[key].get("items", {}).keys()
-            ):
-                if (
-                    get_value_metaschema(
-                        field, metaschema[key]["items"].get("properties"), retrieve
-                    )
-                    != None
-                ):
-                    return get_value_metaschema(
-                        field, metaschema[key]["items"].get("properties"), retrieve
-                    )
-
 
 def rename_param_nest(nest, schema, scope=None):
+    from opentide.generation.pydantic_metaschema import lookup_schema_extra
+
     nest_copy = nest.copy()
 
     for item in nest_copy:
-        parameter_name = get_value_metaschema(
-            item, schema, "tide.mdr.parameter", scope=scope
+        parameter_name = lookup_schema_extra(
+            schema, item, "tide.mdr.parameter", scope=scope
         )
-        temp = nest[
-            item
-        ]  # Avoids conflicts if coretide name and param names are the same
+        temp = nest[item]
         nest.pop(item)
         nest[parameter_name] = temp
 
         if type(nest_copy[item]) == list:
-            # Case for key:value format
-            if get_value_metaschema(item, schema, "key_value_store"):
+            if lookup_schema_extra(schema, item, "key_value_store"):
                 nest[parameter_name] = key_value_transform(nest_copy[item])
             else:
                 for elem in nest_copy[item]:

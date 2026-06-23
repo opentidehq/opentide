@@ -36,7 +36,7 @@ from opentide.documentation.core import (
     GitlabMarkdown,
     object_name,
 )
-from opentide.models.legacy import StatusStrategy
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.core.logging import log
 
 

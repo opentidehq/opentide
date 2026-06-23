@@ -23,11 +23,8 @@ from dataclasses import dataclass, asdict
 
 from opentide.indexing.indexer import indexer
 from opentide.core.logging import log
-from opentide.models.legacy import (DetectionSystems,
-                                    TideModels,
-                                    TideDefinitionsModels,
-                                    TideConfigs,
-                                    SystemConfig)
+from opentide.models.deployment_enums import DetectionSystems
+from opentide.models.system_config import ConfigurationModels as TideConfigs, SystemConfig
 from opentide.indexing.legacy_patch import LegacyObjectPatch
 from opentide.loading.objects import Objects
 from opentide.loading.configurations import Configurations

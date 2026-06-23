@@ -1,15 +1,8 @@
-"""Bundled schema definitions — single source for metaschema data."""
+"""Bundled schema definitions — generated artifacts only."""
 
-from opentide.schemas.store import (
-    definitions_path,
-    metaschemas_path,
-    schemas_data_root,
-    subschemas_path,
-)
+from opentide.schemas.store import generated_schemas_path, schemas_data_root
 
 __all__ = [
-    "definitions_path",
-    "metaschemas_path",
+    "generated_schemas_path",
     "schemas_data_root",
-    "subschemas_path",
 ]
