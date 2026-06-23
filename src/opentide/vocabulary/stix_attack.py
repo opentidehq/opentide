@@ -55,9 +55,7 @@ def _normalise_tactic_name(name: str) -> str:
     return name.replace("Ics", "").strip()
 
 
-def _tactics_for_technique(
-    obj: Mapping[str, Any], tactic_map: dict[str, str]
-) -> list[str]:
+def _tactics_for_technique(obj: Mapping[str, Any], tactic_map: dict[str, str]) -> list[str]:
     stages: list[str] = []
     for phase in obj.get("kill_chain_phases") or []:
         phase_name = phase.get("phase_name", "")

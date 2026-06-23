@@ -206,9 +206,8 @@ _Vocabulary_ : `{source_vocab}`
             log("DEBUG", f"Processing {len(extensions)} extension(s) for", self.vocab)
             ext_vocab = VOCAB_INDEX.get(self.vocab)
             ext_meta = ext_vocab.metadata if ext_vocab else None
-            is_model = (
-                (is_id_keyed(ext_meta.to_dict()) if ext_meta else False)
-                or (self.vocab in OBJECT_TYPES)
+            is_model = (is_id_keyed(ext_meta.to_dict()) if ext_meta else False) or (
+                self.vocab in OBJECT_TYPES
             )
             key_field = entry_key_field(key="id" if is_model else "name")
             normalised = {}

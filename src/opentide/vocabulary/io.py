@@ -97,7 +97,5 @@ def write_vocab_file(path: Path, document: Mapping[str, Any]) -> None:
         raise VocabularyLoadError(f"Cannot write vocabulary without field: {path}")
     expected = field_from_vocab_path(path) if path.name.endswith(VOCAB_SUFFIX) else str(field)
     if field != expected:
-        raise VocabularyLoadError(
-            f"Vocabulary field '{field}' does not match path '{path.name}'"
-        )
+        raise VocabularyLoadError(f"Vocabulary field '{field}' does not match path '{path.name}'")
     path.write_text(dump_vocab_document(document), encoding="utf-8")

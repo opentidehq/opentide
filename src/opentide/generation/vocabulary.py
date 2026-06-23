@@ -196,9 +196,7 @@ def _validate_document_structure(raw: Mapping[str, Any], *, source: str) -> None
         raise VocabularyLoadError(f"Vocabulary 'keys' must be a list: {source}")
 
 
-def parse_vocabulary_document(
-    raw: Mapping[str, Any], *, source: str = ""
-) -> VocabularyDefinition:
+def parse_vocabulary_document(raw: Mapping[str, Any], *, source: str = "") -> VocabularyDefinition:
     """Parse a vocabulary document into a typed definition."""
     _validate_document_structure(raw, source=source)
 
