@@ -30,9 +30,10 @@ def test_dom_template_bug_fixed() -> None:
 
 
 def test_global_objects() -> None:
-    assert 'objects = [ "tvm", "dom", "mdr" ]' in (
-        ROOT / "src/opentide/data/configurations/global.toml"
-    ).read_text()
+    assert (
+        'objects = [ "tvm", "dom", "mdr" ]'
+        in (ROOT / "src/opentide/data/configurations/global.toml").read_text()
+    )
 
 
 def test_deleted_files() -> None:
