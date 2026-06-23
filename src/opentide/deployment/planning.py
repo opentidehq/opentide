@@ -2,13 +2,15 @@ import pandas as pd
 from git.repo import Repo
 from opentide.generation.framework import unroll_dot_dict
 from opentide.models.rule import DetectionRule
-from opentide.models.legacy import (
-    SharedModels,
-    SystemConfig,
+from opentide.models.deployment_enums import (
     DeploymentStrategy,
     StatusStrategy,
-    TenantDeployment,
+)
+from opentide.models.platform import PlatformConfigBase
+from opentide.models.system_config import (
     DeploymentBatch,
+    SystemConfig,
+    TenantDeployment,
 )
 from opentide.core.registry import OpenTide, DetectionPlatforms, ObjectLoader
 from opentide.core.errors import Errors
@@ -33,14 +35,8 @@ DEPRECATED_STATUSES = (StatusStrategy.DELETION,
 
 from opentide.core.registry import OpenTide, ObjectLoader
 from opentide.models.rule import DetectionRule
-from opentide.models.legacy import (
-    SharedModels,
-    SystemConfig,
-    DeploymentStrategy,
-    TenantDeployment,
-    DeploymentBatch,
-    DetectionPlatforms,
-)
+from opentide.models.deployment_enums import DeploymentStrategy, DetectionPlatforms
+from opentide.models.system_config import DeploymentBatch, SystemConfig, TenantDeployment
 from opentide.generation.framework import unroll_dot_dict
 
 class TideDeployment:
@@ -100,7 +96,7 @@ class TideDeployment:
 
     def mdr_configuration_resolver(
         self, data: DetectionRule, system: DetectionPlatforms
-    ) -> SharedModels.PlatformConfigurationBase:
+    ) -> PlatformConfigBase:
         match system:
             case DetectionPlatforms.SENTINEL:
                 mdr_config = data.configurations.sentinel

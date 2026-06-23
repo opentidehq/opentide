@@ -1,14 +1,11 @@
 import pandas as pd
 from git.repo import Repo
 from opentide.generation.framework import unroll_dot_dict
-from opentide.models.legacy import (
-    TideDefinitionsModels,
-    TideModels,
+from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.models.system_config import (
+    DeploymentBatch,
     SystemConfig,
-    DeploymentStrategy,
-    StatusStrategy,
     TenantDeployment,
-    TenantDeploymentModel,
 )
 from opentide.core.registry import OpenTide, DetectionPlatforms, ObjectLoader
 from opentide.core.errors import Errors

@@ -5,43 +5,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS
+from opentide.generation.pydantic_metaschema import CORE_SCHEMA_MODELS, build_core_schema_source
 from opentide.generation.template_engine import (
     emit_template_file,
     gen_template,
     get_required,
 )
 from opentide.models.base import TideModel
-from opentide.schemas.store import schemas_data_root
 
 CORE_TEMPLATE_MODELS: dict[str, type[TideModel]] = CORE_SCHEMA_MODELS
 
-_CORE_METASCHEMA_FILES: dict[str, str] = {
-    "mdr": "MDR Meta Schema.yaml",
-    "dom": "Detection Objective.metaschema.yaml",
-    "tvm": "Threat Vector.metaschema.yaml",
-}
-
-
-def core_metaschema_path(model_key: str) -> Path:
-    """Return bundled metaschema path for a core template model."""
-    if model_key not in CORE_TEMPLATE_MODELS:
-        raise KeyError(f"Unknown core template model {model_key!r}")
-    return schemas_data_root() / _CORE_METASCHEMA_FILES[model_key]
-
 
 def load_core_template_source(model_key: str) -> dict[str, Any]:
-    """Load template-generation source for a core model from the Pydantic schema store."""
-    model = CORE_TEMPLATE_MODELS[model_key]
-    path = core_metaschema_path(model_key)
-    parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(parsed, dict):
-        raise ValueError(f"Invalid metaschema payload for {model_key}")
-    # Gate: core object models are registered in the Pydantic pipeline.
-    _ = model.schema_identifier()
-    return parsed
+    """Build template-generation source for a core model from Pydantic fields."""
+    if model_key not in CORE_TEMPLATE_MODELS:
+        raise KeyError(f"Unknown core template model {model_key!r}")
+    return build_core_schema_source(model_key)
 
 
 def generate_core_template(

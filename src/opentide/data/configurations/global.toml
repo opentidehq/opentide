@@ -17,9 +17,7 @@ staging_index_output = "staging_index.json"
 index_output = "index.json"
 vocabularies = "vocabulary/"
 configurations = "configurations/"
-metaschemas = "src/opentide/schemas/data/"
-subschemas = "src/opentide/schemas/data/Sub Schemas/"
-definitions = "src/opentide/schemas/data/Definitions/"
+platform_templates = "src/opentide/schemas/data/platform_templates/"
 wiki_docs_folder = "wiki/"
 models_docs_folder = "wiki/Models/"
 schemas_docs_folder = "wiki/Framework/Schemas/"
@@ -36,15 +34,12 @@ attack_layer = "ATT&CK Navigator Layer.json"
 table = "Objects Table.csv"
 
 [metaschemas]
-tvm = "Threat Vector.metaschema.yaml"
-dom = "Detection Objective.metaschema.yaml"
-mdr = "MDR Meta Schema.yaml"
+tvm = "tvm"
+dom = "dom"
+mdr = "mdr"
 
 [recomposition]
 systems = "MDR Systems Deployment"
-
-[config_metaschemas]
-visibility = "Configurations/visibility.meta.yaml"
 
 [config_json_schemas]
 visibility = "Configurations/visibility.schema.json"

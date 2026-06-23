@@ -4,15 +4,13 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-import yaml
-
 from opentide.core.files import resolve_paths
 from opentide.core.logging import log
 from opentide.core.registry import OpenTide
 from opentide.documentation.core import get_icon
 from opentide.generation.framework import get_type, get_vocab_entry
 from opentide.generation.vocabulary import VocabularyDefinition, entry_key_field
-from opentide.models.legacy import StatusStrategy
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.enabled import enabled_systems
 
 GLOBAL_CONFIG: Any
@@ -21,7 +19,6 @@ CONFIG_INDEX: dict[str, Any]
 PATHS: dict[str, Path]
 SCHEMA_CONFIG: dict[str, Any]
 VOCAB_EXTENSIONS: dict[str, Any]
-METASCHEMAS_FOLDER: Path
 VOCABS_FOLDER: Path
 JSON_SCHEMA_FOLDER: Path
 ICONS: Any
@@ -34,7 +31,7 @@ def _refresh_runtime_context() -> None:
     """Rebind module globals after env or index changes (tests, reload)."""
     global GLOBAL_CONFIG, VOCAB_INDEX, CONFIG_INDEX, PATHS
     global SCHEMA_CONFIG, VOCAB_EXTENSIONS
-    global METASCHEMAS_FOLDER, VOCABS_FOLDER, JSON_SCHEMA_FOLDER
+    global VOCABS_FOLDER, JSON_SCHEMA_FOLDER
     global ICONS, OBJECT_TYPES, SUBSCHEMAS_PATH, RECOMPOSITION
 
     GLOBAL_CONFIG = OpenTide.Configurations.Global
@@ -43,12 +40,11 @@ def _refresh_runtime_context() -> None:
     PATHS = resolve_paths()
     SCHEMA_CONFIG = CONFIG_INDEX.get("schema", {})
     VOCAB_EXTENSIONS = SCHEMA_CONFIG.get("vocabulary", {})
-    METASCHEMAS_FOLDER = Path(PATHS["metaschemas"])
     VOCABS_FOLDER = Path(PATHS["vocabularies"])
     JSON_SCHEMA_FOLDER = Path(PATHS["json_schemas"])
     ICONS = OpenTide.Configurations.Documentation.icons
     OBJECT_TYPES = OpenTide.Configurations.Global.objects
-    SUBSCHEMAS_PATH = Path(PATHS["subschemas"])
+    SUBSCHEMAS_PATH = Path(PATHS.get("platform_templates", PATHS.get("subschemas", ".")))
     RECOMPOSITION = GLOBAL_CONFIG.recomposition
 
 
@@ -510,16 +506,13 @@ _Vocabulary_ : `{source_vocab}`
                 )
                 raise ValueError(f"Missing configuration for system {self.system}")
 
-            tenants: list[dict] = system_config.get("tenants")
+            tenants: list[dict] = system_config.get("tenants") or []
             if not tenants:
                 log(
-                    "FATAL",
-                    "Cannot retrieve a tenants section within the system configuration",
-                    str(system_config),
+                    "INFO",
+                    f"No tenants configured for system {self.system}; returning empty tenant list",
                 )
-                raise ValueError(
-                    f"System Configuration for {self.system} does not contain a tenants section"
-                )
+                return [], []
 
             enums: list[str] = []
             descriptions: list[str] = []
@@ -546,31 +539,26 @@ def strip_framework_keywords(dictionary: dict) -> dict:
 
 
 def recomposition_handler(entry_point):
+    from opentide.generation.pydantic_metaschema import build_platform_schema_source
+    from opentide.models.platform_schema import platform_model_for_key
 
     recompositions = CONFIG_INDEX[entry_point]
-    subschema_folder = OpenTide.Configurations.Global.recomposition[entry_point]
     recomposition = dict()
-    # Generate a list of pivots
     for entry in recompositions:
         data = recompositions[entry]
-        enabled = False
-
         if data.get("tide"):
             config_keyword = "tide"
         else:
             config_keyword = "platform"
 
-        if data[config_keyword]["enabled"] == True:
-            # recomp_entry = dict()
+        if data[config_keyword]["enabled"] is True:
             recomp_identifier = entry
             recomposition[recomp_identifier] = dict()
             recomposition[recomp_identifier]["title"] = data[config_keyword]["name"]
             recomposition[recomp_identifier]["description"] = data[config_keyword]["description"]
             recomposition[recomp_identifier]["type"] = "object"
-
-            recomp_source = data[config_keyword]["subschema"] + ".yaml"
-            recomp_source_path = SUBSCHEMAS_PATH / subschema_folder / recomp_source
-            recomp_data = yaml.safe_load(open(recomp_source_path, encoding="utf-8"))
+            platform_model = platform_model_for_key(entry)
+            recomp_data = build_platform_schema_source(platform_model)
             recomposition[recomp_identifier].update(recomp_data)
 
     return recomposition
@@ -603,10 +591,17 @@ def gen_json_schema(dictionary):
         # checks if the key is a dict
         if type(dict_foo[field]) == dict:
             if "tide.meta.definition" in dict_foo[field].keys():
-                if (metadef := dict_foo[field]["tide.meta.definition"]) is True:
-                    temp = OpenTide.TideSchemas.definitions[field]
+                from opentide.generation.pydantic_metaschema import (
+                    DEFINITION_MODELS,
+                    build_model_schema_source,
+                )
+
+                metadef = dict_foo[field]["tide.meta.definition"]
+                if metadef is True:
+                    definition_model = DEFINITION_MODELS[field]
                 else:
-                    temp = OpenTide.TideSchemas.definitions[metadef]
+                    definition_model = DEFINITION_MODELS[str(metadef)]
+                temp = build_model_schema_source(definition_model)
 
                 if deprecation_message := dict_foo[field].get("tide.meta.deprecation"):
                     temp["title"] = "⚠️ DEPRECATION WARNING"
@@ -774,12 +769,11 @@ def gen_json_schema(dictionary):
 def run():
     _refresh_runtime_context()
 
-    log("TITLE", "Metaschema to JSON Schema Assembler")
+    log("TITLE", "Pydantic JSON Schema Assembler")
     log(
         "INFO",
-        "Generates JSON Schemas from metaschema files, dynamically "
-        "looking up Vocabulary values. JSON Schemas allow to validate the models "
-        "as per the CoreTIDE schema.",
+        "Generates JSON Schemas from Pydantic models, dynamically "
+        "looking up Vocabulary values.",
     )
 
     from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS, generate_core_model_schema
@@ -795,12 +789,8 @@ def run():
             cleaned = generate_core_model_schema(meta)
             placeholders: dict[str, str] = {}
         else:
-            yaml_input = METASCHEMAS_FOLDER / GLOBAL_CONFIG.metaschemas[meta]
-            parsing = yaml.safe_load(open(yaml_input, encoding="utf-8"))
-            placeholders = parsing.get("tide.placeholders") or {}
-            log("ONGOING", "Generating json schema for : " + str(yaml_input))
-            generated = gen_json_schema(parsing)
-            cleaned = strip_framework_keywords(generated)
+            log("SKIP", f"No Pydantic schema registered for meta key: {meta}")
+            continue
 
         log("ONGOING", "Exporting generated schema to : " + str(json_output))
         output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
@@ -818,50 +808,46 @@ def run():
 
     log("SUCCESS", "Generated all JSON Schemas")
 
-    # Configuration Schemas
-    # Configuration meta schemas live under Configurations/ subdirectories
-    # and may use tide.* keywords for vocabulary resolution
-    config_metaschemas = GLOBAL_CONFIG.config_metaschemas
+    # Configuration Schemas from Pydantic models
     config_json_schemas = GLOBAL_CONFIG.config_json_schemas
 
-    if config_metaschemas:
+    if config_json_schemas:
         log("TITLE", "Configuration Schema Assembler")
         log(
             "INFO",
-            "Generates JSON Schemas from configuration meta schema files, "
-            "dynamically looking up Vocabulary values where applicable.",
+            "Generates JSON Schemas from Pydantic configuration models.",
         )
 
-        for meta in config_metaschemas:
-            if meta in config_json_schemas:
-                yaml_input = METASCHEMAS_FOLDER / config_metaschemas[meta]
-                json_output = JSON_SCHEMA_FOLDER / config_json_schemas[meta]
+        for meta in config_json_schemas:
+            json_output = JSON_SCHEMA_FOLDER / config_json_schemas[meta]
 
-                parsing = yaml.safe_load(open(yaml_input, encoding="utf-8"))
-                placeholders = parsing.get("tide.placeholders") or {}
+            if meta == "visibility":
+                from opentide.generation.pydantic_metaschema import build_model_schema_source
+                from opentide.models.visibility import VisibilityConfig
 
-                log("ONGOING", "Generating config schema for : " + str(yaml_input))
+                parsing = build_model_schema_source(VisibilityConfig)
+                placeholders: dict[str, str] = {}
+            else:
+                continue
 
-                # Generate Schema (resolves tide.vocab and other tide.* keywords)
-                generated = gen_json_schema(parsing)
+            log("ONGOING", f"Generating config schema for : {meta}")
 
-                # Removes the OpenTide reserved schema keys
-                cleaned = strip_framework_keywords(generated)
+            generated = gen_json_schema(parsing)
+            cleaned = strip_framework_keywords(generated)
 
-                # Export JSON Schemas
-                log("ONGOING", "Exporting generated schema to : " + str(json_output))
-                output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
-                for placeholder in placeholders:
-                    log(
-                        "ONGOING",
-                        f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
-                    )
-                    output = output.replace(f"${placeholder}", placeholders[placeholder])
+            log("ONGOING", "Exporting generated schema to : " + str(json_output))
+            output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
+            for placeholder in placeholders:
+                log(
+                    "ONGOING",
+                    f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
+                )
+                output = output.replace(f"${placeholder}", placeholders[placeholder])
 
-                output_file = open((json_output), "w", encoding="utf-8")
-                output_file.write(output)
-                output_file.close()
-                log("SUCCESS", "Correctly exported")
+            output_file = open((json_output), "w", encoding="utf-8")
+            output_file.write(output)
+            output_file.close()
+            log("SUCCESS", "Correctly exported")
 
         log("SUCCESS", "Generated all Configuration Schemas")
 

@@ -15,6 +15,8 @@ from opentide.core.logging import log
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DebugHelpers
 from opentide.deployment import Proxy
+from opentide.generation.pydantic_metaschema import build_platform_schema_source
+from opentide.models.platform import SplunkConfig
 
 class SplunkConnection(ABC):
     """
@@ -52,9 +54,8 @@ class SplunkConnection(ABC):
         self.SPLUNK_DEFAULT_ACTIONS = SPLUNK_SETUP.get("default_actions") or []        
         
         self.TIMERANGE_MODE = correct_timerange_mode(SPLUNK_SETUP.get("frequency_scheduling", ""))
-        self.SPLUNK_SUBSCHEMA = OpenTide.TideSchemas.subschemas["systems"][
-            self.DEPLOYER_IDENTIFIER
-        ]["properties"]
+        self._SPLUNK_SCHEMA = build_platform_schema_source(SplunkConfig)
+        self.SPLUNK_SUBSCHEMA = self._SPLUNK_SCHEMA["properties"]
 
         self.ALERT_SEVERITY_MAPPING = {
             "Informational": 2,

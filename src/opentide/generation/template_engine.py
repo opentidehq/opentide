@@ -77,7 +77,9 @@ def get_required(metaschema: dict[str, Any], required_list: list[str]) -> list[s
 
 
 def definition_handler(entry_point: str) -> dict[str, Any]:
-    return cast(dict[str, Any], OpenTide.TideSchemas.definitions[entry_point])
+    from opentide.generation.pydantic_metaschema import DEFINITION_MODELS, build_model_schema_source
+
+    return build_model_schema_source(DEFINITION_MODELS[entry_point])
 
 
 def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -134,9 +136,9 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                 field = metaschema[key.replace("#", "")]
                 if "additionalProperties" in field.keys():
                     if not isinstance(field["additionalProperties"], bool):
-                        sample = field.get("additionalProperties", {}).get("example")
+                        sample = field.get("additionalProperties", {}).get("example") or "example"
                         if sample not in field.get("additionalProperties", {}).get("required", []):
-                            sample = "#" + sample
+                            sample = "#" + str(sample)
                         body[key] = {sample: "blank"}
                 if "patternProperties" in field:
                     first_item = list(field["patternProperties"])[0]
@@ -232,10 +234,10 @@ def make_spaces(template_path: Path | str, metaschema: dict[str, Any]) -> bool:
         key = line.split(":")[0].replace(" ", "")
         force_space = "force_space" in line
         no_space = "no-space" in line
-        from opentide.generation.framework import get_value_metaschema
+        from opentide.generation.pydantic_metaschema import lookup_schema_extra
 
-        spacer = get_value_metaschema(key.replace("#", ""), metaschema, "tide.template.spacer")
-        key_type = get_value_metaschema(key.replace("#", ""), metaschema, "type")
+        spacer = lookup_schema_extra(metaschema, key.replace("#", ""), "tide.template.spacer")
+        key_type = lookup_schema_extra(metaschema, key.replace("#", ""), "type")
         if key_type == "object" or spacer or force_space:
             if spacer is not False and not no_space:
                 spaced.append("\n")

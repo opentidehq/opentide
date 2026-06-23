@@ -8,9 +8,8 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DetectionPlatforms, ObjectLoader
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
-from opentide.models.legacy import (
-                                    DeploymentStrategy,
-                                    StatusStrategy) 
+from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.models.system_config import ConfigurationModels, TenantDeployment 
 from opentide.deployment import TideDeployment, check_status
 from opentide.platforms.kql import compile_kql_query
 from opentide.core.logging import log

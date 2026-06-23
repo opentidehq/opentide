@@ -14,14 +14,12 @@ from opentide.platforms.splunk.client import (
     create_query,
     splunk_timerange,
 )
-from opentide.generation.framework import (
-    get_value_metaschema,
-    techniques_resolver,
-)
+from opentide.generation.pydantic_metaschema import lookup_schema_extra
 from opentide.core.logging import log
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
-from opentide.models.legacy import StatusStrategy
+from opentide.generation.framework import techniques_resolver
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.deployment import check_status
 from opentide.platforms.plugins import RuleDeployer
 
@@ -61,8 +59,8 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             mdr_splunk[new_key] = mdr_splunk.pop(key)
 
         for key in mdr_splunk:
-            param_name = get_value_metaschema(
-                key, self.SPLUNK_SUBSCHEMA, "tide.mdr.parameter"
+            param_name = lookup_schema_extra(
+                self._SPLUNK_SCHEMA, key, "tide.mdr.parameter"
             )
             data = mdr_splunk[key]
 
@@ -86,8 +84,8 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                         )
                     else:
                         data = cron_to_timeframe(data, mode=self.TIMERANGE_MODE)
-                    param_name = get_value_metaschema(
-                        "cron", self.SPLUNK_SUBSCHEMA, "tide.mdr.parameter"
+                    param_name = lookup_schema_extra(
+                        self._SPLUNK_SCHEMA, "cron", "tide.mdr.parameter"
                     )
 
             # Splunk mostly expects comma separated list when multiple values are present
@@ -117,8 +115,8 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         # which can't be represented in the flat key:value structure of savedsearches.conf
         if risk:
             risk_config = []
-            risk_param = get_value_metaschema(
-                "risk", self.SPLUNK_SUBSCHEMA, "tide.mdr.parameter"
+            risk_param = lookup_schema_extra(
+                self._SPLUNK_SCHEMA, "risk", "tide.mdr.parameter"
             )
             risk_objects_config = []
             threat_objects_config = []
@@ -128,9 +126,9 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                     risk_object_paramed = {}
                     for key in risk_object:
                         risk_object_paramed[
-                            get_value_metaschema(
+                            lookup_schema_extra(
+                                self._SPLUNK_SCHEMA,
                                 key,
-                                self.SPLUNK_SUBSCHEMA,
                                 "tide.mdr.parameter",
                                 scope="risk_objects",
                             )
@@ -142,9 +140,9 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                     threat_object_paramed = {}
                     for key in threat_object:
                         threat_object_paramed[
-                            get_value_metaschema(
+                            lookup_schema_extra(
+                                self._SPLUNK_SCHEMA,
                                 key,
-                                self.SPLUNK_SUBSCHEMA,
                                 "tide.mdr.parameter",
                                 scope="threat_objects",
                             )
@@ -156,9 +154,9 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                 config[risk_param] = json.dumps(risk_config)
             if risk_message:
                 config[
-                    get_value_metaschema(
+                    lookup_schema_extra(
+                        self._SPLUNK_SCHEMA,
                         "message",
-                        self.SPLUNK_SUBSCHEMA,
                         "tide.mdr.parameter",
                         scope="risk",
                     )

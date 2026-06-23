@@ -6,27 +6,21 @@ import json
 from pathlib import Path
 from typing import Any
 
+from opentide.generation.pydantic_metaschema import CORE_SCHEMA_MODELS
 from opentide.generation.schema import model_json_schema
 from opentide.generation.schema_utils import strip_framework_keywords
-from opentide.models.base import TideModel
-from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
-
-CORE_SCHEMA_MODELS: dict[str, type[TideModel]] = {
-    "mdr": DetectionRule,
-    "dom": DetectionObjective,
-    "tvm": ThreatVector,
-}
 
 
 def generate_core_model_schema(model_key: str, *, enrich: bool = True) -> dict[str, Any]:
     """Generate a JSON Schema dict for a core object model."""
-    model = CORE_SCHEMA_MODELS[model_key]
-    raw = model_json_schema(model)
-    if enrich:
-        from opentide.generation.schema_pipeline import gen_json_schema
+    from opentide.generation.pydantic_metaschema import build_core_schema_source
+    from opentide.generation.schema_pipeline import gen_json_schema
 
+    if enrich:
+        raw = build_core_schema_source(model_key)
+    else:
+        raw = model_json_schema(CORE_SCHEMA_MODELS[model_key])
+    if enrich:
         raw = gen_json_schema(raw)
     return strip_framework_keywords(raw)
 

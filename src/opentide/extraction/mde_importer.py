@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 
 from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService 
-from opentide.models.legacy import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels
 
 class DefenderForEndpointImporter(DefenderForEndpointService):
     

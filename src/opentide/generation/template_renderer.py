@@ -1,4 +1,4 @@
-"""Template generation orchestration — core models via Pydantic pipeline."""
+"""Template generation orchestration — Pydantic models as sole source."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any
 
 from opentide.core.logging import log
 from opentide.core.registry import OpenTide
+from opentide.generation.pydantic_metaschema import build_platform_schema_source
 from opentide.generation.pydantic_templates import (
     core_template_model_keys,
     generate_core_template,
@@ -16,38 +17,32 @@ from opentide.generation.template_engine import (
     gen_template,
     get_required,
 )
+from opentide.models.platform_schema import platform_model_for_key
 
 CONFIG_INDEX: dict[str, Any]
 PATHS: dict[str, Any]
-SUBSCHEMAS_FOLDER: Path
+PLATFORM_TEMPLATES_FOLDER: Path
 RECOMPOSITION: Any
 
 
 def _refresh_renderer_context() -> None:
     """Rebind renderer paths after env or index changes (tests, reload)."""
-    global CONFIG_INDEX, PATHS, SUBSCHEMAS_FOLDER, RECOMPOSITION
+    global CONFIG_INDEX, PATHS, PLATFORM_TEMPLATES_FOLDER, RECOMPOSITION
 
     CONFIG_INDEX = OpenTide.Configurations.Index
     PATHS = OpenTide.Configurations.Global.Paths.Index
-    SUBSCHEMAS_FOLDER = Path(PATHS["subschemas"])
+    PLATFORM_TEMPLATES_FOLDER = Path(
+        PATHS.get("platform_templates", PATHS.get("subschemas", "."))
+    )
     RECOMPOSITION = OpenTide.Configurations.Global.recomposition
 
 
-def _ensure_tide_index() -> None:
-    """Ensure OpenTide index includes metaschemas/subschemas for template generation."""
-    index = getattr(OpenTide, "_index", None)
-    if not getattr(OpenTide, "_initialised", False) or index is None or "subschemas" not in index:
-        OpenTide.reload()
-
-
 def run() -> None:
-    _ensure_tide_index()
     _refresh_renderer_context()
-    log("TITLE", "Generate Templates from Pydantic Core Models")
+    log("TITLE", "Generate Templates from Pydantic Models")
     log(
         "INFO",
-        "Core object templates are generated from the Pydantic schema store; "
-        "platform subschema templates retain metaschema sources.",
+        "Core and platform templates are generated from Pydantic model metadata.",
     )
 
     templates = OpenTide.Configurations.Global.templates
@@ -60,20 +55,6 @@ def run() -> None:
         if meta in core_template_model_keys():
             generate_core_template(meta, template_path, log=log)
             continue
-
-        parsed = OpenTide.TideSchemas.Index[meta]
-        placeholders: dict[str, str] = parsed.get("tide.placeholders") or {}
-        required = get_required(parsed["properties"], list(parsed.get("required", [])))
-        required.extend(parsed.get("tide.template.force-required") or [])
-        template_body = gen_template(parsed["properties"], required)
-        emit_template_file(
-            template_path,
-            template_body,
-            placeholders=placeholders,
-            spacing_properties=parsed["properties"],
-            indent=None,
-            log=log,
-        )
 
     for recomp in RECOMPOSITION:
         subschema_type_folder = RECOMPOSITION[recomp]
@@ -96,12 +77,13 @@ def run() -> None:
                 subschema_name = recomp_entry["platform"]["name"]
 
             subschema_template_path = (
-                SUBSCHEMAS_FOLDER
+                PLATFORM_TEMPLATES_FOLDER
                 / subschema_type_folder
                 / "Templates"
                 / f"{subschema_name} Template.yaml"
             )
-            parsed = OpenTide.TideSchemas.subschemas[recomp][entry]
+            platform_model = platform_model_for_key(entry)
+            parsed = build_platform_schema_source(platform_model)
             log("ONGOING", "Generating template", subschema_name)
             required = get_required(parsed["properties"], list(parsed.get("required", [])))
             required.extend(parsed.get("tide.template.force-required") or [])

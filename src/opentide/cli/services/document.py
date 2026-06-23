@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 _SCOPE_RUNNERS: dict[DocumentScope, tuple[str, str]] = {
     DocumentScope.vocabularies: ("opentide.documentation.vocabularies", "run"),
-    DocumentScope.metaschemas: ("opentide.documentation.metaschemas", "run"),
+    DocumentScope.metaschemas: ("opentide.documentation.schema_docs", "run"),
     DocumentScope.models: ("opentide.documentation.models", "run"),
     DocumentScope.objectives: ("opentide.documentation.dom", "run"),
     DocumentScope.rules: ("opentide.documentation.mdr", "run"),

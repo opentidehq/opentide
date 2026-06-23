@@ -6,10 +6,8 @@ import shutil
 import time
 
 
-from opentide.generation.framework import (
-    get_value_metaschema,
-    techniques_resolver,
-)
+from opentide.generation.pydantic_metaschema import lookup_schema_extra
+from opentide.generation.framework import techniques_resolver
 from opentide.documentation.core import (
     get_field_title,
     get_icon,
@@ -246,21 +244,21 @@ def documentation(mdr):
             ]  # Keep only the string after the last separator
             # system_data[new_key] = system_data.pop(key)
             key_name = get_field_title(cleaned_key, SYSTEMS_SUBSCHEMAS[s])
-            param_description = get_value_metaschema(
+            param_description = lookup_schema_extra(
+                                    SYSTEMS_SUBSCHEMAS[s],
                                     cleaned_key,
-                                    metaschema=SYSTEMS_SUBSCHEMAS[s],
-                                    retrieve="description"
+                                    "description",
                                 ) or ""
-            param_name = get_value_metaschema(
+            param_name = lookup_schema_extra(
+                            SYSTEMS_SUBSCHEMAS[s],
                             cleaned_key,
-                            metaschema=SYSTEMS_SUBSCHEMAS[s],
-                            retrieve="tide.mdr.parameter",
+                            "tide.mdr.parameter",
                         )
             
-            param_vocab = get_value_metaschema(
+            param_vocab = lookup_schema_extra(
+                            SYSTEMS_SUBSCHEMAS[s],
                             cleaned_key,
-                            metaschema=SYSTEMS_SUBSCHEMAS[s],
-                            retrieve="tide.vocab",
+                            "tide.vocab",
                         )
 
             param_name = f"`{param_name}`" if param_name else ""

@@ -1,1297 +1,12 @@
 {
-    "$defs": {
-        "CarbonBlackConfig": {
-            "additionalProperties": false,
-            "properties": {
-                "enabled": {
-                    "default": false,
-                    "title": "Enabled",
-                    "type": "boolean"
-                },
-                "name": {
-                    "default": "",
-                    "title": "\ud83c\udfab Name",
-                    "type": "string"
-                },
-                "schema": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Schema"
-                },
-                "status": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Status"
-                },
-                "flags": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Flags"
-                },
-                "tenants": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tenants"
-                },
-                "contributors": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udc65 Contributors"
-                }
-            },
-            "title": "CarbonBlackConfig",
-            "type": "object"
+    "type": "object",
+    "properties": {
+        "name": {
+            "title": "\ud83c\udfab Name",
+            "type": "string"
         },
-        "CrowdstrikeConfig": {
-            "additionalProperties": false,
-            "properties": {
-                "enabled": {
-                    "default": false,
-                    "title": "Enabled",
-                    "type": "boolean"
-                },
-                "name": {
-                    "default": "",
-                    "title": "\ud83c\udfab Name",
-                    "type": "string"
-                },
-                "schema": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Schema"
-                },
-                "status": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Status"
-                },
-                "flags": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Flags"
-                },
-                "tenants": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tenants"
-                },
-                "contributors": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udc65 Contributors"
-                },
-                "details": {
-                    "$ref": "#/$defs/CrowdstrikeDetails",
-                    "title": "Details"
-                },
-                "schedule": {
-                    "$ref": "#/$defs/CrowdstrikeSchedule",
-                    "title": "Schedule"
-                },
-                "query": {
-                    "title": "\ud83d\udd0e Query",
-                    "type": "string"
-                },
-                "rule_id_bundle": {
-                    "anyOf": [
-                        {
-                            "additionalProperties": {
-                                "type": "string"
-                            },
-                            "type": "object"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Rule Id Bundle"
-                }
-            },
-            "required": [
-                "details",
-                "schedule",
-                "query"
-            ],
-            "title": "CrowdstrikeConfig",
-            "type": "object"
-        },
-        "CrowdstrikeDetails": {
-            "additionalProperties": false,
-            "properties": {
-                "trigger": {
-                    "title": "Trigger",
-                    "type": "string"
-                },
-                "outcome": {
-                    "title": "Outcome",
-                    "type": "string"
-                },
-                "name": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83c\udfab Name"
-                },
-                "description": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udd2c Description"
-                },
-                "severity": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udca3 Severity"
-                },
-                "tactic": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tactic"
-                },
-                "technique": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Technique"
-                }
-            },
-            "required": [
-                "trigger",
-                "outcome"
-            ],
-            "title": "CrowdstrikeDetails",
-            "type": "object"
-        },
-        "CrowdstrikeSchedule": {
-            "additionalProperties": false,
-            "properties": {
-                "frequency": {
-                    "title": "\u23f1 Frequency",
-                    "type": "string"
-                },
-                "lookback": {
-                    "title": "\u231b Lookback",
-                    "type": "string"
-                },
-                "start": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Start"
-                },
-                "end": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "End"
-                }
-            },
-            "required": [
-                "frequency",
-                "lookback"
-            ],
-            "title": "CrowdstrikeSchedule",
-            "type": "object"
-        },
-        "DefenderAlert": {
-            "additionalProperties": false,
-            "properties": {
-                "category": {
-                    "title": "Category",
-                    "type": "string"
-                },
-                "title": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83c\udfab Title"
-                },
-                "description": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udd2c Description"
-                },
-                "severity": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udca3 Severity"
-                },
-                "recommendation": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Recommendation"
-                },
-                "techniques": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Techniques"
-                }
-            },
-            "required": [
-                "category"
-            ],
-            "title": "DefenderAlert",
-            "type": "object"
-        },
-        "DefenderAllowBlockAction": {
-            "additionalProperties": false,
-            "properties": {
-                "action": {
-                    "enum": [
-                        "Allow",
-                        "Block"
-                    ],
-                    "title": "Action",
-                    "type": "string"
-                },
-                "identifier": {
-                    "title": "Identifier",
-                    "type": "string"
-                },
-                "groups": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/DefenderAllowBlockGroupScoping"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Groups"
-                }
-            },
-            "required": [
-                "action",
-                "identifier"
-            ],
-            "title": "DefenderAllowBlockAction",
-            "type": "object"
-        },
-        "DefenderAllowBlockGroupScoping": {
-            "additionalProperties": false,
-            "properties": {
-                "selection": {
-                    "enum": [
-                        "All",
-                        "Specific"
-                    ],
-                    "title": "Selection",
-                    "type": "string"
-                },
-                "device_groups": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Device Groups"
-                }
-            },
-            "required": [
-                "selection"
-            ],
-            "title": "DefenderAllowBlockGroupScoping",
-            "type": "object"
-        },
-        "DefenderConfig": {
-            "additionalProperties": false,
-            "properties": {
-                "enabled": {
-                    "default": false,
-                    "title": "Enabled",
-                    "type": "boolean"
-                },
-                "name": {
-                    "default": "",
-                    "title": "\ud83c\udfab Name",
-                    "type": "string"
-                },
-                "schema": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Schema"
-                },
-                "status": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Status"
-                },
-                "flags": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Flags"
-                },
-                "tenants": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tenants"
-                },
-                "contributors": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udc65 Contributors"
-                },
-                "query": {
-                    "title": "\ud83d\udd0e Query",
-                    "type": "string"
-                },
-                "alert": {
-                    "$ref": "#/$defs/DefenderAlert",
-                    "title": "\ud83d\udea8 Alert"
-                },
-                "impacted_entities": {
-                    "$ref": "#/$defs/DefenderImpactedEntities",
-                    "title": "Impacted Entities"
-                },
-                "scheduling": {
-                    "enum": [
-                        "NRT",
-                        "1H",
-                        "3H",
-                        "12H",
-                        "24H"
-                    ],
-                    "title": "\u23f2 Scheduling",
-                    "type": "string"
-                },
-                "rule_id": {
-                    "anyOf": [
-                        {
-                            "additionalProperties": {
-                                "type": "integer"
-                            },
-                            "type": "object"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Rule Id"
-                },
-                "actions": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/DefenderResponseActions"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Actions"
-                },
-                "scope": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/DefenderGroupScoping"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Scope"
-                },
-                "exclusions": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "$ref": "#/$defs/DefenderExclusion"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Exclusions"
-                }
-            },
-            "required": [
-                "query",
-                "alert",
-                "impacted_entities",
-                "scheduling"
-            ],
-            "title": "DefenderConfig",
-            "type": "object"
-        },
-        "DefenderDeviceActions": {
-            "additionalProperties": false,
-            "properties": {
-                "isolate_device": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Isolate Device"
-                },
-                "collect_investigation_package": {
-                    "default": false,
-                    "title": "Collect Investigation Package",
-                    "type": "boolean"
-                },
-                "run_antivirus_scan": {
-                    "default": false,
-                    "title": "Run Antivirus Scan",
-                    "type": "boolean"
-                },
-                "initiate_investigation": {
-                    "default": false,
-                    "title": "Initiate Investigation",
-                    "type": "boolean"
-                },
-                "restrict_app_execution": {
-                    "default": false,
-                    "title": "Restrict App Execution",
-                    "type": "boolean"
-                }
-            },
-            "title": "DefenderDeviceActions",
-            "type": "object"
-        },
-        "DefenderExclusion": {
-            "additionalProperties": false,
-            "properties": {
-                "query": {
-                    "title": "\ud83d\udd0e Query",
-                    "type": "string"
-                },
-                "reason": {
-                    "title": "Reason",
-                    "type": "string"
-                },
-                "tenant": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tenant"
-                },
-                "let": {
-                    "anyOf": [
-                        {
-                            "additionalProperties": true,
-                            "type": "object"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Let"
-                }
-            },
-            "required": [
-                "query",
-                "reason"
-            ],
-            "title": "DefenderExclusion",
-            "type": "object"
-        },
-        "DefenderFileActions": {
-            "additionalProperties": false,
-            "properties": {
-                "allow_block": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/DefenderAllowBlockAction"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Allow Block"
-                },
-                "quarantine_file": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Quarantine File"
-                }
-            },
-            "title": "DefenderFileActions",
-            "type": "object"
-        },
-        "DefenderGroupScoping": {
-            "additionalProperties": false,
-            "properties": {
-                "selection": {
-                    "enum": [
-                        "All",
-                        "Specific"
-                    ],
-                    "title": "Selection",
-                    "type": "string"
-                },
-                "device_groups": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Device Groups"
-                }
-            },
-            "required": [
-                "selection"
-            ],
-            "title": "DefenderGroupScoping",
-            "type": "object"
-        },
-        "DefenderImpactedEntities": {
-            "additionalProperties": false,
-            "properties": {
-                "device": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Device"
-                },
-                "mailbox": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Mailbox"
-                },
-                "user": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "User"
-                }
-            },
-            "title": "DefenderImpactedEntities",
-            "type": "object"
-        },
-        "DefenderResponseActions": {
-            "additionalProperties": false,
-            "properties": {
-                "devices": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/DefenderDeviceActions"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Devices"
-                },
-                "files": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/DefenderFileActions"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Files"
-                },
-                "users": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/DefenderUserActions"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Users"
-                }
-            },
-            "title": "DefenderResponseActions",
-            "type": "object"
-        },
-        "DefenderUserActions": {
-            "additionalProperties": false,
-            "properties": {
-                "mark_as_compromised": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Mark As Compromised"
-                },
-                "disable_user": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Disable User"
-                },
-                "force_password_reset": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Force Password Reset"
-                }
-            },
-            "title": "DefenderUserActions",
-            "type": "object"
-        },
-        "HarfangLabConfig": {
-            "additionalProperties": false,
-            "properties": {
-                "enabled": {
-                    "default": false,
-                    "title": "Enabled",
-                    "type": "boolean"
-                },
-                "name": {
-                    "default": "",
-                    "title": "\ud83c\udfab Name",
-                    "type": "string"
-                },
-                "schema": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Schema"
-                },
-                "status": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Status"
-                },
-                "flags": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Flags"
-                },
-                "tenants": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tenants"
-                },
-                "contributors": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udc65 Contributors"
-                },
-                "maturity": {
-                    "default": "Experimental",
-                    "title": "\ud83d\udcaa Maturity",
-                    "type": "string"
-                },
-                "confidence": {
-                    "default": "Moderate",
-                    "title": "Confidence",
-                    "type": "string"
-                },
-                "action": {
-                    "default": "Alert",
-                    "title": "Action",
-                    "type": "string"
-                },
-                "tags": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83c\udff7\ufe0f Tags"
-                },
-                "sigma": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/HarfangLabSigma"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Sigma"
-                },
-                "yara": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/HarfangLabYara"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Yara"
-                },
-                "rule_id_bundle": {
-                    "anyOf": [
-                        {
-                            "additionalProperties": {
-                                "type": "string"
-                            },
-                            "type": "object"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Rule Id Bundle"
-                }
-            },
-            "title": "HarfangLabConfig",
-            "type": "object"
-        },
-        "HarfangLabSigma": {
-            "additionalProperties": false,
-            "properties": {
-                "logsource": {
-                    "$ref": "#/$defs/HarfangLabSigmaLogSource",
-                    "title": "Logsource"
-                },
-                "selections": {
-                    "items": {
-                        "$ref": "#/$defs/HarfangLabSigmaSelection"
-                    },
-                    "title": "Selections",
-                    "type": "array"
-                },
-                "condition": {
-                    "title": "Condition",
-                    "type": "string"
-                },
-                "false_positives": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "False Positives"
-                }
-            },
-            "required": [
-                "logsource",
-                "selections",
-                "condition"
-            ],
-            "title": "HarfangLabSigma",
-            "type": "object"
-        },
-        "HarfangLabSigmaLogSource": {
-            "additionalProperties": false,
-            "properties": {
-                "category": {
-                    "title": "Category",
-                    "type": "string"
-                },
-                "product": {
-                    "title": "Product",
-                    "type": "string"
-                }
-            },
-            "required": [
-                "category",
-                "product"
-            ],
-            "title": "HarfangLabSigmaLogSource",
-            "type": "object"
-        },
-        "HarfangLabSigmaSelection": {
-            "additionalProperties": false,
-            "properties": {
-                "name": {
-                    "title": "\ud83c\udfab Name",
-                    "type": "string"
-                },
-                "field": {
-                    "title": "Field",
-                    "type": "string"
-                },
-                "value": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "boolean"
-                        },
-                        {
-                            "type": "integer"
-                        },
-                        {
-                            "type": "number"
-                        }
-                    ],
-                    "title": "Value"
-                },
-                "modifiers": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Modifiers"
-                }
-            },
-            "required": [
-                "name",
-                "field",
-                "value"
-            ],
-            "title": "HarfangLabSigmaSelection",
-            "type": "object"
-        },
-        "HarfangLabYara": {
-            "additionalProperties": false,
-            "properties": {
-                "meta": {
-                    "$ref": "#/$defs/HarfangLabYaraMeta",
-                    "title": "\u270d Meta"
-                },
-                "strings": {
-                    "title": "Strings",
-                    "type": "string"
-                },
-                "condition": {
-                    "title": "Condition",
-                    "type": "string"
-                },
-                "imports": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Imports"
-                }
-            },
-            "required": [
-                "meta",
-                "strings",
-                "condition"
-            ],
-            "title": "HarfangLabYara",
-            "type": "object"
-        },
-        "HarfangLabYaraMeta": {
-            "additionalProperties": false,
-            "properties": {
-                "context": {
-                    "items": {
-                        "type": "string"
-                    },
-                    "title": "Context",
-                    "type": "array"
-                },
-                "os": {
-                    "title": "Os",
-                    "type": "string"
-                },
-                "arch": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Arch"
-                },
-                "score": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Score"
-                },
-                "classification": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Classification"
-                }
-            },
-            "required": [
-                "context",
-                "os"
-            ],
-            "title": "HarfangLabYaraMeta",
-            "type": "object"
-        },
-        "ObjectMetadata": {
-            "additionalProperties": false,
+        "metadata": {
+            "type": "object",
             "properties": {
                 "uuid": {
                     "title": "\ud83d\udd11 Uuid",
@@ -1372,11 +87,39 @@
                 "modified",
                 "tlp"
             ],
-            "title": "ObjectMetadata",
+            "additionalProperties": false
+        },
+        "description": {
+            "title": "\ud83d\udd2c Description",
+            "type": "string"
+        },
+        "status": {
+            "default": "STAGING",
+            "title": "Status",
+            "type": "string"
+        },
+        "severity": {
+            "default": "Informational",
+            "title": "\ud83d\udca3 Severity",
+            "type": "string"
+        },
+        "techniques": {
+            "items": {
+                "type": "string"
+            },
+            "title": "Techniques",
+            "type": "array"
+        },
+        "platforms": {
+            "additionalProperties": {
+                "additionalProperties": true,
+                "type": "object"
+            },
+            "title": "\ud83d\udcbf Platforms",
             "type": "object"
         },
-        "ObjectReferences": {
-            "additionalProperties": false,
+        "references": {
+            "type": "object",
             "properties": {
                 "public": {
                     "anyOf": [
@@ -1424,1338 +167,7 @@
                     "title": "Reports"
                 }
             },
-            "title": "ObjectReferences",
-            "type": "object"
-        },
-        "Organisation": {
-            "additionalProperties": false,
-            "properties": {
-                "uuid": {
-                    "title": "\ud83d\udd11 Uuid",
-                    "type": "string"
-                },
-                "name": {
-                    "title": "\ud83c\udfab Name",
-                    "type": "string"
-                }
-            },
-            "required": [
-                "uuid",
-                "name"
-            ],
-            "title": "Organisation",
-            "type": "object"
-        },
-        "ResponseProcedure": {
-            "additionalProperties": false,
-            "properties": {
-                "analysis": {
-                    "title": "Analysis",
-                    "type": "string"
-                },
-                "searches": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "$ref": "#/$defs/ResponseSearch"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Searches"
-                },
-                "containment": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Containment"
-                }
-            },
-            "required": [
-                "analysis"
-            ],
-            "title": "ResponseProcedure",
-            "type": "object"
-        },
-        "ResponseSearch": {
-            "additionalProperties": false,
-            "properties": {
-                "purpose": {
-                    "title": "Purpose",
-                    "type": "string"
-                },
-                "system": {
-                    "title": "System",
-                    "type": "string"
-                },
-                "query": {
-                    "title": "\ud83d\udd0e Query",
-                    "type": "string"
-                }
-            },
-            "required": [
-                "purpose",
-                "system",
-                "query"
-            ],
-            "title": "ResponseSearch",
-            "type": "object"
-        },
-        "RuleConfigurations": {
-            "additionalProperties": false,
-            "description": "Dynamically composed rule platform configurations.",
-            "properties": {
-                "sentinel": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelConfig"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Sentinel"
-                },
-                "defender_for_endpoint": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/DefenderConfig"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Defender For Endpoint"
-                },
-                "splunk": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SplunkConfig"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Splunk"
-                },
-                "sentinel_one": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelOneConfig"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Sentinel One"
-                },
-                "crowdstrike": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/CrowdstrikeConfig"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Crowdstrike"
-                },
-                "harfanglab": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/HarfangLabConfig"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Harfanglab"
-                },
-                "carbon_black_cloud": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/CarbonBlackConfig"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Carbon Black Cloud"
-                }
-            },
-            "title": "RuleConfigurations",
-            "type": "object"
-        },
-        "RuleResponse": {
-            "additionalProperties": false,
-            "properties": {
-                "alert_severity": {
-                    "default": "Informational",
-                    "title": "\ud83c\udf21\ufe0f Alert Severity",
-                    "type": "string"
-                },
-                "playbook": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udc63 Playbook"
-                },
-                "responders": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\u200d\ud83d\ude92 Responders"
-                },
-                "procedure": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/ResponseProcedure"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Procedure"
-                }
-            },
-            "title": "RuleResponse",
-            "type": "object"
-        },
-        "SentinelAlert": {
-            "additionalProperties": false,
-            "properties": {
-                "title": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83c\udfab Title"
-                },
-                "description": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udd2c Description"
-                },
-                "severity": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udca3 Severity"
-                },
-                "suppression": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "boolean"
-                        }
-                    ],
-                    "default": false,
-                    "title": "Suppression"
-                },
-                "create_incident": {
-                    "default": true,
-                    "title": "Create Incident",
-                    "type": "boolean"
-                },
-                "tactics": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tactics"
-                },
-                "techniques": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Techniques"
-                },
-                "custom_details": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "$ref": "#/$defs/SentinelCustomDetails"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Custom Details"
-                },
-                "dynamic_properties": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "$ref": "#/$defs/SentinelDynamicProperties"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Dynamic Properties"
-                }
-            },
-            "title": "SentinelAlert",
-            "type": "object"
-        },
-        "SentinelAlertGrouping": {
-            "additionalProperties": false,
-            "properties": {
-                "enabled": {
-                    "title": "Enabled",
-                    "type": "boolean"
-                },
-                "reopen_closed_incidents": {
-                    "anyOf": [
-                        {
-                            "type": "boolean"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Reopen Closed Incidents"
-                },
-                "grouping_lookback": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Grouping Lookback"
-                },
-                "matching": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Matching"
-                },
-                "group_by_entities": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Group By Entities"
-                },
-                "group_by_alert_details": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Group By Alert Details"
-                },
-                "group_by_custom_details": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Group By Custom Details"
-                }
-            },
-            "required": [
-                "enabled"
-            ],
-            "title": "SentinelAlertGrouping",
-            "type": "object"
-        },
-        "SentinelConfig": {
-            "additionalProperties": false,
-            "properties": {
-                "enabled": {
-                    "default": false,
-                    "title": "Enabled",
-                    "type": "boolean"
-                },
-                "name": {
-                    "default": "",
-                    "title": "\ud83c\udfab Name",
-                    "type": "string"
-                },
-                "schema": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Schema"
-                },
-                "status": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Status"
-                },
-                "flags": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Flags"
-                },
-                "tenants": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tenants"
-                },
-                "contributors": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udc65 Contributors"
-                },
-                "query": {
-                    "title": "\ud83d\udd0e Query",
-                    "type": "string"
-                },
-                "scheduling": {
-                    "$ref": "#/$defs/SentinelScheduling",
-                    "title": "\u23f2 Scheduling"
-                },
-                "alert": {
-                    "$ref": "#/$defs/SentinelAlert",
-                    "title": "\ud83d\udea8 Alert"
-                },
-                "exclusions": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "$ref": "#/$defs/SentinelExclusion"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Exclusions"
-                },
-                "template": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelTemplate"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Template"
-                },
-                "trigger": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelTrigger"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Trigger"
-                },
-                "grouping": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelGrouping"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Grouping"
-                },
-                "entities": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "$ref": "#/$defs/SentinelEntityMapping"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Entities"
-                }
-            },
-            "required": [
-                "query",
-                "scheduling",
-                "alert"
-            ],
-            "title": "SentinelConfig",
-            "type": "object"
-        },
-        "SentinelCustomDetails": {
-            "additionalProperties": false,
-            "properties": {
-                "key": {
-                    "title": "Key",
-                    "type": "string"
-                },
-                "column": {
-                    "title": "Column",
-                    "type": "string"
-                }
-            },
-            "required": [
-                "key",
-                "column"
-            ],
-            "title": "SentinelCustomDetails",
-            "type": "object"
-        },
-        "SentinelDynamicProperties": {
-            "additionalProperties": false,
-            "properties": {
-                "property": {
-                    "title": "Property",
-                    "type": "string"
-                },
-                "column": {
-                    "title": "Column",
-                    "type": "string"
-                }
-            },
-            "required": [
-                "property",
-                "column"
-            ],
-            "title": "SentinelDynamicProperties",
-            "type": "object"
-        },
-        "SentinelEntityMapping": {
-            "additionalProperties": false,
-            "properties": {
-                "entity": {
-                    "title": "Entity",
-                    "type": "string"
-                },
-                "mappings": {
-                    "items": {
-                        "$ref": "#/$defs/SentinelMappingEntry"
-                    },
-                    "title": "Mappings",
-                    "type": "array"
-                }
-            },
-            "required": [
-                "entity",
-                "mappings"
-            ],
-            "title": "SentinelEntityMapping",
-            "type": "object"
-        },
-        "SentinelExclusion": {
-            "additionalProperties": false,
-            "properties": {
-                "query": {
-                    "title": "\ud83d\udd0e Query",
-                    "type": "string"
-                },
-                "reason": {
-                    "title": "Reason",
-                    "type": "string"
-                },
-                "tenant": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tenant"
-                },
-                "let": {
-                    "anyOf": [
-                        {
-                            "additionalProperties": true,
-                            "type": "object"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Let"
-                }
-            },
-            "required": [
-                "query",
-                "reason"
-            ],
-            "title": "SentinelExclusion",
-            "type": "object"
-        },
-        "SentinelGrouping": {
-            "additionalProperties": false,
-            "properties": {
-                "event": {
-                    "title": "Event",
-                    "type": "string"
-                },
-                "alert": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelAlertGrouping"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udea8 Alert"
-                }
-            },
-            "required": [
-                "event"
-            ],
-            "title": "SentinelGrouping",
-            "type": "object"
-        },
-        "SentinelMappingEntry": {
-            "additionalProperties": false,
-            "properties": {
-                "identifier": {
-                    "title": "Identifier",
-                    "type": "string"
-                },
-                "column": {
-                    "title": "Column",
-                    "type": "string"
-                }
-            },
-            "required": [
-                "identifier",
-                "column"
-            ],
-            "title": "SentinelMappingEntry",
-            "type": "object"
-        },
-        "SentinelOneCondition": {
-            "additionalProperties": false,
-            "properties": {
-                "type": {
-                    "enum": [
-                        "Single Event",
-                        "Correlation"
-                    ],
-                    "title": "Type",
-                    "type": "string"
-                },
-                "single_event": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelOneSingleEvent"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Single Event"
-                },
-                "correlation": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelOneCorrelation"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Correlation"
-                },
-                "cool_off": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Cool Off"
-                }
-            },
-            "required": [
-                "type"
-            ],
-            "title": "SentinelOneCondition",
-            "type": "object"
-        },
-        "SentinelOneConfig": {
-            "additionalProperties": false,
-            "properties": {
-                "enabled": {
-                    "default": false,
-                    "title": "Enabled",
-                    "type": "boolean"
-                },
-                "name": {
-                    "default": "",
-                    "title": "\ud83c\udfab Name",
-                    "type": "string"
-                },
-                "schema": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Schema"
-                },
-                "status": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Status"
-                },
-                "flags": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Flags"
-                },
-                "tenants": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tenants"
-                },
-                "contributors": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udc65 Contributors"
-                },
-                "condition": {
-                    "$ref": "#/$defs/SentinelOneCondition",
-                    "title": "Condition"
-                },
-                "response": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelOneResponse"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Response"
-                },
-                "details": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/SentinelOneDetails"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Details"
-                },
-                "rule_id_bundle": {
-                    "anyOf": [
-                        {
-                            "additionalProperties": {
-                                "type": "integer"
-                            },
-                            "type": "object"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Rule Id Bundle"
-                }
-            },
-            "required": [
-                "condition"
-            ],
-            "title": "SentinelOneConfig",
-            "type": "object"
-        },
-        "SentinelOneCorrelation": {
-            "additionalProperties": false,
-            "properties": {
-                "entity": {
-                    "title": "Entity",
-                    "type": "string"
-                },
-                "match_in_order": {
-                    "title": "Match In Order",
-                    "type": "boolean"
-                },
-                "time_window": {
-                    "title": "Time Window",
-                    "type": "string"
-                },
-                "sub_queries": {
-                    "items": {
-                        "$ref": "#/$defs/SentinelOneSubQuery"
-                    },
-                    "title": "Sub Queries",
-                    "type": "array"
-                }
-            },
-            "required": [
-                "entity",
-                "match_in_order",
-                "time_window",
-                "sub_queries"
-            ],
-            "title": "SentinelOneCorrelation",
-            "type": "object"
-        },
-        "SentinelOneDetails": {
-            "additionalProperties": false,
-            "properties": {
-                "name": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83c\udfab Name"
-                },
-                "description": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udd2c Description"
-                },
-                "severity": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udca3 Severity"
-                },
-                "expiration": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Expiration"
-                }
-            },
-            "title": "SentinelOneDetails",
-            "type": "object"
-        },
-        "SentinelOneResponse": {
-            "additionalProperties": false,
-            "properties": {
-                "treat_as_threat": {
-                    "enum": [
-                        false,
-                        "Malicious",
-                        "Suspicious"
-                    ],
-                    "title": "Treat As Threat"
-                },
-                "network_quarantine": {
-                    "title": "Network Quarantine",
-                    "type": "boolean"
-                }
-            },
-            "required": [
-                "treat_as_threat",
-                "network_quarantine"
-            ],
-            "title": "SentinelOneResponse",
-            "type": "object"
-        },
-        "SentinelOneSingleEvent": {
-            "additionalProperties": false,
-            "properties": {
-                "query": {
-                    "title": "\ud83d\udd0e Query",
-                    "type": "string"
-                }
-            },
-            "required": [
-                "query"
-            ],
-            "title": "SentinelOneSingleEvent",
-            "type": "object"
-        },
-        "SentinelOneSubQuery": {
-            "additionalProperties": false,
-            "properties": {
-                "query": {
-                    "title": "\ud83d\udd0e Query",
-                    "type": "string"
-                },
-                "matches_required": {
-                    "title": "Matches Required",
-                    "type": "integer"
-                }
-            },
-            "required": [
-                "query",
-                "matches_required"
-            ],
-            "title": "SentinelOneSubQuery",
-            "type": "object"
-        },
-        "SentinelScheduling": {
-            "additionalProperties": false,
-            "properties": {
-                "nrt": {
-                    "anyOf": [
-                        {
-                            "type": "boolean"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Nrt"
-                },
-                "frequency": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\u23f1 Frequency"
-                },
-                "lookback": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\u231b Lookback"
-                }
-            },
-            "title": "SentinelScheduling",
-            "type": "object"
-        },
-        "SentinelTemplate": {
-            "additionalProperties": false,
-            "properties": {
-                "uuid": {
-                    "title": "\ud83d\udd11 Uuid",
-                    "type": "string"
-                },
-                "version": {
-                    "title": "\ud83c\udff7\ufe0f Version",
-                    "type": "string"
-                }
-            },
-            "required": [
-                "uuid",
-                "version"
-            ],
-            "title": "SentinelTemplate",
-            "type": "object"
-        },
-        "SentinelTrigger": {
-            "additionalProperties": false,
-            "properties": {
-                "operator": {
-                    "title": "Operator",
-                    "type": "string"
-                },
-                "threshold": {
-                    "title": "\u2696\ufe0f Threshold",
-                    "type": "integer"
-                }
-            },
-            "required": [
-                "operator",
-                "threshold"
-            ],
-            "title": "SentinelTrigger",
-            "type": "object"
-        },
-        "SplunkConfig": {
-            "additionalProperties": false,
-            "properties": {
-                "enabled": {
-                    "default": false,
-                    "title": "Enabled",
-                    "type": "boolean"
-                },
-                "name": {
-                    "default": "",
-                    "title": "\ud83c\udfab Name",
-                    "type": "string"
-                },
-                "schema": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Schema"
-                },
-                "status": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Status"
-                },
-                "flags": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Flags"
-                },
-                "tenants": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Tenants"
-                },
-                "contributors": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "\ud83d\udc65 Contributors"
-                },
-                "search": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Search"
-                },
-                "cron_schedule": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Cron Schedule"
-                }
-            },
-            "title": "SplunkConfig",
-            "type": "object"
-        }
-    },
-    "additionalProperties": false,
-    "description": "Code-first detection rule with registry-backed delegation helpers.",
-    "properties": {
-        "name": {
-            "title": "\ud83c\udfab Name",
-            "type": "string"
-        },
-        "metadata": {
-            "$ref": "#/$defs/ObjectMetadata",
-            "title": "\ud83d\uddc3\ufe0f Metadata"
-        },
-        "description": {
-            "title": "\ud83d\udd2c Description",
-            "type": "string"
-        },
-        "status": {
-            "default": "STAGING",
-            "title": "Status",
-            "type": "string"
-        },
-        "severity": {
-            "default": "Informational",
-            "title": "\ud83d\udca3 Severity",
-            "type": "string"
-        },
-        "techniques": {
-            "items": {
-                "type": "string"
-            },
-            "title": "Techniques",
-            "type": "array"
-        },
-        "platforms": {
-            "additionalProperties": {
-                "additionalProperties": true,
-                "type": "object"
-            },
-            "title": "\ud83d\udcbf Platforms",
-            "type": "object"
-        },
-        "references": {
-            "anyOf": [
-                {
-                    "$ref": "#/$defs/ObjectReferences"
-                },
-                {
-                    "type": "null"
-                }
-            ],
-            "default": null,
-            "title": "\ud83d\udd17 References"
+            "additionalProperties": false
         },
         "detection_model": {
             "anyOf": [
@@ -2767,7 +179,11 @@
                 }
             ],
             "default": null,
-            "title": "Detection Model"
+            "title": "Detection Model",
+            "enum": [
+                ""
+            ],
+            "markdownEnumDescriptions": []
         },
         "response": {
             "anyOf": [
@@ -2791,7 +207,698 @@
                 }
             ],
             "default": null,
-            "title": "\ud83d\udee0\ufe0f Configurations"
+            "title": "\ud83d\udee0\ufe0f Detection System Technical Setup",
+            "recomposition": "systems",
+            "properties": {
+                "carbon_black_cloud": {
+                    "title": "Carbon Black Cloud Enterprise EDR",
+                    "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centers (SOCs) and incident response (IR) teams.",
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "title": "Enabled",
+                            "type": "boolean"
+                        },
+                        "name": {
+                            "default": "",
+                            "title": "\ud83c\udfab Name",
+                            "type": "string"
+                        },
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Schema"
+                        },
+                        "status": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Status of the use-case"
+                        },
+                        "flags": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Flags"
+                        },
+                        "tenants": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Tenants"
+                        },
+                        "contributors": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "\ud83d\udc65 Development Contributors"
+                        }
+                    },
+                    "required": [
+                        "status"
+                    ],
+                    "additionalProperties": false
+                },
+                "crowdstrike": {
+                    "title": "Crowdstrike Falcon",
+                    "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "title": "Enabled",
+                            "type": "boolean"
+                        },
+                        "name": {
+                            "default": "",
+                            "title": "\ud83c\udfab Name",
+                            "type": "string"
+                        },
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Schema"
+                        },
+                        "status": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Status of the use-case"
+                        },
+                        "flags": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Flags"
+                        },
+                        "tenants": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Tenants"
+                        },
+                        "contributors": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "\ud83d\udc65 Development Contributors"
+                        },
+                        "details": {
+                            "$ref": "#/$defs/CrowdstrikeDetails",
+                            "title": "Details"
+                        },
+                        "schedule": {
+                            "$ref": "#/$defs/CrowdstrikeSchedule",
+                            "title": "Schedule"
+                        },
+                        "query": {
+                            "title": "\ud83d\udd0e Query",
+                            "type": "string"
+                        },
+                        "rule_id_bundle": {
+                            "anyOf": [
+                                {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Rule Id Bundle"
+                        }
+                    },
+                    "required": [
+                        "status",
+                        "query",
+                        "details",
+                        "schedule"
+                    ],
+                    "additionalProperties": false
+                },
+                "defender_for_endpoint": {
+                    "title": "Microsoft Defender for Endpoint",
+                    "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "title": "Enabled",
+                            "type": "boolean"
+                        },
+                        "name": {
+                            "default": "",
+                            "title": "\ud83c\udfab Name",
+                            "type": "string"
+                        },
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Schema"
+                        },
+                        "status": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Status of the use-case"
+                        },
+                        "flags": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Flags"
+                        },
+                        "tenants": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Tenants"
+                        },
+                        "contributors": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "\ud83d\udc65 Development Contributors"
+                        },
+                        "query": {
+                            "title": "\ud83d\udd0e Query",
+                            "type": "string"
+                        },
+                        "alert": {
+                            "$ref": "#/$defs/DefenderAlert",
+                            "title": "\ud83d\udea8 Alert"
+                        },
+                        "impacted_entities": {
+                            "$ref": "#/$defs/DefenderImpactedEntities",
+                            "title": "Impacted Entities"
+                        },
+                        "scheduling": {
+                            "enum": [
+                                "NRT",
+                                "1H",
+                                "3H",
+                                "12H",
+                                "24H"
+                            ],
+                            "title": "\u23f2 Scheduling",
+                            "type": "string"
+                        },
+                        "rule_id": {
+                            "anyOf": [
+                                {
+                                    "additionalProperties": {
+                                        "type": "integer"
+                                    },
+                                    "type": "object"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Rule Id"
+                        },
+                        "actions": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/$defs/DefenderResponseActions"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Actions"
+                        },
+                        "scope": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/$defs/DefenderGroupScoping"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Scope"
+                        },
+                        "exclusions": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "$ref": "#/$defs/DefenderExclusion"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Exclusions"
+                        }
+                    },
+                    "required": [
+                        "status",
+                        "query",
+                        "alert",
+                        "impacted_entities",
+                        "scheduling"
+                    ],
+                    "additionalProperties": false
+                },
+                "sentinel": {
+                    "title": "Microsoft Sentinel",
+                    "description": "Microsoft Sentinel delivers intelligent security analytics\nand threat intelligence across the enterprise. With Microsoft Sentinel, you\nget a single solution for attack detection, threat visibility, proactive\nhunting, and threat response.",
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "title": "Enabled",
+                            "type": "boolean"
+                        },
+                        "name": {
+                            "default": "",
+                            "title": "\ud83c\udfab Name",
+                            "type": "string"
+                        },
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Schema"
+                        },
+                        "status": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Status of the use-case"
+                        },
+                        "flags": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Flags"
+                        },
+                        "tenants": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Tenants"
+                        },
+                        "contributors": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "\ud83d\udc65 Development Contributors"
+                        },
+                        "query": {
+                            "title": "\ud83d\udd0e Query",
+                            "type": "string"
+                        },
+                        "scheduling": {
+                            "$ref": "#/$defs/SentinelScheduling",
+                            "title": "\u23f2 Scheduling"
+                        },
+                        "alert": {
+                            "$ref": "#/$defs/SentinelAlert",
+                            "title": "\ud83d\udea8 Alert"
+                        },
+                        "exclusions": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "$ref": "#/$defs/SentinelExclusion"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Exclusions"
+                        },
+                        "template": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/$defs/SentinelTemplate"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Template"
+                        },
+                        "trigger": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/$defs/SentinelTrigger"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Trigger"
+                        },
+                        "grouping": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/$defs/SentinelGrouping"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Grouping"
+                        },
+                        "entities": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "$ref": "#/$defs/SentinelEntityMapping"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Entities"
+                        }
+                    },
+                    "required": [
+                        "status",
+                        "query",
+                        "scheduling",
+                        "alert",
+                        "grouping",
+                        "entities"
+                    ],
+                    "additionalProperties": false
+                },
+                "sentinel_one": {
+                    "title": "Sentinel One",
+                    "description": "STAR Rules Engine is a rules-based engine which enables users\nto transform queries of cloud workload telemetry into automated threat hunting\nrules. Whenever a match is made, these custom rules trigger alerts and, optionally,\nautomated response actions.\n",
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "title": "Enabled",
+                            "type": "boolean"
+                        },
+                        "name": {
+                            "default": "",
+                            "title": "\ud83c\udfab Name",
+                            "type": "string"
+                        },
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Schema"
+                        },
+                        "status": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Status of the use-case"
+                        },
+                        "flags": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Flags"
+                        },
+                        "tenants": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Tenants"
+                        },
+                        "contributors": {
+                            "anyOf": [
+                                {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "\ud83d\udc65 Development Contributors"
+                        },
+                        "condition": {
+                            "$ref": "#/$defs/SentinelOneCondition",
+                            "title": "Condition"
+                        },
+                        "response": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/$defs/SentinelOneResponse"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Response"
+                        },
+                        "details": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/$defs/SentinelOneDetails"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Details"
+                        },
+                        "rule_id_bundle": {
+                            "anyOf": [
+                                {
+                                    "additionalProperties": {
+                                        "type": "integer"
+                                    },
+                                    "type": "object"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "default": null,
+                            "title": "Rule Id Bundle"
+                        }
+                    },
+                    "required": [
+                        "status",
+                        "condition"
+                    ],
+                    "additionalProperties": false
+                }
+            }
         },
         "file": {
             "anyOf": [
@@ -2809,9 +916,23 @@
     },
     "required": [
         "name",
-        "metadata",
-        "description"
+        "response",
+        "description",
+        "configurations"
     ],
-    "title": "DetectionRule",
-    "type": "object"
+    "title": "MDR Schema validator",
+    "description": "A Managed Detection Rule is ...",
+    "additionalProperties": false,
+    "anyOf": [
+        {
+            "required": [
+                "metadata"
+            ]
+        },
+        {
+            "required": [
+                "meta"
+            ]
+        }
+    ]
 }
