@@ -60,13 +60,15 @@ CI runs `uv sync --group dev` on Python **3.10–3.14** (PRs test **3.10, 3.12, 
 uv run pre-commit install --install-hooks   # once: pre-commit + pre-push hooks
 scripts/ci-local.sh --quick                 # lint + ty (~seconds)
 scripts/ci-local.sh                           # lint + pytest
-scripts/ci-local.sh --full                    # lint + pytest + coverage gate (46.9%)
+scripts/ci-local.sh --full                    # lint + pytest + coverage gate (pyproject.toml)
 ```
 
 | Hook | Runs |
 |------|------|
-| **pre-commit** | whitespace/YAML/TOML, ruff, ruff-format, ty |
-| **pre-push** | pytest `--no-cov` (if `src/`/`tests/` changed); mkdocs `--strict` (if `docs/` changed) |
+| **pre-commit** | whitespace/YAML/TOML, ruff, ruff-format, ty (staged files) |
+| **pre-push** | `scripts/ci-local.sh --full` when code or CI config changes — **includes coverage gate**; mkdocs `--strict` when `docs/` changes |
+
+`--no-cov` is for fast iteration only (`ci-local.sh` default / matrix cells other than 3.14). Never use it in pre-push hooks.
 
 Targeted iteration:
 

@@ -14,7 +14,7 @@ Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 Options:
   --quick       Lint + type-check only (ruff, ty) — ~seconds
   --test        Lint + pytest without coverage — default
-  --full        Lint + pytest + coverage gate (47%) — pre-push / pre-PR
+  --full        Lint + pytest + coverage gate (pyproject.toml fail_under) — pre-push
   --coverage    Alias for --full
   -h, --help    Show this help
 
@@ -54,12 +54,11 @@ if [[ "$mode" == "quick" ]]; then
   exit 0
 fi
 
-echo "==> Pytest"
+echo "==> Pytest with coverage"
 if [[ "$mode" == "full" ]]; then
-  uv run pytest tests/ \
-    --cov-report=term-missing:skip-covered \
-    --cov-report=xml:coverage.xml
-  uv run coverage report --fail-under=46.9
+  # Same as CI COVERAGE_PYTHON cell: pytest addopts carry --cov; gate from pyproject.toml
+  uv run pytest tests/ -q
+  uv run coverage report
 else
   uv run pytest tests/ --no-cov -q
 fi

@@ -1,5 +1,9 @@
 # Install: uv sync --group dev && uv run pre-commit install --install-hooks
-# Installs both pre-commit (fast) and pre-push (pytest) hooks.
+#
+# pre-commit  — fast checks on staged files (seconds)
+# pre-push    — scripts/ci-local.sh --full when code/CI config changes (matches CI:
+#               lint + pytest + coverage gate from pyproject.toml). Do not swap
+#               for pytest --no-cov or the coverage threshold will only fail on CI.
 default_install_hook_types:
   - pre-commit
   - pre-push
@@ -32,13 +36,13 @@ repos:
         pass_filenames: false
         files: ^src/opentide/
 
-      - id: pytest
-        name: pytest (CI parity, no coverage)
-        entry: uv run pytest tests/ --no-cov -q
+      - id: ci-local-full
+        name: CI parity before push (lint, tests, coverage gate)
+        entry: scripts/ci-local.sh --full
         language: system
         pass_filenames: false
         stages: [pre-push]
-        files: ^(src/opentide/|tests/)
+        files: ^(src/opentide/|tests/|pyproject\.toml|uv\.lock|\.github/workflows/ci\.yml|scripts/ci-local\.sh|\.pre-commit-config\.yaml)$
 
       - id: mkdocs-strict
         name: mkdocs build --strict (docs only)
