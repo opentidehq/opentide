@@ -31,9 +31,7 @@ def _refresh_renderer_context() -> None:
 
     CONFIG_INDEX = OpenTide.Configurations.Index
     PATHS = OpenTide.Configurations.Global.Paths.Index
-    PLATFORM_TEMPLATES_FOLDER = Path(
-        PATHS.get("platform_templates", PATHS.get("subschemas", "."))
-    )
+    PLATFORM_TEMPLATES_FOLDER = Path(PATHS.get("platform_templates", PATHS.get("subschemas", ".")))
     RECOMPOSITION = OpenTide.Configurations.Global.recomposition
 
 

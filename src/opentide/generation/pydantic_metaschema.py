@@ -215,9 +215,7 @@ def lookup_schema_extra(
                 return field_schema[key]
             nested_props = field_schema.get("properties")
             if isinstance(nested_props, dict):
-                result = lookup_schema_extra(
-                    {"properties": nested_props}, field, key, scope=scope
-                )
+                result = lookup_schema_extra({"properties": nested_props}, field, key, scope=scope)
                 if result is not None:
                     return result
 
@@ -234,9 +232,7 @@ def lookup_schema_extra(
         if isinstance(items, dict):
             item_props = items.get("properties")
             if isinstance(item_props, dict):
-                result = lookup_schema_extra(
-                    {"properties": item_props}, field, key, scope=scope
-                )
+                result = lookup_schema_extra({"properties": item_props}, field, key, scope=scope)
                 if result is not None:
                     return result
     return None

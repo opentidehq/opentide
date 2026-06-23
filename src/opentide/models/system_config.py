@@ -54,8 +54,7 @@ class SystemConfig:
             ssl: bool
 
         @dataclass
-        class Parameters:
-            ...
+        class Parameters: ...
 
         name: str
         description: str

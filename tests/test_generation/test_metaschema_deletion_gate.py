@@ -24,8 +24,7 @@ def test_no_get_value_metaschema_in_src() -> None:
     lines = [
         line
         for line in result.stdout.splitlines()
-        if "replaces get_value_metaschema" not in line
-        and "def get_value_metaschema" not in line
+        if "replaces get_value_metaschema" not in line and "def get_value_metaschema" not in line
     ]
     assert lines == [], f"get_value_metaschema still referenced:\n{result.stdout}"
 

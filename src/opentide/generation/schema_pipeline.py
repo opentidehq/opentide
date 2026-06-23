@@ -772,8 +772,7 @@ def run():
     log("TITLE", "Pydantic JSON Schema Assembler")
     log(
         "INFO",
-        "Generates JSON Schemas from Pydantic models, dynamically "
-        "looking up Vocabulary values.",
+        "Generates JSON Schemas from Pydantic models, dynamically looking up Vocabulary values.",
     )
 
     from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS, generate_core_model_schema
