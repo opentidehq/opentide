@@ -1,3 +1,6 @@
+# Advanced CodeQL — requires GitHub repo "default setup" to be disabled
+# (Settings → Code security → CodeQL → Switch to advanced / Disable default).
+# See: https://docs.github.com/en/code-security/code-scanning/troubleshooting-sarif-uploads/default-setup-enabled
 name: CodeQL
 
 on:
