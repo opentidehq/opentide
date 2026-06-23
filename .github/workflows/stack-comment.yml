@@ -1,0 +1,25 @@
+name: Stack comment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  STACK_TRUNK_BRANCHES: development,main
+
+jobs:
+  stack-comment:
+    name: Stack navigation comment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Post stack comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 scripts/github_stack_comment.py

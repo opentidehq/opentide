@@ -2,4 +2,6 @@
 
 All agent instructions: [`AGENTS.md`](../AGENTS.md).
 
-Domain skills (pytest, uv, ruff, CI, MCP, …): [`.agents/skills/`](../.agents/skills/).
+**Version control:** Jujutsu (`jj`) stacked PRs — skill [`.agents/skills/jujutsu-stacked-prs/`](../.agents/skills/jujutsu-stacked-prs/SKILL.md). Do not use Graphite (`gt`).
+
+Domain skills: [`.agents/skills/`](../.agents/skills/).

@@ -42,6 +42,12 @@
       "sourceType": "github",
       "skillPath": "plugins/python-development/skills/uv-package-manager/SKILL.md",
       "computedHash": "c2bf8833d6c3ffa283171ef3b8da90274451605e170077f1ee6529cc38aa6438"
+    },
+    "jujutsu-stacked-prs": {
+      "source": "OpenTideHQ/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/jujutsu-stacked-prs/SKILL.md",
+      "computedHash": "project-local"
     }
   }
 }

@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, development]
   pull_request:
-    branches: [development]
+    # All base branches — required for jj stacks (PRs target parent bookmarks, not only development)
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  code-quality: write
 
 env:
   # Single matrix cell runs coverage (line hits are version-agnostic; use latest supported).
@@ -50,15 +51,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
       checks: write
+      code-quality: write
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
+      # PR head commit (not merge commit) so coverage line numbers map to the diff.
       - uses: actions/checkout@v4
+        if: matrix.python-version == env.COVERAGE_PYTHON
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/checkout@v4
+        if: matrix.python-version != env.COVERAGE_PYTHON
         with:
           fetch-depth: 0
 
@@ -78,7 +86,6 @@ jobs:
         if: matrix.python-version != env.COVERAGE_PYTHON
         run: uv run pytest tests/ --no-cov -q
 
-      # Coverage + junit on one matrix cell only — avoids a second full test run
       - name: Pytest with coverage
         if: matrix.python-version == env.COVERAGE_PYTHON
         run: |
@@ -91,6 +98,17 @@ jobs:
         if: matrix.python-version == env.COVERAGE_PYTHON
         run: uv run coverage report
 
+      - name: Upload coverage to GitHub Code Quality
+        if: >-
+          matrix.python-version == env.COVERAGE_PYTHON &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/upload-code-coverage@v1
+        with:
+          file: coverage.xml
+          language: Python
+          label: code-coverage/pytest
+
       - name: Publish test report
         if: always() && matrix.python-version == env.COVERAGE_PYTHON
         uses: dorny/test-reporter@v1
@@ -100,35 +118,10 @@ jobs:
           reporter: java-junit
           fail-on-error: true
 
-      - name: Coverage comment and annotations
-        if: matrix.python-version == env.COVERAGE_PYTHON
-        id: coverage_comment
-        continue-on-error: true
-        uses: py-cov-action/python-coverage-comment-action@v3
-        with:
-          GITHUB_TOKEN: ${{ github.token }}
-          ANNOTATE_MISSING_LINES: true
-          ANNOTATION_TYPE: notice
-
-      - name: Store PR comment for fork workflows
-        if: matrix.python-version == env.COVERAGE_PYTHON && steps.coverage_comment.outputs.COMMENT_FILE_WRITTEN == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-coverage-comment-action
-          path: python-coverage-comment-action.txt
-
       - name: Upload HTML coverage report
         if: matrix.python-version == env.COVERAGE_PYTHON
         uses: actions/upload-artifact@v4
         with:
           name: htmlcov
           path: htmlcov/
-          retention-days: 14
-
-      - name: Upload coverage XML
-        if: matrix.python-version == env.COVERAGE_PYTHON
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-xml
-          path: coverage.xml
           retention-days: 14

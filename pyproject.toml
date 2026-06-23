@@ -137,6 +137,9 @@ exclude_lines = [
 [tool.coverage.html]
 directory = "htmlcov"
 
+[tool.coverage.xml]
+output = "coverage.xml"
+
 [tool.ruff]
 target-version = "py310"
 line-length = 100

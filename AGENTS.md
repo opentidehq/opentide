@@ -4,19 +4,67 @@
 
 **Agent entry point:** This file (`AGENTS.md`), then domain skills in [`.agents/skills/`](.agents/skills/) when a task matches an installed skill.
 
-**Repository:** [OpenTideHQ/opentide](https://github.com/OpenTideHQ/opentide) — all implementation work lands here. Base branch: `development`.
+**Version control:** [Jujutsu (`jj`)](https://github.com/jj-vcs/jj) with **stacked PRs** — not Graphite (`gt`), not ad-hoc git branches. Skill: [`.agents/skills/jujutsu-stacked-prs/`](.agents/skills/jujutsu-stacked-prs/SKILL.md).
+
+**Repository:** [OpenTideHQ/opentide](https://github.com/OpenTideHQ/opentide) — all implementation work lands here. Trunk: `development` (`development@origin` in jj).
 
 ## Ground rules
 
 | Rule | Detail |
 |------|--------|
 | Repo | [OpenTideHQ/opentide](https://github.com/OpenTideHQ/opentide) only |
-| Base branch | `development` |
-| PRs | Target `development`; link issues with `Closes #<N>` (opentide issues) |
-| Scope | One concern per PR — no drive-by refactors |
-| Commits | [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `ci` |
+| Trunk | `development` / `development@origin` |
+| VCS | **jj** bookmarks + stacked PRs via `scripts/jj-stack-submit.sh` |
+| PRs | Stacked: bottom → `development`, each upper PR targets bookmark below |
+| Scope | One concern per change / PR — no drive-by refactors |
+| Commits | Conventional Commits on each jj change (`feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `ci`) |
 
-Branch naming: `<type>/<short-slug>` (e.g. `feat/sentinel-query-cache`, `fix/cli-init-path`).
+Bookmark naming: `<type>/<short-slug>` (e.g. `feat/sentinel-query-cache`).
+
+## Jujutsu stacked PRs (first-class)
+
+### One-time setup
+
+```bash
+scripts/jj-setup.sh --remove-graphite   # installs jj; removes Graphite; links worktrees
+uv sync --group dev
+uv run pre-commit install --install-hooks
+```
+
+**Git worktrees:** jj colocates in the primary checkout; `scripts/jj-common.sh` routes `jj -R` so stack scripts work from Cursor worktrees.
+
+### Agent workflow
+
+1. Read the issue / task and confirm acceptance criteria
+2. `jj git fetch` — sync `development@origin`
+3. `jj new development@origin -m "type(scope): …"` — start bottom of stack (or `jj new` on parent bookmark)
+4. Implement → `jj bookmark create <type>/<slug>`
+5. Stack more changes: `jj new -m "…"` + bookmark per layer
+6. `scripts/jj-stack-status.sh` — verify stack order
+7. `scripts/ci-local.sh --full`
+8. `scripts/jj-stack-submit.sh <top-bookmark>` — push + create stacked GitHub PRs
+9. Read **Stack navigation** comment on each PR (posted by CI)
+10. After review: `jj new <bookmark>`, edit, `jj squash`, re-submit
+11. After merge (bottom first): `jj git fetch` → `jj abandon <merged>` → `jj rebase -d development@origin` → re-submit
+
+**Never** use `gt`, Graphite, or single PRs targeting `development` when work should be stacked.
+
+### Stack on GitHub
+
+- Each PR's **base** is the bookmark below (only the stack bottom targets `development`)
+- [`.github/workflows/stack-comment.yml`](.github/workflows/stack-comment.yml) posts merge order + links on every PR
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs CI on **all** PRs (stacked bases included)
+
+### Quick reference
+
+| Task | Command |
+|------|---------|
+| View stack | `scripts/jj-stack-status.sh` |
+| Submit stack | `scripts/jj-stack-submit.sh <top-bookmark>` |
+| Dry run | `scripts/jj-stack-submit.sh <top> --dry-run` |
+| Local CI | `scripts/ci-local.sh --full` |
+| Describe change | `jj describe -m "feat(scope): …"` |
+| Rebase on trunk | `jj rebase -d development@origin` |
 
 ## Platform capability matrix (7 deployers / 5 validators)
 
@@ -31,16 +79,6 @@ Branch naming: `<type>/<short-slug>` (e.g. `feat/sentinel-query-cache`, `fix/cli
 | HarfangLab | ✅ | ❌ |
 
 CrowdStrike and HarfangLab: `can_validate is False` — return `supported: False` for query validation, never fake results.
-
-## Agent workflow
-
-1. Read the opentide issue (or task brief) and confirm acceptance criteria
-2. `uv sync --group dev` and `uv run pre-commit install --install-hooks` (first time)
-3. Branch from `development`
-4. Implement acceptance criteria only
-5. Run `scripts/ci-local.sh --full` before opening a PR
-6. Open PR with summary, test plan, and `Closes #<N>`
-7. Address review feedback; do not expand scope mid-PR
 
 ## Developer toolchain (uv + ruff + ty)
 
@@ -77,12 +115,15 @@ uv run pytest tests/test_core/ -x -q
 uv run pytest -k "test_sentinel" -x -q
 ```
 
-Remote CI: lint and test matrix run **in parallel**; stale runs are cancelled on new pushes. Coverage runs on the latest supported Python (**3.14**, see `COVERAGE_PYTHON` in `ci.yml`) in one matrix cell only.
+Remote CI: lint and test matrix run **in parallel**; stale runs are cancelled on new pushes. Coverage runs on Python **3.14** (`COVERAGE_PYTHON` in `ci.yml`) in one matrix cell; Cobertura XML uploads to **GitHub Code Quality** (`github-code-quality[bot]` comments on PRs with per-file deltas vs `development`). Local `fail_under` in `pyproject.toml` still gates merges via pre-push and CI.
+
+**CodeQL** (security scanning) runs in [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) on every PR — not in pre-commit hooks (~40–60s per local run, full DB rebuild, no incremental analysis). Optional before a security-sensitive PR: `scripts/codeql-local.sh`.
 
 ### Agent skills (npx skills)
 
 | Skill | Use when |
 |-------|----------|
+| **`jujutsu-stacked-prs`** | **Stacked PRs, jj bookmarks, submit/rebase** |
 | `uv` | Dependency groups, `uv run`, lockfile |
 | `uv-package-manager` | Advanced uv workflows |
 | `python-testing-patterns` | pytest fixtures, parametrisation, mocks |
@@ -107,8 +148,8 @@ Ruff and ty **exclude** large ported platform/deployer modules until those areas
 src/opentide/     # PyPI package (models, CLI, MCP, platforms, bundled data)
 tests/
 docs/
-scripts/          # ci-local.sh, migration utilities
-.agents/skills/   # Shared agent skills
+scripts/          # ci-local.sh, jj-stack-*.sh, jj-setup.sh
+.agents/skills/   # Shared agent skills (incl. jujutsu-stacked-prs)
 ```
 
 Bundled data: `src/opentide/data/`. No legacy root folders (`Configurations/`, `Engines/`, etc.).

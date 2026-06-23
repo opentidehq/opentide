@@ -4,6 +4,9 @@
 # pre-push    — scripts/ci-local.sh --full when code/CI config changes (matches CI:
 #               lint + pytest + coverage gate from pyproject.toml). Do not swap
 #               for pytest --no-cov or the coverage threshold will only fail on CI.
+#
+# CodeQL is intentionally NOT a hook — full analysis rebuilds the DB each run (~40–60s
+# locally, minutes in CI). Use .github/workflows/codeql.yml + scripts/codeql-local.sh.
 default_install_hook_types:
   - pre-commit
   - pre-push
@@ -42,7 +45,7 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
-        files: ^(src/opentide/|tests/|pyproject\.toml|uv\.lock|\.github/workflows/ci\.yml|scripts/ci-local\.sh|\.pre-commit-config\.yaml)$
+        files: ^(src/opentide/|tests/|pyproject\.toml|uv\.lock|\.github/workflows/(ci|codeql|stack-comment)\.yml|scripts/(ci-local|codeql-local|jj-.*|github_stack_comment)\.(sh|py)|\.pre-commit-config\.yaml)$
 
       - id: mkdocs-strict
         name: mkdocs build --strict (docs only)
