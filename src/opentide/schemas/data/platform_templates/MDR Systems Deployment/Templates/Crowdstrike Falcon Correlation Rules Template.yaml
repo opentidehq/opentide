@@ -1,0 +1,13 @@
+  #enabled: false
+  #name: 
+  #schema: null
+  status: null
+  #flags: null
+  #tenants: null
+  #contributors: null
+  details: 
+  schedule: 
+  
+  query: |
+    ...
+  #rule_id_bundle: null

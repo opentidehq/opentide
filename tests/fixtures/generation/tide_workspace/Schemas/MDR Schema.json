@@ -301,7 +301,7 @@
                     "additionalProperties": false
                 },
                 "crowdstrike": {
-                    "title": "Crowdstrike Falcon",
+                    "title": "Crowdstrike Falcon Correlation Rules",
                     "description": "The CrowdStrike Falcon\u00ae platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
                     "type": "object",
                     "properties": {
