@@ -1,0 +1,14 @@
+name = "Log Sources"
+field = "logsources"
+description = "Log categories holding data of interest for the purpose of threat detection"
+key = "name"
+[[keys]]
+name = "aws:securityhub"
+"tide.vocab.stages" = "splunk"
+description = "AWS Security Hub alerts"
+
+[[keys]]
+name = "Azure AD Connector"
+"tide.vocab.stages" = "sentinel"
+description = "Azure AD audit events and system alerts"
+

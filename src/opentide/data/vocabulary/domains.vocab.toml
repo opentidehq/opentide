@@ -1,0 +1,55 @@
+name = "Domains"
+field = "domains"
+description = "Infrastructure technologies domain of interest to attackers."
+icon = "🛰️"
+key = "name"
+[[keys]]
+name = "Public Cloud"
+icon = "☁️"
+description = "Infrastructure handled by a commercial cloud provider. Managed mostly on a service level, and connected over the internet."
+
+[[keys]]
+name = "Private Cloud"
+icon = "☁️"
+description = "Infrastructure hosted at a third party, but based on custom specification and managed on a platform level."
+
+[[keys]]
+name = "Enterprise"
+icon = "🏢"
+description = "Generic databases, applications, machines and systems that are usually on premises or on Cloud traditional VMs."
+
+[[keys]]
+name = "Mobile"
+icon = "📱"
+description = "Smartphones, tablets and applications running these devices."
+
+[[keys]]
+name = "SaaS"
+icon = "🕸️"
+description = "Subscription based access to software."
+
+[[keys]]
+name = "Networking"
+icon = "🌐"
+description = "Communications backbone connecting users, applications and machines."
+
+[[keys]]
+name = "OSINT"
+icon = "🌏"
+description = "Data publicly available to attackers used during reconnaissance."
+
+[[keys]]
+name = "Embedded"
+icon = "🔧"
+description = "Firmware, middleware and low level software running on devices which are typically not manageable by the consumer."
+
+[[keys]]
+name = "IoT"
+icon = "🦾"
+description = "Placeholder"
+
+[[keys]]
+name = "Industrial"
+icon = "🏭"
+description = "Related to Industrial Control Systems, Operational Technologies their specific concepts (SCADA, PLCs, DCS etc.)"
+

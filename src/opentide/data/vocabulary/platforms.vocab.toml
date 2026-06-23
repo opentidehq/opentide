@@ -1,0 +1,372 @@
+name = "Platforms"
+field = "platforms"
+description = "Actual technologies used by the organization that will be exploited by adversaries during a successful attack, and eventually of relevance for detection. Are named by commercial designation."
+icon = "💿"
+key = "name"
+[[keys]]
+name = "AWS"
+description = "Placeholder"
+
+[[keys]]
+name = "Azure"
+description = "Placeholder"
+
+[[keys]]
+name = "Windows"
+description = "Placeholder"
+
+[[keys]]
+name = "Azure AD"
+description = "Placeholder"
+
+[[keys]]
+name = "Office 365"
+description = "Placeholder"
+
+[[keys]]
+name = "Linux"
+description = "Placeholder"
+
+[[keys]]
+name = "macOS"
+description = "Placeholder"
+
+[[keys]]
+name = "Android"
+description = "Placeholder"
+
+[[keys]]
+name = "iOS"
+description = "Placeholder"
+
+[[keys]]
+name = "AWS IAM"
+description = "Placeholder"
+
+[[keys]]
+name = "AD FS"
+description = "Placeholder"
+
+[[keys]]
+name = "NGINX"
+description = "Placeholder"
+
+[[keys]]
+name = "MySQL"
+description = "Placeholder"
+
+[[keys]]
+name = "Kubernetes"
+description = "Placeholder"
+
+[[keys]]
+name = "Placeholder"
+description = "Placeholder"
+
+[[keys]]
+name = "Active Directory"
+description = "Placeholder"
+
+[[keys]]
+name = "S3 Buckets"
+description = "Placeholder"
+
+[[keys]]
+name = "Blob Storage"
+description = "Placeholder"
+
+[[keys]]
+name = "AWS Lambda"
+description = "Placeholder"
+
+[[keys]]
+name = "Exchange"
+description = "Placeholder"
+
+[[keys]]
+name = "Docker Engine"
+description = "Placeholder"
+
+[[keys]]
+name = "Network Router"
+description = "Placeholder"
+
+[[keys]]
+name = "Cassandra"
+description = "Placeholder"
+
+[[keys]]
+name = "Postgress"
+description = "Placeholder"
+
+[[keys]]
+name = "Kafka"
+description = "Placeholder"
+
+[[keys]]
+name = "Apache HTTP Server"
+description = "Placeholder"
+
+[[keys]]
+name = "PowerShell"
+description = "Placeholder"
+
+[[keys]]
+name = "VMWare"
+description = "Placeholder"
+
+[[keys]]
+name = "AWS EC2"
+description = "Amazon Elastic Compute Cloud (Amazon EC2) is a web service that provides resizable computing capacity—literally, servers in Amazon's data centers—that you use to build and host your software systems."
+link = "https://docs.aws.amazon.com/ec2/index.html"
+
+[[keys]]
+name = "AWS EKS"
+description = "Amazon Elastic Kubernetes Service (Amazon EKS) is a managed service that makes it easy for you to run Kubernetes on AWS without needing to install and operate your own Kubernetes clusters."
+link = "https://docs.aws.amazon.com/eks/index.html"
+
+[[keys]]
+name = "AWS ECS"
+description = "Amazon Elastic Container Service (Amazon ECS) is a highly scalable, fast, container management service that makes it easy to run, stop, and manage Docker containers on a cluster of Amazon EC2 instances."
+link = "https://docs.aws.amazon.com/ecs/index.html"
+
+[[keys]]
+name = "AWS Fargate"
+description = "AWS Fargate is a technology that you can use with Amazon ECS to run containers without having to manage servers or clusters of Amazon EC2 instances."
+link = "https://docs.aws.amazon.com/AmazonECS/latest/userguide/what-is-fargate.html"
+
+[[keys]]
+name = "Azure AKS"
+description = "AKS allows you to quickly deploy a production ready Kubernetes cluster in Azure. Learn how to use AKS with these quickstarts, tutorials, and samples."
+link = "https://docs.microsoft.com/en-us/azure/aks/"
+
+[[keys]]
+name = "VMware Tanzu"
+description = "Tanzu is a suite of products that helps users run and manage multiple Kubernetes (K8S) clusters across public and private clouds."
+link = "https://docs.vmware.com/en/VMware-Tanzu/index.html"
+
+[[keys]]
+name = "OVHcloud"
+description = "OVH, legally OVH Groupe SAS, is a French cloud computing company which offers VPS, dedicated servers and other web services."
+link = "https://docs.ovh.com/gb/en/"
+
+[[keys]]
+name = "IBM Cloud Kubernetes"
+description = "IBM Cloud Kubernetes Service is a managed offering to create your own Kubernetes cluster of compute hosts to deploy and manage containerized apps on IBM Cloud."
+link = "https://cloud.ibm.com/docs/containers?topic=containers-getting-started"
+
+[[keys]]
+name = "Oracle Container Engine"
+description = "Oracle Cloud Infrastructure Container Engine for Kubernetes is a fully-managed, scalable, and highly available service that you can use to deploy your containerized applications to the cloud."
+link = "https://docs.oracle.com/en-us/iaas/Content/ContEng/Concepts/contengoverview.htm"
+
+[[keys]]
+name = "Microsoft SharePoint"
+description = "Microsoft SharePoint is a cloud-based service that helps organizations share and manage content, knowledge, and applications"
+link = "https://docs.microsoft.com/en-us/sharepoint/"
+
+[[keys]]
+name = "Google Workspace"
+description = "Google Workspace is a collection of cloud computing, productivity and collaboration tools, software and products developed and marketed by Google."
+link = "https://workspace.google.com/intl/en_id/"
+
+[[keys]]
+name = "Outlook Web Access"
+description = "Outlook on the web (formerly known as Outlook Web App or Outlook Web Access) is a browser-based email client. Outlook on the web lets you access your Microsoft Exchange Server mailbox from almost any web browser."
+link = "https://docs.microsoft.com/en-us/exchange/troubleshoot/client-connectivity/set-up-web-access"
+
+[[keys]]
+name = "Microsoft Teams"
+description = "Microsoft Teams is a proprietary business communication platform developed by Microsoft, as part of the Microsoft 365 family of products. Teams primarily competes with the similar service Slack, offering workspace chat and videoconferencing, file storage, and application integration."
+link = "https://docs.microsoft.com/en-us/microsoftteams/"
+
+[[keys]]
+name = "Slack"
+description = "Slack is a messaging program designed specifically for the office, but has also been adopted for personal use."
+link = "https://api.slack.com/docs"
+
+[[keys]]
+name = "Confluence"
+description = "Confluence is a web-based corporate wiki developed by Australian software company Atlassian. Atlassian wrote Confluence in the Java programming language and first published it in 2004. Confluence Standalone comes with a built-in Tomcat web server and hsql database, and also supports other databases."
+link = "https://support.atlassian.com/confluence-cloud/resources/"
+
+[[keys]]
+name = "JIRA"
+description = "Jira is a proprietary issue tracking product developed by Atlassian that allows bug tracking and agile project management."
+link = "https://support.atlassian.com/jira-software-cloud/resources/"
+
+[[keys]]
+name = "Gitlab"
+description = "GitLab Inc. is an open-core company that provides GitLab, a DevOps software package that combines the ability to develop, secure, and operate software in a single application."
+link = "https://docs.gitlab.com/"
+
+[[keys]]
+name = "Github"
+description = "GitHub, Inc. is a provider of Internet hosting for software development and version control using Git. It offers the distributed version control and source code management functionality of Git, plus its own features."
+link = "https://docs.github.com/en"
+
+[[keys]]
+name = "Sysdig Backend"
+description = "Sysdig, Inc. is a provider of runtime security solutions for everything based on *nix variants, including a focus on container environments. Available as Saas or IaaS."
+link = "https://sysdig.com"
+
+[[keys]]
+name = "AWS VPC"
+description = "A virtual private cloud (VPC) is a virtual network dedicated to your AWS account. It is logically isolated from other virtual networks in the AWS Cloud. You can launch your AWS resources, such as Amazon EC2 instances, into your VPC."
+link = "https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html"
+
+[[keys]]
+name = "Bitbucket"
+description = "Bitbucket is a Git-based source code repository hosting service owned by Atlassian."
+link = "https://confluence.atlassian.com/bitbucketserver"
+
+[[keys]]
+name = "Bamboo"
+description = "Bamboo is a continuous integration and deployment tool that ties automated builds, tests and releases together in a single workflow"
+link = "https://support.atlassian.com/bamboo/"
+
+[[keys]]
+name = "Active Directory Certificate Services"
+description = "Active Directory Certificate Services (AD CS) is a Windows Server role that provides a platform for issuing and managing public key infrastructure (PKI) certificates. These certificates are essential for secure communication and authentication protocols."
+link = "https://learn.microsoft.com/en-us/windows-server/identity/ad-cs/active-directory-certificate-services-overview"
+
+[[keys]]
+name = "Microsoft Intune"
+description = "Microsoft Intune is a cloud-based endpoint management solution that helps organizations manage user access to resources while simplifying app and device management across various platforms."
+link = "https://learn.microsoft.com/en-us/intune/intune-service/fundamentals/what-is-intune"
+
+[[keys]]
+name = "Microsoft Azure Information Protection"
+description = "Azure Information Protection (AIP) provides the encryption service, Azure Rights Management, that's used by Microsoft Purview Information Protection."
+link = "https://learn.microsoft.com/en-us/azure/information-protection/what-is-information-protection"
+
+[[keys]]
+name = "Microsoft Exchange Online"
+description = "Exchange Online is a cloud-based email service that offers advanced security, reliability, and access from anywhere."
+link = "https://www.microsoft.com/en-us/microsoft-365/exchange/exchange-online"
+
+[[keys]]
+name = "Microsoft OneDrive"
+description = "Microsoft OneDrive is a cloud storage service provided by Microsoft that allows users to store, sync, and share files across multiple devices."
+link = "https://www.microsoft.com/nl-be/microsoft-365/onedrive/online-cloud-storage"
+
+[[keys]]
+name = "Microsoft Security and Compliance Center"
+description = "The Microsoft Security Compliance Center provides organizations with a centralized platform to manage security and compliance across Microsoft 365 services, ensuring data protection and regulatory adherence."
+link = "https://techcommunity.microsoft.com/blog/microsoft-security-blog/introducing-the-microsoft-365-security-and-compliance-center/178468"
+
+[[keys]]
+name = "Microsoft Defender Antivirus"
+description = "Microsoft Defender Antivirus is a major component of your next-generation protection in Microsoft Defender for Endpoint. This protection brings together machine learning, big-data analysis, in-depth threat resistance research, and the Microsoft cloud infrastructure to protect devices (or endpoints) in your organization."
+link = "https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-antivirus-windows?view=o365-worldwide"
+
+[[keys]]
+name = "Microsoft Defender for Endpoint"
+description = "Microsoft Defender for Endpoint is a cloud-native endpoint security platform that provides comprehensive protection across various devices, including Windows, macOS, Linux, Android, iOS, and IoT. It integrates traditional antivirus capabilities with advanced threat detection, response, and analytics, creating a multi-layered defense strategy for modern IT environments."
+link = "https://www.microsoft.com/en-us/security/business/endpoint-security/microsoft-defender-endpoint"
+
+[[keys]]
+name = "Microsoft Defender for Cloud"
+description = "Microsoft Defender for Cloud is a comprehensive cloud-native application protection platform (CNAPP) that secures hybrid and multicloud environments, providing unified security management and advanced threat protection."
+link = "https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-cloud-introduction"
+
+[[keys]]
+name = "Microsoft Defender for Cloud Apps"
+description = "Microsoft Defender for Cloud Apps is a Cloud Access Security Broker (CASB) that helps organizations monitor and protect their SaaS applications, enhancing security and compliance across cloud environments."
+link = "https://learn.microsoft.com/en-us/defender-cloud-apps/what-is-defender-for-cloud-apps"
+
+[[keys]]
+name = "Microsoft Defender EASM"
+description = "Microsoft Defender EASM continuously discovers and maps your digital attack surface, providing essential visibility to identify risks and eliminate threats beyond the firewall."
+link = "https://learn.microsoft.com/en-us/azure/external-attack-surface-management/overview"
+
+[[keys]]
+name = "Microsoft Defender XDR"
+description = "Microsoft Defender XDR is a unified pre- and post-breach enterprise defense suite that natively coordinates detection, prevention, investigation, and response across endpoints, identities, email, and applications to provide integrated protection against sophisticated attacks."
+link = "https://learn.microsoft.com/en-us/defender-xdr/microsoft-365-defender"
+
+[[keys]]
+name = "Microsoft Entra ID Protection"
+description = "Microsoft Entra ID Protection is part of the Microsoft Entra suite, which focuses on identity and access management. It leverages advanced algorithms and machine learning to identify and mitigate identity risks in real time."
+link = "https://learn.microsoft.com/en-us/entra/id-protection/overview-identity-protection"
+
+[[keys]]
+name = "Microsoft Entra Domain Services"
+description = "Microsoft Entra Domain Services provides managed domain services like domain join, group policy, and authentication without the need to manage domain controllers."
+link = "https://learn.microsoft.com/en-us/entra/identity/domain-services/overview"
+
+[[keys]]
+name = "Microsoft Sentinel"
+description = "Microsoft Sentinel is a scalable, cloud-native security information and event management (SIEM) that delivers scalable, cost-efficient security across multicloud and multi-platform environments with built-in AI, automation, threat intelligence, and a modern data lake architecture."
+link = "https://learn.microsoft.com/en-us/azure/sentinel/overview?tabs=defender-portal"
+
+[[keys]]
+name = "Microsoft Entra Privileged Identity Management"
+description = "Privileged Identity Management (PIM) is a service in Microsoft Entra ID that enables you to manage, control, and monitor access to important resources in your organization."
+link = "https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-configure"
+
+[[keys]]
+name = "Azure WAF"
+description = "Azure Web Application Firewall provides centralized protection of your web applications from common exploits and vulnerabilities."
+link = "https://learn.microsoft.com/en-us/azure/web-application-firewall/ag/ag-overview"
+
+[[keys]]
+name = "Microsoft Purview"
+description = "Microsoft Purview is a comprehensive set of solutions that helps your organization govern, protect, and manage data wherever it lives. Microsoft Purview solutions provide integrated coverage and help address the fragmentation of data across organizations, the lack of visibility that hampers data protection and governance, and the blurring of traditional IT management roles."
+link = "https://learn.microsoft.com/en-us/purview/purview"
+
+[[keys]]
+name = "Sysdiagnose"
+description = "You can use sysdiagnose to research general iOS and iPadOS issues before you troubleshoot or research them to AppleCare. Sysdiagnose extracts information from iPhone and iPad devices and captures it in a log file. You or AppleCare can then read the file to understand software or network issues."
+link = "https://it-training.apple.com/tutorials/support/sup075/"
+
+[[keys]]
+name = "Modbus TCP/RTU"
+description = "Modbus is a serial communication protocol used for connecting electronic devices in industrial environments. Modbus TCP operates over TCP/IP networks while Modbus RTU uses serial RS-232/RS-485 connections."
+link = "https://modbus.org"
+
+[[keys]]
+name = "IEC 60870-5-104"
+description = "IEC 60870-5-104 (IEC 104) is a telecontrol protocol for power system monitoring and control, commonly used in electric utility SCADA systems. It operates over TCP/IP networks."
+link = "https://webstore.iec.ch/publication/25035"
+
+[[keys]]
+name = "DNP3"
+description = "Distributed Network Protocol 3 (DNP3) is a communication protocol used in SCADA systems, primarily for electric and water utilities. Supports both serial and TCP/IP transport."
+link = "https://www.dnp.org/"
+
+[[keys]]
+name = "Siemens S7comm"
+description = "S7comm is the proprietary protocol used by Siemens S7-300/400 PLCs for communication between engineering software, HMIs, and controllers."
+link = "https://wiki.wireshark.org/S7comm"
+
+[[keys]]
+name = "EtherNet/IP CIP"
+description = "EtherNet/IP is an industrial network protocol using Common Industrial Protocol (CIP) over standard Ethernet. Used primarily with Allen-Bradley/Rockwell Automation controllers."
+link = "https://www.odva.org/technology-standards/key-technologies/ethernet-ip/"
+
+[[keys]]
+name = "OPC UA"
+description = "OPC Unified Architecture (OPC UA) is a machine-to-machine communication protocol for industrial automation. Provides secure, reliable data exchange across platforms."
+link = "https://opcfoundation.org/about/opc-technologies/opc-ua/"
+
+[[keys]]
+name = "OPC DA"
+description = "OPC Data Access (OPC DA) is a legacy OPC specification for real-time data access from PLCs, DCS, and other control devices to HMIs and SCADA systems."
+link = "https://opcfoundation.org/about/opc-technologies/opc-classic/"
+
+[[keys]]
+name = "BACnet"
+description = "Building Automation and Control Networks (BACnet) is a communication protocol for building automation and control networks, used in HVAC, lighting, and access control systems."
+link = "https://www.bacnetinternational.org/"
+
+[[keys]]
+name = "PROFINET"
+description = "PROFINET is an industry standard for industrial Ethernet, primarily used with Siemens and other fropean automation equipment."
+link = "https://www.profibus.com/technology/profinet"
+
+[[keys]]
+name = "IEC 61850"
+description = "IEC 61850 is a standard for communication networks and systems in substations, enabling interoperability between intelligent electronic devices (IEDs) in power systems."
+link = "https://webstore.iec.ch/publication/6028"
+

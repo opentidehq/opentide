@@ -1,0 +1,93 @@
+name = "Rule Scheduling"
+field = "scheduling"
+description = "The frequency at which the rule should be executed on the detection system, when it is not real-time"
+icon = "⏳"
+key = "name"
+[[keys]]
+name = "Real-time"
+description = "The rule is continuously (or near continuously) ran on incoming logs"
+
+[[keys]]
+name = "5m"
+description = "Rule is scheduled to run every 5m"
+
+[[keys]]
+name = "10m"
+description = "Rule is scheduled to run every 10m"
+
+[[keys]]
+name = "15m"
+description = "Rule is scheduled to run every 15m"
+
+[[keys]]
+name = "30m"
+description = "Rule is scheduled to run every 30m"
+
+[[keys]]
+name = "1h"
+description = "Rule is scheduled to run every 1h"
+
+[[keys]]
+name = "2h"
+description = "Rule is scheduled to run every 2h"
+
+[[keys]]
+name = "3h"
+description = "Rule is scheduled to run every 3h"
+
+[[keys]]
+name = "4h"
+description = "Rule is scheduled to run every 4h"
+
+[[keys]]
+name = "5h"
+description = "Rule is scheduled to run every 5h"
+
+[[keys]]
+name = "6h"
+description = "Rule is scheduled to run every 6h"
+
+[[keys]]
+name = "7h"
+description = "Rule is scheduled to run every 7h"
+
+[[keys]]
+name = "8h"
+description = "Rule is scheduled to run every 8h"
+
+[[keys]]
+name = "9h"
+description = "Rule is scheduled to run every 9h"
+
+[[keys]]
+name = "10h"
+description = "Rule is scheduled to run every 10h"
+
+[[keys]]
+name = "12h"
+description = "Rule is scheduled to run every 12h"
+
+[[keys]]
+name = "24h"
+description = "Rule is scheduled to run every 24h"
+
+[[keys]]
+name = "48h"
+description = "Rule is scheduled to run every 48h"
+
+[[keys]]
+name = "72h"
+description = "Rule is scheduled to run every 72h"
+
+[[keys]]
+name = "168h"
+description = "Rule is scheduled to run every 168h"
+
+[[keys]]
+name = "336h"
+description = "Rule is scheduled to run every 336h"
+
+[[keys]]
+name = "720h"
+description = "Rule is scheduled to run every 720h"
+

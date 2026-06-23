@@ -39,9 +39,4 @@ response:
     #containment: |
       #...
 
-configurations:
-  #crowdstrike: 
-  #sentinel: 
-  #sentinel_one: 
-  #defender_for_endpoint: 
-  #carbon_black_cloud: 
+configurations: {}

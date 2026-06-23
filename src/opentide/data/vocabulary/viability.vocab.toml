@@ -1,0 +1,53 @@
+name = "Vector Viability"
+field = "viability"
+description = "Described with estimative language (likelyhood probability), describes how likely the analyst believes the vector to actually be realized on the organization infrastructure. Estimative language describes quality and credibility of underlying sources, data, and methodologies based Intelligence Community Directive 203 (ICD 203) and JP 2-0, Joint Intelligence."
+reference = "https://www.dni.gov/files/documents/ICD/ICD%20203%20Analytic%20Standards.pdf"
+icon = "🎲"
+key = "name"
+[[keys]]
+name = "Environment dependent"
+icon = "♻️"
+description = "Depends"
+
+[[keys]]
+name = "Almost no chance"
+icon = "🙅\u200d♀️"
+misp = "estimative-language:likelihood-probability=\"almost-no-chance\""
+description = "Remote - 01-05%"
+
+[[keys]]
+name = "Very Unlikely"
+icon = "😅"
+misp = "estimative-language:likelihood-probability=\"very-unlikely\""
+description = "Highly improbable - 05-20%"
+
+[[keys]]
+name = "Unlikely"
+icon = "🤔"
+misp = "estimative-language:likelihood-probability=\"unlikely\""
+description = "Improbable (improbably) - 20-45%"
+
+[[keys]]
+name = "Roughly even chance"
+icon = "🤷\u200d♀️"
+misp = "estimative-language:likelihood-probability=\"roughly-even-chance\""
+description = "Roughly even odds - 45-55%"
+
+[[keys]]
+name = "Likely"
+icon = "🧐"
+misp = "estimative-language:likelihood-probability=\"likely\""
+description = "Probable (probably) - 55-80%"
+
+[[keys]]
+name = "Very Likely"
+icon = "😰"
+misp = "estimative-language:likelihood-probability=\"very-likely\""
+description = "Highly probable - 80-95%"
+
+[[keys]]
+name = "Almost certain"
+icon = "😱"
+misp = "estimative-language:likelihood-probability=\"almost-certain\""
+description = "Nearly certain - 95-99%"
+

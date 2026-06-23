@@ -1,0 +1,6 @@
+name = "Alert Handling Team"
+field = "responders"
+description = "Team responsible to handle incoming security alerts"
+icon = "\u200d🚒"
+key = "name"
+keys = []

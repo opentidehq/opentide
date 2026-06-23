@@ -78,28 +78,18 @@ def indexer(write_index=False) -> dict:
 
     print("📒 Indexing Vocabularies...")
 
-    from opentide.generation.vocabulary import VocabularyLoadError, parse_yaml_vocabulary
+    from opentide.vocabulary.io import load_vocab_file
 
     voc_index = dict()
     for voc_file in sorted(os.listdir(VOCABULARIES_PATH)):
-        if not voc_file.endswith((".yaml", ".yml")):
+        if not voc_file.endswith(".vocab.toml"):
             continue
         obj_counter += 1
         voc_path = VOCABULARIES_PATH / voc_file
         try:
-            voc_body = yaml.safe_load(open(voc_path, encoding="utf-8"))
+            vocabulary = load_vocab_file(voc_path)
         except Exception as exc:
-            log("FAILURE", f"Could not read vocabulary YAML {voc_file}", str(exc))
-            continue
-
-        if not voc_body:
-            log("WARNING", "Could not find data in vocabulary/index", voc_file)
-            continue
-
-        try:
-            vocabulary = parse_yaml_vocabulary(voc_body, source=voc_file)
-        except VocabularyLoadError as exc:
-            log("FAILURE", str(exc), voc_file)
+            log("FAILURE", f"Could not read vocabulary {voc_file}", str(exc))
             continue
 
         voc_index[vocabulary.metadata.field] = vocabulary.to_index_dict()

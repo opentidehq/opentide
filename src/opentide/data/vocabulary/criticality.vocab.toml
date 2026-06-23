@@ -1,0 +1,48 @@
+name = "Criticality"
+field = "criticality"
+description = "Urgency of the model to be implemented into the next layer, based on the severity rating and after analysis of the current defense capabilities to balance urgency. Socio-economic and leadership requirements are also captured."
+reference = "https://www.cisa.gov/uscert/sites/default/files/publications/CISA_National_Cyber_Incident_Scoring_System_S508C.pdf"
+icon = "🔥"
+key = "name"
+[[keys]]
+name = "Baseline - Negligible"
+icon = "🔫"
+misp = "priority-level:baseline-negligible"
+description = "A Baseline–Negligible priority incident is an incident that is highly unlikely to affect public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence. The potential for impact, however, exists and warrants additional scrutiny."
+
+[[keys]]
+name = "Baseline - Minor"
+icon = "🔫"
+misp = "priority-level:baseline-minor"
+description = "A Baseline–Minor priority incident is an incident that is highly unlikely to affect public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence. The potential for impact, however, exists and warrants additional scrutiny."
+
+[[keys]]
+name = "Low"
+icon = "🔫"
+misp = "priority-level:low"
+description = "A Low priority incident is unlikely to affect public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence."
+
+[[keys]]
+name = "Medium"
+icon = "❗"
+misp = "priority-level:medium"
+description = "A Medium priority incident may affect public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence."
+
+[[keys]]
+name = "High"
+icon = "⚠️"
+misp = "priority-level:high"
+description = "A High priority incident is likely to result in a demonstrable impact to public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence."
+
+[[keys]]
+name = "Severe"
+misp = "priority-level:severe"
+icon = "🚨"
+description = "A Severe priority incident is likely to result in a significant impact to public health or safety, national security, economic security, foreign relations, or civil liberties."
+
+[[keys]]
+name = "Emergency"
+icon = "☢️"
+misp = "priority-level:emergency"
+description = "An Emergency priority incident poses an imminent threat to the provision of wide-scale critical infrastructure services, national government stability, or human lives."
+
