@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,7 @@ def load_stix_bundle(path: Path) -> list[dict[str, Any]]:
     raise ValueError(f"Unrecognised STIX bundle format: {path}")
 
 
-def build_tactic_name_map(objects: list[Mapping[str, Any]]) -> dict[str, str]:
+def build_tactic_name_map(objects: Sequence[Mapping[str, Any]]) -> dict[str, str]:
     """Map tactic shortnames to display names."""
     mapping: dict[str, str] = {}
     for obj in objects:
@@ -67,7 +67,7 @@ def _tactics_for_technique(obj: Mapping[str, Any], tactic_map: dict[str, str]) -
 
 
 def parse_techniques(
-    objects: list[Mapping[str, Any]],
+    objects: Sequence[Mapping[str, Any]],
     *,
     prefix: str = "",
     tactic_map: dict[str, str] | None = None,
