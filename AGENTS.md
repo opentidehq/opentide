@@ -117,7 +117,7 @@ uv run pytest -k "test_sentinel" -x -q
 
 Remote CI: lint and test matrix run **in parallel**; stale runs are cancelled on new pushes. Coverage runs on Python **3.14** (`COVERAGE_PYTHON` in `ci.yml`) in one matrix cell; Cobertura XML uploads to **GitHub Code Quality** (`github-code-quality[bot]` comments on PRs with per-file deltas vs `development`). Local `fail_under` in `pyproject.toml` still gates merges via pre-push and CI.
 
-**CodeQL** (security scanning) runs in [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) on every PR — not in pre-commit hooks (~40–60s per local run, full DB rebuild, no incremental analysis). Optional before a security-sensitive PR: `scripts/codeql-local.sh`. Repo must use **advanced** CodeQL setup (disable GitHub “default setup” in Settings → Code security if both are enabled — they conflict).
+**CodeQL:** Python security scanning is handled by **GitHub Code Quality** (dynamic `CodeQL - Code Quality` workflow). [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) scans **GitHub Actions workflows only** (`actions` language) so Python is not analyzed twice. Optional local Python deep-scan: `scripts/codeql-local.sh` (~40–60s; not a pre-commit hook).
 
 ### Agent skills (npx skills)
 

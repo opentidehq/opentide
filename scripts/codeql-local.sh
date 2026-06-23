@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Optional local CodeQL — mirrors .github/workflows/codeql.yml (security-extended).
-#
-# NOT wired into pre-commit or pre-push: each run rebuilds the full CodeQL database
+# Optional local CodeQL for Python — mirrors Code Quality's Python analysis locally.
+# CI: Python via GitHub Code Quality (dynamic); workflow YAML via .github/workflows/codeql.yml.
 # (~15–25s) and evaluates all queries (~20–40s). No incremental analysis yet.
 #
 # Usage:

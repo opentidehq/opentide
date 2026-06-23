@@ -117,11 +117,15 @@ def render_comment(chain: list[dict[str, Any]], current_number: int) -> str:
             f"**Merge order:** start at {merge_hint}, then work upward.",
             depth,
             "",
-            "**Local (jj):** `scripts/jj-stack-status.sh` · "
-            "submit: `scripts/jj-stack-submit.sh <top-bookmark>`",
+            (
+                "**Local (jj):** `scripts/jj-stack-status.sh` · "
+                "submit: `scripts/jj-stack-submit.sh <top-bookmark>`"
+            ),
             "",
-            "_Updated automatically by "
-            "[stack-comment workflow](.github/workflows/stack-comment.yml)._",
+            (
+                "_Updated automatically by "
+                "[stack-comment workflow](.github/workflows/stack-comment.yml)._"
+            ),
         ]
     )
     return "\n".join(lines)

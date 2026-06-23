@@ -1,6 +1,6 @@
-# Advanced CodeQL — requires GitHub repo "default setup" to be disabled
-# (Settings → Code security → CodeQL → Switch to advanced / Disable default).
-# See: https://docs.github.com/en/code-security/code-scanning/troubleshooting-sarif-uploads/default-setup-enabled
+# GitHub Actions workflow scanning only — Python CodeQL runs via Code Quality
+# (Settings → Code security → Code Quality; dynamic "CodeQL - Code Quality" workflow).
+# Do not add python here or it scans twice. See AGENTS.md.
 name: CodeQL
 
 on:
@@ -22,31 +22,18 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
+    name: Analyze (actions)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [python, actions]
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
+          languages: actions
           queries: security-extended
-
-      - uses: astral-sh/setup-uv@v5
-        if: matrix.language == 'python'
-        with:
-          enable-cache: true
-
-      - name: Install Python dependencies
-        if: matrix.language == 'python'
-        run: uv sync --group dev
 
       - uses: github/codeql-action/analyze@v3
         with:
-          category: /language:${{ matrix.language }}
+          category: /language:actions
