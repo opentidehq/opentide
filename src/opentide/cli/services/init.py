@@ -115,23 +115,13 @@ def _scaffold_directories(target: Path) -> None:
         (target / rel).mkdir(parents=True, exist_ok=True)
 
 
-def _copy_ci_workflows(target: Path, options: InitOptions) -> None:
-    root = _repo_template_root()
-    if options.ci is CiPlatform.github:
-        src = root / ".github" / "workflows"
-        if src.is_dir():
-            for workflow in src.glob("*.yml"):
-                shutil.copy2(workflow, target / ".github" / "workflows" / workflow.name)
-    elif options.ci is CiPlatform.gitlab:
-        src = root / "Pipelines" / "Gitlab" / "tide.yml"
-        if src.is_file():
-            shutil.copy2(src, target / ".gitlab-ci.yml")
-    elif options.ci is CiPlatform.azure:
-        src = root / "Pipelines" / "Azure" / "opentide.yml"
-        if src.is_file():
-            (target / "azure-pipelines.yml").write_text(
-                src.read_text(encoding="utf-8"), encoding="utf-8"
-            )
+def _write_ci_workflows(target: Path, options: InitOptions) -> None:
+    from opentide.ci.models import CiRenderOptions
+    from opentide.cli.services.ci_generator import write_ci
+
+    if options.ci is CiPlatform.none:
+        return
+    write_ci(target, CiRenderOptions.from_init_options(options))
 
 
 def _copy_ai_assets(target: Path, options: InitOptions) -> None:
@@ -168,7 +158,7 @@ def run_init(options: InitOptions) -> dict[str, object]:
     _scaffold_directories(target)
     _write_gitignore(target)
     _write_readme(target, options)
-    _copy_ci_workflows(target, options)
+    _write_ci_workflows(target, options)
     _copy_ai_assets(target, options)
 
     log("SUCCESS", "Repository created", str(target))
