@@ -103,10 +103,14 @@ version-file = "src/opentide/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["--cov=opentide", "--cov-report=term-missing"]
+addopts = [
+    "--cov=opentide",
+    "--cov-report=term-missing:skip-covered",
+]
 
 [tool.coverage.run]
-source = ["opentide"]
+source = ["src/opentide"]
+relative_files = true
 omit = [
     "src/opentide/_version.py",
     "src/opentide/deployment/*",
@@ -116,6 +120,22 @@ omit = [
     "src/opentide/platforms/*/validator.py",
     "src/opentide/mcp_server/server.py",
 ]
+
+[tool.coverage.report]
+fail_under = 47
+show_missing = true
+skip_covered = true
+precision = 1
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 [tool.ruff]
 target-version = "py310"
