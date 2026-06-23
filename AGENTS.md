@@ -52,7 +52,7 @@ uv run ruff format tests src/opentide
 uv run ty check src/opentide
 ```
 
-CI runs `uv sync --group dev` on Python **3.10–3.14** (PRs test **3.10, 3.12, 3.14**; full matrix on push to `development`/`main`).
+CI runs `uv sync --group dev` on Python **3.10–3.14** (full matrix on every PR and push).
 
 ### Fast feedback — avoid waiting on CI
 
