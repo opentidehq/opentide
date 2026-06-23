@@ -256,9 +256,9 @@ def parents(id: str) -> list:
     model_type = get_type(id)
     parents = []
     parent_mappings = {
-        "dom": {"data": "objective", "parent": "threats"},
+        "objective": {"data": "objective", "parent": "threats"},
         "signal": {"parent": "parent"},
-        "mdr": {"parent": "detection_model"},
+        "rule": {"parent": "detection_model"},
     }
 
     if model_type not in parent_mappings:
@@ -293,9 +293,9 @@ def childs(model_id: str) -> list:
     implementations = []
 
     mappings = {
-        "tvm": {"child_types": ["dom"], "data_sections": ["detection", "objective"], "references": ["vectors", "threats"]},
-        "dom": {"child_types": ["signal", "mdr"], "references": ["detection_model", "parent"]},
-        "signal": {"child_types": ["mdr"], "references": ["detection_model"]},
+        "threat": {"child_types": ["objective"], "data_sections": ["detection", "objective"], "references": ["vectors", "threats"]},
+        "objective": {"child_types": ["signal", "rule"], "references": ["detection_model", "parent"]},
+        "signal": {"child_types": ["rule"], "references": ["detection_model"]},
     }
 
     model_type = get_type(model_id)
@@ -349,10 +349,10 @@ def get_type(model_uuid:str, mute:bool=False):
     schema = model_body.get("metadata", {}).get("schema")
     if not schema:
         #TODO For backwards compatibility with MDR still on 1.0. To be deprecated.
-        if model_uuid in OpenTide.Models.signal:
+        if model_uuid in OpenTide.Models.signals:
             return "signal"
         if model_body.get("configurations"):
-            return "mdr"
+            return "rule"
         if mute:
             return None
         else:
@@ -361,7 +361,7 @@ def get_type(model_uuid:str, mute:bool=False):
         
     return schema.split("::")[0]
 
-def keep_active_mdr(mdr_list:list[str])->list[str]:
+def keep_active_rules(rule_list:list[str])->list[str]:
     """
     Given a list of MDRs, only keep the ones considered Active,
     which mean none of the system they configure are set with a
@@ -369,10 +369,10 @@ def keep_active_mdr(mdr_list:list[str])->list[str]:
     """
     from opentide.deployment import check_status, DEPRECATED_STATUSES
 
-    active_mdr = []
-    for mdr in mdr_list:
+    active_rules = []
+    for mdr in rule_list:
         try:
-            mdr_data = OpenTide.Models.Index["mdr"][mdr]
+            mdr_data = OpenTide.Models.Index["rule"][mdr]
         except:
             log("FAILURE",
                 "Could not retrieve UUID in MDR Index",
@@ -387,9 +387,9 @@ def keep_active_mdr(mdr_list:list[str])->list[str]:
                     mdr)
                 deprecated = True
         if deprecated is False:
-            active_mdr.append(mdr)
+            active_rules.append(mdr)
     
-    return active_mdr
+    return active_rules
 
 def techniques_resolver(model_id: str, recursive=True) -> list:
     """
@@ -415,7 +415,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
     # Load Model Data
     model_body = MODELS_INDEX[model_type][model_id]
 
-    if model_type == "mdr":
+    if model_type == "rule":
         parent_id = model_body.get("detection_model") or model_body.get("tags", {}).get(
             "coretide"
         )
@@ -427,7 +427,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
             else:
                 return techniques
 
-    if model_type == "dom":
+    if model_type == "objective":
         if "att&ck" in model_body["objective"]:
             techniques = model_body["objective"]["att&ck"]
         else:
@@ -439,7 +439,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
             else:
                 return techniques
 
-    if model_type == "tvm":
+    if model_type == "threat":
         techniques = model_body["threat"]["att&ck"]
 
     # Deduplicate techniques in case they were present
@@ -454,12 +454,12 @@ def relations_downstream(id):
     tree = {}
     
     if get_type(id) in ["signal"]:
-        tree = keep_active_mdr(childs(id))
-    elif get_type(id) == "dom":
+        tree = keep_active_rules(childs(id))
+    elif get_type(id) == "objective":
         for child in childs(id):
             if get_type(child) == "signal":
                 tree[child] = relations_downstream(child)
-            elif get_type(child) == "mdr":
+            elif get_type(child) == "rule":
                 tree[child] = None
     else:
         for c in childs(id):
@@ -470,7 +470,7 @@ def relations_downstream(id):
 def relations_upstream(id):
 
     tree = {}
-    if get_type(id) == "tvm":
+    if get_type(id) == "threat":
         tree = []
     else:
         for p in parents(id):
@@ -531,9 +531,9 @@ def relations_list(
     for k, v in flat.items():
         flat[k] = list(set(v))
 
-    if mdr_list:=flat.get("mdr"):
-        active_mdr = keep_active_mdr(mdr_list)
-        flat["mdr"] = active_mdr
+    if rule_list:=flat.get("rule"):
+        active_rules = keep_active_rules(rule_list)
+        flat["rule"] = active_rules
     
     if mode == "count":
         for k, v in flat.items():

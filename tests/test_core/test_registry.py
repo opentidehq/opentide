@@ -24,7 +24,7 @@ def test_opentide_initialise_and_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     index_mod.IndexManager._cache = None
 
     sample_index = {
-        "objects": {"mdr": {}, "tvm": {}, "dom": {}},
+        "objects": {"rule": {}, "threat": {}, "objective": {}},
         "files": {},
         "configurations": {"global": {"objects": []}, "systems": {}},
         "paths": {},
@@ -46,7 +46,7 @@ def test_opentide_lookup_returns_none_for_missing() -> None:
     OpenTide._rules = {}
     OpenTide._threats = {}
     OpenTide._objectives = {}
-    OpenTide._index = {"objects": {"mdr": {}, "tvm": {}, "dom": {}}, "configurations": {}}
+    OpenTide._index = {"objects": {"rule": {}, "threat": {}, "objective": {}}, "configurations": {}}
     OpenTide._initialised = True
     assert OpenTide.lookup("missing-uuid") is None
 
@@ -62,7 +62,7 @@ def test_opentide_configuration_schema_sharing(monkeypatch: pytest.MonkeyPatch) 
             "deployment": {"statuses": {}},
             "visibility": {},
         },
-        "objects": {"mdr": {}, "tvm": {}, "dom": {}},
+        "objects": {"rule": {}, "threat": {}, "objective": {}},
     }
     OpenTide._initialised = True
     assert OpenTide.Configuration.Schema["version"] == "1"
@@ -89,3 +89,92 @@ def test_detection_rule_validate_query_no_validator(rule_payload: dict[str, Any]
     result = bound.validate_query("crowdstrike")
     assert result.ok is False
     assert "does not support query validation" in result.errors[0]
+
+
+def test_models_accessor_schema_keys() -> None:
+    OpenTide._index = {
+        "objects": {
+            "rule": {"r1": {"name": "Rule"}},
+            "objective": {"o1": {"name": "Objective"}},
+            "threat": {"t1": {"name": "Threat"}},
+            "signal": {"s1": {"name": "Signal"}},
+        },
+        "files": {},
+        "configurations": {},
+    }
+    OpenTide._rules = {}
+    OpenTide._threats = {}
+    OpenTide._objectives = {}
+    OpenTide._initialised = True
+    models = OpenTide.Models
+    assert models.rules["r1"]["name"] == "Rule"
+    assert models.objectives["o1"]["name"] == "Objective"
+    assert models.threats["t1"]["name"] == "Threat"
+    assert models.signals["s1"]["name"] == "Signal"
+    flat = models.FlatIndex
+    assert set(flat) == {"r1", "o1", "t1", "s1"}
+
+
+def test_configuration_visibility_properties() -> None:
+    OpenTide._index = {
+        "configurations": {
+            "visibility": {
+                "assets": [{"name": "server", "description": "Host", "criticality": "high"}],
+                "logsources": [
+                    {
+                        "name": "windows",
+                        "description": "Windows events",
+                        "system": "sentinel",
+                    }
+                ],
+                "detectors": [
+                    {"name": "edr", "description": "EDR alerts"},
+                ],
+            }
+        },
+        "objects": {"rule": {}, "threat": {}, "objective": {}},
+    }
+    OpenTide._initialised = True
+    visibility = OpenTide.Configuration.Visibility
+    assert visibility.assets is not None
+    assert visibility.logsources is not None
+    assert visibility.detectors is not None
+    assert visibility.visibility is not None
+    assert visibility.assets[0].name == "server"
+
+
+def test_models_rules_lazy_load(rule_payload: dict[str, Any]) -> None:
+    uuid = rule_payload["metadata"]["uuid"]
+    OpenTide._index = {
+        "objects": {"rule": {uuid: rule_payload}, "threat": {}, "objective": {}},
+        "files": {},
+        "paths": {},
+        "configurations": {},
+    }
+    OpenTide._rules = {}
+    OpenTide._threats = {}
+    OpenTide._objectives = {}
+    OpenTide._initialised = True
+    rules = OpenTide.Models.Rules
+    assert uuid in rules
+    assert rules[uuid].name == "Test rule"
+
+
+def test_configuration_deployment_statuses() -> None:
+    OpenTide._index = {
+        "configurations": {
+            "deployment": {
+                "statuses": [
+                    {
+                        "name": "production",
+                        "description": "Live",
+                        "strategy": "RELEASE",
+                    }
+                ]
+            }
+        },
+        "objects": {"rule": {}, "threat": {}, "objective": {}},
+    }
+    OpenTide._initialised = True
+    statuses = OpenTide.Configuration.Deployment.statuses
+    assert statuses[0].name == "production"

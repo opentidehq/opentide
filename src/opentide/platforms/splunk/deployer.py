@@ -382,7 +382,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
 
         # Start deployment routine
         for mdr in deployment:
-            mdr_data = OpenTide.Models.mdr[mdr]
+            mdr_data = OpenTide.Models.rules[mdr]
 
             # Check if modified MDR contains a platform entry (by safety, but should not happen since
             # the orchestrator will filter for the platform)

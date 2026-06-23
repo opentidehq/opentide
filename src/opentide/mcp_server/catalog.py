@@ -23,12 +23,12 @@ def object_summary(uuid: str, object_type: str, body: dict[str, Any]) -> dict[st
 
 def get_object(uuid: str) -> dict[str, Any] | None:
     ensure_initialised()
-    if uuid in OpenTide.Models.mdr:
-        return {"type": "rule", "uuid": uuid, "body": OpenTide.Models.mdr[uuid]}
-    if uuid in OpenTide.Models.tvm:
-        return {"type": "threat", "uuid": uuid, "body": OpenTide.Models.tvm[uuid]}
-    if uuid in OpenTide.Models.dom:
-        return {"type": "objective", "uuid": uuid, "body": OpenTide.Models.dom[uuid]}
+    if uuid in OpenTide.Models.rules:
+        return {"type": "rule", "uuid": uuid, "body": OpenTide.Models.rules[uuid]}
+    if uuid in OpenTide.Models.threats:
+        return {"type": "threat", "uuid": uuid, "body": OpenTide.Models.threats[uuid]}
+    if uuid in OpenTide.Models.objectives:
+        return {"type": "objective", "uuid": uuid, "body": OpenTide.Models.objectives[uuid]}
     return None
 
 
@@ -49,9 +49,9 @@ def search_catalog(
     query_lower = query.lower()
     results: list[dict[str, Any]] = []
     for bucket_type, bucket in [
-        ("rule", OpenTide.Models.mdr),
-        ("threat", OpenTide.Models.tvm),
-        ("objective", OpenTide.Models.dom),
+        ("rule", OpenTide.Models.rules),
+        ("threat", OpenTide.Models.threats),
+        ("objective", OpenTide.Models.objectives),
     ]:
         if object_type and object_type != bucket_type:
             continue
@@ -96,7 +96,7 @@ def get_chaining_graph(uuid: str) -> dict[str, Any]:
 def coverage_analysis(*, technique: str = "", tactic: str = "") -> dict[str, Any]:
     ensure_initialised()
     covered: dict[str, list[str]] = {}
-    for uuid, body in OpenTide.Models.mdr.items():
+    for uuid, body in OpenTide.Models.rules.items():
         if not isinstance(body, dict):
             body = body.model_dump(by_alias=True) if hasattr(body, "model_dump") else {}
         tags = body.get("tags", {})

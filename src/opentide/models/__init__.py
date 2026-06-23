@@ -3,6 +3,14 @@
 from opentide.models.base import TideField, TideModel, field_json_schema_extra
 from opentide.models.enums import EnumEntry, EnumRegistry
 from opentide.models.metadata import ObjectMetadata, ObjectReferences, Organisation
+from opentide.models.object_types import (
+    CORE_OBJECT_TYPES,
+    OBJECTIVE,
+    RULE,
+    SCHEMA_IDENTIFIERS,
+    SIGNAL,
+    THREAT,
+)
 from opentide.models.objective import (
     DetectionExample,
     DetectionObjective,
@@ -31,6 +39,12 @@ __all__ = [
     "ObjectMetadata",
     "ObjectReferences",
     "Organisation",
+    "CORE_OBJECT_TYPES",
+    "OBJECTIVE",
+    "RULE",
+    "SCHEMA_IDENTIFIERS",
+    "SIGNAL",
+    "THREAT",
     "SchemaVersion",
     "SchemaVersionChain",
     "SignalData",

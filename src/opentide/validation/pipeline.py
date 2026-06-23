@@ -13,9 +13,9 @@ from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatVector
 
 _MODEL_BY_TYPE: dict[str, type[TideModel]] = {
-    "mdr": DetectionRule,
-    "dom": DetectionObjective,
-    "tvm": ThreatVector,
+    "rule": DetectionRule,
+    "objective": DetectionObjective,
+    "threat": ThreatVector,
 }
 
 
@@ -39,9 +39,9 @@ def validate_raw_payload(payload: dict[str, Any], object_type: str) -> Validatio
     if cls is None:
         return ValidationResult(ok=False, errors=[f"Unknown object type {object_type!r}"])
     try:
-        if object_type == "mdr":
+        if object_type == "rule":
             DetectionRule.from_yaml_dict(payload)
-        elif object_type == "dom":
+        elif object_type == "objective":
             DetectionObjective.from_yaml_dict(payload)
         else:
             ThreatVector.from_yaml_dict(payload)

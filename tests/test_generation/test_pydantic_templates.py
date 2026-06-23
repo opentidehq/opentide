@@ -10,11 +10,11 @@ from opentide.generation.pydantic_templates import (
 
 
 def test_core_template_models_match_schema_models() -> None:
-    assert set(CORE_TEMPLATE_MODELS) == {"mdr", "dom", "tvm"}
+    assert set(CORE_TEMPLATE_MODELS) == {"rule", "objective", "threat"}
 
 
 def test_load_core_template_source_returns_properties() -> None:
-    source = load_core_template_source("mdr")
+    source = load_core_template_source("rule")
     assert "properties" in source
     assert "required" in source
 

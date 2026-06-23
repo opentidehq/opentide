@@ -15,6 +15,7 @@ from opentide.models.objective import DetectionObjective
 from opentide.models.results import ValidationResult
 from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatVector
+from opentide.models.visibility import VisibilityConfig
 from opentide.platforms.registry import PlatformsRegistry
 
 IndexManager = index_mod.IndexManager
@@ -63,19 +64,19 @@ class OpenTideRegistry:
         objects = self._index["objects"]
         files = self._index.get("files", {})
         self._rules = {}
-        for uuid, data in objects.get("mdr", {}).items():
-            file_path = _resolve_file("mdr", files.get(uuid), self._index)
+        for uuid, data in objects.get("rule", {}).items():
+            file_path = _resolve_file("rule", files.get(uuid), self._index)
             from opentide.loading.rule_loader import load_rule_from_dict
 
             rule = load_rule_from_dict(data, file=file_path)
             self._rules[uuid] = rule.bind_registry(self)
         self._threats = {}
-        for uuid, data in objects.get("tvm", {}).items():
+        for uuid, data in objects.get("threat", {}).items():
             self._threats[uuid] = ThreatVector.from_yaml_dict(data)
         self._objectives = {}
         from opentide.loading.objective_loader import load_objective_from_dict
 
-        for uuid, data in objects.get("dom", {}).items():
+        for uuid, data in objects.get("objective", {}).items():
             self._objectives[uuid] = load_objective_from_dict(data)
 
     @property
@@ -125,7 +126,7 @@ class OpenTideRegistry:
     def validate_rule(self, rule: DetectionRule) -> ValidationResult:
         from opentide.validation.pipeline import validate_object
 
-        return validate_object(rule, "mdr")
+        return validate_object(rule, "rule")
 
     def document_rule(self, rule: DetectionRule) -> str:
         from opentide.documentation.rule_export import document_detection_rule
@@ -285,18 +286,29 @@ class _VisibilityConfig:
     def Index(self) -> dict[str, Any]:
         return dict(self._index["configurations"].get("visibility", {}))
 
-    @property
-    def visibility(self) -> Any:
-        import sys
-
-        from opentide.core.root import repository_root
-
-        root = str(repository_root())
-        if root not in sys.path:
-            sys.path.append(root)
+    def _load(self) -> VisibilityConfig | None:
         from opentide.loading.config_loader import ConfigurationsLoader
 
         return ConfigurationsLoader.load_visibility(self.Index)
+
+    @property
+    def visibility(self) -> VisibilityConfig | None:
+        return self._load()
+
+    @property
+    def assets(self) -> list[Any] | None:
+        loaded = self._load()
+        return loaded.assets if loaded else None
+
+    @property
+    def logsources(self) -> list[Any] | None:
+        loaded = self._load()
+        return loaded.logsources if loaded else None
+
+    @property
+    def detectors(self) -> list[Any] | None:
+        loaded = self._load()
+        return loaded.detectors if loaded else None
 
 
 @dataclass(frozen=True)
@@ -450,19 +462,19 @@ class _ModelsAccessor:
         return dict(self._index["objects"])
 
     @property
-    def mdr(self) -> dict[str, Any]:
-        return cast(dict[str, Any], self.Index.get("mdr", {}))
+    def rules(self) -> dict[str, Any]:
+        return cast(dict[str, Any], self.Index.get("rule", {}))
 
     @property
-    def dom(self) -> dict[str, Any]:
-        return cast(dict[str, Any], self.Index.get("dom", {}))
+    def objectives(self) -> dict[str, Any]:
+        return cast(dict[str, Any], self.Index.get("objective", {}))
 
     @property
-    def tvm(self) -> dict[str, Any]:
-        return cast(dict[str, Any], self.Index.get("tvm", {}))
+    def threats(self) -> dict[str, Any]:
+        return cast(dict[str, Any], self.Index.get("threat", {}))
 
     @property
-    def signal(self) -> dict[str, Any]:
+    def signals(self) -> dict[str, Any]:
         return cast(dict[str, Any], self.Index.get("signal", {}))
 
     @property
@@ -471,34 +483,38 @@ class _ModelsAccessor:
 
     @property
     def chaining(self) -> dict[str, Any]:
-        return IndexManager.compute_chains(self.tvm)
+        return IndexManager.compute_chains(self.threats)
 
     @property
     def FlatIndex(self) -> dict[str, Any]:
-        return {**self.tvm, **self.dom, **self.signal, **self.mdr}
+        return {**self.threats, **self.objectives, **self.signals, **self.rules}
+
+    @property
+    def Rules(self) -> dict[str, DetectionRule]:
+        return self._typed_rules()
 
     @property
     def MDR(self) -> dict[str, DetectionRule]:
-        return self._typed_mdr()
+        return self.Rules
 
     @property
     def DOM(self) -> dict[str, DetectionObjective] | None:
         return self._objectives or None
 
     @property
-    def Signal(self) -> dict[str, Any]:
-        return self.signal
+    def Signals(self) -> dict[str, Any]:
+        return self.signals
 
-    def _typed_mdr(self) -> dict[str, DetectionRule]:
-        """Typed MDR access for deployers."""
+    def _typed_rules(self) -> dict[str, DetectionRule]:
+        """Typed rule access for deployers."""
         from opentide.loading.rule_loader import load_rule_from_dict
 
         if self._rules:
             return dict(self._rules)
         files = self._index.get("files", {})
         typed: dict[str, DetectionRule] = {}
-        for uuid, data in self.mdr.items():
-            file_path = _resolve_file("mdr", files.get(uuid), self._index)
+        for uuid, data in self.rules.items():
+            file_path = _resolve_file("rule", files.get(uuid), self._index)
             typed[uuid] = load_rule_from_dict(data, file=file_path)
         return typed
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core.root import repository_root
+from opentide.models.object_types import RULE, SCHEMA_IDENTIFIERS
 
 
 class LegacyObjectPatch:
@@ -27,18 +28,25 @@ class LegacyObjectPatch:
     def tide_1_patch(self, model: dict[str, Any], model_type: str) -> dict[str, Any]:
         """Apply on-the-fly micro-patching for staging validation."""
         legacy_uuid_mapping = self.legacy_uuid_mapping
+
         if (
             os.getenv("CI_COMMIT_REF_NAME") == "main"
             and os.getenv("DEPLOYMENT_PLAN") not in ["PRODUCTION", "STAGING"]
-            and (model_type != "mdr")
+            and model_type != RULE
         ):
             return model
+
         if model.get("metadata", {}).get("schema"):
             return model
+
         if not model.get("metadata"):
             model["metadata"] = model.pop("meta")
+
         if not model.get("metadata", {}).get("schema"):
-            model["metadata"]["schema"] = f"{model_type.lower()}::2.0"
+            model["metadata"]["schema"] = SCHEMA_IDENTIFIERS.get(
+                model_type.lower(), f"{model_type.lower()}::1.0"
+            )
+
         if not model.get("metadata", {}).get("uuid"):
             if "uuid" in model:
                 model["metadata"]["uuid"] = model.pop("uuid")
@@ -50,17 +58,21 @@ class LegacyObjectPatch:
                     model["metadata"]["uuid"] = str(uuid.uuid4())
             else:
                 model["metadata"]["uuid"] = str(uuid.uuid4())
+
         if legacy_uuid_mapping:
             if old_ids := model.get("threat", {}).get("actors"):
                 model["threat"]["actors"] = [
                     legacy_uuid_mapping[old]["uuid"] if old in legacy_uuid_mapping else old
                     for old in old_ids
                 ]
+
             if old_ids := model.get("detection", {}).get("vectors"):
                 model["detection"]["vectors"] = [
                     legacy_uuid_mapping[old]["uuid"] if old in legacy_uuid_mapping else old
                     for old in old_ids
                 ]
+
             if (old := model.get("detection_model")) and old in legacy_uuid_mapping:
                 model["detection_model"] = legacy_uuid_mapping[old]["uuid"]
+
         return model

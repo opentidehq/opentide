@@ -18,7 +18,7 @@ def test_playbook_map_run_writes_excel(tmp_path, monkeypatch) -> None:
     }
 
     mock_opentide = MagicMock()
-    mock_opentide.Models.mdr = mock_mdr
+    mock_opentide.Models.rules = mock_mdr
 
     mock_df = MagicMock()
     with (

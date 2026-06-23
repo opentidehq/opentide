@@ -256,13 +256,13 @@ def backlink_resolver(model_uuid:str,
     icon = ICONS[model_type]
 
     if model_type == "signal":
-        doc_path = "../" + DOCUMENTATION_CONFIG.object_names["dom"] + "/"
+        doc_path = "../" + DOCUMENTATION_CONFIG.object_names["objective"] + "/"
     else:
         doc_path = "../" + DOCUMENTATION_CONFIG.object_names[model_type] + "/"
         hover_content = ""
 
     def mdr_statuses(mdr_id):
-        mdr_configs = MODELS_INDEX["mdr"][mdr_id]["configurations"]
+        mdr_configs = MODELS_INDEX["rule"][mdr_id]["configurations"]
         system_statuses = {}
         for system in mdr_configs:
             sys_status = mdr_configs[system]["status"]
@@ -271,15 +271,15 @@ def backlink_resolver(model_uuid:str,
 
         return [f"[{s}] : {status}" for s, status in system_statuses.items()]
 
-    if model_type == "tvm":
+    if model_type == "threat":
         hover_content = model_value(model_uuid, "description")
-    if model_type == "dom":
-        objective_data = OpenTide.Models.DOM[model_uuid]
+    if model_type == "objective":
+        objective_data = OpenTide.Objectives[model_uuid]
         hover_content = objective_data.objective.description
 
     if model_type == "signal":
-        signal_data = OpenTide.Models.Signal[model_uuid]
-        objective_data = OpenTide.Models.DOM[signal_data.parent]
+        signal_data = OpenTide.Models.Signals[model_uuid]
+        objective_data = OpenTide.Objectives[signal_data.parent]
         if current_page:
             # If we're on the current DOM page, we should just do an anchor and no need to add
             # the full context
@@ -292,7 +292,7 @@ def backlink_resolver(model_uuid:str,
             hover_content = signal_data.description
             # We point to the parent objective wiki page with an anchor to the signal name
             file_link = objective_data.name + f"#{signal_data.name.replace(' ', '-').lower()}"
-    elif model_type == "mdr":
+    elif model_type == "rule":
         model_name = model_data["name"]
 
         backlink_name = model_name.replace("_", " ")
@@ -311,7 +311,7 @@ def backlink_resolver(model_uuid:str,
     if DOCUMENTATION_TARGET in TARGET_WITH_DASH_PATHS:
         if UUID_PERMALINKS:
             if model_type == "signal":
-                signal_data = OpenTide.Models.Signal[model_uuid]
+                signal_data = OpenTide.Models.Signals[model_uuid]
                 parent_uuid = signal_data.parent
                 file_link = doc_path + parent_uuid
             else:

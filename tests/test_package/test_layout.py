@@ -57,9 +57,9 @@ def test_bundled_global_config_objects() -> None:
     global_toml = ROOT / "src/opentide/data/configurations/global.toml"
     assert global_toml.is_file()
     text = global_toml.read_text(encoding="utf-8")
-    assert '"dom"' in text
+    assert '"objective"' in text
     assert '"cdm"' not in text
-    assert 'objects = [ "tvm", "dom", "mdr" ]' in text
+    assert 'objects = [ "threat", "objective", "rule" ]' in text
     assert "Framework/Vocabulary" not in text
 
 

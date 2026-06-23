@@ -7,14 +7,15 @@ from typing import Any, cast
 from opentide.generation.schema import model_json_schema
 from opentide.models.base import TideModel, field_json_schema_extra
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
+from opentide.models.object_types import OBJECTIVE, RULE, THREAT
 from opentide.models.objective import DetectionObjective
 from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatVector
 
 CORE_SCHEMA_MODELS: dict[str, type[TideModel]] = {
-    "mdr": DetectionRule,
-    "dom": DetectionObjective,
-    "tvm": ThreatVector,
+    THREAT: ThreatVector,
+    OBJECTIVE: DetectionObjective,
+    RULE: DetectionRule,
 }
 
 DEFINITION_MODELS: dict[str, type[TideModel]] = {
@@ -22,12 +23,11 @@ DEFINITION_MODELS: dict[str, type[TideModel]] = {
     "references": ObjectReferences,
 }
 
-CORE_ROOT_EXTRAS: dict[str, dict[str, Any]] = {
-    "mdr": {
-        "title": "MDR Schema validator",
-        "description": "A Managed Detection Rule is ...",
+_CORE_ROOT_EXTRAS_BASE: dict[str, dict[str, Any]] = {
+    RULE: {
+        "title": "Detection Rule Schema",
+        "description": "A detection rule defines how a detection opportunity is implemented.",
         "additionalProperties": False,
-        "tide.placeholders": {"SCHEMA_VERSION": "mdr::2.1"},
         "required": ["name", "response", "description", "configurations"],
         "tide.template.force-required": ["metadata"],
         "anyOf": [{"required": ["metadata"]}, {"required": ["meta"]}],
@@ -41,9 +41,9 @@ CORE_ROOT_EXTRAS: dict[str, dict[str, Any]] = {
             "description": {
                 "tide.template.spacer": True,
                 "tide.template.multiline": True,
-                "tide.template.config.default": "schema.templates.mdr::description",
+                "tide.template.config.default": "schema.templates.rule::description",
             },
-            "detection_model": {"tide.vocab": "dom"},
+            "detection_model": {"tide.vocab": OBJECTIVE},
             "references": {"tide.meta.definition": True},
             "configurations": {
                 "title": "Detection System Technical Setup",
@@ -51,10 +51,9 @@ CORE_ROOT_EXTRAS: dict[str, dict[str, Any]] = {
             },
         },
     },
-    "dom": {
+    OBJECTIVE: {
         "title": "Detection Objective Schema",
         "additionalProperties": False,
-        "tide.placeholders": {"SCHEMA_VERSION": "dom::2.0"},
         "required": ["name", "metadata", "objective", "composition"],
         "tide.template.force-required": ["metadata"],
         "property_extras": {
@@ -62,10 +61,9 @@ CORE_ROOT_EXTRAS: dict[str, dict[str, Any]] = {
             "references": {"tide.meta.definition": True},
         },
     },
-    "tvm": {
+    THREAT: {
         "title": "Threat Vector Schema",
         "additionalProperties": False,
-        "tide.placeholders": {"SCHEMA_VERSION": "tvm::2.0"},
         "required": ["name", "criticality", "metadata", "threat"],
         "tide.template.force-required": ["metadata"],
         "property_extras": {
@@ -74,6 +72,18 @@ CORE_ROOT_EXTRAS: dict[str, dict[str, Any]] = {
         },
     },
 }
+
+
+def _core_root_extras() -> dict[str, dict[str, Any]]:
+    extras: dict[str, dict[str, Any]] = {}
+    for key, model in CORE_SCHEMA_MODELS.items():
+        base = dict(_CORE_ROOT_EXTRAS_BASE.get(key, {}))
+        base["tide.placeholders"] = {"SCHEMA_VERSION": model.schema_identifier()}
+        extras[key] = base
+    return extras
+
+
+CORE_ROOT_EXTRAS = _core_root_extras()
 
 
 def build_definition_index() -> dict[str, dict[str, Any]]:
@@ -110,7 +120,7 @@ def build_model_schema_source(
 def build_core_schema_source(model_key: str) -> dict[str, Any]:
     """Build template/schema source for a core object model key."""
     model = CORE_SCHEMA_MODELS[model_key]
-    extras = dict(CORE_ROOT_EXTRAS.get(model_key, {}))
+    extras = dict(_core_root_extras().get(model_key, {}))
     return build_model_schema_source(model, root_extras=extras)
 
 

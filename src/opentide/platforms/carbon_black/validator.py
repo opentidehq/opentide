@@ -1,50 +1,81 @@
 import os
 import sys
+
 from cbc_sdk.rest_api import CBCloudAPI
+
+
+from opentide.core.logging import log
 from opentide.core.debug import DebugEnvironment
 from opentide.platforms.plugins import QueryValidator
 from opentide.core.registry import OpenTide
 from opentide.platforms.carbon_black.client import CarbonBlackCloudConnection
-import structlog
-logger = structlog.get_logger('opentide.platforms.carbon_black.validator')
 
 class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator):
 
-    def check_query(self, mdr: dict, service: CBCloudAPI):
-        query: str = mdr['configurations']['carbon_black_cloud'].get('query')
-        mdr_uuid = mdr.get('uuid') or mdr['metadata']['uuid']
+    def check_query(self, mdr:dict, service:CBCloudAPI):
+        query:str = mdr["configurations"]["carbon_black_cloud"].get("query")
+        mdr_uuid = mdr.get('uuid') or mdr["metadata"]["uuid"]
         if not query:
-            os.environ['VALIDATION_ERROR_RAISED'] = 'True'
-            logger.critical('missing_query_in_mdr', detail=f"{mdr.get('name')} ({mdr_uuid})")
+            os.environ["VALIDATION_ERROR_RAISED"] = "True"
+            log("FATAL", "Missing query in MDR", f"{mdr.get('name')} ({mdr_uuid})")
             return
+
         try:
             result = service.validate_process_query(query)
             if result:
-                logger.info('the_query_is_a_valid_cbc_search')
+                log("SUCCESS", "The query is a valid CBC search")
             else:
-                logger.critical('fatal_error', detail=f"The CBC query is invalid for : {mdr['name']} ({mdr_uuid})", advice='Ensure a value is included and slashes, colons, and spaces are manually escaped')
+                log("FATAL",
+                    f"The CBC query is invalid for : {mdr['name']} ({mdr_uuid})",
+                    # Same error message as displayed on the GUI
+                    "Ensure a value is included and slashes, colons, and spaces are manually escaped")
         except Exception as error:
-            logger.critical('failed_to_validate_the_query_on_the_cbc_tenant')
+            log("FATAL", "Failed to validate the query on the CBC tenant")
             raise error
 
     def validate(self, deployment: list[str]):
         if not deployment:
-            raise Exception('DEPLOYMENT NOT FOUND')
+            raise Exception("DEPLOYMENT NOT FOUND")
+
         self.configure_proxy()
-        ORG_KEY = self.CBC_SECRETS[self.VALIDATION_ORGANIZATION]['org_key']
-        TOKEN = self.CBC_SECRETS[self.VALIDATION_ORGANIZATION]['token']
-        service = CBCloudAPI(url=self.CBC_URL, token=TOKEN, org_key=ORG_KEY, ssl_verify=self.SSL_ENABLED)
-        logger.info('successfully_connected_to_carbon_black_cloud_on_tenant', detail=self.VALIDATION_ORGANIZATION)
+
+        ORG_KEY = self.CBC_SECRETS[self.VALIDATION_ORGANIZATION]["org_key"]
+        TOKEN = self.CBC_SECRETS[self.VALIDATION_ORGANIZATION]["token"]
+
+        service = CBCloudAPI(
+                    url=self.CBC_URL,
+                    token=TOKEN,
+                    org_key=ORG_KEY,
+                    ssl_verify=self.SSL_ENABLED
+                )
+        log(
+            "SUCCESS",
+            "Successfully connected to Carbon Black Cloud on tenant",
+            self.VALIDATION_ORGANIZATION,
+        )
+
+        # Start deployment routine
         for mdr in deployment:
-            mdr_data: dict = OpenTide.Models.mdr[mdr]
-            mdr_uuid = mdr_data.get('uuid') or mdr_data['metadata']['uuid']
-            if self.DEPLOYER_IDENTIFIER in mdr_data['configurations'].keys():
-                logger.info('validating_cbc_lucene_query', detail=f"{mdr_data['name']} ({mdr_uuid}")
+            mdr_data:dict = OpenTide.Models.rules[mdr]
+            mdr_uuid = mdr_data.get('uuid') or mdr_data["metadata"]["uuid"]
+
+            # Check if modified MDR contains a platform entry (by safety, but should not happen since
+            # the orchestrator will filter for the platform)
+            if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"].keys():
+                # Connection routine, if not connected yet.
+                log("ONGOING",
+                    "Validating CBC Lucene Query",
+                    f"{mdr_data['name']} ({mdr_uuid}")
                 self.check_query(mdr_data, service)
             else:
-                logger.info('mdr_skipped', mdr_name=mdr_data.get('name'))
+                log(
+                    "SKIP",
+                    f"🛑 Skipping {mdr_data.get('name')} as does not contain a Splunk configuration section",
+                )
+
 
 def declare():
     return CarbonBlackCloudQueryValidator()
-if __name__ == '__main__' and DebugEnvironment.ENABLED:
+
+if __name__ == "__main__" and DebugEnvironment.ENABLED:
     CarbonBlackCloudQueryValidator().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)

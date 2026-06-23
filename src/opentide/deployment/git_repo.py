@@ -75,8 +75,8 @@ class GitRepository:
                                  sha = str(commit.hexsha))
 
 def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
-    MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.mdr)
-    MDR_PATH_RAW = OpenTide.Configurations.Global.Paths.Tide._raw["mdr"]
+    MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
+    MDR_PATH_RAW = OpenTide.Configurations.Global.Paths.Tide._raw["rule"]
     MDR_PATH_RAW = MDR_PATH_RAW.replace(r"/", r"\/")
 
     mdr_path_regex = rf"^.*{MDR_PATH_RAW}[^\/]+(\.yaml|\.yml)$"

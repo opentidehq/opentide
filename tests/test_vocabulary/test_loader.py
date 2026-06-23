@@ -134,8 +134,8 @@ def test_parse_vocabulary_document() -> None:
 def test_parse_vocabulary_document_id_keyed() -> None:
     raw = {
         "name": "Rules",
-        "field": "mdr",
-        "key": "id",
+        "field": "rule",
+        "model": True,
         "keys": [{"id": "uuid-1", "name": "Rule One"}],
     }
     vocabulary = parse_vocabulary_document(raw, source="rules.vocab.toml")
@@ -315,3 +315,18 @@ def test_stix_parse_techniques_fixture(tmp_path: Path) -> None:
     assert techniques[0]["id"] == "T1548"
     assert techniques[0]["name"] == "Abuse Elevation Control Mechanism"
     assert "Defense Evasion" in techniques[0]["tide.vocab.stages"]
+
+
+def test_parse_vocabulary_document_skips_malformed_entries() -> None:
+    raw = {
+        "name": "Test",
+        "field": "test",
+        "key": "name",
+        "keys": [
+            {"name": "Good"},
+            "bad-entry",
+            {"description": "missing name"},
+        ],
+    }
+    vocabulary = parse_vocabulary_document(raw, source="test.vocab.toml")
+    assert list(vocabulary.entries) == ["Good"]

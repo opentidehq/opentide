@@ -22,9 +22,9 @@ def test_object_summary_uses_name_or_title() -> None:
 
 def test_get_object_returns_none_when_missing(monkeypatch) -> None:
     mock_models = MagicMock()
-    mock_models.mdr = {}
-    mock_models.tvm = {}
-    mock_models.dom = {}
+    mock_models.rules = {}
+    mock_models.threats = {}
+    mock_models.objectives = {}
     with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
         mock_ot.Models = mock_models
         mock_ot.initialise = MagicMock()
@@ -34,9 +34,9 @@ def test_get_object_returns_none_when_missing(monkeypatch) -> None:
 def test_search_catalog_by_uuid(monkeypatch) -> None:
     rule_uuid = "00000000-0000-4000-8000-000000000099"
     mock_models = MagicMock()
-    mock_models.mdr = {rule_uuid: {"name": "Found Rule", "status": "STAGING"}}
-    mock_models.tvm = {}
-    mock_models.dom = {}
+    mock_models.rules = {rule_uuid: {"name": "Found Rule", "status": "STAGING"}}
+    mock_models.threats = {}
+    mock_models.objectives = {}
     with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
         mock_ot.Models = mock_models
         mock_ot.initialise = MagicMock()
@@ -47,12 +47,12 @@ def test_search_catalog_by_uuid(monkeypatch) -> None:
 
 def test_search_catalog_keyword_filter(monkeypatch) -> None:
     mock_models = MagicMock()
-    mock_models.mdr = {
+    mock_models.rules = {
         "uuid-a": {"name": "Alpha Rule", "description": "detects alpha"},
         "uuid-b": {"name": "Beta Rule", "description": "detects beta"},
     }
-    mock_models.tvm = {}
-    mock_models.dom = {}
+    mock_models.threats = {}
+    mock_models.objectives = {}
     with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
         mock_ot.Models = mock_models
         mock_ot.initialise = MagicMock()
@@ -72,7 +72,7 @@ def test_get_chaining_graph_not_found(monkeypatch) -> None:
 
 def test_coverage_analysis_by_technique(monkeypatch) -> None:
     mock_models = MagicMock()
-    mock_models.mdr = {
+    mock_models.rules = {
         "rule-1": {"tags": {"techniques": ["T1059"]}},
     }
     with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:

@@ -203,7 +203,7 @@ class HarfangLabDeploy(RuleDeployer):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if isinstance(mdr, str):
-                loaded_mdr.append(OpenTide.Models.MDR[mdr])
+                loaded_mdr.append(OpenTide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr

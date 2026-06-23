@@ -20,7 +20,7 @@ def resource_index() -> str:
 
 def resource_rules() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Models.mdr)
+    return _json_resource(OpenTide.Models.rules)
 
 
 def resource_rule(uuid: str) -> str:
@@ -32,7 +32,7 @@ def resource_rule(uuid: str) -> str:
 
 def resource_threats() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Models.tvm)
+    return _json_resource(OpenTide.Models.threats)
 
 
 def resource_threat(uuid: str) -> str:
@@ -44,7 +44,7 @@ def resource_threat(uuid: str) -> str:
 
 def resource_objectives() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Models.dom)
+    return _json_resource(OpenTide.Models.objectives)
 
 
 def resource_objective(uuid: str) -> str:
@@ -57,14 +57,18 @@ def resource_objective(uuid: str) -> str:
 def resource_schema(object_type: str) -> str:
     ensure_initialised()
     schemas = OpenTide.JsonSchemas.Index
-    key = {"rule": "mdr", "threat": "tvm", "objective": "dom"}.get(object_type, object_type)
+    key = {"rule": "rule", "threat": "threat", "objective": "objective"}.get(
+        object_type, object_type
+    )
     return _json_resource(schemas.get(key, {}))
 
 
 def resource_template(object_type: str) -> str:
     ensure_initialised()
     templates = OpenTide.Templates.Index
-    key = {"rule": "mdr", "threat": "tvm", "objective": "dom"}.get(object_type, object_type)
+    key = {"rule": "rule", "threat": "threat", "objective": "objective"}.get(
+        object_type, object_type
+    )
     return _json_resource(templates.get(key, {}))
 
 
