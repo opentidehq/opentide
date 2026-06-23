@@ -1,11 +1,7 @@
-"""HarfangLab platform plugin."""
+"""harfanglab platform plugin."""
 
 from __future__ import annotations
 
-from typing import Any
+from opentide.platforms.harfanglab.deployer import declare
 
-
-def declare() -> Any:
-    from Engines.deployment.harfanglab import declare as _declare
-
-    return _declare()
+__all__ = ["declare"]

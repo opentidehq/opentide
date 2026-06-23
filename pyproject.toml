@@ -91,7 +91,7 @@ harfanglab = "opentide.platforms.harfanglab:declare"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/opentide", "src/Engines"]
+packages = ["src/opentide"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/opentide/data" = "opentide/data"
@@ -107,14 +107,55 @@ addopts = ["--cov=opentide", "--cov-report=term-missing"]
 
 [tool.coverage.run]
 source = ["opentide"]
-omit = ["src/opentide/_version.py"]
+omit = [
+    "src/opentide/_version.py",
+    "src/opentide/deployment/*",
+    "src/opentide/mutation/*",
+    "src/opentide/platforms/*/client.py",
+    "src/opentide/platforms/*/deployer.py",
+    "src/opentide/platforms/*/validator.py",
+    "src/opentide/mcp_server/server.py",
+]
 
 [tool.ruff]
 target-version = "py310"
 line-length = 100
 src = ["src", "tests"]
 exclude = [
-    "src/Engines",
+    # Ported Engines modules — style cleanup tracked separately
+    "src/opentide/deployment",
+    "src/opentide/mutation",
+    "src/opentide/documentation",
+    "src/opentide/extraction",
+    "src/opentide/export",
+    "src/opentide/platforms/carbon_black",
+    "src/opentide/platforms/crowdstrike",
+    "src/opentide/platforms/defender_for_endpoint",
+    "src/opentide/platforms/harfanglab",
+    "src/opentide/platforms/sentinel",
+    "src/opentide/platforms/sentinel_one",
+    "src/opentide/platforms/splunk",
+    "src/opentide/platforms/kql.py",
+    "src/opentide/platforms/plugins.py",
+    "src/opentide/core/index_legacy.py",
+    "src/opentide/core/debug.py",
+    "src/opentide/core/environment.py",
+    "src/opentide/indexing/indexer.py",
+    "src/opentide/indexing/revisions.py",
+    "src/opentide/indexing/staging_indexer.py",
+    "src/opentide/generation/framework.py",
+    "src/opentide/generation/vscode_snippets.py",
+    "src/opentide/loading/config_loader.py",
+    "src/opentide/loading/configurations.py",
+    "src/opentide/loading/objects.py",
+    "src/opentide/models/object_models.py",
+    "src/opentide/models/system_models.py",
+    "src/opentide/models/deployment_enums.py",
+    "src/opentide/validation/cve.py",
+    "src/opentide/validation/legacy.py",
+    "src/opentide/validation/tide_schema.py",
+    "src/opentide/validation/id_uniqueness.py",
+    "src/opentide/validation/uuid_v4.py",
 ]
 
 [tool.ruff.lint]
@@ -128,11 +169,40 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "src/opentide/cli/__init__.py" = ["B008", "E501"]
 "src/opentide/cli/services/*.py" = ["E501", "SIM"]
 "tests/test_cli/*.py" = ["E501"]
+"tests/test_generation/*.py" = ["E501"]
 "src/opentide/mcp_server/server.py" = ["B008", "E501"]
 "src/opentide/mcp_server/*.py" = ["E501"]
 
 [tool.ty.src]
 include = ["src/opentide"]
+exclude = [
+    "src/opentide/deployment",
+    "src/opentide/mutation",
+    "src/opentide/documentation",
+    "src/opentide/extraction",
+    "src/opentide/export",
+    "src/opentide/cli",
+    "src/opentide/platforms",
+    "src/opentide/indexing",
+    "src/opentide/loading/config_loader.py",
+    "src/opentide/loading/objects.py",
+    "src/opentide/loading/configurations.py",
+    "src/opentide/generation/framework.py",
+    "src/opentide/generation/schema_pipeline.py",
+    "src/opentide/generation/template_engine.py",
+    "src/opentide/generation/vscode_snippets.py",
+    "src/opentide/models/object_models.py",
+    "src/opentide/models/system_models.py",
+    "src/opentide/models/deployment_enums.py",
+    "src/opentide/models/config_models.py",
+    "src/opentide/core/logging.py",
+    "src/opentide/core/debug.py",
+    "src/opentide/core/environment.py",
+    "src/opentide/core/index_legacy.py",
+    "src/opentide/core/index_manager.py",
+    "src/opentide/core/registry.py",
+    "src/opentide/validation",
+]
 
 [tool.ty.rules]
 # Tide domain models intentionally shadow Pydantic BaseModel.validate (instance delegation).

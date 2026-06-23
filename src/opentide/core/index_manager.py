@@ -48,7 +48,7 @@ class IndexManager:
         root_str = str(root)
         if root_str not in sys.path:
             sys.path.append(root_str)
-        from Engines.indexing.indexer import indexer
+        from opentide.indexing.indexer import indexer
 
         index = indexer()
         if not index:
@@ -64,7 +64,7 @@ class IndexManager:
         root_str = str(root)
         if root_str not in sys.path:
             sys.path.append(root_str)
-        from Engines.modules.index import IndexManager as LegacyIndexManager
+        from opentide.core.index_legacy import IndexManager as LegacyIndexManager
 
         return cast(dict[str, Any], LegacyIndexManager.reconcile_staging(deepcopy(index)))
 
@@ -76,7 +76,7 @@ class IndexManager:
         root_str = str(root)
         if root_str not in sys.path:
             sys.path.append(root_str)
-        from Engines.modules.index import IndexManager as LegacyIndexManager
+        from opentide.core.index_legacy import IndexManager as LegacyIndexManager
 
         return cast(dict[str, Any], LegacyIndexManager.return_paths(tier=tier))
 
@@ -88,6 +88,6 @@ class IndexManager:
         root_str = str(root)
         if root_str not in sys.path:
             sys.path.append(root_str)
-        from Engines.modules.index import IndexManager as LegacyIndexManager
+        from opentide.core.index_legacy import IndexManager as LegacyIndexManager
 
         return cast(dict[str, Any], LegacyIndexManager.compute_chains(tvm))

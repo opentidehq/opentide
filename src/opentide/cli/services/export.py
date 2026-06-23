@@ -14,12 +14,12 @@ if TYPE_CHECKING:
 def run_export_target(target: ExportTarget) -> None:
     """Run a single export target."""
     if target is ExportTarget.navigator:
-        from Engines.export import attack_navigator_layer
+        from opentide.export import attack_navigator_layer
 
         attack_navigator_layer.run()
         return
     if target is ExportTarget.table:
-        from Engines.export.table_export import TableExporter
+        from opentide.export.table_export import TableExporter
 
         TableExporter().run()
         return

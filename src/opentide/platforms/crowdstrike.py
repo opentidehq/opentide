@@ -1,11 +1,7 @@
-"""CrowdStrike Falcon platform plugin."""
+"""crowdstrike platform plugin."""
 
 from __future__ import annotations
 
-from typing import Any
+from opentide.platforms.crowdstrike.deployer import declare
 
-
-def declare() -> Any:
-    from Engines.deployment.crowdstrike import declare as _declare
-
-    return _declare()
+__all__ = ["declare"]

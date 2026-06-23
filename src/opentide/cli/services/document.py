@@ -11,12 +11,12 @@ if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
 _SCOPE_RUNNERS: dict[DocumentScope, tuple[str, str]] = {
-    DocumentScope.vocabularies: ("Engines.documentation.vocabularies", "run"),
-    DocumentScope.metaschemas: ("Engines.documentation.metaschemas", "run"),
-    DocumentScope.models: ("Engines.documentation.models", "run"),
-    DocumentScope.objectives: ("Engines.documentation.dom", "run"),
-    DocumentScope.rules: ("Engines.documentation.mdr", "run"),
-    DocumentScope.navigation: ("Engines.documentation.wiki_navigation", "run"),
+    DocumentScope.vocabularies: ("opentide.documentation.vocabularies", "run"),
+    DocumentScope.metaschemas: ("opentide.documentation.metaschemas", "run"),
+    DocumentScope.models: ("opentide.documentation.models", "run"),
+    DocumentScope.objectives: ("opentide.documentation.dom", "run"),
+    DocumentScope.rules: ("opentide.documentation.mdr", "run"),
+    DocumentScope.navigation: ("opentide.documentation.wiki_navigation", "run"),
 }
 
 

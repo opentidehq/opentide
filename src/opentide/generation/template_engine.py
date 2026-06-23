@@ -232,7 +232,7 @@ def make_spaces(template_path: Path | str, metaschema: dict[str, Any]) -> bool:
         key = line.split(":")[0].replace(" ", "")
         force_space = "force_space" in line
         no_space = "no-space" in line
-        from Engines.modules.framework import get_value_metaschema
+        from opentide.generation.framework import get_value_metaschema
 
         spacer = get_value_metaschema(key.replace("#", ""), metaschema, "tide.template.spacer")
         key_type = get_value_metaschema(key.replace("#", ""), metaschema, "type")

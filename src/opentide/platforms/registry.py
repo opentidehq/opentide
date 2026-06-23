@@ -100,7 +100,7 @@ class PlatformsRegistry:
             return None
         _ensure_repo_on_path()
         try:
-            module = importlib.import_module(f"Engines.validation.{module_suffix}")
+            module = importlib.import_module(f"opentide.validation.{module_suffix}")
             return cast(QueryValidator, module.declare())
         except Exception:
             return None

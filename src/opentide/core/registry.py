@@ -8,6 +8,9 @@ from typing import Any, cast
 
 from opentide.core import index_manager as index_mod
 from opentide.core import runtime
+from opentide.core.environment import DebugHelpers  # noqa: F401
+from opentide.loading.compat import ObjectLoader  # noqa: F401
+from opentide.models.deployment_enums import DetectionPlatforms  # noqa: F401
 from opentide.models.objective import DetectionObjective
 from opentide.models.results import ValidationResult
 from opentide.models.rule import DetectionRule
@@ -269,7 +272,7 @@ class _DeploymentConfig:
         root = str(repository_root())
         if root not in sys.path:
             sys.path.append(root)
-        from Engines.modules.loaders.config_loader import ConfigurationsLoader
+        from opentide.loading.config_loader import ConfigurationsLoader
 
         return cast(list[Any], ConfigurationsLoader.load_statuses(self.Index["statuses"]))
 
@@ -295,7 +298,7 @@ class _VisibilityConfig:
         root = str(repository_root())
         if root not in sys.path:
             sys.path.append(root)
-        from Engines.modules.loaders.config_loader import ConfigurationsLoader
+        from opentide.loading.config_loader import ConfigurationsLoader
 
         return ConfigurationsLoader.load_visibility(self.Index)
 
@@ -395,7 +398,7 @@ class _VocabulariesAccessor:
         root = str(repository_root())
         if root not in sys.path:
             sys.path.append(root)
-        from Engines.modules.vocabulary import VocabularyLoader
+        from opentide.generation.vocabulary import VocabularyLoader
 
         return cast(dict[str, Any], VocabularyLoader.load_index(self._index.get("vocabs")))
 

@@ -1,11 +1,7 @@
-"""Microsoft Defender for Endpoint platform plugin."""
+"""defender for endpoint platform plugin."""
 
 from __future__ import annotations
 
-from typing import Any
+from opentide.platforms.defender_for_endpoint.deployer import declare
 
-
-def declare() -> Any:
-    from Engines.deployment.defender_for_endpoint import declare as _declare
-
-    return _declare()
+__all__ = ["declare"]

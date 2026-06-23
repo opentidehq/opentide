@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 def run_mutate_all() -> None:
     """Run full mutation pipeline (Orchestration/mutate.py parity)."""
-    from Engines.mutation import file_name, references, security_domain
+    from opentide.mutation import file_name, references, security_domain
 
     file_name.run()
     references.run()
@@ -23,8 +23,8 @@ def run_mutate_promote(files: list[str] | None = None) -> None:
     """Promote MDR status for modified files."""
     from pathlib import Path
 
-    from Engines.modules.deployment import DeploymentStrategy, modified_mdr_files
-    from Engines.mutation.promotion import PromoteMDR
+    from opentide.deployment import DeploymentStrategy, modified_mdr_files
+    from opentide.mutation.promotion import PromoteMDR
 
     plan = DeploymentStrategy.load_from_environment()
     raw_targets = files if files is not None else modified_mdr_files(plan)
@@ -33,19 +33,19 @@ def run_mutate_promote(files: list[str] | None = None) -> None:
 
 
 def run_mutate_rename() -> None:
-    from Engines.mutation import file_name
+    from opentide.mutation import file_name
 
     file_name.run()
 
 
 def run_mutate_references() -> None:
-    from Engines.mutation import references
+    from opentide.mutation import references
 
     references.run()
 
 
 def run_mutate_security_domain() -> None:
-    from Engines.mutation import security_domain
+    from opentide.mutation import security_domain
 
     security_domain.run()
 
