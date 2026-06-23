@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +58,7 @@ def _load_template(field: str) -> dict[str, Any]:
 def _stamp_source(doc: dict[str, Any], manifest: dict[str, Any]) -> None:
     doc["source"] = "mitre-attack"
     doc["source_version"] = manifest.get("version", "unknown")
-    doc["source_fetched_at"] = manifest.get("fetched_at") or datetime.now(UTC).isoformat()
+    doc["source_fetched_at"] = manifest.get("fetched_at") or datetime.now(timezone.utc).isoformat()
 
 
 def generate_attack_vocabs(*, fetch: bool = False) -> dict[str, int]:

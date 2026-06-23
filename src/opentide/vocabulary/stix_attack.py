@@ -103,7 +103,7 @@ def parse_techniques(
 
 
 def parse_groups(
-    objects: list[Mapping[str, Any]],
+    objects: Sequence[Mapping[str, Any]],
     *,
     prefix: str = "",
 ) -> list[dict[str, Any]]:
@@ -136,7 +136,7 @@ def parse_groups(
 
 
 def parse_mitigations(
-    objects: list[Mapping[str, Any]],
+    objects: Sequence[Mapping[str, Any]],
     *,
     prefix: str = "",
 ) -> list[dict[str, Any]]:
@@ -165,7 +165,7 @@ def parse_mitigations(
     return entries
 
 
-def parse_datasources(objects: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def parse_datasources(objects: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Extract data source and component entries from STIX objects."""
     sources: dict[str, dict[str, Any]] = {}
     for obj in objects:

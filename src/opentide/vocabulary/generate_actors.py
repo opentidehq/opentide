@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.request import urlopen
@@ -77,7 +77,7 @@ def generate_actors_vocabs(*, misp_url: str | None = None) -> int:
         doc["source_version"] = manifest.get("version", "unknown")
         doc["source_fetched_at"] = manifest.get("fetched_at", "")
     doc["source"] = "mitre-attack+misp"
-    doc["generated_at"] = datetime.now(UTC).isoformat()
+    doc["generated_at"] = datetime.now(timezone.utc).isoformat()
 
     write_vocab_file(_vocab_dir() / "actors.vocab.toml", doc)
     return len(actors)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
@@ -44,7 +44,7 @@ def fetch_latest_attack_stix(output_dir: Path) -> dict[str, Any]:
     manifest: dict[str, Any] = {
         "version": _normalise_release_version(tag),
         "tag": tag,
-        "fetched_at": datetime.now(UTC).isoformat(),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
         "bundles": {},
     }
 
