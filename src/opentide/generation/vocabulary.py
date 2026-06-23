@@ -1,4 +1,4 @@
-"""Typed vocabulary models, loader, and YAML validation."""
+"""Typed vocabulary models, loader, and TOML validation."""
 
 from __future__ import annotations
 
@@ -6,12 +6,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-import structlog
+from opentide.core.logging import log
 
-logger = structlog.get_logger("opentide.generation.vocabulary")
-VOCABULARY_YAML_SCHEMA: dict[str, Any] = {
+VocabKey = Literal["name", "id"]
+
+VOCABULARY_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["name", "field", "keys"],
     "properties": {
@@ -19,27 +20,38 @@ VOCABULARY_YAML_SCHEMA: dict[str, Any] = {
         "field": {"type": "string", "minLength": 1},
         "description": {"type": "string"},
         "icon": {"type": "string"},
+        "key": {"type": "string", "enum": ["name", "id"]},
         "model": {"type": "boolean"},
         "keys": {
             "type": "array",
-            "minItems": 1,
-            "items": {"type": "object", "anyOf": [{"required": ["id"]}, {"required": ["name"]}]},
+            "items": {
+                "type": "object",
+                "required": ["name"],
+            },
         },
         "stages": {
             "type": "array",
             "items": {
-                "type": "object",
-                "required": ["id"],
-                "properties": {
-                    "id": {"type": "string"},
-                    "name": {"type": "string"},
-                    "description": {"type": "string"},
-                    "icon": {"type": "string"},
-                },
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "object",
+                        "required": ["id"],
+                        "properties": {
+                            "id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                            "icon": {"type": "string"},
+                        },
+                    },
+                ]
             },
         },
     },
 }
+
+# Backward-compatible alias
+VOCABULARY_YAML_SCHEMA = VOCABULARY_SCHEMA
 
 
 class VocabularyLoadError(Exception):
@@ -55,9 +67,36 @@ def normalize_stages(stages: str | list[str] | None) -> list[str]:
     return list(stages)
 
 
-def entry_key_field(*, model: bool) -> str:
+def resolve_vocab_key(raw: Mapping[str, Any], *, source: str = "") -> VocabKey:
+    """Resolve entry keying from ``key`` or legacy ``model`` flag."""
+    if "key" in raw:
+        key = raw["key"]
+        if key not in ("name", "id"):
+            raise VocabularyLoadError(f"Invalid vocabulary key '{key}' in {source}")
+        return key
+    if raw.get("model"):
+        if source:
+            log("WARNING", "Deprecated 'model' flag; use key = \"id\"", source)
+        return "id"
+    return "name"
+
+
+def entry_key_field(*, key: VocabKey | None = None, model: bool | None = None) -> str:
     """Return the canonical key field for vocabulary entries."""
-    return "id" if model else "name"
+    if key is not None:
+        return key
+    if model:
+        return "id"
+    return "name"
+
+
+def is_id_keyed(metadata: Mapping[str, Any]) -> bool:
+    """Return whether entries are indexed by external id."""
+    if metadata.get("key") == "id":
+        return True
+    if metadata.get("key") == "name":
+        return False
+    return bool(metadata.get("model"))
 
 
 @dataclass(frozen=True)
@@ -66,12 +105,13 @@ class VocabularyMetadata:
     field: str = ""
     description: str = ""
     icon: str = ""
+    key: VocabKey = "name"
     model: bool = False
     stages: tuple[Mapping[str, Any], ...] = ()
     extra: Mapping[str, Any] = dc_field(default_factory=dict)
 
     def get(self, key: str, default: Any = None) -> Any:
-        if key in ("name", "field", "description", "icon", "model", "stages", "extra"):
+        if key in ("name", "field", "description", "icon", "key", "model", "stages", "extra"):
             value = getattr(self, key)
             if key == "stages":
                 return list(value) if value else default
@@ -84,6 +124,7 @@ class VocabularyMetadata:
             "name": self.name,
             "description": self.description,
             "icon": self.icon,
+            "key": self.key,
             "model": self.model,
             **dict(self.extra),
         }
@@ -142,68 +183,94 @@ class VocabularyDefinition:
         }
 
 
-def _validate_yaml_structure(raw: Mapping[str, Any], *, source: str) -> None:
+def _validate_document_structure(raw: Mapping[str, Any], *, source: str) -> None:
     if not isinstance(raw, Mapping):
-        raise VocabularyLoadError(f"Vocabulary YAML must be a mapping: {source}")
-    for required in ("name", "field", "keys"):
+        raise VocabularyLoadError(f"Vocabulary document must be a mapping: {source}")
+    for required in ("name", "field"):
         if required not in raw:
             raise VocabularyLoadError(
-                f"Missing required key '{required}' in vocabulary YAML: {source}"
+                f"Missing required key '{required}' in vocabulary document: {source}"
             )
-    keys = raw["keys"]
+    keys = raw.get("keys", [])
     if not isinstance(keys, list):
         raise VocabularyLoadError(f"Vocabulary 'keys' must be a list: {source}")
-    for index, entry in enumerate(keys):
-        if not isinstance(entry, Mapping):
-            raise VocabularyLoadError(f"Malformed vocabulary entry at index {index} in {source}")
-        if "id" not in entry and "name" not in entry:
-            raise VocabularyLoadError(
-                f"Vocabulary entry at index {index} missing 'id' or 'name' in {source}"
-            )
 
 
-def parse_yaml_vocabulary(raw: Mapping[str, Any], *, source: str = "") -> VocabularyDefinition:
-    """Parse a vocabulary YAML document into a typed definition."""
-    _validate_yaml_structure(raw, source=source)
+def parse_vocabulary_document(raw: Mapping[str, Any], *, source: str = "") -> VocabularyDefinition:
+    """Parse a vocabulary document into a typed definition."""
+    _validate_document_structure(raw, source=source)
+
+    vocab_key = resolve_vocab_key(raw, source=source)
     metadata_raw = {key: value for key, value in raw.items() if key not in ("field", "keys")}
-    is_model = bool(metadata_raw.get("model"))
+    key_field = entry_key_field(key=vocab_key)
     entries: dict[str, VocabularyEntry] = {}
-    for index, entry_data in enumerate(raw["keys"]):
+    seen_keys: set[str] = set()
+
+    for index, entry_data in enumerate(raw.get("keys", [])):
         if not isinstance(entry_data, Mapping):
-            logger.warning(
-                "event", detail=f"Skipping malformed vocabulary entry at index {index}", arg0=source
-            )
+            log("WARNING", f"Skipping malformed vocabulary entry at index {index}", source)
             continue
-        key_name = entry_data.get("id") if is_model else entry_data.get("name")
+        if "name" not in entry_data:
+            log("WARNING", f"Skipping entry missing 'name' at index {index}", source)
+            continue
+        if vocab_key == "id" and "id" not in entry_data:
+            log("WARNING", f"Skipping id-keyed entry missing 'id' at index {index}", source)
+            continue
+
+        key_name = entry_data.get(key_field)
         if not key_name:
-            logger.warning(
-                "event",
-                detail=f"Skipping vocabulary entry missing key field in {source}",
-                context_1=f"index={index}",
+            log(
+                "WARNING",
+                f"Skipping vocabulary entry missing key field in {source}",
+                f"index={index}",
             )
             continue
+        key_str = str(key_name)
+        if key_str in seen_keys:
+            raise VocabularyLoadError(
+                f"Duplicate entry key '{key_str}' in vocabulary {source} at index {index}"
+            )
+        seen_keys.add(key_str)
+
         try:
-            entry = _build_entry(entry_data, fallback_name=str(key_name))
+            entry = _build_entry(entry_data, fallback_name=str(entry_data["name"]))
         except VocabularyLoadError as exc:
-            logger.warning("event", detail=str(exc), arg0=source, advice=f"entry={key_name}")
+            log("WARNING", str(exc), source, f"entry={key_str}")
             continue
-        entries[str(key_name)] = entry
-    metadata = _build_metadata(metadata_raw, field=str(raw["field"]))
+        entries[key_str] = entry
+
+    metadata = _build_metadata(metadata_raw, field=str(raw["field"]), vocab_key=vocab_key)
     return VocabularyDefinition(metadata=metadata, entries=entries)
 
 
-def _build_metadata(raw: Mapping[str, Any], *, field: str) -> VocabularyMetadata:
-    known = {"name", "description", "icon", "model", "stages"}
+def parse_yaml_vocabulary(raw: Mapping[str, Any], *, source: str = "") -> VocabularyDefinition:
+    """Backward-compatible alias for :func:`parse_vocabulary_document`."""
+    return parse_vocabulary_document(raw, source=source)
+
+
+def _build_metadata(
+    raw: Mapping[str, Any], *, field: str, vocab_key: VocabKey | None = None
+) -> VocabularyMetadata:
+    known = {"name", "description", "icon", "model", "key", "stages"}
+    if vocab_key is None:
+        vocab_key = resolve_vocab_key(raw)
     stages_raw = raw.get("stages") or []
-    stages = tuple(dict(stage) for stage in stages_raw if isinstance(stage, Mapping))
+    stages: list[dict[str, Any]] = []
+    for stage in stages_raw:
+        if isinstance(stage, Mapping):
+            stages.append(dict(stage))
+        elif isinstance(stage, str):
+            stages.append({"name": stage})
     extra = {key: value for key, value in raw.items() if key not in known}
+    is_id = vocab_key == "id"
     return VocabularyMetadata(
         name=str(raw.get("name", "")),
         field=field,
         description=str(raw.get("description", "")),
         icon=str(raw.get("icon", "")),
-        model=bool(raw.get("model")),
-        stages=stages,
+        key=vocab_key,
+        model=is_id,
+        stages=tuple(stages),
         extra=extra,
     )
 
@@ -229,32 +296,41 @@ class VocabularyLoader:
     def load(raw: Mapping[str, Any], *, source: str = "") -> VocabularyDefinition:
         if "metadata" not in raw:
             raise VocabularyLoadError(
-                f"Missing 'metadata' in vocabulary definition{(f' ({source})' if source else '')}"
+                f"Missing 'metadata' in vocabulary definition{f' ({source})' if source else ''}"
             )
         if "entries" not in raw:
             raise VocabularyLoadError(
-                f"Missing 'entries' in vocabulary definition{(f' ({source})' if source else '')}"
+                f"Missing 'entries' in vocabulary definition{f' ({source})' if source else ''}"
             )
+
         metadata_raw = raw["metadata"]
         if not isinstance(metadata_raw, Mapping):
             raise VocabularyLoadError(f"Invalid metadata block in vocabulary {source}")
+
         field_name = str(metadata_raw.get("field", source))
         metadata = _build_metadata(metadata_raw, field=field_name)
+
         entries: dict[str, VocabularyEntry] = {}
         entries_raw = raw["entries"]
         if not isinstance(entries_raw, Mapping):
             raise VocabularyLoadError(f"Invalid entries block in vocabulary {source}")
+
         for key, entry_data in entries_raw.items():
             if not isinstance(entry_data, Mapping):
-                logger.warning(
-                    "event", detail=f"Skipping malformed vocabulary entry '{key}'", arg0=source
-                )
+                log("WARNING", f"Skipping malformed vocabulary entry '{key}'", source)
                 continue
             try:
                 entries[str(key)] = _build_entry(entry_data, fallback_name=str(key))
             except VocabularyLoadError as exc:
-                logger.warning("event", detail=str(exc), arg0=source, advice=f"entry={key}")
+                log("WARNING", str(exc), source, f"entry={key}")
+
         return VocabularyDefinition(metadata=metadata, entries=entries)
+
+    @staticmethod
+    def load_from_vocab_file(path: Path) -> VocabularyDefinition:
+        from opentide.vocabulary.io import load_vocab_file
+
+        return load_vocab_file(path)
 
     @staticmethod
     def load_from_yaml_file(path: Path) -> VocabularyDefinition:
@@ -267,18 +343,19 @@ class VocabularyLoader:
             raise VocabularyLoadError(f"Could not read vocabulary YAML {source}: {exc}") from exc
         if not raw:
             raise VocabularyLoadError(f"Empty vocabulary YAML file: {source}")
-        return parse_yaml_vocabulary(raw, source=source)
+        return parse_vocabulary_document(raw, source=source)
 
     @staticmethod
     def load_index(raw_vocabs: Mapping[str, Any] | None) -> dict[str, VocabularyDefinition]:
         """Load all vocabularies from an index vocabs mapping with per-file error boundaries."""
         if not raw_vocabs:
-            logger.error("vocabulary_index_is_missing_or_empty")
+            log("FAILURE", "Vocabulary index is missing or empty")
             return {}
+
         loaded: dict[str, VocabularyDefinition] = {}
         for name, data in raw_vocabs.items():
             try:
                 loaded[name] = VocabularyLoader.load(data, source=name)
             except VocabularyLoadError as exc:
-                logger.error("operation_failed", detail=str(exc))
+                log("FAILURE", str(exc))
         return loaded

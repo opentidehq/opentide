@@ -19,6 +19,7 @@ def _empty_model_vocabulary(
             "icon": icons.get(object_type, ""),
             "name": index_name,
             "description": index_name,
+            "key": "id",
             "model": True,
         },
         "entries": {},
@@ -41,6 +42,7 @@ def build_object_vocabularies(
             "icon": icons.get(object_type, ""),
             "name": index_name,
             "description": index_name,
+            "key": "id",
             "model": True,
         }
         entries: dict[str, Any] = {}

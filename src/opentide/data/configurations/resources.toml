@@ -1,7 +1,8 @@
-[attack]
-enterprise = "attack/enterprise-attack-v17.1.xlsx"
-mobile = "attack/mobile-attack-v17.1.xlsx"
-ics = "attack/ics-attack-v17.1.xlsx"
+[attack.stix]
+enterprise = "attack/stix/enterprise-attack.json"
+mobile = "attack/stix/mobile-attack.json"
+ics = "attack/stix/ics-attack.json"
+repo = "https://github.com/mitre-attack/attack-stix-data"
 
 [d3fend]
 ontology = "d3fend/d3fend-ontology.json"

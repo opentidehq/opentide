@@ -9,7 +9,7 @@ from opentide.core.logging import log
 from opentide.core.registry import OpenTide
 from opentide.documentation.core import get_icon
 from opentide.generation.framework import get_type, get_vocab_entry
-from opentide.generation.vocabulary import VocabularyDefinition, entry_key_field
+from opentide.generation.vocabulary import VocabularyDefinition, entry_key_field, is_id_keyed
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.enabled import enabled_systems
 
@@ -194,7 +194,7 @@ _Vocabulary_ : `{source_vocab}`
                 return
             metadata = vocab_data.metadata
             self._hints_enabled = metadata.get("vocab.search_hints", True)
-            is_model = metadata.model or (self.vocab in OBJECT_TYPES)
+            is_model = is_id_keyed(metadata.to_dict()) or (self.vocab in OBJECT_TYPES)
             entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
             self._process(entries, is_model=is_model)
 
@@ -206,9 +206,10 @@ _Vocabulary_ : `{source_vocab}`
             log("DEBUG", f"Processing {len(extensions)} extension(s) for", self.vocab)
             ext_vocab = VOCAB_INDEX.get(self.vocab)
             ext_meta = ext_vocab.metadata if ext_vocab else None
-            is_model = (ext_meta.model if ext_meta else False) or (self.vocab in OBJECT_TYPES)
-
-            key_field = entry_key_field(model=is_model)
+            is_model = (is_id_keyed(ext_meta.to_dict()) if ext_meta else False) or (
+                self.vocab in OBJECT_TYPES
+            )
+            key_field = entry_key_field(key="id" if is_model else "name")
             normalised = {}
             for ext in extensions:
                 d = ext.copy()
