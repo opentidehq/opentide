@@ -802,7 +802,7 @@ def run():
             output = output.replace(f"${placeholder}", placeholders[placeholder])
 
         output_file = open((json_output), "w", encoding="utf-8")
-        output_file.write(output)
+        output_file.write(output + "\n")
         output_file.close()
         log("SUCCESS", "Correctly exported")
 
@@ -845,7 +845,7 @@ def run():
                 output = output.replace(f"${placeholder}", placeholders[placeholder])
 
             output_file = open((json_output), "w", encoding="utf-8")
-            output_file.write(output)
+            output_file.write(output + "\n")
             output_file.close()
             log("SUCCESS", "Correctly exported")
 

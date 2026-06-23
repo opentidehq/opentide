@@ -115,7 +115,7 @@
                 "additionalProperties": true,
                 "type": "object"
             },
-            "title": "\ud83d\udcbf Platforms",
+            "title": "Platforms",
             "type": "object"
         },
         "references": {

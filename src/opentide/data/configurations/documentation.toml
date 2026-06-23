@@ -11,8 +11,6 @@ skip_model_keys = ["description",
                             "cve"]
 
 skip_vocabularies = ["mitigation",
-                    "logsources",
-                    "nist",
                     "att&ck"]
 
 model_cover_pages = true #Creates a cover page for the Object sub-folder
