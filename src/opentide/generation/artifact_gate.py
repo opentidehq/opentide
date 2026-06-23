@@ -1,13 +1,11 @@
 """Generation artifact checksum gate for byte-equivalent CI verification."""
 
 from __future__ import annotations
-
 import hashlib
 import json
 import os
 from pathlib import Path
 from typing import Any, cast
-
 from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS
 
@@ -42,11 +40,9 @@ def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
     json_map: dict[str, str] = global_config.get("json_schemas", {})
     template_map: dict[str, str] = global_config.get("templates", {})
     config_json_map: dict[str, str] = global_config.get("config_json_schemas", {})
-
     json_dir = Path(paths["json_schemas"])
     template_dir = Path(paths["templates"])
     specs: list[tuple[str, Path]] = []
-
     for model_key in CORE_SCHEMA_MODELS:
         if model_key in json_map:
             rel = f"Schemas/{json_map[model_key]}"
@@ -54,17 +50,14 @@ def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
         if model_key in template_map:
             rel = f"Schemas/Templates/{template_map[model_key]}"
             specs.append((f"{TIDE_PREFIX}{rel}", template_dir / template_map[model_key]))
-
     for rel_name in config_json_map.values():
         rel = f"Schemas/Configurations/{Path(rel_name).name}"
         specs.append((f"{TIDE_PREFIX}{rel}", json_dir / "Configurations" / Path(rel_name).name))
-
     subschema_templates = Path(paths["subschemas"]) / "MDR Systems Deployment" / "Templates"
     if subschema_templates.is_dir():
         for path in sorted(subschema_templates.glob("*.yaml")):
             rel_path = path.relative_to(repo_root.resolve())
             specs.append((f"{REPO_PREFIX}{rel_path.as_posix()}", path))
-
     return specs
 
 
@@ -92,16 +85,11 @@ def load_checksum_baseline(baseline_path: Path) -> dict[str, str]:
 def write_checksum_baseline(checksums: dict[str, str], baseline_path: Path) -> None:
     baseline_path.parent.mkdir(parents=True, exist_ok=True)
     baseline_path.write_text(
-        json.dumps(checksums, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+        json.dumps(checksums, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
 
-def verify_generation_checksums(
-    expected: dict[str, str],
-    *,
-    repo_root: Path,
-) -> dict[str, str]:
+def verify_generation_checksums(expected: dict[str, str], *, repo_root: Path) -> dict[str, str]:
     """Compare current generation artifact checksums against a baseline."""
     actual = collect_generation_checksums(repo_root)
     missing = {k: v for k, v in expected.items() if k not in actual}

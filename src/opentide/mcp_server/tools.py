@@ -1,9 +1,7 @@
 """MCP tool implementations."""
 
 from __future__ import annotations
-
 from typing import Any
-
 from opentide.core.registry import OpenTide
 from opentide.mcp_server.catalog import (
     coverage_analysis,
@@ -23,12 +21,7 @@ def tool_search(
     actor: str = "",
 ) -> list[dict[str, Any]] | dict[str, Any]:
     return search_catalog(
-        query,
-        object_type=type,
-        platform=platform,
-        status=status,
-        technique=technique,
-        actor=actor,
+        query, object_type=type, platform=platform, status=status, technique=technique, actor=actor
     )
 
 

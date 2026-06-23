@@ -1,13 +1,5 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-
-# TODO - Re-Architect Uber Class by merging this and OpenTide
-# OpenTide.Models. #DataModels
-# OpenTide.Objects. #Returning Models
-# OpenTide.Configurations.
-# OpenTide.Deployment. #Returns Initialized deployment classes
-# OpenTide.Vocabularies.
-# OpenTide.Schemas.Json / OpenTide.Schemas.Yaml
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.models.system_models import SystemConfig
 
@@ -109,7 +101,7 @@ class ConfigurationModels:
             class Tenant(SystemConfig.Tenant):
                 @dataclass
                 class Setup(SystemConfig.Tenant.Setup):
-                    type: str  # "Sigma" or "YARA"
+                    type: str
                     url: str
                     api_token: str
                     source_id: str
@@ -119,8 +111,5 @@ class ConfigurationModels:
             tenants: Sequence[Tenant] | None
 
 
-# Legacy alias
 ConfigurationModels = ConfigurationModels
-
-# Legacy alias
 ConfigurationModels = ConfigurationModels

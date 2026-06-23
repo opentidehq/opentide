@@ -1,18 +1,13 @@
 """Pydantic base types for code-first OpenTide models."""
 
 from __future__ import annotations
-
 from typing import Any, cast
-
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.fields import FieldInfo
 
 
 def TideField(
-    default: Any = ...,
-    *,
-    schema_extra: dict[str, Any] | None = None,
-    **kwargs: Any,
+    default: Any = ..., *, schema_extra: dict[str, Any] | None = None, **kwargs: Any
 ) -> Any:
     """Field helper carrying Tide JSON Schema / template metadata."""
     json_schema_extra = dict(schema_extra or {})
@@ -23,10 +18,7 @@ class TideModel(BaseModel):
     """Base model for all code-first Tide object definitions."""
 
     model_config = ConfigDict(
-        frozen=True,
-        extra="forbid",
-        populate_by_name=True,
-        validate_assignment=True,
+        frozen=True, extra="forbid", populate_by_name=True, validate_assignment=True
     )
 
     @classmethod

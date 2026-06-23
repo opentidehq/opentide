@@ -1,10 +1,8 @@
 """Paths to bundled schema, definition, and subschema data."""
 
 from __future__ import annotations
-
 from importlib.resources import files
 from pathlib import Path
-
 from opentide.core.root import get_data_root
 
 

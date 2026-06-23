@@ -21,18 +21,6 @@ _configured = False
 _config: LoggingConfig | None = None
 _console = Console(stderr=True, highlight=False)
 
-_CATEGORY_LEVEL: dict[str, int] = {
-    "ONGOING": logging.INFO,
-    "SUCCESS": logging.INFO,
-    "WARNING": logging.WARNING,
-    "INFO": logging.INFO,
-    "FAILURE": logging.ERROR,
-    "FATAL": logging.CRITICAL,
-    "DEBUG": logging.DEBUG,
-    "SKIP": logging.INFO,
-    "TITLE": logging.INFO,
-}
-
 
 @dataclass(frozen=True)
 class LoggingConfig:
@@ -82,11 +70,6 @@ def is_plain_output() -> bool:
     """Return True when Rich styling should be suppressed."""
     config = current_config()
     return config.plain or config.json_output
-
-
-def category_level(category: str) -> int:
-    """Map a legacy Tide category to a stdlib log level."""
-    return _CATEGORY_LEVEL.get(category, logging.INFO)
 
 
 def get_console() -> Console:
@@ -169,7 +152,7 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
 
 
 def configure_logging(*, force: bool = False) -> None:
-    """Compatibility alias for lazy initialisation from legacy call sites."""
+    """Compatibility alias for lazy initialisation."""
     init_logging(force=force)
 
 

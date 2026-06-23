@@ -1,7 +1,6 @@
 """Operation result types for model delegation methods."""
 
 from __future__ import annotations
-
 from pydantic import BaseModel
 
 

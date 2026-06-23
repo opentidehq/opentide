@@ -1,10 +1,8 @@
 """Platform configuration parsing — replaces PlatformConfigLoader."""
 
 from __future__ import annotations
-
 from copy import deepcopy
 from typing import Any, cast
-
 from opentide.models.platform import (
     CarbonBlackConfig,
     CrowdstrikeConfig,
@@ -56,52 +54,44 @@ def _base_configuration(mdr_config: dict[str, Any]) -> tuple[dict[str, Any], dic
         "enabled": config.pop("enabled", False),
         "name": config.pop("name", ""),
     }
-    return config, base
+    return (config, base)
 
 
-def _external_rule_id(
-    mdr_config: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
+def _external_rule_id(mdr_config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Normalise rule_id:: tenant keys into a bundle mapping."""
     config = deepcopy(mdr_config)
     if "rule_id_bundle" in config:
-        return config, cast(dict[str, Any], config.pop("rule_id_bundle"))
-
+        return (config, cast(dict[str, Any], config.pop("rule_id_bundle")))
     bundle: dict[str, Any] = {}
     for key in list(config):
         if key.startswith("rule_id::"):
             tenant = key.split("rule_id::", 1)[1]
             bundle[tenant] = config.pop(key)
-    return config, bundle
+    return (config, bundle)
 
 
 def load_sentinel_config(mdr_config: dict[str, Any]) -> SentinelConfig:
     remaining, base = _base_configuration(mdr_config)
     query = remaining.pop("query")
-
     template = remaining.pop("template", None)
     trigger = remaining.pop("trigger", None)
     scheduling = SentinelScheduling.model_validate(remaining.pop("scheduling", {}))
-
     alert_raw = remaining.pop("alert", None) or {}
     custom_details = alert_raw.pop("custom_details", None)
     dynamic_properties = alert_raw.pop("dynamic_properties", None)
     alert = SentinelAlert.model_validate(
         {
             **alert_raw,
-            "custom_details": (
-                [SentinelCustomDetails.model_validate(d) for d in custom_details]
-                if custom_details
-                else None
-            ),
-            "dynamic_properties": (
-                [SentinelDynamicProperties.model_validate(d) for d in dynamic_properties]
-                if dynamic_properties
-                else None
-            ),
+            "custom_details": [SentinelCustomDetails.model_validate(d) for d in custom_details]
+            if custom_details
+            else None,
+            "dynamic_properties": [
+                SentinelDynamicProperties.model_validate(d) for d in dynamic_properties
+            ]
+            if dynamic_properties
+            else None,
         }
     )
-
     grouping = None
     if grouping_raw := remaining.pop("grouping", None):
         alert_grouping = grouping_raw.pop("alert", None)
@@ -109,7 +99,6 @@ def load_sentinel_config(mdr_config: dict[str, Any]) -> SentinelConfig:
             event=grouping_raw["event"],
             alert=SentinelAlertGrouping.model_validate(alert_grouping) if alert_grouping else None,
         )
-
     entities = None
     if entity_list := remaining.pop("entities", None):
         entities = [
@@ -119,11 +108,9 @@ def load_sentinel_config(mdr_config: dict[str, Any]) -> SentinelConfig:
             )
             for mapping in entity_list
         ]
-
     exclusions = None
     if exclusions_raw := remaining.pop("exclusions", None):
         exclusions = [SentinelExclusion.model_validate(e) for e in exclusions_raw]
-
     return SentinelConfig(
         **base,
         query=query,
@@ -145,7 +132,6 @@ def load_defender_config(mdr_config: dict[str, Any]) -> DefenderConfig:
             tenant = key.split("rule_id::", 1)[1]
             rule_id_bundle[tenant] = remaining.pop(key)
     rule_id = rule_id_bundle or remaining.pop("rule_id", None)
-
     from opentide.models.platform_configs import (
         DefenderAlert,
         DefenderExclusion,
@@ -157,7 +143,6 @@ def load_defender_config(mdr_config: dict[str, Any]) -> DefenderConfig:
     alert = DefenderAlert.model_validate(remaining.pop("alert"))
     impacted_entities = DefenderImpactedEntities.model_validate(remaining.pop("impacted_entities"))
     scope = DefenderGroupScoping.model_validate(remaining.pop("scope"))
-
     actions_raw = remaining.pop("actions", None)
     response_actions = None
     if actions_raw:
@@ -180,9 +165,8 @@ def load_defender_config(mdr_config: dict[str, Any]) -> DefenderConfig:
                 )
             files = DefenderFileActions(
                 allow_block=allow_block_action,
-                quarantine_file=(
-                    files_raw.get("quarantine_files") or files_raw.get("quarantine_file")
-                ),
+                quarantine_file=files_raw.get("quarantine_files")
+                or files_raw.get("quarantine_file"),
             )
         users = (
             DefenderUserActions.model_validate(actions_raw["users"])
@@ -191,11 +175,9 @@ def load_defender_config(mdr_config: dict[str, Any]) -> DefenderConfig:
         )
         if devices or files or users:
             response_actions = DefenderResponseActions(devices=devices, files=files, users=users)
-
     exclusions = None
     if exclusions_raw := remaining.pop("exclusions", None):
         exclusions = [DefenderExclusion.model_validate(e) for e in exclusions_raw]
-
     return DefenderConfig(
         **base,
         **remaining,
@@ -225,29 +207,22 @@ def load_crowdstrike_config(mdr_config: dict[str, Any]) -> CrowdstrikeConfig:
 def load_sentinel_one_config(mdr_config: dict[str, Any]) -> SentinelOneConfig:
     remaining, base = _base_configuration(mdr_config)
     remaining, rule_id_bundle = _external_rule_id(remaining)
-
     details = None
     if details_raw := remaining.pop("details", None):
         from opentide.models.platform_configs import SentinelOneDetails
 
         details = SentinelOneDetails.model_validate(details_raw)
-
     condition_raw = remaining.pop("condition")
     rule_type = condition_raw.pop("type")
     single_event = None
     if single_event_raw := condition_raw.pop("single_event", None):
         single_event = SentinelOneSingleEvent.model_validate(single_event_raw)
-
     correlation = None
     if correlation_raw := condition_raw.pop("correlation", None):
         sub_queries = [
             SentinelOneSubQuery.model_validate(sub) for sub in correlation_raw.pop("sub_queries")
         ]
-        correlation = SentinelOneCorrelation(
-            **correlation_raw,
-            sub_queries=sub_queries,
-        )
-
+        correlation = SentinelOneCorrelation(**correlation_raw, sub_queries=sub_queries)
     from opentide.models.platform_configs import SentinelOneResponse
 
     condition = SentinelOneCondition(
@@ -261,7 +236,6 @@ def load_sentinel_one_config(mdr_config: dict[str, Any]) -> SentinelOneConfig:
         if remaining.get("response")
         else None
     )
-
     return SentinelOneConfig(
         **base,
         details=details,
@@ -274,7 +248,6 @@ def load_sentinel_one_config(mdr_config: dict[str, Any]) -> SentinelOneConfig:
 def load_harfanglab_config(mdr_config: dict[str, Any]) -> HarfangLabConfig:
     remaining, base = _base_configuration(mdr_config)
     remaining, rule_id_bundle = _external_rule_id(remaining)
-
     sigma = None
     if sigma_raw := remaining.pop("sigma", None):
         logsource = HarfangLabSigmaLogSource.model_validate(sigma_raw.pop("logsource"))
@@ -287,7 +260,6 @@ def load_harfanglab_config(mdr_config: dict[str, Any]) -> HarfangLabConfig:
             condition=sigma_raw.pop("condition"),
             false_positives=sigma_raw.pop("false_positives", None),
         )
-
     yara = None
     if yara_raw := remaining.pop("yara", None):
         meta = HarfangLabYaraMeta.model_validate(yara_raw.pop("meta"))
@@ -297,7 +269,6 @@ def load_harfanglab_config(mdr_config: dict[str, Any]) -> HarfangLabConfig:
             condition=yara_raw.pop("condition"),
             imports=yara_raw.pop("imports", None),
         )
-
     return HarfangLabConfig(
         **base,
         maturity=remaining.pop("maturity", "Experimental"),

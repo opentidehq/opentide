@@ -1,11 +1,9 @@
 """Detection rule loading — Pydantic-only rule parsing."""
 
 from __future__ import annotations
-
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
-
 from opentide.loading.platform_loader import load_platform_config
 from opentide.models.metadata import ObjectReferences
 from opentide.models.platform import PLATFORM_CONFIG_MODELS, RuleConfigurations
@@ -38,30 +36,21 @@ def _load_configurations(system_configurations: dict[str, Any]) -> RuleConfigura
     return cast(RuleConfigurations, RuleConfigurations.model_validate(kwargs))
 
 
-def load_rule_from_dict(
-    mdr: dict[str, Any],
-    *,
-    file: Path | None = None,
-) -> DetectionRule:
+def load_rule_from_dict(mdr: dict[str, Any], *, file: Path | None = None) -> DetectionRule:
     """Convert a raw MDR mapping into a typed DetectionRule."""
     payload = deepcopy(mdr)
     metadata_raw = payload.pop("metadata", {})
     references_raw = payload.pop("references", None)
     response_raw = payload.pop("response", None)
     configurations_raw = payload.pop("configurations", {})
-
     if references_raw is not None:
         references_raw = ObjectReferences.coerce_public_keys(references_raw)
-
     rule_data: dict[str, Any] = {
         **payload,
         "metadata": metadata_raw,
         "references": references_raw,
         "response": _load_response(response_raw) if response_raw else None,
-        "configurations": (
-            _load_configurations(configurations_raw) if configurations_raw else None
-        ),
+        "configurations": _load_configurations(configurations_raw) if configurations_raw else None,
     }
-
     rule = DetectionRule.from_yaml_dict(rule_data, file=file)
     return rule

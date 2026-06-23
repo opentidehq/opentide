@@ -1,14 +1,14 @@
 """Deployment services for the CLI."""
 
 from __future__ import annotations
-
 import os
 from typing import TYPE_CHECKING, Any, cast
-
 from opentide.cli.enums import DetectionPlatform
 from opentide.core.index_manager import IndexManager
-from opentide.core.logging import log
+import structlog
+from opentide.core.logging.console import emit_section
 
+logger = structlog.get_logger("opentide.cli.services.deploy")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
@@ -28,7 +28,6 @@ def run_deploy(
     os.environ["INDEX_OUTPUT"] = "cache"
     if plan is not None:
         ctx.set_deployment_plan(plan)
-
     from opentide.deployment import (
         CIEnvironment,
         DeploymentStrategy,
@@ -39,16 +38,13 @@ def run_deploy(
     from opentide.platforms.plugins import DeployTide
 
     deployment_plan = DeploymentStrategy.load_from_environment()
-
-    if deployment_plan is DeploymentStrategy.PRODUCTION and not skip_promotion:
+    if deployment_plan is DeploymentStrategy.PRODUCTION and (not skip_promotion):
         pre_deployment = modified_mdr_files(deployment_plan)
-        log("TITLE", "Pre-deployment Routine")
+        emit_section("Pre-deployment Routine")
         PromoteMDR().promote(pre_deployment)
-
     deployment_list = make_deploy_plan(
         deployment_plan, wide_scope=wide, keep_deprecated=keep_deprecated
     )
-
     if platform is not None:
         platform_key = platform.value
         if platform_key not in deployment_list:
@@ -58,49 +54,38 @@ def run_deploy(
                 "message": "No rules to deploy for this platform",
             }
         deployment_list = {platform_key: deployment_list[platform_key]}
-
     if len(deployment_list) == 0:
         environment = CIEnvironment().environment
-        log(
-            "FAILURE",
-            "Nothing could deploy, no MDR can be addressed within this deployment context",
-        )
+        logger.error("nothing_could_deploy_no_mdr_can_be_addressed_within_this_deploym")
         if environment is CIEnvironment.CIPlatforms.GitlabCI:
             raise SystemExit(19)
         if environment is CIEnvironment.CIPlatforms.GitHubActions:
             print("::warning::No deployment was identified in this context")
             return {"status": "empty", "deployed": []}
         raise SystemExit(0)
-
     IndexManager.reload()
-
     mdr_deployers = cast(dict[str, Any], DeployTide.mdr)
     deployed: list[str] = []
     for system, uuids in deployment_list.items():
         if system not in mdr_deployers:
-            log("FATAL", f"Cannot find a deployment engine for {system}")
+            logger.critical("fatal_error", detail=f"Cannot find a deployment engine for {system}")
             raise SystemExit(1)
-
-        log("TITLE", "MDR Deployment")
+        emit_section("MDR Deployment")
         deployer = cast(Any, mdr_deployers[system])
         if dry_run:
-            log("INFO", f"Dry-run: would deploy {len(uuids)} rule(s) to {system}")
+            logger.info("event", detail=f"Dry-run: would deploy {len(uuids)} rule(s) to {system}")
             deployed.append(system)
             continue
-
         try:
             deployer.deploy(deployment=uuids)
         except Exception:
-            log("WARNING", "Switching to MDRv4 new methods")
+            logger.warning("switching_to_mdrv4_new_methods")
             deployer.deploy(mdr_deployment=uuids, deployment_plan=deployment_plan)
         deployed.append(system)
-
     from opentide.cli.exit_codes import exit_on_deployment_errors, exit_on_deployment_warnings
 
     exit_on_deployment_errors()
     exit_on_deployment_warnings()
-
     if not ctx.json_output:
-        log("SUCCESS", "All content passed deployment")
-
+        logger.info("all_content_passed_deployment")
     return {"status": "completed", "deployed": deployed, "dry_run": dry_run}

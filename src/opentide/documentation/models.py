@@ -2,250 +2,138 @@ import os
 from pathlib import Path
 import sys
 import shutil
-
-from opentide.generation.framework import (
-    get_type,
-    childs,
-    parents,
-    techniques_resolver,
-    get_vocab_entry,
-)
-from opentide.documentation.core import (
-    get_icon,
-    rich_attack_links,
-    GitlabMarkdown,
-    sanitize_hover,
-    FOLD,
-    DOCUMENTATION_TARGET,
-    UUID_PERMALINKS,
-    TARGET_WITH_DASH_PATHS
-)
-from opentide.documentation.components import (
-    criticality_doc,
-    metadata_doc,
-    reference_doc,
-    tlp_doc,
-    relations_table,
-    cve_doc,
-    actors_doc,
-    model_data_table,
-    threat_surface_doc,
-)
+from opentide.generation.framework import get_type, childs, parents, techniques_resolver, get_vocab_entry
+from opentide.documentation.core import get_icon, rich_attack_links, GitlabMarkdown, sanitize_hover, FOLD, DOCUMENTATION_TARGET, UUID_PERMALINKS, TARGET_WITH_DASH_PATHS
+from opentide.documentation.components import criticality_doc, metadata_doc, reference_doc, tlp_doc, relations_table, cve_doc, actors_doc, model_data_table, threat_surface_doc
 from opentide.core.files import safe_file_name
 from opentide.documentation.graphs import relationships_graph, chaining_graph
 from opentide.core.registry import OpenTide
-from opentide.core.logging import log
 from opentide.deployment import Proxy, CIEnvironment
 from opentide.documentation.templates.models import MODEL_DOC_TEMPLATE
 from opentide.core.root import get_repo_root
-
+import structlog
+from opentide.core.logging.console import emit_section
+logger = structlog.get_logger('opentide.documentation.models')
 ROOT = get_repo_root()
 MODELS_DOCS_PATH = Path(OpenTide.Configurations.Global.Paths.Core.models_docs_folder)
 MODELS_SCOPE = OpenTide.Configurations.Documentation.scope
 MODELS_INDEX = OpenTide.Models.Index
 MODELS_NAME = OpenTide.Configurations.Documentation.object_names
-
-if OpenTide.Configurations.Documentation.cve.get("proxy"):
+if OpenTide.Configurations.Documentation.cve.get('proxy'):
     Proxy.set_proxy()
 else:
     Proxy.unset_proxy()
 
-
 def documentation(model):
-
-    model_uuid = model.get("metadata", {}).get("uuid")
+    model_uuid = model.get('metadata', {}).get('uuid')
     model_type = get_type(model_uuid)
     title = f"{get_icon(model_type)} {model['name']}"
-    frontmatter = ""
-    
-    if DOCUMENTATION_TARGET in [CIEnvironment.CIPlatforms.GitlabCI,
-                                CIEnvironment.CIPlatforms.AzurePipeline]:
+    frontmatter = ''
+    if DOCUMENTATION_TARGET in [CIEnvironment.CIPlatforms.GitlabCI, CIEnvironment.CIPlatforms.AzurePipeline]:
         if UUID_PERMALINKS:
-            frontmatter = f"---\ntitle: {title}\n---"            
-        title = ""
+            frontmatter = f'---\ntitle: {title}\n---'
+        title = ''
     else:
-        title = "# " + title
-        
+        title = '# ' + title
     model_datafield = OpenTide.Configurations.Global.data_fields[model_type]
-    criticality = criticality_doc(model["criticality"])
-    metadata = model.get("metadata") or model.get("meta") or {}
-    metadata = {k: v for k, v in metadata.items() if k != "tlp"}
-    metadata = metadata_doc(metadata, model_type="tvm")
-
-    expand_header = ""
-    expand_description = ""
-    expand_graphs = ""
-    threat_surface = ""
-
-    actors_sightings = ""
-
-    references = model.get("references")
-    
+    criticality = criticality_doc(model['criticality'])
+    metadata = model.get('metadata') or model.get('meta') or {}
+    metadata = {k: v for k, v in metadata.items() if k != 'tlp'}
+    metadata = metadata_doc(metadata, model_type='tvm')
+    expand_header = ''
+    expand_description = ''
+    expand_graphs = ''
+    threat_surface = ''
+    actors_sightings = ''
+    references = model.get('references')
     if references:
-        # To deprecate once everything is migrated to new reference system
         if type(references) is list:
-            references = "- " + "\n- ".join(references)
+            references = '- ' + '\n- '.join(references)
         elif type(references) is dict:
             references = reference_doc(references)
-        references = "### 🔗 References\n\n" + references
-
+        references = '### 🔗 References\n\n' + references
     else:
-        references = ""
-
-    description = model[model_datafield].get("description") or model[
-        model_datafield
-    ].get("guidelines")
-    description = description.replace("\n", "\n> ")
-
-    tlp = tlp_doc((model.get("metadata") or model["meta"])["tlp"])
-
+        references = ''
+    description = model[model_datafield].get('description') or model[model_datafield].get('guidelines')
+    description = description.replace('\n', '\n> ')
+    tlp = tlp_doc((model.get('metadata') or model['meta'])['tlp'])
     techniques = techniques_resolver(model_uuid, recursive=False)
     if techniques:
         techniques = rich_attack_links(techniques)
-        techniques = f'{get_icon("att&ck")} **ATT&CK Techniques** {techniques}'
+        techniques = f"{get_icon('att&ck')} **ATT&CK Techniques** {techniques}"
     else:
-        techniques = ""
-
+        techniques = ''
     relation_graph = relationships_graph(model_uuid)
-    relation_table = ""
+    relation_table = ''
     if childs(model_uuid):
-        relation_table = "\n\n **Descendants** \n\n" + relations_table(
-            model_uuid, direction="downstream"
-        )
+        relation_table = '\n\n **Descendants** \n\n' + relations_table(model_uuid, direction='downstream')
     if parents(model_uuid):
-        relation_table += "\n\n **Ascendants** \n\n"
-        relation_table += relations_table(model_uuid, direction="upstream")
-
-    if not relation_graph and not relation_table:
-        relation_graph = "🚫 No related OpenTide objects indexed."
+        relation_table += '\n\n **Ascendants** \n\n'
+        relation_table += relations_table(model_uuid, direction='upstream')
+    if not relation_graph and (not relation_table):
+        relation_graph = '🚫 No related OpenTide objects indexed.'
         if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI:
             GitlabMarkdown.negative_diff(relation_graph)
-
-    if model_type == "tvm":
-
-        terrain = model[model_datafield]["terrain"].replace("\n", "\n> ")
-        expand_description += f"\n\n## 🖥️ Terrain \n\n > {terrain}"
-
-        if actors:=model[model_datafield].get("actors"):
-            # Filter out legacy actor definitions
+    if model_type == 'tvm':
+        terrain = model[model_datafield]['terrain'].replace('\n', '\n> ')
+        expand_description += f'\n\n## 🖥️ Terrain \n\n > {terrain}'
+        if (actors := model[model_datafield].get('actors')):
             if type(actors[0]) is str:
-                pass 
+                pass
             else:
-                actors_sightings = "\n\n### 🐲 Actors sightings \n\n"
+                actors_sightings = '\n\n### 🐲 Actors sightings \n\n'
                 actors_sightings += actors_doc(actors)
-
-
-        cve = model[model_datafield].get("cve")
+        cve = model[model_datafield].get('cve')
         if cve:
             cve = cve_doc(cve)
-            expand_description += f"\n\n {cve}"
-
+            expand_description += f'\n\n {cve}'
         chain_diagram, chain_table = chaining_graph(model_uuid)
         if chain_diagram and chain_table:
-            expand_graphs += "\n\n --- \n\n### ⛓️ Threat Chaining\n\n"
-            expand_graphs += chain_diagram + "\n\n"
-            expand_graphs += (
-                FOLD.format("Expand chaining data", chain_table)
-            )
-
-        # Threat surface section: surface entries, targeted assets, visibility
-        tvm_surface = model[model_datafield].get("surface")
+            expand_graphs += '\n\n --- \n\n### ⛓️ Threat Chaining\n\n'
+            expand_graphs += chain_diagram + '\n\n'
+            expand_graphs += FOLD.format('Expand chaining data', chain_table)
+        tvm_surface = model[model_datafield].get('surface')
         if tvm_surface:
             threat_surface = threat_surface_doc(tvm_surface)
-
     data_table, tags = model_data_table(model[model_datafield], model_uuid)
-
     if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI:
-        tags = ""
+        tags = ''
     else:
-        tags = "---\n\n#### 🏷️ Tags\n\n"
-        tags += "#" + ", #".join(tags)
-
-    doc = MODEL_DOC_TEMPLATE.format(frontmatter=frontmatter,
-                                    title=title,
-                                    actors_sightings=actors_sightings,
-                                    criticality=criticality,
-                                    tlp=tlp,
-                                    techniques=techniques,
-                                    expand_header=expand_header,
-                                    metadata=metadata,
-                                    description=description,
-                                    expand_description=expand_description,
-                                    threat_surface=threat_surface,
-                                    relation_graph=relation_graph,
-                                    relation_table=relation_table,
-                                    expand_graphs=expand_graphs,
-                                    data_table=data_table,
-                                    references=references,
-                                    tags=tags)
-
+        tags = '---\n\n#### 🏷️ Tags\n\n'
+        tags += '#' + ', #'.join(tags)
+    doc = MODEL_DOC_TEMPLATE.format(frontmatter=frontmatter, title=title, actors_sightings=actors_sightings, criticality=criticality, tlp=tlp, techniques=techniques, expand_header=expand_header, metadata=metadata, description=description, expand_description=expand_description, threat_surface=threat_surface, relation_graph=relation_graph, relation_table=relation_table, expand_graphs=expand_graphs, data_table=data_table, references=references, tags=tags)
     return doc
 
-
 def run():
-
-    log("TITLE", "Models Documentation")
-    log(
-        "INFO",
-        "Generates the documentation for all models, with hyperlinks in a folder structure",
-    )
-
-    # Initialize a counter of created documents
+    emit_section('Models Documentation')
+    logger.info('generates_the_documentation_for_all_models_with_hyperlinks_in_a')
     doc_count = 0
-
     for model_type in MODELS_SCOPE:
-
-        doc_type_path = (
-            MODELS_DOCS_PATH
-            / MODELS_NAME[model_type]
-        )
+        doc_type_path = MODELS_DOCS_PATH / MODELS_NAME[model_type]
         if DOCUMENTATION_TARGET in TARGET_WITH_DASH_PATHS:
-            doc_type_path = Path(str(doc_type_path).replace(" ", "-"))
-
-        # Remove everything in the doc folder for the model
+            doc_type_path = Path(str(doc_type_path).replace(' ', '-'))
         if os.path.exists(doc_type_path):
             shutil.rmtree(doc_type_path)
-        log(
-            "INFO",
-            "Creating documentation folder : {}... ".format(str(doc_type_path)),
-        )
+        logger.info('event', detail='Creating documentation folder : {}... '.format(str(doc_type_path)))
         doc_type_path.mkdir(parents=True)
-
         for model in MODELS_INDEX[model_type]:
-
-            # Make a file name based on  data
-            model_data:dict = MODELS_INDEX[model_type][model]
-            model_name = model_data["name"]
-            model_uuid = model_data.get("metadata",{}).get("uuid")
-
+            model_data: dict = MODELS_INDEX[model_type][model]
+            model_name = model_data['name']
+            model_uuid = model_data.get('metadata', {}).get('uuid')
             if UUID_PERMALINKS:
-                doc_file_name = model_uuid + ".md"
+                doc_file_name = model_uuid + '.md'
             else:
-                doc_name = model_name.replace("_", " ")
-                doc_file_name = (
-                    f"{get_icon(model_type)} {doc_name.strip()}.md"
-                )
-
+                doc_name = model_name.replace('_', ' ')
+                doc_file_name = f'{get_icon(model_type)} {doc_name.strip()}.md'
             doc_file_name = safe_file_name(doc_file_name)
             doc_path = doc_type_path / doc_file_name
-
-            # Replace whitespace in file name as it becomes a path in the Gitlab MODELS_DOCS_PATH
             if DOCUMENTATION_TARGET in TARGET_WITH_DASH_PATHS:
-                doc_path = Path(str(doc_path).replace(" ", "-"))
-
-            log("ONGOING",
-                f"Generating {model_type.upper()} documentation",
-                model_name,
-                model_uuid)
-            
+                doc_path = Path(str(doc_path).replace(' ', '-'))
+            logger.info('step_in_progress', detail=f'Generating {model_type.upper()} documentation', arg0=model_name, advice=model_uuid)
             document = documentation(model_data)
-
-            with open(doc_path, "w+", encoding="utf-8") as output:
+            with open(doc_path, 'w+', encoding='utf-8') as output:
                 output.write(document)
                 doc_count += 1
-
-    log("SUCCESS", "Successfully built CoreTIDE documentation")
-
-
-if __name__ == "__main__":
+    logger.info('successfully_built_coretide_documentation')
+if __name__ == '__main__':
     run()

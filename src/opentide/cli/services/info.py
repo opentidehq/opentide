@@ -1,9 +1,7 @@
 """System information services."""
 
 from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any
-
 from opentide.cli.enums import DetectionPlatform
 from opentide.core.registry import OpenTide
 
@@ -21,7 +19,6 @@ def collect_info(
     """Collect system information about the detection repository."""
     ctx.apply_environment()
     OpenTide.initialise()
-
     platforms_info = []
     for name, plat in OpenTide.Platforms.items():
         if platform is not None and name != platform.value:
@@ -34,7 +31,6 @@ def collect_info(
                 "can_validate": plat.can_validate,
             }
         )
-
     payload: dict[str, Any] = {
         "version": _package_version(),
         "repo": str(ctx.repo),
@@ -45,7 +41,6 @@ def collect_info(
         },
         "platforms": platforms_info,
     }
-
     if section == "rules":
         payload["rules"] = list(OpenTide.Models.mdr.keys())
     elif section == "threats":
@@ -54,7 +49,6 @@ def collect_info(
         payload["objectives"] = list(OpenTide.Models.dom.keys())
     elif section == "coverage" and technique:
         payload["coverage"] = _technique_coverage(technique)
-
     return payload
 
 

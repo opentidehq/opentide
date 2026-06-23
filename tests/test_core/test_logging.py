@@ -20,7 +20,6 @@ from opentide.core.logging import (
     is_debug_enabled,
     is_json_output,
     is_plain_output,
-    log,
     print_banner,
     reset_for_tests,
 )
@@ -90,23 +89,35 @@ def test_bind_and_clear_context() -> None:
     clear_context()
 
 
-def test_log_debug_suppressed_without_debug() -> None:
+def test_debug_suppressed_without_debug_flag() -> None:
     init_logging(LoggingConfig(debug=False), force=True)
-    with mock.patch("opentide.core.logging.compat.get_logger") as mock_get_logger:
-        log("DEBUG", "hidden debug event")
-        mock_get_logger.assert_not_called()
+    stream = StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.getLogger().handlers[0].formatter)
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    logger = get_logger("tests.logging")
+    logger.debug("hidden_debug_event")
+    assert stream.getvalue() == ""
 
 
-def test_log_info_emits_with_category() -> None:
-    with mock.patch("opentide.core.logging.compat.get_logger") as mock_get_logger:
-        mock_logger = mock.MagicMock()
-        mock_get_logger.return_value = mock_logger
-        log("INFO", "progress", highlight="extra")
-        mock_logger.log.assert_called_once()
-        args, kwargs = mock_logger.log.call_args
-        assert args[1] == "progress"
-        assert kwargs["category"] == "INFO"
-        assert kwargs["detail"] == "extra"
+def test_info_emits_structured_event() -> None:
+    stream = StringIO()
+    init_logging(LoggingConfig(json_output=True), force=True)
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.getLogger().handlers[0].formatter)
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    logger = get_logger("tests.logging")
+    logger.info("deploy_started", platform="splunk", detail="extra")
+    payload = json.loads(stream.getvalue().strip())
+    assert payload["event"] == "deploy_started"
+    assert payload["platform"] == "splunk"
+    assert payload["detail"] == "extra"
+    assert payload["level"] == "info"
+    assert payload["logger"] == "tests.logging"
 
 
 def test_emit_section_uses_console_panel() -> None:
@@ -116,6 +127,20 @@ def test_emit_section_uses_console_panel() -> None:
     with mock.patch.object(get_console(), "print") as mock_print:
         emit_section("Generate Schemas")
         mock_print.assert_called_once()
+
+
+def test_emit_section_json_mode() -> None:
+    stream = StringIO()
+    init_logging(LoggingConfig(json_output=True), force=True)
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.getLogger().handlers[0].formatter)
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    emit_section("Generate Schemas")
+    payload = json.loads(stream.getvalue().strip())
+    assert payload["event"] == "section_started"
+    assert payload["section"] == "Generate Schemas"
 
 
 def test_emit_fatal_plain_mode() -> None:
@@ -132,7 +157,7 @@ def test_emit_fatal_plain_mode() -> None:
     assert "FATAL" in buffer.getvalue() or "boom" in buffer.getvalue()
 
 
-def test_json_logging_emits_structured_records() -> None:
+def test_emit_fatal_json_mode() -> None:
     stream = StringIO()
     init_logging(LoggingConfig(json_output=True), force=True)
     handler = logging.StreamHandler(stream)
@@ -140,11 +165,12 @@ def test_json_logging_emits_structured_records() -> None:
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
-    log("INFO", "structured event", highlight="detail")
+    emit_fatal("boom", detail="more", advice="fix it")
     payload = json.loads(stream.getvalue().strip())
-    assert payload["event"] == "structured event"
-    assert payload["category"] == "INFO"
-    assert payload["detail"] == "detail"
+    assert payload["event"] == "fatal_error"
+    assert payload["error"] == "boom"
+    assert payload["detail"] == "more"
+    assert payload["advice"] == "fix it"
 
 
 def test_print_banner_returns_text() -> None:
@@ -153,20 +179,19 @@ def test_print_banner_returns_text() -> None:
     assert ":--==-:." in banner
 
 
-def test_console_renderer_applies_category_style() -> None:
+def test_console_renderer_uses_level_styling_only() -> None:
     from opentide.core.logging.render import OpenTideConsoleRenderer
 
     renderer = OpenTideConsoleRenderer(use_color=False)
     rendered = renderer.render(
         {
-            "event": "deploying rule",
+            "event": "deploying_rule",
             "level": "info",
             "timestamp": "2026-06-23 12:00:00",
-            "category": "ONGOING",
-            "detail": "mdr-123",
+            "mdr_name": "mdr-123",
         },
         "info",
     )
-    assert "deploying rule" in rendered
-    assert "ONGOING" in rendered
+    assert "deploying_rule" in rendered
     assert "mdr-123" in rendered
+    assert "ONGOING" not in rendered

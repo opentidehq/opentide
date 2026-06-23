@@ -1,16 +1,13 @@
 """Framework extraction and import services."""
 
 from __future__ import annotations
-
 import runpy
 from typing import TYPE_CHECKING
-
 from opentide.cli.enums import ExtractFramework, ExtractImport
 from opentide.core.root import get_repo_root
 
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
-
 _FRAMEWORK_SCRIPTS: dict[ExtractFramework, str] = {
     ExtractFramework.attack: "src/opentide/extraction/attack.py",
     ExtractFramework.d3fend: "src/opentide/extraction/d3fend_artifacts.py",
@@ -18,7 +15,6 @@ _FRAMEWORK_SCRIPTS: dict[ExtractFramework, str] = {
     ExtractFramework.nist: "src/opentide/extraction/nist.py",
     ExtractFramework.react: "src/opentide/extraction/atc_react.py",
 }
-
 _IMPORT_SCRIPTS: dict[ExtractImport, str] = {
     ExtractImport.sentinel: "src/opentide/extraction/sentinel_importer.py",
     ExtractImport.defender: "src/opentide/extraction/mde_importer.py",

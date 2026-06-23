@@ -1,9 +1,7 @@
 """Nested per-platform configuration models for detection rules."""
 
 from __future__ import annotations
-
 from typing import Any, Literal
-
 from opentide.models.base import TideModel
 
 

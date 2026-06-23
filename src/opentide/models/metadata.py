@@ -1,11 +1,8 @@
 """Shared metadata models for Tide objects."""
 
 from __future__ import annotations
-
 from typing import Any
-
 from pydantic import Field, field_validator
-
 from opentide.models.base import TideModel
 
 

@@ -1,11 +1,7 @@
 """Backward-compatible model re-exports."""
 
 from opentide.models.config_models import ConfigurationModels
-from opentide.models.deployment_enums import (
-    DeploymentStrategy,
-    DetectionPlatforms,
-    StatusStrategy,
-)
+from opentide.models.deployment_enums import DeploymentStrategy, DetectionPlatforms, StatusStrategy
 from opentide.models.object_models import DetectionRule, SharedModels, ThreatVector, TideModels
 from opentide.models.system_models import DeploymentBatch, SystemConfig, TenantDeployment
 
@@ -16,7 +12,6 @@ ObjectMetadata = SharedModels.ObjectMetadata
 ObjectReferences = SharedModels.ObjectReferences
 PlatformConfigurationBase = SharedModels.PlatformConfigurationBase
 TideDefinitionsModels = SharedModels
-
 __all__ = [
     "StatusStrategy",
     "DetectionPlatforms",

@@ -5,15 +5,13 @@ from __future__ import annotations
 from rich.panel import Panel
 from rich.text import Text
 
-from opentide.core.logging.config import get_console, is_json_output, is_plain_output
+from opentide.core.logging.config import get_console, get_logger, is_json_output, is_plain_output
 
 
 def emit_section(title: str) -> None:
     """Render a section header."""
     if is_json_output():
-        from opentide.core.logging.config import get_logger
-
-        get_logger("opentide").info(title, category="TITLE")
+        get_logger("opentide").info("section_started", section=title)
         return
 
     console = get_console()
@@ -34,15 +32,13 @@ def emit_section(title: str) -> None:
 def emit_fatal(message: str, *, detail: str = "", advice: str = "") -> None:
     """Render a fatal error panel."""
     if is_json_output():
-        from opentide.core.logging.config import get_logger
-
         logger = get_logger("opentide")
-        payload: dict[str, str] = {"category": "FATAL"}
+        payload: dict[str, str] = {}
         if detail:
             payload["detail"] = detail
         if advice:
             payload["advice"] = advice
-        logger.critical(message, **payload)
+        logger.critical("fatal_error", error=message, **payload)
         return
 
     console = get_console()

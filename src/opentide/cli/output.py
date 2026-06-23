@@ -5,7 +5,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import structlog
+
 from opentide.cli.context import CliContext
+from opentide.core.logging.console import emit_fatal
+
+logger = structlog.get_logger(__name__)
 
 
 def emit(ctx: CliContext, payload: dict[str, Any], *, exit_code: int = 0) -> None:
@@ -21,9 +26,8 @@ def emit_error(ctx: CliContext, message: str, *, exit_code: int = 1) -> None:
     if ctx.json_output:
         emit(ctx, {"ok": False, "error": message}, exit_code=exit_code)
     else:
-        from opentide.core.logging import log
-
-        log("FATAL", message)
+        logger.critical("fatal_error", error=message)
+        emit_fatal(message)
         raise SystemExit(exit_code)
 
 
@@ -32,6 +36,7 @@ def emit_success(ctx: CliContext, payload: dict[str, Any]) -> None:
     if ctx.json_output:
         emit(ctx, {"ok": True, **payload})
     else:
-        from opentide.core.logging import log
-
-        log("SUCCESS", payload.get("message", "Completed successfully"))
+        logger.info(
+            "step_completed",
+            detail=payload.get("message", "Completed successfully"),
+        )

@@ -1,9 +1,7 @@
 """Schema version parsing and migration chain mechanics."""
 
 from __future__ import annotations
-
 from collections.abc import Callable, Mapping, Sequence
-
 from pydantic import BaseModel, field_validator
 
 MigrationFn = Callable[[Mapping[str, object]], dict[str, object]]
@@ -15,7 +13,6 @@ class SchemaVersion(BaseModel):
     family: str
     major: int
     minor: int = 0
-
     model_config = {"frozen": True}
 
     @field_validator("family")
@@ -60,7 +57,7 @@ class SchemaVersionChain:
             raise ValueError("migration endpoints must match chain family")
         if source.sort_key() >= target.sort_key():
             raise ValueError("migrations must advance to a higher version")
-        self._migrations[(source.major, source.minor)] = fn
+        self._migrations[source.major, source.minor] = fn
 
     def migrate(
         self, data: Mapping[str, object], source: SchemaVersion, target: SchemaVersion

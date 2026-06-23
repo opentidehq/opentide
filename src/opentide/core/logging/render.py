@@ -8,18 +8,6 @@ from typing import Any
 from rich.console import Console
 from rich.text import Text
 
-_CATEGORY_STYLE: dict[str, str] = {
-    "ONGOING": "yellow",
-    "SUCCESS": "bold green",
-    "WARNING": "bold yellow",
-    "INFO": "cyan",
-    "FAILURE": "bold red",
-    "FATAL": "bold red",
-    "DEBUG": "magenta",
-    "SKIP": "dim cyan",
-    "TITLE": "bold magenta",
-}
-
 _LEVEL_STYLE: dict[str, str] = {
     "DEBUG": "dim magenta",
     "INFO": "blue",
@@ -42,11 +30,8 @@ class OpenTideConsoleRenderer:
         event = event_dict.pop("event", "")
         level = str(event_dict.pop("level", method_name)).upper()
         timestamp = event_dict.pop("timestamp", "")
-        category = event_dict.pop("category", None)
-        detail = event_dict.pop("detail", None)
-        advice = event_dict.pop("advice", None)
 
-        for key in ("logger", "exc_info", "stack_info"):
+        for key in ("logger", "exc_info", "stack_info", "category"):
             event_dict.pop(key, None)
 
         line = Text()
@@ -57,25 +42,8 @@ class OpenTideConsoleRenderer:
         level_style = _LEVEL_STYLE.get(level, "bold")
         line.append(f"{level:<8}", style=level_style if self._use_color else "")
 
-        if category:
-            line.append("  ")
-            category_style = _CATEGORY_STYLE.get(str(category), "bold")
-            line.append(f"{category:<8}", style=category_style if self._use_color else "")
-
         line.append("  ")
         line.append(str(event))
-
-        if detail:
-            line.append("\n")
-            line.append("           ", style="dim")
-            line.append("detail: ", style="dim italic")
-            line.append(str(detail))
-
-        if advice:
-            line.append("\n")
-            line.append("           ", style="dim")
-            line.append("advice: ", style="cyan dim italic")
-            line.append(str(advice))
 
         for key, value in event_dict.items():
             line.append("\n")

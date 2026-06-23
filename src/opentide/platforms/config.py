@@ -1,11 +1,9 @@
 """Per-platform system configuration loading for ``Platform.config``."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
-
 from opentide.core.index_manager import IndexManager
 from opentide.models.platform import parse_platform_config
 
@@ -18,7 +16,6 @@ def build_system_config(system: str, raw: dict[str, Any] | None = None) -> Any:
     """Build typed platform configuration for a detection system."""
     index = systems_raw_index()
     raw = dict(raw if raw is not None else index[system])
-
     if system == "splunk":
 
         @dataclass(frozen=True)
@@ -38,7 +35,6 @@ def build_system_config(system: str, raw: dict[str, Any] | None = None) -> Any:
             defaults=dict(raw["defaults"]),
             modifiers=dict(raw.get("modifiers", {})),
         )
-
     if system == "carbon_black_cloud":
 
         @dataclass(frozen=True)
@@ -56,7 +52,6 @@ def build_system_config(system: str, raw: dict[str, Any] | None = None) -> Any:
             secrets=dict(raw["secrets"]),
             validation=dict(raw["validation"]),
         )
-
     platform_key = {
         "sentinel": "sentinel",
         "defender_for_endpoint": "defender_for_endpoint",
@@ -64,7 +59,6 @@ def build_system_config(system: str, raw: dict[str, Any] | None = None) -> Any:
         "crowdstrike": "crowdstrike",
         "harfanglab": "harfanglab",
     }[system]
-
     raw_config = dict(raw)
     platform_payload = dict(raw_config.get("platform", {}))
     platform = parse_platform_config(platform_key, platform_payload) if platform_payload else None

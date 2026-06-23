@@ -1,9 +1,7 @@
 """OpenTide Typer CLI application."""
 
 from __future__ import annotations
-
 import typer
-
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import (
     CiPlatform,
@@ -27,7 +25,9 @@ from opentide.cli.services.mutate import run_mutate
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.core.logging import LoggingConfig, init_logging, print_banner
 from opentide.core.root import get_repo_root
+import structlog
 
+logger = structlog.get_logger("opentide.cli.__init__")
 app = typer.Typer(
     name="opentide",
     help="OpenTide — DetectionOps Engine",
@@ -215,15 +215,12 @@ def deploy_cmd(
 
 @deploy_app.command("metadata")
 def deploy_metadata_cmd(
-    ctx: typer.Context,
-    platform: DetectionPlatform = typer.Option(..., "--platform"),
+    ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")
 ) -> None:
     """Deploy Splunk metadata lookup table (platform-specific)."""
     cli = get_context(ctx)
     cli.apply_environment()
-    from opentide.core.logging import log
-
-    log("INFO", f"Metadata deployment for {platform.value}")
+    logger.info("metadata_deployment", platform=platform.value)
     emit_success(cli, {"message": "Metadata deployment signalled", "platform": platform.value})
 
 
@@ -382,10 +379,7 @@ def info_cmd(
                 caps.append("deploy")
             if plat["can_validate"]:
                 caps.append("validate")
-            table.add_row(
-                plat["name"],
-                f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]",
-            )
+            table.add_row(plat["name"], f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]")
         Console().print(table)
 
 

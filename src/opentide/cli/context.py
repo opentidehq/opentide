@@ -1,17 +1,14 @@
 """CLI runtime context and environment wiring."""
 
 from __future__ import annotations
-
 import contextvars
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-
 from opentide.core.root import get_data_root, get_repo_root
 
 _cli_context: contextvars.ContextVar[CliContext | None] = contextvars.ContextVar(
-    "opentide_cli_context",
-    default=None,
+    "opentide_cli_context", default=None
 )
 
 
@@ -33,7 +30,6 @@ class CliContext:
             os.environ["OPENTIDE_DATA_ROOT"] = str(self.data)
         elif "OPENTIDE_DATA_ROOT" not in os.environ:
             os.environ["OPENTIDE_DATA_ROOT"] = str(get_data_root())
-
         if self.debug:
             os.environ["DEBUG"] = "True"
             os.environ["DEBUG_ENABLED"] = "1"
@@ -55,7 +51,6 @@ def get_context(ctx: object | None = None) -> CliContext:
     cached = _cli_context.get()
     if cached is not None:
         return cached
-
     from typer import Context
 
     if isinstance(ctx, Context):
@@ -66,5 +61,4 @@ def get_context(ctx: object | None = None) -> CliContext:
                 return obj
             parent = current.parent
             current = parent if isinstance(parent, Context) else None
-
     raise TypeError("CLI context not initialised")

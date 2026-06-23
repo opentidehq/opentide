@@ -1,11 +1,8 @@
 """Threat vector (TVM) Pydantic models — schema ``threat::1.0``."""
 
 from __future__ import annotations
-
 from typing import Any, ClassVar, cast
-
 from pydantic import Field, model_validator
-
 from opentide.models.base import TideModel
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 
@@ -25,7 +22,7 @@ class ThreatBody(TideModel):
     @model_validator(mode="before")
     @classmethod
     def _accept_attack_key(cls, data: Any) -> Any:
-        if isinstance(data, dict) and "att&ck" in data and "att_ck" not in data:
+        if isinstance(data, dict) and "att&ck" in data and ("att_ck" not in data):
             data = dict(data)
             data["att_ck"] = data.pop("att&ck")
         return data
@@ -35,7 +32,6 @@ class ThreatVector(TideModel):
     """Code-first threat vector model (replaces raw TVM dict entries)."""
 
     __schema_identifier__: ClassVar[str] = "threat::1.0"
-
     name: str
     criticality: str
     metadata: ObjectMetadata

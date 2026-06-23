@@ -1,12 +1,10 @@
 """Repository and bundled data root discovery."""
 
 from __future__ import annotations
-
 import os
 from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
-
 import git
 
 

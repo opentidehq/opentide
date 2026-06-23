@@ -1,12 +1,12 @@
 """Export services for the CLI."""
 
 from __future__ import annotations
-
 from typing import TYPE_CHECKING
-
 from opentide.cli.enums import ExportTarget
-from opentide.core.logging import log
+import structlog
+from opentide.core.logging.console import emit_section
 
+logger = structlog.get_logger("opentide.cli.services.export")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
@@ -34,6 +34,6 @@ def run_export_target(target: ExportTarget) -> None:
 def run_export(ctx: CliContext, *, target: ExportTarget) -> dict[str, object]:
     """Entry point for export command."""
     ctx.apply_environment()
-    log("TITLE", f"Export — {target.value}")
+    emit_section("Export — {}")
     run_export_target(target)
     return {"message": f"Export {target.value} completed", "target": target.value}

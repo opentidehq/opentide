@@ -1,28 +1,15 @@
 from __future__ import annotations
-
 import os
 import sys
 from tokenize import String
-
 from dataclasses import dataclass
 from typing import Literal, Optional, List, Sequence, Mapping, Any, Union
 from opentide.core.typing import Never
 from enum import Enum, auto
-
-
-from opentide.core.logging import log
-
-# TODO - Re-Architect Uber Class by merging this and OpenTide
-
-# OpenTide.Models. #DataModels
-# OpenTide.Objects. #Returning Models
-# OpenTide.Configurations.
-# OpenTide.Deployment. #Returns Initialized deployment classes
-# OpenTide.Vocabularies.
-# OpenTide.Schemas.Json / OpenTide.Schemas.Yaml
-
 from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.models.rule import DetectionRule
+import structlog
+logger = structlog.get_logger('opentide.models.system_models')
 
 @dataclass
 class SystemConfig:
@@ -38,20 +25,21 @@ class SystemConfig:
 
     @dataclass
     class Modifiers:
+
         @dataclass
         class Conditions:
             status: Optional[Sequence[str]] = None
             flags: Optional[Sequence[Never] | Sequence[str]] = None
             tenants: Optional[Sequence[Never] | Sequence[str]] = None
             default: Optional[bool] = None
-        
         conditions: Conditions
         modifications: Mapping[Any, str]
         name: Optional[str] = None
         description: Optional[str] = None
 
-    @dataclass 
+    @dataclass
     class Tenant:
+
         @dataclass
         class Setup:
             proxy: bool
@@ -60,7 +48,6 @@ class SystemConfig:
         @dataclass
         class Parameters:
             ...
-        
         name: str
         description: str
         deployment: Union[DeploymentStrategy, str]
@@ -70,7 +57,6 @@ class SystemConfig:
         def __post_init__(self):
             if type(self.deployment) is str:
                 self.deployment = DeploymentStrategy[self.deployment]
-
     platform: Platform
     tenants: Optional[Sequence[Tenant]]
     modifiers: Optional[Sequence[Modifiers]] = None
@@ -113,7 +99,4 @@ class TenantDeployment:
     @dataclass
     class HarfangLab(DeploymentBatch):
         tenant: ConfigurationModels.Systems.HarfangLab.Tenant
-
-
-# Legacy alias
 DeploymentBatch = DeploymentBatch

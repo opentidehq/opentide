@@ -1,23 +1,15 @@
 """Pydantic-driven template generation for core Tide object models."""
 
 from __future__ import annotations
-
 from pathlib import Path
 from typing import Any
-
 import yaml
-
 from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS
-from opentide.generation.template_engine import (
-    emit_template_file,
-    gen_template,
-    get_required,
-)
+from opentide.generation.template_engine import emit_template_file, gen_template, get_required
 from opentide.models.base import TideModel
 from opentide.schemas.store import schemas_data_root
 
 CORE_TEMPLATE_MODELS: dict[str, type[TideModel]] = CORE_SCHEMA_MODELS
-
 _CORE_METASCHEMA_FILES: dict[str, str] = {
     "mdr": "MDR Meta Schema.yaml",
     "dom": "Detection Objective.metaschema.yaml",
@@ -39,17 +31,11 @@ def load_core_template_source(model_key: str) -> dict[str, Any]:
     parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(parsed, dict):
         raise ValueError(f"Invalid metaschema payload for {model_key}")
-    # Gate: core object models are registered in the Pydantic pipeline.
     _ = model.schema_identifier()
     return parsed
 
 
-def generate_core_template(
-    model_key: str,
-    template_path: Path,
-    *,
-    log,
-) -> None:
+def generate_core_template(model_key: str, template_path: Path) -> None:
     """Generate a YAML template for a core object model."""
     parsed = load_core_template_source(model_key)
     placeholders: dict[str, str] = parsed.get("tide.placeholders") or {}
@@ -62,7 +48,6 @@ def generate_core_template(
         placeholders=placeholders,
         spacing_properties=parsed["properties"],
         indent=None,
-        log=log,
     )
 
 

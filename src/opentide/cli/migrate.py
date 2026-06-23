@@ -1,21 +1,20 @@
 """Client migration helper — detect and rewrite legacy imports."""
 
 from __future__ import annotations
-
 import re
 from pathlib import Path
 
 _LEGACY_IMPORTS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"from Engines\.modules\.tide import DataTide"), "from opentide import OpenTide"),
-    (re.compile(r"from Engines\.modules\.tide import OpenTide"), "from opentide import OpenTide"),
+    (re.compile("from Engines\\.modules\\.tide import DataTide"), "from opentide import OpenTide"),
+    (re.compile("from Engines\\.modules\\.tide import OpenTide"), "from opentide import OpenTide"),
     (
-        re.compile(r"from Engines\.modules\.tide import IndexTide"),
+        re.compile("from Engines\\.modules\\.tide import IndexTide"),
         "from opentide.core.index_manager import IndexManager",
     ),
-    (re.compile(r"python Orchestration/validate\.py"), "opentide validate"),
-    (re.compile(r"python Orchestration/deploy\.py"), "opentide deploy"),
-    (re.compile(r"python Orchestration/generate\.py"), "opentide generate"),
-    (re.compile(r"python Orchestration/document\.py"), "opentide document"),
+    (re.compile("python Orchestration/validate\\.py"), "opentide validate"),
+    (re.compile("python Orchestration/deploy\\.py"), "opentide deploy"),
+    (re.compile("python Orchestration/generate\\.py"), "opentide generate"),
+    (re.compile("python Orchestration/document\\.py"), "opentide document"),
 )
 
 
@@ -27,7 +26,7 @@ def scan_repo(repo: Path) -> list[dict[str, str]]:
             continue
         if path.suffix not in {".py", ".sh", ".yml", ".yaml", ".md"}:
             continue
-        if any(part in path.parts for part in (".venv", "node_modules", ".git")):
+        if any((part in path.parts for part in (".venv", "node_modules", ".git"))):
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -51,7 +50,7 @@ def apply_migrations(repo: Path) -> list[str]:
     for path in repo.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".sh", ".yml", ".yaml", ".md"}:
             continue
-        if any(part in path.parts for part in (".venv", "node_modules", ".git")):
+        if any((part in path.parts for part in (".venv", "node_modules", ".git"))):
             continue
         try:
             original = path.read_text(encoding="utf-8")

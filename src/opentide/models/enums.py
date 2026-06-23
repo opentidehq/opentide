@@ -1,7 +1,6 @@
 """Runtime enum registry for vocabulary-backed schema fields."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 

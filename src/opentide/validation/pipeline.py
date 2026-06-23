@@ -1,11 +1,8 @@
 """Pydantic validation pipeline replacing Draft7Validator."""
 
 from __future__ import annotations
-
 from typing import Any
-
 from pydantic import ValidationError
-
 from opentide.models.base import TideModel
 from opentide.models.objective import DetectionObjective
 from opentide.models.results import ValidationResult
@@ -29,8 +26,7 @@ def validate_object(model: TideModel, object_type: str) -> ValidationResult:
         return ValidationResult(ok=True)
     except ValidationError as exc:
         return ValidationResult(
-            ok=False,
-            errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()],
+            ok=False, errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()]
         )
 
 
@@ -49,8 +45,7 @@ def validate_raw_payload(payload: dict[str, Any], object_type: str) -> Validatio
         return ValidationResult(ok=True)
     except ValidationError as exc:
         return ValidationResult(
-            ok=False,
-            errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()],
+            ok=False, errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()]
         )
 
 

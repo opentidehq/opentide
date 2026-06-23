@@ -1,16 +1,14 @@
 """OpenTide programmatic registry — explicit lifecycle and typed object access."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
-
 from opentide.core import index_manager as index_mod
 from opentide.core import runtime
-from opentide.core.environment import DebugHelpers  # noqa: F401
-from opentide.loading.compat import ObjectLoader  # noqa: F401
-from opentide.models.deployment_enums import DetectionPlatforms  # noqa: F401
+from opentide.core.environment import DebugHelpers
+from opentide.loading.compat import ObjectLoader
+from opentide.models.deployment_enums import DetectionPlatforms
 from opentide.models.objective import DetectionObjective
 from opentide.models.results import ValidationResult
 from opentide.models.rule import DetectionRule
@@ -18,7 +16,6 @@ from opentide.models.threat import ThreatVector
 from opentide.platforms.registry import PlatformsRegistry
 
 IndexManager = index_mod.IndexManager
-
 TideObject = DetectionRule | DetectionObjective | ThreatVector
 
 
@@ -63,7 +60,6 @@ class OpenTideRegistry:
         assert self._index is not None
         objects = self._index["objects"]
         files = self._index.get("files", {})
-
         self._rules = {}
         for uuid, data in objects.get("mdr", {}).items():
             file_path = _resolve_file("mdr", files.get(uuid), self._index)
@@ -71,11 +67,9 @@ class OpenTideRegistry:
 
             rule = load_rule_from_dict(data, file=file_path)
             self._rules[uuid] = rule.bind_registry(self)
-
         self._threats = {}
         for uuid, data in objects.get("tvm", {}).items():
             self._threats[uuid] = ThreatVector.from_yaml_dict(data)
-
         self._objectives = {}
         from opentide.loading.objective_loader import load_objective_from_dict
 
@@ -266,7 +260,6 @@ class _DeploymentConfig:
     @property
     def statuses(self) -> list[Any]:
         import sys
-
         from opentide.core.root import repository_root
 
         root = str(repository_root())
@@ -292,7 +285,6 @@ class _VisibilityConfig:
     @property
     def visibility(self) -> Any:
         import sys
-
         from opentide.core.root import repository_root
 
         root = str(repository_root())
@@ -392,7 +384,6 @@ class _VocabulariesAccessor:
     @property
     def Index(self) -> dict[str, Any]:
         import sys
-
         from opentide.core.root import repository_root
 
         root = str(repository_root())
@@ -499,7 +490,6 @@ class _ModelsAccessor:
 
         if self._rules:
             return dict(self._rules)
-
         files = self._index.get("files", {})
         typed: dict[str, DetectionRule] = {}
         for uuid, data in self.mdr.items():

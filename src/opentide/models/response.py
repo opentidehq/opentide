@@ -1,7 +1,6 @@
 """Detection rule response block models."""
 
 from __future__ import annotations
-
 from opentide.models.base import TideModel
 
 
