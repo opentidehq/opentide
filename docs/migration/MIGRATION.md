@@ -150,6 +150,6 @@ Rewrites common `Engines.modules.*` imports and `Orchestration/` invocations.
 
 ## Related
 
-- [`AGENTS.md`](../../AGENTS.md)
+- [`AGENTS.md`](https://github.com/OpenTideHQ/opentide/blob/development/AGENTS.md)
 - [`TEST_PLAN.md`](../TEST_PLAN.md)
 - [#69](https://github.com/OpenTideHQ/CoreTide/issues/69) · [#67 CLI](https://github.com/OpenTideHQ/CoreTide/issues/67)

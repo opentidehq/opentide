@@ -1,6 +1,6 @@
 # Master Test Plan — Project TideKit
 
-Epic: [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) · Agent guide: [`AGENTS.md`](../AGENTS.md)
+Epic: [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) · Agent guide: [`AGENTS.md`](https://github.com/OpenTideHQ/opentide/blob/development/AGENTS.md)
 
 ---
 
