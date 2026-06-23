@@ -10,7 +10,6 @@ from urllib.request import Request, urlopen
 
 from opentide.core.files import resolve_paths
 from opentide.vocabulary.fetch_stix import GITHUB_API, fetch_latest_attack_stix
-
 from opentide.vocabulary.generate_attack import generate_attack_vocabs
 
 
