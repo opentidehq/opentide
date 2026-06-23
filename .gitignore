@@ -38,6 +38,8 @@ htmlcov/
 .nox/
 coverage.xml
 pytest-results.xml
+codeql-results.sarif
+.codeql-db/
 *.cover
 .hypothesis/
 
