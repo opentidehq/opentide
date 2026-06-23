@@ -29,8 +29,5 @@ jobs:
           uv run ruff check src tests
           uv run ruff format --check src tests
 
-      - name: Ty (primary)
+      - name: Ty
         run: uv run ty check src/opentide --output-format github
-
-      - name: Mypy (migration baseline)
-        run: uv run mypy --follow-imports=skip src/opentide

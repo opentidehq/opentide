@@ -41,10 +41,7 @@ coverage.xml
 .hypothesis/
 
 # Type checkers
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.pytype/
+.ty_cache/
 .ruff_cache/
 
 # IDEs
@@ -81,10 +78,6 @@ staging/
 output/
 generated/
 *.log
-
-# External vendored trees (keep tracked sources; ignore local build/cache)
-External/**/node_modules/
-External/**/.cache/
 
 # Hatch-VCS generated version file
 src/opentide/_version.py

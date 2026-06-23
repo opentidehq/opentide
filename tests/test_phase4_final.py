@@ -34,9 +34,9 @@ def test_framework_meta_schemas_directory_removed() -> None:
 def test_vocabulary_resolver_class_in_opentide() -> None:
     pipeline_source = (ROOT / "src/opentide/generation/schema_pipeline.py").read_text()
     assert "class VocabularyResolver" in pipeline_source
-    engines_source = (ROOT / "Engines/framework/json_schemas.py").read_text()
-    assert "class EnumResolver" not in engines_source
-    assert "class VocabularyResolver" not in engines_source
+    shim = (ROOT / "src/Engines/framework/json_schemas.py").read_text()
+    assert "from opentide.generation.schema_pipeline import" in shim
+    assert "class EnumResolver" not in shim
 
 
 def test_strip_framework_keywords_removes_tide_keys() -> None:

@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
-from opentide.core.files import resolve_paths
+from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS
 
 TIDE_PREFIX = "tide:"
@@ -31,17 +31,14 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _load_global_config(repo_root: Path) -> dict[str, Any]:
-    import toml
-
-    config_path = repo_root / "Configurations" / "global.toml"
-    return toml.load(config_path.open(encoding="utf-8"))
+def _load_global_config() -> dict[str, Any]:
+    return resolve_configurations()["global"]
 
 
 def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
     """Return portable artifact keys and absolute paths."""
     paths = resolve_paths()
-    global_config = _load_global_config(repo_root)
+    global_config = _load_global_config()
     json_map: dict[str, str] = global_config.get("json_schemas", {})
     template_map: dict[str, str] = global_config.get("templates", {})
     config_json_map: dict[str, str] = global_config.get("config_json_schemas", {})

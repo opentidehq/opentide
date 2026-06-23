@@ -14,7 +14,6 @@ from Engines.modules.documentation import get_icon
 from Engines.modules.framework import get_type, get_vocab_entry
 from Engines.modules.models import StatusStrategy
 from Engines.modules.vocabulary import VocabularyDefinition, entry_key_field
-
 from opentide.core.files import resolve_paths
 from opentide.core.logging import log
 from opentide.core.registry import OpenTide

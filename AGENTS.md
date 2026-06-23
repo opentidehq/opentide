@@ -73,7 +73,7 @@
 ```bash
 # Phase 0 (#61)
 rg -i '\bcdm\b|\bbdr\b' --glob '!*.md' | wc -l
-python -c "from Engines.modules.tide import DataTide"
+python -c "from opentide import OpenTide"
 
 # Phase 5 (#66)
 uv sync --group dev && uv run python -c "from opentide import OpenTide"
@@ -91,13 +91,24 @@ uv sync --group dev          # install runtime + dev deps into .venv
 uv run pytest tests/ -v      # run tests
 uv run ruff check src tests  # lint
 uv run ruff format src tests # format
-uv run ty check src/opentide # primary type checker (Astral ty)
-uv run mypy --follow-imports=skip src/opentide  # migration baseline only
+uv run ty check src/opentide # Astral ty (sole type checker)
 ```
 
-CI runs `uv sync --group dev` on Python **3.10–3.14** (3.10 retained until infra PR validates 3.14; drop oldest after green matrix). **ty** is the primary type checker in CI; **mypy** remains during migration and will be removed once ty coverage is complete.
+CI runs `uv sync --group dev` on Python **3.10–3.14**. **ty** is the type checker in CI and pre-commit; **ruff** handles lint and format.
 
-Structured logging lives in `opentide.core.logging` (structlog + Rich). Legacy `Engines/modules/logs.py` is a thin shim — new code must import from `opentide.core.logging`.
+## Repository layout
+
+```
+src/opentide/     # PyPI package (models, CLI, MCP, bundled data)
+src/Engines/      # Runtime deployers/validators (shipped in wheel; migrating into opentide)
+tests/
+docs/
+scripts/
+```
+
+Bundled data lives under `src/opentide/data/` (configurations, vocabulary, external, log_sources). There are **no** legacy root folders (`Configurations/`, `Framework/`, `External/`, `Orchestration/`, `Engines/` at repo root).
+
+Structured logging lives in `opentide.core.logging` (structlog + Rich). Legacy `src/Engines/modules/logs.py` is a thin shim — new code must import from `opentide.core.logging`.
 
 Full commands in each issue and [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md).
 

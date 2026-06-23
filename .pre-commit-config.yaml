@@ -14,14 +14,3 @@ repos:
         language: system
         pass_filenames: false
         files: ^src/opentide/
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.1
-    hooks:
-      - id: mypy
-        additional_dependencies:
-          - pydantic
-          - types-PyYAML
-          - types-toml
-        args: [--config-file=pyproject.toml]
-        files: ^src/opentide/

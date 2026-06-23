@@ -17,7 +17,7 @@ Epic: [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) · Agent guide: [`
 | 6 | [#67](https://github.com/OpenTideHQ/CoreTide/issues/67) | CLI | Typer CliRunner |
 | 7 | [#68](https://github.com/OpenTideHQ/CoreTide/issues/68) | MCP | Tool/resource smoke |
 | 8 | [#69](https://github.com/OpenTideHQ/CoreTide/issues/69) | Packaging | `hatch build`, `twine check` |
-| 9 | [#71](https://github.com/OpenTideHQ/CoreTide/issues/71) | Full pytest | ≥80% cov, ruff, mypy, mkdocs |
+| 9 | [#71](https://github.com/OpenTideHQ/CoreTide/issues/71) | Full pytest | ≥80% cov, ruff, ty, mkdocs |
 
 ---
 
@@ -92,7 +92,7 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 pip install -e ".[dev]"
 pytest --cov=opentide --cov-fail-under=80
 ruff check src/opentide
-mypy --strict src/opentide/core
+uv run ty check src/opentide
 mkdocs build --strict
 ```
 
