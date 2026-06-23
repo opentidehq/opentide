@@ -49,3 +49,26 @@ def test_detection_rule_requires_registry(metadata: dict[str, Any]) -> None:
     )
     with pytest.raises(RuntimeError):
         rule.deploy("sentinel")
+
+
+def test_detection_rule_deploy_and_validate_query_success(metadata: dict[str, Any]) -> None:
+    rule = DetectionRule.from_yaml_dict(
+        {
+            "name": "Test rule",
+            "metadata": metadata,
+            "description": "desc",
+            "status": "STAGING",
+            "severity": "High",
+            "techniques": ["T1059"],
+            "platforms": {},
+        }
+    )
+    registry = MagicMock()
+    registry.Platforms = {
+        "sentinel": MagicMock(deployer=MagicMock(), validator=MagicMock()),
+    }
+    bound = rule.bind_registry(registry)
+    result = bound.deploy("sentinel", dry_run=False)
+    assert result.dry_run is False
+    assert bound.validate_query("sentinel").ok is True
+    registry.Platforms["sentinel"].deployer.deploy.assert_called_once()

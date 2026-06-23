@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from opentide.generation.vocabulary import (
@@ -11,9 +14,20 @@ from opentide.generation.vocabulary import (
     VocabularyLoadError,
     VocabularyMetadata,
     entry_key_field,
+    is_id_keyed,
     normalize_stages,
+    parse_vocabulary_document,
     parse_yaml_vocabulary,
+    resolve_vocab_key,
 )
+from opentide.vocabulary.io import (
+    field_from_vocab_path,
+    load_vocab_file,
+    strip_spurious_entry_id,
+    validate_field_matches_path,
+    write_vocab_file,
+)
+from opentide.vocabulary.stix_attack import load_stix_bundle, parse_techniques
 
 
 def test_normalize_stages_none() -> None:
@@ -28,9 +42,30 @@ def test_normalize_stages_list() -> None:
     assert normalize_stages(["OS", "Cloud"]) == ["OS", "Cloud"]
 
 
-def test_entry_key_field_model() -> None:
+def test_entry_key_field_by_key() -> None:
+    assert entry_key_field(key="id") == "id"
+    assert entry_key_field(key="name") == "name"
+
+
+def test_entry_key_field_model_legacy() -> None:
     assert entry_key_field(model=True) == "id"
     assert entry_key_field(model=False) == "name"
+
+
+def test_resolve_vocab_key_explicit() -> None:
+    assert resolve_vocab_key({"key": "id"}) == "id"
+    assert resolve_vocab_key({"key": "name"}) == "name"
+
+
+def test_resolve_vocab_key_model_legacy() -> None:
+    assert resolve_vocab_key({"model": True}) == "id"
+    assert resolve_vocab_key({}) == "name"
+
+
+def test_is_id_keyed() -> None:
+    assert is_id_keyed({"key": "id"})
+    assert not is_id_keyed({"key": "name"})
+    assert is_id_keyed({"model": True})
 
 
 def test_vocabulary_loader_load_valid() -> None:
@@ -40,6 +75,7 @@ def test_vocabulary_loader_load_valid() -> None:
             "field": "impact",
             "description": "Impact levels",
             "icon": "💥",
+            "key": "name",
         },
         "entries": {
             "Nuisance": {
@@ -67,7 +103,7 @@ def test_vocabulary_loader_missing_entries() -> None:
 
 def test_vocabulary_loader_skips_malformed_entry() -> None:
     raw = {
-        "metadata": {"name": "Test", "field": "test"},
+        "metadata": {"name": "Test", "field": "test", "key": "name"},
         "entries": {
             "good": {"name": "Good"},
             "bad": "not-a-mapping",
@@ -78,7 +114,7 @@ def test_vocabulary_loader_skips_malformed_entry() -> None:
     assert "bad" not in vocabulary.entries
 
 
-def test_parse_yaml_vocabulary() -> None:
+def test_parse_vocabulary_document() -> None:
     raw = {
         "name": "Severity",
         "field": "severity",
@@ -88,39 +124,68 @@ def test_parse_yaml_vocabulary() -> None:
             {"name": "High", "description": "High severity", "tide.vocab.stages": ["A", "B"]},
         ],
     }
-    vocabulary = parse_yaml_vocabulary(raw, source="Severity.yaml")
+    vocabulary = parse_vocabulary_document(raw, source="severity.vocab.toml")
     assert vocabulary.metadata.field == "severity"
+    assert vocabulary.metadata.key == "name"
     assert vocabulary.entries["Low"].description == "Low severity"
     assert vocabulary.entries["High"].stages == ("A", "B")
 
 
-def test_parse_yaml_vocabulary_model_keys_use_id() -> None:
+def test_parse_vocabulary_document_id_keyed() -> None:
     raw = {
         "name": "Rules",
         "field": "rule",
         "model": True,
         "keys": [{"id": "uuid-1", "name": "Rule One"}],
     }
-    vocabulary = parse_yaml_vocabulary(raw, source="rules.yaml")
+    vocabulary = parse_vocabulary_document(raw, source="rules.vocab.toml")
     assert "uuid-1" in vocabulary.entries
     assert vocabulary.entries["uuid-1"].name == "Rule One"
 
 
-def test_parse_yaml_vocabulary_empty_keys_allowed() -> None:
+def test_parse_vocabulary_document_duplicate_id_raises() -> None:
+    raw = {
+        "name": "Test",
+        "field": "test",
+        "key": "id",
+        "keys": [
+            {"id": "T1", "name": "One"},
+            {"id": "T1", "name": "Duplicate"},
+        ],
+    }
+    with pytest.raises(VocabularyLoadError, match="Duplicate entry key"):
+        parse_vocabulary_document(raw, source="test.vocab.toml")
+
+
+def test_parse_vocabulary_document_empty_keys_allowed() -> None:
     raw = {
         "name": "Responders",
         "field": "responders",
         "description": "Instance-defined",
         "keys": [],
     }
-    vocabulary = parse_yaml_vocabulary(raw, source="responders.yaml")
+    vocabulary = parse_vocabulary_document(raw, source="responders.vocab.toml")
     assert vocabulary.metadata.field == "responders"
     assert vocabulary.entries == {}
 
 
-def test_parse_yaml_vocabulary_missing_required() -> None:
-    with pytest.raises(VocabularyLoadError, match="Missing required key 'keys'"):
-        parse_yaml_vocabulary({"name": "X", "field": "x"}, source="bad.yaml")
+def test_parse_vocabulary_document_missing_required() -> None:
+    with pytest.raises(VocabularyLoadError, match="Missing required key 'field'"):
+        parse_vocabulary_document({"name": "X"}, source="bad.vocab.toml")
+
+
+def test_parse_vocabulary_document_no_keys_defaults_empty() -> None:
+    vocabulary = parse_vocabulary_document(
+        {"name": "Responders", "field": "responders"},
+        source="responders.vocab.toml",
+    )
+    assert vocabulary.entries == {}
+
+
+def test_parse_yaml_vocabulary_alias() -> None:
+    raw = {"name": "X", "field": "x", "keys": [{"name": "A"}]}
+    vocabulary = parse_yaml_vocabulary(raw, source="x.yaml")
+    assert "A" in vocabulary.entries
 
 
 def test_vocabulary_entry_as_dict_roundtrip() -> None:
@@ -167,7 +232,7 @@ def test_vocabulary_loader_load_index_per_vocab_errors() -> None:
     loaded = VocabularyLoader.load_index(
         {
             "good": {
-                "metadata": {"name": "Good", "field": "good"},
+                "metadata": {"name": "Good", "field": "good", "key": "name"},
                 "entries": {"x": {"name": "X"}},
             },
             "bad": {"entries": {}},
@@ -175,3 +240,93 @@ def test_vocabulary_loader_load_index_per_vocab_errors() -> None:
     )
     assert "good" in loaded
     assert "bad" not in loaded
+
+
+def test_field_from_vocab_path() -> None:
+    assert field_from_vocab_path(Path("surface.vocab.toml")) == "surface"
+    assert field_from_vocab_path(Path("att&ck.groups.vocab.toml")) == "att&ck.groups"
+
+
+def test_validate_field_matches_path() -> None:
+    with pytest.raises(VocabularyLoadError, match="does not match filename"):
+        validate_field_matches_path({"field": "wrong"}, Path("impact.vocab.toml"))
+
+
+def test_strip_spurious_entry_id() -> None:
+    entry = {"id": "IMP0001", "name": "Nuisance"}
+    cleaned = strip_spurious_entry_id(entry, vocab_key="name", field="impact")
+    assert "id" not in cleaned
+
+
+def test_load_vocab_file_roundtrip(tmp_path: Path) -> None:
+    doc = {
+        "name": "Impact",
+        "field": "impact",
+        "key": "name",
+        "keys": [{"name": "Nuisance", "description": "Small"}],
+    }
+    path = tmp_path / "impact.vocab.toml"
+    write_vocab_file(path, doc)
+    vocabulary = load_vocab_file(path)
+    assert vocabulary.metadata.field == "impact"
+    assert vocabulary.entries["Nuisance"].description == "Small"
+
+
+def test_load_bundled_impact_vocab() -> None:
+    from opentide.core.files import resolve_paths
+
+    vocab_path = Path(resolve_paths()["vocabularies"]) / "impact.vocab.toml"
+    vocabulary = load_vocab_file(vocab_path)
+    assert "Nuisance" in vocabulary.entries
+    assert "id" not in vocabulary.entries["Nuisance"].extra
+
+
+def test_stix_parse_techniques_fixture(tmp_path: Path) -> None:
+    fixture = {
+        "type": "bundle",
+        "objects": [
+            {
+                "type": "x-mitre-tactic",
+                "name": "Defense Evasion",
+                "x_mitre_shortname": "defense-evasion",
+            },
+            {
+                "type": "attack-pattern",
+                "name": "Abuse Elevation Control Mechanism",
+                "description": "Test technique",
+                "external_references": [
+                    {
+                        "source_name": "mitre-attack",
+                        "external_id": "T1548",
+                        "url": "https://attack.mitre.org/techniques/T1548",
+                    }
+                ],
+                "kill_chain_phases": [
+                    {"kill_chain_name": "mitre-attack", "phase_name": "defense-evasion"}
+                ],
+            },
+        ],
+    }
+    bundle_path = tmp_path / "enterprise-attack.json"
+    bundle_path.write_text(json.dumps(fixture), encoding="utf-8")
+    objects = load_stix_bundle(bundle_path)
+    techniques = parse_techniques(objects)
+    assert len(techniques) == 1
+    assert techniques[0]["id"] == "T1548"
+    assert techniques[0]["name"] == "Abuse Elevation Control Mechanism"
+    assert "Defense Evasion" in techniques[0]["tide.vocab.stages"]
+
+
+def test_parse_vocabulary_document_skips_malformed_entries() -> None:
+    raw = {
+        "name": "Test",
+        "field": "test",
+        "key": "name",
+        "keys": [
+            {"name": "Good"},
+            "bad-entry",
+            {"description": "missing name"},
+        ],
+    }
+    vocabulary = parse_vocabulary_document(raw, source="test.vocab.toml")
+    assert list(vocabulary.entries) == ["Good"]
