@@ -37,12 +37,42 @@ def tool_coverage(technique: str = "", tactic: str = "") -> dict[str, Any]:
 
 def tool_validate_rule(uuid: str) -> dict[str, Any]:
     ensure_initialised()
+    from opentide.validation.scope import ValidationScope
+    from opentide.validation.session import run_validation
+
     _ = OpenTide.Rules
     rule = OpenTide.Rules.get(uuid)
     if rule is None:
-        return {"valid": False, "errors": [f"Rule {uuid} not found"], "warnings": []}
-    result = rule.validate()
-    return {"valid": result.ok, "errors": result.errors, "warnings": []}
+        return {"valid": False, "errors": [f"Rule {uuid} not found"], "warnings": [], "issues": []}
+    report = run_validation(scope=ValidationScope.narrow(uuids=frozenset({uuid})))
+    return {
+        "valid": report.ok,
+        "errors": [issue.to_legacy_string() for issue in report.errors],
+        "warnings": [issue.to_legacy_string() for issue in report.warnings],
+        "issues": report.model_dump_json_ready().get("issues", []),
+    }
+
+
+def tool_validation_report(
+    *,
+    file: str | None = None,
+    uuid: str | None = None,
+    object_type: str | None = None,
+) -> dict[str, Any]:
+    """Structured validation report for agents (headless API)."""
+    ensure_initialised()
+    from opentide.validation.scope import ValidationScope
+    from opentide.validation.session import run_validation
+
+    scope = ValidationScope.full()
+    if file or uuid or object_type:
+        scope = ValidationScope.narrow(
+            files=frozenset({file}) if file else None,
+            uuids=frozenset({uuid}) if uuid else None,
+            types=frozenset({object_type}) if object_type else None,
+        )
+    report = run_validation(scope=scope)
+    return report.model_dump_json_ready()
 
 
 def tool_validate_query(query: str, platform: str) -> dict[str, Any]:

@@ -10,16 +10,13 @@ skip_model_keys = ["description",
                             "chaining",
                             "cve"]
 
-skip_vocabularies = ["mitigation",
-                    "att&ck"]
+folder_index_pages = true
 
-model_cover_pages = true #Creates a cover page for the Object sub-folder
-                         #only supported in Gitlab Wiki and Azure DevOps Wiki
-
+[flavor]
+default = "generic"
 
 [gitlab]
-uuid_permalinks = true   #All markdown files are named using UUIDs to create
-                         #a permanent URL link. YAML frontmatter is used for page titles.
+uuid_permalinks = true
 
 [cve]
 default_db_link = "https://nvd.nist.gov/vuln/detail/"
@@ -31,60 +28,3 @@ threat = "Threat Vectors"
 objective = "Detection Objectives"
 signal = "Detection Objective Signals"
 rule = "Detection Rules"
-
-[titles]
-threat = "Threat Vector Schema"
-objective = "Detection Objective Schema"
-rule = "Detection Rules Schema"
-
-[icons]
-threat = ""
-objective = ""
-signal = ""
-rule = ""
-vocab = ""
-metaschema = ""
-metadata = ""
-id = ""
-uuid = ""
-name = ""
-title = ""
-references = ""
-meta = ""
-version = ""
-created = ""
-modified = ""
-configurations = ""
-author = ""
-priority = ""
-actor = ""
-detection = ""
-alert = ""
-request = ""
-description = ""
-affiliations = ""
-aliases = ""
-guidelines = ""
-tuning = ""
-terrain = ""
-playbook = ""
-home = ""
-misp = ""
-stix = ""
-cve = ""
-link = ""
-logsources = ""
-fields = ""
-atomics = ""
-systems = ""
-subschemas = ""
-tags = ""
-contributors = ""
-scheduling = ""
-timeframe = ""
-frequency = ""
-lookback = ""
-duration = ""
-throttling = ""
-threshold = ""
-query = ""

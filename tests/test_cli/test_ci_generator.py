@@ -25,6 +25,7 @@ REQUIRED = (
     "opentide validate",
     "opentide generate",
     "opentide deploy",
+    "opentide document",
 )
 
 

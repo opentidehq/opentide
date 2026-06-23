@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
-from dataclasses import field as dc_field
 from pathlib import Path
 from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from opentide.core.logging import log
 
@@ -99,48 +99,68 @@ def is_id_keyed(metadata: Mapping[str, Any]) -> bool:
     return bool(metadata.get("model"))
 
 
-@dataclass(frozen=True)
-class VocabularyMetadata:
+_VOCAB_MODEL_CONFIG = ConfigDict(
+    frozen=True, extra="allow", protected_namespaces=(), populate_by_name=True
+)
+
+
+class VocabularyMetadata(BaseModel):
+    """Vocabulary document metadata (Pydantic document schema)."""
+
+    model_config = _VOCAB_MODEL_CONFIG
+
     name: str
     field: str = ""
     description: str = ""
     icon: str = ""
     key: VocabKey = "name"
     model: bool = False
-    stages: tuple[Mapping[str, Any], ...] = ()
-    extra: Mapping[str, Any] = dc_field(default_factory=dict)
+    stages: list[dict[str, Any]] = Field(default_factory=list)
+    extra: dict[str, Any] = Field(default_factory=dict)
 
     def get(self, key: str, default: Any = None) -> Any:
-        if key in ("name", "field", "description", "icon", "key", "model", "stages", "extra"):
-            value = getattr(self, key)
+        known = {"name", "field", "description", "icon", "key", "model", "stages", "extra"}
+        if key in known:
+            value = getattr(self, key, None)
             if key == "stages":
                 return list(value) if value else default
-            if value not in (None, "", False, ()):
+            if value not in (None, "", False, []):
                 return value
-        return self.extra.get(key, default)
+        if key in self.extra:
+            return self.extra[key]
+        pydantic_extra = getattr(self, "__pydantic_extra__", None) or {}
+        return pydantic_extra.get(key, default)
 
     def to_dict(self) -> dict[str, Any]:
-        payload = {
-            "name": self.name,
-            "description": self.description,
-            "icon": self.icon,
-            "key": self.key,
-            "model": self.model,
-            **dict(self.extra),
-        }
+        payload = self.model_dump(exclude_none=True, exclude={"extra"})
+        payload.update(self.extra)
+        pydantic_extra = getattr(self, "__pydantic_extra__", None) or {}
+        payload.update(pydantic_extra)
         if self.stages:
             payload["stages"] = [dict(stage) for stage in self.stages]
         return payload
 
 
-@dataclass(frozen=True)
-class VocabularyEntry:
+class VocabularyEntry(BaseModel):
+    """Single vocabulary entry."""
+
+    model_config = _VOCAB_MODEL_CONFIG
+
     name: str
     description: str = ""
     icon: str = ""
     link: str = ""
-    stages: tuple[str, ...] = ()
-    extra: Mapping[str, Any] = dc_field(default_factory=dict)
+    stages: tuple[str, ...] = Field(default_factory=tuple, alias="tide.vocab.stages")
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("stages", mode="before")
+    @classmethod
+    def _coerce_stages(cls, value: Any) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if isinstance(value, str):
+            return (value,)
+        return tuple(value)
 
     def get(self, key: str, default: Any = None) -> Any:
         if key == "name":
@@ -152,27 +172,30 @@ class VocabularyEntry:
         if key == "link":
             return self.link
         if key == "tide.vocab.stages":
-            return list(self.stages)
-        return self.extra.get(key, default)
+            return self.stages
+        if key in self.extra:
+            return self.extra[key]
+        pydantic_extra = getattr(self, "__pydantic_extra__", None) or {}
+        return pydantic_extra.get(key, default)
 
     def __contains__(self, key: str) -> bool:
         return key in self.as_dict()
 
     def as_dict(self) -> dict[str, Any]:
-        payload = {
-            "name": self.name,
-            "description": self.description,
-            "icon": self.icon,
-            "link": self.link,
-            **dict(self.extra),
-        }
+        payload = self.model_dump(by_alias=True, exclude_none=True, exclude={"extra"})
+        payload.update(self.extra)
         if self.stages:
             payload["tide.vocab.stages"] = list(self.stages)
+        pydantic_extra = getattr(self, "__pydantic_extra__", None) or {}
+        payload.update(pydantic_extra)
         return payload
 
 
-@dataclass(frozen=True)
-class VocabularyDefinition:
+class VocabularyDefinition(BaseModel):
+    """Loaded vocabulary: metadata plus keyed entries."""
+
+    model_config = _VOCAB_MODEL_CONFIG
+
     metadata: VocabularyMetadata
     entries: dict[str, VocabularyEntry]
 
@@ -263,15 +286,17 @@ def _build_metadata(
             stages.append({"name": stage})
     extra = {key: value for key, value in raw.items() if key not in known}
     is_id = vocab_key == "id"
-    return VocabularyMetadata(
-        name=str(raw.get("name", "")),
-        field=field,
-        description=str(raw.get("description", "")),
-        icon=str(raw.get("icon", "")),
-        key=vocab_key,
-        model=is_id,
-        stages=tuple(stages),
-        extra=extra,
+    return VocabularyMetadata.model_validate(
+        {
+            "name": str(raw.get("name", "")),
+            "field": field,
+            "description": str(raw.get("description", "")),
+            "icon": str(raw.get("icon", "")),
+            "key": vocab_key,
+            "model": is_id,
+            "stages": stages,
+            "extra": extra,
+        }
     )
 
 
@@ -279,13 +304,15 @@ def _build_entry(entry_data: Mapping[str, Any], *, fallback_name: str) -> Vocabu
     reserved = {"name", "description", "icon", "link", "tide.vocab.stages"}
     stages = normalize_stages(entry_data.get("tide.vocab.stages"))
     extra = {key: value for key, value in entry_data.items() if key not in reserved}
-    return VocabularyEntry(
-        name=str(entry_data.get("name", fallback_name)),
-        description=str(entry_data.get("description", "")),
-        icon=str(entry_data.get("icon", "")),
-        link=str(entry_data.get("link", "")),
-        stages=tuple(stages),
-        extra=extra,
+    return VocabularyEntry.model_validate(
+        {
+            "name": str(entry_data.get("name", fallback_name)),
+            "description": str(entry_data.get("description", "")),
+            "icon": str(entry_data.get("icon", "")),
+            "link": str(entry_data.get("link", "")),
+            "tide.vocab.stages": stages,
+            "extra": extra,
+        }
     )
 
 

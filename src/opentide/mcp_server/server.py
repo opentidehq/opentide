@@ -14,6 +14,7 @@ from opentide.mcp_server.tools import (
     tool_search,
     tool_validate_query,
     tool_validate_rule,
+    tool_validation_report,
 )
 
 mcp = FastMCP(
@@ -53,6 +54,20 @@ def coverage(technique: str = "", tactic: str = "") -> dict:
 def validate_rule(uuid: str) -> dict:
     """Validate a rule against its schema."""
     return tool_validate_rule(uuid)
+
+
+@mcp.tool()
+def validation_report(
+    file: str = "",
+    uuid: str = "",
+    object_type: str = "",
+) -> dict:
+    """Structured validation report (full registry by default; narrow with file/uuid/type)."""
+    return tool_validation_report(
+        file=file or None,
+        uuid=uuid or None,
+        object_type=object_type or None,
+    )
 
 
 @mcp.tool()

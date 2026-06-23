@@ -95,7 +95,8 @@ v0.x: legacy imports warn via `DeprecationWarning`. **v1.0 removes shims.**
 | `Orchestration/generate.py` | `opentide generate` |
 | `Orchestration/document.py` | `opentide document` |
 
-Query validation: **5 platforms only** (no CrowdStrike/HarfangLab).
+Documentation output is `docs/{Rules,Objectives,Threats}/` (not `wiki/`). Removed scopes: `vocabularies`, `metaschemas`, `models`, `navigation`. See [CLI document reference](../cli/document.md).
+
 
 ### 6. Update CI
 

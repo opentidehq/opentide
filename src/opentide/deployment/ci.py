@@ -46,10 +46,5 @@ class CIEnvironment:
             log("SUCCESS", "Discover CI Environment to be Local")
             return self.CIPlatforms.LocalDebug
         else:
-            log(
-                "FATAL",
-                "CI Target environment variable is not implemented",
-                "Ensure that you have configured a variable OpenTide.TargetCi as part of your pipeline",
-                "Current supported values: GitlabCI, AzurePipelines, GitlabActions, LocalDebug",
-            )
-            raise Exception
+            log("SUCCESS", "Discover CI Environment to be Local")
+            return self.CIPlatforms.LocalDebug

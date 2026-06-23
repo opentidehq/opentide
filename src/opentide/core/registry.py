@@ -126,9 +126,14 @@ class OpenTideRegistry:
         return validate_object(rule, "rule")
 
     def document_rule(self, rule: DetectionRule) -> str:
-        from opentide.documentation.rule_export import document_detection_rule
+        from opentide.documentation.api import render_rule
 
-        return document_detection_rule(rule)
+        return render_rule(rule)
+
+    def render_rule(self, rule: DetectionRule) -> str:
+        from opentide.documentation.api import render_rule
+
+        return render_rule(rule)
 
     def promote_rule(self, rule: DetectionRule, target_status: str) -> None:
         raise NotImplementedError("promote_rule requires Orchestration/mutate integration")
@@ -241,8 +246,16 @@ class _DocumentationConfig:
         return dict(self._index["configurations"].get("documentation", {}))
 
     @property
-    def icons(self) -> dict[str, str]:
-        return dict(self.Index.get("icons", {}))
+    def flavor(self) -> str:
+        return str(self.Index.get("flavor", "generic"))
+
+    @property
+    def output(self) -> str:
+        return str(self.Index.get("output", "docs"))
+
+    @property
+    def folder_index_pages(self) -> bool:
+        return bool(self.Index.get("folder_index_pages", True))
 
     @property
     def object_names(self) -> dict[str, str]:

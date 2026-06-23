@@ -7,7 +7,18 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from opentide.cli.enums import CiPlatform, DetectionPlatform
-    from opentide.cli.services.init import InitOptions
+
+    class CiSetupOptions:
+        """Placeholder until setup CLI lands on trunk."""
+
+        ci: CiPlatform
+        platforms: list[DetectionPlatform]
+        staging: bool
+        promotion: bool
+        promotion_target: str
+        python_version: str
+else:
+    CiSetupOptions = object  # type: ignore[misc,assignment]
 
 
 @dataclass
@@ -22,6 +33,8 @@ class CiRenderOptions:
     python_version: str = "3.12"
     opentide_version: str = "0.1.0"
     default_branch: str = "main"
+    docs_output: str = "docs"
+    docs_enabled: bool = True
 
     @classmethod
     def from_init(
@@ -49,13 +62,29 @@ class CiRenderOptions:
         )
 
     @classmethod
-    def from_init_options(cls, init: InitOptions) -> CiRenderOptions:
+    def from_repo_options(cls, repo: CiSetupOptions) -> CiRenderOptions:
         return cls.from_init(
-            ci=init.ci,
-            platforms=init.platforms,
-            staging=init.staging,
-            promotion=init.promotion,
-            promotion_target=init.promotion_target,
+            ci=repo.ci,
+            platforms=repo.platforms,
+            staging=repo.staging,
+            promotion=repo.promotion,
+            promotion_target=repo.promotion_target,
+            python_version=getattr(repo, "python_version", "3.12"),
+        )
+
+    @classmethod
+    def from_init_options(cls, init: object) -> CiRenderOptions:
+        """Build render options from init/onboarding options."""
+        from opentide.cli.enums import CiPlatform
+
+        ci = getattr(init, "ci", CiPlatform.github)
+        platforms = getattr(init, "platforms", [])
+        return cls.from_init(
+            ci=ci,
+            platforms=platforms if platforms else [],
+            staging=getattr(init, "staging", True),
+            promotion=getattr(init, "promotion", True),
+            promotion_target=getattr(init, "promotion_target", "PRODUCTION"),
         )
 
     def output_paths(self) -> dict[str, str]:
