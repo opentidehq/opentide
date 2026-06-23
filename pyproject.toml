@@ -215,7 +215,7 @@ exclude = [
     "src/opentide/models/system_models.py",
     "src/opentide/models/deployment_enums.py",
     "src/opentide/models/config_models.py",
-    "src/opentide/core/logging.py",
+    "src/opentide/core/logging",
     "src/opentide/core/debug.py",
     "src/opentide/core/environment.py",
     "src/opentide/core/index_legacy.py",

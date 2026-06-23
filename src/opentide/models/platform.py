@@ -44,7 +44,6 @@ class PlatformConfigBase(TideModel):
 
 class SentinelConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::sentinel::1.0"
-
     query: str
     scheduling: SentinelScheduling
     alert: SentinelAlert
@@ -57,7 +56,6 @@ class SentinelConfig(PlatformConfigBase):
 
 class DefenderConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::defender_for_endpoint::1.0"
-
     query: str
     alert: DefenderAlert
     impacted_entities: DefenderImpactedEntities
@@ -70,14 +68,12 @@ class DefenderConfig(PlatformConfigBase):
 
 class SplunkConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::splunk::1.0"
-
     search: str | None = None
     cron_schedule: str | None = None
 
 
 class SentinelOneConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::sentinel_one::1.0"
-
     condition: SentinelOneCondition
     response: SentinelOneResponse | None = None
     details: SentinelOneDetails | None = None
@@ -86,7 +82,6 @@ class SentinelOneConfig(PlatformConfigBase):
 
 class CrowdstrikeConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::crowdstrike::1.0"
-
     details: CrowdstrikeDetails
     schedule: CrowdstrikeSchedule
     query: str
@@ -95,7 +90,6 @@ class CrowdstrikeConfig(PlatformConfigBase):
 
 class HarfangLabConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::harfanglab::1.0"
-
     maturity: str = "Experimental"
     confidence: str = "Moderate"
     action: str = "Alert"

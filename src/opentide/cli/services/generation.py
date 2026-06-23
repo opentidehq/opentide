@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import structlog
+
 from opentide.cli.enums import GeneratePhase
 from opentide.core.index_manager import IndexManager
-from opentide.core.logging import log
+from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
 
+logger = structlog.get_logger("opentide.cli.services.generation")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
-
 _PHASE_ORDER: tuple[GeneratePhase, ...] = (
     GeneratePhase.object_vocab,
     GeneratePhase.templates,
@@ -29,60 +31,52 @@ def run_generate_phase(phase: GeneratePhase, *, staging: bool = False) -> None:
         import os
 
         os.environ["INDEX_OUTPUT"] = "cache"
-
     if phase is GeneratePhase.object_vocab:
         from opentide.indexing.object_vocab import run as generate_object_vocab
 
-        log("TITLE", "Object vocabulary generation")
+        emit_section("Object vocabulary generation")
         generate_object_vocab()
         return
-
     if phase is GeneratePhase.templates:
         from opentide.generation.template import run as generate_templates
 
-        log("TITLE", "Template generation")
+        emit_section("Template generation")
         generate_templates()
         IndexManager.reload()
         OpenTide.reload()
         return
-
     if phase is GeneratePhase.schemas:
         from opentide.generation.schema import run as generate_schemas
 
-        log("TITLE", "JSON schema generation")
+        emit_section("JSON schema generation")
         generate_schemas()
         return
-
     if phase is GeneratePhase.revisions:
         from opentide.indexing.revisions import RevisionIndexer
 
-        log("TITLE", "Revision index generation")
+        emit_section("Revision index generation")
         RevisionIndexer().run()
         return
-
     if phase is GeneratePhase.snippets:
         from opentide.generation import vscode_snippets
 
-        log("TITLE", "VS Code snippet generation")
+        emit_section("VS Code snippet generation")
         vscode_snippets.run()
         return
-
     if phase is GeneratePhase.exports:
         from opentide.export import attack_navigator_layer
         from opentide.export.table_export import TableExporter
 
-        log("TITLE", "Export generation")
+        emit_section("Export generation")
         attack_navigator_layer.run()
         TableExporter().run()
         return
-
     if phase is GeneratePhase.playbook_map:
         from opentide.export.playbook_map import run as generate_playbook_map
 
-        log("TITLE", "Playbook map export")
+        emit_section("Playbook map export")
         generate_playbook_map()
         return
-
     raise ValueError(f"Unknown generation phase: {phase}")
 
 
@@ -93,10 +87,7 @@ def run_generate_all(*, staging: bool = False) -> None:
 
 
 def run_generate(
-    ctx: CliContext,
-    *,
-    phase: GeneratePhase | None = None,
-    staging: bool = False,
+    ctx: CliContext, *, phase: GeneratePhase | None = None, staging: bool = False
 ) -> dict[str, object]:
     """Entry point for generate command."""
     ctx.apply_environment()

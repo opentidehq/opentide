@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from opentide.core.logging import log
+import structlog
+
+logger = structlog.get_logger(__name__)
 from opentide.core.registry import OpenTide
 from opentide.generation.doc_generator import export_schema_docs
 
@@ -19,6 +21,6 @@ def run() -> None:
         safe_name = identifier.replace("::", "_")
         output = schema_docs_path / f"{safe_name}.md"
         output.write_text(content, encoding="utf-8")
-        log("SUCCESS", f"Exported schema documentation for {identifier}", str(output))
+        logger.info("exported_schema_documentation", identifier=identifier, output=str(output))
 
-    log("SUCCESS", "Exported all Pydantic schema documentation")
+    logger.info("exported_all_pydantic_schema_documentation")

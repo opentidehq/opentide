@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from opentide.cli.enums import DocumentScope
-from opentide.core.logging import log
+import structlog
 
+from opentide.cli.enums import DocumentScope
+from opentide.core.logging.console import emit_section
+
+logger = structlog.get_logger("opentide.cli.services.document")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
-
 _SCOPE_RUNNERS: dict[DocumentScope, tuple[str, str]] = {
     DocumentScope.vocabularies: ("opentide.documentation.vocabularies", "run"),
     DocumentScope.metaschemas: ("opentide.documentation.schema_docs", "run"),
@@ -39,15 +41,12 @@ def run_document_all() -> None:
         DocumentScope.rules,
         DocumentScope.navigation,
     ):
-        log("TITLE", f"Documentation — {scope.value}")
+        emit_section("Documentation — {}")
         run_document_scope(scope)
 
 
 def run_document(
-    ctx: CliContext,
-    *,
-    scope: DocumentScope | None = None,
-    output: str | None = None,
+    ctx: CliContext, *, scope: DocumentScope | None = None, output: str | None = None
 ) -> dict[str, object]:
     """Entry point for document command."""
     ctx.apply_environment()
@@ -55,7 +54,6 @@ def run_document(
         import os
 
         os.environ["DOCUMENTATION_OUTPUT"] = output
-
     if scope is None:
         run_document_all()
         return {"message": "Full documentation pipeline completed"}

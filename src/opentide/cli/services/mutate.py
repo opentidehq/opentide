@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from opentide.core.logging import log
+import structlog
 
+logger = structlog.get_logger("opentide.cli.services.mutate")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
@@ -51,20 +52,15 @@ def run_mutate_security_domain() -> None:
 
 
 def run_mutate(
-    ctx: CliContext,
-    *,
-    action: str | None = None,
-    files: list[str] | None = None,
+    ctx: CliContext, *, action: str | None = None, files: list[str] | None = None
 ) -> dict[str, object]:
     """Entry point for mutate command."""
     ctx.apply_environment()
-
     if action is None:
         run_mutate_all()
         if not ctx.json_output:
-            log("SUCCESS", "Completed mutation toolchain")
+            logger.info("completed_mutation_toolchain")
         return {"message": "Full mutation pipeline completed"}
-
     if action == "promote":
         run_mutate_promote(files)
         return {"message": "Promotion completed", "action": action}
@@ -77,5 +73,4 @@ def run_mutate(
     if action == "security-domain":
         run_mutate_security_domain()
         return {"message": "Security domain completed", "action": action}
-
     raise ValueError(f"Unknown mutate action: {action}")

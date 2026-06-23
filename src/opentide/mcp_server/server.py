@@ -18,11 +18,7 @@ from opentide.mcp_server.tools import (
 
 mcp = FastMCP(
     "OpenTide",
-    instructions=(
-        "Detection engineering assistant. Search and analyse detection content, "
-        "validate rules and queries, test queries against live platforms, "
-        "and deploy detection rules."
-    ),
+    instructions="Detection engineering assistant. Search and analyse detection content, validate rules and queries, test queries against live platforms, and deploy detection rules.",
 )
 
 
@@ -145,6 +141,9 @@ def platforms_resource() -> str:
 
 def main() -> None:
     """Start the MCP server on stdio transport."""
+    from opentide.core.logging import LoggingConfig, init_logging
+
+    init_logging(LoggingConfig(json_output=True, plain=True))
     mcp.run(transport="stdio")
 
 

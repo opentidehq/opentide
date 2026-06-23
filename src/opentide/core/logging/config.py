@@ -1,0 +1,179 @@
+"""Logging configuration and structlog initialisation."""
+
+from __future__ import annotations
+
+import logging
+import os
+import sys
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+import structlog
+from rich.console import Console
+from rich.logging import RichHandler
+
+from opentide.core.logging.render import OpenTideConsoleRenderer
+
+if TYPE_CHECKING:
+    from opentide.cli.context import CliContext
+
+_configured = False
+_config: LoggingConfig | None = None
+_console = Console(stderr=True, highlight=False)
+
+
+@dataclass(frozen=True)
+class LoggingConfig:
+    """Runtime logging preferences for a single process."""
+
+    debug: bool = False
+    json_output: bool = False
+    plain: bool = False
+
+    @classmethod
+    def from_env(cls) -> LoggingConfig:
+        """Build configuration from standard environment variables."""
+        no_color = bool(os.getenv("NO_COLOR")) or os.getenv("FORCE_COLOR") == "0"
+        plain = no_color or os.environ.get("TERM_PROGRAM") == "vscode"
+        return cls(
+            debug=bool(os.getenv("DEBUG_ENABLED")),
+            json_output=os.getenv("OPENTIDE_LOG_JSON") == "1",
+            plain=plain,
+        )
+
+    @classmethod
+    def from_cli_context(cls, ctx: CliContext) -> LoggingConfig:
+        """Build configuration from an active CLI context."""
+        return cls(
+            debug=ctx.debug,
+            json_output=ctx.json_output,
+            plain=ctx.no_color,
+        )
+
+
+def current_config() -> LoggingConfig:
+    """Return the active logging configuration."""
+    return _config or LoggingConfig.from_env()
+
+
+def is_debug_enabled() -> bool:
+    """Return True when verbose debug logging is requested."""
+    return current_config().debug
+
+
+def is_json_output() -> bool:
+    """Return True when logs should be emitted as JSON."""
+    return current_config().json_output
+
+
+def is_plain_output() -> bool:
+    """Return True when Rich styling should be suppressed."""
+    config = current_config()
+    return config.plain or config.json_output
+
+
+def get_console() -> Console:
+    """Return the shared Rich console used for presentation output."""
+    return _console
+
+
+def _shared_pre_chain() -> list[Any]:
+    return [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
+
+
+def init_logging(config: LoggingConfig | None = None, *, force: bool = False) -> None:
+    """Initialise structlog and stdlib logging once per process."""
+    global _configured, _config
+    if _configured and not force:
+        return
+
+    _config = config or LoggingConfig.from_env()
+    log_level = logging.DEBUG if _config.debug else logging.INFO
+    use_color = not _config.plain and not _config.json_output
+
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.setLevel(log_level)
+
+    if _config.json_output:
+        handler: logging.Handler = logging.StreamHandler(sys.stderr)
+        formatter = structlog.stdlib.ProcessorFormatter(
+            foreign_pre_chain=_shared_pre_chain(),
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                structlog.processors.JSONRenderer(),
+            ],
+        )
+    else:
+        handler = RichHandler(
+            console=_console,
+            rich_tracebacks=use_color,
+            show_path=True,
+            markup=False,
+            show_level=False,
+            show_time=False,
+        )
+        formatter = structlog.stdlib.ProcessorFormatter(
+            foreign_pre_chain=_shared_pre_chain(),
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                OpenTideConsoleRenderer(use_color=use_color),
+            ],
+        )
+
+    handler.setFormatter(formatter)
+    handler.setLevel(log_level)
+    root.addHandler(handler)
+
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    _configured = True
+
+
+def configure_logging(*, force: bool = False) -> None:
+    """Compatibility alias for lazy initialisation."""
+    init_logging(force=force)
+
+
+def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
+    """Return a bound structlog logger, configuring logging on first use."""
+    init_logging()
+    return structlog.get_logger(name or "opentide")
+
+
+def bind_context(**kwargs: Any) -> None:
+    """Bind key=value pairs to the current structlog context."""
+    structlog.contextvars.bind_contextvars(**kwargs)
+
+
+def clear_context() -> None:
+    """Clear structlog context variables."""
+    structlog.contextvars.clear_contextvars()
+
+
+def reset_for_tests() -> None:
+    """Reset module state — test helper only."""
+    global _configured, _config
+    _configured = False
+    _config = None

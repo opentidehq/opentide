@@ -34,7 +34,6 @@ def build_object_vocabularies(
 ) -> dict[str, Any]:
     """Build inline model vocabularies from raw object index data."""
     object_index: dict[str, Any] = {}
-
     for object_type in object_scope:
         index_name = object_names[object_type]
         metadata = {
@@ -46,7 +45,6 @@ def build_object_vocabularies(
         }
         entries: dict[str, Any] = {}
         registry = models_index.get(object_type) or {}
-
         for _uuid, object_data in registry.items():
             entry: dict[str, Any] = {
                 "name": object_data["name"],
@@ -58,7 +56,6 @@ def build_object_vocabularies(
             aliases = object_data.get("actor", {}).get("aliases")
             if aliases is not None:
                 entry["aliases"] = aliases
-
             match object_type:
                 case "tvm":
                     description = object_data.get("threat", {}).get("description")
@@ -69,14 +66,12 @@ def build_object_vocabularies(
                     description = object_data.get("description") or ""
                 case _:
                     description = ""
-
             entry["description"] = description
             entry = {k: v for k, v in entry.items() if v is not None}
             entry = {
                 k: v.replace("\n ", " ") if isinstance(v, str) else v for k, v in entry.items()
             }
             entries[_uuid] = entry
-
             if object_type == "dom":
                 for signal in object_data.get("objective", {}).get("signals", []):
                     signal_uuid = signal["uuid"]
@@ -94,12 +89,9 @@ def build_object_vocabularies(
                         for k, v in signal_entry.items()
                     }
                     entries[signal_uuid] = signal_entry
-
         object_index[object_type] = {"metadata": metadata, "entries": entries}
-
     if "dom" not in object_index and "dom" in object_names:
         object_index["dom"] = _empty_model_vocabulary("dom", icons, object_names)
-
     return object_index
 
 
@@ -114,13 +106,11 @@ def run() -> None:
     index_name = global_config["indexes"]["objects"]
     icons = doc_config.get("icons", {})
     object_names = doc_config.get("object_names", {})
-
     object_index = build_object_vocabularies(
         object_scope=global_config.get("objects", []),
         models_index=index["objects"],
         icons=icons,
         object_names=object_names,
     )
-
     output = index_path / index_name
     output.write_text(json.dumps(object_index, indent=4), encoding="utf-8")

@@ -3,79 +3,48 @@ from pathlib import Path
 import os
 import toml
 import sys
-
-
 from opentide.documentation.core import get_icon
-from opentide.core.logging import log
 from opentide.core.files import resolve_configurations, resolve_paths
-
-CORE_CONFIG = resolve_configurations()["global"]
-METASCHEMAS = CORE_CONFIG["metaschemas"]
-SKIPS = ["logsources", "ram", "mdrv2"]
-
+import structlog
+from opentide.core.logging.console import emit_section
+logger = structlog.get_logger('opentide.validation.id_uniqueness')
+CORE_CONFIG = resolve_configurations()['global']
+METASCHEMAS = CORE_CONFIG['metaschemas']
+SKIPS = ['logsources', 'ram', 'mdrv2']
 PATHS = resolve_paths()
-
 duplicates = list()
 registry = dict()
 
-
 def run():
-
-    log("TITLE", "ID Duplication Checks")
-    log("INFO", "Check if ID used in CoreTIDE are uniquely assigned")
-
+    emit_section('ID Duplication Checks')
+    logger.info('check_if_id_used_in_coretide_are_uniquely_assigned')
     for meta_name in METASCHEMAS:
         if meta_name not in SKIPS:
-            log(
-                "ONGOING",
-                "Now checking for id duplication in",
-                f"{get_icon(meta_name)} {meta_name.upper()}...",
-            )
+            logger.info('now_checking_for_id_duplication_in', detail=f'{get_icon(meta_name)} {meta_name.upper()}...')
             if not os.path.exists(PATHS[meta_name]):
-                log("FAILURE",
-                    "Could not find the folder at the expected location",
-                    str(PATHS[meta_name]),
-                    "Ensure that your repository and configuration files are aligned")
+                logger.error('could_not_find_the_folder_at_the_expected_location', detail=str(PATHS[meta_name]), advice='Ensure that your repository and configuration files are aligned')
                 continue
-
             for model in os.listdir(PATHS[meta_name]):
-
-                #Skips for potential incorrect file types
-                if not model.endswith(".yaml"):
+                if not model.endswith('.yaml'):
                     continue
-
                 model_path = Path(PATHS[meta_name]) / model
-
-                model_body = yaml.safe_load(open(model_path, encoding="utf-8"))
-
-                uuid = model_body.get("metadata",{}).get("uuid")
-
+                model_body = yaml.safe_load(open(model_path, encoding='utf-8'))
+                uuid = model_body.get('metadata', {}).get('uuid')
                 file_name = model
-                name = model_body["name"]
-
-                # We check if there is a precedent for the id, if not we add as a reference
+                name = model_body['name']
                 if uuid not in registry:
-                    registry[uuid] = {"name": name, "file_name": file_name}
-                # If there is a precedent we move to an error list - allows multiple same mistakes
+                    registry[uuid] = {'name': name, 'file_name': file_name}
                 else:
-                    duplicates.append({"uuid": uuid, "name": name, "file_name": file_name})
-
+                    duplicates.append({'uuid': uuid, 'name': name, 'file_name': file_name})
     if duplicates:
         for dup in duplicates:
-            original = registry[dup["uuid"]]
-            original_name = original["name"]
-            original_file_name = original["file_name"]
-            log(
-                "FAILURE",
-                f"Duplicated ID found with {dup['uuid']} - {dup['name']} @ [{dup['file_name']}]",
-                f"has the same id as {original_name} @ ({original_file_name})",
-            )
-        log("FATAL", "Cannot have duplicated IDs throughout multiple CoreTIDE objects")
-        os.environ["VALIDATION_ERROR_RAISED"] = "True"
-
+            original = registry[dup['uuid']]
+            original_name = original['name']
+            original_file_name = original['file_name']
+            logger.error('operation_failed', detail=f"Duplicated ID found with {dup['uuid']} - {dup['name']} @ [{dup['file_name']}]", context_1=f'has the same id as {original_name} @ ({original_file_name})')
+        logger.critical('cannot_have_duplicated_ids_throughout_multiple_coretide_objects')
+        os.environ['VALIDATION_ERROR_RAISED'] = 'True'
     else:
-        log("SUCCESS", "No duplicated ID throughout", f"{len(registry)} objects")
-
-
-if __name__ == "__main__":
+        logger.info('no_duplicated_id_throughout', detail=f'{len(registry)} objects')
+if __name__ == '__main__':
     run()

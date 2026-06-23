@@ -17,5 +17,4 @@ class ObjectLoader:
 
 
 TideLoader = ObjectLoader
-
 __all__ = ["ObjectLoader", "TideLoader"]

@@ -5,12 +5,15 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
+
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
 from opentide.cli.output import emit, emit_error
-from opentide.core.logging import log
+from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
 from opentide.validation.pipeline import validate_all_objects
 
+logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
@@ -74,20 +77,15 @@ def run_validate_all() -> dict[str, object]:
 
 
 def run_validate(
-    ctx: CliContext,
-    *,
-    check: ValidateCheck | None = None,
-    strict: bool = False,
+    ctx: CliContext, *, check: ValidateCheck | None = None, strict: bool = False
 ) -> dict[str, object]:
     """Entry point for validate command."""
     ctx.apply_environment()
     _reset_validation_env()
-
     if check is None:
         result = run_validate_all()
     else:
         result = {check.value: run_validate_check(check)}
-
     from opentide.cli.exit_codes import exit_on_validation_errors, exit_on_validation_warnings
 
     exit_on_validation_errors()
@@ -95,53 +93,39 @@ def run_validate(
         exit_on_validation_warnings()
     else:
         exit_on_validation_warnings()
-
     if not ctx.json_output:
         if os.environ.get("VALIDATION_WARNING_RAISED"):
-            log("WARNING", "Passed validation, but with some warnings")
+            logger.warning("passed_validation_but_with_some_warnings")
         else:
-            log("SUCCESS", "All content successfully passed validation")
-
+            logger.info("all_content_successfully_passed_validation")
     return {"checks": result}
 
 
 def validate_query_platform(
-    ctx: CliContext,
-    platform: str,
-    *,
-    plan: str | None = None,
-    wide: bool = False,
+    ctx: CliContext, platform: str, *, plan: str | None = None, wide: bool = False
 ) -> dict[str, object]:
     """Validate queries for a deployment plan on a single platform."""
     ctx.apply_environment()
     if plan is not None:
         ctx.set_deployment_plan(plan)
-
     if platform not in QUERY_VALIDATION_PLATFORMS:
         message = f"query validation not supported for {platform}"
         if ctx.json_output:
             emit(ctx, {"valid": None, "supported": False, "message": message}, exit_code=1)
         emit_error(ctx, message, exit_code=1)
-
     from opentide.core.registry import OpenTide as LegacyOpenTide
     from opentide.deployment import DeploymentStrategy, make_deploy_plan
     from opentide.platforms.plugins import DeployTide
 
     _reset_validation_env()
     deployment_plan = DeploymentStrategy.load_from_environment()
-    deployment_list = make_deploy_plan(
-        deployment_plan,
-        wide_scope=wide,
-        keep_deprecated=False,
-    )
-
+    deployment_list = make_deploy_plan(deployment_plan, wide_scope=wide, keep_deprecated=False)
     if platform not in deployment_list:
         return {
             "platform": platform,
             "status": "skipped",
             "message": "No rules to validate for this platform in the current plan",
         }
-
     query_validators = cast(dict[str, Any], DeployTide.query_validation)
     if platform not in query_validators:
         return {
@@ -149,26 +133,21 @@ def validate_query_platform(
             "status": "skipped",
             "message": f"No query validation engine for {platform}",
         }
-
     try:
         system_name = LegacyOpenTide.Configurations.Systems.Index[platform]["tide"]["name"]
     except Exception:
         system_name = LegacyOpenTide.Configurations.Systems.Index[platform]["platform"]["name"]
-
-    log("TITLE", f"Query Validation - {system_name}")
+    emit_section(f"Query Validation - {system_name}")
     validator = cast(Any, query_validators[platform])
     try:
         validator.validate(deployment=deployment_list[platform])
     except Exception:
-        log("WARNING", "Trying MDRv4 style method")
+        logger.warning("trying_mdrv4_style_method")
         validator.validate(
-            mdr_deployment=deployment_list[platform],
-            deployment_plan=deployment_plan,
+            mdr_deployment=deployment_list[platform], deployment_plan=deployment_plan
         )
-
     from opentide.cli.exit_codes import exit_on_validation_errors, exit_on_validation_warnings
 
     exit_on_validation_errors()
     exit_on_validation_warnings()
-
     return {"platform": platform, "status": "passed", "supported": True}

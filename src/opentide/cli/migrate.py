@@ -6,16 +6,16 @@ import re
 from pathlib import Path
 
 _LEGACY_IMPORTS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"from Engines\.modules\.tide import DataTide"), "from opentide import OpenTide"),
-    (re.compile(r"from Engines\.modules\.tide import OpenTide"), "from opentide import OpenTide"),
+    (re.compile("from Engines\\.modules\\.tide import DataTide"), "from opentide import OpenTide"),
+    (re.compile("from Engines\\.modules\\.tide import OpenTide"), "from opentide import OpenTide"),
     (
-        re.compile(r"from Engines\.modules\.tide import IndexTide"),
+        re.compile("from Engines\\.modules\\.tide import IndexTide"),
         "from opentide.core.index_manager import IndexManager",
     ),
-    (re.compile(r"python Orchestration/validate\.py"), "opentide validate"),
-    (re.compile(r"python Orchestration/deploy\.py"), "opentide deploy"),
-    (re.compile(r"python Orchestration/generate\.py"), "opentide generate"),
-    (re.compile(r"python Orchestration/document\.py"), "opentide document"),
+    (re.compile("python Orchestration/validate\\.py"), "opentide validate"),
+    (re.compile("python Orchestration/deploy\\.py"), "opentide deploy"),
+    (re.compile("python Orchestration/generate\\.py"), "opentide generate"),
+    (re.compile("python Orchestration/document\\.py"), "opentide document"),
 )
 
 _LEGACY_CI_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (

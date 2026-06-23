@@ -18,7 +18,6 @@ from opentide.models.threat import ThreatVector
 from opentide.platforms.registry import PlatformsRegistry
 
 IndexManager = index_mod.IndexManager
-
 TideObject = DetectionRule | DetectionObjective | ThreatVector
 
 
@@ -63,7 +62,6 @@ class OpenTideRegistry:
         assert self._index is not None
         objects = self._index["objects"]
         files = self._index.get("files", {})
-
         self._rules = {}
         for uuid, data in objects.get("mdr", {}).items():
             file_path = _resolve_file("mdr", files.get(uuid), self._index)
@@ -71,11 +69,9 @@ class OpenTideRegistry:
 
             rule = load_rule_from_dict(data, file=file_path)
             self._rules[uuid] = rule.bind_registry(self)
-
         self._threats = {}
         for uuid, data in objects.get("tvm", {}).items():
             self._threats[uuid] = ThreatVector.from_yaml_dict(data)
-
         self._objectives = {}
         from opentide.loading.objective_loader import load_objective_from_dict
 
@@ -499,7 +495,6 @@ class _ModelsAccessor:
 
         if self._rules:
             return dict(self._rules)
-
         files = self._index.get("files", {})
         typed: dict[str, DetectionRule] = {}
         for uuid, data in self.mdr.items():

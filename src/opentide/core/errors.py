@@ -107,5 +107,4 @@ class Errors(Exception):
         ...
 
 
-# Legacy alias
 TideErrors = Errors

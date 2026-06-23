@@ -22,12 +22,14 @@ from dataclasses import dataclass, asdict
 
 
 from opentide.indexing.indexer import indexer
-from opentide.core.logging import log
 from opentide.models.deployment_enums import DetectionPlatforms
 from opentide.models.system_config import ConfigurationModels, SystemConfig
 from opentide.loading.objects import Objects
 from opentide.loading.configurations import Configurations
 from opentide.core.root import get_repo_root
+import structlog
+logger = structlog.get_logger('opentide.loading.config_loader')
+
 
 ROOT = get_repo_root()
 
@@ -92,11 +94,13 @@ class ConfigurationsLoader:
                 if source_assets := source_config.get("assets"):
                     invalid_assets = [asset for asset in source_assets if asset not in asset_names]
                     if invalid_assets:
-                        log("FAILURE", 
-                            f"Log source '{source_config.get('name')}' references non-existent assets",
-                            f"Invalid assets: {', '.join(invalid_assets)}",
-                            "These assets must be defined in the assets section",
-                            "Configuration will load but may be incomplete")
+                        logger.error(
+                            "operation_failed",
+                            detail=f"Log source '{source_config.get('name')}' references non-existent assets",
+                            context_1=f"Invalid assets: {', '.join(invalid_assets)}",
+                            advice="These assets must be defined in the assets section",
+                            arg2="Configuration will load but may be incomplete",
+                        )
                 
                 logsources.append(Configurations.Visibility.LogSource(**source_config))
                 
@@ -107,11 +111,13 @@ class ConfigurationsLoader:
                 if detector_assets := detector_config.get("assets"):
                     invalid_assets = [asset for asset in detector_assets if asset not in asset_names]
                     if invalid_assets:
-                        log("FAILURE", 
-                            f"Detector '{detector_config.get('name')}' references non-existent assets",
-                            f"Invalid assets: {', '.join(invalid_assets)}",
-                            "These assets must be defined in the assets section",
-                            "Configuration will load but may be incomplete")
+                        logger.error(
+                            "operation_failed",
+                            detail=f"Detector '{detector_config.get('name')}' references non-existent assets",
+                            context_1=f"Invalid assets: {', '.join(invalid_assets)}",
+                            advice="These assets must be defined in the assets section",
+                            arg2="Configuration will load but may be incomplete",
+                        )
                 
                 detectors.append(Configurations.Visibility.Detector(**detector_config))
                 
@@ -123,11 +129,12 @@ class ConfigurationsLoader:
             )
             
         except (KeyError, TypeError) as e:
-            log("FATAL",
-                "Failed to load visibility configuration",
-                f"Error details: {str(e)}",
-                "Ensure all required fields are present and properly formatted",
-                "Check the schema documentation for complete requirements")
+            logger.critical(
+                "failed_to_load_visibility_configuration",
+                detail=f"Error details: {str(e)}",
+                advice="Ensure all required fields are present and properly formatted",
+                arg2="Check the schema documentation for complete requirements",
+            )
             raise ValueError(f"Failed to load visibility configuration: {str(e)}")
 
 

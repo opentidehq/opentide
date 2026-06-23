@@ -3,8 +3,10 @@ from dataclasses import dataclass
 from typing import Optional, List
 
 
-from opentide.core.logging import log
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
+import structlog
+logger = structlog.get_logger('opentide.loading.objects')
+
 
 
 @dataclass

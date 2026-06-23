@@ -8,8 +8,7 @@ from typing import Any
 from opentide.core.registry import OpenTide
 
 _UUID_RE = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-    re.IGNORECASE,
+    "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", re.IGNORECASE
 )
 
 
@@ -19,12 +18,7 @@ def ensure_initialised() -> None:
 
 def object_summary(uuid: str, object_type: str, body: dict[str, Any]) -> dict[str, Any]:
     title = body.get("title") or body.get("name") or uuid
-    return {
-        "uuid": uuid,
-        "type": object_type,
-        "title": title,
-        "status": body.get("status"),
-    }
+    return {"uuid": uuid, "type": object_type, "title": title, "status": body.get("status")}
 
 
 def get_object(uuid: str) -> dict[str, Any] | None:
@@ -49,14 +43,11 @@ def search_catalog(
 ) -> list[dict[str, Any]] | dict[str, Any]:
     """Search catalogue by UUID, keyword, or ATT&CK technique."""
     ensure_initialised()
-
     if _UUID_RE.match(query.strip()):
         found = get_object(query.strip())
         return found if found is not None else []
-
     query_lower = query.lower()
     results: list[dict[str, Any]] = []
-
     for bucket_type, bucket in [
         ("rule", OpenTide.Models.mdr),
         ("threat", OpenTide.Models.tvm),
@@ -81,12 +72,9 @@ def search_catalog(
                     continue
             if platform and platform not in str(body.get("configurations", {})).lower():
                 continue
-            haystack = (
-                f"{uuid} {body.get('title', '')} {body.get('name', '')} {body.get('description', '')}"
-            ).lower()
+            haystack = f"{uuid} {body.get('title', '')} {body.get('name', '')} {body.get('description', '')}".lower()
             if query_lower in haystack:
                 results.append(object_summary(uuid, bucket_type, body))
-
     return results
 
 
@@ -117,7 +105,6 @@ def coverage_analysis(*, technique: str = "", tactic: str = "") -> dict[str, Any
         )
         for tech in techniques or []:
             covered.setdefault(str(tech), []).append(uuid)
-
     if technique:
         return {
             "technique": technique,

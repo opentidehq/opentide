@@ -8,8 +8,9 @@ from dataclasses import field as dc_field
 from pathlib import Path
 from typing import Any
 
-from opentide.core.logging import log
+import structlog
 
+logger = structlog.get_logger("opentide.generation.vocabulary")
 VOCABULARY_YAML_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["name", "field", "keys"],
@@ -22,13 +23,7 @@ VOCABULARY_YAML_SCHEMA: dict[str, Any] = {
         "keys": {
             "type": "array",
             "minItems": 1,
-            "items": {
-                "type": "object",
-                "anyOf": [
-                    {"required": ["id"]},
-                    {"required": ["name"]},
-                ],
-            },
+            "items": {"type": "object", "anyOf": [{"required": ["id"]}, {"required": ["name"]}]},
         },
         "stages": {
             "type": "array",
@@ -170,30 +165,29 @@ def _validate_yaml_structure(raw: Mapping[str, Any], *, source: str) -> None:
 def parse_yaml_vocabulary(raw: Mapping[str, Any], *, source: str = "") -> VocabularyDefinition:
     """Parse a vocabulary YAML document into a typed definition."""
     _validate_yaml_structure(raw, source=source)
-
     metadata_raw = {key: value for key, value in raw.items() if key not in ("field", "keys")}
     is_model = bool(metadata_raw.get("model"))
     entries: dict[str, VocabularyEntry] = {}
-
     for index, entry_data in enumerate(raw["keys"]):
         if not isinstance(entry_data, Mapping):
-            log("WARNING", f"Skipping malformed vocabulary entry at index {index}", source)
+            logger.warning(
+                "event", detail=f"Skipping malformed vocabulary entry at index {index}", arg0=source
+            )
             continue
         key_name = entry_data.get("id") if is_model else entry_data.get("name")
         if not key_name:
-            log(
-                "WARNING",
-                f"Skipping vocabulary entry missing key field in {source}",
-                f"index={index}",
+            logger.warning(
+                "event",
+                detail=f"Skipping vocabulary entry missing key field in {source}",
+                context_1=f"index={index}",
             )
             continue
         try:
             entry = _build_entry(entry_data, fallback_name=str(key_name))
         except VocabularyLoadError as exc:
-            log("WARNING", str(exc), source, f"entry={key_name}")
+            logger.warning("event", detail=str(exc), arg0=source, advice=f"entry={key_name}")
             continue
         entries[str(key_name)] = entry
-
     metadata = _build_metadata(metadata_raw, field=str(raw["field"]))
     return VocabularyDefinition(metadata=metadata, entries=entries)
 
@@ -235,34 +229,31 @@ class VocabularyLoader:
     def load(raw: Mapping[str, Any], *, source: str = "") -> VocabularyDefinition:
         if "metadata" not in raw:
             raise VocabularyLoadError(
-                f"Missing 'metadata' in vocabulary definition{f' ({source})' if source else ''}"
+                f"Missing 'metadata' in vocabulary definition{(f' ({source})' if source else '')}"
             )
         if "entries" not in raw:
             raise VocabularyLoadError(
-                f"Missing 'entries' in vocabulary definition{f' ({source})' if source else ''}"
+                f"Missing 'entries' in vocabulary definition{(f' ({source})' if source else '')}"
             )
-
         metadata_raw = raw["metadata"]
         if not isinstance(metadata_raw, Mapping):
             raise VocabularyLoadError(f"Invalid metadata block in vocabulary {source}")
-
         field_name = str(metadata_raw.get("field", source))
         metadata = _build_metadata(metadata_raw, field=field_name)
-
         entries: dict[str, VocabularyEntry] = {}
         entries_raw = raw["entries"]
         if not isinstance(entries_raw, Mapping):
             raise VocabularyLoadError(f"Invalid entries block in vocabulary {source}")
-
         for key, entry_data in entries_raw.items():
             if not isinstance(entry_data, Mapping):
-                log("WARNING", f"Skipping malformed vocabulary entry '{key}'", source)
+                logger.warning(
+                    "event", detail=f"Skipping malformed vocabulary entry '{key}'", arg0=source
+                )
                 continue
             try:
                 entries[str(key)] = _build_entry(entry_data, fallback_name=str(key))
             except VocabularyLoadError as exc:
-                log("WARNING", str(exc), source, f"entry={key}")
-
+                logger.warning("event", detail=str(exc), arg0=source, advice=f"entry={key}")
         return VocabularyDefinition(metadata=metadata, entries=entries)
 
     @staticmethod
@@ -282,13 +273,12 @@ class VocabularyLoader:
     def load_index(raw_vocabs: Mapping[str, Any] | None) -> dict[str, VocabularyDefinition]:
         """Load all vocabularies from an index vocabs mapping with per-file error boundaries."""
         if not raw_vocabs:
-            log("FAILURE", "Vocabulary index is missing or empty")
+            logger.error("vocabulary_index_is_missing_or_empty")
             return {}
-
         loaded: dict[str, VocabularyDefinition] = {}
         for name, data in raw_vocabs.items():
             try:
                 loaded[name] = VocabularyLoader.load(data, source=name)
             except VocabularyLoadError as exc:
-                log("FAILURE", str(exc))
+                logger.error("operation_failed", detail=str(exc))
         return loaded
