@@ -1490,8 +1490,8 @@ requires-dist = [
     { name = "structlog", specifier = ">=24.0" },
     { name = "toml" },
     { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.9" },
-    { name = "typer", extras = ["all"], marker = "extra == 'cli'", specifier = ">=0.12" },
-    { name = "typer", extras = ["all"], marker = "extra == 'dev'", specifier = ">=0.12" },
+    { name = "typer", extras = ["all"], marker = "extra == 'cli'", specifier = ">=0.26.7" },
+    { name = "typer", extras = ["all"], marker = "extra == 'dev'", specifier = ">=0.26.7" },
     { name = "typing-extensions", specifier = ">=4.0" },
 ]
 provides-extras = ["carbon-black", "cli", "crowdstrike", "dev", "mcp", "sentinel", "splunk"]
@@ -1507,7 +1507,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.9" },
     { name = "ty", specifier = ">=0.0.9" },
-    { name = "typer", extras = ["all"], specifier = ">=0.12" },
+    { name = "typer", extras = ["all"], specifier = ">=0.26.7" },
 ]
 docs = [{ name = "mkdocs-material", specifier = ">=9.0" }]
 
