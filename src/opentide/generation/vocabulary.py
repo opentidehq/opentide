@@ -160,9 +160,7 @@ def _validate_yaml_structure(raw: Mapping[str, Any], *, source: str) -> None:
         raise VocabularyLoadError(f"Vocabulary 'keys' must be a list: {source}")
     for index, entry in enumerate(keys):
         if not isinstance(entry, Mapping):
-            raise VocabularyLoadError(
-                f"Malformed vocabulary entry at index {index} in {source}"
-            )
+            raise VocabularyLoadError(f"Malformed vocabulary entry at index {index} in {source}")
         if "id" not in entry and "name" not in entry:
             raise VocabularyLoadError(
                 f"Vocabulary entry at index {index} missing 'id' or 'name' in {source}"

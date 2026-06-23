@@ -12,6 +12,7 @@ def test_vocabulary_resolve_emits_entry_names(monkeypatch: pytest.MonkeyPatch) -
         VocabularyEntry,
         VocabularyMetadata,
     )
+
     vocab = VocabularyDefinition(
         metadata=VocabularyMetadata(name="Severity", field="severity"),
         entries={
@@ -34,6 +35,7 @@ def test_vocabulary_resolve_empty_vocab_returns_placeholder(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from opentide.generation import schema_pipeline
+
     monkeypatch.setattr(schema_pipeline, "VOCAB_INDEX", {})
     monkeypatch.setattr(schema_pipeline, "VOCAB_EXTENSIONS", {})
 
@@ -52,6 +54,7 @@ def test_vocabulary_finalise_appends_hints_separately(monkeypatch: pytest.Monkey
         VocabularyEntry,
         VocabularyMetadata,
     )
+
     vocab = VocabularyDefinition(
         metadata=VocabularyMetadata(
             name="Impact",

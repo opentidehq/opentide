@@ -1,4 +1,3 @@
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -15,10 +14,8 @@ from opentide.models.system_models import SystemConfig
 
 @dataclass
 class ConfigurationModels:
-
     @dataclass
     class Deployment:
-        
         @dataclass
         class Status:
             name: str
@@ -33,13 +30,10 @@ class ConfigurationModels:
 
     @dataclass
     class Systems:
-
         @dataclass
         class Sentinel(SystemConfig):
-            
             @dataclass
             class Tenant(SystemConfig.Tenant):
-
                 @dataclass
                 class Setup(SystemConfig.Tenant.Setup):
                     resource_group: str
@@ -51,34 +45,30 @@ class ConfigurationModels:
                     azure_client_secret: str
 
                 setup: Setup
-        @dataclass
-        class Splunk(SystemConfig):
-            ...
 
         @dataclass
-        class CarbonBlackCloud(SystemConfig):
-            ...
+        class Splunk(SystemConfig): ...
+
+        @dataclass
+        class CarbonBlackCloud(SystemConfig): ...
 
         @dataclass
         class SentinelOne(SystemConfig):
             @dataclass
             class Tenant(SystemConfig.Tenant):
-
                 @dataclass
                 class Setup(SystemConfig.Tenant.Setup):
-                    url:str
-                    account_id:int
-                    api_token:str
-                    site_id:int | None = None
+                    url: str
+                    account_id: int
+                    api_token: str
+                    site_id: int | None = None
 
-                setup:Setup
+                setup: Setup
 
         @dataclass
         class DefenderForEndpoint(SystemConfig):
-            
             @dataclass
             class Tenant(SystemConfig.Tenant):
-
                 @dataclass
                 class Parameters:
                     device_groups: Sequence[str] | None = None
@@ -89,17 +79,15 @@ class ConfigurationModels:
                     client_id: str
                     client_secret: str
 
-                setup:Setup
+                setup: Setup
                 parameters: Parameters | None = None
 
             tenants: Sequence[Tenant] | None
 
         @dataclass
         class Crowdstrike(SystemConfig):
-            
             @dataclass
             class Tenant(SystemConfig.Tenant):
-
                 @dataclass
                 class Setup(SystemConfig.Tenant.Setup):
                     api: str
@@ -107,20 +95,18 @@ class ConfigurationModels:
                     client_secret: str
                     customer_id: str
 
-                setup:Setup
+                setup: Setup
 
             tenants: Sequence[Tenant] | None
 
         @dataclass
         class HarfangLab(SystemConfig):
-            
             @dataclass
             class Platform(SystemConfig.Platform):
                 pass
 
             @dataclass
             class Tenant(SystemConfig.Tenant):
-
                 @dataclass
                 class Setup(SystemConfig.Tenant.Setup):
                     type: str  # "Sigma" or "YARA"
@@ -138,4 +124,3 @@ ConfigurationModels = ConfigurationModels
 
 # Legacy alias
 ConfigurationModels = ConfigurationModels
-
