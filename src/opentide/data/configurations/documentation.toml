@@ -18,7 +18,7 @@ model_cover_pages = true #Creates a cover page for the Object sub-folder
 
 
 [gitlab]
-uuid_permalinks = true   #All markdown files are named using UUIDs to create 
+uuid_permalinks = true   #All markdown files are named using UUIDs to create
                          #a permanent URL link. YAML frontmatter is used for page titles.
 
 [cve]
@@ -88,4 +88,3 @@ duration = "⌛"
 throttling = "🗜️"
 threshold = "⚖️"
 query = "🔎"
-

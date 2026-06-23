@@ -68,16 +68,6 @@ class ExportTarget(str, Enum):
     playbook_map = "playbook-map"
 
 
-class ExtractFramework(str, Enum):
-    """External framework extraction targets."""
-
-    attack = "attack"
-    d3fend = "d3fend"
-    engage = "engage"
-    nist = "nist"
-    react = "react"
-
-
 class ExtractImport(str, Enum):
     """Platform import targets."""
 
