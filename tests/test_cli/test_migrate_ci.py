@@ -11,8 +11,7 @@ def test_scan_detects_coretide_ci_patterns(tmp_path: Path) -> None:
     workflow = tmp_path / ".github" / "workflows" / "legacy.yml"
     workflow.parent.mkdir(parents=True)
     workflow.write_text(
-        "uses: ./coretide/Pipelines/GitHub/deployment\n"
-        "repository: OpenTideHQ/CoreTide\n",
+        "uses: ./coretide/Pipelines/GitHub/deployment\nrepository: OpenTideHQ/CoreTide\n",
         encoding="utf-8",
     )
     findings = scan_repo(tmp_path)
