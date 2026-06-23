@@ -30,7 +30,7 @@ def export_core_model_schema(model_key: str, output_path: Path) -> None:
     schema = generate_core_model_schema(model_key)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        json.dumps(schema, indent=4, sort_keys=False, default=str),
+        json.dumps(schema, indent=4, sort_keys=False, default=str) + "\n",
         encoding="utf-8",
     )
 
