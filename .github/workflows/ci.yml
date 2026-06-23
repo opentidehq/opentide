@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [development]
+    branches: [main, development]
   pull_request:
     branches: [development]
 
@@ -10,8 +10,36 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Ruff check
+        run: uv run ruff check tests src/opentide
+
+      - name: Ruff format
+        run: uv run ruff format --check tests src/opentide
+
+      - name: Ty type check
+        run: uv run ty check src/opentide --output-format github
+
   test:
-    name: Test Python ${{ matrix.python-version }}
+    name: Test (${{ matrix.python-version }})
+    needs: lint
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -34,16 +62,6 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --group dev
-
-      - name: Ruff lint
-        run: uv run ruff check tests src/opentide
-
-      - name: Ruff format
-        run: uv run ruff format --check tests src/opentide
-
-      - name: Ty type check
-        if: matrix.python-version == '3.12'
-        run: uv run ty check src/opentide --output-format github
 
       - name: Pytest
         run: uv run pytest tests/ --cov-report=xml
