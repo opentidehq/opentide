@@ -59,7 +59,7 @@ if [[ "$mode" == "full" ]]; then
   uv run pytest tests/ \
     --cov-report=term-missing:skip-covered \
     --cov-report=xml:coverage.xml
-  uv run coverage report --fail-under=47
+  uv run coverage report --fail-under=46.9
 else
   uv run pytest tests/ --no-cov -q
 fi

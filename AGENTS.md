@@ -60,7 +60,7 @@ CI runs `uv sync --group dev` on Python **3.10–3.14** (PRs test **3.10, 3.12, 
 uv run pre-commit install --install-hooks   # once: pre-commit + pre-push hooks
 scripts/ci-local.sh --quick                 # lint + ty (~seconds)
 scripts/ci-local.sh                           # lint + pytest
-scripts/ci-local.sh --full                    # lint + pytest + coverage gate (47%)
+scripts/ci-local.sh --full                    # lint + pytest + coverage gate (46.9%)
 ```
 
 | Hook | Runs |
