@@ -10,7 +10,7 @@ def exit_on_validation_warnings() -> None:
     """Mirror Orchestration/validate.py GitLab soft-fail behaviour."""
     if not os.environ.get("VALIDATION_WARNING_RAISED"):
         return
-    from Engines.modules.deployment import CIEnvironment
+    from opentide.deployment import CIEnvironment
 
     environment = CIEnvironment().environment
     if environment is CIEnvironment.CIPlatforms.GitlabCI:
@@ -21,7 +21,7 @@ def exit_on_deployment_warnings() -> None:
     """Mirror Orchestration/deploy.py GitLab soft-fail behaviour."""
     if not os.environ.get("DEPLOYMENT_WARNING_RAISED"):
         return
-    from Engines.modules.deployment import CIEnvironment
+    from opentide.deployment import CIEnvironment
 
     environment = CIEnvironment().environment
     if environment is CIEnvironment.CIPlatforms.GitlabCI:

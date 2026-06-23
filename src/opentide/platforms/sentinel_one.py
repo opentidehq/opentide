@@ -1,11 +1,7 @@
-"""SentinelOne platform plugin."""
+"""sentinel one platform plugin."""
 
 from __future__ import annotations
 
-from typing import Any
+from opentide.platforms.sentinel_one.deployer import declare
 
-
-def declare() -> Any:
-    from Engines.deployment.sentinel_one import declare as _declare
-
-    return _declare()
+__all__ = ["declare"]

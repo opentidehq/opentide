@@ -29,14 +29,14 @@ def run_deploy(
     if plan is not None:
         ctx.set_deployment_plan(plan)
 
-    from Engines.modules.deployment import (
+    from opentide.deployment import (
         CIEnvironment,
         DeploymentStrategy,
         make_deploy_plan,
         modified_mdr_files,
     )
-    from Engines.modules.plugins import DeployTide
-    from Engines.mutation.promotion import PromoteMDR
+    from opentide.mutation.promotion import PromoteMDR
+    from opentide.platforms.plugins import DeployTide
 
     deployment_plan = DeploymentStrategy.load_from_environment()
 

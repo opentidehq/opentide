@@ -47,8 +47,8 @@ def decompose_tide() -> None:
         slice_lines(lines, 833, 1189),
         "\n".join(
             [
-                "from Engines.modules.loaders.system_loader import PlatformConfigLoader",
-                "from Engines.modules.environment import DebugHelpers",
+                "from opentide.loading.platform_loader import PlatformConfigLoader",
+                "from opentide.core.environment import DebugHelpers",
             ]
         ),
     )
@@ -58,10 +58,10 @@ def decompose_tide() -> None:
         slice_lines(lines, 1190, None),
         "\n".join(
             [
-                "from Engines.modules.environment import DebugHelpers",
-                "from Engines.modules.index import IndexManager",
-                "from Engines.modules.loaders.config_loader import ConfigurationsLoader",
-                "from Engines.modules.loaders.object_loader import ObjectLoader",
+                "from opentide.core.environment import DebugHelpers",
+                "from opentide.core.index_legacy import IndexManager",
+                "from opentide.loading.config_loader import ConfigurationsLoader",
+                "from opentide.loading.compat import ObjectLoader",
             ]
         ),
     )
@@ -71,11 +71,11 @@ def decompose_tide() -> None:
         '''\
 """Backward-compatibility re-export shim for tide module."""
 
-from Engines.modules.models import DetectionPlatforms
-from Engines.modules.registry import OpenTide
-from Engines.modules.index import IndexManager
-from Engines.modules.environment import DebugHelpers
-from Engines.modules.loaders.object_loader import ObjectLoader
+from opentide.models.legacy import DetectionPlatforms
+from opentide.core.registry import OpenTide
+from opentide.core.index_legacy import IndexManager
+from opentide.core.environment import DebugHelpers
+from opentide.loading.compat import ObjectLoader
 
 __all__ = [
     "OpenTide",
@@ -101,8 +101,8 @@ def decompose_models() -> None:
         slice_lines(lines, 80, 130) + slice_lines(lines, 624, 662),
         "\n".join(
             [
-                "from Engines.modules.enums import DeploymentStrategy",
-                "from Engines.modules.object_models import TideModels",
+                "from opentide.models.deployment_enums import DeploymentStrategy",
+                "from opentide.models.object_models import TideModels",
             ]
         ),
     )
@@ -112,8 +112,8 @@ def decompose_models() -> None:
         slice_lines(lines, 131, 250),
         "\n".join(
             [
-                "from Engines.modules.enums import StatusStrategy",
-                "from Engines.modules.system_models import SystemConfig",
+                "from opentide.models.deployment_enums import StatusStrategy",
+                "from opentide.models.system_models import SystemConfig",
             ]
         ),
     )
@@ -123,10 +123,10 @@ def decompose_models() -> None:
         '''\
 """Backward-compatibility re-export shim for models module."""
 
-from Engines.modules.enums import StatusStrategy, DetectionPlatforms, DeploymentStrategy
-from Engines.modules.system_models import SystemConfig, DeploymentBatch, TenantDeployment
-from Engines.modules.config_models import ConfigurationModels
-from Engines.modules.object_models import SharedModels, TideModels
+from opentide.models.deployment_enums import StatusStrategy, DetectionPlatforms, DeploymentStrategy
+from opentide.models.system_models import SystemConfig, DeploymentBatch, TenantDeployment
+from opentide.models.config_models import ConfigurationModels
+from opentide.models.object_models import SharedModels, TideModels
 
 __all__ = [
     "StatusStrategy",
@@ -154,15 +154,15 @@ def decompose_deployment() -> None:
         MODULES / "git_repo.py",
         header,
         slice_lines(lines, 36, 79) + slice_lines(lines, 263, 501),
-        "from Engines.modules.ci import CIEnvironment",
+        "from opentide.deployment.ci import CIEnvironment",
     )
 
     utils_extra = "\n".join(
         [
-            "from Engines.modules.tide import OpenTide, DebugHelpers",
-            "from Engines.modules.models import StatusStrategy, DeploymentStrategy",
-            "from Engines.modules.ci import CIEnvironment",
-            "from Engines.modules.git_repo import (",
+            "from opentide.core.registry import OpenTide, DebugHelpers",
+            "from opentide.models.legacy import StatusStrategy, DeploymentStrategy",
+            "from opentide.deployment.ci import CIEnvironment",
+            "from opentide.deployment.git_repo import (",
             "    GitRepository,",
             "    modified_mdr_files,",
             "    diff_calculation,",
@@ -184,8 +184,8 @@ def decompose_deployment() -> None:
         slice_lines(lines, 625, None),
         "\n".join(
             [
-                "from Engines.modules.tide import OpenTide, ObjectLoader",
-                "from Engines.modules.models import (",
+                "from opentide.core.registry import OpenTide, ObjectLoader",
+                "from opentide.models.legacy import (",
                 "    SharedModels,",
                 "    TideModels,",
                 "    SystemConfig,",
@@ -194,7 +194,7 @@ def decompose_deployment() -> None:
                 "    DeploymentBatch,",
                 "    DetectionPlatforms,",
                 ")",
-                "from Engines.modules.framework import unroll_dot_dict",
+                "from opentide.generation.framework import unroll_dot_dict",
             ]
         ),
     )
@@ -203,9 +203,9 @@ def decompose_deployment() -> None:
         '''\
 """Backward-compatibility re-export shim for deployment module."""
 
-from Engines.modules.ci import CIEnvironment
-from Engines.modules.git_repo import GitRepository, modified_mdr_files, diff_calculation
-from Engines.modules.deployment_utils import (
+from opentide.deployment.ci import CIEnvironment
+from opentide.deployment.git_repo import GitRepository, modified_mdr_files, diff_calculation
+from opentide.deployment.utils import (
     SYSTEMS_CONFIGS_INDEX,
     DEPRECATED_STATUSES,
     check_status,
@@ -214,7 +214,7 @@ from Engines.modules.deployment_utils import (
     Proxy,
     ExternalIdHelper,
 )
-from Engines.modules.deployment_planning import TideDeployment
+from opentide.deployment.planning import TideDeployment
 
 __all__ = [
     "CIEnvironment",
@@ -245,7 +245,7 @@ def relocate_system_mixins() -> None:
             f'''\
 """Backward-compatibility re-export shim."""
 
-from Engines.modules.systems.{stem} import *  # noqa: F403
+from opentide.core.systems.{stem} import *  # noqa: F403
 ''',
             encoding="utf-8",
         )

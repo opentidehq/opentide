@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
-
-import git
-
-sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
 
 from opentide.core.logging import log
 from opentide.core.registry import OpenTide

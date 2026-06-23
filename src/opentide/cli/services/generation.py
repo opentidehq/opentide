@@ -54,22 +54,22 @@ def run_generate_phase(phase: GeneratePhase, *, staging: bool = False) -> None:
         return
 
     if phase is GeneratePhase.revisions:
-        from Engines.indexing.revisions import RevisionIndexer
+        from opentide.indexing.revisions import RevisionIndexer
 
         log("TITLE", "Revision index generation")
         RevisionIndexer().run()
         return
 
     if phase is GeneratePhase.snippets:
-        from Engines.framework import vscode_snippets
+        from opentide.generation import vscode_snippets
 
         log("TITLE", "VS Code snippet generation")
         vscode_snippets.run()
         return
 
     if phase is GeneratePhase.exports:
-        from Engines.export import attack_navigator_layer
-        from Engines.export.table_export import TableExporter
+        from opentide.export import attack_navigator_layer
+        from opentide.export.table_export import TableExporter
 
         log("TITLE", "Export generation")
         attack_navigator_layer.run()

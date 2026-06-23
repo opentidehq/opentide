@@ -21,13 +21,13 @@ def _reset_validation_env() -> None:
 
 
 def run_id_uniqueness() -> None:
-    from Engines.validation import id_uniqueness
+    from opentide.validation import id_uniqueness
 
     id_uniqueness.run()
 
 
 def run_uuid_format() -> None:
-    from Engines.validation import uuid_v4
+    from opentide.validation import uuid_v4
 
     uuid_v4.run()
 
@@ -39,7 +39,7 @@ def run_schema_validation() -> dict[str, list[str]]:
 
 
 def run_cve_validation() -> None:
-    from Engines.validation import cve
+    from opentide.validation import cve
 
     cve.run()
 
@@ -123,9 +123,9 @@ def validate_query_platform(
             emit(ctx, {"valid": None, "supported": False, "message": message}, exit_code=1)
         emit_error(ctx, message, exit_code=1)
 
-    from Engines.modules.deployment import DeploymentStrategy, make_deploy_plan
-    from Engines.modules.plugins import DeployTide
-    from Engines.modules.tide import OpenTide as LegacyOpenTide
+    from opentide.core.registry import OpenTide as LegacyOpenTide
+    from opentide.deployment import DeploymentStrategy, make_deploy_plan
+    from opentide.platforms.plugins import DeployTide
 
     _reset_validation_env()
     deployment_plan = DeploymentStrategy.load_from_environment()

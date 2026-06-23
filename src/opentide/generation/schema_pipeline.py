@@ -1,22 +1,18 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any, cast
 
-import git
 import yaml
 
-sys.path.append(str(git.Repo(".", search_parent_directories=True).working_dir))
-
-from Engines.modules.documentation import get_icon
-from Engines.modules.framework import get_type, get_vocab_entry
-from Engines.modules.models import StatusStrategy
-from Engines.modules.vocabulary import VocabularyDefinition, entry_key_field
 from opentide.core.files import resolve_paths
 from opentide.core.logging import log
 from opentide.core.registry import OpenTide
+from opentide.documentation.core import get_icon
+from opentide.generation.framework import get_type, get_vocab_entry
+from opentide.generation.vocabulary import VocabularyDefinition, entry_key_field
+from opentide.models.legacy import StatusStrategy
 from opentide.platforms.enabled import enabled_systems
 
 GLOBAL_CONFIG: Any
