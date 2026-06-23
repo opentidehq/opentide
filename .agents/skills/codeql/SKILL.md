@@ -12,12 +12,12 @@ Static analysis for Python and GitHub Actions workflows. One workflow, no duplic
 
 [`.github/workflows/codeql.yml`](../../../.github/workflows/codeql.yml):
 
-- **Languages:** `python`, `actions` (matrix)
+- **Languages:** `actions` only (GitHub Actions workflow scanning)
+- **Python:** via **GitHub Code Quality** (Settings → Code security → Code Quality, or `PATCH /repos/{owner}/{repo}/code-quality/setup` with `state: configured` and `languages: ["python"]`)
 - **Triggers:** push to `main`/`development`, all PRs, weekly schedule
 - **Queries:** `security-extended`
-- **Python setup:** pinned `astral-sh/setup-uv`, then `uv sync --group dev`
 
-Disable duplicate scanning in repo settings: **Code security → Code Quality → CodeQL** (or the code-quality setup API). Only this workflow should upload SARIF.
+Enable Code Quality for Python scanning. Do **not** add `python` to `codeql.yml` — that duplicates the Code Quality CodeQL run.
 
 ## Local analysis
 

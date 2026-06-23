@@ -75,7 +75,7 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 
 **Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON` in ci.yml). Cobertura upload to GitHub Code Quality is best-effort (`fail-on-error: false` if Code Quality is disabled). HTML report uploaded as artifact.
 
-**CodeQL:** single workflow [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) (`python` + `actions`). Disable duplicate Code Quality → CodeQL in repo settings. Local: `scripts/codeql-local.sh`.
+**CodeQL:** Python via **GitHub Code Quality** (repo settings or `PATCH /repos/{owner}/{repo}/code-quality/setup`); Actions workflows via [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml). Local Python: `scripts/codeql-local.sh`.
 
 **Stack comments:** [`.github/workflows/stack-comment.yml`](.github/workflows/stack-comment.yml) posts merge order **only** on stacked PRs (non-trunk base or child PR exists). Standalone PRs to `development` are skipped.
 
