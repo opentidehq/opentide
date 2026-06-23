@@ -1,19 +1,2 @@
-[attack.stix]
-enterprise = "attack/stix/enterprise-attack.json"
-mobile = "attack/stix/mobile-attack.json"
-ics = "attack/stix/ics-attack.json"
-repo = "https://github.com/mitre-attack/attack-stix-data"
-
-[d3fend]
-ontology = "d3fend/d3fend-ontology.json"
-countermeasures = "d3fend/d3fend.csv"
-
-[engage] #https://engage.mitre.org/learn-more-data/
-matrix = "engage/Engage-Data-V1.0.xlsx"
-
-[nist]
-data = "nist/NIST Cybersecurity Framework.xlsx"
-
-[misp]
 [misp.galaxies]
 threat_actors = "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
