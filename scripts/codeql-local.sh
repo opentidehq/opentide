@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Optional local CodeQL for Python — mirrors Code Quality's Python analysis locally.
-# CI: Python via GitHub Code Quality (dynamic); workflow YAML via .github/workflows/codeql.yml.
+# Optional local CodeQL — mirrors .github/workflows/codeql.yml (python + actions).
 # (~15–25s) and evaluates all queries (~20–40s). No incremental analysis yet.
 #
 # Usage:
@@ -69,3 +68,4 @@ echo "==> Done"
 echo "  SARIF: ${SARIF_OUT}"
 echo "  Upload in CI is automatic via .github/workflows/codeql.yml"
 echo "  Typical local runtime: ~40–60s cold (not suitable for pre-commit hooks)"
+

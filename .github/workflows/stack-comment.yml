@@ -2,19 +2,49 @@ name: Stack comment
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
-  pull-requests: write
-
-env:
-  STACK_TRUNK_BRANCHES: development,main
+  pull-requests: read
 
 jobs:
+  detect-stack:
+    name: Detect stacked PR
+    runs-on: ubuntu-latest
+    outputs:
+      stacked: ${{ steps.check.outputs.stacked }}
+    steps:
+      - name: Check stack membership
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+        run: |
+          stacked=false
+          case "$PR_BASE" in
+            development|main) ;;
+            *) stacked=true ;;
+          esac
+          if [[ "$stacked" != "true" ]]; then
+            count=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+              --base "$PR_HEAD" --state open --json number --jq 'length')
+            if [[ "$count" -gt 0 ]]; then
+              stacked=true
+            fi
+          fi
+          echo "stacked=$stacked" >> "$GITHUB_OUTPUT"
+
   stack-comment:
     name: Stack navigation comment
+    needs: detect-stack
+    if: needs.detect-stack.outputs.stacked == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 

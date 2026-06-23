@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bootstrap Jujutsu for OpenTide stacked-PR workflow. Optionally remove Graphite.
+# Bootstrap Jujutsu for OpenTide. Optionally remove Graphite.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -46,6 +46,11 @@ fi
 echo "==> Configuring jj (user)"
 jj config set --user ui.pager auto 2>/dev/null || true
 jj config set --user git.auto-local-bookmark main 2>/dev/null || true
+if ! jj config get user.email &>/dev/null; then
+  echo "Warning: set jj identity before push (required for jj git push):"
+  echo "  jj config set --user user.name \"Your Name\""
+  echo "  jj config set --user user.email \"you@example.com\""
+fi
 
 GIT_DIR="$(git rev-parse --git-dir)"
 GIT_COMMON="$(git rev-parse --git-common-dir)"
@@ -70,13 +75,14 @@ _ensure_colocated_in() {
 }
 
 if [[ "$IS_WORKTREE" == 1 ]]; then
-  echo "Git worktree detected ($(pwd))"
-  PRIMARY="$(git worktree list --porcelain | awk '/^worktree / { print $2; exit }')"
-  if [[ -z "$PRIMARY" ]]; then
-    PRIMARY="$MAIN_ROOT"
+  echo "Secondary checkout detected ($(pwd))"
+  if [[ -d "${ROOT}/.jj" ]]; then
+    echo ".jj already present"
+  else
+    echo "==> jj git backend (jj git init --git-repo=.)"
+    echo "    Prefer a single clone on development when possible."
+    jj git init --git-repo=.
   fi
-  _ensure_colocated_in "$PRIMARY"
-  echo "jj commands from this worktree use: jj -R ${PRIMARY} (via scripts/jj-common.sh)"
 else
   _ensure_colocated_in "$ROOT"
 fi
@@ -89,7 +95,8 @@ jj_cmd git fetch 2>/dev/null || echo "(fetch skipped — configure origin if nee
 echo
 echo "==> jj repo: ${JJ_REPO}"
 echo "==> Next steps"
-echo "  1. scripts/jj-stack-status.sh          # view stack"
-echo "  2. scripts/jj-stack-submit.sh --dry-run <bookmark>"
-echo "  3. Read AGENTS.md § Jujutsu stacked PRs"
-echo "  4. uv run pre-commit install --install-hooks"
+echo "  1. scripts/jj-submit.sh <bookmark>       # single PR"
+echo "  2. scripts/jj-stack-status.sh            # view stack"
+echo "  3. scripts/jj-stack-submit.sh --dry-run <bookmark>"
+echo "  4. Read AGENTS.md § Jujutsu"
+echo "  5. uv run pre-commit install --install-hooks"

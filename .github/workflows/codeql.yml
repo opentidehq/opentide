@@ -1,13 +1,11 @@
-# GitHub Actions workflow scanning only — Python CodeQL runs via Code Quality
-# (Settings → Code security → Code Quality; dynamic "CodeQL - Code Quality" workflow).
-# Do not add python here or it scans twice. See AGENTS.md.
+# Single CodeQL workflow (python + actions). Disable duplicate scanning in
+# Settings → Code security → Code Quality → CodeQL (or code-quality/setup API).
 name: CodeQL
 
 on:
   push:
     branches: [main, development]
   pull_request:
-    # All base branches — stacked PRs and feature bookmarks
   schedule:
     - cron: "30 5 * * 1"
 
@@ -22,18 +20,31 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze (actions)
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, actions]
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: github/codeql-action/init@v3
         with:
-          languages: actions
+          languages: ${{ matrix.language }}
           queries: security-extended
+
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        if: matrix.language == 'python'
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        if: matrix.language == 'python'
+        run: uv sync --group dev
 
       - uses: github/codeql-action/analyze@v3
         with:
-          category: /language:actions
+          category: /language:${{ matrix.language }}

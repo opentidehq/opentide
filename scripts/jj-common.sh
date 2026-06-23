@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Shared jj helpers for OpenTide scripts (git worktree-safe).
+# Shared jj helpers for OpenTide scripts.
 set -euo pipefail
 
-# Resolve the colocated jj repository root (primary checkout).
+# Resolve jj repo root: prefer .jj in the current checkout (incl. git worktrees).
 jj_repo_root() {
   if root="$(jj root 2>/dev/null)"; then
     printf '%s\n' "$root"
@@ -24,8 +24,12 @@ jj_repo_root() {
   return 1
 }
 
-# Run jj against the resolved repo (works from git worktrees).
+# Run jj in the current checkout when it has .jj; else fall back to primary -R.
 jj_cmd() {
+  if jj root >/dev/null 2>&1; then
+    command jj "$@"
+    return
+  fi
   local root
   root="$(jj_repo_root)" || {
     echo "No jj repo found. Run: scripts/jj-setup.sh" >&2

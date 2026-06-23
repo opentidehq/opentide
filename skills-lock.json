@@ -13,40 +13,58 @@
       "skillPath": "skills/pytest-coverage/SKILL.md",
       "computedHash": "06481f4bbc6d80a52091ec9ba5856eb1dc5f80cbabb40fd4ad02aaea3085a0dc"
     },
-    "python-mcp-server-generator": {
-      "source": "github/awesome-copilot",
-      "sourceType": "github",
-      "skillPath": "skills/python-mcp-server-generator/SKILL.md",
-      "computedHash": "2b598920b5fdc807c9ee5b69bad23b8327c4ea5f1178c38d3a99a9e06a49e628"
-    },
     "python-testing-patterns": {
       "source": "wshobson/agents",
       "sourceType": "github",
       "skillPath": "plugins/python-development/skills/python-testing-patterns/SKILL.md",
       "computedHash": "1306eea409e7eff2288d7658806cb508f18339a0ee9a686d324a0fd2570eae55"
     },
-    "ruff-recursive-fix": {
-      "source": "github/awesome-copilot",
-      "sourceType": "github",
-      "skillPath": "skills/ruff-recursive-fix/SKILL.md",
-      "computedHash": "a6f4b355dd277d24f9ea95cb0f6f181fb4fc77fa8080d1e4f649af21d2095f2a"
-    },
-    "uv": {
-      "source": "astral-sh/claude-code-plugins",
-      "sourceType": "github",
-      "skillPath": "plugins/astral/skills/uv/SKILL.md",
-      "computedHash": "b1ca9e9826d906f6ee6ea172da50018ec13bb622ac9ba7204bda8b10e7fc8d0a"
-    },
-    "uv-package-manager": {
-      "source": "wshobson/agents",
-      "sourceType": "github",
-      "skillPath": "plugins/python-development/skills/uv-package-manager/SKILL.md",
-      "computedHash": "c2bf8833d6c3ffa283171ef3b8da90274451605e170077f1ee6529cc38aa6438"
+    "jujutsu": {
+      "source": "OpenTideHQ/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/jujutsu/SKILL.md",
+      "computedHash": "project-local"
     },
     "jujutsu-stacked-prs": {
       "source": "OpenTideHQ/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/jujutsu-stacked-prs/SKILL.md",
+      "computedHash": "project-local-stub"
+    },
+    "uv": {
+      "source": "OpenTideHQ/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/uv/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "uv-package-manager": {
+      "source": "OpenTideHQ/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/uv-package-manager/SKILL.md",
+      "computedHash": "project-local-stub"
+    },
+    "ruff": {
+      "source": "OpenTideHQ/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/ruff/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "ruff-recursive-fix": {
+      "source": "OpenTideHQ/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/ruff-recursive-fix/SKILL.md",
+      "computedHash": "project-local-stub"
+    },
+    "python-typing": {
+      "source": "OpenTideHQ/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/python-typing/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "codeql": {
+      "source": "OpenTideHQ/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/codeql/SKILL.md",
       "computedHash": "project-local"
     }
   }

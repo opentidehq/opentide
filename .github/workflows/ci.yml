@@ -108,6 +108,7 @@ jobs:
           file: coverage.xml
           language: Python
           label: code-coverage/pytest
+          fail-on-error: false
 
       - name: Publish test report
         if: always() && matrix.python-version == env.COVERAGE_PYTHON
