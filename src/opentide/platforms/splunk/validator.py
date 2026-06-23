@@ -32,13 +32,13 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
 
         try:
             response = service.parse(query.strip(),
-                                     enable_lookups=True,   
+                                     enable_lookups=True,
                                      output_mode='json',
                                      reload_macros=True)
             status = response["status"]
-            
+
             if status == 19:
-                
+
                 if reason:= response.get("reason"):
                     if reason == "Temporary Redirect":
                         if "Network Error" in str(response["body"].read()):
@@ -50,7 +50,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
 
                 parsing = response["body"].read()
                 parsing = json.loads(parsing) #type: ignore
-                log("DEBUG", "Parsed Body", parsing) 
+                log("DEBUG", "Parsed Body", parsing)
                 for message in parsing["messages"]:
                     log("FATAL",
                         f"The SPL query is invalid for : {mdr['name']} ({mdr_uuid})",
@@ -58,13 +58,13 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
                         "Review the error and ensure it can run on the Splunk Search console")
                 os.environ["VALIDATION_ERROR_RAISED"] = "True"
                 return
-                
+
             elif status == 200:
                 parsing = response["body"].read()
                 parsing = json.loads(parsing) #type: ignore
                 log("SUCCESS", "The query is a valid SPL that can be parsed by Splunk")
                 return
-            
+
             else:
                 log("FATAL",
                 "Unexpected Error Code",
@@ -76,7 +76,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
                 "An unknown error was found",
                 repr(e))
             traceback.print_exc()
-            raise 
+            raise
 
     def validate(self, deployment: list[str]):
         if not deployment:
@@ -108,11 +108,11 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
             else:
                 log(
                     "SKIP",
-                    f"🛑 Skipping {mdr_data.get('name')} as does not contain a Splunk configuration section",
+                    f" Skipping {mdr_data.get('name')} as does not contain a Splunk configuration section",
                 )
 
 def declare():
-    return SplunkQueryValidator()    
+    return SplunkQueryValidator()
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
     SplunkQueryValidator().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)

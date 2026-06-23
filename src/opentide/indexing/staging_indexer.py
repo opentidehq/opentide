@@ -43,11 +43,11 @@ for mdr in mdr_to_index:
     uuid = mdr_data.get('uuid') or mdr_data['metadata']['uuid']
     current_stg_index[uuid] = mdr_data
 if not os.path.exists(STG_INDEX_PATH):
-    print('🌟 Could not find a staging index file, will create one')
+    print(' Could not find a staging index file, will create one')
     with open(STG_INDEX_PATH, 'w+') as out:
         json.dump(current_stg_index, out, default=str)
 else:
-    print('🔔 Found MDR index, extending it with latest values')
+    print(' Found MDR index, extending it with latest values')
     stg_index = json.load(open(Path(STG_INDEX_PATH)))
     stg_index.update(current_stg_index)
     with open(STG_INDEX_PATH, 'w+') as out:
@@ -55,4 +55,4 @@ else:
 print('\n' + 'Execution Report'.center(80, '='))
 time_to_execute = datetime.now() - toolchain_start_time
 time_to_execute = '%.2f' % time_to_execute.total_seconds()
-print('\n⌛ Exported Staging index in {} seconds'.format(time_to_execute))
+print('\n Exported Staging index in {} seconds'.format(time_to_execute))

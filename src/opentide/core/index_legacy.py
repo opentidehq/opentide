@@ -58,7 +58,7 @@ class IndexManager:
 
         If a staging index exists (``staging_index.json`` by default or as
         specified by ``STAGING_INDEX_PATH``), this routine will:
-        
+
         1. Load the staging index
         2. Merge model data (MDRs) from staging into production, where:
            - New MDRs from staging are added
@@ -110,18 +110,18 @@ class IndexManager:
 
                 if stg_version > main_version:
                     log("INFO",
-                        f"🔄 Replacing MDR {mdr_name} from prod index with"
+                        f" Replacing MDR {mdr_name} from prod index with"
                         f" staging data, as version is higher (main : v{main_version}"
                         f" staging : v{stg_version})"
                     )
                     log("INFO", "Doing a safety patching to avoid edge cases")
                     RECONCILED_INDEX["objects"]["rule"][mdr] = patch.tide_1_patch(STG_INDEX[mdr], "rule")
                     updated_mdr.append(mdr)
-        
+
         # Always load fresh configurations after model data reconciliation
         log("INFO", "Loading fresh configurations from TOML files")
         RECONCILED_INDEX["configurations"] = resolve_configurations()
-        
+
         log("SUCCESS", "Finalized Staging Reconciliation Routine")
         log("INFO", "Updated MDRs from Production Index with Staging Data", str(len(updated_mdr)))
         log("INFO", "New MDR added from Staging Data ", str(len(added_mdr)))
@@ -182,4 +182,3 @@ class IndexManager:
 
 # Legacy alias
 IndexTide = IndexManager
-

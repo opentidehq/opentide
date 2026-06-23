@@ -2,14 +2,14 @@
     "type": "object",
     "properties": {
         "name": {
-            "title": "\ud83c\udfab Name",
+            "title": "Name",
             "type": "string"
         },
         "metadata": {
             "type": "object",
             "properties": {
                 "uuid": {
-                    "title": "\ud83d\udd11 Uuid",
+                    "title": "Uuid",
                     "type": "string"
                 },
                 "schema": {
@@ -25,18 +25,18 @@
                             "type": "integer"
                         }
                     ],
-                    "title": "\ud83c\udff7\ufe0f Version"
+                    "title": "Version"
                 },
                 "created": {
-                    "title": "\ud83d\uddd3\ufe0f Created",
+                    "title": "Created",
                     "type": "string"
                 },
                 "modified": {
-                    "title": "\ud83d\uddd3\ufe0f Modified",
+                    "title": "Modified",
                     "type": "string"
                 },
                 "tlp": {
-                    "title": "\ud83d\udea6 Tlp",
+                    "title": "Tlp",
                     "type": "string"
                 },
                 "author": {
@@ -49,7 +49,7 @@
                         }
                     ],
                     "default": null,
-                    "title": "\ud83d\udc69\u200d\ud83d\udcbb Author"
+                    "title": "Author"
                 },
                 "contributors": {
                     "anyOf": [
@@ -64,7 +64,7 @@
                         }
                     ],
                     "default": null,
-                    "title": "\ud83d\udc65 Contributors"
+                    "title": "Contributors"
                 },
                 "organisation": {
                     "anyOf": [
@@ -91,7 +91,7 @@
         },
         "objective": {
             "$ref": "#/$defs/ObjectiveBody",
-            "title": "\ud83c\udfaf Objective"
+            "title": "Objective"
         },
         "composition": {
             "$ref": "#/$defs/ObjectiveComposition",

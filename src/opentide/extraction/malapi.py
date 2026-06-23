@@ -11,9 +11,9 @@ from opentide.core.registry import OpenTide
 import structlog
 logger = structlog.get_logger('opentide.extraction.malapi')
 DEBUG = False
-VOCAB_FILE_PATH = Path(OpenTide.Configurations.Global.Paths.Core.vocabularies / 'MalAPI.yaml')
+VOCAB_FILE_PATH = Path(OpenTide.Configurations.Global.Paths.Core.vocabularies) / "malapi.vocab.toml"
 API_DETAILS_FIELD_MAPPING = {'Function Name': 'name', 'Description': 'description', 'Library': 'library', 'Associated Attacks': 'tide.vocab.stages', 'Documentation': 'link'}
-STAGE_ICON_MAPPING = {'Enumeration': '📟', 'Injection': '💉', 'Evasion': '🏃\u200d♂️', 'Spying': '🥸', 'Internet': '🌐', 'Anti-Debugging': '🐞', 'Ransomware': '🔐', 'Helper': '🤝'}
+STAGE_ICON_MAPPING = {key: '' for key in ('Enumeration', 'Injection', 'Evasion', 'Spying', 'Internet', 'Anti-Debugging', 'Ransomware', 'Helper')}
 MALAPI_URL = 'https://malapi.io'
 start_time = datetime.now()
 
@@ -89,7 +89,7 @@ for api in sorted(api_list):
 time_elapsed = datetime.now() - start_time
 time_elapsed = '%.2f' % time_elapsed.total_seconds()
 logger.info('successfully_retrieved', detail=f'{len(malapi_content)} APIs', advice=f'in {time_elapsed} seconds')
-vocab_content = {'name': 'Malicious Window API', 'field': 'malapi', 'description': 'MalAPI.io maps Windows APIs to common techniques used by malware.', 'reference': MALAPI_URL, 'icon': '🎭', 'stages': attacks, 'keys': malapi_content}
+vocab_content = {'name': 'Malicious Window API', 'field': 'malapi', 'description': 'MalAPI.io maps Windows APIs to common techniques used by malware.', 'reference': MALAPI_URL, 'icon': '', 'stages': attacks, 'keys': malapi_content}
 logger.info('writing_to_file_at_location', detail=str(VOCAB_FILE_PATH))
 with open(VOCAB_FILE_PATH, encoding='utf-8', mode='w+') as vocab:
     yaml.dump(vocab_content, vocab, sort_keys=False, allow_unicode=True, Dumper=IndentFullDumper)

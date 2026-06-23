@@ -43,7 +43,7 @@ def indicator_validation(type: Literal['email', 'url', 'domain', 'ip', 'ip::v6',
                 return True
         case _:
             logger.critical('indicators_validation_received_invalid_type', arg0=type)
-            raise Exception('💥 Invalid Type')
+            raise Exception(' Invalid Type')
     if verbose:
         logger.error('operation_failed', detail=f'The following value is not of type {type}', arg0=value, advice='Correct the value to the expected type.')
     return False

@@ -45,10 +45,10 @@ class TideDeployment:
             case DetectionPlatforms.SPLUNK:
                 self.rule_deployment: Sequence[TenantDeployment.Splunk] = ( # type:ignore
                     self.deployment_resolver(deployment, system, strategy)
-                )  
+                )
             case DetectionPlatforms.SENTINEL:
                 self.rule_deployment: Sequence[TenantDeployment.Sentinel] = ( # type:ignore
-                    self.deployment_resolver(deployment, system, strategy) 
+                    self.deployment_resolver(deployment, system, strategy)
                 )
             case DetectionPlatforms.CARBON_BLACK_CLOUD:
                 self.rule_deployment: Sequence[TenantDeployment.CarbonBlackCloud] = ( # type:ignore
@@ -61,7 +61,7 @@ class TideDeployment:
             case DetectionPlatforms.SENTINEL_ONE:
                 self.rule_deployment: Sequence[TenantDeployment.SentinelOne] = ( # type:ignore
                     self.deployment_resolver(deployment, system, strategy)
-                ) 
+                )
             case DetectionPlatforms.CROWDSTRIKE:
                 self.rule_deployment: Sequence[TenantDeployment.Crowdstrike] = (
                     self.deployment_resolver(deployment, system, strategy) # type:ignore
@@ -78,9 +78,9 @@ class TideDeployment:
     def system_configuration_resolver(self, system: DetectionPlatforms):  # type:ignore
         match system:
             # case DetectionPlatforms.SPLUNK:
-            #    return OpenTide.Configurations.Systems.Splunk
+            # return OpenTide.Configurations.Systems.Splunk
             # case DetectionPlatforms.CARBON_BLACK_CLOUD:
-            #    return OpenTide.Configurations.Systems.CarbonBlackCloud
+            # return OpenTide.Configurations.Systems.CarbonBlackCloud
             case DetectionPlatforms.SENTINEL:
                 return OpenTide.Configurations.Systems.Sentinel
             case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
@@ -92,7 +92,7 @@ class TideDeployment:
             case DetectionPlatforms.HARFANGLAB:
                 return OpenTide.Configurations.Systems.HarfangLab
             # case _:
-            #    raise NotImplemented
+            # raise NotImplemented
 
     def mdr_configuration_resolver(
         self, data: DetectionRule, system: DetectionPlatforms
@@ -210,7 +210,7 @@ class TideDeployment:
                     )
                     continue
 
-                elif ( 
+                elif (
                     (tenant.deployment is deployment_strategy) or
                     (tenant.deployment is DeploymentStrategy.ALWAYS)
                 ):
@@ -304,7 +304,7 @@ class TideDeployment:
                     )
                     flatten_modifications = pd.json_normalize(
                         mod.modifications # type: ignore
-                    ).to_dict(orient="records")[0] 
+                    ).to_dict(orient="records")[0]
                     for modification in flatten_modifications:
                         new_value = flatten_modifications[modification]
                         new_value = None if new_value in [
@@ -315,7 +315,7 @@ class TideDeployment:
                             elif "::" in new_value:
                                 raw_mdr_config_flatten = pd.json_normalize(
                                     raw_mdr_config # type: ignore
-                                ).to_dict(orient="records")[0]  
+                                ).to_dict(orient="records")[0]
                                 operator = new_value.split("::")[0]
                                 value = new_value.split("::")[1]
                                 log(
@@ -349,7 +349,7 @@ class TideDeployment:
                         if updated_config:
                             raw_mdr_config = self._deep_update(
                                 raw_mdr_config.copy(), updated_config # type: ignore
-                            )  
+                            )
 
         raw_data["configurations"].update({system_identifier: raw_mdr_config})
         log("INFO", "New recompiled modified deployment", str(raw_data))

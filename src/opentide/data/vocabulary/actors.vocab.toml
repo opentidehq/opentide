@@ -1,18 +1,18 @@
 name = "Threat Actors"
 field = "actors"
 description = "Groups are activity clusters that are tracked by a common name in the\n  security community.\n\n  Analysts track these clusters using various analytic methodologies and terms such\n  as threat groups, activity groups, and threat actors. Some groups have multiple\n  names associated with similar activities due to various organizations tracking similar\n  activities by different names.\n\n  Organizations group definitions may partially overlap with groups designated by\n  other organizations and may disagree on specific activity."
-icon = "🐲"
+
 key = "id"
 [[stages]]
 id = "misp"
 name = "MISP Threat Actor Galaxy"
-icon = "🌌"
+
 description = "Threat Actors extracted from MISP Threat Actor Galaxy/Cluster"
 
 [[stages]]
 id = "att&ck"
 name = "MITRE ATT&CK Groups"
-icon = "🗡️"
+
 description = "Threat Actors extracted from MITRE ATT&CK Groups, from Enterprise, ICS and Mobile definitions"
 
 [[keys]]
@@ -6763,4 +6763,3 @@ id = "12503160-884d-40b8-b4cf-9a4d11a769cf"
 name = "UNC6395"
 description = "The actor systematically exported large volumes of data from numerous corporate Salesforce instances. GTIG assesses the primary intent of the threat actor is to harvest credentials. After the data was exfiltrated, the actor searched through the data to look for secrets that could be potentially used to compromise victim environments. GTIG observed UNC6395 targeting sensitive credentials such as Amazon Web Services (AWS) access keys (AKIA), passwords, and Snowflake-related access tokens. UNC6395 demonstrated operational security awareness by deleting query jobs, however logs were not impacted and organizations should still review relevant logs for evidence of data exposure."
 "tide.vocab.stages" = "misp"
-

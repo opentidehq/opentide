@@ -36,7 +36,7 @@ def indexer(write_index=False) -> dict:
     TEMPLATES_PATH = PATHS["templates"]
     TEMPLATES = CORE_CONFIG["templates"]
     INDEX_PATH = PATHS["tide_indexes"]
-    
+
     @dataclass
     class IndexPaths:
         REVISIONS_INDEX_PATH = INDEX_PATH / "revisions.json"
@@ -72,7 +72,7 @@ def indexer(write_index=False) -> dict:
 
     index["configurations"] = RESOLVED_CONFIGURATIONS
 
-    print("📒 Indexing Vocabularies...")
+    print(" Indexing Vocabularies...")
 
     from opentide.vocabulary.io import load_vocab_file
 
@@ -93,7 +93,7 @@ def indexer(write_index=False) -> dict:
     index["vocabs"] = voc_index
 
     # JSON Schemas Indexer
-    print("🛠️ Indexing JSON Schemas...")
+    print(" Indexing JSON Schemas...")
 
     json_index = dict()
 
@@ -117,7 +117,7 @@ def indexer(write_index=False) -> dict:
     )
     from opentide.models.platform_schema import platform_model_for_key
 
-    print("🛠️ Indexing Pydantic schema sources...")
+    print(" Indexing Pydantic schema sources...")
 
     meta_index = dict()
     for meta_name in METASCHEMAS:
@@ -126,11 +126,11 @@ def indexer(write_index=False) -> dict:
 
     index["metaschemas"] = meta_index
 
-    print("🛠️ Indexing Definitions...")
+    print(" Indexing Definitions...")
     definition_index = build_definition_index()
     index["definitions"] = definition_index
 
-    print("📐 Indexing Templates")
+    print(" Indexing Templates")
 
     template_index = dict()
 
@@ -144,8 +144,8 @@ def indexer(write_index=False) -> dict:
             obj_counter += 1
 
     # Template indexer and Subschema indexer (as dependent on recomposition)
-    print("📐 Indexing Recomposition Templates")
-    print("🧩 Indexing Subschemas")
+    print(" Indexing Recomposition Templates")
+    print(" Indexing Subschemas")
 
     subschemas_index = dict()
     for recomp in RECOMPOSITION:
@@ -167,7 +167,7 @@ def indexer(write_index=False) -> dict:
             platform_model = platform_model_for_key(data)
             sub_body = build_platform_schema_source(platform_model)
             subschemas_index[recomp][data] = sub_body
-            
+
             try:
                 template_body = open(
                     sub_templates_path / (sub_name + " Template.yaml"), encoding="utf-8"
@@ -185,7 +185,7 @@ def indexer(write_index=False) -> dict:
 
     # Objects Indexer
 
-    print("📊 Indexing Objects...")
+    print(" Indexing Objects...")
 
     objects_index = dict()
     files_index = dict()
@@ -194,7 +194,7 @@ def indexer(write_index=False) -> dict:
     for meta_name in METASCHEMAS:
         if meta_name not in SKIPS:
             model_cat_index = dict()
-            
+
             if not os.path.exists(PATHS[meta_name]):
                 log("FAILURE",
                     "Could not find the folder at the expected location",
@@ -204,11 +204,11 @@ def indexer(write_index=False) -> dict:
                 continue
 
             for model in os.listdir(PATHS[meta_name]):
-                
+
                 #Skips for empty InitTide repositories
                 if model == ".gitkeep":
                     continue
-                
+
                 model_path = Path(PATHS[meta_name]) / model
                 if (not os.path.isdir(model_path)) and (str(model_path).endswith(".yaml")):
                     obj_counter += 1
@@ -229,7 +229,7 @@ def indexer(write_index=False) -> dict:
                                 signals = model_body.get("objective",{}).get("signals", [])
                                 for idx, signal in enumerate(signals or []):
                                     if not signal:
-                                        log("FATAL", 
+                                        log("FATAL",
                                             f"Signal at index {idx} is empty/null in Detection Objective",
                                             f"File: {model}",
                                             f"Detection Objective UUID: {identifier}",
@@ -237,7 +237,7 @@ def indexer(write_index=False) -> dict:
                                         raise ValueError(f"Empty signal at index {idx} in Detection Objective '{model}'")
                                     if not signal.get("uuid"):
                                         signal_name = signal.get("name", "unnamed")
-                                        log("FATAL", 
+                                        log("FATAL",
                                             f"Signal '{signal_name}' is missing a UUID",
                                             f"File: {model}",
                                             f"Detection Objective UUID: {identifier}",
@@ -282,22 +282,22 @@ def indexer(write_index=False) -> dict:
 
     # Security Stack Mapping Indexer
 
-    # print("🔒 Indexing Cloud Security Stack Mappings...")
+    # print(" Indexing Cloud Security Stack Mappings...")
     #
     # CLOUD_MITIGATIONS = Path(CONFIG["paths"]["resources"]) / "security-stack-mappings"
     # CLOUD_PLATFORMS = ["AWS", "Azure" ,"GCP"]
     # CLOUD_MAPPINGS_INDEX = dict()
     #
     # for plat in CLOUD_PLATFORMS:
-    #    path = CLOUD_MITIGATIONS / plat
-    #    buf = list()
-    #    for file in os.listdir(path):
-    #        if not os.path.isdir(path / file) is True and file.endswith(".yaml"):
-    #            obj_counter += 1
+    # path = CLOUD_MITIGATIONS / plat
+    # buf = list()
+    # for file in os.listdir(path):
+    # if not os.path.isdir(path / file) is True and file.endswith(".yaml"):
+    # obj_counter += 1
     #
-    #            body = yaml.safe_load(open(path / file, encoding='utf-8'))
-    #            buf.append(body)
-    #    CLOUD_MAPPINGS_INDEX[plat] = buf
+    # body = yaml.safe_load(open(path / file, encoding='utf-8'))
+    # buf.append(body)
+    # CLOUD_MAPPINGS_INDEX[plat] = buf
     #
     # index["security-stack-mappings"] = CLOUD_MAPPINGS_INDEX
     #
@@ -305,7 +305,7 @@ def indexer(write_index=False) -> dict:
     #
     ##ATT&CK relationship Indexer
     #
-    # print("⛓️ Indexing ATT&CK Relationships...")
+    # print(" Indexing ATT&CK Relationships...")
     #
     # ATTACK_ENT = Path(CONFIG["paths"]["att&ck"]) / CONFIG["resources"]["attack"]["enterprise"]
     # ATTACK_ICS = Path(CONFIG["paths"]["att&ck"]) / CONFIG["resources"]["attack"]["ics"]
@@ -325,28 +325,28 @@ def indexer(write_index=False) -> dict:
     #
     ##Atomics Indexer
     #
-    # print("⚛️ Indexing Atomic Red Tests...")
+    # print(" Indexing Atomic Red Tests...")
     #
     # ATOMICS = Path(CONFIG["paths"]["resources"]) / "atomics"
     # ATOMICS_MAPPINGS_INDEX = dict()
     # KB_TO_ATOMIC = Path("../../../Automation/Resources/atomics/")
     #
     # for folder in os.listdir(ATOMICS):
-    #    if os.path.isdir(ATOMICS/folder) and folder != "Indexes":
-    #        obj_counter += 1
+    # if os.path.isdir(ATOMICS/folder) and folder != "Indexes":
+    # obj_counter += 1
     #
-    #        file_name = folder + ".yaml"
-    #        doc_name = folder + ".md"
-    #        body = yaml.safe_load(open(ATOMICS/folder/file_name, encoding='utf-8'))
-    #        body["doc"] = open(ATOMICS/folder/doc_name, encoding='utf-8').read()
-    #        ATOMICS_MAPPINGS_INDEX[folder] = body
+    # file_name = folder + ".yaml"
+    # doc_name = folder + ".md"
+    # body = yaml.safe_load(open(ATOMICS/folder/file_name, encoding='utf-8'))
+    # body["doc"] = open(ATOMICS/folder/doc_name, encoding='utf-8').read()
+    # ATOMICS_MAPPINGS_INDEX[folder] = body
     #
     # index["atomics"] = ATOMICS_MAPPINGS_INDEX
     #
     #
 
     if write_index or os.getenv("WRITE_INDEX"):
-        print("📝 Exporting Index file to : {} ...".format(OUTPUT_PATH))
+        print(" Exporting Index file to : {} ...".format(OUTPUT_PATH))
         with open(OUTPUT_PATH, "w+", encoding="utf-8") as index_file:
             json.dump(index, index_file, default=str)
 
@@ -355,7 +355,7 @@ def indexer(write_index=False) -> dict:
 
 if __name__ == "__main__":
     # if os.environ.get("GENERATE_INDEX_FILE"):
-    #    indexer(write_index=True)
+    # indexer(write_index=True)
     # else:
-    #    indexer()
+    # indexer()
     indexer(write_index=True)

@@ -1,54 +1,54 @@
 name = "Threat Surface"
 field = "surface"
 description = "Hierarchical scoping of the technologies, systems and environments applicable to a threat vector. Uses scoped '::' delimited categories via stages. Replaces the deprecated targets, platforms and domains vocabularies."
-icon = "🌐"
+
 key = "name"
 [[stages]]
 id = "OS"
 name = "Operating Systems"
-icon = "💻"
+
 description = "Operating systems and runtime environments providing kernel-level or container-level execution"
 
 [[stages]]
 id = "Application"
 name = "Applications"
-icon = "📦"
+
 description = "User-facing, developer-facing and enterprise software applications"
 
 [[stages]]
 id = "Authentication"
 name = "Authentication & Identity"
-icon = "🔐"
+
 description = "Identity providers, directory services, privileged access management and authentication protocols"
 
 [[stages]]
 id = "Cloud"
 name = "Cloud Services"
-icon = "☁️"
+
 description = "Cloud provider service catalogue entries across AWS, Azure, GCP and others"
 
 [[stages]]
 id = "Infrastructure"
 name = "Infrastructure"
-icon = "🏗️"
+
 description = "Physical and virtual infrastructure including networking, compute, storage, orchestration and industrial systems"
 
 [[stages]]
 id = "Security"
 name = "Security Tooling"
-icon = "🛡️"
+
 description = "Defensive security tooling including endpoint protection, SIEM, SOAR, vulnerability management and forensics"
 
 [[stages]]
 id = "IoT"
 name = "IoT & Embedded"
-icon = "📡"
+
 description = "Internet of Things devices, embedded systems and connected consumer or industrial devices"
 
 [[stages]]
 id = "Protocol"
 name = "Protocols"
-icon = "🔌"
+
 description = "Network, communication and authentication protocols where the threat targets the protocol itself"
 
 [[keys]]
@@ -4525,4 +4525,3 @@ description = "Multiprotocol Label Switching for traffic engineering and VPN ser
 name = "Routing::IS-IS"
 "tide.vocab.stages" = "Protocol"
 description = "Intermediate System to Intermediate System routing protocol"
-

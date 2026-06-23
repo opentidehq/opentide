@@ -2,46 +2,46 @@ name = "Malicious Window API"
 field = "malapi"
 description = "MalAPI.io maps Windows APIs to common techniques used by malware."
 reference = "https://malapi.io"
-icon = "🎭"
+
 key = "name"
 [[stages]]
 name = "Enumeration"
-icon = "📟"
+
 description = "Functions associated with system enumeration."
 
 [[stages]]
 name = "Injection"
-icon = "💉"
+
 description = "Functions associated with process-related attacks (e.g. DLL injection, process hollowing)"
 
 [[stages]]
 name = "Evasion"
-icon = "🏃\u200d♂️"
+
 description = "Functions associated with evasive behaviour to evade security controls and solutions."
 
 [[stages]]
 name = "Spying"
-icon = "🥸"
+
 description = "Functions associated with spying on user actions (e.g. keylogger, screen capture)."
 
 [[stages]]
 name = "Internet"
-icon = "🌐"
+
 description = "Functions associated with malicious internet connectivity (e.g. C&C, exfiltration, downloads)."
 
 [[stages]]
 name = "Anti-Debugging"
-icon = "🐞"
+
 description = "Functions associated with anti-reverse engineering and debugging."
 
 [[stages]]
 name = "Ransomware"
-icon = "🔐"
+
 description = "Cryptographic functions used by ransomware."
 
 [[stages]]
 name = "Helper"
-icon = "🤝"
+
 description = "Functions that are not necessarily malicious, but can aid malware."
 
 [[keys]]
@@ -2251,4 +2251,3 @@ name = "timeSetEvent"
 description = "timeSetEvent is used to start a specified timer event. This function is obselete but is still used by malware for time-based evasion.\nLibrary : `Winmm.dll`"
 link = "https://docs.microsoft.com/en-us/previous-versions/dd757634(v=vs.85)"
 "tide.vocab.stages" = "Evasion"
-

@@ -59,7 +59,7 @@ def _write_readme(target: Path, options: InitOptions) -> None:
     name = options.name or target.name
     org = options.org or "Security Operations"
     description = options.description or "Detection-as-code repository powered by OpenTide"
-    content = f"# {name}\n\n{description}\n\n**Organisation:** {org}\n\n## Quick start\n\n```bash\nopentide validate\nopentide generate\nopentide deploy --platform sentinel --dry-run\n```\n\n## Platforms\n\n{chr(10).join(f'- {p.value}' for p in options.platforms) or '- (configure platforms in Configurations/)'}\n"
+    content = f"# {name}\n\n{description}\n\n**Organisation:**{org}\n\n## Quick start\n\n```bash\nopentide validate\nopentide generate\nopentide deploy --platform sentinel --dry-run\n```\n\n## Platforms\n\n{chr(10).join(f'- {p.value}' for p in options.platforms) or '- (configure platforms in Configurations/)'}\n"
     (target / "README.md").write_text(content, encoding="utf-8")
 
 
@@ -165,7 +165,7 @@ def run_interactive_init(ctx: CliContext, base_path: Path) -> dict[str, object]:
     console.print(
         Panel(
             "[bold]OpenTide — Detection Repository Setup[/]",
-            title="🌊 OpenTide",
+            title=" OpenTide",
             border_style="blue",
         )
     )

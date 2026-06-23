@@ -21,7 +21,7 @@ def unroll_dot_dict(dot_dict, separator="."):
     """
     if len(dot_dict.keys()) > 1:
         print(
-            f"⚠️ Cannot process dictionary {str(dot_dict)}, expecting a single item dictionary"
+            f" Cannot process dictionary {str(dot_dict)}, expecting a single item dictionary"
         )
         return None
 
@@ -126,7 +126,7 @@ def vocab_metadata(vocab: str, field=None) -> str | dict:
 def get_vocab_stage_details(vocabulary:str, stage_identifier:str)->None|Tuple[str,str]:
     """
     Return a tuple of the name and description for a particular stage of a vocabulary.
-    If no stage correspond, or the vocabulary has no stages, returns nothing. 
+    If no stage correspond, or the vocabulary has no stages, returns nothing.
     """
     if vocabulary not in VOCAB_INDEX:
         log("FAILURE",
@@ -140,7 +140,7 @@ def get_vocab_stage_details(vocabulary:str, stage_identifier:str)->None|Tuple[st
             "The requested vocabulary does not contain a stage section",
             vocabulary)
         return None
-    
+
     for stage in stages_section:
         if stage.get("id") == stage_identifier:
             log("INFO",
@@ -148,7 +148,7 @@ def get_vocab_stage_details(vocabulary:str, stage_identifier:str)->None|Tuple[st
                 stage_identifier,
                 str(stage))
             return stage.get("name"), stage.get("description")
-    
+
     return None
 
 def strip_vocab_stage_prefix(vocab: str, identifier: str) -> str:
@@ -191,7 +191,7 @@ def get_vocab_entry(vocab, identifier, field=None, newlines=False):
         value = entry.get(field)
         if value in (None, ""):
             print(
-                f"⚠️ Could not retrieve parameter [ {field} ] for entry with identifier [ {identifier} ] from vocabulary data of : {vocab}"
+                f" Could not retrieve parameter [ {field} ] for entry with identifier [ {identifier} ] from vocabulary data of : {vocab}"
             )
             return ""
         if newlines is False and isinstance(value, str):
@@ -211,7 +211,7 @@ def get_vocab_entry(vocab, identifier, field=None, newlines=False):
             return value
 
     print(
-        f"⚠️ Could not retrieve identifier [ {identifier} ] from vocabulary data of : {vocab}"
+        f" Could not retrieve identifier [ {identifier} ] from vocabulary data of : {vocab}"
     )
     return ""
 
@@ -237,7 +237,7 @@ def get_key_in_model_body(model_body, key):
 def model_value(id, key):
     model_type = get_type(id)
     if not MODELS_INDEX.get(model_type):
-        log("FAILURE", 
+        log("FAILURE",
             "Could not find object index",
             model_type)
         return None
@@ -310,7 +310,7 @@ def childs(model_id: str) -> list:
 
     for child_type in child_types:
         CHILDS_INDEX = MODELS_INDEX.get(child_type, [])
-        for child in CHILDS_INDEX:            
+        for child in CHILDS_INDEX:
             if data_sections:
                 for section in data_sections:
                     for reference in references:
@@ -358,14 +358,14 @@ def get_type(model_uuid:str, mute:bool=False):
         else:
             log("FATAL", "Missing schema identifier in object", model_body.get("name", "NAME NOT FOUND"))
             raise Exception
-        
+
     return schema.split("::")[0]
 
 def keep_active_rules(rule_list:list[str])->list[str]:
     """
     Given a list of MDRs, only keep the ones considered Active,
     which mean none of the system they configure are set with a
-    Deprecated status. 
+    Deprecated status.
     """
     from opentide.deployment import check_status, DEPRECATED_STATUSES
 
@@ -388,7 +388,7 @@ def keep_active_rules(rule_list:list[str])->list[str]:
                 deprecated = True
         if deprecated is False:
             active_rules.append(mdr)
-    
+
     return active_rules
 
 def techniques_resolver(model_id: str, recursive=True) -> list:
@@ -411,7 +411,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
             "Could not find object index",
             model_type)
         return []
-    
+
     # Load Model Data
     model_body = MODELS_INDEX[model_type][model_id]
 
@@ -452,7 +452,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
 def relations_downstream(id):
 
     tree = {}
-    
+
     if get_type(id) in ["signal"]:
         tree = keep_active_rules(childs(id))
     elif get_type(id) == "objective":
@@ -534,7 +534,7 @@ def relations_list(
     if rule_list:=flat.get("rule"):
         active_rules = keep_active_rules(rule_list)
         flat["rule"] = active_rules
-    
+
     if mode == "count":
         for k, v in flat.items():
             flat[k] = len(v)
