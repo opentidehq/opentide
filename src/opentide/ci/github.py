@@ -130,7 +130,7 @@ def render_github(options: CiRenderOptions) -> str:
               if: {prod_if}
               runs-on: ubuntu-latest
               steps:
-            {setup_steps}{_run_steps(document_steps())}
+            {setup_steps}{_run_steps(document_steps(options))}
             """
         )
     )

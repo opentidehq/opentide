@@ -117,7 +117,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
           before_script:
         {_base_before_script(options)}
           script:
-        {_script_block(document_steps())}
+        {_script_block(document_steps(options))}
           needs:
             - generate
         """

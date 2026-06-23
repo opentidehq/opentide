@@ -4,7 +4,6 @@ from opentide.core.registry import OpenTide
 import structlog
 from opentide.core.logging.console import emit_section
 logger = structlog.get_logger('opentide.generation.vscode_snippets')
-ICONS = OpenTide.Configurations.Documentation.icons
 PATHS = OpenTide.Configurations.Global.Paths.Index
 SNIPPETS_PATH = OpenTide.Configurations.Global.Paths.Tide.snippet_file
 RECOMPOSITION = OpenTide.Configurations.Global.recomposition
@@ -47,16 +46,16 @@ def run():
     snippets = {}
     for model in OpenTide.Configurations.Global.metaschemas:
         if model in (t := OpenTide.Configurations.Global.templates):
-            model_icon = ICONS.get(model, '')
+            model_icon = ""
             full_name = OpenTide.Configurations.Documentation.object_names[model]
-            keyword = f'{model_icon} {full_name} Template'
+            keyword = f'{full_name} Template'.strip()
             template_path = Path(PATHS['templates']) / t[model]
             logger.info('generating_snippets_for', arg0=full_name)
             snippet = vs_code_snippet_generator(template_path, keyword)
             snippets[keyword] = snippet
     for recomp in RECOMPOSITION:
         subschema_type_folder = RECOMPOSITION[recomp]
-        subschema_icon = ICONS[recomp]
+        subschema_icon = ""
         for entry in CONFIG_INDEX[recomp]:
             recomp_entry = CONFIG_INDEX[recomp][entry]
             enabled = False
@@ -74,7 +73,7 @@ def run():
                 logger.info('generating_snippets_for', arg0=subschema_name)
                 subchema_template_name = f'{subschema_name} Template.yaml'
                 subschema_template_path = SUBSCHEMAS_FOLDER / subschema_type_folder / 'Templates' / subchema_template_name
-                keyword = f'{subschema_icon} {subschema_type_folder} : {subschema_name} Template'
+                keyword = f'{subschema_type_folder} : {subschema_name} Template'.strip()
                 snippet = vs_code_snippet_generator(subschema_template_path, keyword, blanks=1)
                 snippets[keyword] = snippet
     output = open(SNIPPETS_PATH, 'w')

@@ -7,11 +7,17 @@ from typing import Any, cast
 from opentide.core.files import resolve_paths
 from opentide.core.logging import log
 from opentide.core.registry import OpenTide
-from opentide.documentation.core import get_icon
 from opentide.generation.framework import get_type, get_vocab_entry
 from opentide.generation.vocabulary import VocabularyDefinition, entry_key_field, is_id_keyed
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.enabled import enabled_systems
+
+
+def _icon(_name: str, **_kwargs: object) -> str:
+    return ""
+
+
+get_icon = _icon
 
 GLOBAL_CONFIG: Any
 VOCAB_INDEX: dict[str, Any]
@@ -36,7 +42,7 @@ def _refresh_runtime_context() -> None:
     VOCAB_EXTENSIONS = schema_config.get("vocabulary", {})
     paths = resolve_paths()
     JSON_SCHEMA_FOLDER = Path(paths["json_schemas"])
-    ICONS = OpenTide.Configurations.Documentation.icons
+    ICONS = {}
     OBJECT_TYPES = OpenTide.Configurations.Global.objects
 
 
@@ -314,7 +320,7 @@ _Vocabulary_ : `{source_vocab}`
             return self._DROPDOWN.format(
                 icon=icon,
                 name=display,
-                id_icon=ICONS["id"],
+                id_icon=ICONS.get("id", ""),
                 identifier=identifier,
                 source_vocab=source_vocab,
                 criticality=criticality,

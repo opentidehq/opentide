@@ -19,7 +19,12 @@ _MODEL_BY_TYPE: dict[str, type[TideModel]] = {
 }
 
 
-def validate_object(model: TideModel, object_type: str) -> ValidationResult:
+def validate_object(
+    model: TideModel,
+    object_type: str,
+    *,
+    graph: Any = None,
+) -> ValidationResult:
     """Re-validate a typed model instance (identity check via model_validate)."""
     cls = _MODEL_BY_TYPE.get(object_type)
     if cls is None:
@@ -33,7 +38,12 @@ def validate_object(model: TideModel, object_type: str) -> ValidationResult:
         )
 
 
-def validate_raw_payload(payload: dict[str, Any], object_type: str) -> ValidationResult:
+def validate_raw_payload(
+    payload: dict[str, Any],
+    object_type: str,
+    *,
+    graph: Any = None,
+) -> ValidationResult:
     """Validate a raw YAML dict against the Pydantic model for its type."""
     cls = _MODEL_BY_TYPE.get(object_type)
     if cls is None:
@@ -54,14 +64,15 @@ def validate_raw_payload(payload: dict[str, Any], object_type: str) -> Validatio
 
 def validate_all_objects(
     objects_index: dict[str, dict[str, dict[str, Any]]],
+    *,
+    scope: Any = None,
 ) -> dict[str, list[str]]:
     """Validate every object in an index bucket; return errors keyed by UUID."""
-    errors: dict[str, list[str]] = {}
-    for object_type, registry in objects_index.items():
-        if object_type not in _MODEL_BY_TYPE:
-            continue
-        for uuid, body in registry.items():
-            result = validate_raw_payload(body, object_type)
-            if not result.ok:
-                errors[uuid] = result.errors
-    return errors
+    if not any(registry for registry in objects_index.values()):
+        return {}
+
+    from opentide.validation.scope import ValidationScope
+    from opentide.validation.session import run_validation
+
+    report = run_validation(scope=scope or ValidationScope.full())
+    return report.legacy_errors_by_uuid()

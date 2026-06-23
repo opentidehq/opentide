@@ -1,7 +1,8 @@
-import yaml
-from pathlib import Path
 import os
-from opentide.documentation.core import get_icon
+from pathlib import Path
+
+import yaml
+
 from opentide.core.files import resolve_configurations, resolve_paths
 import structlog
 from opentide.core.logging.console import emit_section
@@ -18,7 +19,7 @@ def run():
     logger.info('check_if_id_used_in_coretide_are_uniquely_assigned')
     for meta_name in METASCHEMAS:
         if meta_name not in SKIPS:
-            logger.info('now_checking_for_id_duplication_in', detail=f'{get_icon(meta_name)} {meta_name.upper()}...')
+            logger.info('now_checking_for_id_duplication_in', detail=f'{meta_name.upper()}...')
             if not os.path.exists(PATHS[meta_name]):
                 logger.error('could_not_find_the_folder_at_the_expected_location', detail=str(PATHS[meta_name]), advice='Ensure that your repository and configuration files are aligned')
                 continue

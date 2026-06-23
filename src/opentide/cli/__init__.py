@@ -122,6 +122,40 @@ def init_cmd(
     emit_success(cli, result)
 
 
+ci_app = typer.Typer(help="Generate client CI pipeline files")
+app.add_typer(ci_app, name="ci")
+
+
+@ci_app.command("generate")
+def ci_generate_cmd(
+    ctx: typer.Context,
+    path: str = typer.Argument(".", help="Repository path"),
+    ci: CiPlatform = typer.Option(CiPlatform.github, "--ci"),
+    platform: list[DetectionPlatform] = typer.Option([], "--platform"),
+    staging: bool = typer.Option(True, "--staging/--no-staging"),
+    promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
+    promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
+) -> None:
+    """Render GitHub, GitLab, or Azure pipeline files."""
+    from pathlib import Path
+
+    from opentide.ci.models import CiRenderOptions
+    from opentide.cli.services.ci_generator import write_ci
+
+    cli = get_context(ctx)
+    if ci is CiPlatform.none:
+        raise typer.BadParameter("Cannot generate CI for --ci none")
+    options = CiRenderOptions.from_init(
+        ci=ci,
+        platforms=platform,
+        staging=staging,
+        promotion=promotion,
+        promotion_target=promotion_target,
+    )
+    written = write_ci(Path(path), options)
+    emit_success(cli, {"files": written})
+
+
 generate_app = typer.Typer(help="Framework generation pipeline")
 app.add_typer(generate_app, name="generate")
 
@@ -152,18 +186,22 @@ def validate_group(
     ctx: typer.Context,
     check: ValidateCheck | None = typer.Option(None, "--check"),
     file: str | None = typer.Option(None, "--file"),
-    plan: str | None = typer.Option(None, "--plan", envvar="DEPLOYMENT_PLAN"),
+    uuid: list[str] | None = typer.Option(None, "--uuid"),
+    object_type: list[str] | None = typer.Option(None, "--type"),
     strict: bool = typer.Option(False, "--strict"),
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
-    if plan:
-        cli.set_deployment_plan(plan)
-    result = run_validate(cli, check=check, strict=strict)
-    if file and cli.json_output:
-        result["file"] = file
+    result = run_validate(
+        cli,
+        check=check,
+        strict=strict,
+        file=file,
+        uuids=uuid,
+        object_types=object_type,
+    )
     emit_success(cli, result)
 
 
@@ -234,10 +272,15 @@ def document_cmd(
     ctx: typer.Context,
     scope: DocumentScope | None = typer.Option(None, "--scope"),
     output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(
+        None,
+        "--flavor",
+        help="Markdown flavor: github, gitlab, azure-devops, generic",
+    ),
 ) -> None:
-    """Generate wiki documentation from detection content."""
+    """Generate object documentation under docs/{Rules,Objectives,Threats}/."""
     cli = get_context(ctx)
-    result = run_document(cli, scope=scope, output=output)
+    result = run_document(cli, scope=scope, output=output, flavor=flavor)
     emit_success(cli, result)
 
 
@@ -374,52 +417,6 @@ def migrate_cmd(
             cli,
             {"message": "Migration scan complete", "findings": findings, "count": len(findings)},
         )
-
-
-ci_app = typer.Typer(help="Generate CI/CD pipeline files")
-app.add_typer(ci_app, name="ci")
-
-
-@ci_app.command("generate")
-def ci_generate_cmd(
-    ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
-    ci: CiPlatform = typer.Option(CiPlatform.github, "--ci"),
-    platform: list[DetectionPlatform] = typer.Option(
-        [], "--platform", help="Detection platforms (repeatable)"
-    ),
-    staging: bool = typer.Option(True, "--staging/--no-staging"),
-    promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
-    promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
-    python_version: str = typer.Option("3.12", "--python-version"),
-) -> None:
-    """Generate GitHub, GitLab, or Azure DevOps pipeline files for OpenTide."""
-    from pathlib import Path
-
-    from opentide.ci.models import CiRenderOptions
-    from opentide.cli.services.ci_generator import write_ci
-
-    cli_ctx = get_context(ctx)
-    if ci is CiPlatform.none:
-        raise typer.BadParameter("Choose --ci github, gitlab, or azure")
-
-    options = CiRenderOptions.from_init(
-        ci=ci,
-        platforms=platform,
-        staging=staging,
-        promotion=promotion,
-        promotion_target=promotion_target,
-        python_version=python_version,
-    )
-    written = write_ci(Path(path), options)
-    emit_success(
-        cli_ctx,
-        {
-            "message": "CI pipeline generated",
-            "ci": ci.value,
-            "files": written,
-        },
-    )
 
 
 def main() -> None:

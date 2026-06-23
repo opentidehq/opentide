@@ -10,8 +10,10 @@ import structlog
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
 from opentide.cli.output import emit, emit_error
 from opentide.core.logging.console import emit_section
-from opentide.core.registry import OpenTide
-from opentide.validation.pipeline import validate_all_objects
+from opentide.validation.errors import format_issues_for_console
+from opentide.validation.issues import ValidationReport
+from opentide.validation.scope import ValidationScope
+from opentide.validation.session import run_validation
 
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
@@ -23,22 +25,51 @@ def _reset_validation_env() -> None:
     os.environ["VALIDATION_WARNING_RAISED"] = ""
 
 
-def run_id_uniqueness() -> None:
-    from opentide.validation import id_uniqueness
+def _build_scope(
+    *,
+    files: list[str] | None = None,
+    uuids: list[str] | None = None,
+    object_types: list[str] | None = None,
+) -> ValidationScope:
+    if not files and not uuids and not object_types:
+        return ValidationScope.full()
+    return ValidationScope.narrow(
+        files=frozenset(files or []),
+        uuids=frozenset(uuids or []),
+        types=frozenset(object_types or []),
+    )
 
-    id_uniqueness.run()
+
+def _checks_for(check: ValidateCheck | None) -> frozenset[ValidateCheck]:
+    if check is None:
+        return frozenset(
+            {
+                ValidateCheck.id_uniqueness,
+                ValidateCheck.uuid_format,
+                ValidateCheck.schema,
+            }
+        )
+    return frozenset({check})
 
 
-def run_uuid_format() -> None:
-    from opentide.validation import uuid_v4
+def run_id_uniqueness(scope: ValidationScope | None = None) -> ValidationReport:
+    from opentide.cli.enums import ValidateCheck as VC
 
-    uuid_v4.run()
+    return run_validation(
+        scope=scope or ValidationScope.full(), checks=frozenset({VC.id_uniqueness})
+    )
 
 
-def run_schema_validation() -> dict[str, list[str]]:
-    """Pydantic schema validation across all indexed objects."""
-    OpenTide.initialise()
-    return validate_all_objects(OpenTide.Index["objects"])
+def run_uuid_format(scope: ValidationScope | None = None) -> ValidationReport:
+    from opentide.cli.enums import ValidateCheck as VC
+
+    return run_validation(scope=scope or ValidationScope.full(), checks=frozenset({VC.uuid_format}))
+
+
+def run_schema_validation(scope: ValidationScope | None = None) -> ValidationReport:
+    from opentide.cli.enums import ValidateCheck as VC
+
+    return run_validation(scope=scope or ValidationScope.full(), checks=frozenset({VC.schema}))
 
 
 def run_cve_validation() -> None:
@@ -47,45 +78,95 @@ def run_cve_validation() -> None:
     cve.run()
 
 
-def run_validate_check(check: ValidateCheck) -> dict[str, object]:
+def _report_payload(report: ValidationReport) -> dict[str, object]:
+    return {
+        "status": "passed" if report.ok else "failed",
+        "errors": report.legacy_errors_by_uuid(),
+        "issues": report.model_dump_json_ready(),
+    }
+
+
+def run_validate_check(
+    check: ValidateCheck,
+    *,
+    scope: ValidationScope | None = None,
+) -> dict[str, object]:
     """Run a single validation check."""
-    if check is ValidateCheck.id_uniqueness:
-        run_id_uniqueness()
-        return {"check": check.value, "status": "completed"}
-    if check is ValidateCheck.uuid_format:
-        run_uuid_format()
-        return {"check": check.value, "status": "completed"}
-    if check is ValidateCheck.schema:
-        errors = run_schema_validation()
-        if errors:
-            os.environ["VALIDATION_ERROR_RAISED"] = "1"
-            return {"check": check.value, "status": "failed", "errors": errors}
-        return {"check": check.value, "status": "passed", "errors": {}}
     if check is ValidateCheck.cve:
         run_cve_validation()
         return {"check": check.value, "status": "completed"}
-    raise ValueError(f"Unknown check: {check}")
+
+    report = run_validation(scope=scope or ValidationScope.full(), checks=frozenset({check}))
+    if not report.ok:
+        os.environ["VALIDATION_ERROR_RAISED"] = "1"
+    payload = _report_payload(report)
+    payload["check"] = check.value
+    return payload
 
 
-def run_validate_all() -> dict[str, object]:
-    """Run all default validation checks (Orchestration/validate.py parity)."""
+def run_validate_all(*, scope: ValidationScope | None = None) -> dict[str, object]:
+    """Run all default validation checks."""
     _reset_validation_env()
+    report = run_validation(scope=scope or ValidationScope.full())
     results: dict[str, object] = {}
     for check in (ValidateCheck.id_uniqueness, ValidateCheck.uuid_format, ValidateCheck.schema):
-        results[check.value] = run_validate_check(check)
+        results[check.value] = {
+            "check": check.value,
+            "status": "passed" if report.ok else "failed",
+            "issues": report.model_dump_json_ready(),
+        }
     return results
 
 
 def run_validate(
-    ctx: CliContext, *, check: ValidateCheck | None = None, strict: bool = False
+    ctx: CliContext,
+    *,
+    check: ValidateCheck | None = None,
+    strict: bool = False,
+    file: str | None = None,
+    files: list[str] | None = None,
+    uuids: list[str] | None = None,
+    object_types: list[str] | None = None,
 ) -> dict[str, object]:
     """Entry point for validate command."""
     ctx.apply_environment()
     _reset_validation_env()
+
+    file_list = list(files or [])
+    if file:
+        file_list.append(file)
+    scope = _build_scope(files=file_list or None, uuids=uuids, object_types=object_types)
+    checks = _checks_for(check)
+
+    if check is ValidateCheck.cve:
+        return run_validate_check(ValidateCheck.cve, scope=scope)
+
+    report = run_validation(scope=scope, checks=checks)
+
     if check is None:
-        result = run_validate_all()
+        result: dict[str, object] = {
+            "checks": {
+                name: {
+                    "check": name,
+                    "status": "passed" if report.ok else "failed",
+                }
+                for name in (
+                    ValidateCheck.id_uniqueness.value,
+                    ValidateCheck.uuid_format.value,
+                    ValidateCheck.schema.value,
+                )
+            },
+            "report": report.model_dump_json_ready(),
+        }
     else:
-        result = {check.value: run_validate_check(check)}
+        result = _report_payload(report)
+        result["check"] = check.value
+
+    if not ctx.json_output and report.issues:
+        emit_section("Validation issues")
+        for line in format_issues_for_console(report.issues).splitlines():
+            logger.error("validation_issue", message=line)
+
     from opentide.cli.exit_codes import exit_on_validation_errors, exit_on_validation_warnings
 
     exit_on_validation_errors()
@@ -96,9 +177,9 @@ def run_validate(
     if not ctx.json_output:
         if os.environ.get("VALIDATION_WARNING_RAISED"):
             logger.warning("passed_validation_but_with_some_warnings")
-        else:
+        elif report.ok:
             logger.info("all_content_successfully_passed_validation")
-    return {"checks": result}
+    return result
 
 
 def validate_query_platform(

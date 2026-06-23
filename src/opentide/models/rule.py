@@ -25,6 +25,9 @@ class TideRegistry(Protocol):
     def document_rule(self, rule: DetectionRule) -> str:
         pass
 
+    def render_rule(self, rule: DetectionRule) -> str:
+        pass
+
     def promote_rule(self, rule: DetectionRule, target_status: str) -> None:
         pass
 
@@ -91,6 +94,9 @@ class DetectionRule(TideModel):
     def document(self) -> str:
         if self._registry is None:
             raise RuntimeError("DetectionRule.document() requires a bound registry")
+        render = getattr(self._registry, "render_rule", None)
+        if callable(render):
+            return render(self)
         return self._registry.document_rule(self)
 
     def promote(self, target_status: str) -> None:

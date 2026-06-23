@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+from opentide.validation.checks.kinds import ValidateCheck
+
 
 class DetectionPlatform(str, Enum):
     """Detection platform identifiers for CLI flags."""
@@ -40,24 +42,13 @@ class GeneratePhase(str, Enum):
     playbook_map = "playbook-map"
 
 
-class ValidateCheck(str, Enum):
-    """Object validation check types."""
-
-    id_uniqueness = "id-uniqueness"
-    uuid_format = "uuid-format"
-    schema = "schema"
-    cve = "cve"
-
-
 class DocumentScope(str, Enum):
     """Documentation generation scopes."""
 
     rules = "rules"
     objectives = "objectives"
-    vocabularies = "vocabularies"
-    metaschemas = "metaschemas"
-    models = "models"
-    navigation = "navigation"
+    threats = "threats"
+    index = "index"
 
 
 class ExportTarget(str, Enum):
@@ -76,12 +67,30 @@ class ExtractImport(str, Enum):
 
 
 class CiPlatform(str, Enum):
-    """CI/CD platform choices for init."""
+    """CI/CD platform choices for setup."""
 
     github = "github"
     gitlab = "gitlab"
     azure = "azure"
     none = "none"
+
+
+class McpHost(str, Enum):
+    """MCP configuration targets for ``opentide setup mcp``."""
+
+    vscode = "vscode"
+    cursor = "cursor"
+    claude_code = "claude-code"
+    generic = "generic"
+
+
+class SkillTarget(str, Enum):
+    """Agent skill targets for ``opentide setup skills``."""
+
+    cursor = "cursor"
+    claude_code = "claude-code"
+    generic = "generic"
+    github_copilot = "github-copilot"
 
 
 def platform_label(platform: DetectionPlatform) -> str:
@@ -96,3 +105,18 @@ def platform_label(platform: DetectionPlatform) -> str:
         DetectionPlatform.harfanglab: "HarfangLab",
     }
     return labels.get(platform, platform.value)
+
+
+__all__ = [
+    "CiPlatform",
+    "DetectionPlatform",
+    "DocumentScope",
+    "ExportTarget",
+    "ExtractImport",
+    "GeneratePhase",
+    "McpHost",
+    "QUERY_VALIDATION_PLATFORMS",
+    "SkillTarget",
+    "ValidateCheck",
+    "platform_label",
+]

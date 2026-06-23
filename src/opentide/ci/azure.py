@@ -150,7 +150,7 @@ def render_azure(options: CiRenderOptions) -> str:
                 displayName: Generate documentation
                 steps:
             {_python_setup(options)}
-            {_bash_script(document_steps())}
+            {_bash_script(document_steps(options))}
         {promote_stage}
         """
     )

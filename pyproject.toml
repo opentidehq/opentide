@@ -148,7 +148,6 @@ exclude = [
     # Ported Engines modules — style cleanup tracked separately
     "src/opentide/deployment",
     "src/opentide/mutation",
-    "src/opentide/documentation",
     "src/opentide/extraction",
     "src/opentide/export",
     "src/opentide/platforms/carbon_black",
@@ -190,6 +189,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "src/opentide/generation/template_renderer.py" = ["E501", "SIM", "UP", "B", "E712", "E722", "F841"]
 "src/opentide/generation/template_engine.py" = ["E501", "SIM", "UP", "B", "E712", "E722", "F841"]
 "src/opentide/cli/__init__.py" = ["B008", "E501"]
+"src/opentide/cli/setup_app.py" = ["B008", "E501"]
 "src/opentide/cli/services/*.py" = ["E501", "SIM"]
 "tests/test_cli/*.py" = ["E501"]
 "tests/test_generation/*.py" = ["E501"]
@@ -201,7 +201,6 @@ include = ["src/opentide"]
 exclude = [
     "src/opentide/deployment",
     "src/opentide/mutation",
-    "src/opentide/documentation",
     "src/opentide/extraction",
     "src/opentide/export",
     "src/opentide/cli",
