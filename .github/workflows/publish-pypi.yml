@@ -1,24 +1,25 @@
+# PyPI publishing is disabled until trusted publishing and the `pypi` environment are configured.
+# Re-enable by restoring `on.release.types: [published]` and verifying OIDC on PyPI.
 name: Publish to PyPI
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 permissions:
   id-token: write
 
 jobs:
   publish:
+    name: Publish to PyPI (disabled)
+    if: false
     runs-on: ubuntu-latest
     environment: pypi
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
