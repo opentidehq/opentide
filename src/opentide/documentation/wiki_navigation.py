@@ -1,10 +1,9 @@
 import pandas as pd
 import os
 import time
-import sys
 
 from pathlib import Path
-from typing import Literal, Optional, Tuple
+from typing import Literal, Optional
 
 start_time = time.time()
 
@@ -13,7 +12,6 @@ start_time = time.time()
 from opentide.generation.framework import (
     techniques_resolver,
     relations_list,
-    get_type,
     get_vocab_entry,
     keep_active_rules,
 )
@@ -28,7 +26,6 @@ from opentide.documentation.core import (
 )
 from opentide.core.logging import log
 from opentide.core.registry import OpenTide
-from opentide.core.debug import DebugEnvironment
 from opentide.deployment import CIEnvironment, DEPRECATED_STATUSES
 
 COVER_PAGES_ENABLED = OpenTide.Configurations.Documentation.model_cover_pages
@@ -255,7 +252,7 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
                     # keeps other dicts that contain values.
                     model_value_iter = model_value.copy()
                     for v in model_value_iter:
-                        if model_value_iter[v] == None or model_value_iter[v] == [None]:
+                        if model_value_iter[v] is None or model_value_iter[v] == [None]:
                             model_value.pop(v)
                     if model_value != {}:
                         flat_values = [
@@ -297,8 +294,6 @@ def construct_navigation_index(model):
 
     icon = ICONS[model]
     model_title = OpenTide.Configurations.Documentation.object_names[model]
-    nav_index = str()
-
 
     if model == "rule":
         total_mdr_count = len(MODELS_INDEX["rule"])

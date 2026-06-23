@@ -18,8 +18,9 @@ from opentide.schemas.store import (
 
 
 def test_import_opentide() -> None:
-    import opentide
+    import importlib
 
+    opentide = importlib.import_module("opentide")
     assert opentide.__version__
 
 
@@ -91,8 +92,10 @@ def test_platform_entry_points_registered() -> None:
 
 
 def test_package_import_has_no_auto_load_side_effects() -> None:
-    import opentide
-    from opentide.core.registry import OpenTide
+    import importlib
 
-    assert not OpenTide._initialised  # noqa: SLF001 — contract check
+    opentide = importlib.import_module("opentide")
+    registry_module = importlib.import_module("opentide.core.registry")
+
+    assert not registry_module.OpenTide._initialised  # noqa: SLF001 — contract check
     assert hasattr(opentide, "__version__")

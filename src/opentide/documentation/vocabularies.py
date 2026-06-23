@@ -1,7 +1,6 @@
 import pandas as pd
 import os
 import shutil
-import sys
 from pathlib import Path
 from opentide.documentation.core import get_icon, make_json_table, DOCUMENTATION_TARGET, TARGET_WITH_DASH_PATHS
 from opentide.core.registry import OpenTide
@@ -76,7 +75,6 @@ def make_vocab_doc(vocab_field, vocabulary: VocabularyDefinition):
                 stage_doc.append(buffer)
             stages = pd.DataFrame(stage_doc).to_markdown(index=False)
     df = df.replace('\n', '. ', regex=True)
-    table = str()
     if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI:
         title = ''
         table = make_json_table(df)

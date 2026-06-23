@@ -1,8 +1,7 @@
-import sys
 from typing import Sequence
-from dataclasses import asdict
+import sys
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide, DetectionPlatforms, ObjectLoader
+from opentide.core.registry import OpenTide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy
@@ -31,7 +30,7 @@ class SentinelOneDeploy(RuleDeployer):
             return int(timespan_in_minute)
         mdr_config = data.configurations.sentinel_one
         if not mdr_config:
-            exit()
+            sys.exit(1)
         rule_name = data.name
         rule_description = data.description
         rule_expiration_mode = 'Permanent'

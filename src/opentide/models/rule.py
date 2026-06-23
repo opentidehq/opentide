@@ -19,11 +19,14 @@ class TideRegistry(Protocol):
 
     Platforms: Any
 
-    def validate_rule(self, rule: DetectionRule) -> ValidationResult: ...
+    def validate_rule(self, rule: DetectionRule) -> ValidationResult:
+        pass
 
-    def document_rule(self, rule: DetectionRule) -> str: ...
+    def document_rule(self, rule: DetectionRule) -> str:
+        pass
 
-    def promote_rule(self, rule: DetectionRule, target_status: str) -> None: ...
+    def promote_rule(self, rule: DetectionRule, target_status: str) -> None:
+        pass
 
 
 class DetectionRule(TideModel):

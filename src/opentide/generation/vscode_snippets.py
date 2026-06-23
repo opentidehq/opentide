@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-import sys
 from opentide.core.registry import OpenTide
 import structlog
 from opentide.core.logging.console import emit_section
@@ -64,13 +63,13 @@ def run():
             try:
                 if recomp_entry['tide']['enabled'] == True:
                     enabled = True
-            except:
+            except Exception:
                 if recomp_entry['platform']['enabled'] == True:
                     enabled = True
             if enabled:
                 try:
                     subschema_name = recomp_entry['tide']['name']
-                except:
+                except Exception:
                     subschema_name = recomp_entry['platform']['name']
                 logger.info('generating_snippets_for', arg0=subschema_name)
                 subchema_template_name = f'{subschema_name} Template.yaml'

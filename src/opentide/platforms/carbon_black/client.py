@@ -1,5 +1,3 @@
-import os
-import sys
 from abc import ABC
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DebugHelpers

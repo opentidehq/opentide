@@ -17,7 +17,6 @@ from opentide.core.logging.render import OpenTideConsoleRenderer
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
-_configured = False
 _config: LoggingConfig | None = None
 _console = Console(stderr=True, highlight=False)
 
@@ -90,8 +89,8 @@ def _shared_pre_chain() -> list[Any]:
 
 def init_logging(config: LoggingConfig | None = None, *, force: bool = False) -> None:
     """Initialise structlog and stdlib logging once per process."""
-    global _configured, _config
-    if _configured and not force:
+    global _config
+    if _config is not None and not force:
         return
 
     _config = config or LoggingConfig.from_env()
@@ -148,8 +147,6 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
         cache_logger_on_first_use=True,
     )
 
-    _configured = True
-
 
 def configure_logging(*, force: bool = False) -> None:
     """Compatibility alias for lazy initialisation."""
@@ -174,6 +171,5 @@ def clear_context() -> None:
 
 def reset_for_tests() -> None:
     """Reset module state — test helper only."""
-    global _configured, _config
-    _configured = False
+    global _config
     _config = None

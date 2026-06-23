@@ -2,7 +2,6 @@ from random import randrange
 from datetime import datetime
 import urllib.request
 from urllib.error import HTTPError
-import sys
 import ssl
 from splunklib import client
 import os
@@ -34,7 +33,7 @@ class SplunkConnection(ABC):
         self.SPLUNK_URL = SPLUNK_SETUP['url']
         try:
             self.SPLUNK_PORT = int(SPLUNK_SETUP['port'])
-        except:
+        except Exception:
             self.SPLUNK_PORT = SPLUNK_SETUP['port']
         self.SPLUNK_APP = SPLUNK_SETUP['app']
         self.SPLUNK_TOKEN = SPLUNK_SECRETS['token']
@@ -87,9 +86,7 @@ def splunk_timerange(time: str, skewing: float | int=1, offset: int=0) -> str:
     skewing += 1
     unit = time[-1]
     count = int(time[:-1])
-    if unit == 'm':
-        count = count
-    elif unit == 'h':
+    if unit == 'h':
         count = count * 60
     elif unit == 'd':
         count = count * 1440
@@ -143,7 +140,6 @@ def custom_request_handler(url, message):
         response = error
         if os.getenv('TIDE_SPLUNK_PLUGIN_ALLOW_HTTP_ERRORS') == 'True':
             response.code = 19
-            pass
         else:
             logger.critical('fatal_error', detail=f'Received HTTP Error Code {repr(error)}', context=str(response.read()))
     return {'status': response.code, 'reason': response.msg, 'headers': dict(response.info()), 'body': BytesIO(response.read())}

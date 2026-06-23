@@ -1,7 +1,4 @@
-import sys
 import os
-import uuid
-from pathlib import Path
 
 import yaml
 
@@ -27,13 +24,17 @@ def run():
 
     MODELS_TYPES.remove("rule")
     for model in MODELS_TYPES:
-        for file in sorted(os.listdir(PATHS[model])):
-            if not file.endswith(".yaml"):
-                if not file.endswith(".yml"):
-                    log("INFO", "The file doesn't end with .yaml or .yml, skipping", file)
-                    continue  
-
-            data = yaml.safe_load(open(PATHS[model] / file, encoding="utf-8"))
+        model_files = [
+            file
+            for file in sorted(os.listdir(PATHS[model]))
+            if file.endswith(".yaml") or file.endswith(".yml")
+        ]
+        if not model_files:
+            log("SKIP", "No files to assign ID or fix file names in model type", model)
+            continue
+        for file in model_files:
+            with open(PATHS[model] / file, encoding="utf-8") as model_file:
+                data = yaml.safe_load(model_file)
             model_name = data["name"]
             standard_name = f"{safe_file_name(model_name)}.yaml"
 
@@ -50,10 +51,6 @@ def run():
                     PATHS[model] / standard_name,
                 )
                 log("SUCCESS", f"Alligned file name with model data", standard_name)
-
-
-        else:
-            log("SKIP", "No files to assign ID or fix file names in model type", model)
 
 
 if __name__ == "__main__":

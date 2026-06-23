@@ -104,15 +104,18 @@ def resolve_configurations() -> dict[str, dict]:
 
 
 @overload
-def resolve_paths(separate: Literal[True]) -> tuple[dict[str, Path], dict[str, Path]]: ...
+def resolve_paths(separate: Literal[True]) -> tuple[dict[str, Path], dict[str, Path]]:
+    pass
 
 
 @overload
-def resolve_paths(separate: Literal[False]) -> dict[str, Path]: ...
+def resolve_paths(separate: Literal[False]) -> dict[str, Path]:
+    pass
 
 
 @overload
-def resolve_paths() -> dict[str, Path]: ...
+def resolve_paths() -> dict[str, Path]:
+    pass
 
 
 def resolve_paths(separate: bool = False):

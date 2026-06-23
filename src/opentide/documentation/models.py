@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-import sys
 import shutil
 
 from opentide.generation.framework import (
@@ -8,13 +7,11 @@ from opentide.generation.framework import (
     childs,
     parents,
     techniques_resolver,
-    get_vocab_entry,
 )
 from opentide.documentation.core import (
     get_icon,
     rich_attack_links,
     GitlabMarkdown,
-    sanitize_hover,
     FOLD,
     DOCUMENTATION_TARGET,
     UUID_PERMALINKS,

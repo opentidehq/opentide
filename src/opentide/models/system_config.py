@@ -54,7 +54,8 @@ class SystemConfig:
             ssl: bool
 
         @dataclass
-        class Parameters: ...
+        class Parameters:
+            pass
 
         name: str
         description: str
@@ -97,10 +98,12 @@ class ConfigurationModels:
                 setup: Setup
 
         @dataclass
-        class Splunk(SystemConfig): ...
+        class Splunk(SystemConfig):
+            pass
 
         @dataclass
-        class CarbonBlackCloud(SystemConfig): ...
+        class CarbonBlackCloud(SystemConfig):
+            pass
 
         @dataclass
         class SentinelOne(SystemConfig):

@@ -1,13 +1,8 @@
-import sys
-import os
 import requests
 import json
-from dataclasses import dataclass, asdict, is_dataclass
-from typing import Literal, ClassVar, Sequence, overload, Any, Optional
-from opentide.core.typing import Never
-from enum import Enum, auto
-from datetime import datetime, timedelta
-from pprint import pprint
+from dataclasses import dataclass, asdict
+from typing import Literal, Optional
+from enum import Enum
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
 from opentide.models.system_config import ConfigurationModels
@@ -98,6 +93,7 @@ class CrowdstrikeService:
             case _:
                 logger.critical('the_configured_crowdstrike_api_domain_isn_t_valid', detail='Expects : US-1 , US-2 , EU-1 , US-GOV-1 , US-GOV-2')
                 raise Errors.TideSystemConfigurationErrors('Invalid API Domain')
+        raise AssertionError('unreachable')
 
     def _get_access_token(self, client_id: str, client_secret: str):
         data = {'client_id': client_id, 'client_secret': client_secret}
@@ -118,7 +114,7 @@ class CrowdstrikeService:
             try:
                 rule_id = response.json()['resources'][0]['id']
                 return rule_id
-            except:
+            except Exception:
                 logger.critical('the_rule_id_was_not_present_in_the_response_body', detail=str(response.json()))
                 raise Errors.DetectionRulesOperationErrors('Could not retrieve rule ID')
         else:

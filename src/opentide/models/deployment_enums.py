@@ -1,9 +1,4 @@
 import os
-import sys
-from tokenize import String
-from dataclasses import dataclass
-from typing import Literal, Optional, List, Sequence, Mapping, Any, Union
-from opentide.core.typing import Never
 from enum import Enum, auto
 import structlog
 logger = structlog.get_logger('opentide.models.deployment_enums')
@@ -48,7 +43,7 @@ class DeploymentStrategy(Enum):
             raise Exception('NO DEPLOYMENT PLAN')
         try:
             DEPLOYMENT_PLAN = DeploymentStrategy[DEPLOYMENT_PLAN]
-        except:
+        except Exception:
             logger.critical('the_following_deployment_plan_is_not_supported', arg0=DEPLOYMENT_PLAN, advice=f'Supported plan : {SUPPORTED_PLANS}')
             raise AttributeError('UNSUPPORTED DEPLOYMENT PLAN')
         return DEPLOYMENT_PLAN

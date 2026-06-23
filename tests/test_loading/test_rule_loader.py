@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from opentide.loading.rule_loader import load_rule_from_dict
+import opentide.loading.rule_loader as rule_loader_module
 from opentide.models.platform import RuleConfigurations
 from opentide.models.rule import DetectionRule
 
 
 def test_load_rule_compat_removed() -> None:
-    import opentide.loading.rule_loader as module
-
-    assert not hasattr(module, "load_rule_compat")
+    assert not hasattr(rule_loader_module, "load_rule_compat")
 
 
 def test_load_rule_from_dict_typed_configurations(metadata: dict[str, Any]) -> None:
@@ -32,7 +30,7 @@ def test_load_rule_from_dict_typed_configurations(metadata: dict[str, Any]) -> N
             }
         },
     }
-    rule = load_rule_from_dict(payload)
+    rule = rule_loader_module.load_rule_from_dict(payload)
     assert isinstance(rule.configurations, RuleConfigurations)
     assert rule.configurations.sentinel is not None
     assert rule.configurations.sentinel.query.startswith("SecurityEvent")
@@ -58,6 +56,6 @@ def test_load_rule_from_dict_minimal(metadata: dict[str, Any]) -> None:
             },
         },
     }
-    rule = load_rule_from_dict(payload)
+    rule = rule_loader_module.load_rule_from_dict(payload)
     assert isinstance(rule, DetectionRule)
     assert rule.name == "Rule"

@@ -175,13 +175,14 @@ def documentation(mdr):
             for search in searches:
                 try:
                     system_name = SYSTEMS_CONFIG[search.get("system")]["tide"]["name"]
-                except:
+                except Exception:
                     system_name = SYSTEMS_CONFIG[search.get("system")]["platform"]["name"]
 
                 rows += "<tr>\n"
                 rows += "\n<td>" + search.get("purpose") + "\n</td>"
                 rows += "\n<td>" + system_name + "</td>\n"
-                rows += "\n<td>\n" + f"\n```sql\n{search.get("query").strip()}\n```\n" + "</td>\n"
+                query_text = search.get("query", "").strip()
+                rows += "\n<td>\n" + f"\n```sql\n{query_text}\n```\n" + "</td>\n"
                 rows += "</tr>\n"
 
             table = "<tr><th>Purpose</th>\n<th>Target System</th>\n<th>Query</th>\n</tr>"
@@ -219,7 +220,7 @@ def documentation(mdr):
         # Allows to handle transition to MDRv4 new configurations
         try:
             system_name = SYSTEMS_CONFIG[s]["tide"]["name"]
-        except:
+        except Exception:
             system_name = SYSTEMS_CONFIG[s]["platform"]["name"]
 
         system_name += f" <b>{status_name}</b>"

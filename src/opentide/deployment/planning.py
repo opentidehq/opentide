@@ -1,5 +1,4 @@
 import pandas as pd
-from git.repo import Repo
 from opentide.generation.framework import unroll_dot_dict
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import (
@@ -12,19 +11,11 @@ from opentide.models.system_config import (
     SystemConfig,
     TenantDeployment,
 )
-from opentide.core.registry import OpenTide, DetectionPlatforms, ObjectLoader
-from opentide.core.errors import Errors
-from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide, DebugHelpers
+from opentide.core.registry import OpenTide, DetectionPlatforms
+from opentide.core.registry import OpenTide
 from opentide.core.logging import log
-import sys
-import os
-import yaml
-import re
 from typing import MutableMapping, Sequence
-from enum import Enum, auto
-from pathlib import Path
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 
 
 
@@ -33,7 +24,7 @@ SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION,
                         StatusStrategy.DISABLEMENT)
 
-from opentide.core.registry import OpenTide, ObjectLoader
+from opentide.core.registry import OpenTide
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy, DetectionPlatforms
 from opentide.models.system_config import DeploymentBatch, SystemConfig, TenantDeployment
@@ -92,7 +83,8 @@ class TideDeployment:
             case DetectionPlatforms.HARFANGLAB:
                 return OpenTide.Configurations.Systems.HarfangLab
             # case _:
-            # raise NotImplemented
+            # raise NotImplementedError
+        return None
 
     def mdr_configuration_resolver(
         self, data: DetectionRule, system: DetectionPlatforms
@@ -258,7 +250,7 @@ class TideDeployment:
         system_identifier = system_configuration.platform.identifier  # type: ignore
 
         if not mdr_config:
-            raise NotImplemented
+            raise NotImplementedError
 
         raw_data = asdict(data)
         raw_mdr_config = asdict(mdr_config)

@@ -16,36 +16,28 @@ from opentide.platforms.enabled import enabled_systems
 GLOBAL_CONFIG: Any
 VOCAB_INDEX: dict[str, Any]
 CONFIG_INDEX: dict[str, Any]
-PATHS: dict[str, Path]
-SCHEMA_CONFIG: dict[str, Any]
 VOCAB_EXTENSIONS: dict[str, Any]
-VOCABS_FOLDER: Path
 JSON_SCHEMA_FOLDER: Path
 ICONS: Any
 OBJECT_TYPES: Any
-SUBSCHEMAS_PATH: Path
-RECOMPOSITION: Any
 
 
 def _refresh_runtime_context() -> None:
     """Rebind module globals after env or index changes (tests, reload)."""
-    global GLOBAL_CONFIG, VOCAB_INDEX, CONFIG_INDEX, PATHS
-    global SCHEMA_CONFIG, VOCAB_EXTENSIONS
-    global VOCABS_FOLDER, JSON_SCHEMA_FOLDER
-    global ICONS, OBJECT_TYPES, SUBSCHEMAS_PATH, RECOMPOSITION
+    global GLOBAL_CONFIG, VOCAB_INDEX, CONFIG_INDEX
+    global VOCAB_EXTENSIONS
+    global JSON_SCHEMA_FOLDER
+    global ICONS, OBJECT_TYPES
 
     GLOBAL_CONFIG = OpenTide.Configurations.Global
     VOCAB_INDEX = OpenTide.Vocabularies.Index
     CONFIG_INDEX = OpenTide.Configurations.Index
-    PATHS = resolve_paths()
-    SCHEMA_CONFIG = CONFIG_INDEX.get("schema", {})
-    VOCAB_EXTENSIONS = SCHEMA_CONFIG.get("vocabulary", {})
-    VOCABS_FOLDER = Path(PATHS["vocabularies"])
-    JSON_SCHEMA_FOLDER = Path(PATHS["json_schemas"])
+    schema_config = CONFIG_INDEX.get("schema", {})
+    VOCAB_EXTENSIONS = schema_config.get("vocabulary", {})
+    paths = resolve_paths()
+    JSON_SCHEMA_FOLDER = Path(paths["json_schemas"])
     ICONS = OpenTide.Configurations.Documentation.icons
     OBJECT_TYPES = OpenTide.Configurations.Global.objects
-    SUBSCHEMAS_PATH = Path(PATHS.get("platform_templates", PATHS.get("subschemas", ".")))
-    RECOMPOSITION = GLOBAL_CONFIG.recomposition
 
 
 _refresh_runtime_context()
@@ -801,9 +793,8 @@ def run():
             )
             output = output.replace(f"${placeholder}", placeholders[placeholder])
 
-        output_file = open((json_output), "w", encoding="utf-8")
-        output_file.write(output + "\n")
-        output_file.close()
+        with open(json_output, "w", encoding="utf-8") as output_file:
+            output_file.write(output + "\n")
         log("SUCCESS", "Correctly exported")
 
     log("SUCCESS", "Generated all JSON Schemas")
@@ -844,9 +835,8 @@ def run():
                 )
                 output = output.replace(f"${placeholder}", placeholders[placeholder])
 
-            output_file = open((json_output), "w", encoding="utf-8")
-            output_file.write(output + "\n")
-            output_file.close()
+            with open(json_output, "w", encoding="utf-8") as output_file:
+                output_file.write(output + "\n")
             log("SUCCESS", "Correctly exported")
 
         log("SUCCESS", "Generated all Configuration Schemas")

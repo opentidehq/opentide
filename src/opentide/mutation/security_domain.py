@@ -3,7 +3,6 @@
 # not nested under the notable block. It also indent drilldown, 
 # which on some older MDR may not be indented correctly.
 
-import sys
 import os
 from pathlib import Path
 
@@ -28,7 +27,8 @@ class MigrateSecurityDomainMDR:
     """
 
     def indent_security_domain(self, file_path:Path):
-        data = open(MDR_PATH/file_path, encoding="utf-8").readlines()
+        with open(MDR_PATH/file_path, encoding="utf-8") as handle:
+            data = handle.readlines()
         buffer = []
         for line in data:
             if line.startswith("    security_domain:"):
@@ -43,7 +43,8 @@ class MigrateSecurityDomainMDR:
             log("SUCCESS", "Rewrote file")
     
     def uncomment_keyword(self, file_path:Path, keyword:str):
-        data = open(MDR_PATH/file_path, encoding="utf-8").readlines()
+        with open(MDR_PATH/file_path, encoding="utf-8") as handle:
+            data = handle.readlines()
         buffer = []
         for line in data:
             if line.strip().replace("#","").split(":")[0] == keyword:
@@ -58,7 +59,8 @@ class MigrateSecurityDomainMDR:
                 log("SUCCESS", "Rewrote file")
 
     def indent_drilldown_section(self, file_path:Path):
-        data = open(MDR_PATH/file_path, encoding="utf-8").readlines()
+        with open(MDR_PATH/file_path, encoding="utf-8") as handle:
+            data = handle.readlines()
         buffer = []
         DRILLDOWN_RAW = ["    #drilldown:\n",
                          "      #name: \n",
@@ -84,7 +86,8 @@ class MigrateSecurityDomainMDR:
                     log("INFO", "The file doesn't end with .yaml or .yml, skipping", mdr)
                     continue  
 
-            data = yaml.safe_load(open(MDR_PATH/mdr, encoding="utf-8"))
+            with open(MDR_PATH/mdr, encoding="utf-8") as handle:
+                data = yaml.safe_load(handle)
             mdr_name = data["name"]
             log("INFO", "Assessing if security_domain should be migrated", mdr_name)
 

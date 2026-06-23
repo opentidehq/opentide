@@ -3,7 +3,6 @@ from __future__ import annotations
 import pandas as pd
 import os
 from pathlib import Path
-import sys
 import shutil
 
 from dataclasses import asdict
@@ -91,7 +90,7 @@ class DetectionObjectivesWiki:
 
         return DETECTION_OBJECTIVE_TEMPLATE.format(
             frontmatter=frontmatter,
-            name=f"# {get_icon("objective")} " + objective.name if not UUID_PERMALINKS else "",
+            name=("# " + get_icon("objective") + " " + objective.name) if not UUID_PERMALINKS else "",
             priority=objective.objective.priority,
             tlp=tlp,
             techniques=techniques,

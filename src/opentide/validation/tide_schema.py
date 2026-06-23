@@ -1,7 +1,6 @@
 """Schema validation — Pydantic model_validate pipeline."""
 from __future__ import annotations
 import os
-import sys
 from tabulate import tabulate
 from opentide.core.registry import OpenTide
 from opentide.validation.pipeline import validate_all_objects

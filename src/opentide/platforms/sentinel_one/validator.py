@@ -1,13 +1,10 @@
 import os
-import sys
-from cbc_sdk.rest_api import CBCloudAPI
 from typing import Sequence, Union
 from opentide.core.debug import DebugEnvironment
 from opentide.platforms.plugins import QueryValidator
 from opentide.core.registry import OpenTide, DetectionPlatforms
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy
-from opentide.models.system_config import ConfigurationModels
 from opentide.deployment import TideDeployment
 from opentide.platforms.sentinel_one.client import SentinelOneService
 import structlog

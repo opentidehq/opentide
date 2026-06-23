@@ -1,12 +1,10 @@
 import pandas as pd
-import os
-import sys
 from mitrecve import crawler
 from typing import Tuple, Literal
 
 
 
-from opentide.core.registry import OpenTide, IndexManager
+from opentide.core.registry import OpenTide
 from opentide.deployment import CIEnvironment
 from opentide.generation.framework import techniques_resolver
 from opentide.documentation.core import rich_attack_links
@@ -313,6 +311,8 @@ def relations_table(
                     [backlink_resolver(b, current_page=current_page) for b in trunk if b != "Unknown"] #type: ignore
                 ) #type: ignore
                 return branch_data
+
+        return None
 
     data = []
     if type(tree) is list:

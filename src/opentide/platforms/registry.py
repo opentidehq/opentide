@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import importlib
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import Any, Protocol, cast
 
 from opentide.core.root import get_repo_root
+from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.rule import DetectionRule
 from opentide.platforms.config import build_system_config
 from opentide.platforms.enabled import enabled_systems
 
@@ -23,11 +25,21 @@ _VALIDATOR_MODULES = {
 
 
 class RuleDeployer(Protocol):
-    def deploy(self, deployment: list[str]) -> None: ...
+    def deploy(
+        self,
+        mdr_deployment: Sequence[DetectionRule] | list[str],
+        deployment_plan: DeploymentStrategy | None = None,
+    ) -> None:
+        pass
 
 
 class QueryValidator(Protocol):
-    def validate(self, deployment: list[str]) -> None: ...
+    def validate(
+        self,
+        mdr_deployment: Sequence[DetectionRule] | list[str],
+        deployment_plan: DeploymentStrategy | None = None,
+    ) -> None:
+        pass
 
 
 @dataclass
@@ -116,6 +128,7 @@ class PlatformsRegistry:
                 deployer = cast(RuleDeployer, ep.load()())
                 self._deployers[system] = deployer
             except Exception:
+                # Entry point may be missing or fail to load for optional platforms.
                 pass
             validator = self._load_validator(system)
             if validator is not None:

@@ -1,6 +1,4 @@
 import os
-import sys
-from pathlib import Path
 import yaml
 
 
@@ -95,7 +93,8 @@ def run():
                     log("INFO", "The file doesn't end with .yaml or .yml, skipping", file)
                     continue  
 
-            raw_body = open(folder / file, "r", encoding="utf-8").read()
+            with open(folder / file, "r", encoding="utf-8") as handle:
+                raw_body = handle.read()
             yaml_body = yaml.safe_load(raw_body)
             current_references = yaml_body.get("references")
 
