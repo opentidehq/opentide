@@ -1,7 +1,7 @@
 description = "Logs collection point where  relevant data can be extracted and used to build detections."
 name = "Data Collection"
 field = "collection"
-icon = "📢"
+
 key = "name"
 [[keys]]
 name = "Azure Active Directory Audit Logs"
@@ -383,4 +383,3 @@ id = "COL00076"
 name = "AWS SecurityHub Findings"
 description = "AWS Security Hub eliminates the complexity of addressing large volumes of findings from multiple providers. It reduces the effort required to manage and improve the security of all of your AWS accounts, resources, and workloads."
 link = "https://docs.aws.amazon.com/securityhub/latest/userguide/what-is-securityhub.html"
-

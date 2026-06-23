@@ -10,7 +10,7 @@ def generate_model_doc(model: type[TideModel]) -> str:
     lines = [f"# Schema `{model.schema_identifier()}`", ""]
     for name, field in model.model_fields.items():
         annotation = getattr(field.annotation, "__name__", str(field.annotation))
-        lines.append(f"- **{name}** (`{annotation}`)")
+        lines.append(f"- **{name}**(`{annotation}`)")
     return "\n".join(lines)
 
 

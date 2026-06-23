@@ -67,7 +67,7 @@ class DetectionObjectivesWiki:
             objective_content = OpenTide.Models.DOM[objective]
             wiki_content = self._create_wiki_page(objective_content)
             self._export(objective_content, wiki_content)
-    
+
     def _recreate_folder(self):
         if os.path.exists(self.DOCUMENTATION_PATH):
             shutil.rmtree(self.DOCUMENTATION_PATH)
@@ -75,19 +75,19 @@ class DetectionObjectivesWiki:
 
 
     def _create_wiki_page(self, objective: DetectionObjective) -> str:
-        
+
         frontmatter = frontmatter_doc(objective.name, objective.metadata.uuid)
         tlp = tlp_doc(objective.metadata.tlp)
         techniques = attack_techniques(objective.metadata.uuid)
         metadata = metadata_doc(asdict(objective.metadata), model_type="objective")
         objective_type_description = get_vocab_description("detection.types", objective.objective.type)
         strategy_description = get_vocab_description("detection.composition", objective.objective.composition.strategy)
-        relation_graph = relationships_graph(objective.metadata.uuid) 
-        related_threat_vectors = relations_table(objective.metadata.uuid, direction="upstream") or "_❌ No related threat vector_"
-        related_detection_rules = relations_table(objective.metadata.uuid, direction="downstream") or "_❌ No related detection rules_"
+        relation_graph = relationships_graph(objective.metadata.uuid)
+        related_threat_vectors = relations_table(objective.metadata.uuid, direction="upstream") or "_ No related threat vector_"
+        related_detection_rules = relations_table(objective.metadata.uuid, direction="downstream") or "_ No related detection rules_"
         signals_list = [self._create_signal_content(signal) for signal in objective.objective.signals]
         signals_list = "\n\n".join(signals_list)
-        references = reference_doc(asdict(objective.references)) if objective.references else "_❌ No references_"
+        references = reference_doc(asdict(objective.references)) if objective.references else "_ No references_"
 
         return DETECTION_OBJECTIVE_TEMPLATE.format(
             frontmatter=frontmatter,
@@ -111,11 +111,11 @@ class DetectionObjectivesWiki:
 
     def _create_signal_content(self, signal: DetectionSignal) -> str:
 
-        logsource_table = self.Helpers().builders.logsources(signal.data.logsources) if signal.data.logsources else "_❌ No logsources mentioned_"
+        logsource_table = self.Helpers().builders.logsources(signal.data.logsources) if signal.data.logsources else "_ No logsources mentioned_"
         entities_table = self.Helpers().builders.entities(signal.entities)
-        detectors_table = self.Helpers().builders.detectors(signal.detectors) if signal.detectors else "_❌ No detectors mentioned_"
-        examples_table = self.Helpers().builders.examples(signal.examples) if signal.examples else "_❌ No examples mentioned_"
-        
+        detectors_table = self.Helpers().builders.detectors(signal.detectors) if signal.detectors else "_ No detectors mentioned_"
+        examples_table = self.Helpers().builders.examples(signal.examples) if signal.examples else "_ No examples mentioned_"
+
         return SIGNAL_TEMPLATE.format(
             name=signal.name,
             uuid=signal.uuid,
@@ -135,7 +135,7 @@ class DetectionObjectivesWiki:
             self.builders = self.Builders(self.fetchers)
 
         class Fetchers:
-            
+
             def asset(self, asset_name: str) -> VisibilityAsset | None:
                 assets = OpenTide.Configurations.Visibility.assets
                 if not assets:
@@ -158,13 +158,13 @@ class DetectionObjectivesWiki:
                 logsources = OpenTide.Configurations.Visibility.logsources
                 if not logsources:
                     return None
-                
+
                 logsource_name = logsource_name.split("::")[-1] if "::" in logsource_name else logsource_name
                 for logsource in logsources:
                     if logsource.name == logsource_name:
                         return logsource
                 return None
-        
+
         class Builders:
 
             def __init__(self, fetchers: DetectionObjectivesWiki.Helpers.Fetchers):
@@ -182,20 +182,20 @@ class DetectionObjectivesWiki:
                                 assets_documentation.append(f"_{asset_details.name}_ ({asset_details.criticality}) : {asset_details.description}")
                             else:
                                 assets_documentation.append("Missing asset documentation for referenced asset "+ asset)
-                        
+
                         return "- " + "\n- ".join(assets_documentation)
 
-                    return "_❌ No assets configured_"
+                    return "_ No assets configured_"
 
                 logsources_data = []
                 for logsource in logsources:
                     logsource_data = {}
                     logsource_details = self.fetchers.logsource(logsource)
                     logsource_data["Name"] = logsource.split("::")[-1]
-                    logsource_data["Description"] = logsource_details.description if logsource_details else "_❌ Could not retrieve logsource details in visibility configuration_"
-                    logsource_data["Data System"] = logsource_details.system if logsource_details else "_❌ Could not retrieve logsource details in visibility configuration_"
-                    logsource_data["Tenants"] = ", ".join(logsource_details.tenants) if logsource_details and logsource_details.tenants else "_❌ Could not retrieve logsource details in visibility configuration_"
-                    logsource_data["Assets"] = _monitored_assets(logsource) if logsource_details else "_❌ Could not retrieve logsource details in visibility configuration_"
+                    logsource_data["Description"] = logsource_details.description if logsource_details else "_ Could not retrieve logsource details in visibility configuration_"
+                    logsource_data["Data System"] = logsource_details.system if logsource_details else "_ Could not retrieve logsource details in visibility configuration_"
+                    logsource_data["Tenants"] = ", ".join(logsource_details.tenants) if logsource_details and logsource_details.tenants else "_ Could not retrieve logsource details in visibility configuration_"
+                    logsource_data["Assets"] = _monitored_assets(logsource) if logsource_details else "_ Could not retrieve logsource details in visibility configuration_"
 
                     logsources_data.append(logsource_data)
 
@@ -208,9 +208,9 @@ class DetectionObjectivesWiki:
                 def _technology(detector: ExternalDetector) -> str:
                     detector_details = self.fetchers.detector(detector.technology)
                     if detector_details:
-                        return f"**{detector_details.name}** : {detector_details.description}"
-                    return f"_❌ No detector technology configured under visibility for {detector.technology}_"
-                
+                        return f"**{detector_details.name}**: {detector_details.description}"
+                    return f"_ No detector technology configured under visibility for {detector.technology}_"
+
                 def _monitored_assets(detector: ExternalDetector) -> str:
                     detector_details = self.fetchers.detector(detector.technology)
                     if detector_details and detector_details.assets:
@@ -221,11 +221,11 @@ class DetectionObjectivesWiki:
                                 assets_documentation.append(f"_{asset_details.name}_ ({asset_details.criticality}) : {asset_details.description}")
                             else:
                                 assets_documentation.append("Missing asset documentation for referenced asset "+ asset)
-                        
+
                         return "- " + "\n- ".join(assets_documentation)
 
-                    return "_❌ No assets configured_"
-                
+                    return "_ No assets configured_"
+
                 detectors_data = []
                 for detector in detectors:
                     detector_data = {}
@@ -233,8 +233,8 @@ class DetectionObjectivesWiki:
                     detector_data["Description"] = detector.description.replace("\n", "<br>")
                     detector_data["Technology"] = _technology(detector)
                     detector_data["Monitored Assets"] = _monitored_assets(detector)
-                    detector_data["Link"] = f'[Link]({detector.link} "{detector.link}")' if detector.link else "_❌ No link referenced_"
-                    
+                    detector_data["Link"] = f'[Link]({detector.link} "{detector.link}")' if detector.link else "_ No link referenced_"
+
                     detectors_data.append(detector_data)
 
                 return pd.DataFrame(detectors_data).to_markdown(index=False)
@@ -248,13 +248,13 @@ class DetectionObjectivesWiki:
                     stage_details = get_vocab_stage_details("signal.entities", entity.split("::")[0])
                     if stage_details:
                         stage_name, stage_description = stage_details
-                        stage_details = f"**{stage_name}** : {stage_description}"
+                        stage_details = f"**{stage_name}**: {stage_description}"
                     else:
                         stage_details = "Could not enrich stage"
                     entity_data["Category"] = stage_details
                     entity_data["Description"] = get_vocab_description("signal.entities", entity)
                     entities_data.append(entity_data)
-                
+
                 return pd.DataFrame(entities_data).to_markdown(index=False)
 
             def examples(self, examples: list[DetectionExample]) -> str:
@@ -264,13 +264,13 @@ class DetectionObjectivesWiki:
                     example_data = {}
                     example_data["Description"] = example.description.replace('\n', '<br>')
                     example_data["Source"] = f'<a href="{example.link}" title="{example.link}">Link</a>'
-                    example_data["Language"] = example.language if example.language else "_❌ No Language mentioned_"
+                    example_data["Language"] = example.language if example.language else "_ No Language mentioned_"
                     if example.query:
                         # Replace escaped newlines with actual newlines
                         query_formatted = example.query.strip().replace('\n', '<br>')
                         example_data["Query"] = f'<pre><code class="sql">{query_formatted}</code></pre>'
                     else:
-                        example_data["Query"] = "<em>❌ No query mentioned</em>"
+                        example_data["Query"] = "<em> No query mentioned</em>"
 
                     examples_data.append(example_data)
 
@@ -278,7 +278,7 @@ class DetectionObjectivesWiki:
 
 
     def _export(self, objective: DetectionObjective, content: str):
-        
+
         if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI and UUID_PERMALINKS:
             log("INFO", "Generating docs with UUID as file name")
             file_name = objective.metadata.uuid + ".md"

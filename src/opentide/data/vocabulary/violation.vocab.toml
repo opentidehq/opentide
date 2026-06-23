@@ -1,7 +1,7 @@
 name = "Policy, mandate or governance violations"
 field = "violation"
 description = "Categories of usage violations which is not directly the result of an exercised threat, but needs to be monitored and accounted for illegitimate behaviours."
-icon = "👮"
+
 key = "name"
 [[keys]]
 name = "Illegal content streaming or usage of disallowed web service"
@@ -38,4 +38,3 @@ description = "Unauthorized modification of configuration settings. This can be 
 [[keys]]
 name = "Uncompliant remote access to internal resources"
 description = "Legitimate remote activities not being achieved with organization approved means, such as using a third-party VPN or service, unsupported protocols or non-standard infrastructure."
-

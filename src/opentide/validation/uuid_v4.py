@@ -29,7 +29,7 @@ def run():
             counter += 1
     if error_registry:
         os.environ['VALIDATION_ERROR_RAISED'] = 'True'
-        logger.warning('event', detail=f'⚠️ Successfully validated {counter} tide_objects but found', context_1=f'{len(error_registry)} invalid ones')
+        logger.warning('event', detail=f' Successfully validated {counter} tide_objects but found', context_1=f'{len(error_registry)} invalid ones')
         error_table = pd.DataFrame(error_registry).to_markdown(index=False, tablefmt='fancy_grid')
         print(error_table)
         logger.error('failed_uuid_validation')

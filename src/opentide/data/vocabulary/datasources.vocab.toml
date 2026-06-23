@@ -2,7 +2,7 @@ name = "MITRE ATT&CK Data Sources"
 field = "datasources"
 description = "Data sources represent the various subjects/topics of information that can be collected by sensors/logs. Data sources also include data components, which identify specific properties/values of a data source relevant to detecting a given ATT&CK technique or sub-technique."
 reference = "https://attack.mitre.org/datasources/"
-icon = "🗡️"
+
 key = "name"
 [[keys]]
 name = "Active Directory"
@@ -718,4 +718,3 @@ link = "https://attack.mitre.org/datasources/DS0024"
 name = "Windows Registry Key Modification"
 description = "Changes made to an existing registry key or its values. These modifications can include altering permissions, modifying stored data, or updating configuration settings.\n\n*Data Collection Measures:*\n\n- Windows Event Logs\n    - Event ID 4657 - Registry Value Modified: Logs changes to registry values, including modifications to startup entries, security settings, or system configurations.\n- Sysmon (System Monitor) for Windows\n    - Sysmon Event ID 13 - Registry Value Set: Captures changes to specific registry values.\n    - Sysmon Event ID 14 - Registry Key & Value Renamed: Logs renaming of registry keys, which may indicate evasion attempts.\n- Endpoint Detection and Response (EDR) Solutions\n    - Monitor registry modifications for suspicious behavior."
 link = "https://attack.mitre.org/datasources/DS0024"
-

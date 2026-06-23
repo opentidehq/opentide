@@ -2,100 +2,99 @@ name = "Impact"
 field = "impact"
 description = "Analysis of the threat vector from the organizational perspective, in non technical term. This aims at putting a clear denomination on what the attacker will actually be able to act upon if the threat vector is realized."
 reference = "http://veriscommunity.net/enums.html#section-impact"
-icon = "💥"
+
 key = "name"
 [[keys]]
 name = "Nuisance"
-icon = "😤"
+
 description = "Small and mostly inconsequential to day to day operations, but noticed."
 
 [[keys]]
 name = "Impairement"
-icon = "🩼"
+
 description = "Incapacitation of a particular key system that will cause disruptions in day-to-day operations, and eventually service delivery."
 
 [[keys]]
 name = "Data Breach"
-icon = "🔓"
+
 description = "Non-public information has been accessed from the outside, and successfully extracted."
 
 [[keys]]
 name = "IP Loss"
-icon = "🧠"
+
 description = "Particular, key data, information and blueprint conducive to the organization capability to gain and retain a commercial or geopolitical advantage has been accessed, and their content potentially used by competitors or other adversaries."
 
 [[keys]]
 name = "Reputational Damages"
-icon = "🌍"
+
 description = "Damages to the organization public view may be achieved by using directly the access gained, or indirectly with data gathered."
 
 [[keys]]
 name = "Identity Theft"
-icon = "🥸"
+
 description = "Acquisition of sufficient information and privileges to profess as a given individual, for the purpose of abusing and deceiving human trust relationships."
 
 [[keys]]
 name = "Monetary Loss"
-icon = "💸"
+
 description = "The vector will directly conduct to loss of value directly impacting the bottom line."
 
 [[keys]]
 name = "Lose Capabilities"
-icon = "🤬"
+
 description = "Vector execution will remove key functions to the organization, which will not be easily circumvented. Most day-to-day is heavily impaired, but processes can reorganize at a loss."
 
 [[keys]]
 name = "Catastrophic Loss"
-icon = "☄️"
+
 description = "The organization will lose a major part of its capacity to fulfill its strategic objective, and may not be able to recover fully or at all."
 
 [[keys]]
 name = "National Security"
-icon = "🎖️"
+
 description = "The vector execution will expose or destroy such sufficient critical information infrastructure that the country will have to intervene due to loss to key national  or international functions."
 
 [[keys]]
 name = "Asset and fraud"
-icon = "🦹"
+
 description = "Asset and fraud-related losses"
 
 [[keys]]
 name = "Business disruption"
-icon = "🛑"
+
 description = "Business disruption"
 
 [[keys]]
 name = "Operating costs"
-icon = "💲"
+
 description = "Increased operating costs"
 
 [[keys]]
 name = "Legal and regulatory"
-icon = "⚖️"
+
 description = "Legal and regulatory costs"
 
 [[keys]]
 name = "Competitive disadvantage"
-icon = "📉"
+
 description = "Loss of competitive advantage"
 
 [[keys]]
 name = "Loss of Safety"
-icon = "☠️"
+
 description = "Compromise of safety systems or controls leading to potential physical harm to personnel, equipment damage, or environmental release."
 
 [[keys]]
 name = "Loss of Control"
-icon = "🎛️"
+
 description = "Inability to monitor or command physical processes, leading to uncontrolled operations."
 
 [[keys]]
 name = "Loss of View"
-icon = "👁️\u200d🗨️"
+
 description = "Loss of visibility into process state, preventing operators from understanding current conditions."
 
 [[keys]]
 name = "Physical Damage"
-icon = "💥"
-description = "Damage to physical equipment, machinery, or infrastructure as a result of cyber attack."
 
+description = "Damage to physical equipment, machinery, or infrastructure as a result of cyber attack."

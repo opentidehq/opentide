@@ -1,7 +1,7 @@
 name = "Rule Scheduling"
 field = "scheduling"
 description = "The frequency at which the rule should be executed on the detection system, when it is not real-time"
-icon = "⏳"
+
 key = "name"
 [[keys]]
 name = "Real-time"
@@ -90,4 +90,3 @@ description = "Rule is scheduled to run every 336h"
 [[keys]]
 name = "720h"
 description = "Rule is scheduled to run every 720h"
-

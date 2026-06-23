@@ -74,7 +74,7 @@ def test_vocabulary_loader_load_valid() -> None:
             "name": "Impact",
             "field": "impact",
             "description": "Impact levels",
-            "icon": "💥",
+            "icon": "",
             "key": "name",
         },
         "entries": {
@@ -192,7 +192,7 @@ def test_vocabulary_entry_as_dict_roundtrip() -> None:
     entry = VocabularyEntry(
         name="Windows",
         description="Microsoft Windows",
-        icon="💻",
+        icon="",
         link="https://example.com",
         stages=("OS",),
         extra={"alias": ["win"]},

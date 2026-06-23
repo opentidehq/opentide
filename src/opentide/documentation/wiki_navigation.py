@@ -79,7 +79,7 @@ NAV_INDEX_FIELDS = {
         "modified",
         "statuses",
         "att&ck",
-        "detection_model"    
+        "detection_model"
     ],
 }
 
@@ -91,13 +91,13 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
     index = list()
     index_data = MODELS_INDEX.get(model_type)
     if not index_data:
-        return "❌ No objects were indexed"
-    
-    system_column = "🔧 Detection Systems"
-    mdr_statuses = "♻️ Status"
-    implementation_column = "🪛 Implementations"
-    schema_version = "🏷️ Schema Version"
-    mdr_attack_technique = "🗡️ MDR Technique"
+        return " No objects were indexed"
+
+    system_column = " Detection Systems"
+    mdr_statuses = " Status"
+    implementation_column = " Implementations"
+    schema_version = " Schema Version"
+    mdr_attack_technique = " MDR Technique"
 
     custom_cols = [
         system_column,
@@ -109,7 +109,7 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
 
     for entry in index_data:
         row = dict()
-        
+
         # Logic to retain only MDR in the correct status, to allow breaking
         # the table into two
         if model_type == "rule":
@@ -117,11 +117,11 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
             if mdr_status == "ACTIVE":
                 if not active_rules:
                     continue
-            
+
             elif mdr_status == "DEPRECATED":
                 if active_rules:
                     continue
-        
+
         for value in NAV_INDEX_FIELDS[model_type]:
 
 
@@ -138,14 +138,14 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
                         value = mdr_attack_technique
                     row[value] = techniques
                 else:
-                    "❔ No ATT&CK Technique Mapped"
+                    " No ATT&CK Technique Mapped"
 
             elif value == "implementations":
                 relations = relations_list(entry, mode="count", direction="downstream")
                 implementations = []
 
                 if not relations:
-                    implementations = ["⛔ None"]
+                    implementations = [" None"]
 
                 for k, v in relations.items():
                     title = f"{get_icon(k)} {k.upper()} : {v}"
@@ -167,7 +167,7 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
                             actor_aliases = list(set(actor_aliases))
                             actor_name += ", " + ", ".join(actor_aliases)
                         actors_list.append(actor_name)
-                
+
                 actors_list = list(set(actors_list))
                 actors_list = ", ".join(actors_list)
                 row[value] = actors_list
@@ -183,7 +183,7 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
                         vectors_links.append(object_backlink)
                     row[value] = ", ".join(vectors_links)
                 else:
-                    row[value] = "❔ No Object Mapped"
+                    row[value] = " No Object Mapped"
 
             elif model_type == "objective" and value == "objective":
                 objective_section:dict = model_value_doc(entry, "objective") #type: ignore
@@ -229,7 +229,7 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
                         object_backlink = object_backlink.replace("../", "./")
                         row[value] = object_backlink
                     else:
-                        row[value] = "❔ No Object Mapped"
+                        row[value] = " No Object Mapped"
 
                 else:
                     model_value = model_value_doc(
@@ -304,13 +304,13 @@ def construct_navigation_index(model):
         total_mdr_count = len(MODELS_INDEX["rule"])
         active_mdr_count = len(keep_active_rules(MODELS_INDEX["rule"]))
         deprecated_mdr_count = total_mdr_count - active_mdr_count
-        
+
         active_mdr_title = "Active " + model_title
         active_mdr_summary = CENTER_TEXT.format(icon=icon,
                                                 count=active_mdr_count,
                                                 model_title=active_mdr_title)
         active_mdr_details = build_search(model, mdr_status="ACTIVE")
-        
+
         deprecated_mdr_title = "Deprecated " + model_title
         deprecated_mdr_summary = CENTER_TEXT.format(icon=icon,
                                                     count=deprecated_mdr_count,
@@ -354,7 +354,7 @@ def run():
 
     for model in MODELS:
         log("ONGOING", "Generating navigation index for model type", model)
-        
+
         nav_index = construct_navigation_index(model)
         navigation_index_path = MODELS_DOCS_PATH / (MODELS_NAME[model] + ".md")
         navigation_index_path = Path(str(navigation_index_path).replace(" ", "-"))
@@ -363,7 +363,7 @@ def run():
             out.write(nav_index)
 
     time_to_execute = "%.2f" % (time.time() - start_time)
-    print("\n⏱️ Generated navigation index in {} seconds".format(time_to_execute))
+    print("\n Generated navigation index in {} seconds".format(time_to_execute))
 
 
 if __name__ == "__main__":

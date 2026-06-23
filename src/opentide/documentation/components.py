@@ -43,7 +43,7 @@ from opentide.core.logging import log
 GET_CVE_DETAILS = CONFIG.Documentation.cve["retrieve_details"]
 CVE_DB_LINK = CONFIG.Documentation.cve["default_db_link"]
 FOOTER_CAPTION = "Generated from CoreTIDE Indexed Data @ "
-DOM_DIRECT_MDR_LABEL = "🔗 Maps against the Detection Objective"
+DOM_DIRECT_MDR_LABEL = " Maps against the Detection Objective"
 
 
 def _dom_downstream_rules_table(dom_id: str) -> str:
@@ -96,7 +96,7 @@ def _dom_downstream_rules_table(dom_id: str) -> str:
     table = pd.DataFrame(rows, columns=["signal", "rule"])
     metrics = relations_list(dom_id, mode="count", direction="downstream")
 
-    no_rules_filler = f"❌ No {CONFIG.Documentation.object_names['rule']}"
+    no_rules_filler = f" No {CONFIG.Documentation.object_names['rule']}"
     table["rule"] = table["rule"].fillna(no_rules_filler)
 
     def column_rename(col):
@@ -113,10 +113,10 @@ def status_enriched(status_name:str)->str:
     for status in statuses:
         if status_name == status.name:
             strategy = status.strategy.name #type: ignore
-            description = f">**Status** : `{status_name}` - _{status.description}_"
-            description += f"\n>**Strategy** : `{strategy}` - _{StatusStrategy[strategy].value}_"
+            description = f">**Status**: `{status_name}` - _{status.description}_"
+            description += f"\n>**Strategy**: `{strategy}` - _{StatusStrategy[strategy].value}_"
             return description
-    
+
     log("FATAL",
         "Could not look up requested status in existing statuses",
         f"Requested status : {status_name}",
@@ -163,11 +163,11 @@ def attack_techniques(uuid:str) -> str:
         str: A formatted string containing ATT&CK techniques with icons and links,
              or an empty string if no techniques are found.
     """
-    
+
     techniques = techniques_resolver(uuid)
     if techniques:
         techniques = rich_attack_links(techniques, output="string")
-        return f"{get_icon('att&ck')} **ATT&CK Techniques** :  {techniques}"
+        return f"{get_icon('att&ck')} **ATT&CK Techniques**:  {techniques}"
     else:
         return ""
 
@@ -176,18 +176,18 @@ def attack_techniques(uuid:str) -> str:
 def frontmatter_doc(object_name:str, object_uuid:str)->str:
     """
     Generate YAML frontmatter for wiki pages.
-    
+
     Args:
         wiki_target: Target CI environment platform
         object_name: Page title
         object_uuid: UUID of the object
-    
+
     Returns:
         YAML frontmatter string or empty string if not applicable
     """
-    
+
     if CIEnvironment()._check_ci_environment() is not CIEnvironment.CIPlatforms.GitlabCI:
-        return ""    
+        return ""
     if OpenTide.Configurations.Documentation.gitlab.get("uuid_permalinks", False):
         return f"---\ntitle: {get_icon(get_type(object_uuid))} {object_name}\n---"
     else:
@@ -198,7 +198,7 @@ def criticality_doc(criticality_data: str) -> str:
     criticality_data_icon = get_icon(criticality_data, vocab="criticality")
     criticality_description = get_vocab_description("criticality", criticality_data)
 
-    criticality_doc_markdown = f"{criticality_icon} **Criticality:{criticality_data}** {criticality_data_icon} : {criticality_description} "
+    criticality_doc_markdown = f"{criticality_icon} **Criticality:{criticality_data}**{criticality_data_icon} : {criticality_description} "
 
     return criticality_doc_markdown
 
@@ -224,13 +224,13 @@ def metadata_doc(metadata: dict, model_type: str) -> str:
         else:
             log("WARNING", f"Missing title in metaschema : {metaschema} for key : {key}")
             metadata_enriched[key] = value
-    
+
     metadata_enriched.update(schema)
     for m in metadata_enriched:
         if type(metadata_enriched[m]) is list:
             metadata_enriched[m] = ", ".join(metadata_enriched[m])
-        
-    metadata_doc_markdown = " **|** ".join([f"`{m} : {metadata_enriched[m]}`" for m in metadata_enriched])
+
+    metadata_doc_markdown = " **|**".join([f"`{m} : {metadata_enriched[m]}`" for m in metadata_enriched])
 
     return metadata_doc_markdown
 
@@ -242,10 +242,10 @@ def reference_doc(references: dict) -> str:
     reference_doc_markdown = str()
     reference_labels = list()
     for scope in references:
-        
+
         if not references[scope]:
             continue
-        
+
         scope_title = get_field_title(
             scope, DEFINITIONS_INDEX["references"]["properties"]
         )
@@ -369,7 +369,7 @@ def relations_table(
     metrics = relations_list(id, mode="count", direction=direction)
 
     for column in table.columns:
-        filler = f"❌ No {CONFIG.Documentation.object_names[column]}"
+        filler = f" No {CONFIG.Documentation.object_names[column]}"
         table[column] = table[column].fillna(filler)
 
     def column_rename(col):
@@ -442,7 +442,7 @@ def tlp_doc(tlp_data: str, description: bool = True) -> str:
     if description:
         tlp_description = f" : {get_vocab_description('tlp', tlp_data)}"
     tlp_doc_markdown = (
-        f"{tlp_icon} **TLP:{tlp_data.upper()}** {tlp_rating_icon}{tlp_description}"
+        f"{tlp_icon} **TLP:{tlp_data.upper()}**{tlp_rating_icon}{tlp_description}"
     )
 
     return tlp_doc_markdown
@@ -482,9 +482,9 @@ def cve_doc(cve_list: list[str]) -> str:
 
         if broken_cve:
             for broken_vuln in broken_cve:
-                cve_doc_list.append(f"[💔 {broken_vuln}]({CVE_DB_LINK}{broken_vuln})")
+                cve_doc_list.append(f"[ {broken_vuln}]({CVE_DB_LINK}{broken_vuln})")
 
-            cve_error_banner = "⚠️ ERROR : Could not successfully retrieve CVE Details, double check the broken links below to confirm the CVE ID exists."
+            cve_error_banner = " ERROR : Could not successfully retrieve CVE Details, double check the broken links below to confirm the CVE ID exists."
             if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI:
                 cve_error_banner = GitlabMarkdown.negative_diff(cve_error_banner)
             cve_data = "- " + "\n- ".join(cve_doc_list)
@@ -500,10 +500,10 @@ def cve_doc(cve_list: list[str]) -> str:
 
 def _surface_matches(tvm_surfaces: list[str], asset_surfaces: list[str]) -> list[str]:
     """Determine which surface entries overlap between a TVM and an asset.
-    
+
     Uses hierarchical prefix matching: 'os::Windows' on an asset matches
     'os::Windows::Credential Management' on a TVM, and vice versa.
-    
+
     Returns the list of matching surface entries from the TVM side.
     """
     matched = []
@@ -517,24 +517,24 @@ def _surface_matches(tvm_surfaces: list[str], asset_surfaces: list[str]) -> list
 
 def threat_surface_doc(tvm_surface: list[str]) -> str:
     """Generate a unified Threat Surface documentation section for a TVM.
-    
+
     Renders:
     1. Surface entries with descriptions directly under the heading
     2. Targeted Assets table with inline visibility status
     3. Detection sources detail (log sources / detectors) in a collapsible
        section, only when coverage exists
-    
+
     Args:
         tvm_surface: List of threat surface vocabulary entries from the TVM
-        
+
     Returns:
         Formatted markdown string, or empty string if no surface data
     """
     if not tvm_surface:
         return ""
-    
+
     sections = []
-    
+
     # Surface entries with descriptions — listed directly, no sub-header
     surface_entries = []
     for entry in tvm_surface:
@@ -544,10 +544,10 @@ def threat_surface_doc(tvm_surface: list[str]) -> str:
             surface_entries.append(f"- {entry_link} — {entry_description}")
         else:
             surface_entries.append(f"- {entry_link}")
-    
+
     surface_list = "\n".join(surface_entries)
     sections.append(surface_list)
-    
+
     # Targeted assets with inline visibility status
     visibility = CONFIG.Visibility
     if visibility and visibility.assets:
@@ -558,14 +558,14 @@ def threat_surface_doc(tvm_surface: list[str]) -> str:
                 if ls.assets:
                     for a in ls.assets:
                         ls_by_asset.setdefault(a, []).append(ls.name)
-        
+
         det_by_asset: dict[str, list[str]] = {}
         if visibility.detectors:
             for det in visibility.detectors:
                 if det.assets:
                     for a in det.assets:
                         det_by_asset.setdefault(a, []).append(det.name)
-        
+
         asset_rows = []
         matched_asset_names = set()
         covered_assets = set()
@@ -578,25 +578,25 @@ def threat_surface_doc(tvm_surface: list[str]) -> str:
                 has_ls = asset.name in ls_by_asset
                 has_det = asset.name in det_by_asset
                 if has_ls or has_det:
-                    visibility_status = "✅ Covered"
+                    visibility_status = " Covered"
                     covered_assets.add(asset.name)
                 else:
-                    visibility_status = "⚠️ Blind Spot"
+                    visibility_status = " Blind Spot"
                 asset_rows.append({
                     "Asset": asset.name,
                     "Criticality": asset.criticality,
                     "Matching Surface": ", ".join(matches),
                     "Visibility": visibility_status,
                 })
-        
+
         if asset_rows:
             table = pd.DataFrame(asset_rows).to_markdown(index=False)
-            sections.append(f"### 🎯 Targeted Assets\n\n{table}")
-            
+            sections.append(f"### Targeted Assets\n\n{table}")
+
             # Detection sources detail — only if any coverage exists
             if covered_assets:
                 detail_parts = []
-                
+
                 # Log sources for matched assets
                 logsource_data = []
                 if visibility.logsources:
@@ -609,11 +609,11 @@ def threat_surface_doc(tvm_surface: list[str]) -> str:
                                     "System": ls.system,
                                     "Covered Assets": ", ".join(covered),
                                 })
-                
+
                 if logsource_data:
                     ls_table = pd.DataFrame(logsource_data).to_markdown(index=False)
-                    detail_parts.append(f"#### 📡 Log Sources\n\n{ls_table}")
-                
+                    detail_parts.append(f"#### Log Sources\n\n{ls_table}")
+
                 # Detectors for matched assets
                 detector_data = []
                 if visibility.detectors:
@@ -625,16 +625,16 @@ def threat_surface_doc(tvm_surface: list[str]) -> str:
                                     "Detector": det.name,
                                     "Covered Assets": ", ".join(covered),
                                 })
-                
+
                 if detector_data:
                     det_table = pd.DataFrame(detector_data).to_markdown(index=False)
-                    detail_parts.append(f"#### 🛡️ External Detectors\n\n{det_table}")
-                
+                    detail_parts.append(f"#### External Detectors\n\n{det_table}")
+
                 if detail_parts:
                     detail_body = "\n\n".join(detail_parts)
-                    sections.append(f"### 👁️ Detection Sources\n\n{detail_body}")
+                    sections.append(f"### Detection Sources\n\n{detail_body}")
         else:
             sections.append("_No assets in the visibility configuration match this threat surface._")
-    
+
     body = "\n\n".join(sections)
-    return f"\n\n## 🌐 Threat Surface\n\n{body}\n"
+    return f"\n\n## Threat Surface\n\n{body}\n"

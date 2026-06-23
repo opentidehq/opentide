@@ -1,40 +1,39 @@
 name = "Difficulty to Detect"
 field = "feasibility"
 description = "How possible it is to implement the detection objectives, according to data availability, available tooling and sophistication"
-icon = "🤔"
+
 key = "name"
 [[keys]]
 name = "Available"
-icon = "🥳"
+
 description = "Detections are easy to build, since data is available and building blocks already exist"
 
 [[keys]]
 name = "Minor Work"
-icon = "😤"
+
 description = "Building the detection requires some light known and defined development"
 
 [[keys]]
 name = "Possible"
-icon = "😅"
+
 description = "Technical details are known, but some moderate research is required to understand how to build detections"
 
 [[keys]]
 name = "Challenging"
-icon = "😰"
+
 description = "Available information exist to support development, but unfamiliarity will lead to a sharper learning curve"
 
 [[keys]]
 name = "Complex"
-icon = "🥵"
+
 description = "Multiple challenges in the path of development, which will need to resolved alongside technical work"
 
 [[keys]]
 name = "Needs Investment"
-icon = "🤑"
+
 description = "Blocked at the current technological maturity stage, but might be part of a larger investment, i.e. to increase log collection or new toolings"
 
 [[keys]]
 name = "Impossible"
-icon = "😵"
-description = "No perceived technical possibilities to fulfill detection objectives, due to the nature of the threat vector or non-technical aspects"
 
+description = "No perceived technical possibilities to fulfill detection objectives, due to the nature of the threat vector or non-technical aspects"

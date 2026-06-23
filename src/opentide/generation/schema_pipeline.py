@@ -90,7 +90,7 @@ class VocabularyResolver:
         asset = asset_map.get(asset_name)
         if not asset:
             return (
-                f"\n- ⚠️ **{asset_name}**"
+                f"\n- **{asset_name}**"
                 f"\n  - _Warning_: Asset not found in configuration"
                 f"\n  - _Action Required_: Define this asset in the assets section"
             )
@@ -118,11 +118,11 @@ class VocabularyResolver:
 
         Handles three patterns:
 
-        * **Model vocabularies** (keyed by id) — all entries emitted with
+        * **Model vocabularies**(keyed by id) — all entries emitted with
           optional scope-prefixing and VS Code search hints.
-        * **General, non-scoped** — entries filtered by stages, emitted
+        * **General, non-scoped**— entries filtered by stages, emitted
           with their name as the value.
-        * **General, scoped** — entries expanded to ``stage::name`` per
+        * **General, scoped**— entries expanded to ``stage::name`` per
           matching stage.
         """
 
@@ -131,7 +131,7 @@ class VocabularyResolver:
         _DROPDOWN = """
 ### {icon} {name}
 
-{id_icon} **Identifier** : `{identifier}`
+{id_icon} **Identifier**: `{identifier}`
 
 _Vocabulary_ : `{source_vocab}`
 
@@ -305,10 +305,10 @@ _Vocabulary_ : `{source_vocab}`
                 crit = key.get("criticality")
                 crit_icon = get_icon("criticality")
                 if not crit:
-                    criticality = f"{crit_icon} **Criticality** : No Criticality Assigned"
+                    criticality = f"{crit_icon} **Criticality**: No Criticality Assigned"
                 else:
                     crit_value_icon = get_vocab_entry("criticality", crit, "icon")
-                    criticality = f"{crit_icon} **Criticality** : {crit_value_icon} {crit}"
+                    criticality = f"{crit_icon} **Criticality**: {crit_value_icon} {crit}"
 
             if tlp:
                 tlp = f" | **{get_icon(tlp, vocab='tlp')}TLP:{tlp.upper()}**"
@@ -353,7 +353,7 @@ _Vocabulary_ : `{source_vocab}`
                     limit = VocabularyResolver.Vocabulary._STAGE_DESC_LIMIT
                     if len(s_desc) > limit:
                         s_desc = s_desc[:limit] + "..."
-                    parts.append(f"\n\n{s_icon} **{s_name}** : _{s_desc}_")
+                    parts.append(f"\n\n{s_icon} **{s_name}**: _{s_desc}_")
                     break
             return "".join(parts)
 
@@ -442,7 +442,7 @@ _Vocabulary_ : `{source_vocab}`
                 enums.append(status.name)
                 strategy = status.strategy.name
                 desc = (
-                    f"**Strategy** : `{strategy}` "
+                    f"**Strategy**: `{strategy}` "
                     f"- _{StatusStrategy[strategy].value}_"
                     f"\n\n{status.description}"
                 )
@@ -605,8 +605,8 @@ def gen_json_schema(dictionary):
                 temp = build_model_schema_source(definition_model)
 
                 if deprecation_message := dict_foo[field].get("tide.meta.deprecation"):
-                    temp["title"] = "⚠️ DEPRECATION WARNING"
-                    temp["description"] = "⚠️ DEPRECATED : " + deprecation_message
+                    temp["title"] = " DEPRECATION WARNING"
+                    temp["description"] = " DEPRECATED : " + deprecation_message
 
                 dictionary[field] = temp
 
@@ -627,8 +627,8 @@ def gen_json_schema(dictionary):
                         dictionary[field]["title"] = title
 
                 if deprecation_message := dict_foo[field].get("tide.meta.deprecation"):
-                    dict_foo[field]["title"] = "⚠️ DEPRECATION WARNING"
-                    dict_foo[field]["description"] = "⚠️ DEPRECATED : " + deprecation_message
+                    dict_foo[field]["title"] = " DEPRECATION WARNING"
+                    dict_foo[field]["description"] = " DEPRECATED : " + deprecation_message
 
                 # If additionalProperties is not configured, we force it to
                 # False. This prevents the users from adding invalid keys (

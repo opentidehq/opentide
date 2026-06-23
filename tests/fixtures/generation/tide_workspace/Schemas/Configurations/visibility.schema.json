@@ -27,7 +27,7 @@
                 ],
                 "uniqueItems": true
             },
-            "title": "\ud83d\udcd1 Log Sources",
+            "title": "Log Sources",
             "type": "array"
         },
         "detectors": {

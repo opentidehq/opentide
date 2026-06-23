@@ -2,14 +2,14 @@
     "type": "object",
     "properties": {
         "name": {
-            "title": "\ud83c\udfab Name",
+            "title": "Name",
             "type": "string"
         },
         "metadata": {
             "type": "object",
             "properties": {
                 "uuid": {
-                    "title": "\ud83d\udd11 Uuid",
+                    "title": "Uuid",
                     "type": "string"
                 },
                 "schema": {
@@ -25,18 +25,18 @@
                             "type": "integer"
                         }
                     ],
-                    "title": "\ud83c\udff7\ufe0f Version"
+                    "title": "Version"
                 },
                 "created": {
-                    "title": "\ud83d\uddd3\ufe0f Created",
+                    "title": "Created",
                     "type": "string"
                 },
                 "modified": {
-                    "title": "\ud83d\uddd3\ufe0f Modified",
+                    "title": "Modified",
                     "type": "string"
                 },
                 "tlp": {
-                    "title": "\ud83d\udea6 Tlp",
+                    "title": "Tlp",
                     "type": "string"
                 },
                 "author": {
@@ -49,7 +49,7 @@
                         }
                     ],
                     "default": null,
-                    "title": "\ud83d\udc69\u200d\ud83d\udcbb Author"
+                    "title": "Author"
                 },
                 "contributors": {
                     "anyOf": [
@@ -64,7 +64,7 @@
                         }
                     ],
                     "default": null,
-                    "title": "\ud83d\udc65 Contributors"
+                    "title": "Contributors"
                 },
                 "organisation": {
                     "anyOf": [
@@ -90,7 +90,7 @@
             "additionalProperties": false
         },
         "description": {
-            "title": "\ud83d\udd2c Description",
+            "title": "Description",
             "type": "string"
         },
         "status": {
@@ -100,7 +100,7 @@
         },
         "severity": {
             "default": "Informational",
-            "title": "\ud83d\udca3 Severity",
+            "title": "Severity",
             "type": "string"
         },
         "techniques": {
@@ -207,7 +207,7 @@
                 }
             ],
             "default": null,
-            "title": "\ud83d\udee0\ufe0f Detection System Technical Setup",
+            "title": "Detection System Technical Setup",
             "recomposition": "systems",
             "properties": {
                 "carbon_black_cloud": {
@@ -222,7 +222,7 @@
                         },
                         "name": {
                             "default": "",
-                            "title": "\ud83c\udfab Name",
+                            "title": "Name",
                             "type": "string"
                         },
                         "schema": {
@@ -292,7 +292,7 @@
                                 }
                             ],
                             "default": null,
-                            "title": "\ud83d\udc65 Development Contributors"
+                            "title": "Development Contributors"
                         }
                     },
                     "required": [
@@ -312,7 +312,7 @@
                         },
                         "name": {
                             "default": "",
-                            "title": "\ud83c\udfab Name",
+                            "title": "Name",
                             "type": "string"
                         },
                         "schema": {
@@ -382,7 +382,7 @@
                                 }
                             ],
                             "default": null,
-                            "title": "\ud83d\udc65 Development Contributors"
+                            "title": "Development Contributors"
                         },
                         "details": {
                             "$ref": "#/$defs/CrowdstrikeDetails",
@@ -393,7 +393,7 @@
                             "title": "Schedule"
                         },
                         "query": {
-                            "title": "\ud83d\udd0e Query",
+                            "title": "Query",
                             "type": "string"
                         },
                         "rule_id_bundle": {
@@ -432,7 +432,7 @@
                         },
                         "name": {
                             "default": "",
-                            "title": "\ud83c\udfab Name",
+                            "title": "Name",
                             "type": "string"
                         },
                         "schema": {
@@ -502,15 +502,15 @@
                                 }
                             ],
                             "default": null,
-                            "title": "\ud83d\udc65 Development Contributors"
+                            "title": "Development Contributors"
                         },
                         "query": {
-                            "title": "\ud83d\udd0e Query",
+                            "title": "Query",
                             "type": "string"
                         },
                         "alert": {
                             "$ref": "#/$defs/DefenderAlert",
-                            "title": "\ud83d\udea8 Alert"
+                            "title": "Alert"
                         },
                         "impacted_entities": {
                             "$ref": "#/$defs/DefenderImpactedEntities",
@@ -524,7 +524,7 @@
                                 "12H",
                                 "24H"
                             ],
-                            "title": "\u23f2 Scheduling",
+                            "title": "Scheduling",
                             "type": "string"
                         },
                         "rule_id": {
@@ -603,7 +603,7 @@
                         },
                         "name": {
                             "default": "",
-                            "title": "\ud83c\udfab Name",
+                            "title": "Name",
                             "type": "string"
                         },
                         "schema": {
@@ -673,19 +673,19 @@
                                 }
                             ],
                             "default": null,
-                            "title": "\ud83d\udc65 Development Contributors"
+                            "title": "Development Contributors"
                         },
                         "query": {
-                            "title": "\ud83d\udd0e Query",
+                            "title": "Query",
                             "type": "string"
                         },
                         "scheduling": {
                             "$ref": "#/$defs/SentinelScheduling",
-                            "title": "\u23f2 Scheduling"
+                            "title": "Scheduling"
                         },
                         "alert": {
                             "$ref": "#/$defs/SentinelAlert",
-                            "title": "\ud83d\udea8 Alert"
+                            "title": "Alert"
                         },
                         "exclusions": {
                             "anyOf": [
@@ -776,7 +776,7 @@
                         },
                         "name": {
                             "default": "",
-                            "title": "\ud83c\udfab Name",
+                            "title": "Name",
                             "type": "string"
                         },
                         "schema": {
@@ -846,7 +846,7 @@
                                 }
                             ],
                             "default": null,
-                            "title": "\ud83d\udc65 Development Contributors"
+                            "title": "Development Contributors"
                         },
                         "condition": {
                             "$ref": "#/$defs/SentinelOneCondition",

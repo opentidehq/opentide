@@ -85,11 +85,11 @@ def chaining_graph(tvm):
         for link in chaining_data[v]:
             for target in chaining_data[v][link]:
                 data = {}
-                data['☣️ Vector'] = backlink_resolver(v)
-                data['⛓️ Link'] = f'`{link}`'
-                data['🎯 Target'] = backlink_resolver(target)
-                data['⛰️ Terrain'] = str(model_value(target, 'terrain')).replace('\n', ' ')
-                data['🗡️ ATT&CK'] = rich_attack_links(techniques_resolver(target), wrap=5)
+                data[' Vector'] = backlink_resolver(v)
+                data[' Link'] = f'`{link}`'
+                data[' Target'] = backlink_resolver(target)
+                data[' Terrain'] = str(model_value(target, 'terrain')).replace('\n', ' ')
+                data[' ATT&CK'] = rich_attack_links(techniques_resolver(target), wrap=5)
                 table_data.append(data)
     table = pd.DataFrame(table_data).to_markdown(index=False)
     for v in chaining_data:

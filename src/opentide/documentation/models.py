@@ -57,15 +57,15 @@ def documentation(model):
     model_type = get_type(model_uuid)
     title = f"{get_icon(model_type)} {model['name']}"
     frontmatter = ""
-    
+
     if DOCUMENTATION_TARGET in [CIEnvironment.CIPlatforms.GitlabCI,
                                 CIEnvironment.CIPlatforms.AzurePipeline]:
         if UUID_PERMALINKS:
-            frontmatter = f"---\ntitle: {title}\n---"            
+            frontmatter = f"---\ntitle: {title}\n---"
         title = ""
     else:
         title = "# " + title
-        
+
     model_datafield = model_type
     criticality = criticality_doc(model["criticality"])
     metadata = model.get("metadata") or model.get("meta") or {}
@@ -80,14 +80,14 @@ def documentation(model):
     actors_sightings = ""
 
     references = model.get("references")
-    
+
     if references:
         # To deprecate once everything is migrated to new reference system
         if type(references) is list:
             references = "- " + "\n- ".join(references)
         elif type(references) is dict:
             references = reference_doc(references)
-        references = "### 🔗 References\n\n" + references
+        references = "### References\n\n" + references
 
     else:
         references = ""
@@ -102,36 +102,36 @@ def documentation(model):
     techniques = techniques_resolver(model_uuid, recursive=False)
     if techniques:
         techniques = rich_attack_links(techniques)
-        techniques = f'{get_icon("att&ck")} **ATT&CK Techniques** {techniques}'
+        techniques = f'{get_icon("att&ck")} **ATT&CK Techniques**{techniques}'
     else:
         techniques = ""
 
     relation_graph = relationships_graph(model_uuid)
     relation_table = ""
     if childs(model_uuid):
-        relation_table = "\n\n **Descendants** \n\n" + relations_table(
+        relation_table = "\n\n **Descendants**\n\n" + relations_table(
             model_uuid, direction="downstream"
         )
     if parents(model_uuid):
-        relation_table += "\n\n **Ascendants** \n\n"
+        relation_table += "\n\n **Ascendants**\n\n"
         relation_table += relations_table(model_uuid, direction="upstream")
 
     if not relation_graph and not relation_table:
-        relation_graph = "🚫 No related OpenTide objects indexed."
+        relation_graph = " No related OpenTide objects indexed."
         if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI:
             GitlabMarkdown.negative_diff(relation_graph)
 
     if model_type == "threat":
 
         terrain = model[model_datafield]["terrain"].replace("\n", "\n> ")
-        expand_description += f"\n\n## 🖥️ Terrain \n\n > {terrain}"
+        expand_description += f"\n\n## Terrain \n\n > {terrain}"
 
         if actors:=model[model_datafield].get("actors"):
             # Filter out legacy actor definitions
             if type(actors[0]) is str:
-                pass 
+                pass
             else:
-                actors_sightings = "\n\n### 🐲 Actors sightings \n\n"
+                actors_sightings = "\n\n### Actors sightings \n\n"
                 actors_sightings += actors_doc(actors)
 
 
@@ -142,7 +142,7 @@ def documentation(model):
 
         chain_diagram, chain_table = chaining_graph(model_uuid)
         if chain_diagram and chain_table:
-            expand_graphs += "\n\n --- \n\n### ⛓️ Threat Chaining\n\n"
+            expand_graphs += "\n\n --- \n\n### Threat Chaining\n\n"
             expand_graphs += chain_diagram + "\n\n"
             expand_graphs += (
                 FOLD.format("Expand chaining data", chain_table)
@@ -158,7 +158,7 @@ def documentation(model):
     if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI:
         tags = ""
     else:
-        tags = "---\n\n#### 🏷️ Tags\n\n"
+        tags = "---\n\n#### Tags\n\n"
         tags += "#" + ", #".join(tags)
 
     doc = MODEL_DOC_TEMPLATE.format(frontmatter=frontmatter,
@@ -207,7 +207,7 @@ def run():
             shutil.rmtree(doc_type_path)
         log(
             "INFO",
-            "📁 Creating documentation folder : {}... ".format(str(doc_type_path)),
+            " Creating documentation folder : {}... ".format(str(doc_type_path)),
         )
         doc_type_path.mkdir(parents=True)
 
@@ -237,7 +237,7 @@ def run():
                 f"Generating {model_type.upper()} documentation",
                 model_name,
                 model_uuid)
-            
+
             document = documentation(model_data)
 
             with open(doc_path, "w+", encoding="utf-8") as output:
