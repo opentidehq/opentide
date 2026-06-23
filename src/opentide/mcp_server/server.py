@@ -145,6 +145,9 @@ def platforms_resource() -> str:
 
 def main() -> None:
     """Start the MCP server on stdio transport."""
+    from opentide.core.logging import LoggingConfig, init_logging
+
+    init_logging(LoggingConfig(json_output=True, plain=True))
     mcp.run(transport="stdio")
 
 

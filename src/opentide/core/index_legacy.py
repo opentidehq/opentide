@@ -115,7 +115,7 @@ class IndexManager:
 
                 if stg_version > main_version:
                     log("INFO",
-                        f"🔄 Replacing MDR {mdr_name} from prod index with"
+                        f"Replacing MDR {mdr_name} from prod index with"
                         f" staging data, as version is higher (main : v{main_version}"
                         f" staging : v{stg_version})"
                     )

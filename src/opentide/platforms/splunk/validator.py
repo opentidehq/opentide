@@ -108,7 +108,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
             else:
                 log(
                     "SKIP",
-                    f"🛑 Skipping {mdr_data.get('name')} as does not contain a Splunk configuration section",
+                    f"Skipping {mdr_data.get('name')} as does not contain a Splunk configuration section",
                 )
 
 def declare():

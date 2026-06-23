@@ -104,7 +104,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         status = mdr_splunk["status"]
         if check_status(status) is StatusStrategy.DISABLEMENT:
             config["disabled"] = "true"
-            log("INFO", "🔕 Configuring saved search as disabled")
+            log("INFO", "Configuring saved search as disabled")
 
         # Alert Severity Configuration
         config["alert.severity"] = self.ALERT_SEVERITY_MAPPING[
@@ -391,12 +391,12 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             # the orchestrator will filter for the platform)
             if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"].keys():
                 # Connection routine, if not connected yet.
-                log("ONGOING", f"🔥 Currently deploying MDR {mdr_data['name']}...")
+                log("ONGOING", f"Currently deploying MDR {mdr_data['name']}...")
                 self.deploy_mdr(mdr_data, service)
             else:
                 log(
                     "SKIP",
-                    f"🛑 Skipping {mdr_data.get('name')} as does not contain a Splunk rule",
+                    f"Skipping {mdr_data.get('name')} as does not contain a Splunk rule",
                 )
 
 def declare():

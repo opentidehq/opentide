@@ -29,7 +29,7 @@ SCRIPT_DESCRIPTION = (
 )
 
 print("\n\n" + SCRIPT_NAME.center(80, "="))
-print("\n ⚙️" + SCRIPT_DESCRIPTION + "\n")
+print("\n" + SCRIPT_DESCRIPTION + "\n")
 
 log("TITLE", "Staging Index Reconcilier")
 log("INFO", "Loads a version of the index which adds data from mdr in staging.")
@@ -38,7 +38,7 @@ mdr_to_index = modified_mdr_files(DeploymentStrategy.STAGING)
 
 if len(mdr_to_index) == 0:  # In case of no deployments possible
     try:
-        print("🛑 No deployment possible, could not identify MDRs that can be deployed")
+        log("FATAL", "No deployment possible, could not identify MDRs that can be deployed")
         raise Exception("NO_DEPLOYMENT_FOUND")
     except:
         traceback.print_exc()

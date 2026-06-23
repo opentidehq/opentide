@@ -76,7 +76,7 @@ def indexer(write_index=False) -> dict:
 
     index["configurations"] = RESOLVED_CONFIGURATIONS
 
-    print("📒 Indexing Vocabularies...")
+    log("INFO", "Indexing Vocabularies...")
 
     from opentide.generation.vocabulary import VocabularyLoadError, parse_yaml_vocabulary
 
@@ -107,7 +107,7 @@ def indexer(write_index=False) -> dict:
     index["vocabs"] = voc_index
 
     # JSON Schemas Indexer
-    print("🛠️ Indexing JSON Schemas...")
+    log("INFO", "Indexing JSON Schemas...")
 
     json_index = dict()
 
@@ -124,7 +124,7 @@ def indexer(write_index=False) -> dict:
     index["json_schemas"] = json_index
 
     # Metaschema Indexer
-    print("🛠️ Indexing Metaschemas...")
+    log("INFO", "Indexing Metaschemas...")
 
     meta_index = dict()
 
@@ -139,7 +139,7 @@ def indexer(write_index=False) -> dict:
     index["metaschemas"] = meta_index
 
     # Definitions Indexer
-    print("🛠️ Indexing Definitions...")
+    log("INFO", "Indexing Definitions...")
 
     definition_index = dict()
 
@@ -209,7 +209,7 @@ def indexer(write_index=False) -> dict:
 
     # Objects Indexer
 
-    print("📊 Indexing Objects...")
+    log("INFO", "Indexing Objects...")
 
     objects_index = dict()
     files_index = dict()

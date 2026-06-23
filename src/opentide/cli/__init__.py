@@ -25,7 +25,7 @@ from opentide.cli.services.info import collect_info
 from opentide.cli.services.init import InitOptions, run_init, run_interactive_init
 from opentide.cli.services.mutate import run_mutate
 from opentide.cli.services.validation import run_validate, validate_query_platform
-from opentide.core.logging import configure_logging, print_banner
+from opentide.core.logging import LoggingConfig, init_logging, print_banner
 from opentide.core.root import get_repo_root
 
 app = typer.Typer(
@@ -60,7 +60,8 @@ def main_callback(
     )
     ctx.obj = cli_ctx
     cli_ctx.activate()
-    configure_logging(force=True)
+    cli_ctx.apply_environment()
+    init_logging(LoggingConfig.from_cli_context(cli_ctx), force=True)
     if not json_output:
         print_banner()
 
@@ -135,6 +136,8 @@ def generate_cmd(
     cli = get_context(ctx)
     if verbose:
         cli.debug = True
+        cli.apply_environment()
+        init_logging(LoggingConfig.from_cli_context(cli), force=True)
     result = run_generate(cli, phase=phase, staging=staging)
     emit_success(cli, result)
 
