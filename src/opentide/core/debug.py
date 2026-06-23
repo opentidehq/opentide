@@ -1,7 +1,5 @@
 import os
-import sys
 from dataclasses import dataclass
-import git
 from opentide.core.registry import OpenTide, DebugHelpers
 
 @dataclass

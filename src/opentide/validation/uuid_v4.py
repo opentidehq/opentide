@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import sys
 from uuid import UUID
 from opentide.core.registry import OpenTide
 from opentide.core.files import resolve_configurations
@@ -21,10 +20,9 @@ def run():
             tide_object_data = MODELS_INDEX[tide_model][tide_object]
             tide_object_uuid = tide_object_data.get('uuid') or tide_object_data['metadata']['uuid']
             tide_object_name = tide_object_data['name']
-            tide_object_metadata = tide_object_data.get('metadata') or tide_object_data['meta']
             try:
                 UUID(tide_object_uuid, version=4)
-            except:
+            except (ValueError, TypeError):
                 error_registry.append({'Object Name': tide_object_name, 'UUID': tide_object_uuid})
             counter += 1
     if error_registry:

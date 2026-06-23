@@ -1,25 +1,12 @@
-import pandas as pd
 from git.repo import Repo
-from opentide.generation.framework import unroll_dot_dict
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
-from opentide.models.system_config import (
-    DeploymentBatch,
-    SystemConfig,
-    TenantDeployment,
-)
-from opentide.core.registry import OpenTide, DetectionPlatforms, ObjectLoader
+from opentide.core.registry import OpenTide
 from opentide.core.errors import Errors
-from opentide.core.debug import DebugEnvironment
-from opentide.core.environment import DebugHelpers
 from opentide.core.logging import log
-import sys
 import os
-import yaml
 import re
-from typing import MutableMapping, Sequence
-from enum import Enum, auto
 from pathlib import Path
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 
 
@@ -107,8 +94,6 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
     stage: used to filter the paths computed
 
     """
-    scope = list()
-
     TARGET_CI = CIEnvironment().environment
 
     repo = TideRepo().repository

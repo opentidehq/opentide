@@ -1,11 +1,8 @@
-import sys
-import os
 import requests
 import json
 from dataclasses import dataclass, asdict
-from typing import Literal, ClassVar, Sequence, overload, Any, Optional
-from opentide.core.typing import Never
-from enum import Enum, auto
+from typing import Literal, NoReturn, Optional
+from enum import Enum
 from datetime import datetime, timedelta
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
@@ -87,14 +84,14 @@ class SentinelOneService:
         else:
             Proxy.unset_proxy()
 
-    def _http_errors(self, response: requests.Response, error):
+    def _http_errors(self, response: requests.Response, error) -> NoReturn:
         match response.status_code:
             case 400:
                 logger.critical('received_code_400_invalid_user_input_received', detail=str(response.text))
                 raise error
             case 401:
                 logger.critical('received_code_401_unauthorized_access', detail=str(response.text), advice='Check your configuration and API permissions again')
-                raise Errors.TideTenantConfigurationMissingPermissions
+                raise Errors.TideTenantConfigurationMissingPermissions()
             case 404:
                 logger.critical('fatal_error', detail=str(response.text), advice='Go to SentinelOne Console and check if your rule still exists. If not, remove the rule id entry from the MDR file')
                 raise error
@@ -118,19 +115,18 @@ class SentinelOneService:
         request['fromDate'] = str(from_date.isoformat()) + 'Z'
         request = json.dumps(request, indent=4)
         response = self.session.post(url=self.CREATE_QUERY_ENDPOINT, verify=self.tenant_config.setup.ssl, data=request)
-        match response.status_code:
-            case 200:
-                logger.info('the_query_was_able_to_run')
-                return True
-            case 400:
-                try:
-                    error = response.json().get('errors')[0].get('detail')
-                except:
-                    error = str(response.json())
-                logger.critical('fatal_error', detail=f'The query failed to be validated on tenant {self.tenant_config.name}', arg0=error, advice='Double check your query on the Sentinel One Event Search interface')
-                return False
-            case _:
-                self._http_errors(response, error=Errors.TideQueryValidationError)
+        if response.status_code == 200:
+            logger.info('the_query_was_able_to_run')
+            return True
+        if response.status_code == 400:
+            try:
+                error = response.json().get('errors')[0].get('detail')
+            except Exception:
+                error = str(response.json())
+            logger.critical('fatal_error', detail=f'The query failed to be validated on tenant {self.tenant_config.name}', arg0=error, advice='Double check your query on the Sentinel One Event Search interface')
+            return False
+        logger.critical('fatal_error', detail=f'Unforeseen error with code [{response.status_code}]', context=str(response.json()))
+        raise Errors.TideQueryValidationError('Query validation failed')
 
     def create_update_detection_rule(self, rule: DetectionRule, rule_id: Optional[int]=None) -> int:
 
@@ -153,12 +149,11 @@ class SentinelOneService:
             logger.info('executing_api_call_to_create_star_custom_rule')
             error = Errors.DetectionRuleCreationFailed
             request = self.session.post(url=endpoint, verify=self.tenant_config.setup.ssl, data=rule_body)
-        match request.status_code:
-            case 200:
-                logger.info('created_rule_in_sentinelone', detail=str(request.json()))
-                return int(request.json()['data']['id'])
-            case _:
-                self._http_errors(request, error=error)
+        if request.status_code == 200:
+            logger.info('created_rule_in_sentinelone', detail=str(request.json()))
+            return int(request.json()['data']['id'])
+        self._http_errors(request, error=error)
+        raise AssertionError('unreachable')
 
     def disable_detection_rule(self, rule_id: int):
         filter = {'filter': {'ids': [rule_id]}}

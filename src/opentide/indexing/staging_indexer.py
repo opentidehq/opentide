@@ -2,7 +2,6 @@ import yaml
 import json
 from pathlib import Path
 import os
-import toml
 from datetime import datetime
 import sys
 import traceback
@@ -30,14 +29,15 @@ if len(mdr_to_index) == 0:
     try:
         logger.critical('no_deployment_possible_could_not_identify_mdrs_that_can_be_deplo')
         raise Exception('NO_DEPLOYMENT_FOUND')
-    except:
+    except Exception:
         traceback.print_exc()
         sys.exit(19)
 else:
     os.environ['DEPLOYMENT'] = str(mdr_to_index)
 current_stg_index = dict()
 for mdr in mdr_to_index:
-    mdr_data = yaml.safe_load(open(mdr, encoding='utf-8'))
+    with open(mdr, encoding='utf-8') as mdr_file:
+        mdr_data = yaml.safe_load(mdr_file)
     mdr_name = mdr_data.get('name') or mdr_data['title']
     logger.info('updating_the_staging_index', arg0=mdr_name)
     uuid = mdr_data.get('uuid') or mdr_data['metadata']['uuid']
@@ -48,7 +48,8 @@ if not os.path.exists(STG_INDEX_PATH):
         json.dump(current_stg_index, out, default=str)
 else:
     print(' Found MDR index, extending it with latest values')
-    stg_index = json.load(open(Path(STG_INDEX_PATH)))
+    with open(Path(STG_INDEX_PATH), encoding='utf-8') as staging_file:
+        stg_index = json.load(staging_file)
     stg_index.update(current_stg_index)
     with open(STG_INDEX_PATH, 'w+') as out:
         json.dump(stg_index, out, default=str, indent=4)

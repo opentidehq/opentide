@@ -171,10 +171,6 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
     },
 }
 
-_PLATFORM_KEY_BY_MODEL: dict[type[TideModel], str] = {
-    model: key for key, model in PLATFORM_CONFIG_MODELS.items()
-}
-
 
 def platform_root_extras(model: type[TideModel]) -> dict[str, Any]:
     """Return root-level schema extras for a platform configuration model."""

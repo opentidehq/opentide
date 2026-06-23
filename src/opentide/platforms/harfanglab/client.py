@@ -1,9 +1,7 @@
-import sys
-import os
 import requests
 import json
 from dataclasses import dataclass, asdict
-from typing import Literal, Optional, Sequence
+from typing import Optional
 from enum import Enum
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide

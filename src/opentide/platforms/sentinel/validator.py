@@ -1,11 +1,8 @@
 import os
-import sys
-import json
-from typing import Literal, Sequence
+from typing import Sequence
 from datetime import timedelta
-import pandas as pd
 from azure.identity import ClientSecretCredential, CredentialUnavailableError
-from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+from azure.monitor.query import LogsQueryClient
 from azure.core.exceptions import HttpResponseError, ClientAuthenticationError, ServiceRequestError
 from opentide.platforms.plugins import QueryValidator
 from opentide.core.debug import DebugEnvironment
@@ -45,7 +42,7 @@ class SentinelQueryValidator(QueryValidator):
             logger.debug('full_error_message', detail=str(error))
             try:
                 logger.critical('fatal_error', detail=f'The KQL query is invalid for : {mdr.name} ({mdr_uuid})', context_1=error.error.innererror['innererror']['message'], advice=f'Review the error and ensure your search can work in the relevant Sentinel workspace ({tenant_config.setup.workspace_name})')
-            except:
+            except Exception:
                 logger.error('not_able_to_parse_out_the_error_message', detail='This may mean that there is a more complex problem', advice='Will print out the full error package now')
                 print(error)
             os.environ['VALIDATION_ERROR_RAISED'] = 'True'

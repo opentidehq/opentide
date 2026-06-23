@@ -1,5 +1,3 @@
-import os
-import sys
 import json
 import pandas as pd
 from opentide.generation.framework import relations_downstream, relations_upstream, chain_resolver, get_vocab_entry, model_value, techniques_resolver
@@ -60,8 +58,6 @@ def relationships_graph(id):
     return graph_mermaid
 
 def chaining_graph(tvm):
-    graph = str()
-    chaining_structure = dict()
     chaining_data = dict()
     for vector in CHAINING_INDEX:
         for link in CHAINING_INDEX[vector]:
@@ -187,7 +183,7 @@ def chaining_graph(tvm):
                 count = 0
         br_data = ' '.join(br_data)
         return br_data
-    header_data = '\n'.join([f"{v}[{mermaid_sanitizer(mermaid_sanitizer(str(model_value(v, 'name'))))}]" for v in header])
+    header_data = '\n'.join([f"{v}[{mermaid_breakspace(mermaid_sanitizer(str(model_value(v, 'name'))))}]" for v in header])
     vector_links = '\n'.join(vector_links)
     diagram = f'flowchart LR\n\n{header_data}\n\n{killchain_subgraphs}\n\n{properties_graph}\n\n{vector_links}'
     if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.AzurePipeline:

@@ -1,4 +1,3 @@
-import sys
 from typing import Sequence
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DetectionPlatforms
@@ -35,6 +34,7 @@ class CrowdstrikeDeploy(RuleDeployer):
                 case _:
                     logger.critical('could_not_map_severity_to_expected_crowdstrike_values', detail='Expected Informational, Low, Medium, High or Critical')
                     raise Errors.TideConfigurationErrors('Invalid Severity')
+            raise AssertionError('unreachable')
         configuration = data.configurations.crowdstrike
         if not configuration:
             logger.critical('fatal_error', detail=f'[{data.metadata.uuid}] {data.name} does not contain a crowdstrike section')

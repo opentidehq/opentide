@@ -1,8 +1,6 @@
 import yaml
 import os
 import sys
-import toml
-import ast
 
 from pathlib import Path
 
@@ -159,7 +157,7 @@ class PromoteMDR:
                     PROMOTION_TARGET,
                     f"Valid statuses are in the statuses definitions : {', '.join(VALID_STATUSES)}",
                 )
-                exit()
+                sys.exit(1)
 
             if DEBUG:
                 MDR_FOLDER = ROOT / PATHS["rule"]
@@ -177,7 +175,8 @@ class PromoteMDR:
 
             for mdr in deployment:
                 system_promotion = {}
-                data = yaml.safe_load(open(mdr, encoding="utf-8"))
+                with open(mdr, encoding="utf-8") as mdr_file:
+                    data = yaml.safe_load(mdr_file)
                 mdr_name = data["name"]
 
                 for system in (conf := data["configurations"]):
@@ -208,6 +207,6 @@ class PromoteMDR:
             log(
                 "SKIP",
                 "MDR Promotion disabled in config",
-                advice="You can enable MDR Promotion under config>deployment>status>promotion",
+                "You can enable MDR Promotion under config>deployment>status>promotion",
             )
 

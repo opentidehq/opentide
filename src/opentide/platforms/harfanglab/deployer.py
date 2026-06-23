@@ -1,6 +1,4 @@
-import sys
 from typing import Sequence
-from dataclasses import asdict
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
@@ -95,8 +93,8 @@ class HarfangLabDeploy(RuleDeployer):
                 yara_lines.append(f'import "{module}"')
             yara_lines.append('')
         yara_lines.append(f'rule {yara_rule_name} {{')
-        if (author := data.metadata.author):
-            author = author
+        if data.metadata.author:
+            author = data.metadata.author
         elif (organisation := data.metadata.organisation):
             author = organisation.name
         else:
@@ -149,9 +147,6 @@ class HarfangLabDeploy(RuleDeployer):
         yara_lines.append('}')
         yara_content = '\n'.join(yara_lines)
         logger.debug('compiled_yara_rule_content', detail=f'\n{yara_content}')
-        enabled = True
-        if check_status(mdr_config.status) is StatusStrategy.DISABLEMENT:
-            enabled = False
         source_id = tenant_config.setup.source_id
         hl_status = HarfangLabService.map_maturity_to_hl_status(mdr_config.maturity)
         logger.debug('event', detail=f"Maturity mapping: '{mdr_config.maturity}' -> hl_status='{hl_status}'")

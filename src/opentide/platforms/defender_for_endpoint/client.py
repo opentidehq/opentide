@@ -1,11 +1,10 @@
-import sys
 import os
 import requests
 import json
 from dataclasses import dataclass, asdict
-from typing import Literal, ClassVar, Sequence, overload, Any, Optional
+from typing import Literal, Sequence, Any, Optional
 from opentide.core.typing import Never
-from enum import Enum, auto
+from enum import Enum
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
 from opentide.models.system_config import ConfigurationModels
@@ -171,7 +170,7 @@ class DefenderForEndpointService:
             if request.status_code == 201:
                 logger.info('created_rule_in_mde', detail=str(request.json()))
                 logger.warning('this_is_a_partial_deployment_check_the_mde_gui_to_see_the_availa')
-                os.environ['DEPLOYMENT_WARNING_RAISED']
+                os.environ['DEPLOYMENT_WARNING_RAISED'] = '1'
                 return int(request.json()['id'])
             else:
                 raise Errors.DetectionRuleCreationFailed

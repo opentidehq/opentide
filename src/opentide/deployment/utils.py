@@ -1,21 +1,13 @@
-import pandas as pd
-from git.repo import Repo
-from opentide.generation.framework import unroll_dot_dict
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
-from opentide.models.system_config import DeploymentBatch, SystemConfig, TenantDeployment
-from opentide.core.registry import OpenTide, DetectionPlatforms, ObjectLoader
+from opentide.core.registry import OpenTide
 from opentide.core.errors import Errors
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DebugHelpers
 from opentide.core.logging import log
-import sys
 import os
 import yaml
 import re
-from typing import MutableMapping, Sequence
-from enum import Enum, auto
 from pathlib import Path
-from dataclasses import asdict, dataclass
 
 
 
@@ -96,7 +88,8 @@ def make_deploy_plan(
         mdr_files = modified_mdr_files(plan)
 
     for rule in mdr_files:
-        data = yaml.safe_load(open(rule, encoding="utf-8"))
+        with open(rule, encoding="utf-8") as rule_file:
+            data = yaml.safe_load(rule_file)
         name = data["name"]
         conf_data = data["configurations"]
         mdr_uuid = data.get("uuid") or data["metadata"]["uuid"]
@@ -196,8 +189,6 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
     stage: used to filter the paths computed
 
     """
-    scope = list()
-
     TARGET_CI = CIEnvironment().environment
 
     repo = GitRepository().repository
@@ -405,7 +396,7 @@ def enabled_systems() -> list[str]:
         try:
             if SYSTEMS_CONFIGS_INDEX[system]["tide"].get("enabled") is True:
                 enabled_systems.append(system)
-        except:
+        except Exception:
             if SYSTEMS_CONFIGS_INDEX[system]["platform"].get("enabled") is True:
                 enabled_systems.append(system)
 

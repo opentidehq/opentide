@@ -1,8 +1,6 @@
 import yaml
 from pathlib import Path
 import os
-import toml
-import sys
 from opentide.documentation.core import get_icon
 from opentide.core.files import resolve_configurations, resolve_paths
 import structlog
@@ -28,7 +26,8 @@ def run():
                 if not model.endswith('.yaml'):
                     continue
                 model_path = Path(PATHS[meta_name]) / model
-                model_body = yaml.safe_load(open(model_path, encoding='utf-8'))
+                with open(model_path, encoding='utf-8') as handle:
+                    model_body = yaml.safe_load(handle)
                 uuid = model_body.get('metadata', {}).get('uuid')
                 file_name = model
                 name = model_body['name']

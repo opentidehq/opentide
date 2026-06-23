@@ -1,11 +1,15 @@
 """Detection platform registry — deployers, validators, and per-platform config."""
 from __future__ import annotations
 import importlib
-import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from collections.abc import Sequence
 from typing import Iterator, cast
 import structlog
+
+from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.rule import DetectionRule
+
 logger = structlog.get_logger('opentide.platforms.plugins')
 
 class PlatformEngineBase(ABC):
@@ -20,13 +24,21 @@ class ValidationEngine(PlatformEngineBase):
 class RuleDeployer(PlatformEngine):
 
     @abstractmethod
-    def deploy(self, deployment: list[str]):
+    def deploy(
+        self,
+        mdr_deployment: Sequence[DetectionRule] | list[str],
+        deployment_plan: DeploymentStrategy | None = None,
+    ) -> None:
         """Deploy detection rules onto the target platform."""
 
 class QueryValidator(ValidationEngine):
 
     @abstractmethod
-    def validate(self, deployment: list[str]):
+    def validate(
+        self,
+        mdr_deployment: Sequence[DetectionRule] | list[str],
+        deployment_plan: DeploymentStrategy | None = None,
+    ):
         """Validate that queries can be executed on the target platform."""
 
 class PlatformLoader:
@@ -37,7 +49,7 @@ class PlatformLoader:
         @staticmethod
         def declare():
             """Registers the engine class for a platform."""
-            ...
+            pass
 
     @staticmethod
     def import_engine(module_path: str) -> EngineModule:

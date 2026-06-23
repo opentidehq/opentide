@@ -1,14 +1,12 @@
 import pandas as pd
-import sys
 import json
-from typing import Literal, Union, Optional
+from typing import Literal, Optional
 
 
 from opentide.generation.pydantic_metaschema import lookup_schema_extra
 from opentide.generation.framework import (
     get_type,
     model_value,
-    get_vocab_entry,
     strip_vocab_stage_prefix,
 )
 from opentide.core.logging import log
@@ -173,6 +171,7 @@ def get_icon(
             for entry in vocabulary.entries.values():
                 if entry.get("legacy") == value:
                     return entry.icon or ""
+            return ""
         else:
             return ""
     else:
@@ -248,9 +247,8 @@ def backlink_resolver(model_uuid:str,
     hover: when False, omits the title tooltip from the markdown link to reduce output size
     """
     model_type = get_type(model_uuid)
-    file_link = backlink_name = icon = str()
-
-        
+    file_link = ""
+    backlink_name = ""
 
     model_data:dict = MODELS_INDEX[model_type][model_uuid]
     icon = ICONS[model_type]
@@ -300,7 +298,6 @@ def backlink_resolver(model_uuid:str,
             mdr_statuses(model_uuid)
         )
         mdr_description = model_value(model_uuid, "description") or ""
-        mdr_description = mdr_description
         hover_content += f"&#013;&#010;&#013;&#010;{mdr_description}"
         file_link = f"{doc_path}{icon} {model_name}"
     else:
@@ -410,14 +407,7 @@ def get_field_title(field, metaschema, icon=True):
                                 field, definition.get("properties"), icon=icon
                             )
 
-
-def get_vocab_description(vocab, key):
-
-    description = get_vocab_entry(vocab, key, "description")
-    description = description.replace("\n", " ")
-
-    return description
-
+    return ""
 
 def make_vocab_link(field, key):
     if field not in VOCAB_INDEX:
@@ -446,7 +436,7 @@ def model_value_doc(model_id, key, with_icon=False, max_chars=None, legacy=False
     """
     Version of model_value() that add icon and data enrichment functions
     """
-    from opentide.generation.framework import get_type, model_value
+    from opentide.generation.framework import model_value
 
     value = model_value(model_id, key)
 
@@ -475,14 +465,12 @@ def name_subschema_doc(
 ) -> str:
     
     SUFFIX = " Schema"
-    
-    subschema_name = str()
-    composition_name = str()
+
     recomp_config = CONFIG_INDEX[recomposition][identifier]
-    
+
     try:
         composition_name = recomp_config["tide"].get("name")
-    except: 
+    except Exception:
         composition_name = recomp_config["platform"].get("name")
 
     if composition_name:

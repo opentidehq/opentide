@@ -1,5 +1,4 @@
 import json
-import sys
 from typing import Sequence
 from opentide.platforms.sentinel.client import SentinelService, iso_duration_timedelta
 from opentide.generation.framework import get_vocab_entry, techniques_resolver

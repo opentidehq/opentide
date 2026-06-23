@@ -8,9 +8,6 @@ from typing import Any, cast
 
 from opentide.core import index_manager as index_mod
 from opentide.core import runtime
-from opentide.core.environment import DebugHelpers  # noqa: F401
-from opentide.loading.compat import ObjectLoader  # noqa: F401
-from opentide.models.deployment_enums import DetectionPlatforms  # noqa: F401
 from opentide.models.objective import DetectionObjective
 from opentide.models.results import ValidationResult
 from opentide.models.rule import DetectionRule
@@ -548,3 +545,19 @@ def _snake_case(class_name: str) -> str:
     if current:
         parts.append(current.lower())
     return "_".join(parts)
+
+
+_LEGACY_EXPORT_MODULES = {
+    "DebugHelpers": "opentide.core.environment",
+    "ObjectLoader": "opentide.loading.compat",
+    "DetectionPlatforms": "opentide.models.deployment_enums",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module_path = _LEGACY_EXPORT_MODULES.get(name)
+    if module_path is not None:
+        import importlib
+
+        return getattr(importlib.import_module(module_path), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

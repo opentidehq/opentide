@@ -70,10 +70,10 @@ def test_schema_version_chain_register_errors() -> None:
         chain.register(
             SchemaVersion.parse("objective::1.0"),
             target,
-            lambda data: dict(data),
+            dict,
         )
     with pytest.raises(ValueError, match="must advance"):
-        chain.register(target, source, lambda data: dict(data))
+        chain.register(target, source, dict)
 
 
 def test_schema_version_chain_missing_migration() -> None:

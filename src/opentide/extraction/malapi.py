@@ -3,8 +3,6 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import yaml
 from pathlib import Path
-import os
-import sys
 from datetime import datetime
 from opentide.core.files import IndentFullDumper
 from opentide.core.registry import OpenTide
