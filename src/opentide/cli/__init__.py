@@ -11,7 +11,6 @@ from opentide.cli.enums import (
     DetectionPlatform,
     DocumentScope,
     ExportTarget,
-    ExtractFramework,
     ExtractImport,
     GeneratePhase,
     ValidateCheck,
@@ -298,51 +297,17 @@ def export_playbook_map(ctx: typer.Context) -> None:
     emit_success(cli, run_export(cli, target=ExportTarget.playbook_map))
 
 
-extract_app = typer.Typer(help="External framework ingestion")
+extract_app = typer.Typer(help="Platform rule imports")
 app.add_typer(extract_app, name="extract")
 
 
-@extract_app.command("attack")
-def extract_attack(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_extract(cli, framework=ExtractFramework.attack))
-
-
-@extract_app.command("d3fend")
-def extract_d3fend(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_extract(cli, framework=ExtractFramework.d3fend))
-
-
-@extract_app.command("engage")
-def extract_engage(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_extract(cli, framework=ExtractFramework.engage))
-
-
-@extract_app.command("nist")
-def extract_nist(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_extract(cli, framework=ExtractFramework.nist))
-
-
-@extract_app.command("react")
-def extract_react(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_extract(cli, framework=ExtractFramework.react))
-
-
-import_app = typer.Typer(help="Platform imports")
-extract_app.add_typer(import_app, name="import")
-
-
-@import_app.command("sentinel")
+@extract_app.command("sentinel")
 def import_sentinel(ctx: typer.Context) -> None:
     cli = get_context(ctx)
     emit_success(cli, run_extract(cli, import_target=ExtractImport.sentinel))
 
 
-@import_app.command("defender")
+@extract_app.command("defender")
 def import_defender(ctx: typer.Context) -> None:
     cli = get_context(ctx)
     emit_success(cli, run_extract(cli, import_target=ExtractImport.defender))
