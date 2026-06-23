@@ -1,41 +1,41 @@
-import pandas as pd
 import os
-from pathlib import Path
-import sys
 import shutil
 import time
+from pathlib import Path
 
+import pandas as pd
+import structlog
 
-from opentide.generation.pydantic_metaschema import lookup_schema_extra
-from opentide.generation.framework import techniques_resolver
+from opentide.core.files import safe_file_name
+from opentide.core.logging.console import emit_section
+from opentide.core.registry import OpenTide
+from opentide.core.root import get_repo_root
+from opentide.deployment import CIEnvironment, enabled_systems
+from opentide.documentation.components import (
+    metadata_doc,
+    reference_doc,
+    relations_table,
+    status_enriched,
+    tlp_doc,
+)
 from opentide.documentation.core import (
+    DOCUMENTATION_TARGET,
+    FOLD,
+    TARGET_WITH_DASH_PATHS,
+    UUID_PERMALINKS,
+    GitlabMarkdown,
     get_field_title,
     get_icon,
-    rich_attack_links,
     get_vocab_description,
-    GitlabMarkdown,
     model_value_doc,
-    FOLD,
+    rich_attack_links,
 )
-from opentide.core.files import safe_file_name
-from opentide.documentation.templates.mdr import TEMPLATEv3
-from opentide.documentation.components import (
-    tlp_doc,
-    metadata_doc,
-    relations_table,
-    reference_doc,
-    status_enriched
-)
-from opentide.core.registry import OpenTide
-from opentide.core.logging import log
 from opentide.documentation.graphs import relationships_graph
-from opentide.deployment import enabled_systems, CIEnvironment
-from opentide.documentation.core import (
-    TARGET_WITH_DASH_PATHS,
-    DOCUMENTATION_TARGET,
-    UUID_PERMALINKS,
-)
-from opentide.core.root import get_repo_root
+from opentide.documentation.templates.mdr import TEMPLATEv3
+from opentide.generation.framework import techniques_resolver
+from opentide.generation.pydantic_metaschema import lookup_schema_extra
+
+logger = structlog.get_logger("opentide.documentation.mdr")
 
 ROOT = get_repo_root()
 
@@ -93,7 +93,7 @@ def documentation(mdr):
                 if value is not None
             }
 
-    doc = str()
+    doc = ""
     mdr_configs = mdr["configurations"]
 
     name = f"{MDR_ICON} {mdr['name']}"
@@ -207,10 +207,10 @@ def documentation(mdr):
         references = ""
 
     # Add enriched configuration data
-    configurations = str()
+    configurations = ""
     
     # Prepare queries doc
-    queries = str()
+    queries = ""
 
     for s in mdr_configs:
         config_data = list()
@@ -339,8 +339,8 @@ def documentation(mdr):
 
 def run():
 
-    log("TITLE", "MDR Documentation")
-    log("INFO", "Generates markdown documentation for Managed Detection Rules v3.")
+    emit_section("MDR Documentation")
+    logger.info("generates_markdown_documentation_for_managed_detection_rules_v3")
 
     # Remove all previous docs
     if os.path.exists(MDR_WIKI_PATH):
@@ -358,15 +358,11 @@ def run():
         mdr_data = rule.model_dump(by_alias=True, exclude_none=True)
         mdr_name = rule.name
 
-        log("ONGOING",
-            "Generating MDR Documentation",
-            mdr_name,
-            mdr_uuid
-            )
+        logger.info("generating_mdr_documentation", arg0=mdr_name, advice=mdr_uuid)
 
         if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI and UUID_PERMALINKS:
-            log("INFO", "Generating docs with UUID as file name")
-            log("INFO", "Target CI is", str(DOCUMENTATION_TARGET))
+            logger.info("generating_docs_with_uuid_as_file_name")
+            logger.info("target_ci_is", detail=str(DOCUMENTATION_TARGET))
             doc_file_name = mdr_data.get("metadata").get("uuid")+ ".md"
         else:
             doc_name = mdr_data.get("name").replace("_", " ")

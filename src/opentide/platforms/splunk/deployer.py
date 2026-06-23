@@ -15,7 +15,9 @@ from opentide.platforms.splunk.client import (
     splunk_timerange,
 )
 from opentide.generation.pydantic_metaschema import lookup_schema_extra
-from opentide.core.logging import log
+import structlog
+
+logger = structlog.get_logger(__name__)
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
 from opentide.generation.framework import techniques_resolver
@@ -102,7 +104,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         status = mdr_splunk["status"]
         if check_status(status) is StatusStrategy.DISABLEMENT:
             config["disabled"] = "true"
-            log("INFO", "🔕 Configuring saved search as disabled")
+            logger.info("configuring_saved_search_as_disabled")
 
         # Alert Severity Configuration
         config["alert.severity"] = self.ALERT_SEVERITY_MAPPING[
@@ -217,26 +219,24 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                 allowed_actions_config = status_modifiers.pop("allowed_actions")
                 # If explicitely set to False, we blank the actions allowed
                 if allowed_actions_config in [False, None]:
-                    log(
-                        "INFO",
-                        "This MDR will not have any action enabled in Splunk, as actions_enabled is set to False",
-                        status,
+                    logger.info(
+                        "mdr_actions_disabled_in_splunk",
+                        status=status,
                     )
                     status_allowed_actions = []
                 else:
-                    log(
-                        "INFO",
-                        "The enabled actions for this MDR will be constrained by the status modifier actions_enabled",
-                        allowed_actions_config,
+                    logger.info(
+                        "mdr_actions_constrained_by_status",
+                        allowed_actions=allowed_actions_config,
                     )
                     status_allowed_actions = allowed_actions_config
 
             # We pop out allowed_actions, remainder are attributes
             if status_modifiers:
-                log(
-                    "INFO",
-                    f"Applying status modifiers for {status}",
-                    str(status_modifiers),
+                logger.info(
+                    "status_modifiers_applied",
+                    status=status,
+                    modifiers=str(status_modifiers),
                 )
                 mdr_config.update(status_modifiers)
 
@@ -298,7 +298,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         deploy_config.update(actions_config)
         deploy_config["search"] = query
 
-        log("INFO", "The following configuration was compiled")
+        logger.info("compiled_splunk_configuration")
         print(json.dumps(deploy_config, indent=1, sort_keys=True))
 
         # In Splunk, some configurations are coupled with others. The update()
@@ -323,37 +323,36 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         # Check if saved search already exists or create a new one
         try:
             selected_search = service.saved_searches[name]
-            log("INFO", "Found existing saved search", name)
+            logger.info("found_existing_saved_search", name=name)
         except:
             # Special case for removed rules, do not bother with recreating
             if check_status(status) is StatusStrategy.DELETION:
-                log(
-                    "SKIP",
-                    f"Saved search was already non existent, no action required",
-                    name
+                logger.info(
+                    "saved_search_already_absent",
+                    name=name,
                 )
                 return None
 
             # For all other rules, create a new saved search
             else:
-                log("ONGOING", "Will create a new saved search", name)
+                logger.info("creating_new_saved_search", name=name)
                 selected_search = service.saved_searches.create(name, search=query)
 
         # Steps to handle REMOVED rules
         if check_status(status) is StatusStrategy.DELETION:
             service.saved_searches.delete(name)
-            log("WARNING", f"Deleted splunk alert", name)
+            logger.warning("splunk_alert_deleted", name=name)
             return None
 
         # Debugging output; sets attribute one by one
         if self.DEBUG_STEP:
             for k, v in deploy_config.items():
-                log("ONGOING", f"Updating value {k} with {v}")
+                logger.info("updating_saved_search_value", key=k, value=v)
                 selected_search.update(**{k: v})
 
             if second_stage:
                 for k, v in second_stage.items():
-                    log("ONGOING", f"Updating value {k} with {v}")
+                    logger.info("updating_saved_search_value", key=k, value=v)
                     selected_search.update(**{k: v})
 
         else:
@@ -362,7 +361,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             # Rolling out attributes with dependencies that will block the deployment if out of order.
             if second_stage:
                 selected_search.update(**second_stage)
-        log("SUCCESS", "Deployed on Splunk", name)
+        logger.info("deployed_on_splunk", name=name)
 
         return True
 
@@ -389,12 +388,13 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             # the orchestrator will filter for the platform)
             if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"].keys():
                 # Connection routine, if not connected yet.
-                log("ONGOING", f"🔥 Currently deploying MDR {mdr_data['name']}...")
+                logger.info("deploying_mdr", mdr_name=mdr_data["name"])
                 self.deploy_mdr(mdr_data, service)
             else:
-                log(
-                    "SKIP",
-                    f"🛑 Skipping {mdr_data.get('name')} as does not contain a Splunk rule",
+                logger.info(
+                    "mdr_skipped",
+                    mdr_name=mdr_data.get("name"),
+                    reason="no Splunk rule configuration",
                 )
 
 def declare():

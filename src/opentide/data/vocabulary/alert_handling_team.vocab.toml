@@ -1,0 +1,21 @@
+name = "Alert Handling Team"
+field = "alert_handling_team"
+description = "Team responsible to handle incoming security alerts"
+icon = "\u200d🚒"
+key = "name"
+[[keys]]
+name = "CATCH"
+description = "Cybersecurity Analytics, Trending, Correlations & Hunting"
+
+[[keys]]
+name = "CSIRC"
+description = "Computer Security Incident Response Centre"
+
+[[keys]]
+name = "MARTI"
+description = "Malware Analysis, Research and Threat Intelligence"
+
+[[keys]]
+name = "S1-SA"
+description = "Security Assurance and Vulnerability Management"
+

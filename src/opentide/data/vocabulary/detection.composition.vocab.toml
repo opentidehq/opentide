@@ -1,0 +1,34 @@
+name = "Detection Composition Strategy"
+field = "detection.composition"
+description = "Describes how signals should be used in conjuntion, or separated"
+key = "name"
+[[keys]]
+id = "9fd1e42c-ff0d-468c-988c-8f0571d8f0f9"
+name = "Independent"
+description = "No composition performed, each signal can be treated as \nindependent, unrelated alerts.\n"
+
+[[keys]]
+id = "975b9fb7-b08e-40c2-b637-d099535c4029"
+name = "Combined"
+description = "All signals triggered for any entity can be grouped in a single signal. \nThis may be extremely useful to identify pan-environment compromises.\n"
+
+[[keys]]
+id = "9fd1e42c-ff0d-468c-988c-8f0571d8f0f9"
+name = "Threshold"
+description = "Each signal must be considered separately - but only when a certain amount \nof repeated alerts triggers within a span on time.\n"
+
+[[keys]]
+id = "e9e5a900-8f5a-4c60-9986-055886d22738"
+name = "Entity"
+description = "When the same entity is appearing across alerts raised by signals, \nthey should be grouped around the entity into a single incident, case, \nor higher-order alert (alert of alert)\n"
+
+[[keys]]
+id = "0812b927-9eee-439f-879c-b7cdc6c1bfc5"
+name = "Sequence"
+description = "Signals must be tracked across time, and correlated based on a succession of events. \nParticularly useful for weak signals, but which assembled over time with reinforcing \nsignal provide a high fidelity detection - for example, anomalous logons.\n"
+
+[[keys]]
+id = "c5a6f86a-410e-4f98-91b3-ef366101ff7e"
+name = "Risk"
+description = "Advanced strategy where signals contribute a risk score over time to entities \nin a permanent risk store. This allows weak and strong signals to coexist, while \nresponse switches from processing alerts to process a bundle of contributing signals \naround a high risk entity. This is essentially an evolution of the `Entity` and \n`Threshold` strategy, and adds a layer of risk calculation around entities using \nrepeated signals as risk contributors. Different signals may contribute differentially, \nand also include decaying factors."
+

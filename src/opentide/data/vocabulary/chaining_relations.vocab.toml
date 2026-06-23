@@ -1,0 +1,72 @@
+name = "Vector Chaining Relationship"
+field = "chaining_relations"
+description = "Logical relation category between two threat vectors, building block of TVM Chaining"
+icon = "🪢"
+key = "name"
+[[stages]]
+id = "sequence"
+name = "Sequence"
+icon = "🎞️"
+description = "Relative time or ordering of TVM execution"
+
+[[stages]]
+id = "atomicity"
+name = "Atomicity"
+icon = "⚛️"
+description = "TVMs may overlap in concepts, with a scope or granularity hierarchy"
+
+[[stages]]
+id = "support"
+name = "Supportive"
+icon = "⚓"
+description = "TVMs which successful execution allows other TVMs to be more easily performed,\nor produce larger impact.\n"
+
+[[keys]]
+name = "preceeds"
+icon = "⏭️"
+"tide.vocab.stages" = "sequence"
+"tide.vocab.relation.type" = "from"
+description = "The following TVM is occuring **AFTER** this TVM object has been performed.\n"
+
+[[keys]]
+name = "succeeds"
+icon = "⏮️"
+"tide.vocab.stages" = "sequence"
+"tide.vocab.relation.type" = "to"
+description = "The following TVM is occuring **BEFORE** this TVM object has been performed.\n"
+
+[[keys]]
+name = "implemented"
+icon = "👑"
+"tide.vocab.stages" = "atomicity"
+"tide.vocab.relation.type" = "from"
+description = "The following TVM is being performed in this TVM object in a more specific way\n"
+
+[[keys]]
+name = "implements"
+icon = "♟️"
+"tide.vocab.stages" = "atomicity"
+"tide.vocab.relation.type" = "to"
+description = "The following TVM is performing this TVM object in a more specific way\n"
+
+[[keys]]
+name = "enabled"
+icon = "⚡"
+"tide.vocab.stages" = "support"
+"tide.vocab.relation.type" = "from"
+description = "The following TVM is allowed by this TVM object to be more easily performed\n"
+
+[[keys]]
+name = "enabling"
+icon = "🙌"
+"tide.vocab.stages" = "support"
+"tide.vocab.relation.type" = "to"
+description = "The following TVM is allowing this TVM object to be more easily performed\n"
+
+[[keys]]
+name = "synergize"
+icon = "🤝"
+"tide.vocab.stages" = "support"
+"tide.vocab.relation.type" = "bidirectional"
+description = "Both TVM supports each other in performing adversary operations"
+

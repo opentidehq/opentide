@@ -82,12 +82,11 @@ class PlatformsRegistry:
             self._deployers[name] = deployer
         if validator is not None:
             self._validators[name] = validator
-
         existing = self._instances.get(name)
         platform = Platform(
             name=name,
-            enabled=enabled if enabled is not None else (existing.enabled if existing else False),
-            config=config if config is not None else (existing.config if existing else None),
+            enabled=enabled if enabled is not None else existing.enabled if existing else False,
+            config=config if config is not None else existing.config if existing else None,
             deployer=self._deployers.get(name),
             validator=self._validators.get(name),
         )
@@ -108,11 +107,9 @@ class PlatformsRegistry:
     def _ensure_loaded(self) -> None:
         if self._loaded:
             return
-
         _ensure_repo_on_path()
         active = set(enabled_systems())
         eps = entry_points(group="opentide.platforms")
-
         for ep in eps:
             system = ep.name.replace("-", "_")
             try:
@@ -120,16 +117,13 @@ class PlatformsRegistry:
                 self._deployers[system] = deployer
             except Exception:
                 pass
-
             validator = self._load_validator(system)
             if validator is not None:
                 self._validators[system] = validator
-
             try:
                 config = build_system_config(system)
             except Exception:
                 config = None
-
             self._instances[system] = Platform(
                 name=system,
                 enabled=system in active,
@@ -137,7 +131,6 @@ class PlatformsRegistry:
                 deployer=self._deployers.get(system),
                 validator=self._validators.get(system),
             )
-
         self._loaded = True
 
     def __getitem__(self, name: str) -> Platform:
