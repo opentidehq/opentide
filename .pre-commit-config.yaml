@@ -1,4 +1,25 @@
+# Install: uv sync --group dev && uv run pre-commit install --install-hooks
+#
+# pre-commit  — fast checks on staged files (seconds)
+# pre-push    — scripts/ci-local.sh --full when code/CI config changes (matches CI:
+#               lint + pytest + coverage gate from pyproject.toml). Do not swap
+#               for pytest --no-cov or the coverage threshold will only fail on CI.
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]  # allow custom YAML tags in GitHub Actions
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.6
     hooks:
@@ -14,3 +35,19 @@ repos:
         language: system
         pass_filenames: false
         files: ^src/opentide/
+
+      - id: ci-local-full
+        name: CI parity before push (lint, tests, coverage gate)
+        entry: scripts/ci-local.sh --full
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(src/opentide/|tests/|pyproject\.toml|uv\.lock|\.github/workflows/ci\.yml|scripts/ci-local\.sh|\.pre-commit-config\.yaml)$
+
+      - id: mkdocs-strict
+        name: mkdocs build --strict (docs only)
+        entry: bash -c 'uv sync --group docs --quiet && uv run mkdocs build --strict'
+        language: system
+        pass_filenames: false
+        files: ^(docs/|mkdocs\.yml)
+        stages: [pre-push]

@@ -1,53 +1,24 @@
-# Agent Fleet Orchestration — Project TideKit
+# OpenTide — Agent Guide
 
-**OpenTide** (`opentide`) is the PyPI-packaged successor to [CoreTide](https://github.com/OpenTideHQ/CoreTide). This document governs how autonomous agents execute the TideKit transformation programme.
+**OpenTide** (`opentide`) is the DetectionOps engine — a versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across seven security platforms.
 
-**Mandatory:** All TideKit **implementation** pull requests target [OpenTideHQ/opentide](https://github.com/OpenTideHQ/opentide) only. [OpenTideHQ/CoreTide](https://github.com/OpenTideHQ/CoreTide) issues track programme work; the CoreTide repo remains the spec/source baseline — do not open feature or refactor PRs there (docs and issue updates only).
+**Agent entry point:** This file (`AGENTS.md`), then domain skills in [`.agents/skills/`](.agents/skills/) when a task matches an installed skill.
 
-> **Tracking issues**: [Epic #60](https://github.com/OpenTideHQ/CoreTide/issues/60), phases [#61–#71](https://github.com/OpenTideHQ/CoreTide/issues?q=is%3Aissue+milestone%3A%22Project+TideKit%22).
+**Repository:** [OpenTideHQ/opentide](https://github.com/OpenTideHQ/opentide) — all implementation work lands here. Base branch: `development`.
 
-## Fleet Ground Rules
+## Ground rules
 
 | Rule | Detail |
 |------|--------|
-| Implementation repo | [OpenTideHQ/opentide](https://github.com/OpenTideHQ/opentide) **only** — never TideKit code on CoreTide |
-| Tracking / baseline | [OpenTideHQ/CoreTide](https://github.com/OpenTideHQ/CoreTide) issues + spec baseline; CoreTide PRs limited to docs/issues |
-| Base branch | `development` (in **opentide**) |
-| One phase = one agent = one PR | Phases 6 (#67) and 7 (#68) may run in parallel after Phase 5 |
-| Start gate | All **Depends on** phases merged |
-| PR | Target `development` on **opentide**; link/close the CoreTide phase issue (#61–#71) |
+| Repo | [OpenTideHQ/opentide](https://github.com/OpenTideHQ/opentide) only |
+| Base branch | `development` |
+| PRs | Target `development`; link issues with `Closes #<N>` (opentide issues) |
+| Scope | One concern per PR — no drive-by refactors |
+| Commits | [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `ci` |
 
-## Phase DAG
+Branch naming: `<type>/<short-slug>` (e.g. `feat/sentinel-query-cache`, `fix/cli-init-path`).
 
-```
-#61 → #62 → #63 → #64 → #65 → #66 ─┬→ #67 ─┐
-                                    └→ #68 ─┴→ #69 → #71
-```
-
-| Phase | Issue | Start gate |
-|-------|-------|------------|
-| 0 | [#61](https://github.com/OpenTideHQ/CoreTide/issues/61) | immediately |
-| 1 | [#62](https://github.com/OpenTideHQ/CoreTide/issues/62) | #61 |
-| 2 | [#63](https://github.com/OpenTideHQ/CoreTide/issues/63) | #62 |
-| 3 | [#64](https://github.com/OpenTideHQ/CoreTide/issues/64) | #63 |
-| 4 | [#65](https://github.com/OpenTideHQ/CoreTide/issues/65) | #64 |
-| 5 | [#66](https://github.com/OpenTideHQ/CoreTide/issues/66) | #65 |
-| 6 | [#67](https://github.com/OpenTideHQ/CoreTide/issues/67) | #66 |
-| 7 | [#68](https://github.com/OpenTideHQ/CoreTide/issues/68) | #66 |
-| 8 | [#69](https://github.com/OpenTideHQ/CoreTide/issues/69) | #67 + #68 |
-| 9 | [#71](https://github.com/OpenTideHQ/CoreTide/issues/71) | #69 |
-
-[#70](https://github.com/OpenTideHQ/CoreTide/issues/70) is a closed duplicate of #65.
-
-## Branch Naming
-
-`refactor/tidekit-phase<N>-<slug>` or `feat/tidekit-phase<N>-<slug>` — see each issue's Agent Execution Contract.
-
-## Conventional Commits
-
-`<type>(<scope>): <description>` — types: feat, fix, refactor, docs, chore, test, ci.
-
-## Platform Capability Matrix (7 deployers / 5 validators)
+## Platform capability matrix (7 deployers / 5 validators)
 
 | Platform | Deploy | Query validate |
 |----------|:------:|:--------------:|
@@ -59,108 +30,96 @@
 | CrowdStrike | ✅ | ❌ |
 | HarfangLab | ✅ | ❌ |
 
-## Agent Workflow
+CrowdStrike and HarfangLab: `can_validate is False` — return `supported: False` for query validation, never fake results.
 
-1. Read epic #60 and lowest unblocked phase issue
-2. Rebase on `development`, create contract branch
-3. Implement acceptance criteria only
-4. Run verification commands
-5. Open PR with `Closes #<N>`
-6. Stop — do not bundle phases
+## Agent workflow
 
-## Verification by Phase
-
-```bash
-# Phase 0 (#61)
-rg -i '\bcdm\b|\bbdr\b' --glob '!*.md' | wc -l
-python -c "from opentide import OpenTide"
-
-# Phase 5 (#66)
-uv sync --group dev && uv run python -c "from opentide import OpenTide"
-
-# Phase 9 (#71)
-uv sync --group dev && uv run pytest --cov=opentide --cov-fail-under=80
-```
+1. Read the opentide issue (or task brief) and confirm acceptance criteria
+2. `uv sync --group dev` and `uv run pre-commit install --install-hooks` (first time)
+3. Branch from `development`
+4. Implement acceptance criteria only
+5. Run `scripts/ci-local.sh --full` before opening a PR
+6. Open PR with summary, test plan, and `Closes #<N>`
+7. Address review feedback; do not expand scope mid-PR
 
 ## Developer toolchain (uv + ruff + ty)
 
-Dependency management uses [uv](https://docs.astral.sh/uv/). A lockfile (`uv.lock`) is committed; sync before any local work:
-
 ```bash
-uv sync --group dev          # install runtime + dev deps into .venv
-uv run pytest tests/ -v      # run tests
-uv run ruff check src tests  # lint
-uv run ruff format src tests # format
-uv run ty check src/opentide # Astral ty (sole type checker)
+uv sync --group dev
+uv run pytest tests/ -v
+uv run ruff check tests src/opentide
+uv run ruff format tests src/opentide
+uv run ty check src/opentide
 ```
 
-CI runs `uv sync --group dev` on Python **3.10–3.14**. **ty** is the type checker in CI and pre-commit; **ruff** handles lint and format.
+CI runs `uv sync --group dev` on Python **3.10–3.14** (full matrix on every PR and push).
+
+### Fast feedback — avoid waiting on CI
+
+```bash
+uv run pre-commit install --install-hooks   # once: pre-commit + pre-push hooks
+scripts/ci-local.sh --quick                 # lint + ty (~seconds)
+scripts/ci-local.sh                           # lint + pytest
+scripts/ci-local.sh --full                    # lint + pytest + coverage gate (pyproject.toml)
+```
+
+| Hook | Runs |
+|------|------|
+| **pre-commit** | whitespace/YAML/TOML, ruff, ruff-format, ty (staged files) |
+| **pre-push** | `scripts/ci-local.sh --full` when code or CI config changes — **includes coverage gate**; mkdocs `--strict` when `docs/` changes |
+
+`--no-cov` is for fast iteration only (`ci-local.sh` default / matrix cells other than 3.14). Never use it in pre-push hooks.
+
+Targeted iteration:
+
+```bash
+uv run pytest tests/test_core/ -x -q
+uv run pytest -k "test_sentinel" -x -q
+```
+
+Remote CI: lint and test matrix run **in parallel**; stale runs are cancelled on new pushes. Coverage runs on the latest supported Python (**3.14**, see `COVERAGE_PYTHON` in `ci.yml`) in one matrix cell only.
+
+### Agent skills (npx skills)
+
+| Skill | Use when |
+|-------|----------|
+| `uv` | Dependency groups, `uv run`, lockfile |
+| `uv-package-manager` | Advanced uv workflows |
+| `python-testing-patterns` | pytest fixtures, parametrisation, mocks |
+| `pytest-coverage` | Coverage gaps, `--cov-fail-under` |
+| `ruff-recursive-fix` | Ruff lint failures |
+| `github-actions-templates` | `.github/workflows/` |
+| `python-mcp-server-generator` | `opentide.mcp_server` |
+
+```bash
+npx skills find python
+npx skills add <owner/repo> --skill <name> --agent cursor -y
+npx skills list
+```
+
+### Code quality scope
+
+Ruff and ty **exclude** large ported platform/deployer modules until those areas are actively cleaned up. Do not expand lint scope in unrelated PRs. When touching excluded paths, still run `scripts/ci-local.sh` — tests cover behaviour.
 
 ## Repository layout
 
 ```
-src/opentide/     # PyPI package (models, CLI, MCP, bundled data)
-src/Engines/      # Runtime deployers/validators (shipped in wheel; migrating into opentide)
+src/opentide/     # PyPI package (models, CLI, MCP, platforms, bundled data)
 tests/
 docs/
-scripts/
+scripts/          # ci-local.sh, migration utilities
+.agents/skills/   # Shared agent skills
 ```
 
-Bundled data lives under `src/opentide/data/` (configurations, vocabulary, external, log_sources). There are **no** legacy root folders (`Configurations/`, `Framework/`, `External/`, `Orchestration/`, `Engines/` at repo root).
+Bundled data: `src/opentide/data/`. No legacy root folders (`Configurations/`, `Engines/`, etc.).
 
-Client detection repositories get CI from **`opentide init --ci github|gitlab|azure`** or **`opentide ci generate`** — generated pipeline files call the `opentide` CLI via PyPI install. Do not copy or maintain CoreTide-coupled workflow trees in client repos.
+Client detection repos use **`opentide init --ci github|gitlab|azure`** or **`opentide ci generate`** — pipelines call the PyPI package, not submodule workflows.
 
-Structured logging lives in `opentide.core.logging` (structlog + Rich). Legacy `src/Engines/modules/logs.py` is a thin shim — new code must import from `opentide.core.logging`.
+Logging: `opentide.core.logging` (structlog + Rich). New code must not use legacy `print()` for operational output.
 
-Full commands in each issue and [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md).
+## Docs
 
-## Backlog sync (mandatory)
+- [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md) — test strategy and coverage
+- [`docs/migration/MIGRATION.md`](docs/migration/MIGRATION.md) — client repo migration
 
-Every agent **must** keep [OpenTideHQ/CoreTide](https://github.com/OpenTideHQ/CoreTide) TideKit issues current while working in this repo. Planning stays on CoreTide; implementation lands here.
-
-### When to update
-
-| Event | Action |
-|-------|--------|
-| Open a PR | Comment on the parent phase issue (#61–#71) with PR URL and checklist progress |
-| Push significant progress | Update the same phase-issue comment or add a short progress reply |
-| Merge a phase PR to `development` | Mark phase **Merged** on its issue; refresh epic [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) orchestration snapshot |
-| Blocked on human action | Note blocker on epic #60 and the phase issue |
-
-### How
-
-```bash
-gh issue comment <phase-issue> --repo OpenTideHQ/CoreTide --body "$(cat <<'EOF'
-## Status: PR open
-
-**PR**: https://github.com/OpenTideHQ/opentide/pull/<N>
-**Branch**: `<branch>`
-**Phase progress**:
-- [x] CDM removed from configs
-- [ ] IndentFullDumper consolidated
-- [ ] CI green
-
-**Verification**: `pytest tests/ -v` — 4 passed
-EOF
-)"
-```
-
-After a phase merges, post a fresh orchestration snapshot on epic #60 (see [`.github/instructions/backlog-sync.instructions.md`](.github/instructions/backlog-sync.instructions.md)).
-
-### Labels
-
-Keep `tidekit` and `agent-ready` on groomed phase issues. Do not remove labels when commenting.
-
-### Status values
-
-Use exactly one of: **Not started** · **In progress** · **PR open** · **Merged**
-
-Do **not** close phase issues until the corresponding work is merged to `development` in this repo.
-
-## Supporting Docs
-
-- [`.github/copilot-instructions.md`](.github/copilot-instructions.md)
-- [`.github/instructions/backlog-sync.instructions.md`](.github/instructions/backlog-sync.instructions.md)
-- [`.github/instructions/tidekit-phase.instructions.md`](.github/instructions/tidekit-phase.instructions.md)
-- [`.github/instructions/testing.instructions.md`](.github/instructions/testing.instructions.md)
-- [`docs/migration/MIGRATION.md`](docs/migration/MIGRATION.md)
+TideKit programme history (CoreTide → OpenTide migration) is archived in migration docs — not part of day-to-day agent workflow.

@@ -5,6 +5,10 @@ on:
     branches: [development]
   workflow_dispatch:
 
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 

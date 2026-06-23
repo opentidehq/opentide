@@ -93,7 +93,7 @@ def _scaffold_directories(target: Path) -> None:
         "External",
         ".vscode",
         ".github/workflows",
-        ".github/instructions",
+        ".agents/skills",
     ]
     for rel in dirs:
         (target / rel).mkdir(parents=True, exist_ok=True)
@@ -115,10 +115,15 @@ def _copy_ai_assets(target: Path, options: InitOptions) -> None:
         if src.is_file():
             shutil.copy2(src, target / ".github" / "copilot-instructions.md")
     if options.agent_skills:
-        src_dir = root / ".github" / "instructions"
-        if src_dir.is_dir():
-            for skill in src_dir.glob("*.instructions.md"):
-                shutil.copy2(skill, target / ".github" / "instructions" / skill.name)
+        skills_src = root / ".agents" / "skills"
+        skills_dst = target / ".agents" / "skills"
+        if skills_src.is_dir():
+            for path in skills_src.rglob("*"):
+                if path.is_file():
+                    rel = path.relative_to(skills_src)
+                    out = skills_dst / rel
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(path, out)
     if options.vscode_settings:
         settings = {
             "yaml.schemas": {"Schemas/MDR Schema.json": "Objects/Detection Rules/**/*.yaml"}
