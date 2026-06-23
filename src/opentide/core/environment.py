@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 from typing import Any
 from importlib import import_module
 from opentide.core.logging import log
