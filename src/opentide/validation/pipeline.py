@@ -29,8 +29,7 @@ def validate_object(model: TideModel, object_type: str) -> ValidationResult:
         return ValidationResult(ok=True)
     except ValidationError as exc:
         return ValidationResult(
-            ok=False,
-            errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()],
+            ok=False, errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()]
         )
 
 
@@ -49,8 +48,7 @@ def validate_raw_payload(payload: dict[str, Any], object_type: str) -> Validatio
         return ValidationResult(ok=True)
     except ValidationError as exc:
         return ValidationResult(
-            ok=False,
-            errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()],
+            ok=False, errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()]
         )
 
 

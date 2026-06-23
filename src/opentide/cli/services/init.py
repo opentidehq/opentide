@@ -8,12 +8,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from opentide.cli.enums import CiPlatform, DetectionPlatform
-from opentide.core.logging import log
+import structlog
 
+from opentide.cli.enums import CiPlatform, DetectionPlatform
+
+logger = structlog.get_logger("opentide.cli.services.init")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
-
 _DEFAULT_STATUSES = (
     "DESIGN",
     "DEVELOPMENT",
@@ -58,24 +59,7 @@ def _write_readme(target: Path, options: InitOptions) -> None:
     name = options.name or target.name
     org = options.org or "Security Operations"
     description = options.description or "Detection-as-code repository powered by OpenTide"
-    content = f"""# {name}
-
-{description}
-
-**Organisation:** {org}
-
-## Quick start
-
-```bash
-opentide validate
-opentide generate
-opentide deploy --platform sentinel --dry-run
-```
-
-## Platforms
-
-{chr(10).join(f"- {p.value}" for p in options.platforms) or "- (configure platforms in Configurations/)"}
-"""
+    content = f"# {name}\n\n{description}\n\n**Organisation:** {org}\n\n## Quick start\n\n```bash\nopentide validate\nopentide generate\nopentide deploy --platform sentinel --dry-run\n```\n\n## Platforms\n\n{chr(10).join(f'- {p.value}' for p in options.platforms) or '- (configure platforms in Configurations/)'}\n"
     (target / "README.md").write_text(content, encoding="utf-8")
 
 
@@ -115,23 +99,13 @@ def _scaffold_directories(target: Path) -> None:
         (target / rel).mkdir(parents=True, exist_ok=True)
 
 
-def _copy_ci_workflows(target: Path, options: InitOptions) -> None:
-    root = _repo_template_root()
-    if options.ci is CiPlatform.github:
-        src = root / ".github" / "workflows"
-        if src.is_dir():
-            for workflow in src.glob("*.yml"):
-                shutil.copy2(workflow, target / ".github" / "workflows" / workflow.name)
-    elif options.ci is CiPlatform.gitlab:
-        src = root / "Pipelines" / "Gitlab" / "tide.yml"
-        if src.is_file():
-            shutil.copy2(src, target / ".gitlab-ci.yml")
-    elif options.ci is CiPlatform.azure:
-        src = root / "Pipelines" / "Azure" / "opentide.yml"
-        if src.is_file():
-            (target / "azure-pipelines.yml").write_text(
-                src.read_text(encoding="utf-8"), encoding="utf-8"
-            )
+def _write_ci_workflows(target: Path, options: InitOptions) -> None:
+    from opentide.ci.models import CiRenderOptions
+    from opentide.cli.services.ci_generator import write_ci
+
+    if options.ci is CiPlatform.none:
+        return
+    write_ci(target, CiRenderOptions.from_init_options(options))
 
 
 def _copy_ai_assets(target: Path, options: InitOptions) -> None:
@@ -147,13 +121,10 @@ def _copy_ai_assets(target: Path, options: InitOptions) -> None:
                 shutil.copy2(skill, target / ".github" / "instructions" / skill.name)
     if options.vscode_settings:
         settings = {
-            "yaml.schemas": {
-                "Schemas/MDR Schema.json": "Objects/Detection Rules/**/*.yaml",
-            }
+            "yaml.schemas": {"Schemas/MDR Schema.json": "Objects/Detection Rules/**/*.yaml"}
         }
         (target / ".vscode" / "settings.json").write_text(
-            json.dumps(settings, indent=2),
-            encoding="utf-8",
+            json.dumps(settings, indent=2), encoding="utf-8"
         )
     if options.mcp_config:
         mcp = {"mcpServers": {"opentide": {"command": "opentide-mcp"}}}
@@ -164,14 +135,12 @@ def run_init(options: InitOptions) -> dict[str, object]:
     """Create a detection repository scaffold."""
     target = options.path.resolve()
     target.mkdir(parents=True, exist_ok=True)
-
     _scaffold_directories(target)
     _write_gitignore(target)
     _write_readme(target, options)
-    _copy_ci_workflows(target, options)
+    _write_ci_workflows(target, options)
     _copy_ai_assets(target, options)
-
-    log("SUCCESS", "Repository created", str(target))
+    logger.info("repository_created", detail=str(target))
     return {
         "message": "Repository scaffold created",
         "path": str(target),
@@ -195,12 +164,10 @@ def run_interactive_init(ctx: CliContext, base_path: Path) -> dict[str, object]:
             border_style="blue",
         )
     )
-
     options = InitOptions(path=base_path)
     options.name = Prompt.ask("Repository name", default=base_path.name)
     options.org = Prompt.ask("Organisation / team", default="")
     options.description = Prompt.ask("Description", default="Detection-as-code")
-
     console.print("\n[bold]Step 2 — Detection Platforms[/] (comma-separated keys)")
     console.print(
         "Choices: sentinel, splunk, crowdstrike, defender, sentinel-one, carbon-black, harfanglab"
@@ -218,8 +185,7 @@ def run_interactive_init(ctx: CliContext, base_path: Path) -> dict[str, object]:
             try:
                 options.platforms.append(DetectionPlatform(token))
             except ValueError:
-                log("WARNING", f"Unknown platform skipped: {token}")
-
+                logger.warning("event", detail=f"Unknown platform skipped: {token}")
     ci_choice = Prompt.ask(
         "CI/CD platform", choices=["github", "gitlab", "azure", "none"], default="github"
     )
@@ -230,6 +196,5 @@ def run_interactive_init(ctx: CliContext, base_path: Path) -> dict[str, object]:
     options.vscode_settings = Confirm.ask("Generate VS Code settings?", default=False)
     options.mcp_config = Confirm.ask("Generate MCP server config?", default=False)
     options.agent_skills = Confirm.ask("Generate agent skills?", default=False)
-
     ctx.apply_environment()
     return run_init(options)

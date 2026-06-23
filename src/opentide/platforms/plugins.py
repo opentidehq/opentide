@@ -1,46 +1,39 @@
 """Detection platform registry — deployers, validators, and per-platform config."""
-
 from __future__ import annotations
-
 import importlib
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterator, cast
-
-
-
-from opentide.core.logging import log
-
+import structlog
+logger = structlog.get_logger('opentide.platforms.plugins')
 
 class PlatformEngineBase(ABC):
     """Base type for platform operational engines."""
 
-
 class PlatformEngine(PlatformEngineBase):
     """Engine tier for deployment operations."""
-
 
 class ValidationEngine(PlatformEngineBase):
     """Engine tier for query validation operations."""
 
-
 class RuleDeployer(PlatformEngine):
+
     @abstractmethod
     def deploy(self, deployment: list[str]):
         """Deploy detection rules onto the target platform."""
 
-
 class QueryValidator(ValidationEngine):
+
     @abstractmethod
     def validate(self, deployment: list[str]):
         """Validate that queries can be executed on the target platform."""
-
 
 class PlatformLoader:
     """Loads platform deployer and validator engine classes."""
 
     class EngineModule:
+
         @staticmethod
         def declare():
             """Registers the engine class for a platform."""
@@ -48,56 +41,45 @@ class PlatformLoader:
 
     @staticmethod
     def import_engine(module_path: str) -> EngineModule:
-        return importlib.import_module(module_path)  # type: ignore
+        return importlib.import_module(module_path)
 
     def _load_engines(self, tier: PlatformEngineBase, identifier: str) -> dict[str, type]:
-        log("ONGOING", "Initiating platform engine loading")
+        logger.info('initiating_platform_engine_loading')
         engines: dict[str, type] = {}
-
         from opentide.core.registry import OpenTide
-
         for system in OpenTide.Configuration.Systems.Index:
             module_name = system + identifier
             pkg = _platform_pkg(system)
             module = None
             try:
                 if isinstance(tier, PlatformEngine):
-                    log("ONGOING", "Loading deployment engine", module_name)
-                    module = self.import_engine(f"opentide.platforms.{pkg}.deployer")
+                    logger.info('loading_deployment_engine', arg0=module_name)
+                    module = self.import_engine(f'opentide.platforms.{pkg}.deployer')
                 elif isinstance(tier, ValidationEngine):
-                    log("ONGOING", "Loading validation engine", module_name)
-                    module = self.import_engine(f"opentide.platforms.{pkg}.validator")
+                    logger.info('loading_validation_engine', arg0=module_name)
+                    module = self.import_engine(f'opentide.platforms.{pkg}.validator')
                 else:
-                    log("FATAL", "Unsupported engine tier", str(tier))
+                    logger.critical('unsupported_engine_tier', detail=str(tier))
             except Exception as exc:
-                log("WARNING", "Failed to import platform engine", repr(exc), module_name)
-
+                logger.warning('failed_to_import_platform_engine', detail=repr(exc), advice=module_name)
             if module:
                 try:
                     engines[system] = module.declare()
                 except Exception as exc:
-                    log(
-                        "FATAL",
-                        "Engine module missing declare()",
-                        module_name,
-                        repr(exc),
-                    )
-                    raise Exception("PLATFORM ENGINE IMPORT ERROR") from exc
-                log("SUCCESS", "Loaded platform engine", module_name)
-
+                    logger.critical('engine_module_missing_declare', arg0=module_name, advice=repr(exc))
+                    raise Exception('PLATFORM ENGINE IMPORT ERROR') from exc
+                logger.info('loaded_platform_engine', arg0=module_name)
         return engines
 
     def rule_deployers(self) -> dict[str, RuleDeployer]:
-        return cast(dict[str, RuleDeployer], self._load_engines(identifier="", tier=PlatformEngine()))
+        return cast(dict[str, RuleDeployer], self._load_engines(identifier='', tier=PlatformEngine()))
 
     def query_validators(self) -> dict[str, QueryValidator]:
-        return cast(dict[str, QueryValidator], self._load_engines(identifier="_query", tier=ValidationEngine()))
-
+        return cast(dict[str, QueryValidator], self._load_engines(identifier='_query', tier=ValidationEngine()))
 
 @dataclass
 class Platform:
     """A detection platform's configuration and operational capabilities."""
-
     name: str
     enabled: bool = False
     config: object | None = None
@@ -112,10 +94,8 @@ class Platform:
     def can_validate(self) -> bool:
         return self.validator is not None
 
-
 class _PlatformsAccessor:
     """First-class platform access on OpenTide."""
-
     _deployers: dict[str, RuleDeployer] | None = None
     _validators: dict[str, QueryValidator] | None = None
     _instances: dict[str, Platform] | None = None
@@ -124,20 +104,13 @@ class _PlatformsAccessor:
         if self._deployers is None:
             from opentide.deployment import enabled_systems
             from opentide.core.registry import OpenTide
-
             loader = PlatformLoader()
             self._deployers = loader.rule_deployers()
             self._validators = loader.query_validators()
             self._instances = {}
             systems_index = OpenTide.Configuration.Systems.Index
             for name in systems_index:
-                self._instances[name] = Platform(
-                    name=name,
-                    enabled=name in enabled_systems(),
-                    config=getattr(OpenTide.Configuration.Systems, _class_name(name), None),
-                    deployer=self._deployers.get(name),
-                    validator=self._validators.get(name),
-                )
+                self._instances[name] = Platform(name=name, enabled=name in enabled_systems(), config=getattr(OpenTide.Configuration.Systems, _class_name(name), None), deployer=self._deployers.get(name), validator=self._validators.get(name))
 
     def __getitem__(self, name: str) -> Platform:
         self._ensure_loaded()
@@ -164,7 +137,7 @@ class _PlatformsAccessor:
         return self._validators
 
     def __getattr__(self, name: str) -> Platform:
-        if name.startswith("_"):
+        if name.startswith('_'):
             raise AttributeError(name)
         self._ensure_loaded()
         assert self._instances is not None
@@ -174,23 +147,16 @@ class _PlatformsAccessor:
             if _class_name(key) == name:
                 return platform
         raise AttributeError(name)
-
-
 Platforms = _PlatformsAccessor()
-
 
 def _class_name(system_key: str) -> str:
     """Map systems index key to Configuration.Systems nested class name."""
-    return "".join(part.capitalize() for part in system_key.split("_"))
-
-
-# Legacy aliases (transition period)
+    return ''.join((part.capitalize() for part in system_key.split('_')))
 PluginTide = PlatformEngineBase
 DeployEngine = PlatformEngine
 DeployMDR = RuleDeployer
 ValidateQuery = QueryValidator
 PluginEnginesLoader = PlatformLoader
-
 
 class DeployTide:
     """Deprecated — use OpenTide.Platforms."""
@@ -198,7 +164,6 @@ class DeployTide:
     @staticmethod
     def _enabled_keys() -> set[str]:
         from opentide.deployment import enabled_systems
-
         return set(enabled_systems())
 
     @property
@@ -210,20 +175,8 @@ class DeployTide:
     def query_validation(self) -> dict[str, QueryValidator]:
         enabled = self._enabled_keys()
         return {k: v for k, v in Platforms.validators().items() if k in enabled}
-
-
 PlatformsRegistry = DeployTide
-
-_PLATFORM_PKG: dict[str, str] = {
-    "carbon_black_cloud": "carbon_black",
-    "defender_for_endpoint": "defender_for_endpoint",
-    "sentinel_one": "sentinel_one",
-    "crowdstrike": "crowdstrike",
-    "harfanglab": "harfanglab",
-    "sentinel": "sentinel",
-    "splunk": "splunk",
-}
-
+_PLATFORM_PKG: dict[str, str] = {'carbon_black_cloud': 'carbon_black', 'defender_for_endpoint': 'defender_for_endpoint', 'sentinel_one': 'sentinel_one', 'crowdstrike': 'crowdstrike', 'harfanglab': 'harfanglab', 'sentinel': 'sentinel', 'splunk': 'splunk'}
 
 def _platform_pkg(system: str) -> str:
     return _PLATFORM_PKG.get(system, system)

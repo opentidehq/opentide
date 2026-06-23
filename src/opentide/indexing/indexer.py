@@ -29,12 +29,11 @@ def indexer(write_index=False) -> dict:
 
     log("DEBUG", "Loaded all paths")
     VOCABULARIES_PATH = PATHS["vocabularies"]
-    METASCHEMA_PATH = PATHS["metaschemas"]
     METASCHEMAS = CORE_CONFIG["metaschemas"]
     JSONSCHEMAS_PATH = PATHS["json_schemas"]
     JSONSCHEMAS = CORE_CONFIG["json_schemas"]
-    SUBSCHEMAS_PATH = PATHS["subschemas"]
-    DEFINITIONS_PATH = PATHS["definitions"]
+    SUBSCHEMAS_PATH = Path(PATHS.get("platform_templates", PATHS.get("subschemas", ".")))
+    DEFINITIONS_PATH = Path(PATHS.get("definitions", "."))
     RECOMPOSITION = CORE_CONFIG["recomposition"]
     TEMPLATES_PATH = PATHS["templates"]
     TEMPLATES = CORE_CONFIG["templates"]
@@ -113,34 +112,25 @@ def indexer(write_index=False) -> dict:
 
     index["json_schemas"] = json_index
 
-    # Metaschema Indexer
-    print("🛠️ Indexing Metaschemas...")
+    # Core schema sources are generated from Pydantic models at index time.
+    from opentide.generation.pydantic_metaschema import (
+        build_core_schema_source,
+        build_definition_index,
+        build_platform_schema_source,
+    )
+    from opentide.models.platform_schema import platform_model_for_key
+
+    print("🛠️ Indexing Pydantic schema sources...")
 
     meta_index = dict()
-
     for meta_name in METASCHEMAS:
         obj_counter += 1
-
-        meta_body = yaml.safe_load(
-            open(METASCHEMA_PATH / METASCHEMAS[meta_name], encoding="utf-8")
-        )
-        meta_index[meta_name] = meta_body
+        meta_index[meta_name] = build_core_schema_source(meta_name)
 
     index["metaschemas"] = meta_index
 
-    # Definitions Indexer
     print("🛠️ Indexing Definitions...")
-
-    definition_index = dict()
-
-    for definition in os.listdir(DEFINITIONS_PATH):
-
-        definition_body = yaml.safe_load(
-            open(DEFINITIONS_PATH / definition, encoding="utf-8")
-        )
-        definition_name = definition.split(".")[0]
-        definition_index[definition_name] = definition_body
-
+    definition_index = build_definition_index()
     index["definitions"] = definition_index
 
     print("📐 Indexing Templates")
@@ -174,15 +164,11 @@ def indexer(write_index=False) -> dict:
             obj_counter += 1
             try:
                 sub_name = recomp_data[data]["tide"]["name"]
-                subschema_name = recomp_data[data]["tide"]["subschema"]
-            except:
+            except Exception:
                 sub_name = recomp_data[data]["platform"]["name"]
-                subschema_name = recomp_data[data]["platform"]["subschema"]
 
-
-            sub_body = yaml.safe_load(
-                open(subchemas_path / (subschema_name + ".yaml"), encoding="utf-8")
-            )
+            platform_model = platform_model_for_key(data)
+            sub_body = build_platform_schema_source(platform_model)
             subschemas_index[recomp][data] = sub_body
             
             try:
@@ -190,9 +176,12 @@ def indexer(write_index=False) -> dict:
                     sub_templates_path / (sub_name + " Template.yaml"), encoding="utf-8"
                 ).read()
                 template_index[recomp][data] = template_body
-            except:
-                log("FATAL", f"Could not find template {subschema_name} at location {subchemas_path}",
-                    "This will be skipped as it is expected when creating new subschemas")
+            except Exception:
+                log(
+                    "FATAL",
+                    f"Could not find template for {sub_name} at location {sub_templates_path}",
+                    "This will be skipped as it is expected when creating new subschemas",
+                )
 
     index["templates"] = template_index
     index["subschemas"] = subschemas_index

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import structlog
 import typer
 
 from opentide.cli.context import CliContext, get_context
@@ -25,9 +26,10 @@ from opentide.cli.services.info import collect_info
 from opentide.cli.services.init import InitOptions, run_init, run_interactive_init
 from opentide.cli.services.mutate import run_mutate
 from opentide.cli.services.validation import run_validate, validate_query_platform
-from opentide.core.logging import configure_logging, print_banner
+from opentide.core.logging import LoggingConfig, init_logging, print_banner
 from opentide.core.root import get_repo_root
 
+logger = structlog.get_logger("opentide.cli.__init__")
 app = typer.Typer(
     name="opentide",
     help="OpenTide — DetectionOps Engine",
@@ -60,7 +62,8 @@ def main_callback(
     )
     ctx.obj = cli_ctx
     cli_ctx.activate()
-    configure_logging(force=True)
+    cli_ctx.apply_environment()
+    init_logging(LoggingConfig.from_cli_context(cli_ctx), force=True)
     if not json_output:
         print_banner()
 
@@ -135,6 +138,8 @@ def generate_cmd(
     cli = get_context(ctx)
     if verbose:
         cli.debug = True
+        cli.apply_environment()
+        init_logging(LoggingConfig.from_cli_context(cli), force=True)
     result = run_generate(cli, phase=phase, staging=staging)
     emit_success(cli, result)
 
@@ -212,15 +217,12 @@ def deploy_cmd(
 
 @deploy_app.command("metadata")
 def deploy_metadata_cmd(
-    ctx: typer.Context,
-    platform: DetectionPlatform = typer.Option(..., "--platform"),
+    ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")
 ) -> None:
     """Deploy Splunk metadata lookup table (platform-specific)."""
     cli = get_context(ctx)
     cli.apply_environment()
-    from opentide.core.logging import log
-
-    log("INFO", f"Metadata deployment for {platform.value}")
+    logger.info("metadata_deployment", platform=platform.value)
     emit_success(cli, {"message": "Metadata deployment signalled", "platform": platform.value})
 
 
@@ -379,10 +381,7 @@ def info_cmd(
                 caps.append("deploy")
             if plat["can_validate"]:
                 caps.append("validate")
-            table.add_row(
-                plat["name"],
-                f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]",
-            )
+            table.add_row(plat["name"], f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]")
         Console().print(table)
 
 
@@ -410,6 +409,52 @@ def migrate_cmd(
             cli,
             {"message": "Migration scan complete", "findings": findings, "count": len(findings)},
         )
+
+
+ci_app = typer.Typer(help="Generate CI/CD pipeline files")
+app.add_typer(ci_app, name="ci")
+
+
+@ci_app.command("generate")
+def ci_generate_cmd(
+    ctx: typer.Context,
+    path: str = typer.Argument(".", help="Repository path"),
+    ci: CiPlatform = typer.Option(CiPlatform.github, "--ci"),
+    platform: list[DetectionPlatform] = typer.Option(
+        [], "--platform", help="Detection platforms (repeatable)"
+    ),
+    staging: bool = typer.Option(True, "--staging/--no-staging"),
+    promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
+    promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
+    python_version: str = typer.Option("3.12", "--python-version"),
+) -> None:
+    """Generate GitHub, GitLab, or Azure DevOps pipeline files for OpenTide."""
+    from pathlib import Path
+
+    from opentide.ci.models import CiRenderOptions
+    from opentide.cli.services.ci_generator import write_ci
+
+    cli_ctx = get_context(ctx)
+    if ci is CiPlatform.none:
+        raise typer.BadParameter("Choose --ci github, gitlab, or azure")
+
+    options = CiRenderOptions.from_init(
+        ci=ci,
+        platforms=platform,
+        staging=staging,
+        promotion=promotion,
+        promotion_target=promotion_target,
+        python_version=python_version,
+    )
+    written = write_ci(Path(path), options)
+    emit_success(
+        cli_ctx,
+        {
+            "message": "CI pipeline generated",
+            "ci": ci.value,
+            "files": written,
+        },
+    )
 
 
 def main() -> None:

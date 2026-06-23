@@ -64,7 +64,6 @@ class DetectionObjective(TideModel):
     """Code-first detection objective model."""
 
     __schema_identifier__: ClassVar[str] = "objective::1.0"
-
     name: str
     metadata: ObjectMetadata
     objective: ObjectiveBody

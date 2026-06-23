@@ -30,7 +30,6 @@ class DetectionRule(TideModel):
     """Code-first detection rule with registry-backed delegation helpers."""
 
     __schema_identifier__: ClassVar[str] = "rule::1.0"
-
     name: str
     metadata: ObjectMetadata
     description: str
@@ -43,7 +42,6 @@ class DetectionRule(TideModel):
     response: RuleResponse | None = None
     configurations: RuleConfigurations | None = None
     file: Path | None = None
-
     _registry: TideRegistry | None = PrivateAttr(default=None)
 
     def bind_registry(self, registry: TideRegistry) -> DetectionRule:
@@ -67,7 +65,7 @@ class DetectionRule(TideModel):
         deployer.deploy([uuid])
         return DeploymentResult(platform=platform, uuids=[uuid], dry_run=False)
 
-    def validate(self) -> ValidationResult:  # ty: ignore[invalid-method-override]
+    def validate(self) -> ValidationResult:
         if self._registry is None:
             raise RuntimeError("DetectionRule.validate() requires a bound registry")
         return self._registry.validate_rule(self)
@@ -77,16 +75,12 @@ class DetectionRule(TideModel):
             raise RuntimeError("DetectionRule.validate_query() requires a bound registry")
         platforms = self._registry.Platforms
         if platform not in platforms:
-            return ValidationResult(
-                ok=False,
-                errors=[f"Unknown platform {platform!r}"],
-            )
+            return ValidationResult(ok=False, errors=[f"Unknown platform {platform!r}"])
         entry = platforms[platform]
         validator = getattr(entry, "validator", None)
         if validator is None:
             return ValidationResult(
-                ok=False,
-                errors=[f"Platform {platform!r} does not support query validation"],
+                ok=False, errors=[f"Platform {platform!r} does not support query validation"]
             )
         validator.validate([self.metadata.uuid])
         return ValidationResult(ok=True)

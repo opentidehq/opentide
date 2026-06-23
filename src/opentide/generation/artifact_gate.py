@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from opentide.core.files import resolve_configurations, resolve_paths
-from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS
+from opentide.generation.pydantic_metaschema import CORE_SCHEMA_MODELS
 
 TIDE_PREFIX = "tide:"
 REPO_PREFIX = "repo:"
@@ -59,7 +59,11 @@ def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
         rel = f"Schemas/Configurations/{Path(rel_name).name}"
         specs.append((f"{TIDE_PREFIX}{rel}", json_dir / "Configurations" / Path(rel_name).name))
 
-    subschema_templates = Path(paths["subschemas"]) / "MDR Systems Deployment" / "Templates"
+    subschema_templates = (
+        Path(paths.get("platform_templates", paths.get("subschemas", ".")))
+        / "MDR Systems Deployment"
+        / "Templates"
+    )
     if subschema_templates.is_dir():
         for path in sorted(subschema_templates.glob("*.yaml")):
             rel_path = path.relative_to(repo_root.resolve())

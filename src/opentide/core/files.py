@@ -90,8 +90,14 @@ def resolve_configurations() -> dict[str, dict]:
     if repo_configs.is_dir():
         _deep_merge(unified, _fetch_configs(repo_configs))
 
+    workspace_env = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
+    if workspace_env:
+        fixture_configs = root / "tests/fixtures/generation/configurations"
+        if fixture_configs.is_dir():
+            _deep_merge(unified, _fetch_configs(fixture_configs))
+
     parent_configs = root.parent / "Configurations"
-    if parent_configs.is_dir() and parent_configs != repo_configs:
+    if parent_configs.is_dir() and parent_configs != repo_configs and not workspace_env:
         _deep_merge(unified, _fetch_configs(parent_configs))
 
     return unified

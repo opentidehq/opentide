@@ -21,6 +21,13 @@ REQUIRED_ROOT_DIRS = {
     "docs",
 }
 
+FORBIDDEN_WORKFLOW_TOKENS = (
+    "OpenTideHQ/CoreTide",
+    "coretide/Orchestration",
+    "TIDE_CORE_REPO",
+    "Engines/requirements.txt",
+)
+
 
 def test_no_legacy_root_directories() -> None:
     present = {p.name for p in ROOT.iterdir() if p.is_dir() and not p.name.startswith(".")}
@@ -30,6 +37,20 @@ def test_no_legacy_root_directories() -> None:
 def test_required_layout_directories() -> None:
     present = {p.name for p in ROOT.iterdir() if p.is_dir()}
     assert present >= REQUIRED_ROOT_DIRS
+
+
+def test_package_workflows_have_no_coretide_dependencies() -> None:
+    workflows = ROOT / ".github" / "workflows"
+    if not workflows.is_dir():
+        return
+    for workflow in workflows.glob("*.yml"):
+        text = workflow.read_text(encoding="utf-8")
+        for token in FORBIDDEN_WORKFLOW_TOKENS:
+            assert token not in text, f"{workflow.name} references legacy CoreTide CI: {token}"
+
+
+def test_no_legacy_client_pipeline_directory() -> None:
+    assert not (ROOT / ".github" / "pipelines").exists()
 
 
 def test_bundled_global_config_objects() -> None:

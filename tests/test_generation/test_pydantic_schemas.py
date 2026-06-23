@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS, generate_core_model_schema
+from opentide.generation.pydantic_metaschema import CORE_SCHEMA_MODELS
+from opentide.generation.pydantic_schemas import generate_core_model_schema
 
 
 def test_core_schema_models_cover_primary_objects() -> None:

@@ -17,7 +17,6 @@ class DetectionPlatform(str, Enum):
     harfanglab = "harfanglab"
 
 
-# Platforms with query syntax validators (5 of 7).
 QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
     {
         DetectionPlatform.sentinel.value,

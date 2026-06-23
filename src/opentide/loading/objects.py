@@ -3,8 +3,10 @@ from dataclasses import dataclass
 from typing import Optional, List
 
 
-from opentide.core.logging import log
-from opentide.models.legacy import SharedModels
+from opentide.models.metadata import ObjectMetadata, ObjectReferences
+import structlog
+logger = structlog.get_logger('opentide.loading.objects')
+
 
 
 @dataclass
@@ -129,11 +131,11 @@ class Objects:
 
         name: str
         """Name of the OpenTide Detection Objective"""
-        metadata: SharedModels.ObjectMetadata
+        metadata: ObjectMetadata
         """Metadata about the detection objective"""
         objective: Objective
         """Core objective definition including signals and composition"""
         composition: Objective.Composition
         """Strategy for composing detection signals"""
-        references: Optional[SharedModels.ObjectReferences] = None
+        references: Optional[ObjectReferences] = None
         """Optional references for this detection objective"""

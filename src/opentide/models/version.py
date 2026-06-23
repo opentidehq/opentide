@@ -15,7 +15,6 @@ class SchemaVersion(BaseModel):
     family: str
     major: int
     minor: int = 0
-
     model_config = {"frozen": True}
 
     @field_validator("family")
@@ -60,7 +59,7 @@ class SchemaVersionChain:
             raise ValueError("migration endpoints must match chain family")
         if source.sort_key() >= target.sort_key():
             raise ValueError("migrations must advance to a higher version")
-        self._migrations[(source.major, source.minor)] = fn
+        self._migrations[source.major, source.minor] = fn
 
     def migrate(
         self, data: Mapping[str, object], source: SchemaVersion, target: SchemaVersion
