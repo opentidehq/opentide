@@ -25,7 +25,7 @@ def run():
         " ID if missing (non-MDR objects only)",
     )
 
-    MODELS_TYPES.remove("mdr")
+    MODELS_TYPES.remove("rule")
     for model in MODELS_TYPES:
         for file in sorted(os.listdir(PATHS[model])):
             if not file.endswith(".yaml"):

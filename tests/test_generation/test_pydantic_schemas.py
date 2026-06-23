@@ -7,10 +7,10 @@ from opentide.generation.pydantic_schemas import generate_core_model_schema
 
 
 def test_core_schema_models_cover_primary_objects() -> None:
-    assert set(CORE_SCHEMA_MODELS) == {"mdr", "dom", "tvm"}
+    assert set(CORE_SCHEMA_MODELS) == {"rule", "objective", "threat"}
 
 
 def test_generate_core_model_schema_returns_object_schema() -> None:
-    schema = generate_core_model_schema("mdr", enrich=False)
+    schema = generate_core_model_schema("rule", enrich=False)
     assert schema["type"] == "object"
     assert "properties" in schema

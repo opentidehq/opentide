@@ -181,7 +181,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
                     str(rule_id))
                 
                 service.delete_detection_rule(rule_id)
-                file_path = OpenTide.Configurations.Global.Paths.Tide.mdr / OpenTide.Models.files[data.metadata.uuid]
+                file_path = OpenTide.Configurations.Global.Paths.Tide.rule / OpenTide.Models.files[data.metadata.uuid]
                 with open(file_path, "r", encoding="utf-8") as mdr_file:
                     content = mdr_file.readlines()
 
@@ -203,7 +203,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
         
             else:
                 rule_id = service.create_detection_rule(rule)
-                file_path = OpenTide.Configurations.Global.Paths.Tide.mdr / OpenTide.Models.files[data.metadata.uuid]
+                file_path = OpenTide.Configurations.Global.Paths.Tide.rule / OpenTide.Models.files[data.metadata.uuid]
                 with open(file_path, "r", encoding="utf-8") as mdr_file:
                     content = mdr_file.readlines()
                 
@@ -226,7 +226,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
     
     def deploy(self, mdr_deployment: Sequence[DetectionRule], deployment_plan:DeploymentStrategy):
         
-        mdr_deployment = [OpenTide.Models.MDR[uuid] for uuid in mdr_deployment]
+        mdr_deployment = [OpenTide.Rules[uuid] for uuid in mdr_deployment]
 
         deployment = TideDeployment(deployment=mdr_deployment,
                                     system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,

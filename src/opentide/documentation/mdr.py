@@ -43,7 +43,7 @@ DEFAULT_RESPONDERS = OpenTide.Configurations.Deployment.default_responders
 SYSTEMS_CONFIG = OpenTide.Configurations.Systems.Index
 VOCAB_INDEX = OpenTide.Vocabularies.Index
 MODELS_INDEX = OpenTide.Models.Index
-MDR_ICON = get_icon("mdr")
+MDR_ICON = get_icon("rule")
 
 QUERY_FOLD = """
 <details>
@@ -58,11 +58,11 @@ QUERY_FOLD = """
 """
 
 # Fetch metaschema
-MDR_METASCHEMA = OpenTide.TideSchemas.mdr["properties"]
+MDR_METASCHEMA = OpenTide.TideSchemas.Index["rule"]["properties"]
 
 
 WIKI = Path(OpenTide.Configurations.Global.Paths.Core.models_docs_folder)
-MDR_WIKI_PATH = WIKI / OpenTide.Configurations.Documentation.object_names["mdr"]
+MDR_WIKI_PATH = WIKI / OpenTide.Configurations.Documentation.object_names["rule"]
 
 
 # Fetch relevant subschemas
@@ -318,7 +318,7 @@ def documentation(mdr):
     tlp = tlp_doc(mdr_metadata["tlp"])
 
     metadata = {k: v for k, v in mdr_metadata.items() if k != "tlp"}
-    metadata = metadata_doc(metadata, model_type="mdr")
+    metadata = metadata_doc(metadata, model_type="rule")
 
     doc = TEMPLATEv3.format(
         frontmatter=frontmatter,

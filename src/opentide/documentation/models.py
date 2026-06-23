@@ -66,11 +66,11 @@ def documentation(model):
     else:
         title = "# " + title
         
-    model_datafield = OpenTide.Configurations.Global.data_fields[model_type]
+    model_datafield = model_type
     criticality = criticality_doc(model["criticality"])
     metadata = model.get("metadata") or model.get("meta") or {}
     metadata = {k: v for k, v in metadata.items() if k != "tlp"}
-    metadata = metadata_doc(metadata, model_type="tvm")
+    metadata = metadata_doc(metadata, model_type="threat")
 
     expand_header = ""
     expand_description = ""
@@ -121,7 +121,7 @@ def documentation(model):
         if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI:
             GitlabMarkdown.negative_diff(relation_graph)
 
-    if model_type == "tvm":
+    if model_type == "threat":
 
         terrain = model[model_datafield]["terrain"].replace("\n", "\n> ")
         expand_description += f"\n\n## 🖥️ Terrain \n\n > {terrain}"

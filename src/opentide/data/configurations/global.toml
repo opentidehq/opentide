@@ -1,9 +1,9 @@
-objects = [ "tvm", "dom", "mdr" ]
+objects = [ "threat", "objective", "rule" ]
 
 [paths.tide]
-tvm = "Objects/Threat Vectors/"
-dom = "Objects/Detection Objectives/"
-mdr = "Objects/Detection Rules/"
+threat = "Objects/Threat Vectors/"
+objective = "Objects/Detection Objectives/"
+rule = "Objects/Detection Rules/"
 analytics = "Analytics/"
 snippet_file = ".vscode/Model Templates.code-snippets"
 json_schemas = "Schemas/"
@@ -26,7 +26,6 @@ resources = "external/"
 log_sources = "log_sources/"
 
 [indexes]
-objects = "objects.json"
 revisions = "revisions.json"
 
 [exports]
@@ -34,9 +33,9 @@ attack_layer = "ATT&CK Navigator Layer.json"
 table = "Objects Table.csv"
 
 [metaschemas]
-tvm = "tvm"
-dom = "dom"
-mdr = "mdr"
+threat = "threat"
+objective = "objective"
+rule = "rule"
 
 [recomposition]
 systems = "MDR Systems Deployment"
@@ -45,16 +44,11 @@ systems = "MDR Systems Deployment"
 visibility = "Configurations/visibility.schema.json"
 
 [json_schemas]
-tvm = "TVM Schema.json"
-dom = "Detection Objective.schema.json"
-mdr = "MDR Schema.json"
-
-[data_fields]
-tvm = "threat"
-dom = "objective"
-mdr = "rule"
+threat = "TVM Schema.json"
+objective = "Detection Objective.schema.json"
+rule = "MDR Schema.json"
 
 [templates]
-tvm = "TVM TEMPLATE.yaml"
-dom = "Detection Objective.template.yaml"
-mdr = "MDR TEMPLATE.yaml"
+threat = "TVM TEMPLATE.yaml"
+objective = "Detection Objective.template.yaml"
+rule = "MDR TEMPLATE.yaml"

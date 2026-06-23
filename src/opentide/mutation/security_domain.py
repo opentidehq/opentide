@@ -17,7 +17,7 @@ from opentide.core.root import get_repo_root
 ROOT = get_repo_root()
 
 PATHS = resolve_paths()
-MDR_PATH = PATHS["mdr"]
+MDR_PATH = PATHS["rule"]
 
 class MigrateSecurityDomainMDR:
     """
@@ -78,7 +78,7 @@ class MigrateSecurityDomainMDR:
 
 
     def migrate(self):
-        for mdr in os.listdir(PATHS["mdr"]):
+        for mdr in os.listdir(PATHS["rule"]):
             if not mdr.endswith(".yaml"):
                 if not mdr.endswith(".yml"):
                     log("INFO", "The file doesn't end with .yaml or .yml, skipping", mdr)

@@ -97,7 +97,7 @@ def test_parse_yaml_vocabulary() -> None:
 def test_parse_yaml_vocabulary_model_keys_use_id() -> None:
     raw = {
         "name": "Rules",
-        "field": "mdr",
+        "field": "rule",
         "model": True,
         "keys": [{"id": "uuid-1", "name": "Rule One"}],
     }

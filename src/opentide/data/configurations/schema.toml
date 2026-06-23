@@ -4,16 +4,16 @@
 # In metaschema, the special keyword tide.config.template is used
 # to point to the schema path. We prefer to use scoped, non nested
 # keys to avoid confusing the TOML parser with structures too complicated. 
-"mdr::description" = """
+"rule::description" = """
 """
 
-"mdr::response::procedure::analysis" = """
+"rule::response::procedure::analysis" = """
 """
 
-"mdr::response::procedure::containment" = """
+"rule::response::procedure::containment" = """
 """
 
-"mdr::exclusions::reason" = """
+"rule::exclusions::reason" = """
 """
 
 [vocabulary]

@@ -26,8 +26,6 @@ from opentide.core.logging import log
 from opentide.models.deployment_enums import DetectionSystems
 from opentide.models.system_config import ConfigurationModels as TideConfigs, SystemConfig
 from opentide.indexing.legacy_patch import LegacyObjectPatch
-from opentide.loading.objects import Objects
-from opentide.loading.configurations import Configurations
 from opentide.core.root import get_repo_root
 
 ROOT = get_repo_root()
@@ -91,13 +89,13 @@ class IndexManager:
         patch = LegacyObjectPatch()
 
         for mdr in STG_INDEX:
-            if mdr not in RECONCILED_INDEX["objects"]["mdr"]:
+            if mdr not in RECONCILED_INDEX["objects"]["rule"]:
                 log("INFO", "Patching MDR in staging index", mdr)
-                RECONCILED_INDEX["objects"]["mdr"][mdr] = patch.tide_1_patch(STG_INDEX[mdr], "mdr")
+                RECONCILED_INDEX["objects"]["rule"][mdr] = patch.tide_1_patch(STG_INDEX[mdr], "rule")
                 added_mdr.append(mdr)
             else:
                 main_mdr_metadata = (
-                    RECONCILED_INDEX["objects"]["mdr"][mdr].get("meta") or RECONCILED_INDEX["objects"]["mdr"][mdr]["metadata"]
+                    RECONCILED_INDEX["objects"]["rule"][mdr].get("meta") or RECONCILED_INDEX["objects"]["rule"][mdr]["metadata"]
                 )
                 main_version = main_mdr_metadata["version"]
                 stg_mdr_metadata = (
@@ -117,7 +115,7 @@ class IndexManager:
                         f" staging : v{stg_version})"
                     )
                     log("INFO", "Doing a safety patching to avoid edge cases")
-                    RECONCILED_INDEX["objects"]["mdr"][mdr] = patch.tide_1_patch(STG_INDEX[mdr], "mdr")
+                    RECONCILED_INDEX["objects"]["rule"][mdr] = patch.tide_1_patch(STG_INDEX[mdr], "rule")
                     updated_mdr.append(mdr)
         
         # Always load fresh configurations after model data reconciliation

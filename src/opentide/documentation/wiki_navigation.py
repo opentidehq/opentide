@@ -15,7 +15,7 @@ from opentide.generation.framework import (
     relations_list,
     get_type,
     get_vocab_entry,
-    keep_active_mdr,
+    keep_active_rules,
 )
 from opentide.documentation.core import (
     model_value_doc,
@@ -45,7 +45,7 @@ MODELS_NAME = OpenTide.Configurations.Documentation.object_names
 
 CHARS_CLIP = 150
 NAV_INDEX_FIELDS = {
-    "tvm": [
+    "threat": [
         "uuid",
         "name",
         "criticality",
@@ -61,7 +61,7 @@ NAV_INDEX_FIELDS = {
         "impact",
         "leverage",
     ],
-    "dom": [
+    "objective": [
         "uuid",
         "name",
         "priority",
@@ -72,7 +72,7 @@ NAV_INDEX_FIELDS = {
         "threats",
         "implementations"
     ],
-    "mdr": [
+    "rule": [
         "uuid",
         "name",
         "description",
@@ -112,14 +112,14 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
         
         # Logic to retain only MDR in the correct status, to allow breaking
         # the table into two
-        if model_type == "mdr":
-            active_mdr = True if keep_active_mdr([entry]) != [] else False
+        if model_type == "rule":
+            active_rules = True if keep_active_rules([entry]) != [] else False
             if mdr_status == "ACTIVE":
-                if not active_mdr:
+                if not active_rules:
                     continue
             
             elif mdr_status == "DEPRECATED":
-                if active_mdr:
+                if active_rules:
                     continue
         
         for value in NAV_INDEX_FIELDS[model_type]:
@@ -134,7 +134,7 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
                 techniques = techniques_resolver(entry)
                 if techniques:
                     techniques = rich_attack_links(techniques, hover=False)
-                    if model_type == "mdr":
+                    if model_type == "rule":
                         value = mdr_attack_technique
                     row[value] = techniques
                 else:
@@ -154,7 +154,7 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
 
                 row[implementation_column] = " // ".join(implementations)
 
-            elif model_type == "tvm" and value == "actors":
+            elif model_type == "threat" and value == "actors":
                 actors_list = []
                 actors = model_value_doc(entry, "actors") or []
                 for actor in actors:
@@ -172,7 +172,7 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
                 actors_list = ", ".join(actors_list)
                 row[value] = actors_list
 
-            elif model_type == "dom" and value == "threats":
+            elif model_type == "objective" and value == "threats":
                 vectors = model_value_doc(entry, "threats")
                 if vectors:
                     vectors = [vectors] if type(vectors) is str else vectors
@@ -185,14 +185,14 @@ def build_search(model_type, mdr_status:Optional[Literal["ACTIVE", "DEPRECATED"]
                 else:
                     row[value] = "❔ No Object Mapped"
 
-            elif model_type == "dom" and value == "objective":
+            elif model_type == "objective" and value == "objective":
                 objective_section:dict = model_value_doc(entry, "objective") #type: ignore
                 objective_description = objective_section.get("description") or ""
                 objective_description = objective_description.replace("\n", " ")
                 row[value] = objective_description
 
 
-            elif model_type == "mdr":
+            elif model_type == "rule":
 
                 if value == "statuses":
 
@@ -300,9 +300,9 @@ def construct_navigation_index(model):
     nav_index = str()
 
 
-    if model == "mdr":
-        total_mdr_count = len(MODELS_INDEX["mdr"])
-        active_mdr_count = len(keep_active_mdr(MODELS_INDEX["mdr"]))
+    if model == "rule":
+        total_mdr_count = len(MODELS_INDEX["rule"])
+        active_mdr_count = len(keep_active_rules(MODELS_INDEX["rule"]))
         deprecated_mdr_count = total_mdr_count - active_mdr_count
         
         active_mdr_title = "Active " + model_title

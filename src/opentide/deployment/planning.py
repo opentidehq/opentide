@@ -370,7 +370,7 @@ class TideDeployment:
 
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                mdr = OpenTide.Models.MDR[mdr]
+                mdr = OpenTide.Rules[mdr]
 
             tenants = self.tenants_resolver(mdr, system, deployment_strategy)
 

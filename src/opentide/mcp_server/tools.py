@@ -106,7 +106,7 @@ def tool_deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict[str
 
 def tool_deployment_status(uuid: str) -> dict[str, Any]:
     ensure_initialised()
-    body = OpenTide.Models.mdr.get(uuid)
+    body = OpenTide.Models.rule.get(uuid)
     if body is None:
         return {"platforms": {}, "uuid": uuid, "found": False}
     if not isinstance(body, dict):

@@ -8,7 +8,7 @@ from opentide.core.logging import log
 from opentide.core.registry import OpenTide
 from opentide.deployment import Proxy
 
-TVM_MODEL_FIELD = OpenTide.Configurations.Global.data_fields["tvm"]
+THREAT_MODEL_FIELD = "threat"
 
 
 def run():
@@ -24,14 +24,14 @@ def run():
     )
 
     error_list = []
-    for tvm in (index := OpenTide.Models.tvm):
-        tvm_data = index[tvm]
-        tvm_name = tvm_data["name"]
-        tvm_id = tvm_data.get("metadata",{}).get("uuid")
-        cve_list = tvm_data[TVM_MODEL_FIELD].get("cve")
+    for threat_id in (index := OpenTide.Models.threat):
+        threat_data = index[threat_id]
+        threat_name = threat_data["name"]
+        threat_uuid = threat_data.get("metadata", {}).get("uuid")
+        cve_list = threat_data[THREAT_MODEL_FIELD].get("cve")
         if cve_list:
             broken_cve = []
-            log("INFO", "Found CVE in TVM", f"[{tvm_id}] {tvm_name}")
+            log("INFO", "Found CVE in threat vector", f"[{threat_uuid}] {threat_name}")
             for cve in cve_list:
                 try:
                     details = crawler.get_main_page(cve)
@@ -47,7 +47,7 @@ def run():
                     broken_cve.append(cve)
 
             if broken_cve:
-                error_list.append([tvm, broken_cve])
+                error_list.append([threat_id, broken_cve])
 
     if error_list:
         for error in error_list:
@@ -60,7 +60,7 @@ def run():
         os.environ["VALIDATION_ERROR_RAISED"] = "True"
 
     else:
-        log("SUCCESS", "No invalid CVE detected in TVMs")
+        log("SUCCESS", "No invalid CVE detected in threat vectors")
 
 
 if __name__ == "__main__":

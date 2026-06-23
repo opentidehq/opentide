@@ -94,7 +94,7 @@ name: {rule_name}
 
 metadata:
   uuid: {rule_uuid}
-  schema: mdr::2.1
+  schema: rule::1.0
   version: 
   created: {rule_creation}
   modified: {rule_modified}

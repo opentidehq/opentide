@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core.root import repository_root
+from opentide.models.object_types import RULE, SCHEMA_IDENTIFIERS
 
 
 class LegacyObjectPatch:
@@ -31,7 +32,7 @@ class LegacyObjectPatch:
         if (
             os.getenv("CI_COMMIT_REF_NAME") == "main"
             and os.getenv("DEPLOYMENT_PLAN") not in ["PRODUCTION", "STAGING"]
-            and model_type != "mdr"
+            and model_type != RULE
         ):
             return model
 
@@ -42,7 +43,9 @@ class LegacyObjectPatch:
             model["metadata"] = model.pop("meta")
 
         if not model.get("metadata", {}).get("schema"):
-            model["metadata"]["schema"] = f"{model_type.lower()}::2.0"
+            model["metadata"]["schema"] = SCHEMA_IDENTIFIERS.get(
+                model_type.lower(), f"{model_type.lower()}::1.0"
+            )
 
         if not model.get("metadata", {}).get("uuid"):
             if "uuid" in model:

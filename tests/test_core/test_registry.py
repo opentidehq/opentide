@@ -24,7 +24,7 @@ def test_opentide_initialise_and_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     index_mod.IndexManager._cache = None
 
     sample_index = {
-        "objects": {"mdr": {}, "tvm": {}, "dom": {}},
+        "objects": {"rule": {}, "threat": {}, "objective": {}},
         "files": {},
         "configurations": {"global": {"objects": []}, "systems": {}},
         "paths": {},
@@ -46,7 +46,7 @@ def test_opentide_lookup_returns_none_for_missing() -> None:
     OpenTide._rules = {}
     OpenTide._threats = {}
     OpenTide._objectives = {}
-    OpenTide._index = {"objects": {"mdr": {}, "tvm": {}, "dom": {}}, "configurations": {}}
+    OpenTide._index = {"objects": {"rule": {}, "threat": {}, "objective": {}}, "configurations": {}}
     OpenTide._initialised = True
     assert OpenTide.lookup("missing-uuid") is None
 
@@ -62,7 +62,7 @@ def test_opentide_configuration_schema_sharing(monkeypatch: pytest.MonkeyPatch) 
             "deployment": {"statuses": {}},
             "visibility": {},
         },
-        "objects": {"mdr": {}, "tvm": {}, "dom": {}},
+        "objects": {"rule": {}, "threat": {}, "objective": {}},
     }
     OpenTide._initialised = True
     assert OpenTide.Configuration.Schema["version"] == "1"

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
 from opentide.core.index_manager import IndexManager
@@ -60,12 +58,12 @@ def build_object_vocabularies(
                 entry["aliases"] = aliases
 
             match object_type:
-                case "tvm":
+                case "threat":
                     description = object_data.get("threat", {}).get("description")
-                case "dom":
+                case "objective":
                     description = object_data.get("objective", {}).get("description")
                     entry["criticality"] = object_data.get("objective", {}).get("priority")
-                case "mdr":
+                case "rule":
                     description = object_data.get("description") or ""
                 case _:
                     description = ""
@@ -77,7 +75,7 @@ def build_object_vocabularies(
             }
             entries[_uuid] = entry
 
-            if object_type == "dom":
+            if object_type == "objective":
                 for signal in object_data.get("objective", {}).get("signals", []):
                     signal_uuid = signal["uuid"]
                     signal_entry = {
@@ -97,30 +95,24 @@ def build_object_vocabularies(
 
         object_index[object_type] = {"metadata": metadata, "entries": entries}
 
-    if "dom" not in object_index and "dom" in object_names:
-        object_index["dom"] = _empty_model_vocabulary("dom", icons, object_names)
+    if "objective" not in object_index and "objective" in object_names:
+        object_index["objective"] = _empty_model_vocabulary("objective", icons, object_names)
 
     return object_index
 
 
-def run() -> None:
-    """Generate object vocabularies and write to configured index path."""
+def run() -> dict[str, Any]:
+    """Build object vocabularies from the current in-memory index (no disk write)."""
     index = IndexManager.load()
     config = index["configurations"]
     global_config = config["global"]
     doc_config = config.get("documentation", {})
-    paths = IndexManager.return_paths(tier="tide")
-    index_path = Path(paths["tide_indexes"])
-    index_name = global_config["indexes"]["objects"]
     icons = doc_config.get("icons", {})
     object_names = doc_config.get("object_names", {})
 
-    object_index = build_object_vocabularies(
+    return build_object_vocabularies(
         object_scope=global_config.get("objects", []),
         models_index=index["objects"],
         icons=icons,
         object_names=object_names,
     )
-
-    output = index_path / index_name
-    output.write_text(json.dumps(object_index, indent=4), encoding="utf-8")

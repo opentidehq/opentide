@@ -920,8 +920,8 @@
         "description",
         "configurations"
     ],
-    "title": "MDR Schema validator",
-    "description": "A Managed Detection Rule is ...",
+    "title": "Detection Rule Schema",
+    "description": "A detection rule defines how a detection opportunity is implemented.",
     "additionalProperties": false,
     "anyOf": [
         {

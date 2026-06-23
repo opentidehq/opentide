@@ -54,13 +54,13 @@ class AttackNavigatorLayer:
         full_layer = self.assemble_full_layer(technique_layer=technique_layer)
         self.export_layer(layer=full_layer)
 
-    def map_objects_and_techniques(self, model_type:Literal["tvm", "mdr"])->dict[str, TechniqueIndexEntry]:
+    def map_objects_and_techniques(self, model_type:Literal["threat", "rule"])->dict[str, TechniqueIndexEntry]:
 
         match model_type:
-            case "tvm":
-                index = OpenTide.Models.tvm
-            case "mdr":
-                index = OpenTide.Models.mdr
+            case "threat":
+                index = OpenTide.Models.threat
+            case "rule":
+                index = OpenTide.Models.rule
 
         technique_mapping:dict[str, TechniqueIndexEntry] = {}
 
@@ -79,8 +79,8 @@ class AttackNavigatorLayer:
 
     def generate_technique_layer(self)->list[TechniqueLayer]:
 
-        tvm_techniques = self.map_objects_and_techniques(model_type="tvm")
-        mdr_techniques = self.map_objects_and_techniques(model_type="mdr")
+        tvm_techniques = self.map_objects_and_techniques(model_type="threat")
+        mdr_techniques = self.map_objects_and_techniques(model_type="rule")
 
         technique_layer:list[TechniqueLayer] = []
 

@@ -29,8 +29,17 @@ from opentide.core.registry import OpenTide
 from opentide.core.logging import log
 from opentide.documentation.graphs import relationships_graph
 from opentide.deployment import CIEnvironment
-from opentide.loading.objects import Objects
-from opentide.loading.configurations import Configurations
+from opentide.models.objective import (
+    DetectionExample,
+    DetectionObjective,
+    DetectionSignal,
+    ExternalDetector,
+)
+from opentide.models.visibility import (
+    VisibilityAsset,
+    VisibilityDetector,
+    VisibilityLogSource,
+)
 from opentide.documentation.core import (
     TARGET_WITH_DASH_PATHS,
     DOCUMENTATION_TARGET,
@@ -42,7 +51,7 @@ class DetectionObjectivesWiki:
 
     def __init__(self):
         WIKI_PATH = Path(OpenTide.Configurations.Global.Paths.Core.models_docs_folder)
-        self.DOCUMENTATION_PATH = WIKI_PATH / OpenTide.Configurations.Documentation.object_names["dom"]
+        self.DOCUMENTATION_PATH = WIKI_PATH / OpenTide.Configurations.Documentation.object_names["objective"]
         if DOCUMENTATION_TARGET in TARGET_WITH_DASH_PATHS:
             self.DOCUMENTATION_PATH = Path(str(self.DOCUMENTATION_PATH).replace(" ", "-"))
             log("INFO",
@@ -65,12 +74,12 @@ class DetectionObjectivesWiki:
         self.DOCUMENTATION_PATH.mkdir(parents=True)
 
 
-    def _create_wiki_page(self, objective:Objects.DetectionObjective)->str:
+    def _create_wiki_page(self, objective: DetectionObjective) -> str:
         
         frontmatter = frontmatter_doc(objective.name, objective.metadata.uuid)
         tlp = tlp_doc(objective.metadata.tlp)
         techniques = attack_techniques(objective.metadata.uuid)
-        metadata = metadata_doc(asdict(objective.metadata), model_type="dom")
+        metadata = metadata_doc(asdict(objective.metadata), model_type="objective")
         objective_type_description = get_vocab_description("detection.types", objective.objective.type)
         strategy_description = get_vocab_description("detection.composition", objective.objective.composition.strategy)
         relation_graph = relationships_graph(objective.metadata.uuid) 
@@ -82,7 +91,7 @@ class DetectionObjectivesWiki:
 
         return DETECTION_OBJECTIVE_TEMPLATE.format(
             frontmatter=frontmatter,
-            name=f"# {get_icon("dom")} " + objective.name if not UUID_PERMALINKS else "",
+            name=f"# {get_icon("objective")} " + objective.name if not UUID_PERMALINKS else "",
             priority=objective.objective.priority,
             tlp=tlp,
             techniques=techniques,
@@ -100,7 +109,7 @@ class DetectionObjectivesWiki:
             references=references
         )
 
-    def _create_signal_content(self, signal:Objects.DetectionObjective.Objective.Signal)->str:
+    def _create_signal_content(self, signal: DetectionSignal) -> str:
 
         logsource_table = self.Helpers().builders.logsources(signal.data.logsources) if signal.data.logsources else "_❌ No logsources mentioned_"
         entities_table = self.Helpers().builders.entities(signal.entities)
@@ -127,7 +136,7 @@ class DetectionObjectivesWiki:
 
         class Fetchers:
             
-            def asset(self, asset_name:str)->None|Configurations.Visibility.Asset:
+            def asset(self, asset_name: str) -> VisibilityAsset | None:
                 assets = OpenTide.Configurations.Visibility.assets
                 if not assets:
                     return None
@@ -136,7 +145,7 @@ class DetectionObjectivesWiki:
                         return asset
                 return None
 
-            def detector(self, technology_name:str)->None|Configurations.Visibility.Detector:
+            def detector(self, technology_name: str) -> VisibilityDetector | None:
                 detectors = OpenTide.Configurations.Visibility.detectors
                 if not detectors:
                     return None
@@ -145,7 +154,7 @@ class DetectionObjectivesWiki:
                         return technology
                 return None
 
-            def logsource(self, logsource_name:str)->None|Configurations.Visibility.LogSource:
+            def logsource(self, logsource_name: str) -> VisibilityLogSource | None:
                 logsources = OpenTide.Configurations.Visibility.logsources
                 if not logsources:
                     return None
@@ -194,15 +203,15 @@ class DetectionObjectivesWiki:
 
 
 
-            def detectors(self, detectors: list[Objects.DetectionObjective.Objective.Signal.Detector]) -> str:
-                
-                def _technology(detector: Objects.DetectionObjective.Objective.Signal.Detector) -> str:
+            def detectors(self, detectors: list[ExternalDetector]) -> str:
+
+                def _technology(detector: ExternalDetector) -> str:
                     detector_details = self.fetchers.detector(detector.technology)
                     if detector_details:
                         return f"**{detector_details.name}** : {detector_details.description}"
                     return f"_❌ No detector technology configured under visibility for {detector.technology}_"
                 
-                def _monitored_assets(detector: Objects.DetectionObjective.Objective.Signal.Detector) -> str:
+                def _monitored_assets(detector: ExternalDetector) -> str:
                     detector_details = self.fetchers.detector(detector.technology)
                     if detector_details and detector_details.assets:
                         assets_documentation = []
@@ -248,7 +257,7 @@ class DetectionObjectivesWiki:
                 
                 return pd.DataFrame(entities_data).to_markdown(index=False)
 
-            def examples(self, examples:list[Objects.DetectionObjective.Objective.Signal.Example])->str:
+            def examples(self, examples: list[DetectionExample]) -> str:
 
                 examples_data = []
                 for example in examples:
@@ -268,13 +277,13 @@ class DetectionObjectivesWiki:
                 return pd.DataFrame(examples_data).to_html(index=False, escape=False)
 
 
-    def _export(self, objective:Objects.DetectionObjective, content:str):
+    def _export(self, objective: DetectionObjective, content: str):
         
         if DOCUMENTATION_TARGET is CIEnvironment.CIPlatforms.GitlabCI and UUID_PERMALINKS:
             log("INFO", "Generating docs with UUID as file name")
             file_name = objective.metadata.uuid + ".md"
         else:
-            objective_icon = get_icon("dom")
+            objective_icon = get_icon("objective")
             file_name = objective_icon + " " + objective.name + ".md"
             file_name = safe_file_name(file_name)
 

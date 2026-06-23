@@ -25,7 +25,7 @@ from opentide.generation.framework import (
     vocab_metadata,
     relations_list,
     childs,
-    keep_active_mdr,
+    keep_active_rules,
 )
 from opentide.documentation.core import (
     get_icon,
@@ -57,19 +57,19 @@ def _dom_downstream_rules_table(dom_id: str) -> str:
         key=object_name,
     )
     direct_mdr_ids = sorted(
-        [child for child in childs(dom_id) if get_type(child) == "mdr"],
+        [child for child in childs(dom_id) if get_type(child) == "rule"],
         key=object_name,
     )
 
     rows = []
     for signal_id in signal_ids:
-        mdr_ids = sorted(keep_active_mdr(childs(signal_id)), key=object_name)
+        mdr_ids = sorted(keep_active_rules(childs(signal_id)), key=object_name)
         rows.append(
             {
-                "signal": backlink_resolver(signal_id, current_page="dom"),
-                "mdr": (
+                "signal": backlink_resolver(signal_id, current_page="objective"),
+                "rule": (
                     "<br>".join(
-                        backlink_resolver(mdr_id, current_page="dom")
+                        backlink_resolver(mdr_id, current_page="objective")
                         for mdr_id in mdr_ids
                     )
                     if mdr_ids
@@ -78,13 +78,13 @@ def _dom_downstream_rules_table(dom_id: str) -> str:
             }
         )
 
-    active_direct_mdrs = keep_active_mdr(direct_mdr_ids)
+    active_direct_mdrs = keep_active_rules(direct_mdr_ids)
     if active_direct_mdrs:
         rows.append(
             {
                 "signal": DOM_DIRECT_MDR_LABEL,
-                "mdr": "<br>".join(
-                    backlink_resolver(mdr_id, current_page="dom")
+                "rule": "<br>".join(
+                    backlink_resolver(mdr_id, current_page="objective")
                     for mdr_id in active_direct_mdrs
                 ),
             }
@@ -93,11 +93,11 @@ def _dom_downstream_rules_table(dom_id: str) -> str:
     if not rows:
         return ""
 
-    table = pd.DataFrame(rows, columns=["signal", "mdr"])
+    table = pd.DataFrame(rows, columns=["signal", "rule"])
     metrics = relations_list(dom_id, mode="count", direction="downstream")
 
-    no_rules_filler = f"❌ No {CONFIG.Documentation.object_names['mdr']}"
-    table["mdr"] = table["mdr"].fillna(no_rules_filler)
+    no_rules_filler = f"❌ No {CONFIG.Documentation.object_names['rule']}"
+    table["rule"] = table["rule"].fillna(no_rules_filler)
 
     def column_rename(col):
         count = f"({metrics.get(col)})" if metrics.get(col, 0) > 1 else ""
@@ -269,11 +269,11 @@ def relations_table(
 
     model_type = get_type(id)
 
-    if model_type == "dom" and direction == "downstream":
+    if model_type == "objective" and direction == "downstream":
         return _dom_downstream_rules_table(id)
 
     tree = None
-    current_page = "dom" if model_type == "dom" else None
+    current_page = "objective" if model_type == "objective" else None
 
     if direction == "downstream":
         tree = relations_downstream(id)
@@ -324,36 +324,36 @@ def relations_table(
 
         if direction == "downstream":
 
-            if model_type == "tvm":
-                trunk_data["dom"] = (
-                    None if "dom" not in trunk_data else trunk_data["dom"]
+            if model_type == "threat":
+                trunk_data["objective"] = (
+                    None if "objective" not in trunk_data else trunk_data["objective"]
                 )
 
-            if model_type in ["tvm", "dom"]:
-                trunk_data["mdr"] = (
-                    None if "mdr" not in trunk_data else trunk_data["mdr"]
+            if model_type in ["threat", "objective"]:
+                trunk_data["rule"] = (
+                    None if "rule" not in trunk_data else trunk_data["rule"]
                 )
 
-            if model_type == "dom":
+            if model_type == "objective":
                     trunk_data["signal"] = (
                     None if "signal" not in trunk_data else trunk_data["signal"]
                 )
 
 
         elif direction == "upstream":
-            if model_type in ["mdr", "dom"]:
-                trunk_data["tvm"] = (
-                    None if "tvm" not in trunk_data else trunk_data["tvm"]
+            if model_type in ["rule", "objective"]:
+                trunk_data["threat"] = (
+                    None if "threat" not in trunk_data else trunk_data["threat"]
                 )
 
             if model_type == "signal":
-                trunk_data["dom"] = (
-                    None if "dom" not in trunk_data else trunk_data["dom"]
+                trunk_data["objective"] = (
+                    None if "objective" not in trunk_data else trunk_data["objective"]
                 )
 
-            if model_type in ["mdr"]:
-                trunk_data["dom"] = (
-                    None if "dom" not in trunk_data else trunk_data["dom"]
+            if model_type in ["rule"]:
+                trunk_data["objective"] = (
+                    None if "objective" not in trunk_data else trunk_data["objective"]
                 )
                 trunk_data["signal"] = (
                     None if "signal" not in trunk_data else trunk_data["signal"]

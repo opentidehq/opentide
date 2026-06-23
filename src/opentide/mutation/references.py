@@ -11,7 +11,7 @@ from opentide.core.root import get_repo_root
 ROOT = get_repo_root()
 
 PATHS = resolve_paths()
-MODELS_SCOPE = ["tvm", "mdr"]
+MODELS_SCOPE = ["threat", "rule"]
 MODELS_FOLDER = dict()
 
 for model in MODELS_SCOPE:

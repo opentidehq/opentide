@@ -92,11 +92,11 @@ class RevisionIndexer:
             object_type_name = self.OBJECT_NAMES[object_type]
             name = object_data["name"]
             match object_type:
-                case "tvm":
+                case "threat":
                     description = object_data.get("threat", {}).get("description")
-                case "dom":
+                case "objective":
                     description = object_data.get("objective", {}).get("description")
-                case "mdr":
+                case "rule":
                     description = object_data.get("description") or ""
 
             return RevisionIndexEntry(name=name,

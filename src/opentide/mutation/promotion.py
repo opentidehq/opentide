@@ -162,7 +162,7 @@ class PromoteMDR:
                 exit()
 
             if DEBUG:
-                MDR_FOLDER = ROOT / PATHS["mdr"]
+                MDR_FOLDER = ROOT / PATHS["rule"]
                 deployment = [MDR_FOLDER / mdr for mdr in sorted(os.listdir(MDR_FOLDER))]
 
             else:

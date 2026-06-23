@@ -18,8 +18,6 @@ def indexer(write_index=False) -> dict:
 
     CORE_CONFIG = RESOLVED_CONFIGURATIONS["global"]
 
-    DATA_FIELD = CORE_CONFIG["data_fields"]
-
     RAW_PATHS = CORE_CONFIG["paths"]["tide"]
     RAW_CORE_PATHS = CORE_CONFIG["paths"]["core"]
     RAW_PATHS = RAW_CORE_PATHS | RAW_PATHS
@@ -41,7 +39,6 @@ def indexer(write_index=False) -> dict:
     
     @dataclass
     class IndexPaths:
-        OBJECTS_INDEX_PATH = INDEX_PATH / "objects.json"
         REVISIONS_INDEX_PATH = INDEX_PATH / "revisions.json"
 
 
@@ -238,7 +235,7 @@ def indexer(write_index=False) -> dict:
 
                             # Creating a sub-index for signals so we can more easily search in them through OpenTide
                             # We copy each signal to avoid polluting the DOM data with the 'parent' field
-                            if meta_name == "dom":
+                            if meta_name == "objective":
                                 signals = model_body.get("objective",{}).get("signals", [])
                                 for idx, signal in enumerate(signals or []):
                                     if not signal:
@@ -264,48 +261,26 @@ def indexer(write_index=False) -> dict:
 
     index["objects"] = objects_index
     index["files"] = files_index
-    
-    # Tide Indexes retrieval (injected into )
-    log("INFO", "Retrieving all Tide Indexes built on the Tide Instance",
-        "Injected onto vocabulary index to be retrieved in generation jobs")
-    
-    indexes_index = {}
 
-    if not os.path.exists(IndexPaths.OBJECTS_INDEX_PATH):
-        log("SKIP", "Not able to find a objects.json index in Tide instance",
-            "Should be generated in the next Framework generation pipeline run")
-    else:
-        objects_index = json.load(open(IndexPaths.OBJECTS_INDEX_PATH, encoding="utf-8"))
-        configured_objects = set(RESOLVED_CONFIGURATIONS["global"].get("objects", []))
-        filtered_objects_index = {}
+    from opentide.indexing.object_vocab import build_object_vocabularies
 
-        for object_type, object_vocab in objects_index.items():
-            if object_type not in configured_objects:
-                log(
-                    "SKIP",
-                    "Ignoring stored object index for inactive object type",
-                    object_type,
-                    "Regenerate Schemas/Indexes/objects.json to remove stale object families",
-                )
-                continue
-            if (
-                not isinstance(object_vocab, dict)
-                or not isinstance(object_vocab.get("metadata"), dict)
-                or not isinstance(object_vocab.get("entries"), dict)
-            ):
-                log(
-                    "WARNING",
-                    "Ignoring malformed stored object index",
-                    object_type,
-                    "Object indexes must expose both metadata and entries before being used as vocabularies",
-                )
-                continue
-            filtered_objects_index[object_type] = object_vocab
+    doc_config = RESOLVED_CONFIGURATIONS.get("documentation", {})
+    object_vocab_index = build_object_vocabularies(
+        object_scope=CORE_CONFIG.get("objects", []),
+        models_index=objects_index,
+        icons=doc_config.get("icons", {}),
+        object_names=doc_config.get("object_names", {}),
+    )
+    index["vocabs"].update(object_vocab_index)
 
-        indexes_index["objects"] = filtered_objects_index
-        if filtered_objects_index:
-            index["vocabs"].update(filtered_objects_index)
-    
+    log(
+        "INFO",
+        "Built inline object vocabularies from indexed models",
+        str(len(object_vocab_index)),
+    )
+
+    indexes_index: dict[str, object] = {"objects": object_vocab_index}
+
     if not os.path.exists(IndexPaths.REVISIONS_INDEX_PATH):
         log("SKIP", "Not able to find a revisions.json index in Tide instance",
             "Should be generated in the next Framework generation pipeline run")

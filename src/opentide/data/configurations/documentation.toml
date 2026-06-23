@@ -1,4 +1,4 @@
-scope = [ "tvm", "dom", "mdr" ]
+scope = [ "threat", "objective", "rule" ]
 skip_model_keys = ["description",
                             "guidelines",
                             "terrain",
@@ -29,21 +29,21 @@ retrieve_details = true
 proxy = false
 
 [object_names]
-tvm = "Threat Vectors"
-dom = "Detection Objectives"
+threat = "Threat Vectors"
+objective = "Detection Objectives"
 signal = "Detection Objective Signals"
-mdr = "Detection Rules"
+rule = "Detection Rules"
 
 [titles]
-tvm = "Threat Vector Schema"
-dom = "Detection Objective Schema"
-mdr = "Detection Rules Schema"
+threat = "Threat Vector Schema"
+objective = "Detection Objective Schema"
+rule = "Detection Rules Schema"
 
 [icons]
-tvm = "☣️"
-dom = "🎯"
+threat = "☣️"
+objective = "🎯"
 signal = "📡"
-mdr = "🚨"
+rule = "🚨"
 vocab = "📒"
 metaschema = "🏗️"
 metadata = "🗃️"
@@ -60,7 +60,6 @@ configurations = "🛠️"
 author = "👩‍💻"
 priority = "❗"
 actor = "👹"
-threat = "☣️"
 detection = "🛡️"
 alert = "🚨"
 request = "🏛️"

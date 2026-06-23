@@ -91,7 +91,7 @@
         },
         "objective": {
             "$ref": "#/$defs/ObjectiveBody",
-            "title": "Objective"
+            "title": "\ud83c\udfaf Objective"
         },
         "composition": {
             "$ref": "#/$defs/ObjectiveComposition",

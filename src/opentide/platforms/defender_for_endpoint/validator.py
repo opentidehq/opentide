@@ -195,7 +195,7 @@ class DefenderForEndpointQueryValidator(QueryValidator):
                  deployment_plan:DeploymentStrategy):
         
         if type(mdr_deployment[0]) is str:
-            mdr_deployment = [OpenTide.Models.MDR[uuid] for uuid in mdr_deployment]
+            mdr_deployment = [OpenTide.Rules[uuid] for uuid in mdr_deployment]
 
         deployment = TideDeployment(deployment=mdr_deployment,
                                     system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,

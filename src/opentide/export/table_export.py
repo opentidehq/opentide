@@ -99,7 +99,7 @@ class TableExporter:
         object_parents = ", ".join(object_parents) if object_parents else ""
 
         match object_type:
-            case "tvm":
+            case "threat":
                 description = object_data.get("threat", {}).get("description")
                 chains = object_data["threat"].get("chaining") or ""
                 if chains:
@@ -112,12 +112,12 @@ class TableExporter:
                 attack = object_data["threat"]["att&ck"]
                 attack = ", ".join(attack)
 
-            case "dom":
+            case "objective":
                 description = object_data["objective"].get("description")
                 if techniques:=object_data["objective"].get("att&ck"):
                     attack = ", ".join(techniques)
 
-            case "mdr":
+            case "rule":
                 description = object_data["description"]
 
         return TableEntry(uuid=uuid,

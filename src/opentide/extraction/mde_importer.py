@@ -40,7 +40,7 @@ name: "{name}"
 
 metadata:
   uuid: {uuid}
-  schema: mdr::2.1
+  schema: rule::1.0
   version: 1
   created: {created}
   modified: {modified}
