@@ -15,7 +15,7 @@ def run(output: Path | None = None) -> Path:
     OpenTide.initialise()
     playbook_mapping: list[dict[str, str]] = []
 
-    for mdr_uuid, content in OpenTide.Models.rule.items():
+    for mdr_uuid, content in OpenTide.Models.rules.items():
         if content.get("status") != "PRODUCTION":
             continue
 

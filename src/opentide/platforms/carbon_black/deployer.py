@@ -248,7 +248,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
 
         # Start deployment routine
         for mdr in deployment:
-            mdr_data = OpenTide.Models.rule[mdr]
+            mdr_data = OpenTide.Models.rules[mdr]
 
             # Check if modified MDR contains a platform entry (by safety, but should not happen since orchestrator will filter for the platform)
             if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"].keys():

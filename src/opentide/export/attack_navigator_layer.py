@@ -58,9 +58,9 @@ class AttackNavigatorLayer:
 
         match model_type:
             case "threat":
-                index = OpenTide.Models.threat
+                index = OpenTide.Models.threats
             case "rule":
-                index = OpenTide.Models.rule
+                index = OpenTide.Models.rules
 
         technique_mapping:dict[str, TechniqueIndexEntry] = {}
 

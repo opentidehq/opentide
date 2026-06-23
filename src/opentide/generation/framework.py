@@ -349,7 +349,7 @@ def get_type(model_uuid:str, mute:bool=False):
     schema = model_body.get("metadata", {}).get("schema")
     if not schema:
         #TODO For backwards compatibility with MDR still on 1.0. To be deprecated.
-        if model_uuid in OpenTide.Models.signal:
+        if model_uuid in OpenTide.Models.signals:
             return "signal"
         if model_body.get("configurations"):
             return "rule"

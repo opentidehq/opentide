@@ -278,7 +278,7 @@ def backlink_resolver(model_uuid:str,
         hover_content = objective_data.objective.description
 
     if model_type == "signal":
-        signal_data = OpenTide.Models.Signal[model_uuid]
+        signal_data = OpenTide.Models.Signals[model_uuid]
         objective_data = OpenTide.Objectives[signal_data.parent]
         if current_page:
             # If we're on the current DOM page, we should just do an anchor and no need to add
@@ -311,7 +311,7 @@ def backlink_resolver(model_uuid:str,
     if DOCUMENTATION_TARGET in TARGET_WITH_DASH_PATHS:
         if UUID_PERMALINKS:
             if model_type == "signal":
-                signal_data = OpenTide.Models.Signal[model_uuid]
+                signal_data = OpenTide.Models.Signals[model_uuid]
                 parent_uuid = signal_data.parent
                 file_link = doc_path + parent_uuid
             else:

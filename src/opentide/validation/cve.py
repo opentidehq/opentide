@@ -24,7 +24,7 @@ def run():
     )
 
     error_list = []
-    for threat_id in (index := OpenTide.Models.threat):
+    for threat_id in (index := OpenTide.Models.threats):
         threat_data = index[threat_id]
         threat_name = threat_data["name"]
         threat_uuid = threat_data.get("metadata", {}).get("uuid")

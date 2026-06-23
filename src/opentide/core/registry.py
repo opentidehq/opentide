@@ -466,19 +466,19 @@ class _ModelsAccessor:
         return dict(self._index["objects"])
 
     @property
-    def rule(self) -> dict[str, Any]:
+    def rules(self) -> dict[str, Any]:
         return cast(dict[str, Any], self.Index.get("rule", {}))
 
     @property
-    def objective(self) -> dict[str, Any]:
+    def objectives(self) -> dict[str, Any]:
         return cast(dict[str, Any], self.Index.get("objective", {}))
 
     @property
-    def threat(self) -> dict[str, Any]:
+    def threats(self) -> dict[str, Any]:
         return cast(dict[str, Any], self.Index.get("threat", {}))
 
     @property
-    def signal(self) -> dict[str, Any]:
+    def signals(self) -> dict[str, Any]:
         return cast(dict[str, Any], self.Index.get("signal", {}))
 
     @property
@@ -487,11 +487,11 @@ class _ModelsAccessor:
 
     @property
     def chaining(self) -> dict[str, Any]:
-        return IndexManager.compute_chains(self.threat)
+        return IndexManager.compute_chains(self.threats)
 
     @property
     def FlatIndex(self) -> dict[str, Any]:
-        return {**self.threat, **self.objective, **self.signal, **self.rule}
+        return {**self.threats, **self.objectives, **self.signals, **self.rules}
 
     @property
     def Rules(self) -> dict[str, DetectionRule]:
@@ -506,8 +506,8 @@ class _ModelsAccessor:
         return self._objectives or None
 
     @property
-    def Signal(self) -> dict[str, Any]:
-        return self.signal
+    def Signals(self) -> dict[str, Any]:
+        return self.signals
 
     def _typed_rules(self) -> dict[str, DetectionRule]:
         """Typed rule access for deployers."""
@@ -518,7 +518,7 @@ class _ModelsAccessor:
 
         files = self._index.get("files", {})
         typed: dict[str, DetectionRule] = {}
-        for uuid, data in self.rule.items():
+        for uuid, data in self.rules.items():
             file_path = _resolve_file("rule", files.get(uuid), self._index)
             typed[uuid] = load_rule_from_dict(data, file=file_path)
         return typed

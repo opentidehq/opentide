@@ -39,19 +39,19 @@ def collect_info(
         "version": _package_version(),
         "repo": str(ctx.repo),
         "counts": {
-            "rules": len(OpenTide.Models.rule),
-            "threats": len(OpenTide.Models.threat),
-            "objectives": len(OpenTide.Models.objective),
+            "rules": len(OpenTide.Models.rules),
+            "threats": len(OpenTide.Models.threats),
+            "objectives": len(OpenTide.Models.objectives),
         },
         "platforms": platforms_info,
     }
 
     if section == "rules":
-        payload["rules"] = list(OpenTide.Models.rule.keys())
+        payload["rules"] = list(OpenTide.Models.rules.keys())
     elif section == "threats":
-        payload["threats"] = list(OpenTide.Models.threat.keys())
+        payload["threats"] = list(OpenTide.Models.threats.keys())
     elif section == "objectives":
-        payload["objectives"] = list(OpenTide.Models.objective.keys())
+        payload["objectives"] = list(OpenTide.Models.objectives.keys())
     elif section == "coverage" and technique:
         payload["coverage"] = _technique_coverage(technique)
 
@@ -67,7 +67,7 @@ def _package_version() -> str:
 def _technique_coverage(technique: str) -> dict[str, Any]:
     """Return rules referencing an ATT&CK technique."""
     matching: list[str] = []
-    for uuid, rule in OpenTide.Models.rule.items():
+    for uuid, rule in OpenTide.Models.rules.items():
         body = rule if isinstance(rule, dict) else rule.model_dump(by_alias=True)
         tags = body.get("tags", {}) if isinstance(body, dict) else {}
         techniques = tags.get("techniques", []) or tags.get("attack", [])

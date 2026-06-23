@@ -20,7 +20,7 @@ def resource_index() -> str:
 
 def resource_rules() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Models.rule)
+    return _json_resource(OpenTide.Models.rules)
 
 
 def resource_rule(uuid: str) -> str:
@@ -32,7 +32,7 @@ def resource_rule(uuid: str) -> str:
 
 def resource_threats() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Models.threat)
+    return _json_resource(OpenTide.Models.threats)
 
 
 def resource_threat(uuid: str) -> str:
@@ -44,7 +44,7 @@ def resource_threat(uuid: str) -> str:
 
 def resource_objectives() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Models.objective)
+    return _json_resource(OpenTide.Models.objectives)
 
 
 def resource_objective(uuid: str) -> str:
