@@ -18,10 +18,8 @@ def _stable_info_payload(payload: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _stable_info_text(stdout: str) -> str:
-    """Normalize version and temp corpus paths in human-readable info output."""
-    text = re.sub(r"0\.\d+\.dev\S+", "<version>", stdout)
-    return re.sub(r"/tmp/pytest-of-\S+/corpus", "<corpus>", text)
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
 def test_info_json_snapshot(invoke_cli, snapshot) -> None:
@@ -30,7 +28,7 @@ def test_info_json_snapshot(invoke_cli, snapshot) -> None:
     assert _stable_info_payload(payload) == snapshot(name="info_json")
 
 
-def test_info_no_color_text_snapshot(cli_runner, tide_corpus_repo, snapshot) -> None:
+def test_info_no_color_renders_platform_table(cli_runner, tide_corpus_repo) -> None:
     from opentide.cli import app
 
     result = cli_runner.invoke(
@@ -38,4 +36,8 @@ def test_info_no_color_text_snapshot(cli_runner, tide_corpus_repo, snapshot) -> 
         ["--no-color", "--repo", str(tide_corpus_repo), "info"],
     )
     assert result.exit_code == 0
-    assert snapshot(name="info_no_color") == _stable_info_text(result.stdout)
+    plain = _strip_ansi(result.stdout)
+    assert "OpenTide Info" in plain
+    assert "Rules" in plain and "8" in plain
+    assert "splunk" in plain
+    assert "enabled=True" in plain

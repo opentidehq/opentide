@@ -10,8 +10,8 @@ from tests.test_cli.conftest import assert_json_ok
 pytestmark = pytest.mark.cli_e2e
 
 
-def test_document_command(invoke_cli) -> None:
-    result = invoke_cli("document")
+def test_document_command(invoke_cli, tmp_path: Path) -> None:
+    result = invoke_cli("document", "--output", str(tmp_path / "wiki"))
     payload = assert_json_ok(result)
     assert "message" in payload
 

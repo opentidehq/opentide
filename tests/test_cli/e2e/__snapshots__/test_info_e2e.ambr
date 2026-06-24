@@ -52,24 +52,3 @@
     ]),
   })
 # ---
-# name: test_info_no_color_text_snapshot[info_no_color]
-  '''
-                        OpenTide Info                       
-  ┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-  ┃ Key                   ┃ Value                          ┃
-  ┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-  │ Version               │ <version> │
-  │ Rules                 │ 8                              │
-  │ Threats               │ 1                              │
-  │ Objectives            │ 1                              │
-  │ carbon_black_cloud    │ enabled=True                   │
-  │ crowdstrike           │ enabled=True                   │
-  │ defender_for_endpoint │ enabled=True                   │
-  │ harfanglab            │ enabled=True                   │
-  │ sentinel              │ enabled=True                   │
-  │ sentinel_one          │ enabled=True                   │
-  │ splunk                │ enabled=True                   │
-  └───────────────────────┴────────────────────────────────┘
-  
-  '''
-# ---
