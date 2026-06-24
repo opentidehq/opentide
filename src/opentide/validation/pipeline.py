@@ -30,7 +30,7 @@ def validate_object(
     if cls is None:
         return ValidationResult(ok=False, errors=[f"Unknown object type {object_type!r}"])
     try:
-        cls.model_validate(model.model_dump(by_alias=True))
+        _ = cls.model_validate(model.model_dump(by_alias=True))
         return ValidationResult(ok=True)
     except ValidationError as exc:
         return ValidationResult(
@@ -50,11 +50,11 @@ def validate_raw_payload(
         return ValidationResult(ok=False, errors=[f"Unknown object type {object_type!r}"])
     try:
         if object_type == "rule":
-            DetectionRule.from_yaml_dict(payload)
+            _ = DetectionRule.from_yaml_dict(payload)
         elif object_type == "objective":
-            DetectionObjective.from_yaml_dict(payload)
+            _ = DetectionObjective.from_yaml_dict(payload)
         else:
-            ThreatVector.from_yaml_dict(payload)
+            _ = ThreatVector.from_yaml_dict(payload)
         return ValidationResult(ok=True)
     except ValidationError as exc:
         return ValidationResult(

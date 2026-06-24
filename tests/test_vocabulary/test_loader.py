@@ -106,12 +106,12 @@ def test_vocabulary_loader_load_valid() -> None:
 
 def test_vocabulary_loader_missing_metadata() -> None:
     with pytest.raises(VocabularyLoadError, match="Missing 'metadata'"):
-        VocabularyLoader.load({"entries": {}}, source="broken")
+        _ = VocabularyLoader.load({"entries": {}}, source="broken")
 
 
 def test_vocabulary_loader_missing_entries() -> None:
     with pytest.raises(VocabularyLoadError, match="Missing 'entries'"):
-        VocabularyLoader.load({"metadata": {"name": "x"}}, source="broken")
+        _ = VocabularyLoader.load({"metadata": {"name": "x"}}, source="broken")
 
 
 def test_vocabulary_loader_skips_malformed_entry() -> None:
@@ -167,7 +167,7 @@ def test_parse_vocabulary_document_duplicate_id_raises() -> None:
         ],
     }
     with pytest.raises(VocabularyLoadError, match="Duplicate entry key"):
-        parse_vocabulary_document(raw, source="test.vocab.toml")
+        _ = parse_vocabulary_document(raw, source="test.vocab.toml")
 
 
 def test_parse_vocabulary_document_empty_keys_allowed() -> None:
@@ -184,7 +184,7 @@ def test_parse_vocabulary_document_empty_keys_allowed() -> None:
 
 def test_parse_vocabulary_document_missing_required() -> None:
     with pytest.raises(VocabularyLoadError, match="Missing required key 'field'"):
-        parse_vocabulary_document({"name": "X"}, source="bad.vocab.toml")
+        _ = parse_vocabulary_document({"name": "X"}, source="bad.vocab.toml")
 
 
 def test_parse_vocabulary_document_no_keys_defaults_empty() -> None:
@@ -262,7 +262,7 @@ def test_field_from_vocab_path() -> None:
 
 def test_validate_field_matches_path() -> None:
     with pytest.raises(VocabularyLoadError, match="does not match filename"):
-        validate_field_matches_path({"field": "wrong"}, Path("impact.vocab.toml"))
+        _ = validate_field_matches_path({"field": "wrong"}, Path("impact.vocab.toml"))
 
 
 def test_strip_spurious_entry_id() -> None:

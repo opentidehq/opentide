@@ -32,17 +32,17 @@ def test_load_mcp_template(host: str) -> None:
 
 def test_load_mcp_template_unknown_host() -> None:
     with pytest.raises(SetupTemplateError):
-        load_mcp_template("unknown")
+        _ = load_mcp_template("unknown")
 
 
 def test_copy_skill_pack_missing(tmp_path: Path) -> None:
     with pytest.raises(SetupTemplateError):
-        copy_skill_pack("missing-pack", tmp_path / "pack")
+        _ = copy_skill_pack("missing-pack", tmp_path / "pack")
 
 
-def test_render_agent_entrypoint_missing(tmp_path: Path) -> None:
+def test_render_agent_entrypoint_missing() -> None:
     with pytest.raises(SetupTemplateError):
-        render_agent_entrypoint("missing.template", {})
+        _ = render_agent_entrypoint("missing.template", {})
 
 
 def test_copy_skill_pack(tmp_path: Path) -> None:
@@ -73,7 +73,7 @@ def test_load_mcp_template_missing_file(monkeypatch) -> None:
         lambda: root / "missing-mcp",
     )
     with pytest.raises(SetupTemplateError, match="MCP template missing"):
-        load_mcp_template("vscode")
+        _ = load_mcp_template("vscode")
 
 
 def test_copy_skill_pack_missing_directory(monkeypatch, tmp_path: Path) -> None:
@@ -82,7 +82,7 @@ def test_copy_skill_pack_missing_directory(monkeypatch, tmp_path: Path) -> None:
         lambda: tmp_path / "setup-root",
     )
     with pytest.raises(SetupTemplateError, match="Skill pack missing"):
-        copy_skill_pack("detection-ops", tmp_path / "dest")
+        _ = copy_skill_pack("detection-ops", tmp_path / "dest")
 
 
 def test_copy_skill_pack_skips_non_files(tmp_path: Path, monkeypatch) -> None:
@@ -103,7 +103,7 @@ def test_render_agent_entrypoint_missing_file(monkeypatch) -> None:
         lambda: Path("/nonexistent/setup"),
     )
     with pytest.raises(SetupTemplateError, match="Entrypoint template missing"):
-        render_agent_entrypoint("AGENTS.md.template", {})
+        _ = render_agent_entrypoint("AGENTS.md.template", {})
 
 
 def test_load_yaml_schema_fragment_missing(monkeypatch) -> None:
@@ -114,4 +114,4 @@ def test_load_yaml_schema_fragment_missing(monkeypatch) -> None:
         lambda: Path("/nonexistent/setup"),
     )
     with pytest.raises(SetupTemplateError, match="VS Code settings fragment missing"):
-        load_yaml_schema_fragment()
+        _ = load_yaml_schema_fragment()

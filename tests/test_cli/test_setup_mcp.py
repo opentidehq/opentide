@@ -29,7 +29,7 @@ def test_write_mcp_config(tmp_path: Path, host: McpHost, rel: str) -> None:
 
 def test_run_mcp_setup_requires_host() -> None:
     with pytest.raises(typer.BadParameter):
-        run_mcp_setup(McpSetupOptions(hosts=[]))
+        _ = run_mcp_setup(McpSetupOptions(hosts=[]))
 
 
 def test_run_mcp_setup_multiple_hosts(tmp_path: Path) -> None:
