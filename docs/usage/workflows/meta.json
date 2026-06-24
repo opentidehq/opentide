@@ -1,0 +1,4 @@
+{
+  "title": "Workflows",
+  "pages": ["detection-as-code", "ci-cd", "agentic-setup"]
+}

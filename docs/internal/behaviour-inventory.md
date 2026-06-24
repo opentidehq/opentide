@@ -1,3 +1,8 @@
+---
+title: Behaviour inventory
+description: Pre-Pydantic migration baseline behaviour mapping from legacy CoreTide Engines.
+---
+
 # Behaviour Inventory — Pre-Pydantic Migration Baseline
 
 Derived from the **current code** in `Engines/` on branch `development` after Phase 3 merge (`8fd1fd1`). This document gates Phase 4+ work: regenerated schemas/templates must remain byte-equivalent unless an intentional Phase 3 fix changes them.

@@ -1,3 +1,8 @@
+---
+title: Test plan
+description: Master test plan for Project TideKit migration phases.
+---
+
 # Master Test Plan — Project TideKit
 
 Epic: [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) · Agent guide: [`AGENTS.md`](https://github.com/OpenTideHQ/opentide/blob/development/AGENTS.md)
@@ -77,7 +82,7 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 - **CLI E2E** (`tests/test_cli/e2e/`): Typer `CliRunner` tests backed by `tests/fixtures/tide_corpus/` (threat/objective/rule naming, `*::1.0` baseline)
 - Markers: `cli_e2e` (in-process), `cli_smoke` (console-script subprocess); separate `cli-e2e` CI job on Python 3.14 after unit matrix
 - Deploy dry-run returns `plan` + `payloads` (unit golden tests in `tests/test_deployment/test_deploy_payloads.py`)
-- Skill: [`.agents/skills/cli-e2e-testing/SKILL.md`](../.agents/skills/cli-e2e-testing/SKILL.md)
+- Skill: [`.agents/skills/cli-e2e-testing/SKILL.md`](../../.agents/skills/cli-e2e-testing/SKILL.md)
 - Future: interactive `setup` wizard smoke, `extract` E2E
 
 ### Phase 7 ([#68](https://github.com/OpenTideHQ/CoreTide/issues/68))
@@ -88,7 +93,7 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 ### Phase 8 ([#69](https://github.com/OpenTideHQ/CoreTide/issues/69))
 
 - PyPI publish; migration guide; deprecation shims
-- See [`migration/MIGRATION.md`](migration/MIGRATION.md)
+- See [Migration guide](../usage/migration/index.md)
 
 ### Phase 9 ([#71](https://github.com/OpenTideHQ/CoreTide/issues/71))
 

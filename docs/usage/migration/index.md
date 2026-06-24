@@ -1,10 +1,13 @@
-# Client Migration Guide — Submodule to pip install
-
-**Phase 8** ([#69](https://github.com/OpenTideHQ/CoreTide/issues/69)) · [Project TideKit](https://github.com/OpenTideHQ/CoreTide/issues/60)
-
+---
+title: Migration guide
+description: Upgrade detection repositories from CoreTide git submodules to the opentide PyPI package.
 ---
 
-## Before & After
+# Client migration guide
+
+Upgrade detection repositories from **CoreTide git submodules** to the **`opentide` PyPI package**.
+
+## Before and after
 
 ### Before (git submodule)
 
@@ -27,20 +30,20 @@ dependencies = ["opentide[sentinel,splunk,cli]>=0.1"]
 
 ```python
 from opentide import OpenTide
+
 OpenTide.initialise()
 rule = OpenTide.Rules[uuid]
 rule.deploy("sentinel")
 ```
 
 ```bash
-opentide validate --platform sentinel --all
+opentide validate --strict
+opentide validate query --platform sentinel
 ```
 
-Use `--platform`, not `--system`.
+Use `--platform`, not legacy `--system`.
 
----
-
-## Migration Steps
+## Migration steps
 
 ### 1. Install
 
@@ -97,7 +100,7 @@ v0.x: legacy imports warn via `DeprecationWarning`. **v1.0 removes shims.**
 | (repository onboarding) | `opentide setup` |
 | (CI pipeline files) | `opentide setup ci` |
 
-Query validation: **5 platforms only** (no CrowdStrike/HarfangLab).
+Query validation: **five platforms only** (no CrowdStrike/HarfangLab).
 
 ### 6. Update CI
 
@@ -105,53 +108,52 @@ Remove `submodules: recursive`. Add:
 
 ```yaml
 - run: pip install "opentide[sentinel,cli]>=0.1"
-- run: opentide validate --platform sentinel --all
-env:
-  OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+- run: opentide validate --strict
+  env:
+    OPENTIDE_REPO_ROOT: ${{ github.workspace }}
 ```
 
-### 7. IDE / agents
+See [CI/CD workflow](../workflows/ci-cd.md).
+
+### 7. IDE and agents
+
+```bash
+opentide setup mcp --cursor --yes
+opentide setup skills --generic --yes
+```
+
+Or configure manually:
 
 ```json
 { "mcpServers": { "opentide": { "command": "opentide-mcp" } } }
 ```
 
-Or run `opentide setup` for scaffolded MCP config and agent skills.
-
----
-
-## Automated Helper
+## Automated helper
 
 ```bash
-opentide migrate --check
-opentide migrate --apply
+opentide migrate --check    # scan for legacy patterns
+opentide migrate --apply    # rewrite known imports and script calls
 ```
 
-Rewrites common `Engines.modules.*` imports and `Orchestration/` invocations.
+See [CLI migrate](../../cli/migrate.md).
 
----
-
-## Deprecation Timeline
+## Deprecation timeline
 
 | Version | Shims |
 |---------|-------|
 | v0.x | Active with warnings |
 | v1.0 | Removed |
 
----
-
-## Verification Checklist
+## Verification checklist
 
 - [ ] `pip install opentide[<platforms>,cli]` succeeds
 - [ ] `OPENTIDE_REPO_ROOT` set
-- [ ] `opentide validate` passes
+- [ ] `opentide validate --strict` passes
 - [ ] CI no longer uses submodule
 - [ ] No `sys.path.append` hacks
 
----
-
 ## Related
 
-- [`AGENTS.md`](https://github.com/OpenTideHQ/opentide/blob/development/AGENTS.md)
-- [`TEST_PLAN.md`](../TEST_PLAN.md)
-- [#69](https://github.com/OpenTideHQ/CoreTide/issues/69) · [#67 CLI](https://github.com/OpenTideHQ/CoreTide/issues/67)
+- [Behaviour inventory (internal)](../../internal/behaviour-inventory.md) — legacy vs new behaviour mapping
+- [Repository setup](../repository-setup.md)
+- [CLI migrate](../../cli/migrate.md)

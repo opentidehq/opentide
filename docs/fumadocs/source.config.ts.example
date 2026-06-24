@@ -1,0 +1,16 @@
+/**
+ * Example Fumadocs MDX config for the OpenTide docs site.
+ *
+ * Copy to the website repository as source.config.ts and adjust `dir`
+ * to point at this package's docs/ folder.
+ */
+import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
+
+export const docs = defineDocs({
+  // Path to opentide/docs (submodule, copy, or monorepo relative path)
+  dir: '../opentide/docs',
+});
+
+export default defineConfig({
+  mdxOptions: {},
+});

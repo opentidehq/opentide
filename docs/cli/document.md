@@ -1,61 +1,64 @@
+---
+title: opentide document
+description: Generate markdown documentation for rules, objectives, threats, and catalogue indexes.
+---
+
 # opentide document
 
-Generate markdown documentation for detection objects under `docs/{Rules,Objectives,Threats}/`.
-
-## Usage
+Generate markdown documentation for detection objects.
 
 ```bash
-opentide document                      # full pipeline: objects then index
-opentide document --scope rules        # rules only
-opentide document --scope objectives   # objectives only
-opentide document --scope threats      # threats only
-opentide document --scope index        # index pages only
-opentide document --output docs        # output directory (default from config)
-opentide document --flavor github      # markdown dialect
+opentide document                           # all scopes, then index
+opentide document rules
+opentide document objectives
+opentide document threats
+opentide document index
+opentide document --output docs --flavor github
 ```
 
-## Scopes
+## Subcommands
 
-| Scope | Output |
-|-------|--------|
-| `rules` | `docs/Rules/*.md` |
-| `objectives` | `docs/Objectives/*.md` (signals as `##` sections) |
-| `threats` | `docs/Threats/*.md` |
-| `index` | folder README/cover pages + root index |
-| *(none)* | all scopes in order, then index |
+| Subcommand | Output |
+|------------|--------|
+| *(default)* | Rules, objectives, threats, then index pages |
+| `rules` | Rule pages under configured rules docs folder |
+| `objectives` | Objective pages (signals as `##` sections) |
+| `threats` | Threat pages |
+| `index` | Folder index / cover pages and root index |
+
+## Options
+
+| Flag | Purpose |
+|------|---------|
+| `--output` | Output directory (default from `documentation.toml`) |
+| `--flavor` | Markdown dialect (overrides auto-detection) |
 
 ## Flavors
 
 | `--flavor` | Target |
 |------------|--------|
 | `github` | GitHub README / GFM |
-| `gitlab` | GitLab wiki (`json:table`, YAML frontmatter when UUID permalinks) |
+| `gitlab` | GitLab wiki (`json:table`, YAML frontmatter with UUID permalinks) |
 | `azure-devops` | Azure DevOps wiki (`::: mermaid`, `[[_TOC_]]`) |
-| `generic` | portable GFM (default locally) |
+| `generic` | Portable GFM (local default) |
 
-CI auto-detects flavor from `GITHUB_ACTIONS`, `CI` (GitLab), or `TF_BUILD` (Azure Pipelines). `--flavor` always wins.
+CI auto-detects flavor from `GITHUB_ACTIONS`, GitLab `CI`, or Azure `TF_BUILD`. `--flavor` always wins.
 
-## Platform Mermaid notes
+## Mermaid rendering notes
 
-Research (June 2026) on wiki rendering:
-
-- **GitHub** — standard ` ```mermaid ` fences; broad Mermaid support including `flowchart` and `mindmap`.
-- **GitLab GLFM** — ` ```mermaid ` fences; Mermaid 11.x in recent releases; `json:table` for searchable indexes.
-- **Azure DevOps** — Sprint 274+ accepts standard ` ```mermaid ` fences in addition to `::: mermaid`. Microsoft docs still list syntax limits: prefer `graph` over `flowchart`, avoid `---->` long arrows, and avoid subgraphs in complex diagrams.
-
-OpenTide emits full Mermaid (`flowchart`, `mindmap`) for GitHub, GitLab, and generic. The Azure DevOps formatter applies **minimal** normalisation only (`flowchart`→`graph`, `---->`→`-->`) and uses `::: mermaid` fences.
+- **GitHub** — standard ` ```mermaid ` fences; supports `flowchart` and `mindmap`.
+- **GitLab** — Mermaid 11.x in recent releases; `json:table` for searchable indexes.
+- **Azure DevOps** — uses `::: mermaid` fences; formatter normalises `flowchart`→`graph` and long arrows.
 
 ## Configuration
 
-`configurations/documentation.toml`:
+Client `.opentide/configurations/documentation.toml`:
 
-- `folder_index_pages` — write per-folder index pages
+- `folder_index_pages` — per-folder index pages
 - `[flavor] default` — local default flavor
 - `[gitlab] uuid_permalinks` — UUID filenames + YAML frontmatter
 
-`configurations/global.toml` paths:
-
-- `docs_folder`, `rules_docs_folder`, `objectives_docs_folder`, `threats_docs_folder`
+Paths in `global.toml`: `docs_folder`, `rules_docs_folder`, `objectives_docs_folder`, `threats_docs_folder`.
 
 ## Programmatic API
 
@@ -65,3 +68,9 @@ from opentide.documentation import render_rule, write_all
 md = render_rule(rule)
 write_all(include_index=True, output="docs", flavor="github")
 ```
+
+See [SDK documentation API](../sdk/documentation.md).
+
+## Source
+
+`src/opentide/cli/__init__.py`, `src/opentide/cli/services/document.py`

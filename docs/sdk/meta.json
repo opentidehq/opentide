@@ -1,0 +1,17 @@
+{
+  "root": true,
+  "title": "SDK",
+  "description": "Python package API for embedding OpenTide",
+  "icon": "Code",
+  "pages": [
+    "index",
+    "installation",
+    "---Core---",
+    "registry",
+    "validation",
+    "documentation",
+    "---Models---",
+    "models",
+    "platforms"
+  ]
+}
