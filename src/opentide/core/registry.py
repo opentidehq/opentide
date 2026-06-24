@@ -32,9 +32,14 @@ class OpenTideRegistry:
         self.Platforms = PlatformsRegistry()
 
     @property
-    def initialised(self) -> bool:
+    def is_initialised(self) -> bool:
         """Return whether the registry index has been loaded."""
         return self._initialised
+
+    @property
+    def initialised(self) -> bool:
+        """Backward-compatible alias for :attr:`is_initialised`."""
+        return self.is_initialised
 
     def initialise(self) -> None:
         """Load index into memory (typed objects load on first access)."""

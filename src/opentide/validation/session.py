@@ -172,16 +172,16 @@ def _validate_work_item(
     file_path = ref.file_path if ref else None
 
     if ValidateCheck.uuid_format in checks:
-        issues.extend(_uuid_issue_for_object(item, graph, file_path))
+        issues.extend(_uuid_issue_for_object(item, file_path))
 
     if ValidateCheck.schema in checks:
         try:
             if item.object_type == "rule":
-                DetectionRule.from_yaml_dict(item.body)
+                _ = DetectionRule.from_yaml_dict(item.body)
             elif item.object_type == "objective":
-                DetectionObjective.from_yaml_dict(item.body)
+                _ = DetectionObjective.from_yaml_dict(item.body)
             else:
-                ThreatVector.from_yaml_dict(item.body)
+                _ = ThreatVector.from_yaml_dict(item.body)
         except ValidationError as exc:
             bucket = issues_from_pydantic(
                 exc,
@@ -211,7 +211,6 @@ def _validate_work_item(
 
 def _uuid_issue_for_object(
     item: ObjectWorkItem,
-    graph: PreflightGraph,
     file_path: Path | None,
 ) -> list[ValidationIssue]:
     raw_uuid = item.body.get("uuid") or item.body.get("metadata", {}).get("uuid")

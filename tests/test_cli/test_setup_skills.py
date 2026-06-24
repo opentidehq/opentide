@@ -55,4 +55,4 @@ def test_run_skills_setup_copilot(tmp_path: Path) -> None:
 
 def test_run_skills_setup_requires_target() -> None:
     with pytest.raises(typer.BadParameter):
-        run_skills_setup(SkillsSetupOptions(targets=[]))
+        _ = run_skills_setup(SkillsSetupOptions(targets=[]))
