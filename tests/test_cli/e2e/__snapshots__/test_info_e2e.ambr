@@ -1,0 +1,54 @@
+# serializer version: 1
+# name: test_info_json_snapshot[info_json]
+  dict({
+    'counts': dict({
+      'objectives': 1,
+      'rules': 8,
+      'threats': 1,
+    }),
+    'platforms': list([
+      dict({
+        'can_deploy': True,
+        'can_validate': True,
+        'enabled': True,
+        'name': 'carbon_black_cloud',
+      }),
+      dict({
+        'can_deploy': False,
+        'can_validate': False,
+        'enabled': True,
+        'name': 'crowdstrike',
+      }),
+      dict({
+        'can_deploy': False,
+        'can_validate': False,
+        'enabled': True,
+        'name': 'defender_for_endpoint',
+      }),
+      dict({
+        'can_deploy': False,
+        'can_validate': False,
+        'enabled': True,
+        'name': 'harfanglab',
+      }),
+      dict({
+        'can_deploy': False,
+        'can_validate': False,
+        'enabled': True,
+        'name': 'sentinel',
+      }),
+      dict({
+        'can_deploy': False,
+        'can_validate': False,
+        'enabled': True,
+        'name': 'sentinel_one',
+      }),
+      dict({
+        'can_deploy': True,
+        'can_validate': True,
+        'enabled': True,
+        'name': 'splunk',
+      }),
+    ]),
+  })
+# ---

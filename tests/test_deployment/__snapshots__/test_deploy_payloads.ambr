@@ -1,0 +1,217 @@
+# serializer version: 1
+# name: test_preview_payload_shape[rule-0001-sentinel-kql.yaml-sentinel][sentinel_api_request]
+  dict({
+    'alert': dict({
+      'create_incident': True,
+      'custom_details': None,
+      'description': None,
+      'dynamic_properties': None,
+      'severity': None,
+      'suppression': False,
+      'tactics': None,
+      'techniques': None,
+      'title': 'Sentinel KQL Rule',
+    }),
+    'contributors': None,
+    'enabled': True,
+    'entities': None,
+    'exclusions': None,
+    'flags': None,
+    'grouping': dict({
+      'alert': dict({
+        'enabled': False,
+        'group_by_alert_details': None,
+        'group_by_custom_details': None,
+        'group_by_entities': None,
+        'grouping_lookback': None,
+        'matching': None,
+        'reopen_closed_incidents': None,
+      }),
+      'event': 'SingleAlert',
+    }),
+    'name': 'Sentinel KQL Rule',
+    'query': '''
+      SecurityEvent
+      | where EventID == 4688
+      | take 1
+  
+    ''',
+    'scheduling': dict({
+      'frequency': 'PT1H',
+      'lookback': 'PT2H',
+      'nrt': None,
+    }),
+    'schema': None,
+    'status': 'STAGING',
+    'template': None,
+    'tenants': None,
+    'trigger': None,
+  })
+# ---
+# name: test_preview_payload_shape[rule-0002-defender-kql.yaml-defender_for_endpoint][defender_for_endpoint_api_request]
+  dict({
+    'actions': None,
+    'alert': dict({
+      'category': 'Execution',
+      'description': None,
+      'recommendation': None,
+      'severity': None,
+      'techniques': None,
+      'title': None,
+    }),
+    'contributors': None,
+    'enabled': True,
+    'exclusions': None,
+    'flags': None,
+    'impacted_entities': dict({
+      'device': 'device_id',
+      'mailbox': None,
+      'user': None,
+    }),
+    'name': 'Defender KQL Rule',
+    'query': '''
+      DeviceProcessEvents
+      | take 1
+  
+    ''',
+    'rule_id': None,
+    'scheduling': '1H',
+    'schema': None,
+    'scope': dict({
+      'device_groups': None,
+      'selection': 'All',
+    }),
+    'status': 'STAGING',
+    'tenants': None,
+  })
+# ---
+# name: test_preview_payload_shape[rule-0003-splunk-spl.yaml-splunk][splunk_api_request]
+  dict({
+    'actions': None,
+    'advanced': None,
+    'contributors': None,
+    'correlation_search': None,
+    'cron_schedule': '0 * * * *',
+    'enabled': True,
+    'flags': None,
+    'name': 'Splunk SPL Rule',
+    'query': None,
+    'scheduling': None,
+    'schema': None,
+    'search': 'index=main | head 1',
+    'status': 'STAGING',
+    'tenants': None,
+    'trigger': None,
+  })
+# ---
+# name: test_preview_payload_shape[rule-0004-sentinel-one-s1ql.yaml-sentinel_one][sentinel_one_api_request]
+  dict({
+    'condition': dict({
+      'cool_off': None,
+      'correlation': dict({
+        'entity': 'host',
+        'match_in_order': True,
+        'sub_queries': list([
+          dict({
+            'matches_required': 1,
+            'query': 'EventType = "Process Create"',
+          }),
+        ]),
+        'time_window': '1h',
+      }),
+      'single_event': None,
+      'type': 'Correlation',
+    }),
+    'contributors': None,
+    'details': None,
+    'enabled': True,
+    'flags': None,
+    'name': 'SentinelOne S1QL Rule',
+    'response': dict({
+      'network_quarantine': False,
+      'treat_as_threat': 'Malicious',
+    }),
+    'rule_id_bundle': None,
+    'schema': None,
+    'status': 'STAGING',
+    'tenants': None,
+  })
+# ---
+# name: test_preview_payload_shape[rule-0005-carbon-black-lucene.yaml-carbon_black_cloud][carbon_black_cloud_api_request]
+  dict({
+    'contributors': None,
+    'enabled': True,
+    'flags': None,
+    'name': 'Carbon Black Lucene Rule',
+    'organizations': None,
+    'query': 'process_name:cmd.exe',
+    'report': None,
+    'rule_id_bundle': None,
+    'schema': None,
+    'status': 'STAGING',
+    'tags': None,
+    'tenants': None,
+    'watchlist': None,
+  })
+# ---
+# name: test_preview_payload_shape[rule-0006-crowdstrike-deploy-only.yaml-crowdstrike][crowdstrike_api_request]
+  dict({
+    'contributors': None,
+    'details': dict({
+      'description': None,
+      'name': None,
+      'outcome': 'detection',
+      'severity': None,
+      'tactic': None,
+      'technique': None,
+      'trigger': 'event',
+    }),
+    'enabled': True,
+    'flags': None,
+    'name': 'CrowdStrike Deploy Rule',
+    'query': 'index=main',
+    'rule_id_bundle': None,
+    'schedule': dict({
+      'end': None,
+      'frequency': '1h',
+      'lookback': '2h',
+      'start': None,
+    }),
+    'schema': None,
+    'status': 'STAGING',
+    'tenants': None,
+  })
+# ---
+# name: test_preview_payload_shape[rule-0007-harfanglab-deploy-only.yaml-harfanglab][harfanglab_api_request]
+  dict({
+    'action': 'Alert',
+    'confidence': 'Moderate',
+    'contributors': None,
+    'enabled': True,
+    'flags': None,
+    'maturity': 'Experimental',
+    'name': 'HarfangLab Deploy Rule',
+    'rule_id_bundle': None,
+    'schema': None,
+    'sigma': dict({
+      'condition': 'selection',
+      'false_positives': None,
+      'logsource': dict({
+        'category': 'process_creation',
+        'product': 'windows',
+      }),
+      'selections': list([
+        dict({
+          'field': 'Image',
+          'modifiers': None,
+          'name': 'selection',
+          'value': 'cmd.exe',
+        }),
+      ]),
+    }),
+    'status': 'STAGING',
+    'tags': None,
+    'tenants': None,
+    'yara': None,
+  })
+# ---

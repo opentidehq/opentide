@@ -1,0 +1,28 @@
+name: Splunk SPL Rule
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000003
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+
+description: |
+  Simulated Splunk rule for CLI E2E corpus.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  splunk:
+    enabled: true
+    name: Splunk SPL Rule
+    status: STAGING
+    search: index=main | head 1
+    cron_schedule: "0 * * * *"

@@ -1,0 +1,52 @@
+{
+    "type": "object",
+    "properties": {
+        "assets": {
+            "anyOf": [
+                {
+                    "items": {
+                        "$ref": "#/$defs/VisibilityAsset"
+                    },
+                    "type": "array"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "description": "List of assets that generate logs in the environment",
+            "title": "Assets"
+        },
+        "logsources": {
+            "items": {
+                "enum": [
+                    "splunk::Placeholder Logsource"
+                ],
+                "markdownEnumDescriptions": [
+                    "### Placeholder Logsource\n**System**: splunk\n**Description**: Customize this field by adding logsources and assets entries under logsources.toml\n\n"
+                ],
+                "uniqueItems": true
+            },
+            "title": "Log Sources",
+            "type": "array"
+        },
+        "detectors": {
+            "anyOf": [
+                {
+                    "items": {
+                        "$ref": "#/$defs/VisibilityDetector"
+                    },
+                    "type": "array"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": "External Detectors"
+        }
+    },
+    "required": [
+        "logsources"
+    ]
+}

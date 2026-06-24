@@ -207,7 +207,7 @@ def validate_query_platform(
             "status": "skipped",
             "message": "No rules to validate for this platform in the current plan",
         }
-    query_validators = cast(dict[str, Any], DeployTide.query_validation)
+    query_validators = cast(dict[str, Any], DeployTide().query_validation)
     if platform not in query_validators:
         return {
             "platform": platform,

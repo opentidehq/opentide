@@ -1,0 +1,36 @@
+name: Defender KQL Rule
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000002
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+
+description: |
+  Simulated Defender rule for CLI E2E corpus.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  defender_for_endpoint:
+    enabled: true
+    name: Defender KQL Rule
+    status: STAGING
+    query: |
+      DeviceProcessEvents
+      | take 1
+    scheduling: 1H
+    alert:
+      category: Execution
+    impacted_entities:
+      device: device_id
+    scope:
+      selection: All

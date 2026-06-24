@@ -1,0 +1,27 @@
+name: Carbon Black Lucene Rule
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000005
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+
+description: |
+  Simulated Carbon Black rule for CLI E2E corpus.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  carbon_black_cloud:
+    enabled: true
+    name: Carbon Black Lucene Rule
+    status: STAGING
+    query: process_name:cmd.exe
