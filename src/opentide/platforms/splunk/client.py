@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import ssl
 import urllib.request
@@ -5,11 +7,13 @@ from abc import ABC
 from datetime import datetime
 from io import BytesIO
 from random import randrange
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from urllib.error import HTTPError
 
 import structlog
-from splunklib import client
+
+if TYPE_CHECKING:
+    from splunklib.client import Service
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, OpenTide
@@ -221,7 +225,9 @@ def connect_splunk(
     app: str,
     allow_http_errors: bool = False,
     ssl_enabled: bool = True,
-) -> client.Service:
+) -> Service:
+    from splunklib import client
+
     port = int(port)
     if allow_http_errors:
         os.environ["TIDE_SPLUNK_PLUGIN_ALLOW_HTTP_ERRORS"] = "True"

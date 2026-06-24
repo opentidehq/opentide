@@ -146,6 +146,7 @@ line-length = 100
 src = ["src", "tests"]
 exclude = [
     # Ported Engines modules — style cleanup tracked separately
+    "src/opentide/deployment",
     "src/opentide/mutation",
     "src/opentide/documentation",
     "src/opentide/extraction",

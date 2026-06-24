@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import structlog
-from cbc_sdk.rest_api import CBCloudAPI
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, OpenTide
@@ -16,6 +16,9 @@ from opentide.platforms.carbon_black.client import (
     CarbonBlackCloudService,
 )
 from opentide.platforms.plugins import QueryValidator
+
+if TYPE_CHECKING:
+    from cbc_sdk.rest_api import CBCloudAPI
 
 logger = structlog.get_logger(__name__)
 
@@ -99,6 +102,8 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
         self.configure_proxy()
         org_key = self.CBC_SECRETS[self.VALIDATION_ORGANIZATION]["org_key"]
         token = self.CBC_SECRETS[self.VALIDATION_ORGANIZATION]["token"]
+        from cbc_sdk.rest_api import CBCloudAPI
+
         service = CBCloudAPI(
             url=self.CBC_URL, token=token, org_key=org_key, ssl_verify=self.SSL_ENABLED
         )

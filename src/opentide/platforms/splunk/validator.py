@@ -4,9 +4,12 @@ import json
 import os
 import traceback
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import structlog
-from splunklib import client
+
+if TYPE_CHECKING:
+    from splunklib.client import Service
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, OpenTide
@@ -25,7 +28,7 @@ logger = structlog.get_logger(__name__)
 
 
 class SplunkQueryValidator(SplunkConnection, QueryValidator):
-    def check_query(self, mdr: dict[str, object], service: client.Service) -> None:
+    def check_query(self, mdr: dict[str, object], service: Service) -> None:
         mdr_uuid = str(mdr.get("uuid") or mdr["metadata"]["uuid"])  # type: ignore[index]
         query: str | None = mdr["configurations"][self.DEPLOYER_IDENTIFIER].get("query")  # type: ignore[index]
         if not query:
@@ -35,7 +38,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
         query = create_query(mdr)  # type: ignore[arg-type]
         self._validate_spl_query(query, str(mdr["name"]), mdr_uuid, service)
 
-    def check_query_v4(self, data: DetectionRule, service: client.Service) -> None:
+    def check_query_v4(self, data: DetectionRule, service: Service) -> None:
         splunk_config = data.configurations.splunk
         if not splunk_config or not splunk_config.query:
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
@@ -45,7 +48,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
         self._validate_spl_query(query, data.name, data.metadata.uuid, service)
 
     def _validate_spl_query(
-        self, query: str, mdr_name: str, mdr_uuid: str, service: client.Service
+        self, query: str, mdr_name: str, mdr_uuid: str, service: Service
     ) -> None:
         if not query.startswith("| "):
             query = "| search " + query

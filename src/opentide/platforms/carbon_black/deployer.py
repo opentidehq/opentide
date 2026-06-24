@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import structlog
-from cbc_sdk.enterprise_edr import IOC_V2, Report, Watchlist
-from cbc_sdk.rest_api import CBCloudAPI
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, OpenTide
@@ -19,6 +18,9 @@ from opentide.platforms.carbon_black.client import (
 )
 from opentide.platforms.plugins import RuleDeployer
 
+if TYPE_CHECKING:
+    from cbc_sdk.rest_api import CBCloudAPI
+
 logger = structlog.get_logger(__name__)
 
 
@@ -31,6 +33,8 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
         org: str,
         config_data: dict[str, object],
     ) -> bool:
+        from cbc_sdk.enterprise_edr import IOC_V2, Report, Watchlist
+
         uuid = (
             data.metadata.uuid
             if isinstance(data, DetectionRule)
@@ -153,6 +157,8 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
                 logger.critical("missing_org_credentials", org=org)
                 raise KeyError(org)
             try:
+                from cbc_sdk.rest_api import CBCloudAPI
+
                 service = CBCloudAPI(
                     url=self.CBC_URL,
                     token=token,

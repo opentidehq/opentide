@@ -1,7 +1,6 @@
 from abc import ABC
 
 import structlog
-from cbc_sdk.rest_api import CBCloudAPI
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, OpenTide
@@ -121,6 +120,8 @@ class CarbonBlackCloudService:
     """Connect to Carbon Black Cloud for a specific tenant configuration."""
 
     def __init__(self, tenant: ConfigurationModels.Systems.CarbonBlackCloud.Tenant):
+        from cbc_sdk.rest_api import CBCloudAPI
+
         self.tenant = tenant
         self.service = CBCloudAPI(
             url=tenant.setup.url,
