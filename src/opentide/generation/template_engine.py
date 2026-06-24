@@ -8,8 +8,10 @@ from typing import Any, Callable, cast
 import yaml
 
 from opentide.core.files import IndentFullDumper
-from opentide.core.logging import log as default_log
+from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
+
+logger = get_logger(__name__)
 
 
 def _config_index() -> dict[str, Any]:
@@ -30,11 +32,11 @@ def fetch_config_template(dot_path: str) -> str:
     try:
         return str(config_index[key]).strip()
     except Exception:
-        default_log(
-            "WARNING",
-            "Could not the expected template",
-            dot_path,
-            "This is non blocking, but check why the template could not be fetched",
+        logger.warning(
+            "template_fetch_failed",
+            dot_path=dot_path,
+            detail="Could not the expected template",
+            advice="This is non blocking, but check why the template could not be fetched",
         )
         return ""
 

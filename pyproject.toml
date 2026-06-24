@@ -122,7 +122,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 46.9
+fail_under = 70.0
 show_missing = true
 skip_covered = true
 precision = 1
@@ -208,24 +208,14 @@ exclude = [
     "src/opentide/cli",
     "src/opentide/platforms",
     "src/opentide/indexing",
-    "src/opentide/loading/config_loader.py",
-    "src/opentide/loading/objects.py",
-    "src/opentide/loading/configurations.py",
     "src/opentide/generation/framework.py",
     "src/opentide/generation/schema_pipeline.py",
     "src/opentide/generation/template_engine.py",
     "src/opentide/generation/vscode_snippets.py",
-    "src/opentide/models/object_models.py",
-    "src/opentide/models/system_models.py",
     "src/opentide/models/deployment_enums.py",
-    "src/opentide/models/config_models.py",
     "src/opentide/core/logging",
     "src/opentide/core/debug.py",
-    "src/opentide/core/environment.py",
     "src/opentide/core/index_legacy.py",
-    "src/opentide/core/index_manager.py",
-    "src/opentide/core/registry.py",
-    "src/opentide/validation",
 ]
 
 [tool.ty.rules]

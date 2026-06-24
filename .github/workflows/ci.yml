@@ -43,6 +43,9 @@ jobs:
       - name: Ruff format
         run: uv run ruff format --check tests src/opentide
 
+      - name: Legacy logging guard
+        run: bash scripts/check-legacy-logging.sh
+
       - name: Ty type check
         run: uv run ty check src/opentide --output-format github
 

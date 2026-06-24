@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from opentide.core.logging import log
+from opentide.core.logging import get_logger
+from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
 from opentide.generation.pydantic_metaschema import build_platform_schema_source
 from opentide.generation.pydantic_templates import (
@@ -18,6 +19,8 @@ from opentide.generation.template_engine import (
     get_required,
 )
 from opentide.models.platform_schema import platform_model_for_key
+
+logger = get_logger(__name__)
 
 CONFIG_INDEX: dict[str, Any]
 PATHS: dict[str, Any]
@@ -37,10 +40,10 @@ def _refresh_renderer_context() -> None:
 
 def run() -> None:
     _refresh_renderer_context()
-    log("TITLE", "Generate Templates from Pydantic Models")
-    log(
-        "INFO",
-        "Core and platform templates are generated from Pydantic model metadata.",
+    emit_section("Generate Templates from Pydantic Models")
+    logger.info(
+        "template_generation_started",
+        detail="Core and platform templates are generated from Pydantic model metadata.",
     )
 
     templates = OpenTide.Configurations.Global.templates
@@ -48,10 +51,10 @@ def run() -> None:
         if meta not in templates:
             continue
         template_path = Path(PATHS["templates"]) / templates[meta]
-        log("ONGOING", "Generating template", str(meta))
+        logger.info("generating_template", detail=str(meta))
 
         if meta in core_template_model_keys():
-            generate_core_template(meta, template_path, log=log)
+            generate_core_template(meta, template_path)
             continue
 
     for recomp in RECOMPOSITION:
@@ -82,7 +85,7 @@ def run() -> None:
             )
             platform_model = platform_model_for_key(entry)
             parsed = build_platform_schema_source(platform_model)
-            log("ONGOING", "Generating template", subschema_name)
+            logger.info("generating_template", detail=subschema_name)
             required = get_required(parsed["properties"], list(parsed.get("required", [])))
             required.extend(parsed.get("tide.template.force-required") or [])
             subschema_template = gen_template(parsed["properties"], required)
@@ -92,10 +95,9 @@ def run() -> None:
                 placeholders=None,
                 spacing_properties=parsed["properties"],
                 indent=2,
-                log=log,
             )
 
-    log("SUCCESS", "All Templates correctly generated")
+    logger.info("all_templates_correctly_generated")
 
 
 if __name__ == "__main__":

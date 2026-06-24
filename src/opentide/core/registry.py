@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
 from opentide.core import index_manager as index_mod
 from opentide.core import runtime
+from opentide.core.types import IndexSnapshot
 from opentide.models.objective import DetectionObjective
 from opentide.models.results import ValidationResult
 from opentide.models.rule import DetectionRule
@@ -25,7 +27,7 @@ class OpenTideRegistry:
     def __init__(self) -> None:
         self._initialised = False
         self._objects_loaded = False
-        self._index: dict[str, Any] | None = None
+        self._index: IndexSnapshot | None = None
         self._rules: dict[str, DetectionRule] = {}
         self._threats: dict[str, ThreatVector] = {}
         self._objectives: dict[str, DetectionObjective] = {}
@@ -97,7 +99,7 @@ class OpenTideRegistry:
         return self._objectives
 
     @property
-    def Index(self) -> dict[str, Any]:
+    def Index(self) -> IndexSnapshot:
         self._require_init()
         assert self._index is not None
         return self._index
@@ -195,7 +197,7 @@ class OpenTideRegistry:
 OpenTide = OpenTideRegistry()
 
 
-def _resolve_file(category: str, filename: str | None, index: dict[str, Any]) -> Path | None:
+def _resolve_file(category: str, filename: str | None, index: Mapping[str, Any]) -> Path | None:
     if not filename:
         return None
     paths = index["paths"]
@@ -207,7 +209,7 @@ def _resolve_file(category: str, filename: str | None, index: dict[str, Any]) ->
 
 @dataclass(frozen=True)
 class _ConfigurationAccessor:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
@@ -244,11 +246,15 @@ class _ConfigurationAccessor:
 
 @dataclass(frozen=True)
 class _DocumentationConfig:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
         return dict(self._index["configurations"].get("documentation", {}))
+
+    @property
+    def cve(self) -> dict[str, Any]:
+        return dict(self.Index.get("cve", {}))
 
     @property
     def flavor(self) -> str:
@@ -269,7 +275,7 @@ class _DocumentationConfig:
 
 @dataclass(frozen=True)
 class _DeploymentConfig:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
@@ -295,7 +301,7 @@ class _DeploymentConfig:
 
 @dataclass(frozen=True)
 class _VisibilityConfig:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
@@ -328,7 +334,7 @@ class _VisibilityConfig:
 
 @dataclass(frozen=True)
 class _GlobalConfig:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
@@ -393,7 +399,7 @@ def _paths_namespace(paths: dict[str, Any]) -> Any:
 
 @dataclass(frozen=True)
 class _PathsAccessor:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
@@ -410,7 +416,7 @@ class _PathsAccessor:
 
 @dataclass(frozen=True)
 class _VocabulariesAccessor:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
@@ -428,7 +434,7 @@ class _VocabulariesAccessor:
 
 @dataclass(frozen=True)
 class _MetaSchemasAccessor:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
@@ -449,7 +455,7 @@ class _MetaSchemasAccessor:
 
 @dataclass(frozen=True)
 class _SchemasAccessor:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
@@ -458,7 +464,7 @@ class _SchemasAccessor:
 
 @dataclass(frozen=True)
 class _TemplatesAccessor:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:
@@ -467,7 +473,7 @@ class _TemplatesAccessor:
 
 @dataclass(frozen=True)
 class _ModelsAccessor:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
     _rules: dict[str, DetectionRule]
     _objectives: dict[str, DetectionObjective]
     _threats: dict[str, ThreatVector]
@@ -536,7 +542,7 @@ class _ModelsAccessor:
 
 @dataclass(frozen=True)
 class _SystemsConfig:
-    _index: dict[str, Any]
+    _index: IndexSnapshot
 
     @property
     def Index(self) -> dict[str, Any]:

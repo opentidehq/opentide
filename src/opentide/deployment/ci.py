@@ -1,18 +1,17 @@
+import os
+
+from opentide.core.logging import get_logger
+from opentide.core.registry import DebugHelpers, OpenTide
 from opentide.models.deployment_enums import (
     StatusStrategy,
 )
-from opentide.core.registry import OpenTide
-from opentide.core.registry import OpenTide, DebugHelpers
-from opentide.core.logging import log
-import os
+
+logger = get_logger(__name__)
 from enum import Enum, auto
 
-
-
-
 SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
-DEPRECATED_STATUSES = (StatusStrategy.DELETION,
-                        StatusStrategy.DISABLEMENT)
+DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
+
 
 class CIEnvironment:
     """
@@ -30,21 +29,21 @@ class CIEnvironment:
         AzurePipeline = auto()
         GitlabCI = auto()
         GitHubActions = auto()
-        LocalDebug = auto()        
+        LocalDebug = auto()
 
     def _check_ci_environment(self) -> CIPlatforms:
         if os.getenv("TF_BUILD"):
-            log("SUCCESS", "Discovered CI Environment to be Azure Pipeline")
+            logger.info("discovered_ci_environment", platform="azure_pipeline")
             return self.CIPlatforms.AzurePipeline
         elif os.getenv("GITHUB_ACTIONS"):
-            log("SUCCESS", "Discovered CI Environment to be GitHub Actions")
+            logger.info("discovered_ci_environment", platform="github_actions")
             return self.CIPlatforms.GitHubActions
         elif os.getenv("CI"):
-            log("SUCCESS", "Discovered CI Environment to be Gitlab CI")
+            logger.info("discovered_ci_environment", platform="gitlab_ci")
             return self.CIPlatforms.GitlabCI
         elif DebugHelpers.is_debug():
-            log("SUCCESS", "Discover CI Environment to be Local")
+            logger.info("discovered_ci_environment", platform="local")
             return self.CIPlatforms.LocalDebug
         else:
-            log("SUCCESS", "Discover CI Environment to be Local")
+            logger.info("discovered_ci_environment", platform="local")
             return self.CIPlatforms.LocalDebug

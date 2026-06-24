@@ -9,15 +9,16 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from opentide.core.root import repository_root
+from opentide.core.types import IndexSnapshot
 
 
 class IndexManager:
     """Load and refresh the repository index on demand."""
 
-    _cache: dict[str, Any] | None = None
+    _cache: IndexSnapshot | None = None
 
     @classmethod
-    def load(cls) -> dict[str, Any]:
+    def load(cls) -> IndexSnapshot:
         """Load index from disk or build in memory."""
         if cls._cache is not None:
             return cls._cache
@@ -31,11 +32,12 @@ class IndexManager:
         else:
             index = cls._build_index()
 
-        cls._cache = cls.reconcile_staging(index)
+        cls._cache = cast(IndexSnapshot, cls.reconcile_staging(index))
+        assert cls._cache is not None
         return cls._cache
 
     @classmethod
-    def reload(cls) -> dict[str, Any]:
+    def reload(cls) -> IndexSnapshot:
         """Drop cached index and rebuild."""
         cls._cache = None
         return cls.load()
@@ -56,7 +58,7 @@ class IndexManager:
         return cast(dict[str, Any], index)
 
     @classmethod
-    def reconcile_staging(cls, index: dict[str, Any]) -> dict[str, Any]:
+    def reconcile_staging(cls, index: dict[str, Any]) -> IndexSnapshot:
         """Merge staging index MDR data and refresh configurations."""
         import sys
 
@@ -66,7 +68,7 @@ class IndexManager:
             sys.path.append(root_str)
         from opentide.core.index_legacy import IndexManager as LegacyIndexManager
 
-        return cast(dict[str, Any], LegacyIndexManager.reconcile_staging(deepcopy(index)))
+        return cast(IndexSnapshot, LegacyIndexManager.reconcile_staging(deepcopy(index)))
 
     @classmethod
     def return_paths(cls, tier: Literal["all", "core", "tide"] = "all") -> dict[str, Any]:

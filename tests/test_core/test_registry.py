@@ -178,3 +178,108 @@ def test_configuration_deployment_statuses() -> None:
     OpenTide._initialised = True
     statuses = OpenTide.Configuration.Deployment.statuses
     assert statuses[0].name == "production"
+
+
+def test_opentide_reload_refreshes_index(monkeypatch: pytest.MonkeyPatch) -> None:
+    OpenTide._initialised = True
+    OpenTide._rules = {"old": MagicMock()}
+    sample_index = {
+        "objects": {"rule": {}, "threat": {}, "objective": {}},
+        "files": {},
+        "configurations": {"global": {"objects": []}, "systems": {}},
+    }
+    monkeypatch.setattr(index_mod.IndexManager, "reload", lambda: None)
+    monkeypatch.setattr(index_mod.IndexManager, "load", lambda: sample_index)
+    OpenTide.reload()
+    assert OpenTide._initialised is True
+    assert OpenTide._rules == {}
+    assert OpenTide._objects_loaded is False
+
+
+def test_opentide_lookup_finds_typed_objects(rule_payload: dict[str, Any]) -> None:
+    uuid = rule_payload["metadata"]["uuid"]
+    rule = DetectionRule.from_yaml_dict(rule_payload)
+    OpenTide._rules = {uuid: rule}
+    OpenTide._threats = {}
+    OpenTide._objectives = {}
+    OpenTide._objects_loaded = True
+    OpenTide._initialised = True
+    assert OpenTide.lookup(uuid) is rule
+    assert OpenTide.lookup("nonexistent") is None
+
+
+def test_models_chaining_property() -> None:
+    threat_uuid = "00000000-0000-4000-8000-000000000060"
+    OpenTide._index = {
+        "objects": {
+            "threat": {
+                threat_uuid: {
+                    "name": "Chained Threat",
+                    "threat": {
+                        "chaining": [{"relation": "follows", "vector": "other-uuid"}],
+                    },
+                }
+            },
+            "rule": {},
+            "objective": {},
+            "signal": {},
+        },
+        "files": {},
+        "configurations": {},
+    }
+    OpenTide._initialised = True
+    chains = OpenTide.Models.chaining
+    assert isinstance(chains, dict)
+
+
+def test_configuration_documentation_properties() -> None:
+    OpenTide._index = {
+        "configurations": {
+            "documentation": {
+                "flavor": "sentinel",
+                "output": "analytics",
+                "folder_index_pages": False,
+                "object_names": {"rule": "Detection Rules"},
+            }
+        },
+        "objects": {"rule": {}, "threat": {}, "objective": {}},
+    }
+    OpenTide._initialised = True
+    doc = OpenTide.Configuration.Documentation
+    assert doc.flavor == "sentinel"
+    assert doc.output == "analytics"
+    assert doc.folder_index_pages is False
+    assert doc.object_names["rule"] == "Detection Rules"
+
+
+def test_global_config_paths_and_exports() -> None:
+    OpenTide._index = {
+        "configurations": {
+            "global": {
+                "objects": ["rule"],
+                "exports": {"table": "table.csv"},
+                "metaschemas": {"rule": "rule.yaml"},
+            }
+        },
+        "objects": {"rule": {}, "threat": {}, "objective": {}},
+        "paths": {"rule": "/tmp/rules"},
+    }
+    OpenTide._initialised = True
+    global_cfg = OpenTide.Configuration.Global
+    assert global_cfg.objects == ["rule"]
+    assert global_cfg.exports.table == "table.csv"
+    assert global_cfg.metaschemas["rule"] == "rule.yaml"
+
+
+def test_legacy_export_getattr() -> None:
+    from opentide.core import registry as reg_mod
+
+    loader = reg_mod.__getattr__("ObjectLoader")
+    assert loader is not None
+
+
+def test_legacy_export_unknown_raises() -> None:
+    from opentide.core import registry as reg_mod
+
+    with pytest.raises(AttributeError):
+        reg_mod.__getattr__("NotARealExport")

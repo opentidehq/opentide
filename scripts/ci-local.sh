@@ -46,6 +46,9 @@ uv run ruff check tests src/opentide
 echo "==> Ruff format"
 uv run ruff format --check tests src/opentide
 
+echo "==> Legacy logging guard"
+bash scripts/check-legacy-logging.sh
+
 echo "==> Ty type check"
 uv run ty check src/opentide
 

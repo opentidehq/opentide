@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from opentide.core.logging import log
+from opentide.core.logging import get_logger
 from opentide.models.system_config import ConfigurationModels
 from opentide.models.visibility import VisibilityConfig
+
+logger = get_logger(__name__)
 
 
 class ConfigurationsLoader:
@@ -35,12 +37,10 @@ class ConfigurationsLoader:
                         asset for asset in source_assets if asset not in asset_names
                     ]
                     if invalid_assets:
-                        log(
-                            "FAILURE",
-                            f"Log source '{source_config.get('name')}' references non-existent assets",
-                            f"Invalid assets: {', '.join(invalid_assets)}",
-                            "These assets must be defined in the assets section",
-                            "Configuration will load but may be incomplete",
+                        logger.error(
+                            "logsource_invalid_assets",
+                            logsource=source_config.get("name"),
+                            invalid_assets=", ".join(invalid_assets),
                         )
 
             for detector_config in config.get("detectors", []):
@@ -49,21 +49,16 @@ class ConfigurationsLoader:
                         asset for asset in detector_assets if asset not in asset_names
                     ]
                     if invalid_assets:
-                        log(
-                            "FAILURE",
-                            f"Detector '{detector_config.get('name')}' references non-existent assets",
-                            f"Invalid assets: {', '.join(invalid_assets)}",
-                            "These assets must be defined in the assets section",
-                            "Configuration will load but may be incomplete",
+                        logger.error(
+                            "detector_invalid_assets",
+                            detector=detector_config.get("name"),
+                            invalid_assets=", ".join(invalid_assets),
                         )
 
             return VisibilityConfig.model_validate(config)
         except (KeyError, TypeError, ValueError) as exc:
-            log(
-                "FATAL",
-                "Failed to load visibility configuration",
-                f"Error details: {str(exc)}",
-                "Ensure all required fields are present and properly formatted",
-                "Check the schema documentation for complete requirements",
+            logger.critical(
+                "visibility_config_load_failed",
+                detail=str(exc),
             )
             raise ValueError(f"Failed to load visibility configuration: {str(exc)}") from exc

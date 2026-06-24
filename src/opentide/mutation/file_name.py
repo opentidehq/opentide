@@ -2,10 +2,12 @@ import os
 
 import yaml
 
-
-from opentide.core.logging import log
-from opentide.core.files import safe_file_name, resolve_configurations, resolve_paths
+from opentide.core.files import resolve_configurations, resolve_paths, safe_file_name
+from opentide.core.logging import get_logger
+from opentide.core.logging.console import emit_section
 from opentide.core.root import get_repo_root
+
+logger = get_logger(__name__)
 
 ROOT = get_repo_root()
 CONFIGURATIONS = resolve_configurations()
@@ -14,12 +16,13 @@ MODELS_TYPES = CONFIGURATIONS["global"]["objects"]
 
 
 def run():
-
-    log("TITLE", "File Name Aligner")
-    log(
-        "INFO",
-        "Aligns the file name with the YAML Content and assigns"
-        " ID if missing (non-MDR objects only)",
+    emit_section("File Name Aligner")
+    logger.info(
+        "file_name_aligner_started",
+        detail=(
+            "Aligns the file name with the YAML Content and assigns "
+            "ID if missing (non-MDR objects only)"
+        ),
     )
 
     MODELS_TYPES.remove("rule")
@@ -30,7 +33,7 @@ def run():
             if file.endswith(".yaml") or file.endswith(".yml")
         ]
         if not model_files:
-            log("SKIP", "No files to assign ID or fix file names in model type", model)
+            logger.info("no_files_to_align", model_type=model)
             continue
         for file in model_files:
             with open(PATHS[model] / file, encoding="utf-8") as model_file:
@@ -39,7 +42,7 @@ def run():
             standard_name = f"{safe_file_name(model_name)}.yaml"
 
             if file != standard_name:
-                log("INFO", "Re-aligning file name with model_data", file)
+                logger.info("realigning_file_name", file=file)
                 # Renaming goes through a temp file to still rename in case-insensitive OSs
                 # when the only difference is capitalization
                 os.rename(
@@ -50,7 +53,7 @@ def run():
                     PATHS[model] / (standard_name + ".tmp"),
                     PATHS[model] / standard_name,
                 )
-                log("SUCCESS", f"Alligned file name with model data", standard_name)
+                logger.info("file_name_aligned", standard_name=standard_name)
 
 
 if __name__ == "__main__":
