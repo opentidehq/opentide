@@ -31,6 +31,11 @@ class OpenTideRegistry:
         self._objectives: dict[str, DetectionObjective] = {}
         self.Platforms = PlatformsRegistry()
 
+    @property
+    def initialised(self) -> bool:
+        """Return whether the registry index has been loaded."""
+        return self._initialised
+
     def initialise(self) -> None:
         """Load index into memory (typed objects load on first access)."""
         self._index = IndexManager.load()

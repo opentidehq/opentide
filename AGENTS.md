@@ -33,7 +33,9 @@ Stub pointers (content merged above): `jujutsu-stacked-prs`, `uv-package-manager
 
 Bookmark naming: `<type>/<short-slug>` (e.g. `feat/sentinel-query-cache`).
 
-**Forbidden for coding agents:** `git commit`, `git add`, `git checkout -b`, `git merge`, `git rebase`, `git push`, Graphite (`gt`).
+**Forbidden for local coding agents:** `git commit`, `git add`, `git checkout -b`, `git merge`, `git rebase`, `git push`, Graphite (`gt`). Use **jj** instead (see above).
+
+**Cloud agents** (Cursor Cloud, GitHub Copilot Workspace, etc.): follow the platform git workflow when jj is unavailable; still use Conventional Commits and open PRs against `development`.
 
 ## Daily workflow
 

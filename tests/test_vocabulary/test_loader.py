@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from opentide.core.files import resolve_paths
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
     VocabularyEntry,
@@ -30,42 +31,54 @@ from opentide.vocabulary.io import (
 from opentide.vocabulary.stix_attack import load_stix_bundle, parse_techniques
 
 
-def test_normalize_stages_none() -> None:
-    assert normalize_stages(None) == []
+@pytest.mark.parametrize(
+    ("stages", "expected"),
+    [
+        (None, []),
+        ("OS", ["OS"]),
+        (["OS", "Cloud"], ["OS", "Cloud"]),
+    ],
+)
+def test_normalize_stages(stages: str | list[str] | None, expected: list[str]) -> None:
+    assert normalize_stages(stages) == expected
 
 
-def test_normalize_stages_string() -> None:
-    assert normalize_stages("OS") == ["OS"]
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"key": "id"}, "id"),
+        ({"key": "name"}, "name"),
+        ({"model": True}, "id"),
+        ({"model": False}, "name"),
+    ],
+)
+def test_entry_key_field(kwargs: dict[str, object], expected: str) -> None:
+    assert entry_key_field(**kwargs) == expected
 
 
-def test_normalize_stages_list() -> None:
-    assert normalize_stages(["OS", "Cloud"]) == ["OS", "Cloud"]
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        ({"key": "id"}, "id"),
+        ({"key": "name"}, "name"),
+        ({"model": True}, "id"),
+        ({}, "name"),
+    ],
+)
+def test_resolve_vocab_key(metadata: dict[str, object], expected: str) -> None:
+    assert resolve_vocab_key(metadata) == expected
 
 
-def test_entry_key_field_by_key() -> None:
-    assert entry_key_field(key="id") == "id"
-    assert entry_key_field(key="name") == "name"
-
-
-def test_entry_key_field_model_legacy() -> None:
-    assert entry_key_field(model=True) == "id"
-    assert entry_key_field(model=False) == "name"
-
-
-def test_resolve_vocab_key_explicit() -> None:
-    assert resolve_vocab_key({"key": "id"}) == "id"
-    assert resolve_vocab_key({"key": "name"}) == "name"
-
-
-def test_resolve_vocab_key_model_legacy() -> None:
-    assert resolve_vocab_key({"model": True}) == "id"
-    assert resolve_vocab_key({}) == "name"
-
-
-def test_is_id_keyed() -> None:
-    assert is_id_keyed({"key": "id"})
-    assert not is_id_keyed({"key": "name"})
-    assert is_id_keyed({"model": True})
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        ({"key": "id"}, True),
+        ({"key": "name"}, False),
+        ({"model": True}, True),
+    ],
+)
+def test_is_id_keyed(metadata: dict[str, object], expected: bool) -> None:
+    assert is_id_keyed(metadata) is expected
 
 
 def test_vocabulary_loader_load_valid() -> None:
@@ -273,8 +286,6 @@ def test_load_vocab_file_roundtrip(tmp_path: Path) -> None:
 
 
 def test_load_bundled_impact_vocab() -> None:
-    from opentide.core.files import resolve_paths
-
     vocab_path = Path(resolve_paths()["vocabularies"]) / "impact.vocab.toml"
     vocabulary = load_vocab_file(vocab_path)
     assert "Nuisance" in vocabulary.entries

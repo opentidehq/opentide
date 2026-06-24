@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import importlib
 from importlib.metadata import entry_points
 from importlib.resources import files
 from pathlib import Path
 
 import pytest
 
+from opentide import OpenTide, __version__
 from opentide.core.root import get_data_root, get_repo_root
 from opentide.schemas.store import (
     bundled_data_exists,
@@ -18,23 +20,19 @@ from opentide.schemas.store import (
 
 
 def test_import_opentide() -> None:
-    import importlib
-
     opentide = importlib.import_module("opentide")
     assert opentide.__version__
 
 
 def test_import_opentide_public_api() -> None:
-    from opentide import OpenTide, __version__
-
     assert OpenTide is not None
     assert __version__
 
 
 def test_import_opentide_core_registry() -> None:
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import OpenTide as RegistryOpenTide
 
-    assert OpenTide is not None
+    assert RegistryOpenTide is not None
 
 
 def test_bundled_data_via_importlib_resources() -> None:
@@ -92,10 +90,8 @@ def test_platform_entry_points_registered() -> None:
 
 
 def test_package_import_has_no_auto_load_side_effects() -> None:
-    import importlib
+    from opentide.core.registry import OpenTide as RegistryOpenTide
 
-    opentide = importlib.import_module("opentide")
-    registry_module = importlib.import_module("opentide.core.registry")
-
-    assert not registry_module.OpenTide._initialised  # noqa: SLF001 — contract check
-    assert hasattr(opentide, "__version__")
+    assert not RegistryOpenTide.initialised
+    assert hasattr(importlib.import_module("opentide"), "__version__")
+    assert not RegistryOpenTide.initialised
