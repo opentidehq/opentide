@@ -70,7 +70,9 @@ def test_deploy_dry_run_sentinel_payload_contains_query(
         "--skip-promotion",
     )
     payload = assert_json_ok(result)
-    preview = payload["payloads"][platform][0]
+    previews = payload["payloads"][platform]
+    expected_uuid = corpus_rule_uuids[platform]
+    preview = next(item for item in previews if item["uuid"] == expected_uuid)
     api_request = preview["api_request"]
     query_text = api_request.get("query") or api_request.get("properties", {}).get("query", "")
     assert "SecurityEvent" in str(query_text)

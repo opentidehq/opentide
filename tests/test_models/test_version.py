@@ -46,10 +46,16 @@ def test_schema_version_chain_migrate() -> None:
 def test_schema_version_chain_path() -> None:
     chain = SchemaVersionChain("rule")
     source = SchemaVersion.parse("rule::1.0")
+    mid = SchemaVersion.parse("rule::1.1")
     target = SchemaVersion.parse("rule::1.2")
+    chain.register(source, mid, lambda data: data)
+    chain.register(mid, target, lambda data: data)
     path = chain.path(source, target)
-    assert path[0].as_identifier() == "rule::1.0"
-    assert path[-1].as_identifier() == "rule::1.2"
+    assert [version.as_identifier() for version in path] == [
+        "rule::1.0",
+        "rule::1.1",
+        "rule::1.2",
+    ]
 
 
 def test_schema_version_parse_rejects_invalid() -> None:

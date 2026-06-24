@@ -5,20 +5,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from opentide.generation.pydantic_metaschema import CORE_SCHEMA_MODELS, build_core_schema_source
+from opentide.generation.pydantic_metaschema import build_core_schema_source, core_schema_models
 from opentide.generation.template_engine import (
     emit_template_file,
     gen_template,
     get_required,
 )
-from opentide.models.base import TideModel
+from opentide.models.object_types import CORE_OBJECT_TYPES
 
-CORE_TEMPLATE_MODELS: dict[str, type[TideModel]] = CORE_SCHEMA_MODELS
+CORE_TEMPLATE_MODELS: frozenset[str] = frozenset(CORE_OBJECT_TYPES)
 
 
 def load_core_template_source(model_key: str) -> dict[str, Any]:
     """Build template-generation source for a core model from Pydantic fields."""
-    if model_key not in CORE_TEMPLATE_MODELS:
+    models = core_schema_models()
+    if model_key not in models:
         raise KeyError(f"Unknown core template model {model_key!r}")
     return build_core_schema_source(model_key)
 
@@ -43,5 +44,5 @@ def generate_core_template(
 
 
 def core_template_model_keys() -> frozenset[str]:
-    """Return registered core template model keys."""
-    return frozenset(CORE_TEMPLATE_MODELS)
+    """Return registered core object family keys for template generation."""
+    return frozenset(core_schema_models())

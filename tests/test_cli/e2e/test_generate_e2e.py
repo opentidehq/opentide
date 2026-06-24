@@ -9,7 +9,8 @@ pytestmark = pytest.mark.cli_e2e
 
 
 def test_generate_phase_schemas(invoke_cli, tide_corpus_repo) -> None:
-    result = invoke_cli("generate", "--phase", "schemas")
+    result = invoke_cli("generate", "schemas")
     assert_json_ok(result)
-    assert (tide_corpus_repo / "Schemas" / "MDR Schema.json").is_file()
-    assert (tide_corpus_repo / "Schemas" / "TVM Schema.json").is_file()
+    schemas = tide_corpus_repo / ".opentide" / "schemas"
+    assert (schemas / "rule.1.0.schema.json").is_file()
+    assert (schemas / "threat.1.0.schema.json").is_file()

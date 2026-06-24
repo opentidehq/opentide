@@ -1,15 +1,16 @@
 {
-  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Carbon Black Cloud Enterprise EDR Template.yaml": "723a243f743fbfc31e7b649dca3a0c1e4f686b040335c8e8909aca220bf0d013",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Carbon Black Cloud Enterprise EDR Template.yaml": "43bc94ea6c49ce44b7413745e20110d5e3a1b399c8ed852cece8065058b93e8e",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Crowdstrike Falcon Correlation Rules Template.yaml": "ecd1685decb41621fecf40cc006f3c458cb1677163cf486676e2a0e339a431b5",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Crowdstrike Falcon Template.yaml": "ecd1685decb41621fecf40cc006f3c458cb1677163cf486676e2a0e339a431b5",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Microsoft Defender for Endpoint Template.yaml": "54fa58f17edcdc3bbe64067b879f1951b26b1b9741ce242c958b1642ff8060a4",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Microsoft Sentinel Template.yaml": "894ebcaa8bc8e085fb121feb95af8a1ef6b4f774c390acbc6f8147eafab9750b",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Sentinel One Template.yaml": "9666232b36bf6c9f2b39d6ab5ab195287c4423636674a7b043a50458160dcc36",
-  "tide:Schemas/Configurations/visibility.schema.json": "fe98467b3b51256dbc14a22773a433766b5f5e8441a2e5e395bd8bafd6e53097",
-  "tide:Schemas/Detection Objective.schema.json": "5530308ec9008d5e4a696235feec472cf9bb7d0764519c5c1657a16fc77171c3",
-  "tide:Schemas/MDR Schema.json": "7f54ecfbd8f8e891caea3b4c6c28a65ba2f96df99acd094222bf3affd35c054c",
-  "tide:Schemas/TVM Schema.json": "2eeffb65fbaa809fec5d2a25b15d0b257ca8465d2ef986325fdc5e411236dedc",
-  "tide:Schemas/Templates/Detection Objective.template.yaml": "2c9035e3563ea9ee347248786d4cd09a3e2af8f85fe45ce8ce7733eda3f575bd",
-  "tide:Schemas/Templates/MDR TEMPLATE.yaml": "6396d2c1eed682d5bea275b2a3e929aa081160e7e4e1dee28bb6bb3e6587495a",
-  "tide:Schemas/Templates/TVM TEMPLATE.yaml": "ab970cbc68947af0958659b0658977252e989eeea2ab10d5d45297ecc6a55295"
+  "tide:.opentide/schemas/objective.1.0.schema.json": "4ba96f3c39d254abdcbf1f5bebb7f5b828bb96aa076ced1eec314754484853eb",
+  "tide:.opentide/schemas/opentide.schema.json": "21105afdbd57e663e598c80bb1044269e026d72a2ee4a3af60a4e8b5a07438a5",
+  "tide:.opentide/schemas/rule.1.0.schema.json": "1db7170a6ef4f5003acf8a29538d888070f80d88d2ac3f5f152c0399f54b8de1",
+  "tide:.opentide/schemas/threat.1.0.schema.json": "c3a9c066bdbdde3dbc85a8ba6e65b38bd02782b63a64bf1bbaf338986f7f1f37",
+  "tide:.opentide/schemas/visibility.1.0.schema.json": "fe98467b3b51256dbc14a22773a433766b5f5e8441a2e5e395bd8bafd6e53097",
+  "tide:.opentide/templates/objective.1.0.template.yaml": "2c9035e3563ea9ee347248786d4cd09a3e2af8f85fe45ce8ce7733eda3f575bd",
+  "tide:.opentide/templates/rule.1.0.template.yaml": "6396d2c1eed682d5bea275b2a3e929aa081160e7e4e1dee28bb6bb3e6587495a",
+  "tide:.opentide/templates/threat.1.0.template.yaml": "ab970cbc68947af0958659b0658977252e989eeea2ab10d5d45297ecc6a55295"
 }

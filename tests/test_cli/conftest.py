@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -29,6 +30,38 @@ def tide_corpus_root() -> Path:
     return TIDE_CORPUS_ROOT
 
 
+def _symlink_dir(link: Path, target: Path) -> None:
+    """Symlink ``link`` → ``target`` (directory) using a relative path."""
+    if link.exists() or link.is_symlink():
+        return
+    link.parent.mkdir(parents=True, exist_ok=True)
+    rel = Path(os.path.relpath(target.resolve(), link.parent.resolve()))
+    link.symlink_to(rel, target_is_directory=True)
+
+
+def _migrate_tide_corpus_layout(dest: Path) -> None:
+    """Adapt legacy tide_corpus fixture to greenfield ``.opentide/`` layout."""
+    opentide = dest / ".opentide"
+    opentide.mkdir(exist_ok=True)
+
+    legacy_configs = dest / "Configurations"
+    if legacy_configs.is_dir():
+        shutil.copytree(legacy_configs, opentide / "configurations", dirs_exist_ok=True)
+
+    object_links = {
+        "objects/threats": "Objects/Threat Vectors",
+        "objects/objectives": "Objects/Detection Objectives",
+        "objects/rules": "Objects/Detection Rules",
+    }
+    for link_rel, target_rel in object_links.items():
+        _symlink_dir(dest / link_rel, dest / target_rel)
+
+    opentide.joinpath("schemas").mkdir(exist_ok=True)
+    opentide.joinpath("templates").mkdir(exist_ok=True)
+    opentide.joinpath("exports").mkdir(exist_ok=True)
+    opentide.joinpath("inflight").mkdir(exist_ok=True)
+
+
 def _clear_runtime_caches() -> None:
     from opentide.core.index_manager import IndexManager
     from opentide.core.registry import OpenTide
@@ -52,6 +85,7 @@ def tide_corpus_repo(
     """Copy tide_corpus into an isolated repo and wire OpenTide path env vars."""
     dest = tmp_path / "corpus"
     shutil.copytree(tide_corpus_root, dest)
+    _migrate_tide_corpus_layout(dest)
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(dest))
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(dest))
     monkeypatch.setenv("DEPLOYMENT_PLAN", "FULL")

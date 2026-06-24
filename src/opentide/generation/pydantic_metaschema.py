@@ -4,19 +4,18 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from opentide.generation.schema import model_json_schema
+from opentide.generation.model_json_schema import model_json_schema
 from opentide.models.base import TideModel, field_json_schema_extra
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.object_types import OBJECTIVE, RULE, THREAT
-from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
+from opentide.models.schema_registry import core_object_schemas, resolve_model
+from opentide.models.version import SchemaVersion
 
-CORE_SCHEMA_MODELS: dict[str, type[TideModel]] = {
-    THREAT: ThreatVector,
-    OBJECTIVE: DetectionObjective,
-    RULE: DetectionRule,
-}
+
+def core_schema_models() -> dict[str, type[TideModel]]:
+    """Latest registered model per core object family (rule, threat, objective)."""
+    return core_object_schemas()
+
 
 DEFINITION_MODELS: dict[str, type[TideModel]] = {
     "metadata": ObjectMetadata,
@@ -74,12 +73,16 @@ _CORE_ROOT_EXTRAS_BASE: dict[str, dict[str, Any]] = {
 }
 
 
+def _core_root_extras_for_model(model: type[TideModel], family: str) -> dict[str, Any]:
+    base = dict(_CORE_ROOT_EXTRAS_BASE.get(family, {}))
+    base["tide.placeholders"] = {"SCHEMA_VERSION": model.schema_identifier()}
+    return base
+
+
 def _core_root_extras() -> dict[str, dict[str, Any]]:
     extras: dict[str, dict[str, Any]] = {}
-    for key, model in CORE_SCHEMA_MODELS.items():
-        base = dict(_CORE_ROOT_EXTRAS_BASE.get(key, {}))
-        base["tide.placeholders"] = {"SCHEMA_VERSION": model.schema_identifier()}
-        extras[key] = base
+    for key, model in core_schema_models().items():
+        extras[key] = _core_root_extras_for_model(model, key)
     return extras
 
 
@@ -118,9 +121,17 @@ def build_model_schema_source(
 
 
 def build_core_schema_source(model_key: str) -> dict[str, Any]:
-    """Build template/schema source for a core object model key."""
-    model = CORE_SCHEMA_MODELS[model_key]
-    extras = dict(_core_root_extras().get(model_key, {}))
+    """Build template/schema source for a core object family (latest registered model)."""
+    model = core_schema_models()[model_key]
+    extras = _core_root_extras_for_model(model, model_key)
+    return build_model_schema_source(model, root_extras=extras)
+
+
+def build_schema_source_for_identifier(schema_id: str) -> dict[str, Any]:
+    """Build metaschema source for a specific registered schema identifier."""
+    model = resolve_model(schema_id)
+    family = SchemaVersion.parse(schema_id).family
+    extras = _core_root_extras_for_model(model, family)
     return build_model_schema_source(model, root_extras=extras)
 
 

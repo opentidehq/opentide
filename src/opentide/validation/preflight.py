@@ -120,9 +120,25 @@ class PreflightGraph:
         return self._objects_by_uuid.get(uuid)
 
     def parent_uuids(self, uuid: str) -> list[str]:
-        from opentide.generation.framework import parents
-
-        return parents(uuid)
+        ref = self.resolve(uuid)
+        if ref is None:
+            return []
+        body = self._objects_by_type.get(ref.object_type, {}).get(uuid, {})
+        if not isinstance(body, dict):
+            return []
+        if ref.object_type == "objective":
+            objective = body.get("objective")
+            if not isinstance(objective, dict):
+                return []
+            threats = objective.get("threats") or []
+            return [str(value) for value in threats] if isinstance(threats, list) else []
+        if ref.object_type == "signal":
+            parent = body.get("parent")
+            return [str(parent)] if parent else []
+        if ref.object_type == "rule":
+            parent = body.get("detection_model")
+            return [str(parent)] if parent else []
+        return []
 
     def chaining_neighbors(self, tvm_uuid: str) -> dict[str, list[str]]:
         return dict(self._chaining_graph.get(tvm_uuid, {}))

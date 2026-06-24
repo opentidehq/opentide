@@ -1,0 +1,17 @@
+[
+  {
+    "actors": "",
+    "attack": "T1059",
+    "chaining": "",
+    "childs": "",
+    "created": "2026-01-01",
+    "description": "desc",
+    "modified": "2026-01-02",
+    "name": "Test",
+    "parents": "",
+    "tlp": "clear",
+    "type": "Rule",
+    "uuid": "u1",
+    "version": "1"
+  }
+]

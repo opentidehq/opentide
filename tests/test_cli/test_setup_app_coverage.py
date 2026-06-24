@@ -15,6 +15,7 @@ from opentide.cli.enums import CiPlatform, DetectionPlatform
 setup_app_module = importlib.import_module("opentide.cli.setup_app")
 _has_repo_flags = setup_app_module._has_repo_flags
 _should_run_repo = setup_app_module._should_run_repo
+_resolve_setup_path = setup_app_module._resolve_setup_path
 
 runner = CliRunner()
 
@@ -53,6 +54,22 @@ def test_has_repo_flags_and_should_run_repo() -> None:
         )
         is False
     )
+
+
+def test_resolve_setup_path_uses_cli_repo_when_path_is_dot(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from opentide.cli.context import CliContext
+
+    repo = tmp_path / "detection"
+    repo.mkdir()
+    other = tmp_path / "other"
+    other.mkdir()
+    monkeypatch.chdir(other)
+    cli = CliContext(repo=repo)
+    assert _resolve_setup_path(cli, ".") == repo
+    assert _resolve_setup_path(cli, str(other)) == other
 
 
 def test_setup_yes_only_scaffolds_repo(tmp_path: Path) -> None:
@@ -212,7 +229,7 @@ def test_setup_vscode_snippets_success_message(tmp_path: Path, monkeypatch) -> N
     monkeypatch.setattr(
         setup_app_module,
         "run_vscode_snippets",
-        lambda target: ".vscode/Model Templates.code-snippets",
+        lambda target: ".vscode/model-templates.code-snippets",
     )
     result = runner.invoke(
         app,

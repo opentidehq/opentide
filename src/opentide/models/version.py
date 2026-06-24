@@ -52,14 +52,14 @@ class SchemaVersionChain:
 
     def __init__(self, family: str) -> None:
         self.family = family.lower()
-        self._migrations: dict[tuple[int, int], MigrationFn] = {}
+        self._migrations: dict[tuple[int, int], tuple[SchemaVersion, MigrationFn]] = {}
 
     def register(self, source: SchemaVersion, target: SchemaVersion, fn: MigrationFn) -> None:
         if source.family != self.family or target.family != self.family:
             raise ValueError("migration endpoints must match chain family")
         if source.sort_key() >= target.sort_key():
             raise ValueError("migrations must advance to a higher version")
-        self._migrations[source.major, source.minor] = fn
+        self._migrations[source.major, source.minor] = (target, fn)
 
     def migrate(
         self, data: Mapping[str, object], source: SchemaVersion, target: SchemaVersion
@@ -72,13 +72,16 @@ class SchemaVersionChain:
         cursor = source
         while cursor.sort_key() < target.sort_key():
             key = (cursor.major, cursor.minor)
-            migration = self._migrations.get(key)
-            if migration is None:
+            step = self._migrations.get(key)
+            if step is None:
                 raise LookupError(f"no migration registered from {cursor.as_identifier()}")
+            next_version, migration = step
             current = migration(current)
-            cursor = SchemaVersion(family=cursor.family, major=cursor.major, minor=cursor.minor + 1)
+            cursor = next_version
             if cursor.sort_key() > target.sort_key():
-                cursor = target
+                raise LookupError(
+                    f"migration from {key} overshoots target {target.as_identifier()}"
+                )
         return current
 
     def path(self, source: SchemaVersion, target: SchemaVersion) -> Sequence[SchemaVersion]:
@@ -87,8 +90,13 @@ class SchemaVersionChain:
         versions = [source]
         cursor = source
         while cursor.sort_key() < target.sort_key():
-            cursor = SchemaVersion(family=cursor.family, major=cursor.major, minor=cursor.minor + 1)
-            if cursor.sort_key() > target.sort_key():
-                cursor = target
+            step = self._migrations.get((cursor.major, cursor.minor))
+            if step is None:
+                raise LookupError(f"no migration registered from {cursor.as_identifier()}")
+            cursor = step[0]
             versions.append(cursor)
+            if cursor.sort_key() > target.sort_key():
+                raise ValueError(
+                    f"no migration path from {source.as_identifier()} to {target.as_identifier()}"
+                )
         return versions

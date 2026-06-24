@@ -166,12 +166,8 @@ exclude = [
     "src/opentide/platforms/sentinel_one",
     "src/opentide/platforms/kql.py",
     "src/opentide/platforms/plugins.py",
-    "src/opentide/core/index_legacy.py",
     "src/opentide/core/debug.py",
     "src/opentide/core/environment.py",
-    "src/opentide/indexing/indexer.py",
-    "src/opentide/indexing/revisions.py",
-    "src/opentide/indexing/staging_indexer.py",
     "src/opentide/generation/framework.py",
     "src/opentide/generation/vscode_snippets.py",
     "src/opentide/loading/config_loader.py",
@@ -238,7 +234,10 @@ exclude = [
     "src/opentide/models/deployment_enums.py",
     "src/opentide/core/logging",
     "src/opentide/core/debug.py",
-    "src/opentide/core/index_legacy.py",
+    "src/opentide/core/environment.py",
+    "src/opentide/core/index_manager.py",
+    "src/opentide/core/registry.py",
+    "src/opentide/validation",
 ]
 
 [tool.ty.rules]

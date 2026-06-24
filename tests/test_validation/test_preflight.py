@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from opentide.generation.vocabulary import VocabularyDefinition, VocabularyEntry, VocabularyMetadata
 from opentide.validation.preflight import ObjectRef, PreflightGraph
 from opentide.validation.vocab_resolver import RuntimeEnumResolver
@@ -123,13 +121,21 @@ def test_preflight_graph_chaining_neighbors() -> None:
     assert graph.chaining_neighbors("tvm-1") == {"follows": ["tvm-2"]}
 
 
-def test_preflight_graph_parent_uuids(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_preflight_graph_parent_uuids() -> None:
+    child_uuid = "00000000-0000-4000-8000-000000000020"
+    parent_uuid = "00000000-0000-4000-8000-000000000021"
     graph = PreflightGraph(
-        objects_by_type={},
-        objects_by_uuid={},
+        objects_by_type={"rule": {child_uuid: {"detection_model": parent_uuid}}},
+        objects_by_uuid={
+            child_uuid: ObjectRef(
+                uuid=child_uuid,
+                object_type="rule",
+                name="Child Rule",
+                file_path=Path("child.yaml"),
+            )
+        },
         files_index={},
         chaining_graph={},
         enum_resolver=_sample_vocab_resolver(),
     )
-    monkeypatch.setattr("opentide.generation.framework.parents", lambda _uuid: ["parent-1"])
-    assert graph.parent_uuids("child-1") == ["parent-1"]
+    assert graph.parent_uuids(child_uuid) == [parent_uuid]

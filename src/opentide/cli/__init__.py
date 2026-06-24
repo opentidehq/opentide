@@ -11,7 +11,6 @@ from opentide.cli.enums import (
     DocumentScope,
     ExportTarget,
     ExtractImport,
-    GeneratePhase,
     ValidateCheck,
 )
 from opentide.cli.output import emit, emit_success
@@ -19,7 +18,7 @@ from opentide.cli.services.deploy import run_deploy
 from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
-from opentide.cli.services.generation import run_generate
+from opentide.cli.services.generation import run_generate, run_generate_docs
 from opentide.cli.services.info import collect_info
 from opentide.cli.services.mutate import run_mutate
 from opentide.cli.services.validation import run_validate, validate_query_platform
@@ -74,20 +73,63 @@ app.add_typer(generate_app, name="generate")
 
 
 @generate_app.callback(invoke_without_command=True)
-def generate_cmd(
-    ctx: typer.Context,
-    phase: GeneratePhase | None = typer.Option(None, "--phase"),
-    staging: bool = typer.Option(False, "--staging"),
-    verbose: bool = typer.Option(False, "--verbose"),
-) -> None:
-    """Generate indexes, schemas, templates, and exports."""
+def generate_all(ctx: typer.Context) -> None:
+    """Run full generation pipeline."""
+    if ctx.invoked_subcommand is not None:
+        return
     cli = get_context(ctx)
-    if verbose:
-        cli.debug = True
-        cli.apply_environment()
-        init_logging(LoggingConfig.from_cli_context(cli), force=True)
-    result = run_generate(cli, phase=phase, staging=staging)
+    result = run_generate(cli)
     emit_success(cli, result)
+
+
+@generate_app.command("schemas")
+def generate_schemas_cmd(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="schemas"))
+
+
+@generate_app.command("templates")
+def generate_templates_cmd(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="templates"))
+
+
+@generate_app.command("vocabs")
+def generate_vocabs_cmd(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="vocabs"))
+
+
+@generate_app.command("snippets")
+def generate_snippets_cmd(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="snippets"))
+
+
+@generate_app.command("exports")
+def generate_exports_cmd(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="exports"))
+
+
+@generate_app.command("playbook-map")
+def generate_playbook_map_cmd(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="playbook-map"))
+
+
+@generate_app.command("docs")
+def generate_docs_cmd(
+    ctx: typer.Context,
+    rules: bool = typer.Option(False, "--rules"),
+    threats: bool = typer.Option(False, "--threats"),
+    objectives: bool = typer.Option(False, "--objectives"),
+) -> None:
+    """Generate documentation (optionally scoped with flags)."""
+    cli = get_context(ctx)
+    cli.apply_environment()
+    run_generate_docs(rules=rules, threats=threats, objectives=objectives)
+    emit_success(cli, {"message": "Documentation generation completed"})
 
 
 validate_app = typer.Typer(help="Object and query validation")
@@ -176,20 +218,61 @@ def deploy_metadata_cmd(
     emit_success(cli, {"message": "Metadata deployment signalled", "platform": platform.value})
 
 
-document_app = typer.Typer(help="Wiki documentation generation")
+document_app = typer.Typer(help="Documentation generation")
 app.add_typer(document_app, name="document")
 
 
 @document_app.callback(invoke_without_command=True)
 def document_cmd(
     ctx: typer.Context,
-    scope: DocumentScope | None = typer.Option(None, "--scope"),
     output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
 ) -> None:
-    """Generate wiki documentation from detection content."""
+    """Generate documentation for rules, objectives, threats, and index."""
     cli = get_context(ctx)
-    result = run_document(cli, scope=scope, output=output)
-    emit_success(cli, result)
+    emit_success(cli, run_document(cli, output=output, flavor=flavor))
+
+
+@document_app.command("rules")
+def document_rules_cmd(
+    ctx: typer.Context,
+    output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
+) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_document(cli, scope=DocumentScope.rules, output=output, flavor=flavor))
+
+
+@document_app.command("objectives")
+def document_objectives_cmd(
+    ctx: typer.Context,
+    output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
+) -> None:
+    cli = get_context(ctx)
+    emit_success(
+        cli, run_document(cli, scope=DocumentScope.objectives, output=output, flavor=flavor)
+    )
+
+
+@document_app.command("threats")
+def document_threats_cmd(
+    ctx: typer.Context,
+    output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
+) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_document(cli, scope=DocumentScope.threats, output=output, flavor=flavor))
+
+
+@document_app.command("index")
+def document_index_cmd(
+    ctx: typer.Context,
+    output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
+) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_document(cli, scope=DocumentScope.index, output=output, flavor=flavor))
 
 
 mutate_app = typer.Typer(help="Object mutations")
@@ -238,10 +321,16 @@ def export_navigator(ctx: typer.Context) -> None:
     emit_success(cli, run_export(cli, target=ExportTarget.navigator))
 
 
-@export_app.command("table")
-def export_table(ctx: typer.Context) -> None:
+@export_app.command("objects")
+def export_objects(ctx: typer.Context) -> None:
     cli = get_context(ctx)
-    emit_success(cli, run_export(cli, target=ExportTarget.table))
+    emit_success(cli, run_export(cli, target=ExportTarget.objects))
+
+
+@export_app.command("revisions")
+def export_revisions(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_export(cli, target=ExportTarget.revisions))
 
 
 @export_app.command("playbook-map")

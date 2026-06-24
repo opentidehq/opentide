@@ -541,22 +541,27 @@ def recomposition_handler(entry_point):
 
     recompositions = CONFIG_INDEX[entry_point]
     recomposition = dict()
-    for entry in recompositions:
-        data = recompositions[entry]
+    for entry, data in recompositions.items():
+        if not isinstance(data, dict):
+            continue
         if data.get("tide"):
             config_keyword = "tide"
-        else:
+        elif data.get("platform"):
             config_keyword = "platform"
+        else:
+            continue
 
-        if data[config_keyword]["enabled"] is True:
-            recomp_identifier = entry
-            recomposition[recomp_identifier] = dict()
-            recomposition[recomp_identifier]["title"] = data[config_keyword]["name"]
-            recomposition[recomp_identifier]["description"] = data[config_keyword]["description"]
-            recomposition[recomp_identifier]["type"] = "object"
-            platform_model = platform_model_for_key(entry)
-            recomp_data = build_platform_schema_source(platform_model)
-            recomposition[recomp_identifier].update(recomp_data)
+        platform_cfg = data[config_keyword]
+        if platform_cfg.get("enabled") is not True:
+            continue
+        recomp_identifier = entry
+        recomposition[recomp_identifier] = dict()
+        recomposition[recomp_identifier]["title"] = platform_cfg["name"]
+        recomposition[recomp_identifier]["description"] = platform_cfg["description"]
+        recomposition[recomp_identifier]["type"] = "object"
+        platform_model = platform_model_for_key(entry)
+        recomp_data = build_platform_schema_source(platform_model)
+        recomposition[recomp_identifier].update(recomp_data)
 
     return recomposition
 
@@ -774,7 +779,8 @@ def run():
         ),
     )
 
-    from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS, generate_core_model_schema
+    from opentide.generation.pydantic_metaschema import core_schema_models
+    from opentide.generation.pydantic_schemas import generate_core_model_schema
 
     # Core object schemas are generated from Pydantic models (single source of truth).
     for meta in GLOBAL_CONFIG.metaschemas:
@@ -782,15 +788,15 @@ def run():
             continue
         json_output = JSON_SCHEMA_FOLDER / GLOBAL_CONFIG.json_schemas[meta]
 
-        if meta in CORE_SCHEMA_MODELS:
-            logger.info("generating_pydantic_json_schema_for_core_model")
+        if meta in core_schema_models():
+            logger.info("generating_pydantic_json_schema_for_core_model", meta=meta)
             cleaned = generate_core_model_schema(meta)
             placeholders: dict[str, str] = {}
         else:
-            logger.info("no_pydantic_schema_registered_for_meta_key")
+            logger.info("no_pydantic_schema_registered_for_meta_key", meta=meta)
             continue
 
-        logger.info("exporting_generated_schema_to_str_json_output")
+        logger.info("exporting_generated_schema_to_str_json_output", path=str(json_output))
         output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
         for placeholder in placeholders:
             logger.info("replacing_all_occurence_of_placeholder")

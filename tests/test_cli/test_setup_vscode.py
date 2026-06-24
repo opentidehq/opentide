@@ -11,18 +11,21 @@ from opentide.cli.services.setup.vscode import (
     run_vscode_all,
     run_vscode_settings,
     run_vscode_snippets,
+    snippet_file_rel,
     validate_schema_fragment_matches_global,
     write_vscode_settings,
 )
 
+SNIPPET_REL = ".vscode/model-templates.code-snippets"
+
+
+def test_snippet_file_rel_matches_paths_toml(tmp_path: Path) -> None:
+    assert snippet_file_rel(workspace=tmp_path) == SNIPPET_REL
+
 
 def test_build_yaml_schema_mappings() -> None:
     mappings = build_yaml_schema_mappings()
-    assert mappings["Schemas/TVM Schema.json"] == "Objects/Threat Vectors/**/*.yaml"
-    assert mappings["Schemas/Detection Objective.schema.json"] == (
-        "Objects/Detection Objectives/**/*.yaml"
-    )
-    assert mappings["Schemas/MDR Schema.json"] == "Objects/Detection Rules/**/*.yaml"
+    assert mappings[".opentide/schemas/opentide.schema.json"] == "objects/**/*.yaml"
 
 
 def test_write_vscode_settings_merge(tmp_path: Path) -> None:
@@ -38,7 +41,7 @@ def test_write_vscode_settings_merge(tmp_path: Path) -> None:
     assert caught
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["editor.tabSize"] == 4
-    assert "Schemas/MDR Schema.json" in settings["yaml.schemas"]
+    assert ".opentide/schemas/opentide.schema.json" in settings["yaml.schemas"]
 
 
 def test_schema_fragment_matches_global() -> None:
@@ -56,22 +59,22 @@ def test_run_vscode_all_skips_snippets_on_empty_scaffold(tmp_path: Path) -> None
         warnings.simplefilter("always")
         result = run_vscode_all(tmp_path)
     assert ".vscode/settings.json" in result["files"]
-    assert ".vscode/Model Templates.code-snippets" not in result["files"]
+    assert SNIPPET_REL not in result["files"]
 
 
 def test_run_vscode_snippets_writes_when_templates_exist(tmp_path: Path, monkeypatch) -> None:
     import sys
     import types
 
-    templates = tmp_path / "Schemas" / "Templates"
+    templates = tmp_path / ".opentide" / "templates"
     templates.mkdir(parents=True)
     (templates / "rule.yaml").write_text("template: true\n", encoding="utf-8")
 
     fake_mod = types.ModuleType("vscode_snippets")
-    fake_mod.SNIPPETS_PATH = ".vscode/Model Templates.code-snippets"
+    fake_mod.SNIPPETS_PATH = SNIPPET_REL
 
     def fake_run() -> None:
-        dest = tmp_path / ".vscode" / "Model Templates.code-snippets"
+        dest = tmp_path / SNIPPET_REL
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text("{}", encoding="utf-8")
 
@@ -81,18 +84,18 @@ def test_run_vscode_snippets_writes_when_templates_exist(tmp_path: Path, monkeyp
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         rel = run_vscode_snippets(tmp_path)
-    assert rel == ".vscode/Model Templates.code-snippets"
+    assert rel == SNIPPET_REL
 
 
 def test_run_vscode_all_includes_snippets_when_generated(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "opentide.cli.services.setup.vscode.run_vscode_snippets",
-        lambda target: ".vscode/Model Templates.code-snippets",
+        lambda target: SNIPPET_REL,
     )
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         result = run_vscode_all(tmp_path)
-    assert ".vscode/Model Templates.code-snippets" in result["files"]
+    assert SNIPPET_REL in result["files"]
 
 
 def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:
@@ -109,24 +112,16 @@ def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:
     assert isinstance(settings["yaml.schemas"], dict)
 
 
-def test_build_yaml_schema_mappings_skips_unknown_object_type(monkeypatch) -> None:
-    fake_config = {
-        "paths": {"tide": {"rule": "Objects/Detection Rules/", "json_schemas": "Schemas/"}},
-        "json_schemas": {"rule": "MDR Schema.json", "unknown_type": "Missing.schema.json"},
-    }
-    monkeypatch.setattr(
-        "opentide.cli.services.setup.vscode.toml.loads",
-        lambda _text: fake_config,
-    )
+def test_build_yaml_schema_mappings_uses_router_schema() -> None:
     mappings = build_yaml_schema_mappings()
-    assert "Schemas/MDR Schema.json" in mappings
     assert len(mappings) == 1
+    assert ".opentide/schemas/opentide.schema.json" in mappings
 
 
 def test_run_vscode_snippets_file_not_found(tmp_path: Path, monkeypatch) -> None:
     from unittest.mock import MagicMock
 
-    templates = tmp_path / "Schemas" / "Templates"
+    templates = tmp_path / ".opentide" / "templates"
     templates.mkdir(parents=True)
     (templates / "rule.yaml").write_text("x: 1\n", encoding="utf-8")
 
@@ -134,7 +129,7 @@ def test_run_vscode_snippets_file_not_found(tmp_path: Path, monkeypatch) -> None
     import types
 
     fake_mod = types.ModuleType("vscode_snippets")
-    fake_mod.SNIPPETS_PATH = ".vscode/Model Templates.code-snippets"
+    fake_mod.SNIPPETS_PATH = SNIPPET_REL
     fake_mod.run = MagicMock(side_effect=FileNotFoundError("missing template"))
     monkeypatch.setitem(sys.modules, "opentide.generation.vscode_snippets", fake_mod)
 
@@ -153,15 +148,13 @@ def test_run_vscode_snippets_restores_unset_repo_root(tmp_path: Path, monkeypatc
     os.environ.pop("OPENTIDE_REPO_ROOT", None)
     get_repo_root.cache_clear()
 
-    templates = tmp_path / "Schemas" / "Templates"
+    templates = tmp_path / ".opentide" / "templates"
     templates.mkdir(parents=True)
     (templates / "rule.yaml").write_text("x: 1\n", encoding="utf-8")
 
     fake_mod = types.ModuleType("vscode_snippets")
-    fake_mod.SNIPPETS_PATH = ".vscode/Model Templates.code-snippets"
-    fake_mod.run = lambda: (tmp_path / ".vscode" / "Model Templates.code-snippets").write_text(
-        "{}", encoding="utf-8"
-    )
+    fake_mod.SNIPPETS_PATH = SNIPPET_REL
+    fake_mod.run = lambda: (tmp_path / SNIPPET_REL).write_text("{}", encoding="utf-8")
     monkeypatch.setitem(sys.modules, "opentide.generation.vscode_snippets", fake_mod)
 
     with warnings.catch_warnings(record=True):

@@ -7,9 +7,9 @@ from opentide.models.object_types import (
     CORE_OBJECT_TYPES,
     OBJECTIVE,
     RULE,
-    SCHEMA_IDENTIFIERS,
     SIGNAL,
     THREAT,
+    latest_identifier,
 )
 from opentide.models.objective import (
     DetectionExample,
@@ -42,9 +42,9 @@ __all__ = [
     "CORE_OBJECT_TYPES",
     "OBJECTIVE",
     "RULE",
-    "SCHEMA_IDENTIFIERS",
     "SIGNAL",
     "THREAT",
+    "latest_identifier",
     "SchemaVersion",
     "SchemaVersionChain",
     "SignalData",
