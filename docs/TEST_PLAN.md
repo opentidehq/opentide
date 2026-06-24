@@ -74,7 +74,11 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 ### Phase 6 ([#67](https://github.com/OpenTideHQ/CoreTide/issues/67))
 
 - `opentide` CLI; 5-platform query validation only
-- Future: `tests/test_cli/test_*.py`
+- **CLI E2E** (`tests/test_cli/e2e/`): Typer `CliRunner` tests backed by `tests/fixtures/tide_corpus/` (threat/objective/rule naming, `*::1.0` baseline)
+- Markers: `cli_e2e` (in-process), `cli_smoke` (console-script subprocess); separate `cli-e2e` CI job on Python 3.14 after unit matrix
+- Deploy dry-run returns `plan` + `payloads` (unit golden tests in `tests/test_deployment/test_deploy_payloads.py`)
+- Skill: [`.agents/skills/cli-e2e-testing/SKILL.md`](../.agents/skills/cli-e2e-testing/SKILL.md)
+- Future: interactive `setup` wizard smoke, `extract` E2E
 
 ### Phase 7 ([#68](https://github.com/OpenTideHQ/CoreTide/issues/68))
 

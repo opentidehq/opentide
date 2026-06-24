@@ -69,7 +69,7 @@ def make_deploy_plan(
     mdr_files: list[Path]
     deploy_mdr: dict[str, list[str]] = {}
 
-    if plan == "FULL":
+    if plan is DeploymentStrategy.FULL:
         mdr_path = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
         mdr_files = [mdr_path / mdr for mdr in os.listdir(mdr_path)]
         logger.info("full_redeploy_scope", mdr_count=len(mdr_files))

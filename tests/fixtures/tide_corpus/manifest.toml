@@ -1,0 +1,14 @@
+corpus_version = 1
+baseline_schema_versions = ["threat::1.0", "objective::1.0", "rule::1.0"]
+
+[[slices]]
+name = "current"
+path = "current"
+schemas = ["threat::1.0", "objective::1.0", "rule::1.0"]
+status = "active"
+
+[[slices]]
+name = "future_rule_1_1"
+path = "future/rule_1_1"
+schemas = ["rule::1.1"]
+status = "reserved"

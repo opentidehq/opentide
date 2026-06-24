@@ -13,15 +13,15 @@ Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 
 Options:
   --quick       Lint + type-check only (ruff, ty) — ~seconds
-  --test        Lint + pytest without coverage — default
-  --full        Lint + pytest + coverage gate (pyproject.toml fail_under) — pre-push
+  --test        Lint + unit pytest (excludes cli_e2e/cli_smoke) — default
+  --full        Lint + unit pytest + coverage gate + CLI E2E (3.14) — pre-push
   --coverage    Alias for --full
   -h, --help    Show this help
 
 Examples:
-  scripts/ci-local.sh              # default: lint + tests
+  scripts/ci-local.sh              # default: lint + unit tests
   scripts/ci-local.sh --quick      # before every commit (also via pre-commit)
-  scripts/ci-local.sh --full       # before opening a PR
+  scripts/ci-local.sh --full       # before opening a PR (unit then E2E)
 EOF
 }
 
@@ -54,13 +54,15 @@ if [[ "$mode" == "quick" ]]; then
   exit 0
 fi
 
-echo "==> Pytest with coverage"
+echo "==> Pytest"
+unit_marker='not cli_e2e and not cli_smoke'
 if [[ "$mode" == "full" ]]; then
-  # Same as CI COVERAGE_PYTHON cell: pytest addopts carry --cov; gate from pyproject.toml
-  uv run pytest tests/ -q
+  uv run pytest tests/ -q -m "$unit_marker"
   uv run coverage report
+  echo "==> CLI E2E pytest"
+  uv run pytest tests/test_cli/e2e/ -m "cli_e2e or cli_smoke" -q --no-cov
 else
-  uv run pytest tests/ --no-cov -q
+  uv run pytest tests/ --no-cov -q -m "$unit_marker"
 fi
 
 echo "==> All checks passed ($mode)"

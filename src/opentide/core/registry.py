@@ -399,7 +399,9 @@ class _GlobalConfig:
 def _paths_namespace(paths: dict[str, Any]) -> Any:
     from types import SimpleNamespace
 
-    return SimpleNamespace(**paths)
+    ns = SimpleNamespace(**paths)
+    ns._raw = {key: str(value) for key, value in paths.items()}
+    return ns
 
 
 @dataclass(frozen=True)

@@ -222,6 +222,8 @@ def mutate_security_domain(ctx: typer.Context) -> None:
 
 @mutate_app.callback(invoke_without_command=True)
 def mutate_all(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is not None:
+        return
     cli = get_context(ctx)
     emit_success(cli, run_mutate(cli))
 

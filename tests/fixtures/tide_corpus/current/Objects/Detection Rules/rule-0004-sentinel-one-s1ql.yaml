@@ -1,0 +1,38 @@
+name: SentinelOne S1QL Rule
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000004
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+
+description: |
+  Simulated SentinelOne rule for CLI E2E corpus.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  sentinel_one:
+    enabled: true
+    name: SentinelOne S1QL Rule
+    status: STAGING
+    condition:
+      type: Correlation
+      correlation:
+        entity: host
+        match_in_order: true
+        time_window: 1h
+        sub_queries:
+          - query: EventType = "Process Create"
+            matches_required: 1
+    response:
+      treat_as_threat: Malicious
+      network_quarantine: false

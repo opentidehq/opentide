@@ -39,7 +39,9 @@ def run_deploy(
     )
     from opentide.mutation.promotion import PromoteMDR
     from opentide.platforms.plugins import DeployTide
+    from opentide.core.registry import OpenTide
 
+    OpenTide.reload()
     deployment_plan = DeploymentStrategy.load_from_environment()
     if deployment_plan is DeploymentStrategy.PRODUCTION and (not skip_promotion):
         pre_deployment = modified_mdr_files(deployment_plan)
@@ -67,8 +69,12 @@ def run_deploy(
             return {"status": "empty", "deployed": []}
         raise SystemExit(0)
     IndexManager.reload()
-    mdr_deployers = cast(dict[str, Any], DeployTide.mdr)
+    mdr_deployers = cast(dict[str, Any], DeployTide().mdr)
     deployed: list[str] = []
+    plan_payload: dict[str, list[str]] = {
+        system: list(uuids) for system, uuids in deployment_list.items()
+    }
+    payloads: dict[str, list[dict[str, object]]] = {}
     for system, uuids in deployment_list.items():
         if system not in mdr_deployers:
             logger.critical("fatal_error", detail=f"Cannot find a deployment engine for {system}")
@@ -77,6 +83,9 @@ def run_deploy(
         deployer = cast(Any, mdr_deployers[system])
         if dry_run:
             logger.info("event", detail=f"Dry-run: would deploy {len(uuids)} rule(s) to {system}")
+            from opentide.deployment.preview import preview_platform_deployment
+
+            payloads[system] = preview_platform_deployment(system, uuids)
             deployed.append(system)
             continue
         try:
@@ -91,4 +100,12 @@ def run_deploy(
     exit_on_deployment_warnings()
     if not ctx.json_output:
         logger.info("all_content_passed_deployment")
-    return {"status": "completed", "deployed": deployed, "dry_run": dry_run}
+    result: dict[str, object] = {
+        "status": "completed",
+        "deployed": deployed,
+        "dry_run": dry_run,
+        "plan": plan_payload,
+    }
+    if dry_run:
+        result["payloads"] = payloads
+    return result
