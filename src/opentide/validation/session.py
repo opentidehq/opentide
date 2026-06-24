@@ -24,10 +24,11 @@ from opentide.validation.checks.cross_object import (
 from opentide.validation.checks.kinds import ValidateCheck
 from opentide.validation.errors import attach_yaml_lines, issues_from_pydantic
 from opentide.validation.field_vocab import validate_object_vocab_from_metaschema
+from opentide.validation.id_scan import IdScanRow, merge_id_duplicates
 from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.parallel import map_parallel, resolve_worker_count, sort_issues
 from opentide.validation.preflight import PreflightGraph
-from opentide.validation.scope import ValidationScope
+from opentide.validation.scope import ValidationScope, has_narrow_filter, scope_no_match_issue
 
 _MODEL_BY_TYPE: dict[str, type[TideModel]] = {
     "rule": DetectionRule,
@@ -52,14 +53,6 @@ class ObjectWorkItem:
     object_type: str
     body: dict[str, Any]
     file_name: str | None
-
-
-@dataclass(frozen=True)
-class _IdScanRow:
-    model_file: Path
-    meta_name: str
-    uuid: str
-    name: str
 
 
 def run_validation(
@@ -102,8 +95,8 @@ def run_validation(
         ValidateCheck.uuid_format,
         ValidateCheck.schema,
     }
-    if _scope_has_narrow_filter(scope) and object_checks and not work_items:
-        issues.append(_scope_no_match_issue(scope))
+    if has_narrow_filter(scope) and object_checks and not work_items:
+        issues.append(scope_no_match_issue(scope))
 
     if ValidateCheck.id_uniqueness in checks:
         issues.extend(_check_id_uniqueness(id_paths, scope=scope, workers=id_workers))
@@ -240,42 +233,6 @@ def _uuid_issue_for_object(
     return []
 
 
-def _scope_has_narrow_filter(scope: ValidationScope) -> bool:
-    return scope.mode == "narrow" and bool(scope.targets or scope.object_types)
-
-
-def _scope_no_match_issue(scope: ValidationScope) -> ValidationIssue:
-    return ValidationIssue(
-        code="scope_no_match",
-        severity="error",
-        message="No objects matched the validation scope (check --file, --uuid, --type)",
-        context={
-            "targets": sorted(scope.targets),
-            "object_types": sorted(scope.object_types),
-        },
-    )
-
-
-def _id_duplicate_in_scope(
-    scope: ValidationScope,
-    row: _IdScanRow,
-    original: _IdScanRow,
-) -> bool:
-    if scope.mode == "full":
-        return True
-    if not scope.targets:
-        return True
-    if scope.targets & {row.uuid, original.uuid}:
-        return True
-    paths = {
-        row.model_file.name,
-        str(row.model_file),
-        original.model_file.name,
-        str(original.model_file),
-    }
-    return bool(scope.targets & paths)
-
-
 def _check_id_uniqueness(
     paths: list[tuple[Path, str]],
     *,
@@ -293,7 +250,7 @@ def _check_id_uniqueness(
     else:
         scans = [row for path_row in paths if (row := _scan_id_file(path_row)) is not None]
 
-    return _merge_id_duplicates(scans, scope)
+    return merge_id_duplicates(scans, scope)
 
 
 def _id_scan_paths() -> list[tuple[Path, str]]:
@@ -317,7 +274,7 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
     return scan_paths
 
 
-def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | None:
+def _scan_id_file(path_row: tuple[Path, str]) -> IdScanRow | None:
     import yaml
 
     model_file, meta_name = path_row
@@ -328,41 +285,9 @@ def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | None:
     uuid = model_body.get("metadata", {}).get("uuid")
     if not uuid:
         return None
-    return _IdScanRow(
+    return IdScanRow(
         model_file=model_file,
         meta_name=meta_name,
         uuid=str(uuid),
         name=str(model_body.get("name", "")),
     )
-
-
-def _merge_id_duplicates(scans: list[_IdScanRow], scope: ValidationScope) -> list[ValidationIssue]:
-    registry: dict[str, _IdScanRow] = {}
-    issues: list[ValidationIssue] = []
-    for row in scans:
-        if row.uuid not in registry:
-            registry[row.uuid] = row
-            continue
-        original = registry[row.uuid]
-        if not _id_duplicate_in_scope(scope, row, original):
-            continue
-        issues.append(
-            ValidationIssue(
-                code="duplicate_id",
-                severity="error",
-                object_uuid=row.uuid,
-                object_type=row.meta_name,
-                file_path=row.model_file,
-                message=(
-                    f"Duplicated ID {row.uuid} on {row.name!r} @ {row.model_file.name}; "
-                    f"already used by {original.name!r} @ {original.model_file.name}"
-                ),
-                context={
-                    "original": {
-                        "name": original.name,
-                        "file_name": original.model_file.name,
-                    }
-                },
-            )
-        )
-    return issues

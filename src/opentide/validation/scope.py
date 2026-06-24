@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from opentide.validation.issues import ValidationIssue
+
 
 @dataclass(frozen=True)
 class ValidationScope:
@@ -53,3 +55,21 @@ class ValidationScope:
         if uuid in self.targets:
             return True
         return bool(file_name and file_name in self.targets)
+
+
+def has_narrow_filter(scope: ValidationScope) -> bool:
+    """Return whether the scope restricts validation to explicit targets or types."""
+    return scope.mode == "narrow" and bool(scope.targets or scope.object_types)
+
+
+def scope_no_match_issue(scope: ValidationScope) -> ValidationIssue:
+    """Build a scope_no_match error when narrow filters match no objects."""
+    return ValidationIssue(
+        code="scope_no_match",
+        severity="error",
+        message="No objects matched the validation scope (check --file, --uuid, --type)",
+        context={
+            "targets": sorted(scope.targets),
+            "object_types": sorted(scope.object_types),
+        },
+    )
