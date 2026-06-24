@@ -116,9 +116,6 @@ def test_create_layer_orchestrates_pipeline(monkeypatch) -> None:
     layer = AttackNavigatorLayer()
     captured: dict[str, object] = {}
 
-    def capture_export(**kwargs):
-        captured["layer"] = kwargs.get("layer")
-
     monkeypatch.setattr(layer, "generate_technique_layer", lambda: [])
     monkeypatch.setattr(
         layer,

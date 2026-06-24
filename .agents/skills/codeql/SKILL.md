@@ -12,12 +12,13 @@ Static analysis for Python and GitHub Actions workflows. One workflow, no duplic
 
 [`.github/workflows/codeql.yml`](../../../.github/workflows/codeql.yml):
 
-- **Languages:** `actions` only (GitHub Actions workflow scanning)
-- **Python:** via **GitHub Code Quality** (Settings → Code security → Code Quality, or `PATCH /repos/{owner}/{repo}/code-quality/setup` with `state: configured` and `languages: ["python"]`)
+- **Languages:** `python` and `actions` in one matrix job (categories `/language:python` and `/language:actions`)
+- **Why both in the workflow:** PR code-scanning comparison requires the same `(codeql.yml) /language:python` category registered on `development`; Code Quality dynamic scans alone leave PR checks in a NEUTRAL "configuration not found" state
 - **Triggers:** push to `main`/`development`, all PRs, weekly schedule
 - **Queries:** `security-extended`
+- **Python deps:** `uv sync --group dev` before analyze
 
-Enable Code Quality for Python scanning. Do **not** add `python` to `codeql.yml` — that duplicates the Code Quality CodeQL run.
+Code Quality may also run a dynamic Python scan on push; if duplicate alerts appear, disable Python in Code Quality settings and rely on this workflow.
 
 ## Local analysis
 
