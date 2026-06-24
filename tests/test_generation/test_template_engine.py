@@ -47,10 +47,37 @@ def test_gen_template_simple_string_field() -> None:
     assert body["name"] == "blank"
 
 
-def test_gen_template_optional_field_commented() -> None:
-    metaschema = {"description": {"type": "string"}}
+def test_gen_template_object_with_properties() -> None:
+    metaschema = {
+        "metadata": {
+            "type": "object",
+            "properties": {
+                "uuid": {"type": "string"},
+                "author": {"type": "string"},
+            },
+        }
+    }
+    body = gen_template(metaschema, required=["metadata", "uuid"])
+    assert body["metadata"]["uuid"] == "blank"
+    assert "#author" in body["metadata"]
+
+
+def test_gen_template_array_items_optional() -> None:
+    metaschema = {
+        "signals": {
+            "type": "array",
+            "items": {
+                "properties": {
+                    "name": {"type": "string"},
+                    "severity": {"type": "string"},
+                }
+            },
+        }
+    }
     body = gen_template(metaschema, required=[])
-    assert "#description" in body
+    assert "#signals" in body
+    values = body["#signals"][0]
+    assert "Comment out name" in values or "name" in values
 
 
 def test_replace_strings_in_file(tmp_path: Path) -> None:

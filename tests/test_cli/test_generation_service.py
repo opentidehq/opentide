@@ -50,8 +50,59 @@ def test_run_generate_playbook_map_phase(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_run_generate_exports_phase(monkeypatch: pytest.MonkeyPatch) -> None:
     attack = MagicMock()
     table = MagicMock(run=MagicMock())
+    revisions = MagicMock()
     monkeypatch.setattr("opentide.export.attack_navigator_layer.run", attack)
     monkeypatch.setattr("opentide.export.table_export.TableExporter", lambda: table)
+    monkeypatch.setattr("opentide.export.revisions_export.run", revisions)
     generation.run_generate_phase(GeneratePhase.exports)
     attack.assert_called_once()
     table.run.assert_called_once()
+    revisions.assert_called_once()
+
+
+def test_run_generate_snippets_phase(monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_module = MagicMock()
+    monkeypatch.setitem(
+        __import__("sys").modules, "opentide.generation.vscode_snippets", mock_module
+    )
+    generation.run_generate_phase(GeneratePhase.snippets)
+    mock_module.run.assert_called_once()
+
+
+def test_run_generate_docs_phase(monkeypatch: pytest.MonkeyPatch) -> None:
+    run_docs = MagicMock()
+    monkeypatch.setattr("opentide.documentation.cli.run", run_docs)
+    generation.run_generate_phase(GeneratePhase.docs)
+    run_docs.assert_called_once()
+
+
+def test_run_generate_all_runs_every_phase(monkeypatch: pytest.MonkeyPatch) -> None:
+    called: list[str] = []
+
+    def _record(phase: str) -> None:
+        called.append(phase)
+
+    monkeypatch.setattr(generation, "run_generate_phase", _record)
+    generation.run_generate_all()
+    assert called == list(generation._PHASE_ORDER)
+
+
+def test_run_generate_single_phase(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = MagicMock()
+    monkeypatch.setattr(generation, "run_generate_phase", MagicMock())
+    result = generation.run_generate(ctx, phase="schemas")
+    assert result["phase"] == "schemas"
+
+
+def test_run_generate_full_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = MagicMock()
+    monkeypatch.setattr(generation, "run_generate_all", MagicMock())
+    result = generation.run_generate(ctx)
+    assert "phases" in result
+
+
+def test_run_generate_docs_scoped(monkeypatch: pytest.MonkeyPatch) -> None:
+    run_docs = MagicMock()
+    monkeypatch.setattr("opentide.documentation.cli.run", run_docs)
+    generation.run_generate_docs(rules=True)
+    run_docs.assert_called_once()
