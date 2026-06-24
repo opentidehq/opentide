@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.core.registry import OpenTide
+from opentide.core.types import IndexSnapshot
 from opentide.models.base import TideModel
 from opentide.models.objective import DetectionObjective
 from opentide.models.rule import DetectionRule
@@ -59,7 +60,7 @@ def run_validation(
     scope: ValidationScope | None = None,
     checks: frozenset[ValidateCheck] | None = None,
     *,
-    index: dict[str, Any] | None = None,
+    index: IndexSnapshot | None = None,
     workers: int | None = None,
 ) -> ValidationReport:
     """Run validation checks and return a structured report."""
@@ -100,6 +101,11 @@ def run_validation(
 
     if ValidateCheck.id_uniqueness in checks:
         issues.extend(_check_id_uniqueness(id_paths, scope=scope, workers=id_workers))
+
+    if ValidateCheck.cve in checks:
+        from opentide.validation.cve_check import check_cve_issues
+
+        issues.extend(check_cve_issues(index, scope))
 
     if object_checks:
         if object_workers > 0:

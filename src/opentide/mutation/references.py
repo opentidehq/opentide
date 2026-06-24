@@ -1,10 +1,12 @@
 import os
+
 import yaml
 
-
-from opentide.core.logging import log
 from opentide.core.files import resolve_paths
+from opentide.core.logging import get_logger
 from opentide.core.root import get_repo_root
+
+logger = get_logger(__name__)
 
 ROOT = get_repo_root()
 
@@ -38,9 +40,7 @@ def upgrade_refs(old_refs):
             for ref in old_refs
             if PRIVATE_DOMAIN in ref or (".pdf" in ref and "https" not in ref)
         ]
-        public_refs_list = [
-            ref.strip() for ref in old_refs if ref not in internal_refs_list
-        ]
+        public_refs_list = [ref.strip() for ref in old_refs if ref not in internal_refs_list]
 
         public_counter = 1
         for pub_ref in public_refs_list:
@@ -80,20 +80,18 @@ def run():
     for model_type in MODELS_SCOPE:
         folder = MODELS_FOLDER[model_type]
         if not folder.exists():
-            log(
-                "WARNING",
-                "Model folder configured but not found, skipping",
-                f"{model_type} -> {folder}",
+            logger.warning(
+                "model_folder_configured_but_not_found_skipping", detail=f"{model_type} -> {folder}"
             )
             continue
-        log("INFO", "Now processing all files under model type", model_type)
+        logger.info("now_processing_all_files_under_model_type", detail=model_type)
         for file in sorted(os.listdir(folder)):
             if not file.endswith(".yaml"):
                 if not file.endswith(".yml"):
-                    log("INFO", "The file doesn't end with .yaml or .yml, skipping", file)
-                    continue  
+                    logger.info("the_file_doesn_t_end_with_yaml_or_yml_skipping", detail=file)
+                    continue
 
-            with open(folder / file, "r", encoding="utf-8") as handle:
+            with open(folder / file, encoding="utf-8") as handle:
                 raw_body = handle.read()
             yaml_body = yaml.safe_load(raw_body)
             current_references = yaml_body.get("references")
@@ -104,11 +102,13 @@ def run():
                 metadata_keyword = "metadata:"
 
             if current_references and (type(current_references) is not list):
-                log("DEBUG", "No need to migrate", file)
+                logger.debug("no_need_to_migrate", detail=file)
 
-            elif (current_references and type(current_references) is not dict) or ("#public:" not in raw_body.split(metadata_keyword)[0]):
-                log("ONGOING", "Migrating to new references model", file)
-                
+            elif (current_references and type(current_references) is not dict) or (
+                "#public:" not in raw_body.split(metadata_keyword)[0]
+            ):
+                logger.info("migrating_to_new_references_model", detail=file)
+
                 header = raw_body.split(metadata_keyword)[0]
                 large_block = "metadata:" + raw_body.split(metadata_keyword)[1]
 
@@ -129,10 +129,9 @@ def run():
                 # output_path = Path("./DEBUG") / file
                 with open(output_path, "w+", encoding="utf-8") as export:
                     export.write(body)
-                    log("SUCCESS", "Migrated reference schema correctly")
+                    logger.info("migrated_reference_schema_correctly")
 
-
-    log("SUCCESS", "Ensured all files are migrated to the new reference schema")
+    logger.info("ensured_all_files_are_migrated_to_the_new_reference_schema")
 
 
 if __name__ == "__main__":

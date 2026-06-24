@@ -1,10 +1,15 @@
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from dataclasses import dataclass, asdict
-from typing import Sequence
-from opentide.core.logging import log
-from opentide.core.registry import OpenTide
-from opentide.generation.framework import childs, parents, get_vocab_entry
+
 import pandas as pd
+
+from opentide.core.logging import get_logger
+from opentide.core.registry import OpenTide
+from opentide.generation.framework import childs, get_vocab_entry, parents
+
+logger = get_logger(__name__)
+
 
 @dataclass
 class TableEntry:
@@ -22,8 +27,8 @@ class TableEntry:
     actors: str
     attack: str
 
-class TableExporter:
 
+class TableExporter:
     def __init__(self):
         self.TIDE_EXPORTS_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.exports)
         self.OBJECT_SCOPE = OpenTide.Configurations.Global.objects
@@ -41,8 +46,8 @@ class TableExporter:
     def _rename_columns(self, dataset: pd.DataFrame) -> pd.DataFrame:
         new_columns = {}
         for column in dataset.columns:
-            if column == 'uuid':
-                new_columns[column] = 'UUID'
+            if column == "uuid":
+                new_columns[column] = "UUID"
             else:
                 new_columns[column] = column.capitalize()
         dataset.rename(columns=new_columns, inplace=True)
@@ -51,60 +56,79 @@ class TableExporter:
     def _flatten_actors(self, actors: list[dict]) -> list:
 
         def _enrich_actor_name(actor: str) -> str:
-            raw_id = actor.split('::')[1]
-            clean_id = raw_id.split(' #')[0].strip()
-            actor_data: dict = get_vocab_entry('actors', clean_id)
-            return str(actor_data.get('name')) if isinstance(actor_data, dict) else clean_id
-        return [_enrich_actor_name(str(actor.get('name'))) for actor in actors]
+            raw_id = actor.split("::")[1]
+            clean_id = raw_id.split(" #")[0].strip()
+            actor_data: dict = get_vocab_entry("actors", clean_id)
+            return str(actor_data.get("name")) if isinstance(actor_data, dict) else clean_id
+
+        return [_enrich_actor_name(str(actor.get("name"))) for actor in actors]
 
     def _flatten_chaining(self, chains: list[dict]) -> dict[str, Sequence]:
         flat_chains = dict()
         for chain in chains:
-            flat_chains.setdefault(chain['relation'], [])
-            flat_chains[chain['relation']].append(chain['vector'])
+            flat_chains.setdefault(chain["relation"], [])
+            flat_chains[chain["relation"]].append(chain["vector"])
         return flat_chains
 
     def _create_entry(self, object: str, object_type: str) -> TableEntry:
         object_data = OpenTide.Models.Index[object_type][object]
         uuid = object
-        name = object_data['name']
+        name = object_data["name"]
         object_type_name = self.OBJECT_NAMES[object_type]
-        tlp = object_data['metadata']['tlp']
-        version = str(object_data['metadata']['version'])
-        created = object_data['metadata']['created']
-        modified = object_data['metadata']['modified']
-        actors = attack = chaining = ''
+        tlp = object_data["metadata"]["tlp"]
+        version = str(object_data["metadata"]["version"])
+        created = object_data["metadata"]["created"]
+        modified = object_data["metadata"]["modified"]
+        actors = attack = chaining = ""
         object_childs = childs(uuid)
-        object_childs = ', '.join(object_childs) if object_childs else ''
-        object_parents = parents(uuid) or ''
-        object_parents = ', '.join(object_parents) if object_parents else ''
+        object_childs = ", ".join(object_childs) if object_childs else ""
+        object_parents = parents(uuid) or ""
+        object_parents = ", ".join(object_parents) if object_parents else ""
         match object_type:
-            case 'threat':
-                description = object_data.get('threat', {}).get('description')
-                chains = object_data['threat'].get('chaining') or ''
+            case "threat":
+                description = object_data.get("threat", {}).get("description")
+                chains = object_data["threat"].get("chaining") or ""
                 if chains:
                     chaining = self._flatten_chaining(chains)
                     chaining = str(chaining)
-                actors = object_data['threat'].get('actors') or ''
+                actors = object_data["threat"].get("actors") or ""
                 if actors:
                     actors = self._flatten_actors(actors)
-                    actors = ', '.join(actors)
-                attack = object_data['threat']['att&ck']
-                attack = ', '.join(attack)
-            case 'objective':
-                description = object_data['objective'].get('description')
-                if (techniques := object_data['objective'].get('att&ck')):
-                    attack = ', '.join(techniques)
-            case 'rule':
-                description = object_data['description']
-        return TableEntry(uuid=uuid, name=name, type=object_type_name, tlp=tlp, description=description, version=version, created=created, modified=modified, childs=object_childs, parents=object_parents, chaining=chaining, actors=actors, attack=attack)
+                    actors = ", ".join(actors)
+                attack = object_data["threat"]["att&ck"]
+                attack = ", ".join(attack)
+            case "objective":
+                description = object_data["objective"].get("description")
+                if techniques := object_data["objective"].get("att&ck"):
+                    attack = ", ".join(techniques)
+            case "rule":
+                description = object_data["description"]
+        return TableEntry(
+            uuid=uuid,
+            name=name,
+            type=object_type_name,
+            tlp=tlp,
+            description=description,
+            version=version,
+            created=created,
+            modified=modified,
+            childs=object_childs,
+            parents=object_parents,
+            chaining=chaining,
+            actors=actors,
+            attack=attack,
+        )
 
     def _create_dataset(self) -> Sequence[TableEntry]:
         dataset = list()
         for object_type in self.OBJECT_SCOPE:
             object_index = OpenTide.Models.Index.get(object_type)
             if not object_index:
-                log('FAILURE', 'Could not find a current indexable set of OpenTide object for the type', object_type)
+                logger.error(
+                    "object_index_not_found",
+                    object_type=object_type,
+                    detail="Could not find a current indexable set of OpenTide object for the type",
+                )
                 continue
             for object in object_index:
                 dataset.append(self._create_entry(object, object_type))
@@ -112,5 +136,7 @@ class TableExporter:
 
     def _export(self, export: pd.DataFrame):
         export.to_csv(self.EXPORT_PATH, index=False)
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     TableExporter().run()

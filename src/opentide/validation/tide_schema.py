@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 import structlog
-from tabulate import tabulate
 
 from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
@@ -13,6 +13,18 @@ from opentide.validation.errors import format_issues_for_console
 from opentide.validation.session import run_validation
 
 logger = structlog.get_logger("opentide.validation.tide_schema")
+
+
+def _format_stats_table(rows: list[list[Any]]) -> str:
+    if not rows:
+        return ""
+    widths = [max(len(str(row[col])) for row in rows) for col in range(len(rows[0]))]
+    lines: list[str] = []
+    for row_index, row in enumerate(rows):
+        lines.append(" | ".join(str(cell).ljust(widths[col]) for col, cell in enumerate(row)))
+        if row_index == 0:
+            lines.append("-+-".join("-" * width for width in widths))
+    return "\n".join(lines)
 
 
 def run() -> None:
@@ -44,7 +56,7 @@ def run() -> None:
         statstable = [["Category", "Count"]]
         for key in stats:
             statstable.append([key, stats[key]])
-        statstable = tabulate(statstable, headers="firstrow")
+        statstable = _format_stats_table(statstable)
         logger.info("step_completed", detail=f"Successfully verified {overall} OpenTide objects")
         print(statstable)
 

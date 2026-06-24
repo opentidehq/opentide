@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from opentide.validation.issues import ValidationIssue
 from opentide.validation.preflight import PreflightGraph
@@ -60,7 +60,7 @@ def walk_vocab_fields(
                     if isinstance(item, dict):
                         issues.extend(
                             walk_vocab_fields(
-                                item,
+                                cast(dict[str, Any], item),
                                 items,
                                 graph,
                                 object_uuid=object_uuid,

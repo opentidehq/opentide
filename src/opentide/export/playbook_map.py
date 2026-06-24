@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from opentide.core.logging import log
+from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
+
+logger = get_logger(__name__)
 
 
 def run(output: Path | None = None) -> Path:
@@ -27,14 +29,14 @@ def run(output: Path | None = None) -> Path:
         }
 
         if row["Playbook"] == "":
-            log("WARNING", "No playbook entry", row["Name"])
+            logger.warning("no_playbook_entry", name=row["Name"])
         else:
-            log("INFO", "Found playbook entry", row["Name"])
+            logger.info("found_playbook_entry", name=row["Name"])
 
         playbook_mapping.append(row)
 
     table = pd.DataFrame(playbook_mapping)
     out_path = output or Path("playbook_map.xlsx")
     table.to_excel(out_path, index=False)
-    log("SUCCESS", "Playbook map written", str(out_path))
+    logger.info("playbook_map_written", path=str(out_path))
     return out_path

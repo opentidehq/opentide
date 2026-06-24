@@ -8,7 +8,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from opentide.core.logging import log
+from opentide.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 VocabKey = Literal["name", "id"]
 
@@ -76,7 +79,7 @@ def resolve_vocab_key(raw: Mapping[str, Any], *, source: str = "") -> VocabKey:
         return key
     if raw.get("model"):
         if source:
-            log("WARNING", "Deprecated 'model' flag; use key = \"id\"", source)
+            logger.warning("deprecated_model_flag_use_key_id", detail=source)
         return "id"
     return "name"
 
@@ -231,21 +234,19 @@ def parse_vocabulary_document(raw: Mapping[str, Any], *, source: str = "") -> Vo
 
     for index, entry_data in enumerate(raw.get("keys", [])):
         if not isinstance(entry_data, Mapping):
-            log("WARNING", f"Skipping malformed vocabulary entry at index {index}", source)
+            logger.warning("skipping_malformed_vocabulary_entry_at_index", detail=source)
             continue
         if "name" not in entry_data:
-            log("WARNING", f"Skipping entry missing 'name' at index {index}", source)
+            logger.warning("skipping_entry_missing_name_at_index", detail=source)
             continue
         if vocab_key == "id" and "id" not in entry_data:
-            log("WARNING", f"Skipping id-keyed entry missing 'id' at index {index}", source)
+            logger.warning("skipping_id_keyed_entry_missing_id_at_index", detail=source)
             continue
 
         key_name = entry_data.get(key_field)
         if not key_name:
-            log(
-                "WARNING",
-                f"Skipping vocabulary entry missing key field in {source}",
-                f"index={index}",
+            logger.warning(
+                "skipping_vocabulary_entry_missing_key_field_in", detail=f"index={index}"
             )
             continue
         key_str = str(key_name)
@@ -258,7 +259,10 @@ def parse_vocabulary_document(raw: Mapping[str, Any], *, source: str = "") -> Vo
         try:
             entry = _build_entry(entry_data, fallback_name=str(entry_data["name"]))
         except VocabularyLoadError as exc:
-            log("WARNING", str(exc), source, f"entry={key_str}")
+            logger.warning(
+                "warning",
+                detail=str(str(exc)) + " | " + str(source) + " | " + str(f"entry={key_str}"),
+            )
             continue
         entries[key_str] = entry
 
@@ -344,12 +348,15 @@ class VocabularyLoader:
 
         for key, entry_data in entries_raw.items():
             if not isinstance(entry_data, Mapping):
-                log("WARNING", f"Skipping malformed vocabulary entry '{key}'", source)
+                logger.warning("skipping_malformed_vocabulary_entry", detail=source)
                 continue
             try:
                 entries[str(key)] = _build_entry(entry_data, fallback_name=str(key))
             except VocabularyLoadError as exc:
-                log("WARNING", str(exc), source, f"entry={key}")
+                logger.warning(
+                    "warning",
+                    detail=str(str(exc)) + " | " + str(source) + " | " + str(f"entry={key}"),
+                )
 
         return VocabularyDefinition(metadata=metadata, entries=entries)
 
@@ -376,7 +383,7 @@ class VocabularyLoader:
     def load_index(raw_vocabs: Mapping[str, Any] | None) -> dict[str, VocabularyDefinition]:
         """Load all vocabularies from an index vocabs mapping with per-file error boundaries."""
         if not raw_vocabs:
-            log("FAILURE", "Vocabulary index is missing or empty")
+            logger.error("vocabulary_index_is_missing_or_empty")
             return {}
 
         loaded: dict[str, VocabularyDefinition] = {}
@@ -384,5 +391,5 @@ class VocabularyLoader:
             try:
                 loaded[name] = VocabularyLoader.load(data, source=name)
             except VocabularyLoadError as exc:
-                log("FAILURE", str(exc))
+                logger.error("failure", detail=str(exc))
         return loaded
