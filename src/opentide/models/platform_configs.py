@@ -224,3 +224,98 @@ class HarfangLabYara(TideModel):
     strings: str
     condition: str
     imports: list[str] | None = None
+
+
+class SplunkSchedule(TideModel):
+    frequency: str | None = None
+    cron: str | None = None
+    custom_time: str | None = None
+
+
+class SplunkTimerange(TideModel):
+    lookback: str | None = None
+    earliest: str | None = None
+    latest: str | None = None
+
+
+class SplunkScheduling(TideModel):
+    type: str | None = None
+    expires: str | None = None
+    schedule: SplunkSchedule | None = None
+    timerange: SplunkTimerange | None = None
+
+
+class SplunkThrottling(TideModel):
+    fields: list[str] | None = None
+    duration: str | None = None
+    group_name: str | None = None
+
+
+class SplunkTrigger(TideModel):
+    condition: str | None = None
+    comparator: str | None = None
+    threshold: int | None = None
+    severity: int | None = None
+    custom_condition: str | None = None
+    type: str | None = None
+    throttling: SplunkThrottling | None = None
+
+
+class SplunkNotableEvent(TideModel):
+    title: str | None = None
+    description: str | None = None
+
+
+class SplunkNotableDrilldown(TideModel):
+    name: str | None = None
+    search: str | None = None
+
+
+class SplunkNotable(TideModel):
+    event: SplunkNotableEvent | None = None
+    drilldown: SplunkNotableDrilldown | None = None
+    security_domain: str | None = None
+
+
+class SplunkRiskObject(TideModel):
+    field: str
+    type: str
+    score: int
+
+
+class SplunkThreatObject(TideModel):
+    field: str
+    type: str
+
+
+class SplunkRisk(TideModel):
+    message: str | None = None
+    risk_objects: list[SplunkRiskObject] | None = None
+    threat_objects: list[SplunkThreatObject] | None = None
+
+
+class SplunkEmailInclude(TideModel):
+    results_link: bool | None = None
+    search_string: bool | None = None
+    trigger_condition: bool | None = None
+    trigger_time: bool | None = None
+
+
+class SplunkEmail(TideModel):
+    to: str | None = None
+    cc: str | None = None
+    bcc: str | None = None
+    priority: str | None = None
+    subject: str | None = None
+    message: str | None = None
+    content_type: str | None = None
+    send_csv: bool | None = None
+    send_pdf: bool | None = None
+    inline_results: bool | None = None
+    include: SplunkEmailInclude | None = None
+
+
+class SplunkActions(TideModel):
+    notable: SplunkNotable | None = None
+    risk: SplunkRisk | None = None
+    email: SplunkEmail | None = None

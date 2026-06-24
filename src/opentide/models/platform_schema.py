@@ -49,7 +49,7 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
             **_COMMON_PLATFORM_EXTRAS["property_extras"],
             "platform_schema": {
                 "title": "Schema identifier and version",
-                "default": "splunk::2.1",
+                "default": "splunk::3.0",
                 "pattern": r"^splunk::[1-9]\.[0-9]$",
             },
             "threshold": {"tide.mdr.parameter": "alert_threshold"},
@@ -162,10 +162,13 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
         },
     },
     CarbonBlackConfig: {
-        "required": ["status"],
+        "required": ["status", "query"],
         "property_extras": {
             **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {"default": "carbon_black_cloud::2.0"},
+            "platform_schema": {
+                "default": "carbon_black_cloud::3.0",
+                "pattern": r"^carbon_black_cloud::[1-9]\.[0-9]$",
+            },
             "tenants": {"tide.config.system.tenants": "carbon_black_cloud"},
         },
     },

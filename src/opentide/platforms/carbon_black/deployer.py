@@ -1,141 +1,255 @@
-from cbc_sdk.enterprise_edr import Report, IOC_V2, Watchlist
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import structlog
+from cbc_sdk.enterprise_edr import IOC_V2, Report, Watchlist
 from cbc_sdk.rest_api import CBCloudAPI
-from opentide.generation.framework import techniques_resolver
-from opentide.core.logging import log
+
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide
-from opentide.platforms.plugins import RuleDeployer
-from opentide.platforms.carbon_black.client import CarbonBlackCloudConnection
-from opentide.deployment import check_status
+from opentide.core.registry import DetectionPlatforms, OpenTide
+from opentide.deployment import TideDeployment, check_status
+from opentide.generation.framework import techniques_resolver
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.models.rule import DetectionRule
+from opentide.models.system_config import ConfigurationModels
+from opentide.platforms.carbon_black.client import (
+    CarbonBlackCloudConnection,
+    CarbonBlackCloudService,
+)
+from opentide.platforms.plugins import RuleDeployer
+
+logger = structlog.get_logger(__name__)
+
 
 class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
+    def _deploy_to_org(
+        self,
+        *,
+        service: CBCloudAPI,
+        data: dict[str, object] | DetectionRule,
+        org: str,
+        config_data: dict[str, object],
+    ) -> bool:
+        uuid = (
+            data.metadata.uuid
+            if isinstance(data, DetectionRule)
+            else str(data.get("uuid") or data["metadata"]["uuid"])  # type: ignore[index]
+        )
+        name = (
+            data.name.strip() if isinstance(data, DetectionRule) else str(data["name"]).strip()  # type: ignore[index]
+        )
+        description = (
+            data.description.strip()
+            if isinstance(data, DetectionRule)
+            else str(data["description"]).strip()  # type: ignore[index]
+        )
+        status = str(config_data["status"])
+        query = str(config_data["query"]).replace("\n", " ")
+        deployment = check_status(status) not in (
+            StatusStrategy.DISABLEMENT,
+            StatusStrategy.DELETION,
+        )
+        removal = not deployment
 
-    def deploy_mdr(self, data):
-        """
-        Deployment routine, connecting to the platform and combining base and custom configurations
-        """
-        custom_orgs = data['configurations'][self.DEPLOYER_IDENTIFIER].get('organization')
-        if custom_orgs:
-            deploy_orgs = custom_orgs
-        else:
-            deploy_orgs = self.ORGANIZATIONS
-        for org in deploy_orgs:
-            log('ONGOING', f" Currently deploying MDR {data['name']} on organization", org)
-            org = org.strip()
-            if org in self.CBC_SECRETS:
-                org_secrets = self.CBC_SECRETS[org]
-                org_key = org_secrets.get('org_key')
-                token = org_secrets.get('token')
+        tags: list[str] = [status]
+        detection_model = (
+            data.detection_model if isinstance(data, DetectionRule) else data.get("detection_model")  # type: ignore[union-attr]
+        )
+        if detection_model:
+            techniques = techniques_resolver(str(uuid))
+            tags.append(str(detection_model))
+            tags.extend(techniques)
+        if config_tags := config_data.get("tags"):
+            tags.extend(list(config_tags))  # type: ignore[arg-type]
+
+        alert_severity = (
+            data.response.alert_severity
+            if isinstance(data, DetectionRule) and data.response
+            else data["response"]["alert_severity"]  # type: ignore[index]
+        )
+        severity = self.SEVERITY_MAPPING[str(alert_severity)]
+        selected_watchlist = config_data.get("watchlist") or self.DEFAULT_WATCHLIST
+        selected_report = config_data.get("report") or name
+
+        watchlist_list = service.select(Watchlist)
+        report = None
+        watchlist = None
+        if watchlist_list:
+            for item in watchlist_list:
+                if item.name == selected_watchlist:
+                    watchlist = item
+            if watchlist:
+                for item in watchlist.reports:
+                    if item.title == selected_report:
+                        report = item
             else:
-                log('FATAL', 'Target organization is not present in Secrets configuration', org, 'Double check TOML config to ensure there is a org_key and token entry for this org')
-                raise Exception
-            if not org_key:
-                log('FATAL', 'Could not fetch Organization Key for organization', org, 'Double check that there is a namespaced entry for this organization in the TOML config')
-                raise Exception
-            if not token:
-                log('FATAL', 'Could not fetch Organization Token for organization', org, 'Double check that there is a namespaced entry for this organization in the TOML config')
-                raise Exception
-            try:
-                service = CBCloudAPI(url=self.CBC_URL, token=token, org_key=org_key, ssl_verify=self.SSL_ENABLED)
-                log('SUCCESS', 'Successfully connected to Carbon Black Cloud on tenant', org)
-            except Exception:
-                raise Exception(f' [FAILURE] Service could not be reached for organization {org}')
-            config_data = data['configurations'][self.DEPLOYER_IDENTIFIER]
-            uuid = data.get('uuid') or data['metadata']['uuid']
-            name = data['name'].strip()
-            description = data['description'].strip()
-            status = config_data['status']
-            query = config_data['query'].replace('\n', ' ')
-            deployment = False
-            removal = False
-            if check_status(status) in (StatusStrategy.DISABLEMENT, StatusStrategy.DELETION):
-                removal = True
-            else:
-                deployment = True
-            tags = list()
-            tags.append(config_data['status'])
-            if 'detection_model' in data.keys():
-                detection_model = data['detection_model']
-                techniques = techniques_resolver(uuid)
-                tags.append(detection_model)
-                tags.extend(techniques)
-            if 'tags' in config_data.keys():
-                tags.extend(config_data['tags'])
-            severity = self.SEVERITY_MAPPING[data['response']['alert_severity']]
-            selected_watchlist = config_data.get('watchlist') or self.DEFAULT_WATCHLIST
-            selected_report = config_data.get('report') or name
-            watchlist_list = service.select(Watchlist)
-            report = None
-            watchlist = None
-            if watchlist_list:
-                for w in watchlist_list:
-                    if w.name == selected_watchlist:
-                        watchlist = w
-                if watchlist:
-                    for r in watchlist.reports:
-                        if r.title == selected_report:
-                            report = r
-                else:
-                    raise Exception(f' [FATAL] The CBC Deployer cannot create a detection in a nonexistent Watchlist : {selected_watchlist}. Make sure to createone on the console before retriggering the deployment')
-            ioc = IOC_V2.create_query(service, uuid, query)
-            if report:
-                if selected_report == name:
-                    if deployment:
-                        report.remove_iocs_by_id(str(uuid))
-                        report.append_iocs([ioc])
-                        if severity != report.severity:
-                            report.update(description=description, tags=tags, severity=severity)
-                            log('INFO', 'Upgraded severity for this report to allign with MDR', str(severity))
-                        else:
-                            report.update(description=description, tags=tags)
-                        log('SUCCESS', 'Rolled out IOC to report', selected_report)
-                    elif removal:
-                        report.delete()
-                        log('WARNING', 'The report was deleted alongside the rule', selected_report)
-                elif deployment:
-                    report.remove_iocs_by_id(uuid)
+                raise RuntimeError(
+                    f"The CBC Deployer cannot create a detection in a nonexistent Watchlist: "
+                    f"{selected_watchlist}. Create it on the console before retriggering deployment."
+                )
+
+        ioc = IOC_V2.create_query(service, uuid, query)
+        if report:
+            if selected_report == name:
+                if deployment:
+                    report.remove_iocs_by_id(str(uuid))
                     report.append_iocs([ioc])
-                    tags.extend((t for t in report.tags if t not in tags))
-                    if severity > report.severity:
+                    if severity != report.severity:
                         report.update(description=description, tags=tags, severity=severity)
-                        log('INFO', 'Upgraded severity for this report to allign with MDR', str(severity))
+                        logger.info("upgraded_severity_for_report", severity=str(severity))
                     else:
                         report.update(description=description, tags=tags)
-                    log('SUCCESS', 'Deployed IOC to report', selected_report)
+                    logger.info("rolled_out_ioc_to_report", report=selected_report)
                 elif removal:
-                    if len(report.iocs_) > 1:
-                        report.remove_iocs_by_id(uuid)
-                        report.update()
-                        log('SUCCESS', f'Deleted IOC from report', selected_report)
-                    else:
-                        report.delete()
-                        log('WARNING', 'The specified report was automaticallydeleted as they were no other rule', selected_report)
+                    report.delete()
+                    logger.warning("report_deleted_with_rule", report=selected_report)
             elif deployment:
-                report_builder = Report.create(service, selected_report, description, severity)
-                report_builder.add_ioc(ioc)
-                for tag in tags:
-                    report_builder.add_tag(tag.strip())
-                report = report_builder.build()
-                report.save_watchlist()
-                watchlist.add_reports([report])
-                log('SUCCESS', 'Created report and deployed IOC', selected_report)
+                report.remove_iocs_by_id(uuid)
+                report.append_iocs([ioc])
+                tags.extend(tag for tag in report.tags if tag not in tags)
+                if severity > report.severity:
+                    report.update(description=description, tags=tags, severity=severity)
+                    logger.info("upgraded_severity_for_report", severity=str(severity))
+                else:
+                    report.update(description=description, tags=tags)
+                logger.info("deployed_ioc_to_report", report=selected_report)
             elif removal:
-                log('SKIP', f'No report to delete, already removed from system', selected_report)
+                if len(report.iocs_) > 1:
+                    report.remove_iocs_by_id(uuid)
+                    report.update()
+                    logger.info("deleted_ioc_from_report", report=selected_report)
+                else:
+                    report.delete()
+                    logger.warning("report_auto_deleted", report=selected_report)
+        elif deployment:
+            report_builder = Report.create(service, selected_report, description, severity)
+            report_builder.add_ioc(ioc)
+            for tag in tags:
+                report_builder.add_tag(str(tag).strip())
+            new_report = report_builder.build()
+            new_report.save_watchlist()
+            watchlist.add_reports([new_report])
+            logger.info("created_report_and_deployed_ioc", report=selected_report)
+        elif removal:
+            logger.info("no_report_to_delete", report=selected_report)
         return True
 
-    def deploy(self, deployment: list[str], deployment_plan: DeploymentStrategy | None = None):
-        if not deployment:
-            raise Exception('DEPLOYMENT NOT FOUND')
+    def deploy_mdr(self, data: dict[str, object]) -> bool:
+        """MDRv3 deployment routine using dict-based MDR access."""
+        # TODO: DEPRECATED [carbon-black-cloud-mdrv4]
+        custom_orgs = data["configurations"][self.DEPLOYER_IDENTIFIER].get("organization")  # type: ignore[index]
+        deploy_orgs = custom_orgs or self.ORGANIZATIONS
+        for org in deploy_orgs:
+            logger.info("deploying_mdr_on_organization", mdr_name=data["name"], org=org)
+            org = str(org).strip()
+            org_secrets = self.CBC_SECRETS.get(org)
+            if not org_secrets:
+                logger.critical("organization_missing_from_secrets", org=org)
+                raise KeyError(org)
+            org_key = org_secrets.get("org_key")
+            token = org_secrets.get("token")
+            if not org_key or not token:
+                logger.critical("missing_org_credentials", org=org)
+                raise KeyError(org)
+            try:
+                service = CBCloudAPI(
+                    url=self.CBC_URL,
+                    token=token,
+                    org_key=org_key,
+                    ssl_verify=self.SSL_ENABLED,
+                )
+                logger.info("connected_to_cbc_tenant", org=org)
+            except Exception as exc:
+                raise RuntimeError(f"Service could not be reached for organization {org}") from exc
+            config_data = data["configurations"][self.DEPLOYER_IDENTIFIER]  # type: ignore[index]
+            self._deploy_to_org(service=service, data=data, org=org, config_data=config_data)
+        return True
+
+    def deploy_mdr_v4(
+        self,
+        data: DetectionRule,
+        service: CBCloudAPI,
+        tenant_config: ConfigurationModels.Systems.CarbonBlackCloud.Tenant,
+    ) -> bool | None:
+        """MDRv4 typed deployment for a single MDR on a single tenant."""
+        config = data.configurations.carbon_black_cloud
+        if not config or not config.query:
+            logger.info("mdr_skipped", mdr_name=data.name, reason="no typed CBC configuration")
+            return None
+
+        config_data = {
+            "status": config.status,
+            "query": config.query,
+            "watchlist": config.watchlist,
+            "report": config.report,
+            "tags": config.tags,
+        }
+        return self._deploy_to_org(
+            service=service,
+            data=data,
+            org=tenant_config.name,
+            config_data=config_data,
+        )
+
+    def deploy(
+        self,
+        mdr_deployment: Sequence[DetectionRule] | list[str] | None = None,
+        deployment_plan: DeploymentStrategy | None = None,
+        deployment: list[str] | None = None,
+    ) -> None:
+        """Deploy CBC MDRs — supports MDRv3 (UUID list) and MDRv4 (typed) signatures."""
         self.configure_proxy()
+
+        if mdr_deployment is not None:
+            loaded_mdr: list[DetectionRule] = []
+            for mdr in mdr_deployment:
+                if isinstance(mdr, str):
+                    loaded_mdr.append(OpenTide.Rules[mdr])
+                elif isinstance(mdr, DetectionRule):
+                    loaded_mdr.append(mdr)
+            if not loaded_mdr:
+                logger.info("no_mdrs_to_deploy_for_carbon_black_cloud")
+                return
+            if not deployment_plan:
+                raise ValueError("deployment_plan is required for MDRv4 CBC deployment")
+
+            tide_deployment = TideDeployment(
+                deployment=loaded_mdr,
+                system=DetectionPlatforms.CARBON_BLACK_CLOUD,
+                strategy=deployment_plan,
+            )
+            for tenant_deployment in tide_deployment.rule_deployment:
+                tenant_deployment = tenant_deployment  # type: TenantDeployment.CarbonBlackCloud
+                logger.info("currently_targeting_tenant", tenant=tenant_deployment.tenant.name)
+                cbc_service = CarbonBlackCloudService(tenant_deployment.tenant)
+                for mdr in tenant_deployment.rules:
+                    logger.info("processing_rule", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
+                    self.deploy_mdr_v4(
+                        data=mdr,
+                        service=cbc_service.service,
+                        tenant_config=tenant_deployment.tenant,
+                    )
+            return
+
+        # TODO: DEPRECATED [carbon-black-cloud-mdrv4]
+        if not deployment:
+            raise ValueError("DEPLOYMENT NOT FOUND")
         for mdr in deployment:
             mdr_data = OpenTide.Models.rules[mdr]
-            if self.DEPLOYER_IDENTIFIER in mdr_data['configurations'].keys():
+            if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"]:
                 self.deploy_mdr(mdr_data)
             else:
-                log('SKIP', f' Skipping as does not contain a CBC rule', mdr_data.get('name'))
+                logger.info(
+                    "mdr_skipped",
+                    mdr_name=mdr_data.get("name"),
+                    reason="no CBC rule configuration",
+                )
+
 
 def declare():
     return CarbonBlackCloudDeploy()
-if __name__ == '__main__' and DebugEnvironment.ENABLED:
-    CarbonBlackCloudDeploy().deploy(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)
+
+
+if __name__ == "__main__" and DebugEnvironment.ENABLED:
+    CarbonBlackCloudDeploy().deploy(deployment=DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)

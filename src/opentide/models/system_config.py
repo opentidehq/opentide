@@ -99,11 +99,41 @@ class ConfigurationModels:
 
         @dataclass
         class Splunk(SystemConfig):
-            pass
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    url: str
+                    port: str | int
+                    app: str
+                    correlation_searches: bool = True
+                    allow_skew: str | None = None
+                    schedule_offset: int = 0
+                    frequency_scheduling: str = "random"
+                    actions_enabled: Sequence[str] | None = None
+                    default_actions: Sequence[str] | None = None
+                    enterprise_security: bool = False
+                    token: str = ""
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
 
         @dataclass
         class CarbonBlackCloud(SystemConfig):
-            pass
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    url: str
+                    org_key: str
+                    token: str
+                    watchlist: str | None = None
+                    organizations: Sequence[str] | None = None
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
 
         @dataclass
         class SentinelOne(SystemConfig):
@@ -181,7 +211,7 @@ class DeploymentBatch:
 class TenantDeployment:
     @dataclass
     class Splunk(DeploymentBatch):
-        tenant: ConfigurationModels.Systems.DefenderForEndpoint.Tenant
+        tenant: ConfigurationModels.Systems.Splunk.Tenant
 
     @dataclass
     class Sentinel(DeploymentBatch):
@@ -189,7 +219,7 @@ class TenantDeployment:
 
     @dataclass
     class CarbonBlackCloud(DeploymentBatch):
-        tenant: ConfigurationModels.Systems.DefenderForEndpoint.Tenant
+        tenant: ConfigurationModels.Systems.CarbonBlackCloud.Tenant
 
     @dataclass
     class SentinelOne(DeploymentBatch):

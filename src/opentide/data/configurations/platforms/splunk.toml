@@ -66,3 +66,32 @@ schedule_window = "auto"
 schedule_priority = "default"
 "dispatch.earliest_time" = ""
 "dispatch.index_earliest" = ""
+
+# ── MDRv4 format (preferred for multi-tenant deployments) ─────────────
+# Uncomment and configure alongside or instead of legacy [tide]/[setup]/[secrets].
+#
+# [platform]
+# enabled = false
+# identifier = "splunk"
+# name = "Splunk Enterprise"
+# subschema = "Splunk Sub Schema"
+# description = """Splunk Enterprise enables you to search, analyze and
+# visualize your data to quickly act on insights from across your technology landscape."""
+# flags = [""]
+#
+# [[tenants]]
+# name = "Primary"
+# description = "Primary Splunk tenant"
+# deployment = "ALWAYS"
+# [tenants.setup]
+# proxy = false
+# ssl = true
+# url = "$SPLUNK_URL"
+# port = "$SPLUNK_PORT"
+# app = "$SPLUNK_APP"
+# correlation_searches = true
+# enterprise_security = true
+# frequency_scheduling = "random"
+# actions_enabled = ["notable"]
+# default_actions = ["notable"]
+# token = "$SPLUNK_TOKEN"

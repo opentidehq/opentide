@@ -27,6 +27,9 @@ from opentide.models.platform_configs import (
     SentinelScheduling,
     SentinelTemplate,
     SentinelTrigger,
+    SplunkActions,
+    SplunkScheduling,
+    SplunkTrigger,
 )
 
 
@@ -68,6 +71,13 @@ class DefenderConfig(PlatformConfigBase):
 
 class SplunkConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::splunk::1.0"
+    query: str | None = None
+    scheduling: SplunkScheduling | None = None
+    trigger: SplunkTrigger | None = None
+    actions: SplunkActions | None = None
+    correlation_search: bool | None = None
+    advanced: dict[str, Any] | None = None
+    # Legacy flat v2.x fields retained for backward-compatible loading
     search: str | None = None
     cron_schedule: str | None = None
 
@@ -101,6 +111,12 @@ class HarfangLabConfig(PlatformConfigBase):
 
 class CarbonBlackConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::carbon_black_cloud::1.0"
+    query: str | None = None
+    organizations: list[str] | None = None
+    watchlist: str | None = None
+    report: str | None = None
+    tags: list[str] | None = None
+    rule_id_bundle: dict[str, str] | None = None
 
 
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {

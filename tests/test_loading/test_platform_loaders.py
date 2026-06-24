@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from opentide.loading.platform_loader import (
+    load_carbon_black_config,
     load_crowdstrike_config,
     load_defender_config,
     load_sentinel_config,
     load_sentinel_one_config,
+    load_splunk_config,
 )
-from opentide.models.platform import SentinelConfig
+from opentide.models.platform import CarbonBlackConfig, SentinelConfig, SplunkConfig
 
 
 def test_sentinel_config_loader_parses_alert_and_scheduling() -> None:
@@ -87,3 +89,70 @@ def test_sentinel_one_config_loader_parses_correlation() -> None:
     )
     assert config.condition.correlation is not None
     assert config.condition.correlation.sub_queries[0].query == "a"
+
+
+def test_splunk_config_loader_normalizes_flat_v2_trigger_and_actions() -> None:
+    config = load_splunk_config(
+        {
+            "schema": "splunk::2.1",
+            "status": "STAGING",
+            "query": "index=main | stats count",
+            "scheduling": {"frequency": "1h", "lookback": "2h"},
+            "throttling": {"duration": "1h", "fields": ["host"]},
+            "threshold": 5,
+            "notable": {"security_domain": "threat"},
+            "risk": {"message": "risk message"},
+        }
+    )
+    assert isinstance(config, SplunkConfig)
+    assert config.query == "index=main | stats count"
+    assert config.scheduling is not None
+    assert config.scheduling.schedule is not None
+    assert config.scheduling.schedule.frequency == "1h"
+    assert config.scheduling.timerange is not None
+    assert config.scheduling.timerange.lookback == "2h"
+    assert config.trigger is not None
+    assert config.trigger.threshold == 5
+    assert config.trigger.throttling is not None
+    assert config.trigger.throttling.duration == "1h"
+    assert config.actions is not None
+    assert config.actions.notable is not None
+    assert config.actions.notable.security_domain == "threat"
+    assert config.actions.risk is not None
+    assert config.actions.risk.message == "risk message"
+
+
+def test_splunk_config_loader_handles_missing_scheduling() -> None:
+    config = load_splunk_config(
+        {
+            "schema": "splunk::3.0",
+            "status": "STAGING",
+            "query": "index=main",
+            "trigger": {"threshold": 1},
+        }
+    )
+    assert config.scheduling is None
+    assert config.trigger is not None
+    assert config.trigger.threshold == 1
+
+
+def test_carbon_black_config_loader_parses_typed_fields() -> None:
+    config = load_carbon_black_config(
+        {
+            "schema": "carbon_black_cloud::3.0",
+            "status": "STAGING",
+            "query": "process_name:cmd.exe",
+            "organizations": ["org-a"],
+            "watchlist": "Default",
+            "report": "Report A",
+            "tags": ["tag-a"],
+            "rule_id::org-a": "123",
+        }
+    )
+    assert isinstance(config, CarbonBlackConfig)
+    assert config.query == "process_name:cmd.exe"
+    assert config.organizations == ["org-a"]
+    assert config.watchlist == "Default"
+    assert config.report == "Report A"
+    assert config.tags == ["tag-a"]
+    assert config.rule_id_bundle == {"org-a": "123"}
