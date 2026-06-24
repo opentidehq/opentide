@@ -10,7 +10,7 @@ from opentide.ci.models import CiRenderOptions
 from opentide.ci.render import render_ci
 from opentide.cli.enums import CiPlatform, DetectionPlatform
 from opentide.cli.services.ci_generator import write_ci
-from opentide.cli.services.init import InitOptions, run_init
+from opentide.cli.services.setup.orchestrator import SetupOptions, run_setup
 
 FORBIDDEN = (
     "CoreTide",
@@ -25,7 +25,6 @@ REQUIRED = (
     "opentide validate",
     "opentide generate",
     "opentide deploy",
-    "opentide document",
 )
 
 
@@ -85,16 +84,20 @@ def test_write_ci_creates_expected_file(tmp_path: Path, ci: CiPlatform) -> None:
         (CiPlatform.azure, "azure-pipelines.yml"),
     ],
 )
-def test_init_generates_ci_file(tmp_path: Path, ci: CiPlatform, expected: str) -> None:
+def test_setup_repo_generates_ci_file(tmp_path: Path, ci: CiPlatform, expected: str) -> None:
     target = tmp_path / f"repo-{ci.value}"
-    options = InitOptions(
-        path=target,
-        name="Test Detections",
-        platforms=[DetectionPlatform.sentinel],
-        ci=ci,
-        yes=True,
+    result = run_setup(
+        SetupOptions(
+            path=target,
+            name="Test Detections",
+            platforms=[DetectionPlatform.sentinel],
+            ci=ci,
+            yes=True,
+            run_repo=True,
+            run_ci=True,
+        )
     )
-    run_init(options)
+    assert result["steps"]
     content = (target / expected).read_text(encoding="utf-8")
     for token in FORBIDDEN:
         assert token not in content

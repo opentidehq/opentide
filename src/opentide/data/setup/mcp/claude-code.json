@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "opentide": {
+      "command": "opentide-mcp"
+    }
+  }
+}

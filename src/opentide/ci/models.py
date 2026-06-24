@@ -7,18 +7,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from opentide.cli.enums import CiPlatform, DetectionPlatform
-
-    class CiSetupOptions:
-        """Placeholder until setup CLI lands on trunk."""
-
-        ci: CiPlatform
-        platforms: list[DetectionPlatform]
-        staging: bool
-        promotion: bool
-        promotion_target: str
-        python_version: str
-else:
-    CiSetupOptions = object  # type: ignore[misc,assignment]
+    from opentide.cli.services.setup.ci import CiSetupOptions
 
 
 @dataclass
@@ -69,23 +58,13 @@ class CiRenderOptions:
             staging=repo.staging,
             promotion=repo.promotion,
             promotion_target=repo.promotion_target,
-            python_version=getattr(repo, "python_version", "3.12"),
+            python_version=repo.python_version,
         )
 
     @classmethod
-    def from_init_options(cls, init: object) -> CiRenderOptions:
-        """Build render options from init/onboarding options."""
-        from opentide.cli.enums import CiPlatform
-
-        ci = getattr(init, "ci", CiPlatform.github)
-        platforms = getattr(init, "platforms", [])
-        return cls.from_init(
-            ci=ci,
-            platforms=platforms if platforms else [],
-            staging=getattr(init, "staging", True),
-            promotion=getattr(init, "promotion", True),
-            promotion_target=getattr(init, "promotion_target", "PRODUCTION"),
-        )
+    def from_init_options(cls, init: CiSetupOptions) -> CiRenderOptions:
+        """Backward-compatible alias for :meth:`from_repo_options`."""
+        return cls.from_repo_options(init)
 
     def output_paths(self) -> dict[str, str]:
         """Relative output paths keyed by platform value."""

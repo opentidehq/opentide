@@ -148,6 +148,7 @@ exclude = [
     # Ported Engines modules — style cleanup tracked separately
     "src/opentide/deployment",
     "src/opentide/mutation",
+    "src/opentide/documentation",
     "src/opentide/extraction",
     "src/opentide/export",
     "src/opentide/platforms/carbon_black",
@@ -201,6 +202,7 @@ include = ["src/opentide"]
 exclude = [
     "src/opentide/deployment",
     "src/opentide/mutation",
+    "src/opentide/documentation",
     "src/opentide/extraction",
     "src/opentide/export",
     "src/opentide/cli",

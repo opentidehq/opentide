@@ -9,7 +9,9 @@ nav:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
       - Migration: getting-started/migration.md
-  - CLI: cli/index.md
+  - CLI:
+      - Reference: cli/index.md
+      - Setup: cli/setup.md
   - MCP: mcp/index.md
   - Concepts:
       - Platforms: concepts/platforms.md

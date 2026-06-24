@@ -94,9 +94,10 @@ v0.x: legacy imports warn via `DeprecationWarning`. **v1.0 removes shims.**
 | `Orchestration/deploy.py` | `opentide deploy` |
 | `Orchestration/generate.py` | `opentide generate` |
 | `Orchestration/document.py` | `opentide document` |
+| (repository onboarding) | `opentide setup` |
+| (CI pipeline files) | `opentide setup ci` |
 
-Documentation output is `docs/{Rules,Objectives,Threats}/` (not `wiki/`). Removed scopes: `vocabularies`, `metaschemas`, `models`, `navigation`. See [CLI document reference](../cli/document.md).
-
+Query validation: **5 platforms only** (no CrowdStrike/HarfangLab).
 
 ### 6. Update CI
 
@@ -115,7 +116,7 @@ env:
 { "mcpServers": { "opentide": { "command": "opentide-mcp" } } }
 ```
 
-Or run `opentide init` for scaffolded Copilot instructions and MCP config.
+Or run `opentide setup` for scaffolded MCP config and agent skills.
 
 ---
 

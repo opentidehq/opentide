@@ -19,27 +19,27 @@ _LEGACY_IMPORTS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 _LEGACY_CI_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"OpenTideHQ/CoreTide"), "opentide ci generate"),
+    (re.compile(r"OpenTideHQ/CoreTide"), "opentide setup ci"),
     (re.compile(r"coretide/Orchestration"), "opentide validate / generate / deploy"),
     (re.compile(r"\$TIDE_CORE_REPO/Orchestration"), "opentide validate / generate / deploy"),
-    (re.compile(r"Pipelines/GitHub/"), "opentide ci generate --ci github"),
+    (re.compile(r"Pipelines/GitHub/"), "opentide setup ci --ci github"),
     (
         re.compile(r"raw\.githubusercontent\.com/OpenTideHQ/CoreTide"),
-        "opentide ci generate --ci gitlab",
+        "opentide setup ci --ci gitlab",
     ),
-    (re.compile(r"coretide_initialization\.yml"), "opentide ci generate --ci azure"),
+    (re.compile(r"coretide_initialization\.yml"), "opentide setup ci --ci azure"),
 )
 
 
 def _ci_suggestion(path: Path) -> str:
     name = path.name.lower()
     if name.endswith(".gitlab-ci.yml") or "gitlab" in str(path).lower():
-        return "opentide ci generate --ci gitlab"
+        return "opentide setup ci --ci gitlab"
     if "azure-pipelines" in name:
-        return "opentide ci generate --ci azure"
+        return "opentide setup ci --ci azure"
     if ".github/workflows" in str(path).replace("\\", "/"):
-        return "opentide ci generate --ci github"
-    return "opentide ci generate --ci github"
+        return "opentide setup ci --ci github"
+    return "opentide setup ci --ci github"
 
 
 def scan_repo(repo: Path) -> list[dict[str, str]]:

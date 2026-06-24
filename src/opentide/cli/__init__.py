@@ -7,7 +7,6 @@ import typer
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import (
-    CiPlatform,
     DetectionPlatform,
     DocumentScope,
     ExportTarget,
@@ -22,9 +21,9 @@ from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate
 from opentide.cli.services.info import collect_info
-from opentide.cli.services.init import InitOptions, run_init, run_interactive_init
 from opentide.cli.services.mutate import run_mutate
 from opentide.cli.services.validation import run_validate, validate_query_platform
+from opentide.cli.setup_app import setup_app
 from opentide.core.logging import LoggingConfig, init_logging, print_banner
 from opentide.core.root import get_repo_root
 
@@ -67,93 +66,7 @@ def main_callback(
         print_banner()
 
 
-@app.command("init")
-def init_cmd(
-    ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
-    name: str | None = typer.Option(None, "--name"),
-    org: str | None = typer.Option(None, "--org"),
-    description: str | None = typer.Option(None, "--description"),
-    platform: list[DetectionPlatform] = typer.Option(
-        [], "--platform", help="Platforms (repeatable)"
-    ),
-    ci: CiPlatform = typer.Option(CiPlatform.github, "--ci"),
-    staging: bool = typer.Option(True, "--staging/--no-staging"),
-    promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
-    promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
-    framework: list[str] = typer.Option(["attack"], "--framework"),
-    copilot_instructions: bool = typer.Option(False, "--copilot-instructions"),
-    vscode_settings: bool = typer.Option(False, "--vscode-settings"),
-    mcp_config: bool = typer.Option(False, "--mcp-config"),
-    agent_skills: bool = typer.Option(False, "--agent-skills"),
-    statuses: str | None = typer.Option(None, "--statuses"),
-    yes: bool = typer.Option(
-        False, "--yes", "-y", help="Non-interactive with provided/default flags"
-    ),
-) -> None:
-    """Interactive or scripted detection repository onboarding."""
-    cli = get_context(ctx)
-    from pathlib import Path
-
-    base = Path(path)
-    if yes or any([name, org, platform, copilot_instructions]):
-        options = InitOptions(
-            path=base,
-            name=name,
-            org=org,
-            description=description,
-            platforms=platform,
-            ci=ci,
-            staging=staging,
-            promotion=promotion,
-            promotion_target=promotion_target,
-            frameworks=framework,
-            copilot_instructions=copilot_instructions,
-            vscode_settings=vscode_settings,
-            mcp_config=mcp_config,
-            agent_skills=agent_skills,
-            statuses=statuses.split(",") if statuses else None,
-            yes=yes,
-        )
-        cli.apply_environment()
-        result = run_init(options)
-    else:
-        result = run_interactive_init(cli, base)
-    emit_success(cli, result)
-
-
-ci_app = typer.Typer(help="Generate client CI pipeline files")
-app.add_typer(ci_app, name="ci")
-
-
-@ci_app.command("generate")
-def ci_generate_cmd(
-    ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
-    ci: CiPlatform = typer.Option(CiPlatform.github, "--ci"),
-    platform: list[DetectionPlatform] = typer.Option([], "--platform"),
-    staging: bool = typer.Option(True, "--staging/--no-staging"),
-    promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
-    promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
-) -> None:
-    """Render GitHub, GitLab, or Azure pipeline files."""
-    from pathlib import Path
-
-    from opentide.ci.models import CiRenderOptions
-    from opentide.cli.services.ci_generator import write_ci
-
-    cli = get_context(ctx)
-    if ci is CiPlatform.none:
-        raise typer.BadParameter("Cannot generate CI for --ci none")
-    options = CiRenderOptions.from_init(
-        ci=ci,
-        platforms=platform,
-        staging=staging,
-        promotion=promotion,
-        promotion_target=promotion_target,
-    )
-    written = write_ci(Path(path), options)
-    emit_success(cli, {"files": written})
+app.add_typer(setup_app, name="setup")
 
 
 generate_app = typer.Typer(help="Framework generation pipeline")
@@ -272,15 +185,10 @@ def document_cmd(
     ctx: typer.Context,
     scope: DocumentScope | None = typer.Option(None, "--scope"),
     output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(
-        None,
-        "--flavor",
-        help="Markdown flavor: github, gitlab, azure-devops, generic",
-    ),
 ) -> None:
-    """Generate object documentation under docs/{Rules,Objectives,Threats}/."""
+    """Generate wiki documentation from detection content."""
     cli = get_context(ctx)
-    result = run_document(cli, scope=scope, output=output, flavor=flavor)
+    result = run_document(cli, scope=scope, output=output)
     emit_success(cli, result)
 
 

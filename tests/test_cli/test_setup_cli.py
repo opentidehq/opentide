@@ -1,0 +1,109 @@
+"""CLI smoke tests for opentide setup."""
+
+from __future__ import annotations
+
+from typer.testing import CliRunner
+
+from opentide.cli import app
+
+runner = CliRunner()
+
+
+def test_setup_help_lists_subcommands() -> None:
+    result = runner.invoke(app, ["setup", "--help"])
+    assert result.exit_code == 0
+    assert "repo" in result.stdout
+    assert "mcp" in result.stdout
+    assert "skills" in result.stdout
+
+
+def test_setup_repo_scripted(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "repo",
+            str(tmp_path),
+            "--yes",
+            "--name",
+            "CLI Test",
+        ],
+    )
+    assert result.exit_code == 0
+    assert (tmp_path / "README.md").is_file()
+
+
+def test_setup_mcp_vscode(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "mcp", str(tmp_path), "--yes", "--vscode"],
+    )
+    assert result.exit_code == 0
+    assert (tmp_path / ".vscode" / "mcp.json").is_file()
+
+
+def test_setup_mcp_yes_defaults_to_vscode(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "mcp", str(tmp_path), "--yes"],
+    )
+    assert result.exit_code == 0
+    assert (tmp_path / ".vscode" / "mcp.json").is_file()
+
+
+def test_setup_skills_yes_defaults_to_generic(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "skills", str(tmp_path), "--yes"],
+    )
+    assert result.exit_code == 0
+    assert (tmp_path / "AGENTS.md").is_file()
+
+
+def test_setup_vscode_settings_command(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "vscode", "settings", str(tmp_path)],
+    )
+    assert result.exit_code == 0
+    assert (tmp_path / ".vscode" / "settings.json").is_file()
+
+
+def test_setup_vscode_snippets_command_skips_without_templates(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "vscode", "snippets", str(tmp_path)],
+    )
+    assert result.exit_code == 0
+    assert "skipped" in result.stdout.lower()
+
+
+def test_setup_ci_none_alone_is_not_noop(tmp_path, monkeypatch) -> None:
+    """Only --ci none should not silently succeed with zero steps."""
+    import importlib
+
+    setup_module = importlib.import_module("opentide.cli.setup_app")
+    monkeypatch.setattr(
+        setup_module,
+        "run_interactive_setup",
+        lambda cli, base: {"message": "interactive", "path": str(base)},
+    )
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "--path", str(tmp_path), "--ci", "none"],
+    )
+    assert result.exit_code == 0
+    assert "interactive" in result.stdout
+
+
+def test_validate_scope_flags_do_not_raise_type_error(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "opentide.cli.services.validation.run_validate_all",
+        lambda: {"schema": {"status": "passed"}},
+    )
+    monkeypatch.setattr("opentide.cli.exit_codes.exit_on_validation_errors", lambda: None)
+    monkeypatch.setattr("opentide.cli.exit_codes.exit_on_validation_warnings", lambda: None)
+    result = runner.invoke(app, ["--json", "validate", "--file", "Objects/foo.yaml"])
+    assert "TypeError" not in (result.stdout + result.stderr)
+    assert '"checks"' in result.stdout

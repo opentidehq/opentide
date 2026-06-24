@@ -1,4 +1,4 @@
-"""CLI tests for opentide ci generate."""
+"""CLI tests for opentide setup ci."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from opentide.cli import app
 runner = CliRunner()
 
 
-def test_ci_generate_github(tmp_path) -> None:
+def test_setup_ci_github(tmp_path) -> None:
     result = runner.invoke(
         app,
         [
             "--json",
+            "setup",
             "ci",
-            "generate",
             str(tmp_path),
             "--ci",
             "github",
@@ -33,6 +33,6 @@ def test_ci_generate_github(tmp_path) -> None:
     assert "mutate promote" not in text
 
 
-def test_ci_generate_rejects_none_platform() -> None:
-    result = runner.invoke(app, ["ci", "generate", "--ci", "none"])
+def test_setup_ci_rejects_none_platform() -> None:
+    result = runner.invoke(app, ["setup", "ci", "--ci", "none"])
     assert result.exit_code != 0
