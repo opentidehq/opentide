@@ -22,3 +22,29 @@ organization = "" #The org where the query validation is executed on
 # For every organization, add org.org_key and org.token pointing to envvars
 #org.org_key = "$CBC_ORG_KEY_DWP"
 #org.token = "$CBC_TOKEN_DWP"
+
+# ── MDRv4 format (preferred for multi-tenant deployments) ─────────────
+# Uncomment and configure alongside or instead of legacy [tide]/[setup]/[secrets].
+#
+# [platform]
+# enabled = false
+# identifier = "carbon_black_cloud"
+# name = "Carbon Black Cloud Enterprise EDR"
+# subschema = "CBC EDR Sub Schema"
+# description = """VMware Carbon Black Enterprise EDR is an advanced threat hunting
+# and incident response solution delivering continuous visibility for top security
+# operations centers (SOCs) and incident response (IR) teams."""
+# flags = [""]
+#
+# [[tenants]]
+# name = "Primary"
+# description = "Primary CBC organization"
+# deployment = "ALWAYS"
+# [tenants.setup]
+# proxy = false
+# ssl = true
+# url = "$CBC_URL"
+# org_key = "$CBC_ORG_KEY"
+# token = "$CBC_TOKEN"
+# watchlist = ""
+# organizations = []

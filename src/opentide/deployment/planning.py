@@ -3,10 +3,12 @@ from dataclasses import asdict
 
 import pandas as pd
 
-from opentide.core.registry import DetectionPlatforms, OpenTide
+from opentide.core.logging import get_logger
+from opentide.core.registry import OpenTide
 from opentide.generation.framework import unroll_dot_dict
 from opentide.models.deployment_enums import (
     DeploymentStrategy,
+    DetectionPlatforms,
     StatusStrategy,
 )
 from opentide.models.platform import PlatformConfigBase
@@ -19,10 +21,6 @@ from opentide.models.system_config import (
 
 SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
-
-from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
-from opentide.models.deployment_enums import DetectionPlatforms
 
 logger = get_logger(__name__)
 
@@ -63,10 +61,10 @@ class TideDeployment:
 
     def system_configuration_resolver(self, system: DetectionPlatforms):  # type:ignore
         match system:
-            # case DetectionPlatforms.SPLUNK:
-            # return OpenTide.Configurations.Systems.Splunk
-            # case DetectionPlatforms.CARBON_BLACK_CLOUD:
-            # return OpenTide.Configurations.Systems.CarbonBlackCloud
+            case DetectionPlatforms.SPLUNK:
+                return OpenTide.Configurations.Systems.Splunk
+            case DetectionPlatforms.CARBON_BLACK_CLOUD:
+                return OpenTide.Configurations.Systems.CarbonBlackCloud
             case DetectionPlatforms.SENTINEL:
                 return OpenTide.Configurations.Systems.Sentinel
             case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
@@ -95,6 +93,10 @@ class TideDeployment:
                 mdr_config = data.configurations.crowdstrike
             case DetectionPlatforms.HARFANGLAB:
                 mdr_config = data.configurations.harfanglab
+            case DetectionPlatforms.SPLUNK:
+                mdr_config = data.configurations.splunk
+            case DetectionPlatforms.CARBON_BLACK_CLOUD:
+                mdr_config = data.configurations.carbon_black_cloud
             case _:
                 logger.critical(
                     "could_not_resolve_mdr_configuration_for_system", detail=str(system)
@@ -239,18 +241,14 @@ class TideDeployment:
 
                 match = False
 
-                if mod.conditions.default:
-                    if mod.conditions.default is True:
-                        match = True
+                if mod.conditions.default and mod.conditions.default is True:
+                    match = True
 
                 if mod.conditions.status:
                     if mdr_config.status in mod.conditions.status:
                         match = True
                 if mod.conditions.tenants:
-                    if target_tenant in mod.conditions.tenants:
-                        match = True
-                    else:
-                        match = False
+                    match = target_tenant in mod.conditions.tenants
                 if mod.conditions.flags and mdr_config.flags:
                     if [tag for tag in mdr_config.flags if tag in mod.conditions.flags]:
                         match = True

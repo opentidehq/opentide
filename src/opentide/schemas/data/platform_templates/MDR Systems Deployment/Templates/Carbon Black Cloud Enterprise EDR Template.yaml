@@ -5,3 +5,11 @@
   #flags: null
   #tenants: null
   #contributors: null
+  
+  query: |
+    ...
+  #organizations: null
+  #watchlist: null
+  #report: null
+  #tags: null
+  #rule_id_bundle: null

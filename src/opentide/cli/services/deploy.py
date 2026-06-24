@@ -80,10 +80,10 @@ def run_deploy(
             deployed.append(system)
             continue
         try:
-            deployer.deploy(deployment=uuids)
-        except Exception:
-            logger.warning("switching_to_mdrv4_new_methods")
             deployer.deploy(mdr_deployment=uuids, deployment_plan=deployment_plan)
+        except TypeError:
+            logger.warning("switching_to_mdrv3_legacy_methods")
+            deployer.deploy(deployment=uuids)
         deployed.append(system)
     from opentide.cli.exit_codes import exit_on_deployment_errors, exit_on_deployment_warnings
 

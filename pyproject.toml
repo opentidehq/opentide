@@ -34,9 +34,9 @@ dependencies = [
 
 [project.optional-dependencies]
 sentinel = []
-splunk = []
+splunk = ["splunk-sdk>=2.0", "pandas>=2.0"]
 crowdstrike = []
-carbon-black = []
+carbon-black = ["carbon-black-cloud-sdk>=1.0"]
 cli = [
     "typer[all]>=0.26.7",
 ]
@@ -151,13 +151,11 @@ exclude = [
     "src/opentide/documentation",
     "src/opentide/extraction",
     "src/opentide/export",
-    "src/opentide/platforms/carbon_black",
     "src/opentide/platforms/crowdstrike",
     "src/opentide/platforms/defender_for_endpoint",
     "src/opentide/platforms/harfanglab",
     "src/opentide/platforms/sentinel",
     "src/opentide/platforms/sentinel_one",
-    "src/opentide/platforms/splunk",
     "src/opentide/platforms/kql.py",
     "src/opentide/platforms/plugins.py",
     "src/opentide/core/index_legacy.py",
@@ -194,19 +192,36 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "src/opentide/cli/services/*.py" = ["E501", "SIM"]
 "tests/test_cli/*.py" = ["E501"]
 "tests/test_generation/*.py" = ["E501"]
+"src/opentide/platforms/splunk/deployer.py" = ["E501", "B024"]
+"src/opentide/platforms/splunk/client.py" = ["E501", "B024"]
+"src/opentide/platforms/splunk/validator.py" = ["E501", "SIM102"]
+"src/opentide/platforms/carbon_black/deployer.py" = ["E501", "B024"]
+"src/opentide/platforms/carbon_black/client.py" = ["E501", "B024"]
+"src/opentide/platforms/carbon_black/validator.py" = ["E501"]
+"src/opentide/platforms/config.py" = ["E501"]
+"src/opentide/deployment/planning.py" = ["E501", "SIM102"]
 "src/opentide/mcp_server/server.py" = ["B008", "E501"]
 "src/opentide/mcp_server/*.py" = ["E501"]
 
 [tool.ty.src]
 include = ["src/opentide"]
 exclude = [
-    "src/opentide/deployment",
     "src/opentide/mutation",
     "src/opentide/documentation",
     "src/opentide/extraction",
     "src/opentide/export",
     "src/opentide/cli",
-    "src/opentide/platforms",
+    "src/opentide/deployment",
+    "src/opentide/platforms/crowdstrike",
+    "src/opentide/platforms/defender_for_endpoint",
+    "src/opentide/platforms/harfanglab",
+    "src/opentide/platforms/sentinel",
+    "src/opentide/platforms/sentinel_one",
+    "src/opentide/platforms/splunk",
+    "src/opentide/platforms/carbon_black",
+    "src/opentide/platforms/kql.py",
+    "src/opentide/platforms/plugins.py",
+    "src/opentide/platforms/config.py",
     "src/opentide/indexing",
     "src/opentide/generation/framework.py",
     "src/opentide/generation/schema_pipeline.py",

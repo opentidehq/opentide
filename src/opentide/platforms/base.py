@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from typing import cast
 
 from opentide.core.logging import get_logger
 from opentide.models.deployment_enums import DeploymentStrategy
@@ -49,5 +50,5 @@ class BaseRuleDeployer(ABC):
             return []
         first = mdr_deployment[0]
         if isinstance(first, DetectionRule):
-            return list(mdr_deployment)  # type: ignore[arg-type]
-        return [OpenTide.Rules[uuid] for uuid in mdr_deployment]  # type: ignore[index]
+            return list(cast(Sequence[DetectionRule], mdr_deployment))
+        return [OpenTide.Rules[uuid] for uuid in cast(list[str], mdr_deployment)]

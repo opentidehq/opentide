@@ -221,12 +221,12 @@ def validate_query_platform(
     emit_section(f"Query Validation - {system_name}")
     validator = cast(Any, query_validators[platform])
     try:
-        validator.validate(deployment=deployment_list[platform])
-    except Exception:
-        logger.warning("trying_mdrv4_style_method")
         validator.validate(
             mdr_deployment=deployment_list[platform], deployment_plan=deployment_plan
         )
+    except TypeError:
+        logger.warning("trying_mdrv3_style_method")
+        validator.validate(deployment=deployment_list[platform])
     from opentide.cli.exit_codes import exit_on_validation_errors, exit_on_validation_warnings
 
     exit_on_validation_errors()
