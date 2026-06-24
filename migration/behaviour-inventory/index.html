@@ -1,0 +1,1259 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="DetectionOps engine documentation">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Behaviour Inventory — Pre-Pydantic Migration Baseline - OpenTide</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#behaviour-inventory-pre-pydantic-migration-baseline" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="OpenTide" class="md-header__button md-logo" aria-label="OpenTide" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            OpenTide
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Behaviour Inventory — Pre-Pydantic Migration Baseline
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/OpenTideHQ/opentide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="OpenTide" class="md-nav__button md-logo" aria-label="OpenTide" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    OpenTide
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/OpenTideHQ/opentide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    CLI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/platforms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platforms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-json-schema-generation-json_schemaspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. JSON Schema generation (json_schemas.py)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. JSON Schema generation (json_schemas.py)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-enumresolver-vocabulary-resolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 EnumResolver vocabulary resolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-metaschema-json-schema-walk-gen_json_schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Metaschema → JSON Schema walk (gen_json_schema)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-recomposition-recomposition_handler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Recomposition (recomposition_handler)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-template-generation-templatespy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Template generation (templates.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-vs-code-snippets-vscode_snippetspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. VS Code snippets (vscode_snippets.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-validation-tide_schemapy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Validation (tide_schema.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-indexing-indexerpy-objects_indexerpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Indexing (indexer.py, objects_indexer.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-phase-4-scope-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Phase 4 scope mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-verification-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Verification commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="behaviour-inventory-pre-pydantic-migration-baseline">Behaviour Inventory — Pre-Pydantic Migration Baseline<a class="headerlink" href="#behaviour-inventory-pre-pydantic-migration-baseline" title="Permanent link">&para;</a></h1>
+<p>Derived from the <strong>current code</strong> in <code>Engines/</code> on branch <code>development</code> after Phase 3 merge (<code>8fd1fd1</code>). This document gates Phase 4+ work: regenerated schemas/templates must remain byte-equivalent unless an intentional Phase 3 fix changes them.</p>
+<p><strong>Sources analysed</strong></p>
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Primary modules</th>
+<th>Lines (approx.)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Template generation</td>
+<td><code>Engines/framework/templates.py</code>, <code>Engines/templates/dom.py</code>, <code>mdr.py</code>, <code>models.py</code></td>
+<td>457 + ~240</td>
+</tr>
+<tr>
+<td>JSON Schema generation</td>
+<td><code>Engines/framework/json_schemas.py</code></td>
+<td>870</td>
+</tr>
+<tr>
+<td>VS Code snippets</td>
+<td><code>Engines/framework/vscode_snippets.py</code></td>
+<td>133</td>
+</tr>
+<tr>
+<td>Schema validation</td>
+<td><code>Engines/validation/tide_schema.py</code></td>
+<td>101</td>
+</tr>
+<tr>
+<td>Indexing</td>
+<td><code>Engines/indexing/indexer.py</code>, <code>objects_indexer.py</code></td>
+<td>416 + 137</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-json-schema-generation-json_schemaspy">1. JSON Schema generation (<code>json_schemas.py</code>)<a class="headerlink" href="#1-json-schema-generation-json_schemaspy" title="Permanent link">&para;</a></h2>
+<h3 id="11-enumresolver-vocabulary-resolution">1.1 <code>EnumResolver</code> vocabulary resolution<a class="headerlink" href="#11-enumresolver-vocabulary-resolution" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Behaviour</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JS-01</td>
+<td>Ingest core vocabulary from <code>VOCAB_INDEX</code>; honour <code>vocab.search_hints</code> metadata</td>
+<td><code>EnumResolver.Vocabulary._ingest</code></td>
+</tr>
+<tr>
+<td>JS-02</td>
+<td>Merge <code>schema.toml</code> vocabulary extensions; normalise extension keys via <code>entry_key_field</code></td>
+<td><code>_ingest_extensions</code></td>
+</tr>
+<tr>
+<td>JS-03</td>
+<td>Model vocab: emit rule UUID keys; scoped stages prefix <code>stage::key</code> (list-normalised stages)</td>
+<td><code>_process</code> (model branch)</td>
+</tr>
+<tr>
+<td>JS-04</td>
+<td>Non-model vocab: optional stage filter; scoped multi-stage emits one enum per stage</td>
+<td><code>_process</code> (non-model branch)</td>
+</tr>
+<tr>
+<td>JS-05</td>
+<td>De-duplicate enum values; skip duplicates with INFO log</td>
+<td><code>_emit</code></td>
+</tr>
+<tr>
+<td>JS-06</td>
+<td>Empty enum becomes <code>[""]</code> before return</td>
+<td><code>_finalise</code></td>
+</tr>
+<tr>
+<td>JS-07</td>
+<td>Append search hints to enum + descriptions when hints enabled</td>
+<td><code>_finalise</code></td>
+</tr>
+<tr>
+<td>JS-08</td>
+<td>Hint abbreviations when <code>no_wrap</code> false and hint length &gt; 60</td>
+<td><code>_search_hint</code></td>
+</tr>
+<tr>
+<td>JS-09</td>
+<td>Dropdown markdown: icon, title-cased display name, criticality block for object types</td>
+<td><code>_dropdown</code></td>
+</tr>
+<tr>
+<td>JS-10</td>
+<td>Stage documentation from vocabulary <code>stages</code> metadata</td>
+<td><code>_stage_doc</code></td>
+</tr>
+<tr>
+<td>JS-11</td>
+<td><strong>Phase 3 fix:</strong> hint descriptions stored in <code>_hint_descriptions</code>, not <code>extend(self)</code></td>
+<td><code>_finalise</code></td>
+</tr>
+<tr>
+<td>JS-12</td>
+<td><strong>Phase 3 fix:</strong> <code>isinstance(field_types, str)</code> for type normalisation</td>
+<td><code>gen_json_schema</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="12-metaschema-json-schema-walk-gen_json_schema">1.2 Metaschema → JSON Schema walk (<code>gen_json_schema</code>)<a class="headerlink" href="#12-metaschema-json-schema-walk-gen_json_schema" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Behaviour</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JS-13</td>
+<td>Depth-first walk; copy keys before mutation</td>
+<td><code>dict_foo = dictionary.copy()</code></td>
+</tr>
+<tr>
+<td>JS-14</td>
+<td>Resolve <code>tide.vocab</code> → enum + <code>markdownEnum</code> via <code>EnumResolver</code></td>
+<td>inline in walk</td>
+</tr>
+<tr>
+<td>JS-15</td>
+<td>Resolve <code>tide.meta.definition</code> references from definitions index</td>
+<td>inline</td>
+</tr>
+<tr>
+<td>JS-16</td>
+<td>Resolve <code>recomposition</code> blocks via <code>recomposition_handler</code></td>
+<td>object properties</td>
+</tr>
+<tr>
+<td>JS-17</td>
+<td>Strip <code>tide.*</code> keys recursively via <code>strip_framework_keywords</code></td>
+<td>post-process</td>
+</tr>
+<tr>
+<td>JS-18</td>
+<td>Config-driven required fields via <code>fetch_config_template</code></td>
+<td>template keywords</td>
+</tr>
+<tr>
+<td>JS-19</td>
+<td>Icon injection on titled fields</td>
+<td><code>get_icon</code></td>
+</tr>
+<tr>
+<td>JS-20</td>
+<td><code>run()</code> writes schemas under configured paths; logs per object type</td>
+<td><code>run</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-recomposition-recomposition_handler">1.3 Recomposition (<code>recomposition_handler</code>)<a class="headerlink" href="#13-recomposition-recomposition_handler" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JS-21</td>
+<td>Load enabled platform/system entries from <code>CONFIG_INDEX</code></td>
+</tr>
+<tr>
+<td>JS-22</td>
+<td>Support both <code>tide.enabled</code> and <code>platform.enabled</code> config shapes</td>
+</tr>
+<tr>
+<td>JS-23</td>
+<td>Merge subschema YAML from <code>Sub Schemas/</code> folder</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-template-generation-templatespy">2. Template generation (<code>templates.py</code>)<a class="headerlink" href="#2-template-generation-templatespy" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Behaviour</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TP-01</td>
+<td>Skip fields with <code>tide.template.hide</code></td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-02</td>
+<td>Expand <code>tide.meta.definition</code> inline (forced or referenced)</td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-03</td>
+<td>Prefix optional object keys with <code>#</code> when not required</td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-04</td>
+<td>Config-gated optional sections via <code>tide.template.config.required</code></td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-05</td>
+<td>Recomposition placeholders as <code>#{entry}: blank</code> for enabled systems</td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-06</td>
+<td><code>additionalProperties</code> object templates recurse or emit <code>blank</code></td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-07</td>
+<td>Array templates: optional → <code>#key</code> + <code>"Comment out"</code></td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-08</td>
+<td>Sentinel strings: <code>blank</code>, <code>no-space</code>, <code>force_space</code>, <code>Comment out</code></td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-09</td>
+<td>Vocabulary placeholders from enum first value</td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-10</td>
+<td>Example values from metaschema <code>example</code> keyword</td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-11</td>
+<td>Boolean defaults to <code>false</code> / example</td>
+<td><code>gen_template</code></td>
+</tr>
+<tr>
+<td>TP-12</td>
+<td>Insert blank lines from <code>tide.template.spacer</code> / <code>force_space</code></td>
+<td><code>make_spaces</code></td>
+</tr>
+<tr>
+<td>TP-13</td>
+<td>Strip <code>no-space</code> / <code>force_space</code> sentinel markers from output</td>
+<td><code>make_spaces</code></td>
+</tr>
+<tr>
+<td>TP-14</td>
+<td>Re-indent entire template by N spaces</td>
+<td><code>indent_template</code></td>
+</tr>
+<tr>
+<td>TP-15</td>
+<td><code>run()</code> pipeline: generate → spaces → indent → remove blanks</td>
+<td><code>run</code></td>
+</tr>
+<tr>
+<td>TP-16</td>
+<td><code>remove_blanks</code> strips trailing empty YAML lines</td>
+<td><code>remove_blanks</code></td>
+</tr>
+<tr>
+<td>TP-17</td>
+<td><code>replace_strings_in_file</code> post-processing for template paths</td>
+<td><code>replace_strings_in_file</code></td>
+</tr>
+<tr>
+<td>TP-18</td>
+<td><code>get_required</code> merges metaschema <code>required</code> + <code>tide.template.force-required</code></td>
+<td><code>get_required</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-vs-code-snippets-vscode_snippetspy">3. VS Code snippets (<code>vscode_snippets.py</code>)<a class="headerlink" href="#3-vs-code-snippets-vscode_snippetspy" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VS-01</td>
+<td>Read template line-by-line preserving indentation into JSON string array</td>
+</tr>
+<tr>
+<td>VS-02</td>
+<td>Leading blank lines via <code>blanks</code> parameter</td>
+</tr>
+<tr>
+<td>VS-03</td>
+<td>Strip trailing <code>\n</code> per line for snippet body</td>
+</tr>
+<tr>
+<td>VS-04</td>
+<td>Prefix triggers from platform/object short names</td>
+</tr>
+<tr>
+<td>VS-05</td>
+<td><code>run()</code> writes <code>.code-snippets</code> under configured snippet path</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-validation-tide_schemapy">4. Validation (<code>tide_schema.py</code>)<a class="headerlink" href="#4-validation-tide_schemapy" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VA-01</td>
+<td>Per-object-type iteration over <code>JSONSCHEMAS_INDEX</code></td>
+</tr>
+<tr>
+<td>VA-02</td>
+<td><code>Draft7Validator</code> against compiled schema</td>
+</tr>
+<tr>
+<td>VA-03</td>
+<td>Coerce metadata <code>created</code> / <code>modified</code> to strings before validation</td>
+</tr>
+<tr>
+<td>VA-04</td>
+<td>Strip <code>references.public</code> for validator (int keys), validate separately</td>
+</tr>
+<tr>
+<td>VA-05</td>
+<td>Tabulated error output via <code>tabulate</code></td>
+</tr>
+<tr>
+<td>VA-06</td>
+<td>Aggregate stats per schema type</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-indexing-indexerpy-objects_indexerpy">5. Indexing (<code>indexer.py</code>, <code>objects_indexer.py</code>)<a class="headerlink" href="#5-indexing-indexerpy-objects_indexerpy" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IX-01</td>
+<td>Resolve configurations (core + optional parent <code>Configurations/</code>)</td>
+</tr>
+<tr>
+<td>IX-02</td>
+<td>Index vocabularies, schemas, metaschemas, definitions, templates, subschemas</td>
+</tr>
+<tr>
+<td>IX-03</td>
+<td>Load DOM/MDR objects; apply <code>Tide2Patching</code> where configured</td>
+</tr>
+<tr>
+<td>IX-04</td>
+<td>Build <code>objects</code>, <code>files</code>, <code>paths</code>, <code>configurations</code> index sections</td>
+</tr>
+<tr>
+<td>IX-05</td>
+<td>Inline object enum generation for model vocabularies</td>
+</tr>
+<tr>
+<td>IX-06</td>
+<td>Staging reconciliation merges higher-version MDRs</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-phase-4-scope-mapping">6. Phase 4 scope mapping<a class="headerlink" href="#6-phase-4-scope-mapping" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Sub-phase</th>
+<th>Inventory sections</th>
+<th>Replacement target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4.7 JSON Schema</td>
+<td>§1</td>
+<td><code>TideSchemaGenerator</code> + <code>EnumRegistry</code> in <code>opentide.models</code></td>
+</tr>
+<tr>
+<td>4.8 Templates</td>
+<td>§2</td>
+<td><code>TemplateRenderer</code> from Pydantic fields</td>
+</tr>
+<tr>
+<td>4.9 Validation</td>
+<td>§4</td>
+<td><code>model_validate()</code> pipeline</td>
+</tr>
+<tr>
+<td>4.10 Indexing</td>
+<td>§5</td>
+<td>Typed <code>model_validate</code> during index build</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Phase 4 PR #1 (this branch)</strong> lands foundation models in <code>src/opentide/models/</code> without removing legacy generators. Behaviour IDs above become Phase 9 (#71) preservation tests.</p>
+<hr />
+<h2 id="7-verification-commands">7. Verification commands<a class="headerlink" href="#7-verification-commands" title="Permanent link">&para;</a></h2>
+<pre><code class="language-bash"># Regenerate artefacts (LocalDebug)
+TERM_PROGRAM=vscode python Orchestration/generate.py
+git diff --stat Schemas/ Framework/
+
+# Inventory present
+test -f docs/migration/behaviour-inventory.md
+
+# New model package imports
+python -c &quot;from opentide.models import DetectionRule, ThreatVector, DetectionObjective&quot;
+</code></pre>
+<hr />
+<p><em>Last updated: Phase 4 worker — derived from opentide <code>development</code> + Phase 3 merge.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
