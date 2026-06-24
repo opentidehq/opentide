@@ -1,0 +1,49 @@
+---
+title: Global options
+description: Repository root, data root, debug logging, colour, and JSON output flags shared by all CLI commands.
+---
+
+# Global options
+
+Set on the root `opentide` callback before any subcommand.
+
+```bash
+opentide --repo /path/to/repo --json validate --strict
+opentide --debug --no-color generate
+```
+
+## Options
+
+| Flag | Environment variable | Default | Description |
+|------|---------------------|---------|-------------|
+| `--repo` | `OPENTIDE_REPO_ROOT` | Auto-detected repo root | Detection content repository |
+| `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Override vocabulary and default configs |
+| `--debug` | `DEBUG` | off | Enable structlog debug logging |
+| `--no-color` | — | off | Disable Rich colour output |
+| `--json` | — | off | Emit JSON instead of Rich tables / logs |
+
+## Repository root resolution
+
+When `--repo` is omitted, OpenTide walks up from the current directory to find the repository root (objects, configurations markers). Explicit `--repo` or `OPENTIDE_REPO_ROOT` always wins.
+
+Setup commands honour `--repo` when `--path` is `.` (default).
+
+## Environment propagation
+
+The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.
+
+## Banner
+
+The ASCII banner prints on interactive runs unless `--json` is set.
+
+## Deployment plan
+
+Some subcommands read `DEPLOYMENT_PLAN` from the environment or `--plan`:
+
+- `opentide deploy --plan STAGING`
+- `opentide validate query --platform sentinel --plan STAGING`
+
+## Related
+
+- [Usage: Installation](../usage/installation.md)
+- [CLI validate](./validate.md)

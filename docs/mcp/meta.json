@@ -1,0 +1,14 @@
+{
+  "root": true,
+  "title": "MCP",
+  "description": "Model Context Protocol server for detection engineering agents",
+  "icon": "Bot",
+  "pages": [
+    "index",
+    "installation",
+    "configuration",
+    "---Reference---",
+    "tools",
+    "resources"
+  ]
+}

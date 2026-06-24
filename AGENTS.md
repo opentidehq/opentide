@@ -19,6 +19,7 @@
 | Coverage gaps, `--cov-fail-under` | [`.agents/skills/pytest-coverage/SKILL.md`](.agents/skills/pytest-coverage/SKILL.md) |
 | GitHub Actions workflows | [`.agents/skills/github-actions-templates/SKILL.md`](.agents/skills/github-actions-templates/SKILL.md) |
 | CLI E2E tests, tide_corpus, deploy payloads | [`.agents/skills/cli-e2e-testing/SKILL.md`](.agents/skills/cli-e2e-testing/SKILL.md) |
+| Documentation pages, Fumadocs structure, doc/code sync | [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md) |
 
 Stub pointers (content merged above): `jujutsu-stacked-prs`, `uv-package-manager`, `ruff-recursive-fix`.
 
@@ -118,5 +119,7 @@ Client repos: `opentide setup` or `opentide setup ci`.
 
 ## Docs
 
-- [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md)
-- [`docs/migration/MIGRATION.md`](docs/migration/MIGRATION.md)
+Fumadocs-ready content under [`docs/`](docs/) — four tabs: Usage, CLI, MCP, SDK. Authoring guide: [`docs/README.md`](docs/README.md). Agent skill: [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md).
+
+- [`docs/internal/test-plan.md`](docs/internal/test-plan.md)
+- [`docs/usage/migration/index.md`](docs/usage/migration/index.md)

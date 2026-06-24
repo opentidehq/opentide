@@ -1,0 +1,22 @@
+{
+  "root": true,
+  "title": "CLI",
+  "description": "Technical command-line reference",
+  "icon": "Terminal",
+  "pages": [
+    "index",
+    "---Global---",
+    "global-options",
+    "---Commands---",
+    "setup",
+    "generate",
+    "validate",
+    "deploy",
+    "document",
+    "mutate",
+    "export",
+    "extract",
+    "info",
+    "migrate"
+  ]
+}

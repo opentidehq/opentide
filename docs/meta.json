@@ -1,0 +1,11 @@
+{
+  "title": "OpenTide",
+  "description": "DetectionOps engine documentation",
+  "pages": [
+    "index",
+    "usage",
+    "cli",
+    "mcp",
+    "sdk"
+  ]
+}

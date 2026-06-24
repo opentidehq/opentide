@@ -1,3 +1,8 @@
+---
+title: PyPI trusted publishing
+description: OIDC trusted publishing setup for PyPI releases.
+---
+
 # PyPI Trusted Publishing Setup (Human Action Required)
 
 Phase 8 CI workflows (`.github/workflows/publish-pypi.yml`, `ci.yml` TestPyPI job) use **OIDC Trusted Publishing** — no API tokens in the repository.

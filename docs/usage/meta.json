@@ -1,0 +1,19 @@
+{
+  "root": true,
+  "title": "Usage",
+  "description": "Setup, workflows, and day-to-day detection engineering",
+  "icon": "BookOpen",
+  "pages": [
+    "index",
+    "---Getting started---",
+    "installation",
+    "quickstart",
+    "repository-setup",
+    "---Workflows---",
+    "workflows",
+    "---Concepts---",
+    "concepts",
+    "---Migration---",
+    "migration"
+  ]
+}

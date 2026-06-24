@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev --group docs
 
+      - name: Validate docs structure
+        run: scripts/validate-docs.sh
+
       - name: Build docs
         run: uv run mkdocs build --strict
 
