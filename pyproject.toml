@@ -38,14 +38,14 @@ splunk = []
 crowdstrike = []
 carbon-black = []
 cli = [
-    "typer[all]>=0.12",
+    "typer[all]>=0.26.7",
 ]
 mcp = [
     "mcp>=1.0",
     "fastmcp>=2.0",
 ]
 dev = [
-    "typer[all]>=0.12",
+    "typer[all]>=0.26.7",
     "mcp>=1.0",
     "fastmcp>=2.0",
     "pytest>=8.0",
@@ -59,7 +59,7 @@ dev = [
 
 [dependency-groups]
 dev = [
-    "typer[all]>=0.12",
+    "typer[all]>=0.26.7",
     "mcp>=1.0",
     "fastmcp>=2.0",
     "pytest>=8.0",
