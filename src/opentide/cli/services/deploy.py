@@ -31,6 +31,7 @@ def run_deploy(
     os.environ["INDEX_OUTPUT"] = "cache"
     if plan is not None:
         ctx.set_deployment_plan(plan)
+    from opentide.core.registry import OpenTide
     from opentide.deployment import (
         CIEnvironment,
         DeploymentStrategy,
@@ -39,7 +40,6 @@ def run_deploy(
     )
     from opentide.mutation.promotion import PromoteMDR
     from opentide.platforms.plugins import DeployTide
-    from opentide.core.registry import OpenTide
 
     OpenTide.reload()
     deployment_plan = DeploymentStrategy.load_from_environment()

@@ -46,7 +46,9 @@ def _clear_runtime_caches() -> None:
 
 
 @pytest.fixture
-def tide_corpus_repo(tide_corpus_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def tide_corpus_repo(
+    tide_corpus_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
     """Copy tide_corpus into an isolated repo and wire OpenTide path env vars."""
     dest = tmp_path / "corpus"
     shutil.copytree(tide_corpus_root, dest)

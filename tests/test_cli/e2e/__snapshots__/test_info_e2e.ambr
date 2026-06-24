@@ -8,8 +8,8 @@
     }),
     'platforms': list([
       dict({
-        'can_deploy': False,
-        'can_validate': False,
+        'can_deploy': True,
+        'can_validate': True,
         'enabled': True,
         'name': 'carbon_black_cloud',
       }),
@@ -44,34 +44,21 @@
         'name': 'sentinel_one',
       }),
       dict({
-        'can_deploy': False,
-        'can_validate': False,
+        'can_deploy': True,
+        'can_validate': True,
         'enabled': True,
         'name': 'splunk',
       }),
     ]),
-    'repo': '/tmp/pytest-of-ubuntu/pytest-10/test_info_json_snapshot0/corpus',
-    'version': '0.1.dev56+g92c2e470b.d20260624',
   })
 # ---
 # name: test_info_no_color_text_snapshot[info_no_color]
   '''
-   Indexing Vocabularies...
-   Indexing JSON Schemas...
-  Loading... /tmp/pytest-of-ubuntu/pytest-10/test_info_no_color_text_snapsh0/corpus/Schemas/TVM Schema.json
-  Loading... /tmp/pytest-of-ubuntu/pytest-10/test_info_no_color_text_snapsh0/corpus/Schemas/Detection Objective.schema.json
-  Loading... /tmp/pytest-of-ubuntu/pytest-10/test_info_no_color_text_snapsh0/corpus/Schemas/MDR Schema.json
-   Indexing Pydantic schema sources...
-   Indexing Definitions...
-   Indexing Templates
-   Indexing Recomposition Templates
-   Indexing Subschemas
-   Indexing Objects...
                         OpenTide Info                       
   ┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
   ┃ Key                   ┃ Value                          ┃
   ┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-  │ Version               │ 0.1.dev56+g92c2e470b.d20260624 │
+  │ Version               │ <version> │
   │ Rules                 │ 8                              │
   │ Threats               │ 1                              │
   │ Objectives            │ 1                              │

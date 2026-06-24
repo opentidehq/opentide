@@ -21,10 +21,7 @@ def test_mutate_promote(
     tide_corpus_repo: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    staging_rule = (
-        tide_corpus_repo
-        / "Objects/Detection Rules/rule-0008-staging-promote.yaml"
-    )
+    staging_rule = tide_corpus_repo / "Objects/Detection Rules/rule-0008-staging-promote.yaml"
 
     def _modified_mdr_files(_plan: object) -> list[Path]:
         return [staging_rule]

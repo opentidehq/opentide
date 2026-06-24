@@ -87,15 +87,21 @@
 # ---
 # name: test_preview_payload_shape[rule-0003-splunk-spl.yaml-splunk][splunk_api_request]
   dict({
+    'actions': None,
+    'advanced': None,
     'contributors': None,
+    'correlation_search': None,
     'cron_schedule': '0 * * * *',
     'enabled': True,
     'flags': None,
     'name': 'Splunk SPL Rule',
+    'query': None,
+    'scheduling': None,
     'schema': None,
     'search': 'index=main | head 1',
     'status': 'STAGING',
     'tenants': None,
+    'trigger': None,
   })
 # ---
 # name: test_preview_payload_shape[rule-0004-sentinel-one-s1ql.yaml-sentinel_one][sentinel_one_api_request]
@@ -137,10 +143,15 @@
     'enabled': True,
     'flags': None,
     'name': 'Carbon Black Lucene Rule',
+    'organizations': None,
     'query': 'process_name:cmd.exe',
+    'report': None,
+    'rule_id_bundle': None,
     'schema': None,
     'status': 'STAGING',
+    'tags': None,
     'tenants': None,
+    'watchlist': None,
   })
 # ---
 # name: test_preview_payload_shape[rule-0006-crowdstrike-deploy-only.yaml-crowdstrike][crowdstrike_api_request]
