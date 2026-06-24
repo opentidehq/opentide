@@ -13,9 +13,9 @@ Use this skill when authoring or reviewing detection content in an OpenTide repo
 
 | Object | Path | Purpose |
 |--------|------|---------|
-| Threat | `Objects/Threat Vectors/` | Threat vectors (TVM) |
-| Objective | `Objects/Detection Objectives/` | Detection objectives |
-| Rule | `Objects/Detection Rules/` | MDR detection rules |
+| Threat | `objects/threats/` | Threat vectors (TVM) |
+| Objective | `objects/objectives/` | Detection objectives |
+| Rule | `objects/rules/` | MDR detection rules |
 
 ## Core commands
 

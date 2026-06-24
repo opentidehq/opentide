@@ -1,0 +1,16 @@
+  #enabled: false
+  #name: 
+  #schema: null
+  status: null
+  #flags: null
+  #tenants: null
+  #contributors: null
+  
+  query: |
+    ...
+  scheduling: null
+  #trigger: null
+  #actions: null
+  #correlation_search: null
+  #search: null
+  #cron_schedule: null

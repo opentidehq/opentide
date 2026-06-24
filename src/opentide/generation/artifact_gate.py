@@ -8,8 +8,13 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
-from opentide.core.files import resolve_configurations, resolve_paths
-from opentide.generation.pydantic_metaschema import CORE_SCHEMA_MODELS
+from opentide.core.files import resolve_configurations
+from opentide.models.object_types import CORE_OBJECT_TYPES
+from opentide.models.schema_registry import identifiers_for_families
+from opentide.models.version import SchemaVersion
+from opentide.registry.artifacts import schema_artifact_name
+from opentide.registry.discovery import OPENTIDE_DIR
+from opentide.registry.paths import resolve_workspace_paths
 
 TIDE_PREFIX = "tide:"
 REPO_PREFIX = "repo:"
@@ -31,33 +36,42 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _load_global_config() -> dict[str, Any]:
-    return resolve_configurations()["global"]
+def _workspace_config() -> dict[str, Any]:
+    configs = resolve_configurations()
+    return configs.get("paths") or configs["global"]
 
 
 def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
     """Return portable artifact keys and absolute paths."""
-    paths = resolve_paths()
-    global_config = _load_global_config()
-    json_map: dict[str, str] = global_config.get("json_schemas", {})
-    template_map: dict[str, str] = global_config.get("templates", {})
-    config_json_map: dict[str, str] = global_config.get("config_json_schemas", {})
+    cfg = _workspace_config()
+    paths = resolve_workspace_paths()
+    artifacts = cfg.get("artifacts", {})
+    schema_map: dict[str, str] = dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
+    template_map: dict[str, str] = dict(artifacts.get("templates", cfg.get("templates", {})))
 
-    json_dir = Path(paths["json_schemas"])
+    schema_dir = Path(paths["json_schemas"])
     template_dir = Path(paths["templates"])
     specs: list[tuple[str, Path]] = []
 
-    for model_key in CORE_SCHEMA_MODELS:
-        if model_key in json_map:
-            rel = f"Schemas/{json_map[model_key]}"
-            specs.append((f"{TIDE_PREFIX}{rel}", json_dir / json_map[model_key]))
-        if model_key in template_map:
-            rel = f"Schemas/Templates/{template_map[model_key]}"
-            specs.append((f"{TIDE_PREFIX}{rel}", template_dir / template_map[model_key]))
+    for schema_id in identifiers_for_families(CORE_OBJECT_TYPES):
+        family = SchemaVersion.parse(schema_id).family
+        filename = schema_map.get(family) or schema_artifact_name(schema_id)
+        rel = f"{OPENTIDE_DIR}/schemas/{filename}"
+        specs.append((f"{TIDE_PREFIX}{rel}", schema_dir / filename))
+        template_name = template_map.get(family)
+        if template_name:
+            rel_t = f"{OPENTIDE_DIR}/templates/{template_name}"
+            specs.append((f"{TIDE_PREFIX}{rel_t}", template_dir / template_name))
 
-    for rel_name in config_json_map.values():
-        rel = f"Schemas/Configurations/{Path(rel_name).name}"
-        specs.append((f"{TIDE_PREFIX}{rel}", json_dir / "Configurations" / Path(rel_name).name))
+    visibility_name = schema_map.get("visibility")
+    if visibility_name:
+        rel = f"{OPENTIDE_DIR}/schemas/{visibility_name}"
+        specs.append((f"{TIDE_PREFIX}{rel}", schema_dir / visibility_name))
+
+    router_name = schema_map.get("router")
+    if router_name:
+        rel = f"{OPENTIDE_DIR}/schemas/{router_name}"
+        specs.append((f"{TIDE_PREFIX}{rel}", schema_dir / router_name))
 
     subschema_templates = (
         Path(paths.get("platform_templates", paths.get("subschemas", ".")))

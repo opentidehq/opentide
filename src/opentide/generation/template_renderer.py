@@ -28,6 +28,11 @@ PLATFORM_TEMPLATES_FOLDER: Path
 RECOMPOSITION: Any
 
 
+def _platform_section(entry: dict[str, Any]) -> dict[str, Any]:
+    section = entry.get("platform") or entry.get("tide")
+    return section if isinstance(section, dict) else {}
+
+
 def _refresh_renderer_context() -> None:
     """Rebind renderer paths after env or index changes (tests, reload)."""
     global CONFIG_INDEX, PATHS, PLATFORM_TEMPLATES_FOLDER, RECOMPOSITION
@@ -59,23 +64,17 @@ def run() -> None:
 
     for recomp in RECOMPOSITION:
         subschema_type_folder = RECOMPOSITION[recomp]
-        for entry in CONFIG_INDEX[recomp]:
-            recomp_entry = CONFIG_INDEX[recomp][entry]
-            enabled = False
-            try:
-                if recomp_entry["tide"]["enabled"] is True:
-                    enabled = True
-            except Exception:
-                if recomp_entry["platform"]["enabled"] is True:
-                    enabled = True
-
-            if not enabled:
+        recomp_configs = CONFIG_INDEX.get(recomp, {})
+        for entry, recomp_entry in recomp_configs.items():
+            if not isinstance(recomp_entry, dict):
+                continue
+            platform_section = _platform_section(recomp_entry)
+            if not platform_section or platform_section.get("enabled") is not True:
                 continue
 
-            try:
-                subschema_name = recomp_entry["tide"]["name"]
-            except Exception:
-                subschema_name = recomp_entry["platform"]["name"]
+            subschema_name = (
+                platform_section.get("name") or platform_section.get("subschema") or entry
+            )
 
             subschema_template_path = (
                 PLATFORM_TEMPLATES_FOLDER

@@ -46,23 +46,36 @@ def build_object_vocabularies(
         registry = models_index.get(object_type) or {}
 
         for _uuid, object_data in registry.items():
+            if not isinstance(object_data, dict):
+                continue
+            name = object_data.get("name")
+            obj_meta = object_data.get("metadata")
+            if not name or not isinstance(obj_meta, dict):
+                continue
             entry: dict[str, Any] = {
-                "name": object_data["name"],
+                "name": name,
                 "model": True,
-                "tlp": object_data["metadata"]["tlp"],
+                "tlp": obj_meta.get("tlp", ""),
             }
             if object_data.get("criticality") is not None:
                 entry["criticality"] = object_data.get("criticality")
-            aliases = object_data.get("actor", {}).get("aliases")
-            if aliases is not None:
-                entry["aliases"] = aliases
+            actor = object_data.get("actor")
+            if isinstance(actor, dict):
+                aliases = actor.get("aliases")
+                if aliases is not None:
+                    entry["aliases"] = aliases
 
             match object_type:
                 case "threat":
-                    description = object_data.get("threat", {}).get("description")
+                    threat = object_data.get("threat")
+                    description = threat.get("description") if isinstance(threat, dict) else ""
                 case "objective":
-                    description = object_data.get("objective", {}).get("description")
-                    entry["criticality"] = object_data.get("objective", {}).get("priority")
+                    objective = object_data.get("objective")
+                    description = (
+                        objective.get("description") if isinstance(objective, dict) else ""
+                    )
+                    if isinstance(objective, dict) and objective.get("priority") is not None:
+                        entry["criticality"] = objective.get("priority")
                 case "rule":
                     description = object_data.get("description") or ""
                 case _:
@@ -75,16 +88,23 @@ def build_object_vocabularies(
             }
             entries[_uuid] = entry
 
-            if object_type == "objective":
-                for signal in object_data.get("objective", {}).get("signals", []):
-                    signal_uuid = signal["uuid"]
+            objective = object_data.get("objective") if object_type == "objective" else None
+
+            if object_type == "objective" and isinstance(objective, dict):
+                for signal in objective.get("signals") or []:
+                    if not isinstance(signal, dict):
+                        continue
+                    signal_uuid = signal.get("uuid")
+                    signal_name = signal.get("name")
+                    if not signal_uuid or not signal_name:
+                        continue
                     signal_entry = {
-                        "name": object_data["name"] + "::" + signal["name"],
+                        "name": f"{name}::{signal_name}",
                         "model": True,
                         "tide.object.parent": _uuid,
-                        "tlp": object_data["metadata"]["tlp"],
-                        "criticality": signal["severity"],
-                        "description": signal["description"],
+                        "tlp": obj_meta.get("tlp", ""),
+                        "criticality": signal.get("severity"),
+                        "description": signal.get("description"),
                     }
                     signal_entry = {k: v for k, v in signal_entry.items() if v is not None}
                     signal_entry = {

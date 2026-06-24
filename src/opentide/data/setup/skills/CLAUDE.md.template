@@ -18,9 +18,9 @@ opentide deploy --platform sentinel --dry-run
 
 ### Layout
 
-- Threat vectors: `Objects/Threat Vectors/`
-- Objectives: `Objects/Detection Objectives/`
-- Rules: `Objects/Detection Rules/`
+- Threat vectors: `objects/threats/`
+- Objectives: `objects/objectives/`
+- Rules: `objects/rules/`
 
 ### Agent skills
 

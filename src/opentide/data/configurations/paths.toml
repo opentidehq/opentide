@@ -1,0 +1,46 @@
+objects = ["threat", "objective", "rule"]
+
+[paths.opentide]
+root = ".opentide/"
+schemas = ".opentide/schemas/"
+templates = ".opentide/templates/"
+
+[paths.objects]
+threat = "objects/threats/"
+objective = "objects/objectives/"
+rule = "objects/rules/"
+snippet_file = ".vscode/model-templates.code-snippets"
+
+[paths.exports]
+root = ".opentide/exports/"
+
+[paths.docs]
+root = "docs/"
+rules = "docs/rules/"
+objectives = "docs/objectives/"
+threats = "docs/threats/"
+
+[artifacts.schemas]
+threat = "threat.1.0.schema.json"
+objective = "objective.1.0.schema.json"
+rule = "rule.1.0.schema.json"
+visibility = "visibility.1.0.schema.json"
+router = "opentide.schema.json"
+
+[artifacts.templates]
+threat = "threat.1.0.template.yaml"
+objective = "objective.1.0.template.yaml"
+rule = "rule.1.0.template.yaml"
+
+[artifacts.exports]
+revisions = "revisions.export.json"
+objects = "objects.export.json"
+attack_layer = "attack-navigator.json"
+
+[metaschemas]
+threat = "threat"
+objective = "objective"
+rule = "rule"
+
+[recomposition]
+systems = "MDR Systems Deployment"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from opentide.validation.deprecated_fields import resolve_metaschema
 from opentide.validation.issues import ValidationIssue
 from opentide.validation.preflight import PreflightGraph
 
@@ -140,7 +141,7 @@ def validate_object_vocab_from_metaschema(
     *,
     object_uuid: str = "",
 ) -> list[ValidationIssue]:
-    schema = metaschemas.get(object_type)
+    schema = resolve_metaschema(metaschemas, payload, object_type)
     if not schema:
         return []
     return walk_vocab_fields(

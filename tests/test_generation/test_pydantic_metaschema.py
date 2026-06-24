@@ -34,7 +34,8 @@ def test_lookup_schema_extra_missing_returns_none() -> None:
 
 
 def test_core_schema_models_keys() -> None:
-    assert set(meta.CORE_SCHEMA_MODELS) == {"rule", "objective", "threat"}
-    assert meta.CORE_SCHEMA_MODELS["rule"] is DetectionRule
-    assert meta.CORE_SCHEMA_MODELS["objective"] is DetectionObjective
-    assert meta.CORE_SCHEMA_MODELS["threat"] is ThreatVector
+    models = meta.core_schema_models()
+    assert set(models) == {"rule", "objective", "threat"}
+    assert models["rule"] is DetectionRule
+    assert models["objective"] is DetectionObjective
+    assert models["threat"] is ThreatVector

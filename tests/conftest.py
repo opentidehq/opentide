@@ -80,19 +80,19 @@ def _reset_opentide_registry() -> None:
 def tide_workspace(monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect tide instance outputs into a repo-local workspace for portable CI."""
     from opentide.generation.artifact_gate import TIDE_WORKSPACE_DIR
+    from opentide.registry.discovery import OPENTIDE_DIR
 
     workspace = ROOT / TIDE_WORKSPACE_DIR
     workspace.mkdir(parents=True, exist_ok=True)
     for rel in (
-        "Schemas",
-        "Schemas/Templates",
-        "Schemas/Configurations",
-        "Schemas/Indexes",
-        "Schemas/Exports",
-        "Objects/Threat Vectors",
-        "Objects/Detection Objectives",
-        "Objects/Detection Rules",
-        "Analytics",
+        f"{OPENTIDE_DIR}/schemas",
+        f"{OPENTIDE_DIR}/templates",
+        f"{OPENTIDE_DIR}/exports",
+        f"{OPENTIDE_DIR}/inflight",
+        f"{OPENTIDE_DIR}/configurations",
+        "objects/threats",
+        "objects/objectives",
+        "objects/rules",
         ".vscode",
     ):
         (workspace / rel).mkdir(parents=True, exist_ok=True)

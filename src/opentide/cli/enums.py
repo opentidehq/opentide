@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 
+from opentide.documentation.types import DocumentScope
 from opentide.validation.checks.kinds import ValidateCheck
 
 
@@ -30,32 +31,12 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 )
 
 
-class GeneratePhase(str, Enum):
-    """Generation pipeline phases."""
-
-    object_vocab = "index"
-    templates = "templates"
-    schemas = "schemas"
-    revisions = "revisions"
-    snippets = "snippets"
-    exports = "exports"
-    playbook_map = "playbook-map"
-
-
-class DocumentScope(str, Enum):
-    """Documentation generation scopes."""
-
-    rules = "rules"
-    objectives = "objectives"
-    threats = "threats"
-    index = "index"
-
-
 class ExportTarget(str, Enum):
     """Export targets."""
 
     navigator = "navigator"
-    table = "table"
+    objects = "objects"
+    revisions = "revisions"
     playbook_map = "playbook-map"
 
 
@@ -91,6 +72,18 @@ class SkillTarget(str, Enum):
     claude_code = "claude-code"
     generic = "generic"
     github_copilot = "github-copilot"
+
+
+class GeneratePhase(str, Enum):
+    """Generation pipeline phases for ``opentide generate``."""
+
+    object_vocab = "vocabs"
+    templates = "templates"
+    schemas = "schemas"
+    snippets = "snippets"
+    exports = "exports"
+    playbook_map = "playbook-map"
+    docs = "docs"
 
 
 def platform_label(platform: DetectionPlatform) -> str:

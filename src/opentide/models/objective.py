@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, ClassVar, cast
 
 from opentide.models.base import TideModel
@@ -71,7 +72,9 @@ class DetectionObjective(TideModel):
     references: ObjectReferences | None = None
 
     @classmethod
-    def from_yaml_dict(cls, payload: dict[str, Any]) -> DetectionObjective:
+    def from_yaml_dict(
+        cls, payload: dict[str, Any], *, file: Path | None = None
+    ) -> DetectionObjective:
         references = payload.get("references")
         if references is not None:
             payload = dict(payload)

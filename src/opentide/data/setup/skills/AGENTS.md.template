@@ -15,9 +15,9 @@ opentide deploy --platform sentinel --dry-run
 
 ## Object layout
 
-- `Objects/Threat Vectors/` — threat vectors
-- `Objects/Detection Objectives/` — detection objectives
-- `Objects/Detection Rules/` — MDR rules
+- `objects/threats/` — threat vectors
+- `objects/objectives/` — detection objectives
+- `objects/rules/` — MDR rules
 - `Configurations/` — platform and visibility configuration
 - `Schemas/` — generated JSON schemas and templates (via `opentide generate`)
 

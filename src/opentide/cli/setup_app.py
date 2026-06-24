@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
-from opentide.cli.context import get_context
+from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
 from opentide.cli.output import emit_success
 from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
@@ -33,6 +35,14 @@ from opentide.cli.services.setup.vscode import (
 setup_app = typer.Typer(help="Repository and tooling setup")
 vscode_app = typer.Typer(help="VS Code configuration (deprecated)")
 setup_app.add_typer(vscode_app, name="vscode")
+
+
+def _resolve_setup_path(cli: CliContext, path: str | Path) -> Path:
+    """Honor ``--repo`` when setup path is the default (``.``)."""
+    target = Path(path)
+    if target == Path(".") and cli.repo.resolve() != Path.cwd().resolve():
+        return cli.repo
+    return target
 
 
 def _has_repo_flags(
@@ -84,10 +94,9 @@ def setup_cmd(
     """Interactive or scripted detection repository onboarding."""
     if ctx.invoked_subcommand is not None:
         return
-    from pathlib import Path
 
     cli = get_context(ctx)
-    base = Path(path)
+    base = _resolve_setup_path(cli, path)
     has_repo = _has_repo_flags(name, org, description, platform)
     only_ci_none = (
         ci is CiPlatform.none
@@ -150,10 +159,8 @@ def setup_repo_cmd(
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Scaffold a detection repository."""
-    from pathlib import Path
-
     cli = get_context(ctx)
-    base = Path(path)
+    base = _resolve_setup_path(cli, path)
     if yes or _has_repo_flags(name, org, description, platform):
         options = RepoSetupOptions(
             path=base,
@@ -185,13 +192,11 @@ def setup_ci_cmd(
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Generate CI/CD pipeline files."""
-    from pathlib import Path
-
     cli = get_context(ctx)
     if ci is CiPlatform.none:
         raise typer.BadParameter("Choose --ci github, gitlab, or azure")
     options = CiSetupOptions(
-        path=Path(path),
+        path=_resolve_setup_path(cli, path),
         ci=ci,
         platforms=platform,
         staging=staging,
@@ -215,10 +220,8 @@ def setup_mcp_cmd(
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Write OpenTide MCP configuration for editors and agents."""
-    from pathlib import Path
-
     cli = get_context(ctx)
-    base = Path(path)
+    base = _resolve_setup_path(cli, path)
     hosts: list[McpHost] = []
     if vscode:
         hosts.append(McpHost.vscode)
@@ -255,10 +258,8 @@ def setup_skills_cmd(
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Install detection engineering agent skills and entrypoints."""
-    from pathlib import Path
-
     cli = get_context(ctx)
-    base = Path(path)
+    base = _resolve_setup_path(cli, path)
     targets: list[SkillTarget] = []
     if cursor:
         targets.append(SkillTarget.cursor)
@@ -295,11 +296,10 @@ def setup_vscode_settings_cmd(
     no_merge: bool = typer.Option(False, "--no-merge"),
 ) -> None:
     """Write yaml.schemas to .vscode/settings.json (deprecated)."""
-    from pathlib import Path
-
     cli = get_context(ctx)
     cli.apply_environment()
-    emit_success(cli, run_vscode_settings(Path(path), merge=not no_merge))
+    target = _resolve_setup_path(cli, path)
+    emit_success(cli, run_vscode_settings(target, merge=not no_merge))
 
 
 @vscode_app.command("snippets")
@@ -308,11 +308,10 @@ def setup_vscode_snippets_cmd(
     path: str = typer.Argument(".", help="Repository path"),
 ) -> None:
     """Generate VS Code snippets from templates (deprecated)."""
-    from pathlib import Path
-
     cli = get_context(ctx)
     cli.apply_environment()
-    snippet_path = run_vscode_snippets(Path(path))
+    target = _resolve_setup_path(cli, path)
+    snippet_path = run_vscode_snippets(target)
     emit_success(
         cli,
         {
@@ -331,8 +330,7 @@ def setup_vscode_all_cmd(
     no_merge: bool = typer.Option(False, "--no-merge"),
 ) -> None:
     """Write settings and snippets (deprecated)."""
-    from pathlib import Path
-
     cli = get_context(ctx)
     cli.apply_environment()
-    emit_success(cli, run_vscode_all(Path(path), merge=not no_merge))
+    target = _resolve_setup_path(cli, path)
+    emit_success(cli, run_vscode_all(target, merge=not no_merge))

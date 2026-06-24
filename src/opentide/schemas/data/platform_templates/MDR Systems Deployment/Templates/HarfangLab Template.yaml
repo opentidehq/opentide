@@ -1,0 +1,14 @@
+  #enabled: false
+  #name: 
+  #schema: null
+  status: null
+  #flags: null
+  #tenants: null
+  #contributors: null
+  #maturity: Experimental
+  #confidence: Moderate
+  #action: Alert
+  #tags: null
+  #sigma: null
+  #yara: null
+  #rule_id_bundle: null

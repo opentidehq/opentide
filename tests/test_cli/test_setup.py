@@ -86,7 +86,7 @@ def test_run_setup_vscode_deprecated(tmp_path: Path) -> None:
     vscode_files = steps[0]["files"]
     assert isinstance(vscode_files, list)
     assert ".vscode/settings.json" in vscode_files
-    assert ".vscode/Model Templates.code-snippets" not in vscode_files
+    assert ".vscode/model-templates.code-snippets" not in vscode_files
 
 
 def test_run_setup_ci_none_skips_ci_step(tmp_path: Path) -> None:

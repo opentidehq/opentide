@@ -12,6 +12,7 @@ import toml
 import yaml
 
 from opentide.core.root import get_data_root, get_repo_root
+from opentide.registry.discovery import client_configurations_dir, discover_workspace
 
 
 def _deep_merge(source: dict, merge: dict) -> None:
@@ -46,8 +47,10 @@ def _fetch_configs(configuration_path: Path) -> dict[str, dict]:
                 if not config_path.is_file():
                     continue
                 configuration = _load_toml(config_path)
-                key = configuration.get("tide", {}).get("identifier") or config_name.removesuffix(
-                    ".toml"
+                key = (
+                    configuration.get("platform", {}).get("identifier")
+                    or configuration.get("tide", {}).get("identifier")
+                    or config_name.removesuffix(".toml")
                 )
                 config_index[entry][key] = configuration
 
@@ -55,7 +58,6 @@ def _fetch_configs(configuration_path: Path) -> dict[str, dict]:
 
 
 def _bundled_platform_configs() -> dict[str, dict]:
-    """Load default platform TOMLs shipped inside ``opentide.data``."""
     platforms_dir = get_data_root() / "configurations" / "platforms"
     systems: dict[str, dict] = {}
     if not platforms_dir.is_dir():
@@ -64,8 +66,8 @@ def _bundled_platform_configs() -> dict[str, dict]:
     for toml_path in sorted(platforms_dir.glob("*.toml")):
         configuration = _load_toml(toml_path)
         key = (
-            configuration.get("tide", {}).get("identifier")
-            or configuration.get("platform", {}).get("identifier")
+            configuration.get("platform", {}).get("identifier")
+            or configuration.get("tide", {}).get("identifier")
             or toml_path.stem
         )
         systems[key] = configuration
@@ -73,31 +75,43 @@ def _bundled_platform_configs() -> dict[str, dict]:
 
 
 def resolve_configurations() -> dict[str, dict]:
-    """Merge bundled, optional repo, and parent-instance configuration TOMLs."""
+    """Merge bundled, optional workspace, and parent-instance configuration TOMLs."""
     data_root = get_data_root()
     unified = _fetch_configs(data_root / "configurations")
-    if "global" not in unified:
-        raise KeyError("Bundled global.toml missing from opentide.data.configurations")
+    if "paths" not in unified and "global" not in unified:
+        raise KeyError(
+            "Bundled paths.toml or global.toml missing from opentide.data.configurations"
+        )
 
-    if "systems" not in unified:
-        unified["systems"] = {}
+    if "paths" in unified and "global" not in unified:
+        unified["global"] = unified["paths"]
+
+    if "platforms" not in unified:
+        unified["platforms"] = unified.get("systems", {})
     bundled = _bundled_platform_configs()
     if bundled:
-        _deep_merge(unified["systems"], bundled)
+        _deep_merge(unified["platforms"], bundled)
+    unified.setdefault("systems", unified["platforms"])
+
+    workspace = discover_workspace()
+    client_configs = client_configurations_dir(workspace)
+    if client_configs.is_dir():
+        _deep_merge(unified, _fetch_configs(client_configs))
 
     root = get_repo_root()
-    repo_configs = root / "Configurations"
-    if repo_configs.is_dir():
-        _deep_merge(unified, _fetch_configs(repo_configs))
-
     workspace_env = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
     if workspace_env:
         fixture_configs = root / "tests/fixtures/generation/configurations"
         if fixture_configs.is_dir():
             _deep_merge(unified, _fetch_configs(fixture_configs))
 
-    parent_configs = root.parent / "Configurations"
-    if parent_configs.is_dir() and parent_configs != repo_configs and not workspace_env:
+    parent_configs = workspace.parent / ".opentide" / "configurations"
+    if (
+        parent_configs.is_dir()
+        and parent_configs != client_configs
+        and not workspace_env
+        and parent_configs != client_configs
+    ):
         _deep_merge(unified, _fetch_configs(parent_configs))
 
     return unified
@@ -119,25 +133,20 @@ def resolve_paths() -> dict[str, Path]:
 
 
 def resolve_paths(separate: bool = False):
-    """Resolve absolute Tide and core paths from merged configuration."""
-    root = get_repo_root()
+    """Resolve absolute workspace paths from merged configuration."""
+    from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
+
     configs = resolve_configurations()
-    core_config = configs["global"]
-
-    workspace = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
-    tide_base = Path(workspace) if workspace else root.parent
-    paths = {k: (tide_base / path) for k, path in core_config["paths"]["tide"].items()}
-
-    data_root = get_data_root()
-    core_paths = {k: (root / path) for k, path in core_config["paths"]["core"].items()}
-    core_paths["vocabularies"] = data_root / "vocabulary"
-    core_paths["resources"] = data_root / "external"
-    core_paths["platform_configs"] = data_root / "configurations" / "platforms"
-    core_paths["log_sources"] = data_root / "log_sources"
-
+    paths = resolve_workspace_paths(configs)
+    aliases = legacy_path_aliases(paths)
+    tide_paths = aliases["tide"]
+    core_paths = aliases["core"]
     if separate:
-        return paths, core_paths
-    return paths | core_paths
+        return tide_paths, core_paths
+    flat = dict(paths)
+    flat.update(tide_paths)
+    flat.update(core_paths)
+    return flat
 
 
 def safe_file_name(string: str, safe_mode: bool = True) -> str:

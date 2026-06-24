@@ -1,10 +1,9 @@
-"""Tests for table CSV export."""
+"""Tests for object catalog JSON export."""
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
-
-import pandas as pd
 
 from opentide.export.table_export import TableEntry, TableExporter
 
@@ -12,6 +11,7 @@ from opentide.export.table_export import TableEntry, TableExporter
 def _setup_opentide_for_table(monkeypatch) -> None:
     from opentide import OpenTide
 
+    monkeypatch.setattr(OpenTide, "initialise", lambda: None)
     threat_uuid = "00000000-0000-4000-8000-000000000010"
     rule_uuid = "00000000-0000-4000-8000-000000000011"
     OpenTide._index = {
@@ -52,7 +52,7 @@ def _setup_opentide_for_table(monkeypatch) -> None:
         "configurations": {
             "global": {
                 "objects": ["threat", "rule"],
-                "exports": {"table": "table.csv"},
+                "exports": {"objects": "objects.export.json"},
             },
             "documentation": {
                 "object_names": {"threat": "Threat Vector", "rule": "Detection Rule"},
@@ -61,13 +61,6 @@ def _setup_opentide_for_table(monkeypatch) -> None:
         "paths": {"tide": {"exports": "/tmp/exports"}},
     }
     OpenTide._initialised = True
-
-
-def test_rename_columns_capitalises_headers() -> None:
-    exporter = TableExporter()
-    frame = pd.DataFrame([{"uuid": "u1", "name": "Test", "type": "Rule"}])
-    renamed = exporter._rename_columns(frame)
-    assert list(renamed.columns) == ["UUID", "Name", "Type"]
 
 
 def test_flatten_actors_enriches_names(monkeypatch) -> None:
@@ -112,7 +105,7 @@ def test_create_entry_threat(monkeypatch) -> None:
 def test_create_dataset_skips_missing_index(monkeypatch) -> None:
     _setup_opentide_for_table(monkeypatch)
     exporter = TableExporter()
-    exporter.OBJECT_SCOPE = ["threat", "missing_type"]
+    exporter.object_scope = ["threat", "missing_type"]
     with patch.object(
         exporter,
         "_create_entry",
@@ -136,13 +129,13 @@ def test_create_dataset_skips_missing_index(monkeypatch) -> None:
     assert len(dataset) == 1
 
 
-def test_run_exports_csv(tmp_path, monkeypatch) -> None:
+def test_run_exports_json(tmp_path, monkeypatch) -> None:
     _setup_opentide_for_table(monkeypatch)
     export_dir = tmp_path / "exports"
     export_dir.mkdir()
     exporter = TableExporter()
-    exporter.TIDE_EXPORTS_PATH = export_dir
-    exporter.EXPORT_PATH = export_dir / "table.csv"
+    exporter.exports_path = export_dir
+    exporter.export_path = export_dir / "objects.export.json"
     monkeypatch.setattr(
         exporter,
         "_create_dataset",
@@ -165,6 +158,6 @@ def test_run_exports_csv(tmp_path, monkeypatch) -> None:
         ],
     )
     exporter.run()
-    content = (export_dir / "table.csv").read_text(encoding="utf-8")
-    assert "UUID" in content
-    assert "Test" in content
+    payload = json.loads((export_dir / "objects.export.json").read_text(encoding="utf-8"))
+    assert payload[0]["name"] == "Test"
+    assert payload[0]["attack"] == "T1059"

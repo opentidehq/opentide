@@ -1,4 +1,4 @@
-"""Canonical OpenTide core object type keys and schema identifiers."""
+"""Canonical OpenTide core object type keys (folder routing)."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ SIGNAL = "signal"
 
 CORE_OBJECT_TYPES = (THREAT, OBJECTIVE, RULE)
 
-SCHEMA_IDENTIFIERS: dict[str, str] = {
-    THREAT: "threat::1.0",
-    OBJECTIVE: "objective::1.0",
-    RULE: "rule::1.0",
-}
+
+def latest_identifier(family: str) -> str:
+    """Latest registered schema identifier for a core object family."""
+    from opentide.models.schema_registry import latest_identifier as registry_latest
+
+    return registry_latest(family)

@@ -343,7 +343,12 @@ class _GlobalConfig:
 
     @property
     def Index(self) -> dict[str, Any]:
-        return dict(self._index["configurations"]["global"])
+        configs = self._index["configurations"]
+        return dict(configs.get("paths") or configs.get("global", {}))
+
+    @property
+    def _artifacts(self) -> dict[str, Any]:
+        return dict(self.Index.get("artifacts", {}))
 
     @property
     def Paths(self) -> _PathsAccessor:
@@ -355,7 +360,7 @@ class _GlobalConfig:
 
     @property
     def templates(self) -> dict[str, str]:
-        return dict(self.Index["templates"])
+        return dict(self._artifacts.get("templates") or self.Index.get("templates", {}))
 
     @property
     def objects(self) -> list[str]:
@@ -371,7 +376,8 @@ class _GlobalConfig:
 
     @property
     def json_schemas(self) -> dict[str, str]:
-        return dict(self.Index.get("json_schemas", {}))
+        schemas = self._artifacts.get("schemas") or self.Index.get("json_schemas", {})
+        return dict(schemas)
 
     @property
     def config_metaschemas(self) -> dict[str, str]:
@@ -383,7 +389,8 @@ class _GlobalConfig:
 
     @property
     def exports(self) -> Any:
-        return _paths_namespace(dict(self.Index.get("exports", {})))
+        export_map = self._artifacts.get("exports") or self.Index.get("exports", {})
+        return _paths_namespace(dict(export_map))
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):

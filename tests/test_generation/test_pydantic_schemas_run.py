@@ -36,10 +36,10 @@ def test_export_core_model_schema_writes_file(tmp_path: Path) -> None:
 
 def test_export_all_core_model_schemas(tmp_path: Path) -> None:
     with patch(
-        "opentide.generation.pydantic_schemas.export_core_model_schema",
+        "opentide.generation.pydantic_schemas.export_schema_for_identifier",
     ) as mock_export:
         pydantic_schemas.export_all_core_model_schemas(
             json_schema_folder=tmp_path,
-            json_schema_map={"rule": "rule.json"},
+            json_schema_map={"rule::1.0": "rule.json"},
         )
-    mock_export.assert_called_once()
+    assert mock_export.call_count >= 1

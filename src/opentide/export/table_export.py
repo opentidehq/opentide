@@ -1,8 +1,11 @@
-from collections.abc import Sequence
+"""Export object catalog to ``.opentide/exports/objects.export.json``."""
+
+from __future__ import annotations
+
+import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-
-import pandas as pd
+from typing import Any, Sequence
 
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
@@ -29,82 +32,70 @@ class TableEntry:
 
 
 class TableExporter:
-    def __init__(self):
-        self.TIDE_EXPORTS_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.exports)
-        self.OBJECT_SCOPE = OpenTide.Configurations.Global.objects
-        self.OBJECT_NAMES = OpenTide.Configurations.Documentation.object_names
-        self.EXPORT_NAME = OpenTide.Configurations.Global.exports.table
-        self.EXPORT_PATH = self.TIDE_EXPORTS_PATH / self.EXPORT_NAME
+    def __init__(self) -> None:
+        OpenTide.initialise()
+        self.exports_path = Path(OpenTide.Configurations.Global.Paths.Tide.exports)
+        self.object_scope = OpenTide.Configurations.Global.objects
+        self.object_names = OpenTide.Configurations.Documentation.object_names
+        self.export_name = OpenTide.Configurations.Global.exports.objects
+        self.export_path = self.exports_path / self.export_name
 
-    def run(self):
-        dataset = self._create_dataset()
-        dataset = [asdict(entry) for entry in dataset]
-        dataset = pd.DataFrame(dataset)
-        dataset = self._rename_columns(dataset)
-        self._export(dataset)
+    def run(self) -> None:
+        dataset = [asdict(entry) for entry in self._create_dataset()]
+        self.exports_path.mkdir(parents=True, exist_ok=True)
+        self.export_path.write_text(
+            json.dumps(dataset, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
-    def _rename_columns(self, dataset: pd.DataFrame) -> pd.DataFrame:
-        new_columns = {}
-        for column in dataset.columns:
-            if column == "uuid":
-                new_columns[column] = "UUID"
-            else:
-                new_columns[column] = column.capitalize()
-        dataset.rename(columns=new_columns, inplace=True)
-        return dataset
-
-    def _flatten_actors(self, actors: list[dict]) -> list:
-
+    def _flatten_actors(self, actors: list[dict[str, Any]]) -> list[str]:
         def _enrich_actor_name(actor: str) -> str:
             raw_id = actor.split("::")[1]
             clean_id = raw_id.split(" #")[0].strip()
-            actor_data: dict = get_vocab_entry("actors", clean_id)
+            actor_data = get_vocab_entry("actors", clean_id)
             return str(actor_data.get("name")) if isinstance(actor_data, dict) else clean_id
 
         return [_enrich_actor_name(str(actor.get("name"))) for actor in actors]
 
-    def _flatten_chaining(self, chains: list[dict]) -> dict[str, Sequence]:
-        flat_chains = dict()
+    def _flatten_chaining(self, chains: list[dict[str, Any]]) -> dict[str, list[str]]:
+        flat_chains: dict[str, list[str]] = {}
         for chain in chains:
             flat_chains.setdefault(chain["relation"], [])
             flat_chains[chain["relation"]].append(chain["vector"])
         return flat_chains
 
-    def _create_entry(self, object: str, object_type: str) -> TableEntry:
-        object_data = OpenTide.Models.Index[object_type][object]
-        uuid = object
+    def _create_entry(self, object_uuid: str, object_type: str) -> TableEntry:
+        object_data = OpenTide.Models.Index[object_type][object_uuid]
         name = object_data["name"]
-        object_type_name = self.OBJECT_NAMES[object_type]
-        tlp = object_data["metadata"]["tlp"]
-        version = str(object_data["metadata"]["version"])
-        created = object_data["metadata"]["created"]
-        modified = object_data["metadata"]["modified"]
+        object_type_name = self.object_names[object_type]
+        metadata = object_data["metadata"]
+        tlp = metadata["tlp"]
+        version = str(metadata["version"])
+        created = metadata["created"]
+        modified = metadata["modified"]
         actors = attack = chaining = ""
-        object_childs = childs(uuid)
+        object_childs = childs(object_uuid)
         object_childs = ", ".join(object_childs) if object_childs else ""
-        object_parents = parents(uuid) or ""
+        object_parents = parents(object_uuid) or ""
         object_parents = ", ".join(object_parents) if object_parents else ""
-        match object_type:
-            case "threat":
-                description = object_data.get("threat", {}).get("description")
-                chains = object_data["threat"].get("chaining") or ""
-                if chains:
-                    chaining = self._flatten_chaining(chains)
-                    chaining = str(chaining)
-                actors = object_data["threat"].get("actors") or ""
-                if actors:
-                    actors = self._flatten_actors(actors)
-                    actors = ", ".join(actors)
-                attack = object_data["threat"]["att&ck"]
-                attack = ", ".join(attack)
-            case "objective":
-                description = object_data["objective"].get("description")
-                if techniques := object_data["objective"].get("att&ck"):
-                    attack = ", ".join(techniques)
-            case "rule":
-                description = object_data["description"]
+        description = ""
+        if object_type == "threat":
+            description = str(object_data.get("threat", {}).get("description", ""))
+            chains = object_data["threat"].get("chaining") or ""
+            if chains:
+                chaining = str(self._flatten_chaining(chains))
+            actors_raw = object_data["threat"].get("actors") or ""
+            if actors_raw:
+                actors = ", ".join(self._flatten_actors(actors_raw))
+            attack = ", ".join(object_data["threat"]["att&ck"])
+        elif object_type == "objective":
+            description = str(object_data.get("objective", {}).get("description", ""))
+            if techniques := object_data["objective"].get("att&ck"):
+                attack = ", ".join(techniques)
+        elif object_type == "rule":
+            description = str(object_data.get("description", ""))
         return TableEntry(
-            uuid=uuid,
+            uuid=object_uuid,
             name=name,
             type=object_type_name,
             tlp=tlp,
@@ -120,22 +111,18 @@ class TableExporter:
         )
 
     def _create_dataset(self) -> Sequence[TableEntry]:
-        dataset = list()
-        for object_type in self.OBJECT_SCOPE:
+        dataset: list[TableEntry] = []
+        for object_type in self.object_scope:
             object_index = OpenTide.Models.Index.get(object_type)
             if not object_index:
                 logger.error(
                     "object_index_not_found",
                     object_type=object_type,
-                    detail="Could not find a current indexable set of OpenTide object for the type",
                 )
                 continue
-            for object in object_index:
-                dataset.append(self._create_entry(object, object_type))
+            for object_uuid in object_index:
+                dataset.append(self._create_entry(object_uuid, object_type))
         return dataset
-
-    def _export(self, export: pd.DataFrame):
-        export.to_csv(self.EXPORT_PATH, index=False)
 
 
 if __name__ == "__main__":

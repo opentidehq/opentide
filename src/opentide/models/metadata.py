@@ -25,6 +25,15 @@ class ObjectMetadata(TideModel):
     contributors: list[str] | None = None
     organisation: Organisation | None = None
 
+    @field_validator("schema_id")
+    @classmethod
+    def _validate_schema_identifier(cls, value: str) -> str:
+        from opentide.models.schema_registry import is_registered
+
+        if not is_registered(value):
+            raise ValueError(f"unknown schema identifier: {value!r}")
+        return value
+
     @field_validator("created", "modified", mode="before")
     @classmethod
     def _coerce_dates(cls, value: Any) -> str:
