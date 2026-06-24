@@ -221,7 +221,9 @@ def validate_query_platform(
     emit_section(f"Query Validation - {system_name}")
     validator = cast(Any, query_validators[platform])
     try:
-        validator.validate(mdr_deployment=deployment_list[platform], deployment_plan=deployment_plan)
+        validator.validate(
+            mdr_deployment=deployment_list[platform], deployment_plan=deployment_plan
+        )
     except TypeError:
         logger.warning("trying_mdrv3_style_method")
         validator.validate(deployment=deployment_list[platform])

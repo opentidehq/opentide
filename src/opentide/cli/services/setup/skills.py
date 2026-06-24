@@ -42,7 +42,7 @@ def _entrypoint_context(options: SkillsSetupOptions, target: Path) -> dict[str, 
     }
 
 
-def _install_cursor(target: Path, pack: str, context: dict[str, str]) -> list[str]:
+def _install_cursor(target: Path, pack: str, _context: dict[str, str]) -> list[str]:
     written = copy_skill_pack(pack, target / ".cursor" / "skills" / f"opentide-{pack}")
     return [f".cursor/skills/opentide-{pack}/{item}" for item in written]
 

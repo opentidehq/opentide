@@ -92,6 +92,7 @@ def test_platform_entry_points_registered() -> None:
 def test_package_import_has_no_auto_load_side_effects() -> None:
     from opentide.core.registry import OpenTide as RegistryOpenTide
 
-    assert not RegistryOpenTide.initialised
-    assert hasattr(importlib.import_module("opentide"), "__version__")
-    assert not RegistryOpenTide.initialised
+    assert not RegistryOpenTide.is_initialised
+    opentide = importlib.import_module("opentide")
+    assert hasattr(opentide, "__version__")
+    assert not RegistryOpenTide.is_initialised

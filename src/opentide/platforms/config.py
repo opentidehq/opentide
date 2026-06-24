@@ -15,7 +15,9 @@ def systems_raw_index() -> dict[str, dict[str, Any]]:
     return dict(IndexManager.load()["configurations"]["systems"])
 
 
-def _load_modifiers(modifiers_config: list[dict[str, Any]] | dict[str, Any] | None) -> list[SystemConfig.Modifiers]:
+def _load_modifiers(
+    modifiers_config: list[dict[str, Any]] | dict[str, Any] | None,
+) -> list[SystemConfig.Modifiers]:
     if not modifiers_config:
         return []
     if isinstance(modifiers_config, dict):
@@ -34,7 +36,9 @@ def _load_modifiers(modifiers_config: list[dict[str, Any]] | dict[str, Any] | No
     return modifiers
 
 
-def _load_splunk_tenants(tenants_config: list[dict[str, Any]] | None) -> list[ConfigurationModels.Systems.Splunk.Tenant]:
+def _load_splunk_tenants(
+    tenants_config: list[dict[str, Any]] | None,
+) -> list[ConfigurationModels.Systems.Splunk.Tenant]:
     from opentide.core.debug import DebugHelpers
 
     if not tenants_config:
@@ -141,7 +145,9 @@ def _build_splunk_config(raw: dict[str, Any]) -> Any:
     )
     tenants = _load_splunk_tenants(raw.get("tenants"))
     modifiers = _load_modifiers(raw.get("modifiers"))
-    typed = ConfigurationModels.Systems.Splunk(platform=platform, tenants=tenants, modifiers=modifiers)
+    typed = ConfigurationModels.Systems.Splunk(
+        platform=platform, tenants=tenants, modifiers=modifiers
+    )
     return SimpleNamespace(
         raw=raw,
         platform=platform,

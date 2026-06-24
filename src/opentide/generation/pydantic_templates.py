@@ -26,8 +26,6 @@ def load_core_template_source(model_key: str) -> dict[str, Any]:
 def generate_core_template(
     model_key: str,
     template_path: Path,
-    *,
-    log,
 ) -> None:
     """Generate a YAML template for a core object model."""
     parsed = load_core_template_source(model_key)
@@ -41,7 +39,6 @@ def generate_core_template(
         placeholders=placeholders,
         spacing_properties=parsed["properties"],
         indent=None,
-        log=log,
     )
 
 

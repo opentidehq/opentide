@@ -1,73 +1,48 @@
-"""ConfigurationsLoader visibility and deployment helpers."""
+"""Tests for configuration loader helpers."""
 
 from __future__ import annotations
 
 import pytest
 
 from opentide.loading.config_loader import ConfigurationsLoader
-from opentide.models.visibility import VisibilityConfig
 
 
-def test_load_statuses_typed() -> None:
+def test_load_statuses_from_dicts() -> None:
     statuses = ConfigurationsLoader.load_statuses(
-        [{"name": "production", "description": "Live", "strategy": "RELEASE"}]
+        [{"name": "preview", "description": "Preview status", "strategy": "PREVIEW"}]
     )
-    assert statuses[0].name == "production"
+    assert len(statuses) == 1
+    assert statuses[0].name == "preview"
 
 
-def test_load_visibility_empty_returns_none() -> None:
+def test_load_visibility_returns_none_for_empty() -> None:
     assert ConfigurationsLoader.load_visibility({}) is None
 
 
-def test_load_visibility_minimal() -> None:
+def test_load_visibility_valid_config() -> None:
     config = {
-        "logsources": [
+        "assets": [
             {
-                "name": "windows",
-                "description": "Windows events",
-                "system": "sentinel",
-            }
-        ]
-    }
-    loaded = ConfigurationsLoader.load_visibility(config)
-    assert isinstance(loaded, VisibilityConfig)
-    assert loaded.logsources[0].name == "windows"
-
-
-def test_load_visibility_warns_on_unknown_asset_refs() -> None:
-    config = {
-        "assets": [{"name": "server", "description": "Host", "criticality": "high"}],
-        "logsources": [
-            {
-                "name": "windows",
-                "description": "Windows events",
-                "system": "sentinel",
-                "assets": ["missing-host"],
+                "name": "workstations",
+                "description": "Corporate laptops",
+                "criticality": "medium",
             }
         ],
-        "detectors": [
+        "logsources": [
             {
-                "name": "edr",
-                "description": "EDR alerts",
-                "assets": ["missing-host"],
+                "name": "sysmon",
+                "description": "Sysmon events",
+                "system": "windows",
+                "assets": ["workstations"],
             }
         ],
+        "detectors": [],
     }
-    loaded = ConfigurationsLoader.load_visibility(config)
-    assert loaded is not None
-    assert loaded.logsources[0].assets == ["missing-host"]
+    result = ConfigurationsLoader.load_visibility(config)
+    assert result is not None
+    assert result.logsources[0].name == "sysmon"
 
 
-def test_load_visibility_invalid_required_field_raises() -> None:
-    with pytest.raises(ValueError, match="Failed to load visibility configuration"):
-        ConfigurationsLoader.load_visibility(
-            {
-                "logsources": [
-                    {
-                        "name": "windows",
-                        "description": "Windows events",
-                        # missing required system field
-                    }
-                ]
-            }
-        )
+def test_load_visibility_raises_on_invalid() -> None:
+    with pytest.raises(ValueError, match="Failed to load visibility"):
+        ConfigurationsLoader.load_visibility({"assets": "not-a-list"})

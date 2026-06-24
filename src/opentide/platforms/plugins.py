@@ -1,6 +1,13 @@
-"""Detection platform registry — deployers, validators, and per-platform config."""
+"""Detection platform registry — deployers, validators, and per-platform config.
+
+.. deprecated::
+    Prefer :mod:`opentide.platforms.registry` for new code. This module remains
+    for backward-compatible imports of ``RuleDeployer``, ``QueryValidator``,
+    and legacy ``Platforms`` accessor types.
+"""
 from __future__ import annotations
 import importlib
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from collections.abc import Sequence
@@ -107,12 +114,22 @@ class Platform:
         return self.validator is not None
 
 class _PlatformsAccessor:
-    """First-class platform access on OpenTide."""
+    """First-class platform access on OpenTide.
+
+    .. deprecated::
+        Use :class:`opentide.platforms.registry.PlatformsRegistry` instead.
+    """
     _deployers: dict[str, RuleDeployer] | None = None
     _validators: dict[str, QueryValidator] | None = None
     _instances: dict[str, Platform] | None = None
 
     def _ensure_loaded(self) -> None:
+        warnings.warn(
+            "opentide.platforms.plugins.Platforms is deprecated; "
+            "use opentide.platforms.registry.PlatformsRegistry",
+            DeprecationWarning,
+            stacklevel=3,
+        )
         if self._deployers is None:
             from opentide.deployment import enabled_systems
             from opentide.core.registry import OpenTide

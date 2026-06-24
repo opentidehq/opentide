@@ -1,13 +1,13 @@
 import json
-
 from pathlib import Path
 
-
+from opentide.core.logging import get_logger
+from opentide.core.registry import OpenTide
 from opentide.platforms.sentinel.client import (
     SentinelService,
 )
-from opentide.core.logging import log
-from opentide.core.registry import OpenTide
+
+logger = get_logger(__name__)
 
 
 GROUPING_CONFIGURATION = """
@@ -167,8 +167,11 @@ SENTINEL = """
     {query}
 """
 
-def convert_period(period:str)->str:
+
+def convert_period(period: str) -> str:
     return period.removeprefix("PT").removeprefix("P").lower()
+
+
 def sanitize_filename(name):
     invalid_chars = '<>:"/\\|?*'
     sanitized_name = ""
@@ -179,57 +182,74 @@ def sanitize_filename(name):
             sanitized_name += char
     return sanitized_name
 
+
 def _import_sentinel_rules() -> None:
     if not OpenTide.Configurations.Systems.Sentinel.tenants:
-        log("FATAL", "You must first have Sentinel tenants configured to initiate the import")
+        logger.critical(
+            "sentinel_tenants_not_configured",
+            detail="You must first have Sentinel tenants configured to initiate the import",
+        )
         raise Exception
     for tenant in OpenTide.Configurations.Systems.Sentinel.tenants:  # type: ignore
-        service = SentinelService(tenant).connect() #type: ignore
-        rules = service.alert_rules.list(resource_group_name=tenant.setup.resource_group, # type: ignore
-                                        workspace_name=tenant.setup.workspace_name # type: ignore
-                                        )    
+        service = SentinelService(tenant).connect()  # type: ignore
+        rules = service.alert_rules.list(
+            resource_group_name=tenant.setup.resource_group,  # type: ignore
+            workspace_name=tenant.setup.workspace_name,  # type: ignore
+        )
         rules_list = [rule.as_dict() for rule in rules]
-    
+
         with open(f"output-{tenant.name}.json", "w+", encoding="utf-8") as f:
             json.dump(rules_list, f, indent=4)
-    
+
         for rule in rules_list:
             tenant_name = tenant.name
-        
+
             status = "PRODUCTION" if rule.get("enabled", False) is True else "DISABLED"
-        
+
             # Trigger and Scheduling
             if rule.get("kind") == "nrt":
                 trigger = TRIGGER_TEMPLATE
                 scheduling = NRT_SCHEDULING
             elif rule.get("kind") == "Scheduled":
-                trigger = TRIGGER.format(operator=rule["trigger_operator"],
-                                         threshold=rule["trigger_threshold"])
-                scheduling = SCHEDULING.format(frequency=convert_period(rule["query_frequency"]),
-                                               lookback=convert_period(rule["query_period"])
-                                               )
+                trigger = TRIGGER.format(
+                    operator=rule["trigger_operator"], threshold=rule["trigger_threshold"]
+                )
+                scheduling = SCHEDULING.format(
+                    frequency=convert_period(rule["query_frequency"]),
+                    lookback=convert_period(rule["query_period"]),
+                )
             else:
-                continue # Do not process other types of detections
+                continue  # Do not process other types of detections
             create_incident = rule.get("incident_configuration", {}).get("create_incident", "false")
-        
+
             # Suppression
             if rule.get("suppression_enabled", False) is False:
                 alert_suppression = "false"
             else:
                 alert_suppression = convert_period(rule["suppression_duration"])
-        
+
             # Custom Details Handling
-            if custom_details:=rule.get("custom_details"):
+            if custom_details := rule.get("custom_details"):
                 custom_details_commented = ""
-                custom_details = "\n".join([CUSTOM_DETAILS.format(key=k, column=v).strip("\n") for k,v in custom_details.items()])
+                custom_details = "\n".join(
+                    [
+                        CUSTOM_DETAILS.format(key=k, column=v).strip("\n")
+                        for k, v in custom_details.items()
+                    ]
+                )
             else:
                 custom_details_commented = "#"
                 custom_details = CUSTOM_DETAILS_TEMPLATE.strip("\n")
 
             # Dynamic Properties Handling
-            if dynamic_properties:=rule.get("dynamic_properties"):
+            if dynamic_properties := rule.get("dynamic_properties"):
                 dynamic_properties_commented = ""
-                dynamic_properties = "\n".join([CUSTOM_DETAILS.format(key=k, column=v).strip("\n") for k,v in dynamic_properties.items()])
+                dynamic_properties = "\n".join(
+                    [
+                        CUSTOM_DETAILS.format(key=k, column=v).strip("\n")
+                        for k, v in dynamic_properties.items()
+                    ]
+                )
             else:
                 dynamic_properties_commented = "#"
                 dynamic_properties = DYNAMIC_PROPERTIES_TEMPLATE.strip("\n")
@@ -243,45 +263,47 @@ def _import_sentinel_rules() -> None:
                 alert_description_override = "#..."
                 dynamic_properties_commented = "#"
             else:
-                if title_override:=alert_details_override.get("alert_display_name_format"):
+                if title_override := alert_details_override.get("alert_display_name_format"):
                     alert_title_commented = ""
                     alert_title_override = title_override
                 else:
                     alert_title_commented = "#"
                     alert_title_override = ""
-            
-                if description_override:=alert_details_override.get("alert_description_format"):
+
+                if description_override := alert_details_override.get("alert_description_format"):
                     alert_description_commented = ""
                     alert_description_override = "\n      ".join(description_override.split("\n"))
                 else:
                     alert_description_commented = "#"
                     alert_description_override = "#..."
 
-                if dynamic_props:=alert_details_override.get("alert_dynamic_properties"):
+                if dynamic_props := alert_details_override.get("alert_dynamic_properties"):
                     dynamic_properties_commented = ""
                     dynamic_properties = ""
                     for dp in dynamic_props:
-                        dynamic_properties += "\n" + DYNAMIC_PROPERTIES.format(property = dp["alert_property"],
-                                                                               column = dp["value"])
+                        dynamic_properties += "\n" + DYNAMIC_PROPERTIES.format(
+                            property=dp["alert_property"], column=dp["value"]
+                        )
                 else:
                     dynamic_properties_commented = "#"
                     dynamic_properties = DYNAMIC_PROPERTIES_TEMPLATE.strip("\n")
 
             # MITRE ATT&CK Tactics and Techniques
-            if tactics:=rule.get("tactics"):
+            if tactics := rule.get("tactics"):
                 tactics = "tactics:\n" + "      - " + "\n      - ".join(tactics)
             else:
                 tactics = "OPENTIDE::REMOVE"
-            if techniques:=rule.get("techniques"):
+            if techniques := rule.get("techniques"):
                 techniques = "techniques:\n" + "      - " + "\n      - ".join(techniques)
             else:
                 techniques = "OPENTIDE::REMOVE"
 
             # Alert and Incident Grouping
-            event_aggregation = rule.get("event_grouping_settings",{}).get("aggregation_kind") or "SingleAlert"
+            event_aggregation = (
+                rule.get("event_grouping_settings", {}).get("aggregation_kind") or "SingleAlert"
+            )
             incident_configuration = rule.get("incident_configuration")
             grouping_configuration = incident_configuration.get("grouping_configuration") or {}
-
 
             if grouping_configuration["enabled"] is False:
                 alert_grouping_enabled = "false"
@@ -292,38 +314,52 @@ def _import_sentinel_rules() -> None:
             else:
                 alert_grouping_enabled = "true"
                 reopen_closed_incidents_commented = ""
-                reopen_closed_incidents = grouping_configuration.get("reopen_closed_incident", "false")
+                reopen_closed_incidents = grouping_configuration.get(
+                    "reopen_closed_incident", "false"
+                )
 
                 grouping_lookback = convert_period(grouping_configuration["lookback_duration"])
                 grouping_matching_method = grouping_configuration["matching_method"]
-                if group_by_entities:=grouping_configuration.get("group_by_entities"):
-                    group_by_entities = "group_by_entities:\n        - " + "\n      - ".join(group_by_entities)
+                if group_by_entities := grouping_configuration.get("group_by_entities"):
+                    group_by_entities = "group_by_entities:\n        - " + "\n      - ".join(
+                        group_by_entities
+                    )
                 else:
                     group_by_entities = "OPENTIDE::REMOVE"
-                if group_by_alert_details:=grouping_configuration.get("group_by_alert_details"):
-                    group_by_alert_details = "group_by_alert_details:\n        - " + "\n      - ".join(group_by_alert_details)
+                if group_by_alert_details := grouping_configuration.get("group_by_alert_details"):
+                    group_by_alert_details = (
+                        "group_by_alert_details:\n        - "
+                        + "\n      - ".join(group_by_alert_details)
+                    )
                 else:
                     group_by_alert_details = "OPENTIDE::REMOVE"
-                if group_by_custom_details:=grouping_configuration.get("group_by_custom_details"):
-                    group_by_custom_details = "group_by_custom_details:\n        - " + "\n      - ".join(group_by_custom_details)
+                if group_by_custom_details := grouping_configuration.get("group_by_custom_details"):
+                    group_by_custom_details = (
+                        "group_by_custom_details:\n        - "
+                        + "\n      - ".join(group_by_custom_details)
+                    )
                 else:
                     group_by_custom_details = "OPENTIDE::REMOVE"
 
                 grouping_configuration = GROUPING_CONFIGURATION.format(**locals()).strip("\n")
 
-            #Entity Mappings
-            if entity_mappings:=rule.get("entity_mappings"):
+            # Entity Mappings
+            if entity_mappings := rule.get("entity_mappings"):
                 entities_commented = ""
                 entities = []
                 for entity in entity_mappings:
                     field_mappings = entity["field_mappings"]
                     mappings = []
                     for mapping in field_mappings:
-                        mappings.append(ENTITIES_MAPPINGS.format(identifier=mapping["identifier"],
-                                        column=mapping["column_name"]).strip("\n"))
+                        mappings.append(
+                            ENTITIES_MAPPINGS.format(
+                                identifier=mapping["identifier"], column=mapping["column_name"]
+                            ).strip("\n")
+                        )
                     mappings = "\n".join(mappings)
-                    entities.append(ENTITIES.format(entity=entity["entity_type"],
-                                    mappings=mappings).strip("\n")) 
+                    entities.append(
+                        ENTITIES.format(entity=entity["entity_type"], mappings=mappings).strip("\n")
+                    )
                 entities = "\n".join(entities)
             else:
                 entities_commented = "#"

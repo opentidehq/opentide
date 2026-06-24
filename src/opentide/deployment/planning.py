@@ -3,7 +3,7 @@ from dataclasses import asdict
 
 import pandas as pd
 
-from opentide.core.logging import log
+from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 from opentide.generation.framework import unroll_dot_dict
 from opentide.models.deployment_enums import (
@@ -21,6 +21,8 @@ from opentide.models.system_config import (
 
 SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
+
+logger = get_logger(__name__)
 
 
 class TideDeployment:
@@ -96,18 +98,15 @@ class TideDeployment:
             case DetectionPlatforms.CARBON_BLACK_CLOUD:
                 mdr_config = data.configurations.carbon_black_cloud
             case _:
-                log(
-                    "FATAL",
-                    "Could not resolve mdr configuration for system",
-                    str(system),
+                logger.critical(
+                    "could_not_resolve_mdr_configuration_for_system", detail=str(system)
                 )
                 raise Exception(NotImplemented)
 
         if not mdr_config:
-            log(
-                "FAILURE",
-                "Was not able to retrieve MDR configuration for targeted system",
-                f"[{data.metadata.uuid}] {data.name} - Available configurations : [{data.configurations!s}]",
+            logger.error(
+                "was_not_able_to_retrieve_mdr_configuration_for_targeted_system",
+                detail=f"[{data.metadata.uuid}] {data.name} - Available configurations : [{data.configurations!s}]",
             )
             raise Exception(NotImplemented)
 
@@ -129,30 +128,26 @@ class TideDeployment:
         mdr_tenants = self.mdr_configuration_resolver(data, system).tenants
         target_tenants = list()
 
-        log(
-            "ONGOING",
-            "Currently resolving available tenant deployments for rule",
-            data.name,
-            data.metadata.uuid,
+        logger.info(
+            "currently_resolving_available_tenant_deployments_for_rule",
+            detail=str(data.name) + " | " + str(data.metadata.uuid),
         )
 
         if not tenants:
-            log(
-                "FATAL",
-                "Missing tenant configuration for enabled system",
-                system.name,
-                "Review the system configuration and ensure you have at least one tenant",
+            logger.critical(
+                "missing_tenant_configuration_for_enabled_system",
+                detail=str(system.name)
+                + " | "
+                + "Review the system configuration and ensure you have at least one tenant",
             )
             raise Exception
 
         for tenant in tenants:
             # Resolve tenant deployments when they are specific or not in the MDR spec
             if mdr_tenants:
-                log(
-                    "INFO",
-                    "Found specific tenants targeted by rule",
-                    data.name,
-                    str(mdr_tenants),
+                logger.info(
+                    "found_specific_tenants_targeted_by_rule",
+                    detail=str(data.name) + " | " + str(str(mdr_tenants)),
                 )
 
                 if tenant.name in mdr_tenants:
@@ -162,36 +157,28 @@ class TideDeployment:
                         or (tenant.deployment is deployment_strategy)
                     ):
                         target_tenants.append(tenant)
-                        log(
-                            "SUCCESS",
-                            f"Adding tenant {tenant.name} to the tenant deployment list",
-                            f"Compatible with current deployment plan : {deployment_strategy!s}",
+                        logger.info(
+                            "adding_tenant",
+                            detail=f"Compatible with current deployment plan : {deployment_strategy!s}",
                         )
                     else:
-                        log(
-                            "SKIP",
-                            f"Skipping tenant {tenant.name} as is not compatible with current deployment plan",
-                            f"Tenant deployment plan : {tenant.deployment!s}, current deployment plan : {deployment_strategy.name}",
+                        logger.info(
+                            "skipping_tenant",
+                            detail=f"Tenant deployment plan : {tenant.deployment!s}, current deployment plan : {deployment_strategy.name}",
                         )
                 else:
-                    log(
-                        "SKIP",
-                        f"Skipping tenant {tenant.name} as is not defined by MDR tenant list",
-                        str(mdr_tenants),
-                    )
+                    logger.info("skipping_tenant", detail=str(mdr_tenants))
 
             else:
-                log(
-                    "INFO",
-                    "Did not find tenants specified in detection rule, will resolve available ones",
-                    data.name,
+                logger.info(
+                    "did_not_find_tenants_specified_in_detection_rule_will_resolve_available_ones",
+                    detail=data.name,
                 )
 
                 if tenant.deployment is DeploymentStrategy.MANUAL:
-                    log(
-                        "SKIP",
-                        f"Skipping tenant {tenant.name} as can only be assigned within the MDR defined tenant",
-                        "You can define custom target tenants under the tenants keyword",
+                    logger.info(
+                        "skipping_tenant",
+                        detail="You can define custom target tenants under the tenants keyword",
                     )
                     continue
 
@@ -199,16 +186,14 @@ class TideDeployment:
                     tenant.deployment is DeploymentStrategy.ALWAYS
                 ):
                     target_tenants.append(tenant)
-                    log(
-                        "SUCCESS",
-                        f"Adding tenant {tenant.name} to the tenant deployment list",
-                        f"Compatible with current deployment plan : {deployment_strategy!s}",
+                    logger.info(
+                        "adding_tenant",
+                        detail=f"Compatible with current deployment plan : {deployment_strategy!s}",
                     )
                 else:
-                    log(
-                        "SKIP",
-                        f"Skipping tenant {tenant.name} as is not compatible with current deployment plan",
-                        f"Tenant deployment plan : {tenant.deployment!s}, current deployment plan : {deployment_strategy.name}",
+                    logger.info(
+                        "skipping_tenant",
+                        detail=f"Tenant deployment plan : {tenant.deployment!s}, current deployment plan : {deployment_strategy.name}",
                     )
 
         return target_tenants
@@ -245,16 +230,14 @@ class TideDeployment:
         raw_data = asdict(data)
         raw_mdr_config = asdict(mdr_config)
 
-        log("ONGOING", "Checking modifiers for system", str(system), str(modifiers))
+        logger.info(
+            "checking_modifiers_for_system", detail=str(str(system)) + " | " + str(str(modifiers))
+        )
 
         if modifiers:
-            log("INFO", "Found modifiers in configuration for system", str(system))
+            logger.info("found_modifiers_in_configuration_for_system", detail=str(system))
             for mod in modifiers:
-                log(
-                    "ONGOING",
-                    f"Evaluating modifier {mod.name!s} {mod.description!s}",
-                    str(mod.conditions),
-                )
+                logger.info("evaluating_modifier", detail=str(mod.conditions))
 
                 match = False
 
@@ -273,11 +256,9 @@ class TideDeployment:
                         match = False
 
                 if match is True:
-                    log(
-                        "INFO",
-                        "Condition Matching",
-                        str(mod.name or ""),
-                        str(mod.description or ""),
+                    logger.info(
+                        "condition_matching",
+                        detail=str(str(mod.name or "")) + " | " + str(str(mod.description or "")),
                     )
                     flatten_modifications = pd.json_normalize(
                         mod.modifications  # type: ignore
@@ -294,15 +275,11 @@ class TideDeployment:
                                 ).to_dict(orient="records")[0]
                                 operator = new_value.split("::")[0]
                                 value = new_value.split("::")[1]
-                                log(
-                                    "DEBUG",
-                                    f"Found mod {modification} with operator {operator} with value {value}",
-                                )
-                                log("DEBUG", str(raw_mdr_config_flatten))
+                                logger.debug("found_mod")
+                                logger.debug("debug", detail=str(raw_mdr_config_flatten))
                                 if modification in raw_mdr_config_flatten:
-                                    log(
-                                        "DEBUG",
-                                        str(raw_mdr_config_flatten[modification]),
+                                    logger.debug(
+                                        "debug", detail=str(raw_mdr_config_flatten[modification])
                                     )
                                     if operator == "prefix":
                                         new_value = value + (
@@ -312,15 +289,12 @@ class TideDeployment:
                                         new_value = (
                                             raw_mdr_config_flatten[modification] or ""
                                         ) + value
-                                    log("DEBUG", "Generated new value", new_value)
+                                    logger.debug("generated_new_value", detail=new_value)
                                 else:
                                     new_value = value
 
                         updated_config = unroll_dot_dict({modification: new_value})
-                        log(
-                            "ONGOING",
-                            f"Applying modification {modification} -> {new_value!s}",
-                        )
+                        logger.info("applying_modification")
                         if updated_config:
                             raw_mdr_config = self._deep_update(
                                 raw_mdr_config.copy(),
@@ -328,7 +302,7 @@ class TideDeployment:
                             )
 
         raw_data["configurations"].update({system_identifier: raw_mdr_config})
-        log("INFO", "New recompiled modified deployment", str(raw_data))
+        logger.info("new_recompiled_modified_deployment", detail=str(raw_data))
 
         from opentide.loading.rule_loader import load_rule_from_dict
 

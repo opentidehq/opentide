@@ -5,12 +5,15 @@ from pathlib import Path
 from typing import Any, cast
 
 from opentide.core.files import resolve_paths
-from opentide.core.logging import log
+from opentide.core.logging import get_logger, is_debug_enabled
+from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
 from opentide.generation.framework import get_type, get_vocab_entry
 from opentide.generation.vocabulary import VocabularyDefinition, entry_key_field, is_id_keyed
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.enabled import enabled_systems
+
+logger = get_logger(__name__)
 
 
 def _icon(_name: str, **_kwargs: object) -> str:
@@ -178,7 +181,7 @@ _Vocabulary_ : `{source_vocab}`
 
         def resolve(self) -> tuple[list[str], list[str]]:
             """Resolve core + extension entries → ``(enum, descriptions)``."""
-            log("DEBUG", "Resolving vocab enums for", self.vocab)
+            logger.debug("resolving_vocab_enums_for", detail=self.vocab)
             self._ingest(VOCAB_INDEX.get(self.vocab))
             self._ingest_extensions()
             return self._finalise()
@@ -188,7 +191,7 @@ _Vocabulary_ : `{source_vocab}`
         def _ingest(self, vocab_data: VocabularyDefinition | None):
             """Ingest entries from a vocabulary definition (core index)."""
             if not vocab_data:
-                log("WARNING", "Could not retrieve vocabulary", self.vocab)
+                logger.warning("could_not_retrieve_vocabulary", detail=self.vocab)
                 return
             metadata = vocab_data.metadata
             self._hints_enabled = metadata.get("vocab.search_hints", True)
@@ -201,7 +204,7 @@ _Vocabulary_ : `{source_vocab}`
             extensions = VOCAB_EXTENSIONS.get(self.vocab, [])
             if not extensions:
                 return
-            log("DEBUG", f"Processing {len(extensions)} extension(s) for", self.vocab)
+            logger.debug("processing", detail=self.vocab)
             ext_vocab = VOCAB_INDEX.get(self.vocab)
             ext_meta = ext_vocab.metadata if ext_vocab else None
             is_model = (is_id_keyed(ext_meta.to_dict()) if ext_meta else False) or (
@@ -213,7 +216,7 @@ _Vocabulary_ : `{source_vocab}`
                 d = ext.copy()
                 key = d.pop(key_field, None)
                 if not key:
-                    log("WARNING", f"Extension missing '{key_field}'", self.vocab)
+                    logger.warning("extension_missing", detail=self.vocab)
                     continue
                 normalised[key] = d
             self._process(normalised, is_model=is_model)
@@ -252,7 +255,7 @@ _Vocabulary_ : `{source_vocab}`
         def _emit(self, value: str, entry_key: str, data: dict) -> bool:
             """Append *value* if not already present (de-duplicate)."""
             if value in self.enum:
-                log("INFO", f"Skipping duplicate in vocab {self.vocab}", value)
+                logger.info("skipping_duplicate_in_vocab", detail=value)
                 return False
             self.enum.append(value)
             self.enum_description.append(self._dropdown(entry_key, data))
@@ -334,7 +337,7 @@ _Vocabulary_ : `{source_vocab}`
             vocab_def = VOCAB_INDEX.get(self.vocab)
             vocab_stages = vocab_def.metadata.get("stages") if vocab_def else None
             if not vocab_stages:
-                log("WARNING", f"Could not find stages in vocabulary {self.vocab}")
+                logger.warning("could_not_find_stages_in_vocabulary")
                 return ""
             if isinstance(stages, str):
                 stages = [stages]
@@ -463,7 +466,8 @@ _Vocabulary_ : `{source_vocab}`
             key = parts[0]
             while key != parts[-1]:
                 if key == "tenants":
-                    print(config_index)
+                    if is_debug_enabled():
+                        logger.debug("tenant_config_index", config_index=config_index)
                     param_key = parts[parts.index(key) + 1]
                     result: list[str] = []
                     for tenant in config_index["tenants"]:
@@ -498,19 +502,15 @@ _Vocabulary_ : `{source_vocab}`
             config = OpenTide.Configurations.Index
             system_config = config.get("systems", {}).get(self.system)
             if not system_config:
-                log(
-                    "FATAL",
-                    f"Could not retrieve configuration for system {self.system}",
-                    f"Indexed Configurations : {str(config.keys())}",
+                logger.critical(
+                    "could_not_retrieve_configuration_for_system",
+                    detail=f"Indexed Configurations : {str(config.keys())}",
                 )
                 raise ValueError(f"Missing configuration for system {self.system}")
 
             tenants: list[dict] = system_config.get("tenants") or []
             if not tenants:
-                log(
-                    "INFO",
-                    f"No tenants configured for system {self.system}; returning empty tenant list",
-                )
+                logger.info("no_tenants_configured_for_system")
                 return [], []
 
             enums: list[str] = []
@@ -518,13 +518,11 @@ _Vocabulary_ : `{source_vocab}`
             for tc in tenants:
                 name = tc.get("name")
                 if not name:
-                    log(
-                        "FATAL",
-                        "Cannot retrieve a tenant name in tenant definition",
-                        str(tc),
+                    logger.critical(
+                        "cannot_retrieve_a_tenant_name_in_tenant_definition", detail=str(tc)
                     )
                     raise ValueError("Missing name field in tenant definition")
-                log("INFO", f"Discovered tenant definition {name}", tc.get("description", ""))
+                logger.info("discovered_tenant_definition", detail=tc.get("description", ""))
                 enums.append(name)
                 descriptions.append(tc.get("description", "No Description"))
             return enums, descriptions
@@ -768,10 +766,12 @@ def gen_json_schema(dictionary):
 def run():
     _refresh_runtime_context()
 
-    log("TITLE", "Pydantic JSON Schema Assembler")
-    log(
-        "INFO",
-        "Generates JSON Schemas from Pydantic models, dynamically looking up Vocabulary values.",
+    emit_section("Pydantic JSON Schema Assembler")
+    logger.info(
+        "schema_assembler_started",
+        detail=(
+            "Generates JSON Schemas from Pydantic models, dynamically looking up Vocabulary values."
+        ),
     )
 
     from opentide.generation.pydantic_schemas import CORE_SCHEMA_MODELS, generate_core_model_schema
@@ -783,36 +783,33 @@ def run():
         json_output = JSON_SCHEMA_FOLDER / GLOBAL_CONFIG.json_schemas[meta]
 
         if meta in CORE_SCHEMA_MODELS:
-            log("ONGOING", f"Generating pydantic json schema for core model: {meta}")
+            logger.info("generating_pydantic_json_schema_for_core_model")
             cleaned = generate_core_model_schema(meta)
             placeholders: dict[str, str] = {}
         else:
-            log("SKIP", f"No Pydantic schema registered for meta key: {meta}")
+            logger.info("no_pydantic_schema_registered_for_meta_key")
             continue
 
-        log("ONGOING", "Exporting generated schema to : " + str(json_output))
+        logger.info("exporting_generated_schema_to_str_json_output")
         output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
         for placeholder in placeholders:
-            log(
-                "ONGOING",
-                f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
-            )
+            logger.info("replacing_all_occurence_of_placeholder")
             output = output.replace(f"${placeholder}", placeholders[placeholder])
 
         with open(json_output, "w", encoding="utf-8") as output_file:
             output_file.write(output + "\n")
-        log("SUCCESS", "Correctly exported")
+        logger.info("correctly_exported")
 
-    log("SUCCESS", "Generated all JSON Schemas")
+    logger.info("generated_all_json_schemas")
 
     # Configuration Schemas from Pydantic models
     config_json_schemas = GLOBAL_CONFIG.config_json_schemas
 
     if config_json_schemas:
-        log("TITLE", "Configuration Schema Assembler")
-        log(
-            "INFO",
-            "Generates JSON Schemas from Pydantic configuration models.",
+        emit_section("Configuration Schema Assembler")
+        logger.info(
+            "config_schema_assembler_started",
+            detail="Generates JSON Schemas from Pydantic configuration models.",
         )
 
         for meta in config_json_schemas:
@@ -827,25 +824,22 @@ def run():
             else:
                 continue
 
-            log("ONGOING", f"Generating config schema for : {meta}")
+            logger.info("generating_config_schema_for")
 
             generated = gen_json_schema(parsing)
             cleaned = strip_framework_keywords(generated)
 
-            log("ONGOING", "Exporting generated schema to : " + str(json_output))
+            logger.info("exporting_generated_schema_to_str_json_output")
             output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
             for placeholder in placeholders:
-                log(
-                    "ONGOING",
-                    f"Replacing all occurence of placeholder {placeholder} with value {placeholders[placeholder]}",
-                )
+                logger.info("replacing_all_occurence_of_placeholder")
                 output = output.replace(f"${placeholder}", placeholders[placeholder])
 
             with open(json_output, "w", encoding="utf-8") as output_file:
                 output_file.write(output + "\n")
-            log("SUCCESS", "Correctly exported")
+            logger.info("correctly_exported")
 
-        log("SUCCESS", "Generated all Configuration Schemas")
+        logger.info("generated_all_configuration_schemas")
 
 
 if __name__ == "__main__":

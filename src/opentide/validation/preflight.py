@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,7 +41,7 @@ class PreflightGraph:
         self._enum_resolver = enum_resolver
 
     @classmethod
-    def build(cls, index: dict[str, Any]) -> PreflightGraph:
+    def build(cls, index: Mapping[str, Any]) -> PreflightGraph:
         configurations = index.get("configurations", {})
         global_config = configurations.get("global", {})
         doc_config = configurations.get("documentation", {})

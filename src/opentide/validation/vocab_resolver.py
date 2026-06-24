@@ -5,13 +5,15 @@ from __future__ import annotations
 import difflib
 from typing import Any
 
-from opentide.core.logging import log
+from opentide.core.logging import get_logger
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
     entry_key_field,
     is_id_keyed,
 )
 from opentide.models.object_types import CORE_OBJECT_TYPES
+
+logger = get_logger(__name__)
 
 _STAGE_DESC_LIMIT = 300
 
@@ -77,14 +79,14 @@ class _VocabEnumBuilder:
         self._hints_enabled = False
 
     def resolve(self) -> tuple[list[str], list[str]]:
-        log("DEBUG", "Resolving vocab enums for", self.vocab)
+        logger.debug("resolving_vocab_enums", vocab=self.vocab)
         self._ingest(self.vocab_index.get(self.vocab))
         self._ingest_extensions()
         return self._finalise()
 
     def _ingest(self, vocab_data: VocabularyDefinition | None) -> None:
         if not vocab_data:
-            log("WARNING", "Could not retrieve vocabulary", self.vocab)
+            logger.warning("vocabulary_not_found", vocab=self.vocab)
             return
         metadata = vocab_data.metadata
         self._hints_enabled = bool(metadata.get("vocab.search_hints", True))
@@ -107,7 +109,7 @@ class _VocabEnumBuilder:
             row = dict(ext)
             key = row.pop(key_field, None)
             if not key:
-                log("WARNING", f"Extension missing '{key_field}'", self.vocab)
+                logger.warning("extension_missing_key_field", key_field=key_field, vocab=self.vocab)
                 continue
             normalised[str(key)] = row
         self._process(normalised, is_model=is_model)
@@ -144,7 +146,7 @@ class _VocabEnumBuilder:
 
     def _emit(self, value: str, entry_key: str, data: dict[str, Any]) -> bool:
         if value in self.enum:
-            log("INFO", f"Skipping duplicate in vocab {self.vocab}", value)
+            logger.info("skipping_duplicate_vocab_entry", vocab=self.vocab, value=value)
             return False
         self.enum.append(value)
         self.enum_description.append(self._dropdown(entry_key, data))
