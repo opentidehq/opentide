@@ -7,7 +7,7 @@ pip install "opentide[mcp]"
 opentide-mcp
 ```
 
-VS Code configuration:
+VS Code configuration (or use `opentide setup mcp --vscode`):
 
 ```json
 { "mcpServers": { "opentide": { "command": "opentide-mcp" } } }

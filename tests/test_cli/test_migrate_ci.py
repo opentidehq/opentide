@@ -18,4 +18,4 @@ def test_scan_detects_coretide_ci_patterns(tmp_path: Path) -> None:
     patterns = {item["pattern"] for item in findings}
     assert "OpenTideHQ/CoreTide" in patterns
     assert "Pipelines/GitHub/" in patterns
-    assert any("opentide ci generate --ci github" in item["suggestion"] for item in findings)
+    assert any("opentide setup ci --ci github" in item["suggestion"] for item in findings)

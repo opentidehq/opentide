@@ -111,7 +111,7 @@ scripts/          # ci-local.sh, codeql-local.sh, jj-*.sh
 
 Bundled data: `src/opentide/data/`. Logging: `opentide.core.logging` (structlog + Rich) — no operational `print()`.
 
-Client repos: `opentide init --ci github|gitlab|azure` or `opentide ci generate`.
+Client repos: `opentide setup` or `opentide setup ci`.
 
 ## Docs
 

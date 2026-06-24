@@ -1,0 +1,7 @@
+{
+  "yaml.schemas": {
+    "Schemas/TVM Schema.json": "Objects/Threat Vectors/**/*.yaml",
+    "Schemas/Detection Objective.schema.json": "Objects/Detection Objectives/**/*.yaml",
+    "Schemas/MDR Schema.json": "Objects/Detection Rules/**/*.yaml"
+  }
+}

@@ -1,0 +1,30 @@
+# {name} — Agent Guide
+
+{description}
+
+**Organisation:** {org}
+
+## Quick start
+
+```bash
+opentide setup          # interactive repository onboarding
+opentide validate
+opentide generate
+opentide deploy --platform sentinel --dry-run
+```
+
+## Object layout
+
+- `Objects/Threat Vectors/` — threat vectors
+- `Objects/Detection Objectives/` — detection objectives
+- `Objects/Detection Rules/` — MDR rules
+- `Configurations/` — platform and visibility configuration
+- `Schemas/` — generated JSON schemas and templates (via `opentide generate`)
+
+## Skills
+
+See `.agents/skills/opentide-detection-ops/SKILL.md` for detection engineering workflows.
+
+## MCP
+
+Run `opentide setup mcp` to configure `opentide-mcp` for your editor.
