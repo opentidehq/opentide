@@ -349,11 +349,10 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
 
 
 def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | None:
-    import yaml
+    from opentide.core.io import load_yaml
 
     model_file, meta_name = path_row
-    with model_file.open(encoding="utf-8") as handle:
-        model_body = yaml.safe_load(handle)
+    model_body = load_yaml(model_file)
     if not isinstance(model_body, dict):
         return None
     uuid = model_body.get("metadata", {}).get("uuid")

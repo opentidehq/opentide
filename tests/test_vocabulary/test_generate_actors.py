@@ -74,3 +74,62 @@ def test_generate_actors_vocabs_merges_sources(
 
     count = generate_actors.generate_actors_vocabs()
     assert count == 3
+
+
+def test_generate_actors_vocabs_with_explicit_misp_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vocab_dir = tmp_path / "vocabs"
+    stix_dir = tmp_path / "attack" / "stix"
+    vocab_dir.mkdir()
+    stix_dir.mkdir(parents=True)
+    (vocab_dir / "actors.vocab.toml").write_text('key = "id"\nkeys = []\n', encoding="utf-8")
+    (stix_dir / "enterprise-attack.json").write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(generate_actors, "_vocab_dir", lambda: vocab_dir)
+    monkeypatch.setattr(generate_actors, "_stix_dir", lambda: stix_dir)
+    monkeypatch.setattr(generate_actors, "parse_groups", lambda _bundle, prefix: [])
+    monkeypatch.setattr(generate_actors, "load_stix_bundle", lambda _path: {"objects": []})
+    monkeypatch.setattr(
+        generate_actors,
+        "read_vocab_document",
+        lambda _path: {"field": "actors", "key": "id", "keys": []},
+    )
+    monkeypatch.setattr(generate_actors, "write_vocab_file", lambda _path, _doc: None)
+    monkeypatch.setattr(
+        generate_actors,
+        "_load_misp_galaxy",
+        lambda _url: [{"id": "u1", "name": "Actor"}],
+    )
+
+    assert generate_actors.generate_actors_vocabs(misp_url="https://example/galaxy.json") == 1
+
+
+def test_default_misp_url_reads_resources_toml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_dir = tmp_path / "configurations"
+    config_dir.mkdir()
+    (config_dir / "resources.toml").write_text(
+        '[misp.galaxies]\nthreat_actors = "https://example/galaxy.json"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        generate_actors,
+        "resolve_paths",
+        lambda: {"configurations": str(config_dir)},
+    )
+    assert generate_actors._default_misp_url() == "https://example/galaxy.json"
+
+
+def test_path_helpers_use_resolve_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        generate_actors,
+        "resolve_paths",
+        lambda: {
+            "vocabularies": str(tmp_path / "vocabs"),
+            "resources": str(tmp_path / "resources"),
+        },
+    )
+    assert generate_actors._vocab_dir() == tmp_path / "vocabs"
+    assert generate_actors._stix_dir() == tmp_path / "resources" / "attack" / "stix"

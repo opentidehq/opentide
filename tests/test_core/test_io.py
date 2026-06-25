@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 import yaml
 
-from opentide.core.io import dump_yaml, load_json, load_toml, load_yaml, write_text
+from opentide.core.io import (
+    dump_json_text,
+    dump_toml,
+    dump_yaml,
+    load_json,
+    load_toml,
+    load_yaml,
+    parse_yaml,
+    write_text,
+    yaml_loader_name,
+)
+
+
+def test_yaml_loader_is_csafe_or_safe() -> None:
+    assert yaml_loader_name() in {"CSafeLoader", "SafeLoader"}
 
 
 def test_load_yaml_roundtrip(tmp_path: Path) -> None:
@@ -21,7 +34,7 @@ def test_load_yaml_roundtrip(tmp_path: Path) -> None:
 def test_load_json_roundtrip(tmp_path: Path) -> None:
     payload = {"uuid": "abc", "values": [1, 2]}
     path = tmp_path / "data.json"
-    path.write_text(json.dumps(payload), encoding="utf-8")
+    path.write_text(dump_json_text(payload), encoding="utf-8")
     assert load_json(path) == payload
 
 
@@ -30,6 +43,13 @@ def test_load_toml_roundtrip(tmp_path: Path) -> None:
     path = tmp_path / "data.toml"
     path.write_text(content, encoding="utf-8")
     assert load_toml(path) == {"title": "MalAPI", "count": 3}
+
+
+def test_dump_toml_roundtrip() -> None:
+    from opentide.core.io import parse_toml
+
+    payload = {"title": "MalAPI", "count": 3}
+    assert parse_toml(dump_toml(payload)) == payload
 
 
 def test_write_text_creates_parent_dirs(tmp_path: Path) -> None:
@@ -46,6 +66,23 @@ def test_dump_yaml_writes_mapping(tmp_path: Path) -> None:
     assert loaded["beta"]["gamma"] is True
 
 
+def test_dump_yaml_accepts_explicit_dumper(tmp_path: Path) -> None:
+    from opentide.core.files import IndentFullDumper
+
+    path = tmp_path / "custom.yaml"
+    dump_yaml(path, {"list": [{"item": 1}]}, dumper=IndentFullDumper)
+    assert "list:" in path.read_text(encoding="utf-8")
+
+
 def test_load_yaml_missing_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_yaml(tmp_path / "missing.yaml")
+
+
+def test_parse_yaml_roundtrip() -> None:
+    assert parse_yaml("name: alpha\n") == {"name": "alpha"}
+
+
+def test_dump_json_text_supports_default_serializer() -> None:
+    rendered = dump_json_text({"when": object()}, default=str)
+    assert "object" in rendered

@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import toml
 from typer.testing import CliRunner, Result
 
 from opentide.cli import app
+from opentide.core.io import load_toml
 
 ROOT = Path(__file__).resolve().parents[2]
 TIDE_CORPUS_ROOT = ROOT / "tests/fixtures/tide_corpus/current"
@@ -23,6 +23,19 @@ TIDE_CORPUS_MANIFEST = ROOT / "tests/fixtures/tide_corpus/manifest.toml"
 @pytest.fixture
 def cli_runner() -> CliRunner:
     return CliRunner()
+
+
+@pytest.fixture
+def mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Avoid network calls when tests install skills from OpenTideHQ/skills."""
+
+    def _fake(slug: str, dest: Path, *, ref: str) -> list[str]:
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8")
+        return ["SKILL.md"]
+
+    monkeypatch.setattr("opentide.cli.services.setup.skills._download_skill", _fake)
+    monkeypatch.setattr("opentide.cli.services.setup.skills._fetch_bytes", lambda url: None)
 
 
 @pytest.fixture
@@ -139,7 +152,7 @@ def invoke_cli(cli_runner: CliRunner, tide_corpus_repo: Path) -> Callable[..., R
 
 
 def load_corpus_manifest() -> dict[str, Any]:
-    return toml.loads(TIDE_CORPUS_MANIFEST.read_text(encoding="utf-8"))
+    return load_toml(TIDE_CORPUS_MANIFEST)
 
 
 def manifest_slices(*, status: str | None = None) -> list[dict[str, Any]]:

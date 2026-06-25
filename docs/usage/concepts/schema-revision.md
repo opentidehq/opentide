@@ -64,3 +64,7 @@ Concurrent schema files in `.opentide/schemas/` are expected.
 ## SDK
 
 Programmatic schema access via `OpenTide.JsonSchemas`, `OpenTide.Templates`, and `OpenTide.TideSchemas` — see [SDK registry](../../sdk/registry.md).
+
+## Normative reference
+
+[Versioning spec](/docs/specifications/specs/versioning/) · [Metadata spec](/docs/specifications/specs/metadata/)

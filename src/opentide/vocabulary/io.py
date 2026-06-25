@@ -8,8 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
-import toml
-
+from opentide.core.io import load_toml
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
     VocabularyLoadError,
@@ -71,7 +70,7 @@ def read_vocab_document(path: Path) -> dict[str, Any]:
     """Load a vocabulary TOML file into a plain dict."""
     source = str(path)
     try:
-        raw = toml.loads(path.read_text(encoding="utf-8"))
+        raw = load_toml(path)
     except Exception as exc:
         raise VocabularyLoadError(f"Could not read vocabulary TOML {source}: {exc}") from exc
     if not raw:

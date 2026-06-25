@@ -17,7 +17,6 @@ from opentide.cli.services import export as export_service
         (ExportTarget.navigator, "opentide.export.attack_navigator_layer.run"),
         (ExportTarget.objects, "opentide.export.table_export.TableExporter"),
         (ExportTarget.revisions, "opentide.export.revisions_export.run"),
-        (ExportTarget.playbook_map, "opentide.export.playbook_map.run"),
     ],
 )
 def test_run_export_target_delegates(target: ExportTarget, patch_target: str) -> None:

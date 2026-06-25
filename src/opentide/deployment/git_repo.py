@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from git.repo import Repo
+from opentide.deployment.git_backend import DulwichRepo, open_repo
 
 from opentide.core.errors import Errors
 from opentide.core.registry import OpenTide
@@ -29,7 +29,7 @@ class GitRepository:
         author: str
         sha: str
 
-    def _initialize_repository(self) -> Repo:
+    def _initialize_repository(self) -> DulwichRepo | None:
         TARGET_CI = CIEnvironment().environment
         match TARGET_CI:
             case CIEnvironment.CIPlatforms.GitHubActions:
@@ -45,7 +45,7 @@ class GitRepository:
                 return None  # type: ignore
         logger.info("will_initialize_repository_located_on", detail=str(REPO_DIR))
 
-        return Repo(REPO_DIR)
+        return open_repo(REPO_DIR)
 
     def _latest_commit_information(self) -> LatestCommit:
 
@@ -55,7 +55,7 @@ class GitRepository:
                 author="Sample Commit Author",
                 sha="Sample Commit SHA",
             )
-        commit = self.repository.head.commit
+        commit = self.repository.head
         return self.LatestCommit(
             message=str(commit.message.strip()),
             author=str(commit.author.name),
@@ -164,7 +164,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                                 + " | "
                                 + str(str(mr_correct_parent)),
                             )
-                            LATEST_COMMIT = mr_correct_parent
+                            LATEST_COMMIT = mr_correct_parent.hexsha
                             break
             else:
                 logger.critical("illegal_deployment_plan")

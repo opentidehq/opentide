@@ -72,7 +72,6 @@ def _write_gitignore(target: Path) -> None:
                 "build/",
                 "*.egg-info/",
                 ".pytest_cache/",
-                "playbook_map.xlsx",
                 f"{OPENTIDE_DIR}/exports/*.export.json",
             ]
         )

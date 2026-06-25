@@ -39,7 +39,7 @@ rule.document() -> str
 # or: OpenTide.render_rule(rule)
 ```
 
-`OpenTide.promote_rule()` raises `NotImplementedError` — use `opentide mutate promote` for bulk promotion.
+`OpenTide.promote_rule()` raises `NotImplementedError` — use deployment-time promotion via `opentide deploy` and `.opentide/configurations/` promotion settings.
 
 These delegate to the bound registry when `_registry` is set (normal load path).
 

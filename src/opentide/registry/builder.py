@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from opentide.core.files import resolve_configurations
+from opentide.core.io import load_yaml, parse_json
 from opentide.core.logging import get_logger
 from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
 
@@ -21,8 +19,7 @@ def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | N
     """Worker: return (path, body, error)."""
     path = Path(path_str)
     try:
-        with path.open(encoding="utf-8") as handle:
-            body = yaml.safe_load(handle)
+        body = load_yaml(path)
         if not isinstance(body, dict):
             return path_str, None, "YAML root must be a mapping"
         return path_str, body, None
@@ -114,7 +111,7 @@ class RegistryBuilder:
                 continue
             try:
                 identifier = parse_schema_artifact_name(path.name)
-                content = json.loads(path.read_text(encoding="utf-8"))
+                content = parse_json(path.read_bytes())
             except Exception:
                 continue
             framework_paths[identifier] = path
@@ -131,7 +128,7 @@ class RegistryBuilder:
             except ValueError:
                 identifier = meta_name
             if identifier not in json_index:
-                json_index[identifier] = json.loads(schema_path.read_text(encoding="utf-8"))
+                json_index[identifier] = parse_json(schema_path.read_bytes())
 
         return framework_paths, json_index
 

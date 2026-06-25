@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import pytest
 import yaml
 
-from opentide.core.files import IndentFullDumper, OrderedYAMLDumper, safe_file_name
+from opentide.core.files import (
+    IndentFullDumper,
+    OrderedYAMLDumper,
+    _bundled_platform_configs,
+    _fetch_configs,
+    resolve_configurations,
+    resolve_paths,
+    safe_file_name,
+)
+from opentide.core.root import get_repo_root
 
 
 @pytest.mark.parametrize(
@@ -32,3 +44,86 @@ def test_ordered_yaml_dumper_is_indent_full_subclass() -> None:
     payload = {"z": 1, "a": {"b": 2}}
     dumped = yaml.dump(payload, Dumper=OrderedYAMLDumper, default_flow_style=False)
     assert dumped.startswith("z:") or "z:" in dumped
+
+
+def test_fetch_configs_reads_top_level_and_nested_toml(tmp_path: Path) -> None:
+    (tmp_path / "global.toml").write_text('title = "global"\n', encoding="utf-8")
+    systems = tmp_path / "systems"
+    systems.mkdir()
+    (systems / "sentinel.toml").write_text(
+        '[platform]\nidentifier = "sentinel"\n',
+        encoding="utf-8",
+    )
+    configs = _fetch_configs(tmp_path)
+    assert configs["global"]["title"] == "global"
+    assert configs["systems"]["sentinel"]["platform"]["identifier"] == "sentinel"
+
+
+def test_fetch_configs_uses_tide_identifier_fallback(tmp_path: Path) -> None:
+    systems = tmp_path / "systems"
+    systems.mkdir()
+    (systems / "legacy.toml").write_text('[tide]\nidentifier = "legacy"\n', encoding="utf-8")
+    configs = _fetch_configs(tmp_path)
+    assert configs["systems"]["legacy"]["tide"]["identifier"] == "legacy"
+
+
+def test_fetch_configs_returns_empty_for_missing_directory(tmp_path: Path) -> None:
+    assert _fetch_configs(tmp_path / "missing") == {}
+
+
+def test_fetch_configs_skips_non_file_entries_in_nested_dir(tmp_path: Path) -> None:
+    systems = tmp_path / "systems"
+    systems.mkdir()
+    (systems / "nested-dir").mkdir()
+    (systems / "sentinel.toml").write_text(
+        '[platform]\nidentifier = "sentinel"\n',
+        encoding="utf-8",
+    )
+    configs = _fetch_configs(tmp_path)
+    assert configs["systems"]["sentinel"]["platform"]["identifier"] == "sentinel"
+
+
+def test_bundled_platform_configs_returns_empty_when_data_root_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "opentide.core.files.get_data_root",
+        lambda: Path("/definitely-missing-data-root"),
+    )
+    assert _bundled_platform_configs() == {}
+
+
+def test_safe_file_name_unsafe_mode_honours_platform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert safe_file_name("a/b", safe_mode=False) == "ab"
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert safe_file_name("a<b", safe_mode=False) == "ab"
+
+
+def test_resolve_configurations_merges_parent_opentide_configs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "client" / "project"
+    workspace.mkdir(parents=True)
+    parent_configs = tmp_path / "client" / ".opentide" / "configurations"
+    parent_configs.mkdir(parents=True)
+    (parent_configs / "overlay.toml").write_text('marker = "parent"\n', encoding="utf-8")
+
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(workspace))
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    get_repo_root.cache_clear()
+
+    configs = resolve_configurations()
+    assert configs["overlay"]["marker"] == "parent"
+
+
+def test_resolve_paths_supports_separate_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = Path(__file__).resolve().parents[2]
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(repo))
+    get_repo_root.cache_clear()
+    tide_paths, core_paths = resolve_paths(separate=True)
+    assert isinstance(tide_paths, dict)
+    assert isinstance(core_paths, dict)
+    assert tide_paths

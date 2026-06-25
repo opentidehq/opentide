@@ -12,11 +12,6 @@
     "generate",
     "validate",
     "deploy",
-    "document",
-    "mutate",
-    "export",
-    "extract",
-    "info",
-    "migrate"
+    "info"
   ]
 }

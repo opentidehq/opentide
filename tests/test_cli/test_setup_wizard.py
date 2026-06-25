@@ -50,16 +50,34 @@ def test_run_interactive_mcp_setup_defaults_when_empty(monkeypatch, tmp_path: Pa
 
 def test_run_interactive_skills_setup(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: "generic")
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills._download_skill",
+        lambda slug, dest, *, ref: (
+            dest.mkdir(parents=True, exist_ok=True),
+            (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8"),
+            ["SKILL.md"],
+        )[2],
+    )
+    monkeypatch.setattr("opentide.cli.services.setup.skills._fetch_bytes", lambda url: None)
     result = run_interactive_skills_setup(tmp_path)
     assert (tmp_path / "AGENTS.md").is_file()
-    assert result["pack"] == "detection-ops"
+    assert "opentide-detection-rule" in result["skills"]
 
 
 def test_run_interactive_skills_setup_defaults_when_empty(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: "")
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills._download_skill",
+        lambda slug, dest, *, ref: (
+            dest.mkdir(parents=True, exist_ok=True),
+            (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8"),
+            ["SKILL.md"],
+        )[2],
+    )
+    monkeypatch.setattr("opentide.cli.services.setup.skills._fetch_bytes", lambda url: None)
     result = run_interactive_skills_setup(tmp_path)
     assert (tmp_path / "AGENTS.md").is_file()
-    assert result["pack"] == "detection-ops"
+    assert "opentide-detection-rule" in result["skills"]
 
 
 def test_run_interactive_setup_full_wizard(
@@ -76,11 +94,20 @@ def test_run_interactive_setup_full_wizard(
             "generic",
         ]
     )
-    confirms = iter([True, True, True, True, True])
+    confirms = iter([True, True, True, True, False])
 
     monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: next(prompts))
     monkeypatch.setattr("rich.prompt.Confirm.ask", lambda *args, **kwargs: next(confirms))
     monkeypatch.setattr("rich.console.Console.print", MagicMock())
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills._download_skill",
+        lambda slug, dest, *, ref: (
+            dest.mkdir(parents=True, exist_ok=True),
+            (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8"),
+            ["SKILL.md"],
+        )[2],
+    )
+    monkeypatch.setattr("opentide.cli.services.setup.skills._fetch_bytes", lambda url: None)
 
     import warnings
 
@@ -90,4 +117,4 @@ def test_run_interactive_setup_full_wizard(
     steps = result["steps"]
     assert isinstance(steps, list)
     step_names = {step["step"] for step in steps}
-    assert {"repo", "ci", "mcp", "skills", "vscode"}.issubset(step_names)
+    assert {"repo", "platforms", "ci", "mcp", "skills"}.issubset(step_names)

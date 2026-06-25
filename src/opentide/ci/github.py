@@ -106,7 +106,7 @@ def render_github(options: CiRenderOptions) -> str:
         )
     )
 
-    if options.promotion:
+    if options.promotion and promotion_steps(options):
         jobs.append(
             textwrap.dedent(
                 f"""\

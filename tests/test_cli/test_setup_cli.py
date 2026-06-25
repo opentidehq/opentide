@@ -52,10 +52,10 @@ def test_setup_mcp_yes_defaults_to_vscode(tmp_path) -> None:
     assert (tmp_path / ".vscode" / "mcp.json").is_file()
 
 
-def test_setup_skills_yes_defaults_to_generic(tmp_path) -> None:
+def test_setup_skills_yes_defaults_to_generic(tmp_path, mock_skill_download) -> None:
     result = runner.invoke(
         app,
-        ["--json", "setup", "skills", str(tmp_path), "--yes"],
+        ["--json", "setup", "skills", "--yes", str(tmp_path)],
     )
     assert result.exit_code == 0
     assert (tmp_path / "AGENTS.md").is_file()
@@ -64,7 +64,7 @@ def test_setup_skills_yes_defaults_to_generic(tmp_path) -> None:
 def test_setup_vscode_settings_command(tmp_path) -> None:
     result = runner.invoke(
         app,
-        ["--json", "setup", "vscode", "settings", str(tmp_path)],
+        ["--json", "setup", "vscode", str(tmp_path), "--settings"],
     )
     assert result.exit_code == 0
     assert (tmp_path / ".vscode" / "settings.json").is_file()
@@ -73,10 +73,10 @@ def test_setup_vscode_settings_command(tmp_path) -> None:
 def test_setup_vscode_snippets_command_skips_without_templates(tmp_path) -> None:
     result = runner.invoke(
         app,
-        ["--json", "setup", "vscode", "snippets", str(tmp_path)],
+        ["--json", "setup", "vscode", str(tmp_path), "--snippets"],
     )
     assert result.exit_code == 0
-    assert "skipped" in result.stdout.lower()
+    assert '"files": []' in result.stdout
 
 
 def test_setup_ci_none_alone_is_not_noop(tmp_path, monkeypatch) -> None:

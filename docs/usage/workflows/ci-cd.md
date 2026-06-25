@@ -9,11 +9,16 @@ Use `opentide setup ci` to scaffold pipeline files, or add steps manually to exi
 
 ## Scaffold with setup
 
+Enable detection platforms first, then generate the CI **provider** workflow (`github`, `gitlab`, or `azure`):
+
 ```bash
-opentide setup ci --ci github --platform sentinel --yes
-opentide setup ci --ci gitlab --platform sentinel --platform splunk --yes
-opentide setup ci --ci azure --python-version 3.12 --yes
+opentide setup platforms --sentinel --yes
+opentide setup ci github --yes
+opentide setup ci gitlab --yes
+opentide setup ci azure --python-version 3.12 --yes
 ```
+
+`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback).
 
 | Flag | Default | Purpose |
 |------|---------|---------|
@@ -62,7 +67,7 @@ Remove `submodules: recursive` from checkout. Replace Orchestration scripts:
 | `Orchestration/validate.py` | `opentide validate` |
 | `Orchestration/generate.py` | `opentide generate` |
 | `Orchestration/deploy.py` | `opentide deploy` |
-| `Orchestration/document.py` | `opentide document` |
+| `Orchestration/document.py` | `opentide generate docs` |
 
 See [Migration guide](../migration/index.md).
 
@@ -79,7 +84,7 @@ Parse the `ok` field and issue lists in downstream gates.
 ## Document generation in CI
 
 ```bash
-opentide document --flavor github
+opentide generate docs --flavor github
 ```
 
-Flavor auto-detects from `GITHUB_ACTIONS`, GitLab `CI`, or Azure `TF_BUILD`. Override with `--flavor` when needed. See [CLI document](../../cli/document.md).
+Flavor auto-detects from `GITHUB_ACTIONS`, GitLab `CI`, or Azure `TF_BUILD`. Override with `--flavor` when needed. See [CLI generate](../../cli/generate.md).

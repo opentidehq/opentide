@@ -18,3 +18,13 @@ def recomposition_platforms_root() -> Path:
 def vocabulary_schema_path() -> Path:
     """Bundled vocabulary JSON schema."""
     return _schemas_data_root() / "vocabulary.schema.json"
+
+
+def bundled_data_root() -> Path:
+    """Bundled package data (configurations, skills manifest, setup templates)."""
+    return Path(str(files("opentide.data")))
+
+
+def bundled_configurations_root() -> Path:
+    """Default platform and global configuration templates."""
+    return bundled_data_root() / "configurations"

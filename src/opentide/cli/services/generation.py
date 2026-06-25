@@ -15,14 +15,14 @@ logger = structlog.get_logger("opentide.cli.services.generation")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
+# User-visible outputs first, then framework internals. Extract is opt-in only.
 _PHASE_ORDER: tuple[str, ...] = (
+    "docs",
+    "exports",
     "vocabs",
     "templates",
     "schemas",
     "snippets",
-    "exports",
-    "playbook-map",
-    "docs",
 )
 
 
@@ -66,12 +66,6 @@ def run_generate_phase(phase: str) -> None:
         TableExporter().run()
         export_revisions()
         return
-    if phase == "playbook-map":
-        from opentide.export.playbook_map import run as generate_playbook_map
-
-        emit_section("Playbook map export")
-        generate_playbook_map()
-        return
     if phase == "docs":
         from opentide.documentation.cli import run as run_docs
 
@@ -83,24 +77,28 @@ def run_generate_phase(phase: str) -> None:
 
 def run_generate_docs(
     *,
+    output: str | None = None,
+    flavor: str | None = None,
     rules: bool = False,
     threats: bool = False,
     objectives: bool = False,
-) -> None:
+    scope: str | None = None,
+) -> dict[str, object]:
     from opentide.documentation.cli import run as run_docs
     from opentide.documentation.types import DocumentScope
 
     emit_section("Documentation generation")
+    if scope == DocumentScope.index.value:
+        return run_docs(scope=scope, output=output, flavor=flavor)
     if rules:
-        run_docs(scope=DocumentScope.rules)
-        return
+        return run_docs(scope=DocumentScope.rules.value, output=output, flavor=flavor)
     if threats:
-        run_docs(scope=DocumentScope.threats)
-        return
+        return run_docs(scope=DocumentScope.threats.value, output=output, flavor=flavor)
     if objectives:
-        run_docs(scope=DocumentScope.objectives)
-        return
-    run_docs()
+        return run_docs(scope=DocumentScope.objectives.value, output=output, flavor=flavor)
+    if scope:
+        return run_docs(scope=scope, output=output, flavor=flavor)
+    return run_docs(output=output, flavor=flavor)
 
 
 def run_generate_all() -> None:

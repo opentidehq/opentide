@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
 from opentide.cli.services.setup.orchestrator import SetupOptions, run_setup
 
@@ -44,12 +46,24 @@ def test_run_setup_with_ci_and_mcp(tmp_path: Path) -> None:
     )
     steps = result["steps"]
     assert isinstance(steps, list)
-    assert {step["step"] for step in steps} == {"repo", "ci", "mcp"}
-    assert (target / ".github" / "workflows" / "opentide.yml").is_file()
+    assert {step["step"] for step in steps} == {"repo", "platforms", "ci", "mcp"}
+    assert (target / ".opentide" / "configurations" / "platforms" / "sentinel.toml").is_file()
+    workflow = (target / ".github" / "workflows" / "opentide.yml").read_text(encoding="utf-8")
+    assert "validate query" in workflow
+    assert "sentinel" in workflow
     assert (target / ".vscode" / "mcp.json").is_file()
 
 
-def test_run_setup_skills_only(tmp_path: Path) -> None:
+def test_run_setup_skills_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills._download_skill",
+        lambda slug, dest, *, ref: (
+            dest.mkdir(parents=True, exist_ok=True),
+            (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8"),
+            ["SKILL.md"],
+        )[2],
+    )
+    monkeypatch.setattr("opentide.cli.services.setup.skills._fetch_bytes", lambda url: None)
     target = tmp_path / "skills-only"
     target.mkdir()
     result = run_setup(
@@ -104,3 +118,24 @@ def test_run_setup_ci_none_skips_ci_step(tmp_path: Path) -> None:
     steps = result["steps"]
     assert isinstance(steps, list)
     assert {step["step"] for step in steps} == {"repo"}
+
+
+def test_run_setup_auto_platforms_before_ci_without_run_platforms_flag(tmp_path: Path) -> None:
+    target = tmp_path / "ci-only"
+    result = run_setup(
+        SetupOptions(
+            path=target,
+            platforms=[DetectionPlatform.sentinel],
+            ci=CiPlatform.github,
+            yes=True,
+            run_repo=False,
+            run_ci=True,
+            run_platforms=False,
+        )
+    )
+    steps = result["steps"]
+    assert isinstance(steps, list)
+    assert [step["step"] for step in steps] == ["platforms", "ci"]
+    workflow = (target / ".github" / "workflows" / "opentide.yml").read_text(encoding="utf-8")
+    assert "validate query" in workflow
+    assert "sentinel" in workflow

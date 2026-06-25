@@ -18,16 +18,17 @@ Run `opentide --help` for the live command tree.
 
 | Command | Purpose |
 |---------|---------|
-| [`setup`](./setup.md) | Onboard detection repositories (interactive or scripted) |
-| [`generate`](./generate.md) | Build indexes, schemas, templates, exports |
+| [`setup`](./setup.md) | Onboard detection repositories (repo, platforms, CI, MCP, skills) |
+| [`generate`](./generate.md) | Documentation, exports, framework artifacts, optional platform import |
 | [`validate`](./validate.md) | Object and query validation |
 | [`deploy`](./deploy.md) | Platform rule deployment |
-| [`document`](./document.md) | Wiki and object documentation generation |
-| [`mutate`](./mutate.md) | Bulk content mutations |
-| [`export`](./export.md) | Navigator layers, object dumps, revisions |
-| [`extract`](./extract.md) | Import rules from external platforms |
 | [`info`](./info.md) | Repository and platform statistics |
-| [`migrate`](./migrate.md) | Legacy import and script migration |
+
+<Callout type="info">
+
+Top-level `document`, `export`, and `extract` remain as **hidden deprecation shims** for one release. They log a warning and delegate to `opentide generate docs`, `generate exports`, and `generate extract`. `mutate` and `migrate` were removed — use `opentide deploy` for promotion and the [CoreTide migration prompt](../usage/migration/prompt.md) for legacy repos.
+
+</Callout>
 
 ## Global options
 
@@ -50,9 +51,11 @@ opentide validate query --platform sentinel
 opentide deploy --platform sentinel --dry-run
 ```
 
+Generated pipelines use `opentide generate docs --output docs` for documentation jobs. Status promotion runs inside `opentide deploy` — there is no separate `mutate promote` step.
+
 ## JSON output
 
-With `--json`, success payloads include `"ok": true`. Errors emit `"ok": false` and exit non-zero. Use in pipeline gates and agent tooling.
+With `--json`, most success payloads include `"ok": true` and write JSON to stdout. Errors emit `"ok": false` and exit non-zero. Human-oriented log lines may still appear on stderr when structlog is configured for JSON — treat stdout as the contract for automation.
 
 ## Shell completion
 

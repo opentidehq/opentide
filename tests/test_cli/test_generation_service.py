@@ -40,13 +40,6 @@ def test_run_generate_schemas_phase(monkeypatch: pytest.MonkeyPatch) -> None:
     generate.assert_called_once()
 
 
-def test_run_generate_playbook_map_phase(monkeypatch: pytest.MonkeyPatch) -> None:
-    generate = MagicMock()
-    monkeypatch.setattr("opentide.export.playbook_map.run", generate)
-    generation.run_generate_phase(GeneratePhase.playbook_map)
-    generate.assert_called_once()
-
-
 def test_run_generate_exports_phase(monkeypatch: pytest.MonkeyPatch) -> None:
     attack = MagicMock()
     table = MagicMock(run=MagicMock())

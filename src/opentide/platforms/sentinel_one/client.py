@@ -3,7 +3,9 @@ import json
 from dataclasses import dataclass, asdict
 from typing import Literal, NoReturn, Optional
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+from opentide.core.time import format_utc_z, utc_now
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
 from opentide.models.system_config import ConfigurationModels
@@ -109,10 +111,10 @@ class SentinelOneService:
         if (site_id := self.tenant_config.setup.site_id):
             request['site_id'] = str(site_id)
         request['query'] = query
-        now = datetime.now()
+        now = utc_now()
         from_date = now - timedelta(minutes=1)
-        request['toDate'] = str(now.isoformat()) + 'Z'
-        request['fromDate'] = str(from_date.isoformat()) + 'Z'
+        request['toDate'] = format_utc_z(now)
+        request['fromDate'] = format_utc_z(from_date)
         request = json.dumps(request, indent=4)
         response = self.session.post(url=self.CREATE_QUERY_ENDPOINT, verify=self.tenant_config.setup.ssl, data=request)
         if response.status_code == 200:

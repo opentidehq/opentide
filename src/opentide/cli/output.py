@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import structlog
 
 from opentide.cli.context import CliContext
+from opentide.core.io import dump_json_text
 from opentide.core.logging.console import emit_fatal
 
 logger = structlog.get_logger(__name__)
@@ -16,7 +16,7 @@ logger = structlog.get_logger(__name__)
 def emit(ctx: CliContext, payload: dict[str, Any], *, exit_code: int = 0) -> None:
     """Emit machine-readable JSON or raise SystemExit for errors."""
     if ctx.json_output:
-        print(json.dumps(payload, indent=2, default=str))
+        print(dump_json_text(payload, indent=True, default=str))
     if exit_code != 0:
         raise SystemExit(exit_code)
 

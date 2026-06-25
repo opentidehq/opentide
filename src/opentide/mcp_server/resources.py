@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
+from opentide.core.io import dump_json_text
 from opentide.core.registry import OpenTide
 from opentide.mcp_server.catalog import ensure_initialised, get_object
 
 
 def _json_resource(payload: Any) -> str:
-    return json.dumps(payload, indent=2, default=str)
+    return dump_json_text(payload, indent=True, default=str)
 
 
 def resource_index() -> str:

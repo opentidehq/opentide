@@ -16,12 +16,7 @@ def test_cli_help_lists_commands(cli_runner, invoke_cli) -> None:
         "generate",
         "validate",
         "deploy",
-        "document",
-        "mutate",
-        "export",
-        "extract",
         "info",
-        "migrate",
     ):
         assert command in result.stdout
 

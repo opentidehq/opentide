@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from opentide.core.files import resolve_configurations, resolve_paths
-from opentide.core.root import get_data_root, get_repo_root
+from opentide.core.root import find_repo_root, get_data_root, get_repo_root
 from opentide.platforms.enabled import enabled_systems
 
 
@@ -47,3 +47,16 @@ def test_enabled_systems_reads_merged_config(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(repo))
     systems = enabled_systems()
     assert isinstance(systems, list)
+
+
+def test_find_repo_root_detects_git_directory(tmp_path: Path) -> None:
+    nested = tmp_path / "nested" / "project"
+    nested.mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+    assert find_repo_root(nested) == tmp_path
+
+
+def test_find_repo_root_falls_back_to_start_when_no_git(tmp_path: Path) -> None:
+    nested = tmp_path / "only" / "here"
+    nested.mkdir(parents=True)
+    assert find_repo_root(nested) == nested

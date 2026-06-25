@@ -8,7 +8,7 @@ import typer
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
-from opentide.cli.output import emit_success
+from opentide.cli.output import emit, emit_success
 from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
 from opentide.cli.services.setup.mcp import (
     McpSetupOptions,
@@ -16,6 +16,7 @@ from opentide.cli.services.setup.mcp import (
     run_mcp_setup,
 )
 from opentide.cli.services.setup.orchestrator import SetupOptions, run_interactive_setup, run_setup
+from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
 from opentide.cli.services.setup.repo import (
     RepoSetupOptions,
     run_interactive_repo_setup,
@@ -26,15 +27,15 @@ from opentide.cli.services.setup.skills import (
     run_interactive_skills_setup,
     run_skills_setup,
 )
+from opentide.cli.services.setup.skills_registry import discover_skills, show_skill
 from opentide.cli.services.setup.vscode import (
-    run_vscode_all,
     run_vscode_settings,
     run_vscode_snippets,
 )
 
 setup_app = typer.Typer(help="Repository and tooling setup")
-vscode_app = typer.Typer(help="VS Code configuration (deprecated)")
-setup_app.add_typer(vscode_app, name="vscode")
+skills_app = typer.Typer(help="Agent skills discovery and installation")
+setup_app.add_typer(skills_app, name="skills")
 
 
 def _resolve_setup_path(cli: CliContext, path: str | Path) -> Path:
@@ -60,13 +61,11 @@ def _should_run_repo(
     interactive: bool,
     has_repo_flags: bool,
     ci: CiPlatform | None,
-    mcp: list[McpHost],
-    skills: list[SkillTarget],
     vscode_setup: bool,
 ) -> bool:
     if interactive or has_repo_flags:
         return True
-    return yes and not any([ci is not None, mcp, skills, vscode_setup])
+    return yes and ci is None and not vscode_setup
 
 
 @setup_app.callback(invoke_without_command=True)
@@ -77,15 +76,15 @@ def setup_cmd(
     org: str | None = typer.Option(None, "--org"),
     description: str | None = typer.Option(None, "--description"),
     platform: list[DetectionPlatform] = typer.Option(
-        [], "--platform", help="Detection platforms (repeatable)"
+        [],
+        "--platform",
+        help="Detection platforms — runs setup platforms step (repeatable)",
     ),
     ci: CiPlatform | None = typer.Option(None, "--ci"),
     staging: bool = typer.Option(True, "--staging/--no-staging"),
     promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
     promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
     python_version: str = typer.Option("3.12", "--python-version"),
-    mcp: list[McpHost] = typer.Option([], "--mcp", help="MCP host targets (repeatable)"),
-    skills: list[SkillTarget] = typer.Option([], "--skills", help="Agent targets (repeatable)"),
     vscode_setup: bool = typer.Option(
         False, "--vscode-setup", help="Run deprecated VS Code settings + snippets"
     ),
@@ -98,17 +97,8 @@ def setup_cmd(
     cli = get_context(ctx)
     base = _resolve_setup_path(cli, path)
     has_repo = _has_repo_flags(name, org, description, platform)
-    only_ci_none = (
-        ci is CiPlatform.none
-        and not yes
-        and not has_repo
-        and not mcp
-        and not skills
-        and not vscode_setup
-    )
-    scripted = not only_ci_none and (
-        yes or has_repo or ci is not None or bool(mcp) or bool(skills) or vscode_setup
-    )
+    only_ci_none = ci is CiPlatform.none and not yes and not has_repo and not vscode_setup
+    scripted = not only_ci_none and (yes or has_repo or ci is not None or vscode_setup)
 
     if scripted:
         options = SetupOptions(
@@ -122,8 +112,6 @@ def setup_cmd(
             promotion=promotion,
             promotion_target=promotion_target,
             python_version=python_version,
-            mcp_hosts=list(mcp),
-            skill_targets=list(skills),
             vscode_setup=vscode_setup,
             yes=yes,
             run_repo=_should_run_repo(
@@ -131,13 +119,10 @@ def setup_cmd(
                 interactive=False,
                 has_repo_flags=has_repo,
                 ci=ci,
-                mcp=list(mcp),
-                skills=list(skills),
                 vscode_setup=vscode_setup,
             ),
             run_ci=ci is not None and ci is not CiPlatform.none,
-            run_mcp=bool(mcp),
-            run_skills=bool(skills),
+            run_platforms=bool(platform),
         )
         cli.apply_environment()
         result = run_setup(options)
@@ -177,28 +162,66 @@ def setup_repo_cmd(
     emit_success(cli, result)
 
 
+@setup_app.command("platforms")
+def setup_platforms_cmd(
+    ctx: typer.Context,
+    path: str = typer.Argument(".", help="Repository path"),
+    sentinel: bool = typer.Option(False, "--sentinel"),
+    splunk: bool = typer.Option(False, "--splunk"),
+    crowdstrike: bool = typer.Option(False, "--crowdstrike"),
+    defender_for_endpoint: bool = typer.Option(False, "--defender-for-endpoint"),
+    sentinel_one: bool = typer.Option(False, "--sentinel-one"),
+    carbon_black_cloud: bool = typer.Option(False, "--carbon-black-cloud"),
+    harfanglab: bool = typer.Option(False, "--harfanglab"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+) -> None:
+    """Create and enable platform configuration files under ``.opentide/configurations/platforms/``."""
+    cli = get_context(ctx)
+    base = _resolve_setup_path(cli, path)
+    platforms: list[DetectionPlatform] = []
+    if sentinel:
+        platforms.append(DetectionPlatform.sentinel)
+    if splunk:
+        platforms.append(DetectionPlatform.splunk)
+    if crowdstrike:
+        platforms.append(DetectionPlatform.crowdstrike)
+    if defender_for_endpoint:
+        platforms.append(DetectionPlatform.defender)
+    if sentinel_one:
+        platforms.append(DetectionPlatform.sentinel_one)
+    if carbon_black_cloud:
+        platforms.append(DetectionPlatform.carbon_black)
+    if harfanglab:
+        platforms.append(DetectionPlatform.harfanglab)
+    if yes and not platforms:
+        platforms = [DetectionPlatform.sentinel]
+    if not platforms:
+        raise typer.BadParameter("Choose at least one platform flag (e.g. --sentinel --splunk)")
+    cli.apply_environment()
+    emit_success(
+        cli,
+        run_platforms_setup(PlatformsSetupOptions(path=base, platforms=platforms, yes=yes)),
+    )
+
+
 @setup_app.command("ci")
 def setup_ci_cmd(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
-    ci: CiPlatform = typer.Option(CiPlatform.github, "--ci"),
-    platform: list[DetectionPlatform] = typer.Option(
-        [], "--platform", help="Detection platforms (repeatable)"
-    ),
+    ci_platform: CiPlatform = typer.Argument(..., help="github, gitlab, or azure"),
+    path: str = typer.Option(".", "--path", "-C", help="Repository path"),
     staging: bool = typer.Option(True, "--staging/--no-staging"),
     promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
     promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
     python_version: str = typer.Option("3.12", "--python-version"),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
-    """Generate CI/CD pipeline files."""
+    """Generate CI/CD pipeline files (platforms discovered from repo config)."""
     cli = get_context(ctx)
-    if ci is CiPlatform.none:
-        raise typer.BadParameter("Choose --ci github, gitlab, or azure")
+    if ci_platform is CiPlatform.none:
+        raise typer.BadParameter("Choose github, gitlab, or azure")
     options = CiSetupOptions(
         path=_resolve_setup_path(cli, path),
-        ci=ci,
-        platforms=platform,
+        ci=ci_platform,
         staging=staging,
         promotion=promotion,
         promotion_target=promotion_target,
@@ -244,20 +267,24 @@ def setup_mcp_cmd(
     emit_success(cli, result)
 
 
-@setup_app.command("skills")
-def setup_skills_cmd(
+@skills_app.callback(invoke_without_command=True)
+def setup_skills_install_cmd(
     ctx: typer.Context,
     path: str = typer.Argument(".", help="Repository path"),
     cursor: bool = typer.Option(False, "--cursor"),
     claude_code: bool = typer.Option(False, "--claude-code"),
     generic: bool = typer.Option(False, "--generic"),
     github_copilot: bool = typer.Option(False, "--github-copilot"),
+    install: list[str] = typer.Option([], "--install", help="Skill slugs to install (repeatable)"),
+    all_skills: bool = typer.Option(False, "--all", help="Install full skills catalogue"),
     name: str | None = typer.Option(None, "--name"),
     org: str | None = typer.Option(None, "--org"),
     description: str | None = typer.Option(None, "--description"),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
-    """Install detection engineering agent skills and entrypoints."""
+    """Install detection engineering agent skills from OpenTideHQ/skills."""
+    if ctx.invoked_subcommand is not None:
+        return
     cli = get_context(ctx)
     base = _resolve_setup_path(cli, path)
     targets: list[SkillTarget] = []
@@ -277,6 +304,8 @@ def setup_skills_cmd(
         options = SkillsSetupOptions(
             path=base,
             targets=targets,
+            skill_slugs=list(install),
+            install_all=all_skills,
             name=name,
             org=org,
             description=description,
@@ -289,48 +318,89 @@ def setup_skills_cmd(
     emit_success(cli, result)
 
 
-@vscode_app.command("settings")
-def setup_vscode_settings_cmd(
+@skills_app.command("discover")
+def setup_skills_discover_cmd(
     ctx: typer.Context,
     path: str = typer.Argument(".", help="Repository path"),
+    query: str | None = typer.Option(None, "--query", "-q"),
+    installed: bool = typer.Option(False, "--installed"),
+    refresh: bool = typer.Option(False, "--refresh"),
+) -> None:
+    """List skills from the OpenTideHQ/skills catalogue."""
+    cli = get_context(ctx)
+    base = _resolve_setup_path(cli, path)
+    payload = discover_skills(base, query=query, installed_only=installed, refresh=refresh)
+    if cli.json_output:
+        emit_success(cli, payload)
+        return
+    from rich.console import Console
+    from rich.table import Table
+
+    table = Table(title="OpenTide Skills")
+    table.add_column("Name")
+    table.add_column("Installed")
+    table.add_column("Description")
+    for item in payload["skills"]:
+        table.add_row(
+            str(item["name"]),
+            "yes" if item.get("installed") else "no",
+            str(item.get("description", ""))[:80],
+        )
+    Console().print(table)
+    Console().print(f"Source: {payload['source']} ({payload['count']} skills)")
+
+
+@skills_app.command("show")
+def setup_skills_show_cmd(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Skill slug or name"),
+    path: str = typer.Option(".", "--path", "-C"),
+    refresh: bool = typer.Option(False, "--refresh"),
+) -> None:
+    """Show details for one skill from the catalogue."""
+    cli = get_context(ctx)
+    base = _resolve_setup_path(cli, path)
+    payload = show_skill(base, name, refresh=refresh)
+    if cli.json_output:
+        if "error" in payload:
+            emit(cli, {"ok": False, **payload}, exit_code=1)
+        else:
+            emit_success(cli, payload)
+        return
+    from rich.console import Console
+
+    if "error" in payload:
+        Console().print(f"[red]{payload['error']}[/red]")
+        raise typer.Exit(1)
+    skill = payload["skill"]
+    Console().print(f"[bold]{skill['name']}[/bold] ({skill['slug']})")
+    Console().print(skill.get("description", ""))
+    Console().print(f"Installed: {'yes' if skill.get('installed') else 'no'}")
+    Console().print(payload.get("install_hint", ""))
+
+
+@setup_app.command("vscode")
+def setup_vscode_cmd(
+    ctx: typer.Context,
+    path: str = typer.Argument(".", help="Repository path"),
+    settings: bool = typer.Option(False, "--settings"),
+    snippets: bool = typer.Option(False, "--snippets"),
     no_merge: bool = typer.Option(False, "--no-merge"),
 ) -> None:
-    """Write yaml.schemas to .vscode/settings.json (deprecated)."""
+    """Write VS Code yaml.schemas and snippets (deprecated). Default: both."""
     cli = get_context(ctx)
     cli.apply_environment()
     target = _resolve_setup_path(cli, path)
-    emit_success(cli, run_vscode_settings(target, merge=not no_merge))
-
-
-@vscode_app.command("snippets")
-def setup_vscode_snippets_cmd(
-    ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
-) -> None:
-    """Generate VS Code snippets from templates (deprecated)."""
-    cli = get_context(ctx)
-    cli.apply_environment()
-    target = _resolve_setup_path(cli, path)
-    snippet_path = run_vscode_snippets(target)
-    emit_success(
-        cli,
-        {
-            "message": "VS Code snippets generated (deprecated)"
-            if snippet_path
-            else "VS Code snippets skipped (no templates in Schemas/Templates)",
-            "files": [snippet_path] if snippet_path else [],
-        },
-    )
-
-
-@vscode_app.command("all")
-def setup_vscode_all_cmd(
-    ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
-    no_merge: bool = typer.Option(False, "--no-merge"),
-) -> None:
-    """Write settings and snippets (deprecated)."""
-    cli = get_context(ctx)
-    cli.apply_environment()
-    target = _resolve_setup_path(cli, path)
-    emit_success(cli, run_vscode_all(target, merge=not no_merge))
+    run_settings_flag = settings or not snippets
+    run_snippets_flag = snippets or not settings
+    written: dict[str, object] = {"message": "VS Code setup complete (deprecated)", "files": []}
+    files: list[str] = []
+    if run_settings_flag:
+        result = run_vscode_settings(target, merge=not no_merge)
+        files.extend(result.get("files", []))  # type: ignore[arg-type]
+    if run_snippets_flag:
+        snippet_path = run_vscode_snippets(target)
+        if snippet_path:
+            files.append(snippet_path)
+    written["files"] = files
+    emit_success(cli, written)

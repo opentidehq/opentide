@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -19,14 +19,27 @@ for path in (SRC, ROOT):
 os.environ.setdefault("TERM_PROGRAM", "vscode")
 
 _repo_patcher: patch | None = None
+_original_find_repo_root = None
+
+
+def _test_find_repo_root(start: Path | None = None) -> Path:
+    """Pin default repo root for imports; honour env override and explicit *start*."""
+    if start is not None:
+        assert _original_find_repo_root is not None
+        return _original_find_repo_root(start)
+    override = os.environ.get("OPENTIDE_REPO_ROOT")
+    if override:
+        return Path(override)
+    return ROOT
 
 
 def pytest_configure(config: object) -> None:
-    """Pin git repo root before Engines modules resolve paths at import time."""
-    global _repo_patcher
-    mock_repo = MagicMock()
-    mock_repo.working_dir = str(ROOT)
-    _repo_patcher = patch("git.Repo", return_value=mock_repo)
+    """Pin repo root before Engines modules resolve paths at import time."""
+    global _repo_patcher, _original_find_repo_root
+    import opentide.core.root as root_mod
+
+    _original_find_repo_root = root_mod.find_repo_root
+    _repo_patcher = patch.object(root_mod, "find_repo_root", _test_find_repo_root)
     _repo_patcher.start()
 
 

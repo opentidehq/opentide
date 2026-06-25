@@ -15,17 +15,18 @@ OpenTide organises detection content into three core object families under `obje
 | Objective | `objects/objectives/` | `objective::1.0` | Detection objectives and signals |
 | Rule | `objects/rules/` | `rule::1.0` | MDR rules with platform configurations |
 
-Each YAML file includes:
+Each YAML file includes top-level `name` plus a `metadata` block:
 
 ```yaml
+name: "Example rule"
 metadata:
   schema: rule::1.0      # structural revision — selects Pydantic model
   version: 1.2.0         # business semver for the instance
   uuid: "<uuid>"
-  name: "Example rule"
+  tlp: clear
 ```
 
-See [Schema revision](./schema-revision.md) for the difference between `metadata.schema` and `metadata.version`.
+Normative field definitions: [Metadata spec](/docs/specifications/specs/metadata/), [Rule object spec](/docs/specifications/specs/objects/rule-1.0/).
 
 ## Chaining
 
@@ -72,10 +73,11 @@ After `opentide generate`:
 
 ## Documentation output
 
-`opentide document` renders markdown per object under configured docs folders (rules, objectives, threats) with Mermaid diagrams for relationships and ATT&CK coverage.
+`opentide generate docs` renders markdown per object under configured docs folders (rules, objectives, threats) with Mermaid diagrams for relationships and ATT&CK coverage.
 
 ## Further reading
 
-- [Schema revision](./schema-revision.md)
+- [Schema revision](./schema-revision.md) — `metadata.schema` vs `metadata.version`
 - [Platforms](./platforms.md)
 - [SDK models](../../sdk/models.md)
+- [Threat spec](/docs/specifications/specs/objects/threat-1.0/) · [Objective](/docs/specifications/specs/objects/objective-1.0/) · [Rule](/docs/specifications/specs/objects/rule-1.0/)

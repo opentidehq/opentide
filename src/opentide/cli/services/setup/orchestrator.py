@@ -19,9 +19,10 @@ from opentide.cli.services.setup.interactive import (
     skill_targets_from_keys,
 )
 from opentide.cli.services.setup.mcp import McpSetupOptions, run_mcp_setup
+from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
 from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
 from opentide.cli.services.setup.skills import SkillsSetupOptions, run_skills_setup
-from opentide.cli.services.setup.vscode import run_vscode_all
+from opentide.cli.services.setup.vscode import run_vscode_settings, run_vscode_snippets
 
 logger = structlog.get_logger("opentide.cli.services.setup.orchestrator")
 if TYPE_CHECKING:
@@ -42,14 +43,15 @@ class SetupOptions:
     promotion: bool = True
     promotion_target: str = "PRODUCTION"
     python_version: str = "3.12"
-    mcp_hosts: list[McpHost] = field(default_factory=list)
-    skill_targets: list[SkillTarget] = field(default_factory=list)
     vscode_setup: bool = False
     yes: bool = False
     run_repo: bool = True
     run_ci: bool = False
+    run_platforms: bool = False
     run_mcp: bool = False
+    mcp_hosts: list[McpHost] = field(default_factory=list)
     run_skills: bool = False
+    skill_targets: list[SkillTarget] = field(default_factory=list)
 
 
 def _repo_options(options: SetupOptions) -> RepoSetupOptions:
@@ -68,22 +70,10 @@ def _ci_options(options: SetupOptions) -> CiSetupOptions:
     return CiSetupOptions(
         path=options.path,
         ci=options.ci,
-        platforms=options.platforms,
         staging=options.staging,
         promotion=options.promotion,
         promotion_target=options.promotion_target,
         python_version=options.python_version,
-        yes=options.yes,
-    )
-
-
-def _skills_options(options: SetupOptions) -> SkillsSetupOptions:
-    return SkillsSetupOptions(
-        path=options.path,
-        targets=options.skill_targets,
-        name=options.name,
-        org=options.org,
-        description=options.description,
         yes=options.yes,
     )
 
@@ -94,9 +84,19 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
     steps = results["steps"]
     assert isinstance(steps, list)
 
+    run_platforms = options.run_platforms or (
+        bool(options.platforms) and options.run_ci and options.ci is not CiPlatform.none
+    )
+
     if options.run_repo:
         repo_result = run_repo_setup(_repo_options(options))
         steps.append({"step": "repo", **repo_result})
+
+    if run_platforms and options.platforms:
+        plat_result = run_platforms_setup(
+            PlatformsSetupOptions(path=options.path, platforms=options.platforms, yes=options.yes)
+        )
+        steps.append({"step": "platforms", **plat_result})
 
     if options.run_ci and options.ci is not None and options.ci is not CiPlatform.none:
         ci_result = run_ci_setup(_ci_options(options))
@@ -109,15 +109,34 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
         steps.append({"step": "mcp", **mcp_result})
 
     if options.run_skills and options.skill_targets:
-        skills_result = run_skills_setup(_skills_options(options))
+        skills_result = run_skills_setup(
+            SkillsSetupOptions(
+                path=options.path,
+                targets=options.skill_targets,
+                name=options.name,
+                org=options.org,
+                description=options.description,
+                yes=options.yes,
+            )
+        )
         steps.append({"step": "skills", **skills_result})
 
     if options.vscode_setup:
-        vscode_result = run_vscode_all(options.path.resolve())
+        target = options.path.resolve()
+        vscode_result: dict[str, object] = {
+            "message": "VS Code setup complete (deprecated)",
+            "files": [],
+        }
+        settings = run_vscode_settings(target)
+        files = list(settings.get("files", []))  # type: ignore[arg-type]
+        snippet = run_vscode_snippets(target)
+        if snippet:
+            files.append(snippet)
+        vscode_result["files"] = files
         steps.append({"step": "vscode", **vscode_result})
 
     results["message"] = "Setup complete"
-    if options.run_repo and isinstance(steps[0], dict):
+    if options.run_repo and steps and isinstance(steps[0], dict):
         results["platforms"] = steps[0].get("platforms", [])
     return results
 
@@ -146,6 +165,7 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
     )
     platform_input = Prompt.ask("Platforms", default="sentinel,defender")
     options.platforms = parse_platform_tokens(platform_input)
+    options.run_platforms = bool(options.platforms)
 
     ci_choice = Prompt.ask(
         "CI/CD platform", choices=["github", "gitlab", "azure", "none"], default="github"
@@ -157,19 +177,13 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
         options.promotion = Confirm.ask("Enable automatic status promotion?", default=True)
 
     if Confirm.ask("Configure OpenTide MCP?", default=True):
-        mcp_raw = Prompt.ask(
-            "MCP hosts (comma-separated)",
-            default="vscode",
-        )
+        mcp_raw = Prompt.ask("MCP hosts (comma-separated)", default="vscode")
         keys = parse_multi_select(mcp_raw, MCP_LABELS) or ["vscode"]
         options.mcp_hosts = mcp_hosts_from_keys(keys)
         options.run_mcp = True
 
     if Confirm.ask("Install agent skills?", default=True):
-        skills_raw = Prompt.ask(
-            "Agent environments (comma-separated)",
-            default="generic",
-        )
+        skills_raw = Prompt.ask("Agent environments (comma-separated)", default="generic")
         keys = parse_multi_select(skills_raw, SKILL_LABELS) or ["generic"]
         options.skill_targets = skill_targets_from_keys(keys)
         options.run_skills = True

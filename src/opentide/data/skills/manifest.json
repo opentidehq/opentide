@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "source": "OpenTideHQ/skills",
+  "ref": "main",
+  "skills": [
+    {
+      "name": "active-directory",
+      "slug": "active-directory",
+      "description": "Active Directory internals for detection engineering \u2014 Kerberos authentication flow (AS-REQ/TGT/TGS/service ticket), NTLM challenge-response mechanics, AD replication protocol (DRS/DCSync), trust types and delegation abuse (constrained/unconstrained/RBCD), Group Policy processing, AD Certificate Services attack paths (ESC1-ESC13), SPN mechanics and Kerberoasting, LDAP reconnaissance patterns, and the telemetry each operation produces. Use when authoring detections for credential access, lateral movement, privilege escalation, or persistence that involves Active Directory."
+    },
+    {
+      "name": "amazon-web-services",
+      "slug": "amazon-web-services",
+      "description": "AWS security telemetry and internals for detection engineering \u2014 CloudTrail event structure (management vs data events, read-only vs write), IAM mechanics (roles, policies, assume-role chains, SCPs, permission boundaries), GuardDuty finding types, S3 access logging, VPC Flow Logs, Lambda execution model, cross-account access patterns, and the mapping between AWS operations and detection telemetry. Use when authoring detections targeting AWS cloud infrastructure abuse, privilege escalation, data exfiltration, or persistence."
+    },
+    {
+      "name": "carbon-black-cloud",
+      "slug": "carbon-black-cloud",
+      "description": "VMware Carbon Black Cloud Enterprise EDR authoring guidance \u2014 distinguishes process search query syntax (CBC search language) from watchlist feeds, scheduled searches, and live response. Covers indicator vs IOC discipline, watchlist subscription model, alert override / interrupt, sensor capability boundaries, and entity identifier alignment for cross-platform correlation. Use for carbon_black_cloud-keyed configurations in OpenTide MDR objects."
+    },
+    {
+      "name": "crowdstrike-falcon",
+      "slug": "crowdstrike-falcon",
+      "description": "CrowdStrike Falcon detection engineering \u2014 distinguishes Falcon Insight (Event Search / EAM) from Falcon Next-Gen SIEM (LogScale / CQL), covers Falcon Query Language idioms, Custom IOA / IOC discipline, Correlation Rules (detection-as-code), Falcon Fusion workflow automation, sensor coverage gaps across Windows / macOS / Linux, SIEM ingestion patterns, real-time response guardrails, and entity-identifier alignment for cross-platform correlation. Distilled from CrowdStrike/falconpy SDK samples and API documentation. Use when authoring or reviewing CrowdStrike-keyed configurations in OpenTide MDR objects."
+    },
+    {
+      "name": "detection-engineering",
+      "slug": "detection-engineering",
+      "description": "Detection engineering lifecycle across the OpenTide TVM \u2192 DOM \u2192 MDR sequence and the operational practice of converting validated hunting queries into production detection rules. Encodes hunting-vs-detection trade-offs, hunt-to-rule conversion (7-step process with FP reduction, entity mapping, NRT compliance, response actions), platform pairing matrix (Microsoft KQL split, Splunk SPL, vendor consoles), maturity progression, PR scope discipline, and quality bars. Use when planning multi-phase detection work, sequencing object types in OpenTide content repos, reviewing PR scope, or operationalising hunts into MDR objects."
+    },
+    {
+      "name": "email-and-collaboration",
+      "slug": "email-and-collaboration",
+      "description": "M365 email and collaboration security telemetry for detection engineering \u2014 Exchange Online mail flow (transport rules, journaling, DLP), mailbox delegation and forwarding rules, OAuth app permissions on mailboxes, SharePoint/OneDrive external sharing, Teams guest access, Purview Unified Audit Log (UAL) event types, MailItemsAccessed semantics, and BEC/phishing detection patterns. Use when authoring detections targeting email-based attacks, business email compromise, data exfiltration via collaboration tools, or insider threat indicators."
+    },
+    {
+      "name": "entra-id",
+      "slug": "entra-id",
+      "description": "Microsoft Entra ID (formerly Azure AD) \u2014 identity platform internals, telemetry, and attack detection. Covers the full Entra ID surface including sign-in logs (interactive, non-interactive, service principal, managed identity), audit logs, Identity Protection risk signals, Conditional Access evaluation, directory role management, OAuth/consent grants, PRT/token mechanics, cross-tenant B2B/B2C, and workload identities. Includes SKU gating (P1 vs P2), ResultType code catalogue, identity attack patterns (password spray, AiTM, MFA fatigue, token theft, OAuth abuse, Golden SAML), and entity alignment for cross-platform correlation. Use for any work involving Entra ID telemetry, identity-focused detection, or directory security posture. Pair with the relevant platform skill for query mechanics (microsoft-sentinel, splunk-spl-processing, crowdstrike-falcon, etc.)."
+    },
+    {
+      "name": "google-cloud-platform",
+      "slug": "google-cloud-platform",
+      "description": "Google Cloud Platform security telemetry for detection engineering \u2014 Cloud Audit Logs structure (Admin Activity, Data Access, System Event, Policy Denied), IAM mechanics (roles, service accounts, workload identity federation, impersonation), GCP-specific attack patterns (service account key theft, cross-project access, storage exfiltration), VPC Flow Logs, and the mapping to Google SecOps (Chronicle) YARA-L and SIEM ingestion. Use when authoring detections targeting GCP infrastructure abuse."
+    },
+    {
+      "name": "harfanglab",
+      "slug": "harfanglab",
+      "description": "HarfangLab orb / EDR detection engineering \u2014 Sigma rule authoring in CoreTide's validated YAML schema (selections array, modifiers, conditional field validation), RHQL hunt query language, YARA file/memory scanning (CoreTide structure with imports, meta.context, auto-routing), full logsource category catalogue (39 Windows, 12 Linux, 6 macOS), 21 Sigma modifiers, maturity/confidence/action lifecycle, exclusion discipline, and SIEM ingestion patterns. Distilled from CoreTide HarfangLab sub-schema and SigmaHQ (3132 rules). Use for harfanglab-keyed configurations in OpenTide MDR objects."
+    },
+    {
+      "name": "identity-providers",
+      "slug": "identity-providers",
+      "description": "Cross-vendor identity mechanics for detection engineering \u2014 OAuth2/OIDC token flows (authorization code, client credentials, device code, ROPC), SAML assertion structure and forgery conditions (Golden SAML), Primary Refresh Token (PRT) mechanics, refresh token binding and lifetime, federation trust chains (ADFS-to-Entra, Okta-to-Entra), MFA ceremony flows (push, FIDO2, TOTP, phone), conditional access evaluation order, and session token lifecycle. Use when authoring detections that need to understand authentication protocol mechanics regardless of the specific identity platform."
+    },
+    {
+      "name": "kusto-query-language",
+      "slug": "kusto-query-language",
+      "description": "Platform-agnostic Kusto Query Language (KQL) patterns, optimisation rules, anti-patterns, and correlation techniques shared by Microsoft Sentinel and Microsoft Defender Advanced Hunting. Covers operator hierarchy, filter ordering, joins, summarise patterns, commenting discipline, false-positive engineering, IOC templates, and bug-class anti-patterns. Use when authoring or reviewing any KQL \u2014 pair with microsoft-sentinel or microsoft-defender-endpoint for table schemas, ingestion semantics, and platform-native rule constraints."
+    },
+    {
+      "name": "linux-internals",
+      "slug": "linux-internals",
+      "description": "Linux operating system internals for detection engineering \u2014 process model (fork/exec, /proc filesystem, namespaces), user/group/capability model, auditd subsystem and rule authoring, eBPF hook points and security tools (Falco, Tetragon), systemd service model, PAM authentication, SSH key management, common persistence locations, container isolation boundaries (namespaces, cgroups, seccomp), and the mapping between Linux operations and detection telemetry. Use when authoring detections targeting Linux endpoints, servers, or container workloads."
+    },
+    {
+      "name": "macos-internals",
+      "slug": "macos-internals",
+      "description": "macOS operating system internals for detection engineering \u2014 process model (XPC, launchd, posix_spawn), TCC (Transparency, Consent, and Control) framework, Gatekeeper and notarisation, code signing enforcement, System Extensions vs kernel extensions, Endpoint Security framework, persistence locations (LaunchAgents, LaunchDaemons, login items), Keychain access, and the mapping between macOS operations and EDR telemetry. Use when authoring detections targeting macOS endpoints."
+    },
+    {
+      "name": "microsoft-azure",
+      "slug": "microsoft-azure",
+      "description": "Azure cloud infrastructure security telemetry for detection engineering \u2014 Azure Activity Log and Resource Manager operations, Azure RBAC model (roles, scopes, PIM), managed identity mechanics, Key Vault access patterns, storage account security, virtual machine and compute operations, network security groups, Azure Policy and Defender for Cloud signals. Use when authoring detections targeting Azure resource abuse, privilege escalation, data exfiltration, or persistence at the infrastructure layer. For Entra ID identity detections, use `entra-id` instead."
+    },
+    {
+      "name": "microsoft-defender-endpoint",
+      "slug": "microsoft-defender-endpoint",
+      "description": "Microsoft Defender for Endpoint (MDE) Advanced Hunting authoring guidance \u2014 Device*/Email*/Identity* table schemas, Timestamp discipline, ProcessUniqueId vs PID for temporal joins, FileProfile() prevalence enrichment with null handling, AdditionalFields parsing, mandatory output columns for custom detection rules (Timestamp/DeviceId/ReportId), NRT single-table/no-comment constraints, retention boundaries, named-pipe and DGA detection patterns. Always pair with kusto-query-language for language-level optimisation. Use for configurations.defender_for_endpoint blocks in OpenTide MDR objects and Defender-first hypotheses."
+    },
+    {
+      "name": "microsoft-sentinel",
+      "slug": "microsoft-sentinel",
+      "description": "Microsoft Sentinel (Azure Log Analytics) hunting, analytic-rule, and detection authoring guidance \u2014 table-domain decision matrix, identity/cloud workload schemas (SigninLogs, AuditLogs, AzureActivity, OfficeActivity, CommonSecurityLog), TimeGenerated discipline, ResultType code patterns, NRT vs scheduled rule constraints, watchlists, ASIM caveats, materialise+arg_max+coalesce TI patterns, row_window_session sessionisation, BehaviorAnalytics/IdentityInfo enrichment. Always pair with kusto-query-language for language-level optimisation. Use for configurations.sentinel blocks in OpenTide MDR objects and Sentinel-first hypotheses."
+    },
+    {
+      "name": "mitre-attack",
+      "slug": "mitre-attack",
+      "description": "MITRE ATT&CK mapping discipline and technique reference for OpenTide TVM, DOM, and MDR objects \u2014 technique vs sub-technique selection, tactic assignment, multi-technique chaining, version pinning, revocation handling, coverage gap analysis, platform matrix awareness, and a locally searchable technique index. Use when populating threat.att&ck fields in TVMs, mapping DOM signals to techniques, tagging MDR rules, assessing detection coverage against the ATT&CK matrix, or looking up technique IDs and descriptions."
+    },
+    {
+      "name": "network-protocols",
+      "slug": "network-protocols",
+      "description": "Network protocol internals for detection engineering \u2014 DNS resolution chain and tunnelling indicators, TLS handshake and certificate anomalies, SMB authentication and lateral movement surface, HTTP/S C2 patterns (beaconing, jitter, domain fronting), LDAP bind and search patterns, RDP session mechanics, WinRM/PSRemoting transport, SMTP relay and header analysis, and the telemetry each protocol produces across detection platforms. Use when authoring detections that need to understand protocol-level behaviour to distinguish malicious from legitimate traffic."
+    },
+    {
+      "name": "okta-identity",
+      "slug": "okta-identity",
+      "description": "Okta identity platform detection guidance \u2014 System Log event schema (eventType taxonomy, actor/target/outcome structure), session token mechanics, authentication flows (FastPass, FIDO2, delegated auth), admin API abuse patterns, ThreatInsight signals, Okta-to-Entra federation trust chains, and Okta-specific attack patterns (cross-tenant impersonation, HAR file session theft, MFA factor reset abuse, inbound federation hijacking). Use for identity-focused detections targeting Okta telemetry ingested into SIEMs."
+    },
+    {
+      "name": "opentide-detection-objective",
+      "slug": "opentide-detection-objective",
+      "description": "Authors OpenTide Detection Objective (DOM) YAML -- priorities, compositions, ATT&CK cross-links, signal contracts with methodology/severity/effort/entities/data requirements, and traceability toward linked Threat Vectors. Covers signal decomposition principles, composition strategies, data availability modelling, entity taxonomy, and anti-patterns distilled from production corpora. Use whenever creating or refactoring files under Detection Objectives or structuring coverage intents before Detection Rules attach."
+    },
+    {
+      "name": "opentide-detection-rule",
+      "slug": "opentide-detection-rule",
+      "description": "Authors OpenTide Detection Rule (MDR) YAML -- descriptions, response metadata, playbook hooks, analytic references -- and wires platform-specific configurations (Sentinel KQL, SPL, Defender advanced hunting, Falcon queries, SentinelOne rules, CBC watchlists, HarfangLab content) keyed per CoreTide deployment manifests. Covers structured description patterns, response procedure authoring, per-platform configuration schemas (sentinel, splunk, defender_for_endpoint, carbon_black_cloud), entity/risk mapping, exclusion discipline, and anti-patterns distilled from production corpora. Use when producing deployable artefacts or updating existing rules under Detection Rules folders."
+    },
+    {
+      "name": "opentide-threat-vector",
+      "slug": "opentide-threat-vector",
+      "description": "Structures threat intelligence into evidence-backed behavioural atoms and authors OpenTide Threat Vector (TVM) YAML (tvm schemas), including metadata, terrain, chaining, ATT&CK, UUIDs. Covers Phase A intelligence structuring (source hygiene, atomisation, gap analysis) and Phase B schema-backed YAML authoring (field-level guidance, quality patterns, anti-patterns distilled from production corpora). Use whenever work involves converting CTI into TVMs, creating or refactoring files under Threat Vectors, or when the user provides reports, feeds, or narratives before detection objectives exist."
+    },
+    {
+      "name": "sentinelone-singularity",
+      "slug": "sentinelone-singularity",
+      "description": "SentinelOne Singularity detection engineering \u2014 explicit distinction from Microsoft Sentinel, surface map across STAR Custom Logic (sensor-side behavioural rules), Deep Visibility (DVQL), Singularity Data Lake / PowerQuery (SDL alert configuration, scheduled queries, geo/math functions), exclusions and policies, Storyline ID-based correlation, AI Engine policy modes (detect / protect), SIEM ingestion patterns, and entity alignment for cross-platform correlation. Distilled from Sentinel-One/ai-siem community detection library. Use for sentinel_one-keyed configurations in OpenTide MDR objects \u2014 never confuse with microsoft-sentinel."
+    },
+    {
+      "name": "splunk-spl-processing",
+      "slug": "splunk-spl-processing",
+      "description": ">-"
+    },
+    {
+      "name": "threat-hunting",
+      "slug": "threat-hunting",
+      "description": "Threat hunting hypothesis discipline using the ABLE framework (Actor, Behaviour, Location, Evidence), hypothesis quality scoring (confidence, relevance, priority, effort, scope), evidence-platform decision matrix, hypothesis archetypes (baseline anomaly, frequency-based, behavioural sequence), data-gap analysis, anti-pattern checks, and the bridge from validated hunts into OpenTide TVM/DOM/MDR objects. Use when generating hunt leads from intelligence, scoring hunting hypotheses, decomposing behaviour into observable telemetry, or feeding hunt outcomes back into Threat Vectors and Detection Objectives."
+    },
+    {
+      "name": "windows-event-logs",
+      "slug": "windows-event-logs",
+      "description": "Windows native event log authoring guidance for detection engineering \u2014 Security, Sysmon, PowerShell, and system event channels. Covers critical Event IDs (4624/4625/4688/4697/4720/5140/7045), Sysmon EID 1-29 with configuration discipline, PowerShell ScriptBlock/Module logging, EVTX channel routing, audit policy prerequisites, ETW fundamentals, and SIEM ingestion patterns. Use when authoring detections that depend on native Windows telemetry, configuring audit policies for detection coverage, or bridging Windows events to platform-specific query skills."
+    },
+    {
+      "name": "windows-internals",
+      "slug": "windows-internals",
+      "description": "Windows operating system internals relevant for detection engineering \u2014 process creation chain (CreateProcess to token assignment), access token and privilege model (SeDebugPrivilege, integrity levels, UAC), DLL loading order and hijacking surface, service control manager architecture, COM/DCOM/WMI execution model, named pipe IPC, ETW provider landscape, AMSI architecture, registry hive structure, and the mapping between OS-level operations and the telemetry they produce. Use when authoring detections that need to understand WHY a behaviour is suspicious at the OS level, not just WHAT tool produces it."
+    }
+  ]
+}
