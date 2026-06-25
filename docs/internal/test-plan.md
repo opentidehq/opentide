@@ -102,7 +102,7 @@ pip install -e ".[dev]"
 pytest --cov=opentide --cov-fail-under=80
 ruff check src/opentide
 uv run ty check src/opentide
-mkdocs build --strict
+scripts/validate-docs.sh
 ```
 
 Final tree: `tests/{test_core,test_models,test_platforms,test_validation,test_generation,test_cli,test_mcp}/`

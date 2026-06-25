@@ -47,10 +47,10 @@ repos:
         stages: [pre-push]
         files: ^(src/opentide/|tests/|pyproject\.toml|uv\.lock|\.github/workflows/(ci|codeql|stack-comment)\.yml|scripts/(ci-local|codeql-local|jj-|github_stack_comment)\.(sh|py)|\.pre-commit-config\.yaml|AGENTS\.md|\.agents/skills/jujutsu/)
 
-      - id: mkdocs-strict
-        name: mkdocs build --strict (docs only)
-        entry: bash -c 'uv sync --group docs --quiet && uv run mkdocs build --strict'
+      - id: validate-docs
+        name: validate docs structure (docs only)
+        entry: scripts/validate-docs.sh
         language: system
         pass_filenames: false
-        files: ^(docs/|mkdocs\.yml)
+        files: ^(docs/|scripts/validate-docs\.sh)
         stages: [pre-push]
