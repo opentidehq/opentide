@@ -1,9 +1,9 @@
 # OpenTide MCP — generic install notes
 
-Install the MCP server:
+Install OpenTide (includes the MCP server):
 
 ```bash
-pip install "opentide[mcp]"
+pip install opentide
 ```
 
 Copy `generic.json` (or the host-specific file) into your editor's MCP configuration location.

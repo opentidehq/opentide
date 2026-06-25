@@ -78,7 +78,7 @@ def attach_yaml_lines(
 ) -> list[ValidationIssue]:
     """Best-effort YAML line hints when ``ruamel.yaml`` is installed.
 
-    Install ``opentide[cli]`` or ``opentide[dev]`` for line-level validation hints;
+    Install ``opentide`` (or ``opentide[dev]`` for contributors) for line-level validation hints;
     without ruamel, issues are returned unchanged.
     """
     try:

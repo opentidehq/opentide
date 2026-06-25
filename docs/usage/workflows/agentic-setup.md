@@ -13,10 +13,10 @@ OpenTide ships first-class scaffolding for AI agents: an MCP server for catalogu
 
 ## MCP server
 
-Install the MCP extra and configure your editor:
+Install opentide and configure your editor:
 
 ```bash
-pip install "opentide[mcp,cli]>=0.1"
+pip install opentide
 opentide setup mcp --cursor --yes
 ```
 

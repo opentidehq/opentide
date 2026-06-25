@@ -1,1 +1,1 @@
-"""Platform plugin entry points for OpenTide."""
+"""Platform adapters for OpenTide — bundled entry points under opentide.platforms."""

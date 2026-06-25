@@ -10,7 +10,7 @@ Guides for detection engineers who install OpenTide, scaffold repositories, and 
 
 ## Getting started
 
-1. [Installation](./installation.md) — PyPI extras, environment variables, and editor prerequisites.
+1. [Installation](./installation.md) — PyPI install, environment variables, and editor prerequisites.
 2. [Quickstart](./quickstart.md) — validate, generate, and inspect a repo in five minutes.
 3. [Repository setup](./repository-setup.md) — what `opentide setup` scaffolds and how to configure platforms.
 

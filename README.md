@@ -7,7 +7,7 @@
 ## Install
 
 ```bash
-pip install "opentide[sentinel,cli,mcp]>=0.1"
+pip install opentide
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate
 ```

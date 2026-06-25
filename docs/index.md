@@ -19,7 +19,7 @@ OpenTide is the **DetectionOps engine** for detection-as-code repositories. Inst
 ## Quick start
 
 ```bash
-pip install "opentide[sentinel,cli,mcp]>=0.1"
+pip install opentide
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 
 opentide setup --yes --platform sentinel --ci github
@@ -36,12 +36,12 @@ See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 
 ## Package surfaces
 
-| Surface | Entry | Install extra |
-|---------|-------|---------------|
-| CLI | `opentide` | `cli` |
-| MCP server | `opentide-mcp` | `mcp` |
-| Python SDK | `from opentide import OpenTide` | base package |
-| Platform plugins | entry points under `opentide.platforms` | per-platform extras |
+| Surface | Entry | Ships with |
+|---------|-------|------------|
+| CLI | `opentide` | `pip install opentide` |
+| MCP server | `opentide-mcp` | `pip install opentide` |
+| Python SDK | `from opentide import OpenTide` | `pip install opentide` |
+| Platform adapters | entry points under `opentide.platforms` | `pip install opentide` |
 
 ## For doc site maintainers
 

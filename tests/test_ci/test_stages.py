@@ -16,7 +16,7 @@ from opentide.ci.stages import (
 
 def test_pip_install_includes_version() -> None:
     options = CiRenderOptions(ci="github", opentide_version="1.2.3")
-    assert pip_install(options) == 'pip install "opentide[cli]>=1.2.3"'
+    assert pip_install(options) == 'pip install "opentide>=1.2.3"'
 
 
 def test_query_platforms_filters_supported() -> None:

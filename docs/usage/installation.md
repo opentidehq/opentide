@@ -1,17 +1,17 @@
 ---
 title: Installation
-description: Install opentide from PyPI with the right extras for your platforms, CLI, and MCP server.
+description: Install opentide from PyPI — one package, CLI, MCP, and all platforms.
 ---
 
 <Callout type="info">
-Platform plugins are included with the base `opentide` package. **PyPI extras** only add the Typer CLI, MCP server, or optional Python SDK dependencies for Splunk and Carbon Black.
+One install gets the CLI, MCP server (`opentide-mcp`), all seven platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
 </Callout>
 
 ## Requirements
 
 - Python **3.10–3.14**
 - A detection content repository (or use `opentide setup repo` to scaffold one)
-- Platform credentials configured under `.opentide/configurations/` when deploying or running live queries
+- Platform credentials under `.opentide/configurations/` when deploying or running live queries
 
 ## PyPI install
 
@@ -19,30 +19,22 @@ Platform plugins are included with the base `opentide` package. **PyPI extras** 
 pip install opentide
 ```
 
-```bash
-pip install "opentide[sentinel,cli,mcp]>=0.1"
-```
+That installs the **DetectionOps engine**: the `opentide` CLI, `opentide-mcp` MCP server, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
-### Optional extras
+### Live deploy SDKs (when needed)
 
-| Extra | Provides |
-|-------|----------|
-| `cli` | `opentide` Typer command |
-| `mcp` | `opentide-mcp` MCP server |
-| `sentinel` | Microsoft Sentinel plugin (no extra Python deps) |
-| `splunk` | Splunk plugin + `splunk-sdk`, `pandas` |
-| `crowdstrike` | CrowdStrike Falcon plugin |
-| `carbon-black` | Carbon Black Cloud plugin + SDK |
+OpenTide ships platform logic in the wheel. **Third-party SDKs** are only required for live API deploy to some vendors — install them separately in the same environment if you use live deploy (not for validate, generate, or dry-run):
 
-Combine extras in one install string:
+| Live deploy target | Additional `pip install` |
+|--------------------|---------------------------|
+| Splunk | `splunk-sdk` `pandas` |
+| Carbon Black Cloud | `carbon-black-cloud-sdk` |
 
-```bash
-pip install "opentide[sentinel,splunk,cli,mcp]>=0.1"
-```
+Sentinel, Defender, CrowdStrike, SentinelOne, and HarfangLab use HTTP clients bundled with opentide.
 
-### Platform plugins (always in base package)
+### Platform identifiers
 
-These `--platform` values are registered at install time — **no separate PyPI extra**:
+These `--platform` values are built into the package — **no separate PyPI extra**:
 
 | `--platform` | Product |
 |--------------|---------|

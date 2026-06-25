@@ -1,30 +1,21 @@
 ---
 title: MCP installation
-description: Install the opentide-mcp server with the mcp PyPI extra and verify stdio transport.
+description: Install opentide-mcp — included with pip install opentide — and verify stdio transport.
 ---
 
 # MCP installation
 
 ## PyPI
 
+The MCP server ships with the base package:
+
 ```bash
-pip install "opentide[mcp]>=0.1"
+pip install opentide
 ```
-
-The `mcp` extra installs:
-
-- `mcp>=1.0`
-- `fastmcp>=2.0`
 
 Console script: **`opentide-mcp`** → `opentide.mcp_server.server:main`
 
-## Combined with CLI
-
-```bash
-pip install "opentide[mcp,cli,sentinel]>=0.1"
-```
-
-Platform extras are optional unless tools need live query execution or deployment against a platform API.
+Dependencies (`mcp`, `fastmcp`) are installed automatically. All seven platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
 
 ## Verify
 

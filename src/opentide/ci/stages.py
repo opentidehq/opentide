@@ -7,7 +7,7 @@ from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
 
 
 def pip_install(options: CiRenderOptions) -> str:
-    return f'pip install "opentide[cli]>={options.opentide_version}"'
+    return f'pip install "opentide>={options.opentide_version}"'
 
 
 def query_platforms(options: CiRenderOptions) -> list[str]:

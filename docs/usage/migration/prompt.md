@@ -23,7 +23,7 @@ Goals:
 Steps:
 1. Dependencies
    - Remove CoreTide submodule: git submodule deinit, git rm CoreTide, clean .git/modules.
-   - Add pyproject/requirements: pip install "opentide[sentinel,splunk,cli]>=0.1" (adjust extras per platform).
+   - Add pyproject/requirements: `opentide>=0.1` (one package — enable platforms with `opentide setup platforms`, not pip extras).
    - Set OPENTIDE_REPO_ROOT to the detection content root in CI and local dev.
 
 2. Replace imports
@@ -46,7 +46,7 @@ Steps:
 5. CI/CD
    - Remove submodules: recursive checkout.
    - Regenerate pipeline: opentide setup ci github (or gitlab/azure).
-   - Typical job order: pip install opentide[cli] → opentide validate → validate query per enabled platform → opentide generate → opentide generate docs --output docs → deploy stages.
+   - Typical job order: pip install opentide → opentide validate → validate query per enabled platform → opentide generate → opentide generate docs --output docs → deploy stages.
    - Do not reference opentide mutate, opentide migrate, or opentide document.
 
 6. Agents and IDE
@@ -55,7 +55,7 @@ Steps:
    - Remove references to vendored detection-ops skill packs.
 
 7. Verification checklist
-   - pip install succeeds with chosen extras
+   - pip install opentide succeeds
    - opentide validate --strict passes
    - opentide generate completes
    - CI YAML contains no CoreTide checkout or python Orchestration/*.py
