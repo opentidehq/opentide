@@ -57,6 +57,6 @@ src/opentide/
 ├── models/              # Pydantic models
 ├── validation/          # Pipeline and reports
 ├── documentation/       # Markdown rendering
-├── platforms/           # Platform plugins
+├── platforms/           # Platform adapters
 └── loading/             # YAML loaders
 ```

@@ -12,7 +12,7 @@ This walkthrough assumes you have a detection content repository with `objects/`
 ### Install and point at your repo
 
 ```bash
-pip install "opentide[sentinel,cli]>=0.1"
+pip install opentide
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 ```
 

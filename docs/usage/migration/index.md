@@ -25,7 +25,7 @@ python Orchestration/validate.py
 ### After (pip package)
 
 ```toml
-dependencies = ["opentide[sentinel,splunk,cli]>=0.1"]
+dependencies = ["opentide>=0.1"]
 ```
 
 ```python
@@ -48,19 +48,16 @@ Use `--platform`, not legacy `--system`.
 ### 1. Install
 
 ```bash
-pip install "opentide[sentinel,splunk,cli]>=0.1"
+pip install opentide
 ```
 
-| Extra | Adds |
-|-------|------|
-| `cli` | `opentide` command |
-| `mcp` | `opentide-mcp` server |
-| `sentinel` | Sentinel plugin (no extra deps) |
-| `splunk` | Splunk plugin + SDK dependencies |
-| `crowdstrike` | CrowdStrike plugin |
-| `carbon-black` | Carbon Black plugin + SDK |
+Enable platforms in the repo (not at pip install time):
 
-All seven `--platform` plugins ship with the base package — see [Installation](../installation.md).
+```bash
+opentide setup platforms --sentinel --splunk --yes
+```
+
+Optional MCP server setup: `opentide setup mcp --cursor --yes` (after `pip install opentide`).
 
 ### 2. Remove submodule
 
@@ -106,7 +103,7 @@ Query validation: **five platforms only** (no CrowdStrike/HarfangLab).
 Remove `submodules: recursive`. Add:
 
 ```yaml
-- run: pip install "opentide[sentinel,cli]>=0.1"
+- run: pip install opentide
 - run: opentide validate --strict
   env:
     OPENTIDE_REPO_ROOT: ${{ github.workspace }}
@@ -140,7 +137,7 @@ OpenTide no longer provides `opentide migrate`. Use the [CoreTide migration prom
 
 ## Verification checklist
 
-- [ ] `pip install opentide[<platforms>,cli]` succeeds
+- [ ] `pip install opentide` succeeds
 - [ ] `OPENTIDE_REPO_ROOT` set
 - [ ] `opentide validate --strict` passes
 - [ ] CI no longer uses submodule

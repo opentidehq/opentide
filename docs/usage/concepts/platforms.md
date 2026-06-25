@@ -5,7 +5,7 @@ description: Seven deployment platforms and five query validators — capability
 
 # Platforms
 
-OpenTide integrates with **seven detection platforms** through entry-point plugins registered at install time.
+OpenTide integrates with **seven detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
 
 ## Capability matrix
 
@@ -19,7 +19,7 @@ OpenTide integrates with **seven detection platforms** through entry-point plugi
 | CrowdStrike Falcon | `crowdstrike` | yes | no | — |
 | HarfangLab | `harfanglab` | yes | no | — |
 
-CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These differ from PyPI extra names (`splunk`, `carbon-black`) — see [Installation](../installation.md).
+CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers — not pip install extras.
 
 Normative capability flags: [Platforms spec](/docs/specifications/specs/platforms/).
 
@@ -49,17 +49,11 @@ opentide validate query --platform crowdstrike   # reports unsupported
 
 ## Platform configuration
 
-Per-platform settings live under `.opentide/configurations/platforms/`. Enable platforms in client config; the registry loads deployers and validators for enabled systems only.
+Per-platform settings live under `.opentide/configurations/platforms/`. Enable platforms with `opentide setup platforms` or the parent `opentide setup --platform` flags; the registry loads deployers and validators for enabled systems only.
 
-## PyPI extras
+## Live deploy dependencies
 
-Install platform extras to pull optional SDK dependencies:
-
-```bash
-pip install "opentide[sentinel,splunk,carbon-black]>=0.1"
-```
-
-See [Installation](../installation.md) for the full extras table.
+Validate, generate, and dry-run deploy work with `pip install opentide` alone. **Live** API deploy to Splunk or Carbon Black may require additional vendor SDKs — see [Installation](../installation.md).
 
 ## SDK access
 

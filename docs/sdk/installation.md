@@ -1,6 +1,6 @@
 ---
 title: SDK installation
-description: Install opentide as a library dependency with platform extras and PEP 561 typing support.
+description: Install opentide as a library dependency with PEP 561 typing support.
 ---
 
 # SDK installation
@@ -16,19 +16,11 @@ dependencies = ["opentide>=0.1"]
 pip install opentide
 ```
 
-Core dependencies: `pydantic>=2`, `pyyaml`, `structlog`, `rich`, `GitPython`, `ruamel.yaml`.
+Includes the CLI, MCP server (`opentide-mcp`), all platform adapters, and core dependencies (`pydantic`, `pyyaml`, `structlog`, `rich`, `dulwich`, `typer`, `mcp`, `fastmcp`, etc.).
 
-## Platform extras
+## Live deploy SDKs
 
-Add extras for optional platform SDKs (same as CLI):
-
-```toml
-dependencies = [
-  "opentide[sentinel,splunk]>=0.1",
-]
-```
-
-See [Usage: Installation](../usage/installation.md) for the full extras table.
+For programmatic live deploy to Splunk or Carbon Black, install vendor SDKs alongside opentide — see [Usage: Installation](../usage/installation.md).
 
 ## Environment
 
