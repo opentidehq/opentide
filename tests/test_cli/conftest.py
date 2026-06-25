@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import toml
 from typer.testing import CliRunner, Result
 
 from opentide.cli import app
+from opentide.core.io import load_toml
 
 ROOT = Path(__file__).resolve().parents[2]
 TIDE_CORPUS_ROOT = ROOT / "tests/fixtures/tide_corpus/current"
@@ -139,7 +139,7 @@ def invoke_cli(cli_runner: CliRunner, tide_corpus_repo: Path) -> Callable[..., R
 
 
 def load_corpus_manifest() -> dict[str, Any]:
-    return toml.loads(TIDE_CORPUS_MANIFEST.read_text(encoding="utf-8"))
+    return load_toml(TIDE_CORPUS_MANIFEST)
 
 
 def manifest_slices(*, status: str | None = None) -> list[dict[str, Any]]:

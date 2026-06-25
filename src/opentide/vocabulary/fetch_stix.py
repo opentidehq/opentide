@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
+
+from opentide.core.io import dump_json_text, parse_json
+from opentide.core.time import utc_now_iso
 
 GITHUB_API = "https://api.github.com/repos/mitre-attack/attack-stix-data/releases/latest"
 BUNDLE_FILES = {
@@ -19,7 +20,7 @@ BUNDLE_FILES = {
 def _http_get_json(url: str) -> Any:
     request = Request(url, headers={"Accept": "application/vnd.github+json"})
     with urlopen(request, timeout=120) as response:
-        return json.loads(response.read().decode("utf-8"))
+        return parse_json(response.read())
 
 
 def _http_download(url: str, dest: Path) -> None:
@@ -44,7 +45,7 @@ def fetch_latest_attack_stix(output_dir: Path) -> dict[str, Any]:
     manifest: dict[str, Any] = {
         "version": _normalise_release_version(tag),
         "tag": tag,
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": utc_now_iso(),
         "bundles": {},
     }
 
@@ -66,5 +67,5 @@ def fetch_latest_attack_stix(output_dir: Path) -> dict[str, Any]:
         }
 
     manifest_path = output_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    manifest_path.write_text(dump_json_text(manifest, indent=True), encoding="utf-8")
     return manifest

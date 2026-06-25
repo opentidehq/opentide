@@ -15,6 +15,21 @@ def test_normalise_release_version_strips_prefixes() -> None:
     assert fetch_stix._normalise_release_version("custom") == "custom"
 
 
+def test_http_get_json_uses_parse_json() -> None:
+    payload = b'{"ok": true}'
+    with patch("opentide.vocabulary.fetch_stix.urlopen") as urlopen:
+        urlopen.return_value.__enter__.return_value.read.return_value = payload
+        assert fetch_stix._http_get_json("https://example.com/data") == {"ok": True}
+
+
+def test_http_download_writes_bytes(tmp_path: Path) -> None:
+    with patch("opentide.vocabulary.fetch_stix.urlopen") as urlopen:
+        urlopen.return_value.__enter__.return_value.read.return_value = b"bundle"
+        dest = tmp_path / "enterprise-attack.json"
+        fetch_stix._http_download("https://example.com/bundle", dest)
+    assert dest.read_bytes() == b"bundle"
+
+
 def test_fetch_latest_attack_stix_writes_manifest(tmp_path: Path) -> None:
     release = {
         "tag_name": "ATT&CK-v14.0",

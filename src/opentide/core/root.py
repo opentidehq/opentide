@@ -7,7 +7,15 @@ from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
 
-import git
+
+def find_repo_root(start: Path | None = None) -> Path:
+    """Walk parents from *start* (or cwd) to locate a git work tree root."""
+    path = (start or Path.cwd()).resolve()
+    for candidate in (path, *path.parents):
+        git_path = candidate / ".git"
+        if git_path.is_dir() or git_path.is_file():
+            return candidate
+    return path
 
 
 @lru_cache(maxsize=1)
@@ -25,10 +33,7 @@ def get_repo_root() -> Path:
     override = os.environ.get("OPENTIDE_REPO_ROOT")
     if override:
         return Path(override)
-    try:
-        return Path(str(git.Repo(".", search_parent_directories=True).working_dir))
-    except Exception:
-        return Path.cwd()
+    return find_repo_root()
 
 
 def repository_root() -> Path:

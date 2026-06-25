@@ -26,6 +26,27 @@ def test_id_duplicate_in_scope_file_target() -> None:
     assert id_duplicate_in_scope(scope, row, original)
 
 
+def test_id_duplicate_in_scope_full_mode_always_reports() -> None:
+    scope = ValidationScope.full()
+    row = IdScanRow(Path("a.yaml"), "rule", "u1", "A")
+    original = IdScanRow(Path("b.yaml"), "rule", "u1", "B")
+    assert id_duplicate_in_scope(scope, row, original)
+
+
+def test_id_duplicate_in_scope_uuid_target() -> None:
+    scope = ValidationScope.narrow(uuids=frozenset({"u1"}))
+    row = IdScanRow(Path("a.yaml"), "rule", "u1", "A")
+    original = IdScanRow(Path("b.yaml"), "rule", "u1", "B")
+    assert id_duplicate_in_scope(scope, row, original)
+
+
+def test_id_duplicate_in_scope_empty_targets_reports() -> None:
+    scope = ValidationScope.narrow()
+    row = IdScanRow(Path("a.yaml"), "rule", "u1", "A")
+    original = IdScanRow(Path("b.yaml"), "rule", "u1", "B")
+    assert id_duplicate_in_scope(scope, row, original)
+
+
 def test_id_duplicate_unrelated_files_skipped() -> None:
     scope = ValidationScope.narrow(files=frozenset({"other.yaml"}))
     row = IdScanRow(Path("a.yaml"), "rule", "u1", "A")
@@ -41,3 +62,12 @@ def test_merge_id_duplicates_respects_scope() -> None:
     ]
     issues = merge_id_duplicates(scans, scope)
     assert len(issues) == 1
+
+
+def test_merge_id_duplicates_skips_out_of_scope_pairs() -> None:
+    scope = ValidationScope.narrow(files=frozenset({"other.yaml"}))
+    scans = [
+        IdScanRow(Path("a.yaml"), "rule", "dup", "A"),
+        IdScanRow(Path("b.yaml"), "rule", "dup", "B"),
+    ]
+    assert merge_id_duplicates(scans, scope) == []

@@ -76,7 +76,11 @@ def attach_yaml_lines(
     *,
     file_path: Path | None = None,
 ) -> list[ValidationIssue]:
-    """Best-effort line hints using ruamel when available."""
+    """Best-effort YAML line hints when ``ruamel.yaml`` is installed.
+
+    Install ``opentide[cli]`` or ``opentide[dev]`` for line-level validation hints;
+    without ruamel, issues are returned unchanged.
+    """
     try:
         from ruamel.yaml import YAML
     except ImportError:

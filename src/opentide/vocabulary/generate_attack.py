@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from opentide.core.files import resolve_paths
+from opentide.core.io import load_json
+from opentide.core.time import utc_now_iso
 from opentide.vocabulary.io import read_vocab_document, write_vocab_file
 from opentide.vocabulary.stix_attack import (
     load_stix_bundle,
@@ -35,7 +35,7 @@ def _stix_dir() -> Path:
 def _manifest() -> dict[str, Any]:
     manifest_path = _stix_dir() / "manifest.json"
     if manifest_path.is_file():
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
+        return load_json(manifest_path)
     return {}
 
 
@@ -58,7 +58,7 @@ def _load_template(field: str) -> dict[str, Any]:
 def _stamp_source(doc: dict[str, Any], manifest: dict[str, Any]) -> None:
     doc["source"] = "mitre-attack"
     doc["source_version"] = manifest.get("version", "unknown")
-    doc["source_fetched_at"] = manifest.get("fetched_at") or datetime.now(timezone.utc).isoformat()
+    doc["source_fetched_at"] = manifest.get("fetched_at") or utc_now_iso()
 
 
 def generate_attack_vocabs(*, fetch: bool = False) -> dict[str, int]:

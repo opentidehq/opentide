@@ -102,12 +102,17 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
     root.setLevel(log_level)
 
     if _config.json_output:
+        import orjson
+
+        def _orjson_serializer(obj: object, **_kwargs: object) -> str:
+            return orjson.dumps(obj).decode("utf-8")
+
         handler: logging.Handler = logging.StreamHandler(sys.stderr)
         formatter = structlog.stdlib.ProcessorFormatter(
             foreign_pre_chain=_shared_pre_chain(),
             processors=[
                 structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-                structlog.processors.JSONRenderer(),
+                structlog.processors.JSONRenderer(serializer=_orjson_serializer),
             ],
         )
     else:

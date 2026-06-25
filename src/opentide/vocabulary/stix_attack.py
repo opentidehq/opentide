@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
+
+from opentide.core.io import load_json
 
 MITRE_SOURCE = "mitre-attack"
 
@@ -26,13 +27,13 @@ def _mitre_url(obj: Mapping[str, Any]) -> str | None:
 
 def load_stix_bundle(path: Path) -> list[dict[str, Any]]:
     """Load STIX objects from a JSON bundle file."""
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = load_json(path)
+    if isinstance(data, list):
+        return data
     if data.get("type") == "bundle":
         return list(data.get("objects") or [])
     if isinstance(data, dict) and "objects" in data:
         return list(data["objects"])
-    if isinstance(data, list):
-        return data
     raise ValueError(f"Unrecognised STIX bundle format: {path}")
 
 
