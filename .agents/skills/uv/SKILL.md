@@ -12,7 +12,6 @@
 
 ```bash
 uv sync --group dev              # install dev deps (pytest, ruff, ty, pre-commit, …)
-uv sync --group docs             # mkdocs (docs/ changes only)
 uv run pytest tests/ -v
 uv run ruff check tests src/opentide
 uv run ty check src/opentide
@@ -29,7 +28,8 @@ CI (`.github/workflows/ci.yml`) runs `uv sync --group dev` on every job.
 | Group | Purpose |
 |-------|---------|
 | `dev` | Tests, ruff, ty, pre-commit, pandas fixtures |
-| `docs` | mkdocs-material for `docs/` |
+
+Docs build/deploy: [OpenTideHQ/website](https://github.com/OpenTideHQ/website). This repo validates with `scripts/validate-docs.sh`.
 
 Add runtime deps with `uv add <package>`. Add dev tools with `uv add --group dev <package>`.
 
@@ -47,7 +47,7 @@ uv run pre-commit install --install-hooks
 ```
 
 - **pre-commit:** whitespace, YAML/TOML, ruff, ruff-format, ty (staged)
-- **pre-push:** `scripts/ci-local.sh --full` when code/CI paths change; mkdocs `--strict` when `docs/` changes
+- **pre-push:** `scripts/ci-local.sh --full` when code/CI paths change; `scripts/validate-docs.sh` when `docs/` changes
 
 Hooks run on `jj git push` (colocated git backend).
 

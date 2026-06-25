@@ -21,7 +21,7 @@ opentide validate
 | [MCP](docs/mcp/index.md) | Agent server |
 | [SDK](docs/sdk/index.md) | Python API |
 
-Docs are structured for a future [Fumadocs](docs/fumadocs/) site. Local preview: `uv sync --group docs && uv run mkdocs serve`.
+Docs are structured for the [Fumadocs](docs/fumadocs/) site in [OpenTideHQ/website](https://github.com/OpenTideHQ/website). This repo validates content only: `scripts/validate-docs.sh`.
 
 Contributors: see [`AGENTS.md`](AGENTS.md) and [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md).
 

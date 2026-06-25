@@ -74,15 +74,14 @@ Agents working on documentation should read [`.agents/skills/docs-maintenance/SK
 
 ## Fumadocs site repository
 
-Scaffolding for the future website lives in [`fumadocs/`](./fumadocs/). Copy `source.config.ts.example` into the site repo and point `dir` at this `docs/` folder (git submodule, sparse checkout, or CI sync).
+**Build and deploy are owned by [OpenTideHQ/website](https://github.com/OpenTideHQ/website)** — not this repo. This repository only ships markdown content and structural validation.
 
-## Local preview (interim)
+Scaffolding notes: [`fumadocs/`](./fumadocs/). The website repo syncs `docs/` at build time.
 
-Until the Fumadocs site ships, preview with MkDocs Material:
+## Validation
 
 ```bash
-uv sync --group docs
-uv run mkdocs serve
+scripts/validate-docs.sh
 ```
 
-Nav is defined in [`mkdocs.yml`](../mkdocs.yml) at the repository root.
+CI runs the same check via [`.github/workflows/docs.yml`](../.github/workflows/docs.yml) on docs changes.

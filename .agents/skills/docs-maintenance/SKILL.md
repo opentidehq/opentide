@@ -95,15 +95,6 @@ Seven platforms deploy; five validate queries. CrowdStrike and HarfangLab: **`su
 
 ## Fumadocs site repo
 
-Scaffolding: [`docs/fumadocs/`](../../docs/fumadocs/). Content stays in this repository; the site repo consumes it via submodule or CI sync.
+**Build and deploy:** [OpenTideHQ/website](https://github.com/OpenTideHQ/website). This repo ships content under `docs/` only.
 
-## MkDocs interim preview
-
-Until Fumadocs ships:
-
-```bash
-uv sync --group docs
-uv run mkdocs serve
-```
-
-Update `mkdocs.yml` nav when adding top-level sections.
+Notes: [`docs/fumadocs/`](../../docs/fumadocs/).
