@@ -25,7 +25,7 @@ opentide generate                    # refresh schemas/templates if needed
 opentide validate --strict           # schema, UUID, uniqueness, cross-object refs
 opentide validate query --platform sentinel
 opentide deploy --platform sentinel --dry-run
-opentide document                    # refresh wiki pages
+opentide generate docs                 # refresh wiki pages
 ```
 
 ## Authoring checklist
@@ -40,7 +40,7 @@ opentide document                    # refresh wiki pages
 
 Rules carry a `status` field (e.g. `STAGING`, `PRODUCTION`). Deployment respects visibility and promotion configuration under `.opentide/configurations/`.
 
-Use `opentide mutate promote` for bulk status transitions (see [CLI mutate](../../cli/mutate.md)).
+Promotion runs inside `opentide deploy` before production deployment when configured — there is no separate `mutate promote` CLI command.
 
 ## Platform queries
 
@@ -59,8 +59,8 @@ CrowdStrike and HarfangLab **deploy** but return `supported: false` for query va
 ## Exports and coverage
 
 ```bash
-opentide export navigator      # ATT&CK Navigator layer
-opentide export revisions      # snapshot export
+opentide generate exports navigator
+opentide generate exports revisions
 opentide --json info --technique T1059 coverage
 ```
 
@@ -70,7 +70,7 @@ Configure MCP and skills so agents can search, validate, and dry-run deploy:
 
 ```bash
 opentide setup mcp --cursor --yes
-opentide setup skills --generic --yes
+opentide setup skills --yes --generic
 ```
 
 See [Agentic setup](./agentic-setup.md) and [MCP tools](../../mcp/tools.md).

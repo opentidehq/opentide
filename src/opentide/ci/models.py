@@ -51,20 +51,23 @@ class CiRenderOptions:
         )
 
     @classmethod
-    def from_repo_options(cls, repo: CiSetupOptions) -> CiRenderOptions:
-        return cls.from_init(
-            ci=repo.ci,
-            platforms=repo.platforms,
+    def from_repo_options(cls, repo: CiSetupOptions, platforms: list[str]) -> CiRenderOptions:
+        from opentide import __version__
+
+        return cls(
+            ci=repo.ci.value,
+            platforms=platforms,
             staging=repo.staging,
             promotion=repo.promotion,
             promotion_target=repo.promotion_target,
             python_version=repo.python_version,
+            opentide_version=__version__,
         )
 
     @classmethod
     def from_init_options(cls, init: CiSetupOptions) -> CiRenderOptions:
         """Backward-compatible alias for :meth:`from_repo_options`."""
-        return cls.from_repo_options(init)
+        return cls.from_repo_options(init, [])
 
     def output_paths(self) -> dict[str, str]:
         """Relative output paths keyed by platform value."""

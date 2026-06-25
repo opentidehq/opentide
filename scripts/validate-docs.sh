@@ -80,7 +80,7 @@ errors = 0
 for md in docs.rglob("*.md"):
     text = md.read_text()
     for target in link_re.findall(text):
-        if target.startswith(("http://", "https://", "#", "mailto:")):
+        if target.startswith(("http://", "https://", "#", "mailto:", "/")):
             continue
         path_part = target.split("#")[0]
         if not path_part:

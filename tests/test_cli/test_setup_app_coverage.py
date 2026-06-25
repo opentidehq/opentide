@@ -36,8 +36,6 @@ def test_has_repo_flags_and_should_run_repo() -> None:
             interactive=False,
             has_repo_flags=False,
             ci=None,
-            mcp=[],
-            skills=[],
             vscode_setup=False,
         )
         is True
@@ -48,8 +46,6 @@ def test_has_repo_flags_and_should_run_repo() -> None:
             interactive=False,
             has_repo_flags=False,
             ci=CiPlatform.github,
-            mcp=[],
-            skills=[],
             vscode_setup=False,
         )
         is False
@@ -82,7 +78,7 @@ def test_setup_yes_only_scaffolds_repo(tmp_path: Path) -> None:
     assert '"steps"' in result.stdout
 
 
-def test_setup_scripted_full_flags(tmp_path: Path) -> None:
+def test_setup_scripted_full_flags(tmp_path: Path, mock_skill_download) -> None:
     result = runner.invoke(
         app,
         [
@@ -95,10 +91,6 @@ def test_setup_scripted_full_flags(tmp_path: Path) -> None:
             "Full",
             "--ci",
             "github",
-            "--mcp",
-            "vscode",
-            "--skills",
-            "generic",
             "--vscode-setup",
             "--no-staging",
             "--no-promotion",
@@ -110,9 +102,21 @@ def test_setup_scripted_full_flags(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0
     assert (tmp_path / ".github" / "workflows" / "opentide.yml").is_file()
-    assert (tmp_path / ".vscode" / "mcp.json").is_file()
-    assert (tmp_path / "AGENTS.md").is_file()
     assert (tmp_path / ".vscode" / "settings.json").is_file()
+
+    mcp_result = runner.invoke(
+        app,
+        ["--json", "setup", "mcp", str(tmp_path), "--yes", "--vscode"],
+    )
+    assert mcp_result.exit_code == 0
+    assert (tmp_path / ".vscode" / "mcp.json").is_file()
+
+    skills_result = runner.invoke(
+        app,
+        ["--json", "setup", "skills", "--yes", "--generic", str(tmp_path)],
+    )
+    assert skills_result.exit_code == 0
+    assert (tmp_path / "AGENTS.md").is_file()
 
 
 def test_setup_repo_interactive(tmp_path: Path, monkeypatch) -> None:
@@ -129,15 +133,16 @@ def test_setup_repo_interactive(tmp_path: Path, monkeypatch) -> None:
 def test_setup_ci_platforms(tmp_path: Path) -> None:
     for ci in ("github", "gitlab", "azure"):
         target = tmp_path / ci
+        target.mkdir()
         result = runner.invoke(
             app,
-            ["--json", "setup", "ci", str(target), "--ci", ci, "--yes"],
+            ["--json", "setup", "ci", ci, "--path", str(target), "--yes"],
         )
         assert result.exit_code == 0
 
 
 def test_setup_ci_none_rejected() -> None:
-    result = runner.invoke(app, ["setup", "ci", "--ci", "none"])
+    result = runner.invoke(app, ["setup", "ci", "none"])
     assert result.exit_code != 0
 
 
@@ -177,14 +182,13 @@ def test_setup_mcp_interactive(tmp_path: Path, monkeypatch) -> None:
     assert "mcp-wizard" in result.stdout
 
 
-def test_setup_skills_all_targets(tmp_path: Path) -> None:
+def test_setup_skills_all_targets(tmp_path: Path, mock_skill_download) -> None:
     result = runner.invoke(
         app,
         [
             "--json",
             "setup",
             "skills",
-            str(tmp_path),
             "--yes",
             "--cursor",
             "--claude-code",
@@ -196,10 +200,11 @@ def test_setup_skills_all_targets(tmp_path: Path) -> None:
             "SecOps",
             "--description",
             "Detections",
+            str(tmp_path),
         ],
     )
     assert result.exit_code == 0
-    assert (tmp_path / ".cursor" / "skills" / "opentide-detection-ops" / "SKILL.md").is_file()
+    assert (tmp_path / ".cursor" / "skills" / "opentide-detection-rule" / "SKILL.md").is_file()
     assert (tmp_path / "CLAUDE.md").is_file()
     assert (tmp_path / "AGENTS.md").is_file()
     assert (tmp_path / ".github" / "copilot-instructions.md").is_file()
@@ -216,10 +221,10 @@ def test_setup_skills_interactive(tmp_path: Path, monkeypatch) -> None:
     assert "skills-wizard" in result.stdout
 
 
-def test_setup_vscode_all_command(tmp_path: Path) -> None:
+def test_setup_vscode_flags(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
-        ["--json", "setup", "vscode", "all", str(tmp_path), "--no-merge"],
+        ["--json", "setup", "vscode", str(tmp_path), "--settings", "--no-merge"],
     )
     assert result.exit_code == 0
     assert (tmp_path / ".vscode" / "settings.json").is_file()
@@ -233,10 +238,10 @@ def test_setup_vscode_snippets_success_message(tmp_path: Path, monkeypatch) -> N
     )
     result = runner.invoke(
         app,
-        ["--json", "setup", "vscode", "snippets", str(tmp_path)],
+        ["--json", "setup", "vscode", str(tmp_path), "--snippets"],
     )
     assert result.exit_code == 0
-    assert "generated" in result.stdout.lower()
+    assert "complete" in result.stdout.lower()
 
 
 def test_setup_subcommand_skips_default_callback(tmp_path: Path) -> None:

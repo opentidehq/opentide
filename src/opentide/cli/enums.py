@@ -37,7 +37,6 @@ class ExportTarget(str, Enum):
     navigator = "navigator"
     objects = "objects"
     revisions = "revisions"
-    playbook_map = "playbook-map"
 
 
 class ExtractImport(str, Enum):
@@ -82,7 +81,6 @@ class GeneratePhase(str, Enum):
     schemas = "schemas"
     snippets = "snippets"
     exports = "exports"
-    playbook_map = "playbook-map"
     docs = "docs"
 
 

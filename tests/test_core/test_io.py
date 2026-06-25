@@ -46,7 +46,10 @@ def test_load_toml_roundtrip(tmp_path: Path) -> None:
 
 
 def test_dump_toml_roundtrip() -> None:
-    assert dump_toml({"title": "MalAPI", "count": 3}) == 'title = "MalAPI"\ncount = 3\n'
+    from opentide.core.io import parse_toml
+
+    payload = {"title": "MalAPI", "count": 3}
+    assert parse_toml(dump_toml(payload)) == payload
 
 
 def test_write_text_creates_parent_dirs(tmp_path: Path) -> None:

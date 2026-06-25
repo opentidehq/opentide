@@ -3,7 +3,9 @@ title: Installation
 description: Install opentide from PyPI with the right extras for your platforms, CLI, and MCP server.
 ---
 
-# Installation
+<Callout type="info">
+Platform plugins are included with the base `opentide` package. **PyPI extras** only add the Typer CLI, MCP server, or optional Python SDK dependencies for Splunk and Carbon Black.
+</Callout>
 
 ## Requirements
 
@@ -17,23 +19,20 @@ description: Install opentide from PyPI with the right extras for your platforms
 pip install opentide
 ```
 
-Install extras for the surfaces you need:
-
 ```bash
 pip install "opentide[sentinel,cli,mcp]>=0.1"
 ```
+
+### Optional extras
 
 | Extra | Provides |
 |-------|----------|
 | `cli` | `opentide` Typer command |
 | `mcp` | `opentide-mcp` MCP server |
-| `sentinel` | Microsoft Sentinel platform plugin |
-| `defender` | Defender for Endpoint (via `defender_for_endpoint` entry point) |
-| `splunk` | Splunk + `splunk-sdk`, `pandas` |
+| `sentinel` | Microsoft Sentinel plugin (no extra Python deps) |
+| `splunk` | Splunk plugin + `splunk-sdk`, `pandas` |
 | `crowdstrike` | CrowdStrike Falcon plugin |
-| `carbon-black` | Carbon Black Cloud + SDK |
-| `sentinel-one` | SentinelOne plugin |
-| `harfanglab` | HarfangLab plugin |
+| `carbon-black` | Carbon Black Cloud plugin + SDK |
 
 Combine extras in one install string:
 
@@ -41,11 +40,29 @@ Combine extras in one install string:
 pip install "opentide[sentinel,splunk,cli,mcp]>=0.1"
 ```
 
-## Development install
+### Platform plugins (always in base package)
 
-Contributors to this repository:
+These `--platform` values are registered at install time — **no separate PyPI extra**:
+
+| `--platform` | Product |
+|--------------|---------|
+| `sentinel` | Microsoft Sentinel |
+| `defender_for_endpoint` | Defender for Endpoint |
+| `splunk` | Splunk Enterprise Security |
+| `sentinel_one` | SentinelOne |
+| `carbon_black_cloud` | Carbon Black Cloud |
+| `crowdstrike` | CrowdStrike Falcon |
+| `harfanglab` | HarfangLab |
+
+See [Platforms](./concepts/platforms.md) for deploy vs query-validation capabilities.
+
+## Contributing to OpenTide
+
+To work on the [opentide](https://github.com/OpenTideHQ/opentide) package itself:
 
 ```bash
+git clone https://github.com/OpenTideHQ/opentide.git
+cd opentide
 uv sync --group dev
 uv run pre-commit install --install-hooks
 ```
@@ -70,14 +87,17 @@ opentide validate
 
 ```bash
 opentide --json info | python -c "import sys,json; print(json.load(sys.stdin)['version'])"
-# or: pip show opentide | grep Version
 opentide --json info
 ```
 
 Expected: package version, rule/threat/objective counts, and per-platform capability flags.
 
+## Normative reference
+
+Workspace layout and configuration files are defined in the [Specifications](/docs/specifications/specs/workspace/) and [Configuration](/docs/specifications/specs/configuration/) specs.
+
 ## Next steps
 
 - [Quickstart](./quickstart.md)
 - [Repository setup](./repository-setup.md)
-- [CLI installation extras](../cli/index.md)
+- [Platforms](./concepts/platforms.md)

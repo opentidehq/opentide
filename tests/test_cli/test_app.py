@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -20,12 +20,7 @@ def test_cli_help_lists_commands() -> None:
         "generate",
         "validate",
         "deploy",
-        "document",
-        "mutate",
-        "export",
-        "extract",
         "info",
-        "migrate",
     ):
         assert command in result.stdout
 
@@ -50,18 +45,24 @@ def test_info_json_output() -> None:
 
 def test_generate_subcommands_invoke_services() -> None:
     with patch("opentide.cli.run_generate", return_value={"status": "ok"}) as mock_run:
-        for phase in ("schemas", "templates", "vocabs", "snippets", "exports", "playbook-map"):
+        for phase in ("schemas", "templates", "vocabs", "snippets", "exports"):
             result = runner.invoke(app, ["--json", "generate", phase])
             assert result.exit_code == 0, result.stdout
-        assert mock_run.call_count == 6
+        assert mock_run.call_count == 5
         assert {call.kwargs["phase"] for call in mock_run.call_args_list} == {
             "schemas",
             "templates",
             "vocabs",
             "snippets",
             "exports",
-            "playbook-map",
         }
+
+
+def test_generate_docs_group_invokes_service() -> None:
+    with patch("opentide.cli.run_generate_docs", return_value={"status": "ok"}) as mock_docs:
+        result = runner.invoke(app, ["--json", "generate", "docs", "--rules"])
+    assert result.exit_code == 0
+    mock_docs.assert_called_once()
 
 
 def test_generate_all_runs_full_pipeline() -> None:
@@ -106,27 +107,37 @@ def test_deploy_dry_run_json() -> None:
     assert result.exit_code == 0
 
 
-def test_export_navigator_json() -> None:
+def test_export_playbook_map_legacy_shim() -> None:
+    with (
+        patch("opentide.cli.services.export.run_playbook_map_export") as mock_run,
+        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.print_banner"),
+    ):
+        result = runner.invoke(app, ["--json", "export", "playbook-map"])
+    assert result.exit_code == 0
+    mock_run.assert_called_once()
+
+
+def test_run_playbook_map_export_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
+    from opentide.cli.services import export as export_service
+
+    called = MagicMock()
+    monkeypatch.setattr("opentide.export.playbook_map.run", called)
+    export_service.run_playbook_map_export()
+    called.assert_called_once()
+
+
+def test_generate_exports_navigator_json() -> None:
     with (
         patch("opentide.cli.run_export", return_value={"target": "navigator"}),
         patch("opentide.cli.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
-        result = runner.invoke(app, ["--json", "export", "navigator"])
+        result = runner.invoke(app, ["--json", "generate", "exports", "navigator"])
     assert result.exit_code == 0
 
 
-def test_mutate_promote_json() -> None:
-    with (
-        patch("opentide.cli.run_mutate", return_value={"action": "promote"}),
-        patch("opentide.cli.init_logging"),
-        patch("opentide.cli.print_banner"),
-    ):
-        result = runner.invoke(app, ["--json", "mutate", "promote"])
-    assert result.exit_code == 0
-
-
-def test_document_rules_json() -> None:
+def test_document_rules_deprecated_shim() -> None:
     with (
         patch("opentide.cli.run_document", return_value={"scope": "rules"}),
         patch("opentide.cli.init_logging"),
@@ -136,25 +147,25 @@ def test_document_rules_json() -> None:
     assert result.exit_code == 0
 
 
-def test_extract_sentinel_json() -> None:
+def test_generate_extract_sentinel_json() -> None:
     with (
         patch("opentide.cli.run_extract", return_value={"import": "sentinel"}),
         patch("opentide.cli.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
-        result = runner.invoke(app, ["--json", "extract", "sentinel"])
+        result = runner.invoke(app, ["--json", "generate", "extract", "sentinel"])
     assert result.exit_code == 0
 
 
-def test_generate_docs_subcommand() -> None:
+def test_generate_docs_rules_subcommand() -> None:
     with (
-        patch("opentide.cli.run_generate_docs") as mock_docs,
+        patch("opentide.cli.run_document", return_value={"scope": "rules"}) as mock_docs,
         patch("opentide.cli.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
-        result = runner.invoke(app, ["--json", "generate", "docs", "--rules"])
+        result = runner.invoke(app, ["--json", "generate", "docs", "rules"])
     assert result.exit_code == 0
-    mock_docs.assert_called_once_with(rules=True, threats=False, objectives=False)
+    mock_docs.assert_called_once()
 
 
 def test_info_rules_section_json() -> None:

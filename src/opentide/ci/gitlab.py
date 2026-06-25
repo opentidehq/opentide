@@ -28,7 +28,8 @@ def _base_before_script(options: CiRenderOptions) -> str:
 
 def render_gitlab(options: CiRenderOptions) -> str:
     stages = ["validate", "generate", "deploy", "document"]
-    if options.promotion:
+    promote_cmds = promotion_steps(options)
+    if promote_cmds:
         stages.insert(3, "promote")
 
     validate_script = _script_block(["opentide validate"])
@@ -90,7 +91,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
     )
 
     promote_job = ""
-    if options.promotion:
+    if promote_cmds:
         promote_job = textwrap.dedent(
             f"""\
             promote:

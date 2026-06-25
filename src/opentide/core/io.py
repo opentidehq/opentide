@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import orjson
-import tomli_w
 import yaml
 
 try:
@@ -19,7 +18,7 @@ except ImportError:
 if sys.version_info >= (3, 11):
     import tomllib
 else:
-    import tomli as tomllib
+    import tomli as tomllib  # ty: ignore[unresolved-import]
 
 
 def yaml_loader_name() -> str:
@@ -88,9 +87,41 @@ def load_toml(path: Path) -> dict[str, Any]:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
+def parse_toml(text: str) -> dict[str, Any]:
+    """Parse TOML text."""
+    return tomllib.loads(text)
+
+
+def format_toml_value(value: Any) -> str:
+    """Format a scalar or inline list value for TOML output."""
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        return str(value)
+    if isinstance(value, str):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        inner = ", ".join(format_toml_value(item) for item in value)
+        return f"[{inner}]"
+    raise TypeError(f"Unsupported TOML value type: {type(value).__name__}")
+
+
+def dump_toml_table(data: Mapping[str, Any]) -> str:
+    """Serialize a flat TOML table (no nested dict values)."""
+    lines = [f"{key} = {format_toml_value(value)}" for key, value in data.items()]
+    return "\n".join(lines)
+
+
 def dump_toml(data: Mapping[str, Any]) -> str:
-    """Serialize *data* as TOML text."""
-    return tomli_w.dumps(dict(data))
+    """Serialize *data* as a flat TOML document."""
+    if not data:
+        return ""
+    return dump_toml_table(data) + "\n"
 
 
 def dump_yaml(

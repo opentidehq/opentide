@@ -71,7 +71,8 @@ def render_azure(options: CiRenderOptions) -> str:
         )
 
     promote_stage = ""
-    if options.promotion:
+    promote_cmds = promotion_steps(options)
+    if promote_cmds:
         promote_stage = textwrap.dedent(
             f"""\
             - stage: Promote

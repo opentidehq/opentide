@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-import tomli_w
+from opentide.core.io import dump_toml_table, format_toml_value
 
 _AOT_ARRAY_FIELDS = frozenset({"entries", "keys"})
 
@@ -13,10 +13,7 @@ _AOT_ARRAY_FIELDS = frozenset({"entries", "keys"})
 def _dump_aot_table(section: str, item: Mapping[str, Any]) -> str:
     lines = [f"[[{section}]]"]
     for key, value in item.items():
-        if isinstance(value, list):
-            lines.append(f"{key} = {tomli_w.dumps({key: value}).split('=', 1)[1].strip()}")
-        else:
-            lines.append(tomli_w.dumps({key: value}).strip())
+        lines.append(f"{key} = {format_toml_value(value)}")
     return "\n".join(lines)
 
 
@@ -36,7 +33,7 @@ def dump_vocab_document(document: Mapping[str, Any]) -> str:
         else:
             header[key] = value
 
-    parts = [tomli_w.dumps(header).rstrip()]
+    parts = [dump_toml_table(header).rstrip()]
     for section, items in array_sections:
         for item in items:
             parts.append(_dump_aot_table(section, item))

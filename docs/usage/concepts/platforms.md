@@ -19,7 +19,9 @@ OpenTide integrates with **seven detection platforms** through entry-point plugi
 | CrowdStrike Falcon | `crowdstrike` | yes | no | — |
 | HarfangLab | `harfanglab` | yes | no | — |
 
-CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`). PyPI install extras remain `defender` and `carbon-black` — those are not `--platform` values.
+CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These differ from PyPI extra names (`splunk`, `carbon-black`) — see [Installation](../installation.md).
+
+Normative capability flags: [Platforms spec](/docs/specifications/specs/platforms/).
 
 ## Inspecting capabilities at runtime
 

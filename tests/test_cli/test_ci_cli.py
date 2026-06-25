@@ -10,17 +10,18 @@ runner = CliRunner()
 
 
 def test_setup_ci_github(tmp_path) -> None:
+    platforms_dir = tmp_path / ".opentide" / "configurations" / "platforms"
+    platforms_dir.mkdir(parents=True)
+    (platforms_dir / "sentinel.toml").write_text("[platform]\nenabled = true\n", encoding="utf-8")
     result = runner.invoke(
         app,
         [
             "--json",
             "setup",
             "ci",
-            str(tmp_path),
-            "--ci",
             "github",
-            "--platform",
-            "sentinel",
+            "--path",
+            str(tmp_path),
             "--no-promotion",
         ],
     )
@@ -30,9 +31,11 @@ def test_setup_ci_github(tmp_path) -> None:
     assert workflow.is_file()
     text = workflow.read_text(encoding="utf-8")
     assert "opentide validate" in text
+    assert "validate query" in text
+    assert "sentinel" in text
     assert "mutate promote" not in text
 
 
 def test_setup_ci_rejects_none_platform() -> None:
-    result = runner.invoke(app, ["setup", "ci", "--ci", "none"])
+    result = runner.invoke(app, ["setup", "ci", "none"])
     assert result.exit_code != 0

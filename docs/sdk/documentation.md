@@ -5,7 +5,7 @@ description: Render and publish markdown documentation for rules, objectives, an
 
 # Documentation API
 
-Programmatic access to the same renderer used by `opentide document`.
+Programmatic access to the same renderer used by `opentide generate docs`.
 
 ## Render single objects
 
@@ -55,7 +55,7 @@ Formatters live in `opentide.documentation.format.*`.
 
 Loaded from client `.opentide/configurations/documentation.toml` and bundled defaults.
 
-See [CLI document](../cli/document.md) for flavor-specific Mermaid behaviour.
+See [CLI generate](../cli/generate.md) for flavor-specific Mermaid behaviour.
 
 ## Public exports
 

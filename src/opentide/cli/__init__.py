@@ -20,7 +20,6 @@ from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate, run_generate_docs
 from opentide.cli.services.info import collect_info
-from opentide.cli.services.mutate import run_mutate
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
 from opentide.core.logging import LoggingConfig, init_logging, print_banner
@@ -33,6 +32,10 @@ app = typer.Typer(
     rich_markup_mode="rich",
     no_args_is_help=True,
 )
+
+
+def _deprecate(legacy: str, replacement: str) -> None:
+    logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
 
 
 @app.callback()
@@ -67,14 +70,20 @@ def main_callback(
 
 app.add_typer(setup_app, name="setup")
 
-
-generate_app = typer.Typer(help="Framework generation pipeline")
+generate_app = typer.Typer(help="Framework generation and documentation pipeline")
 app.add_typer(generate_app, name="generate")
+
+docs_app = typer.Typer(help="Generate markdown documentation for detection objects")
+exports_app = typer.Typer(help="Export catalogue artefacts")
+extract_app = typer.Typer(help="Import rules from external platforms")
+generate_app.add_typer(docs_app, name="docs")
+generate_app.add_typer(exports_app, name="exports")
+generate_app.add_typer(extract_app, name="extract")
 
 
 @generate_app.callback(invoke_without_command=True)
 def generate_all(ctx: typer.Context) -> None:
-    """Run full generation pipeline."""
+    """Run full generation pipeline (docs, exports, then framework internals)."""
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
@@ -106,30 +115,121 @@ def generate_snippets_cmd(ctx: typer.Context) -> None:
     emit_success(cli, run_generate(cli, phase="snippets"))
 
 
-@generate_app.command("exports")
-def generate_exports_cmd(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_generate(cli, phase="exports"))
-
-
-@generate_app.command("playbook-map")
-def generate_playbook_map_cmd(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_generate(cli, phase="playbook-map"))
-
-
-@generate_app.command("docs")
-def generate_docs_cmd(
+def _emit_docs(
     ctx: typer.Context,
+    *,
+    output: str | None,
+    flavor: str | None,
+    scope: DocumentScope | None = None,
+    rules: bool = False,
+    threats: bool = False,
+    objectives: bool = False,
+) -> None:
+    cli = get_context(ctx)
+    cli.apply_environment()
+    if scope is not None:
+        emit_success(cli, run_document(cli, scope=scope, output=output, flavor=flavor))
+        return
+    result = run_generate_docs(
+        output=output,
+        flavor=flavor,
+        rules=rules,
+        threats=threats,
+        objectives=objectives,
+    )
+    emit_success(cli, result)
+
+
+@docs_app.callback(invoke_without_command=True)
+def generate_docs_all(
+    ctx: typer.Context,
+    output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
     rules: bool = typer.Option(False, "--rules"),
     threats: bool = typer.Option(False, "--threats"),
     objectives: bool = typer.Option(False, "--objectives"),
 ) -> None:
-    """Generate documentation (optionally scoped with flags)."""
+    """Generate documentation (all scopes, then index)."""
+    if ctx.invoked_subcommand is not None:
+        return
+    _emit_docs(
+        ctx, output=output, flavor=flavor, rules=rules, threats=threats, objectives=objectives
+    )
+
+
+@docs_app.command("rules")
+def generate_docs_rules(
+    ctx: typer.Context,
+    output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
+) -> None:
+    _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.rules)
+
+
+@docs_app.command("objectives")
+def generate_docs_objectives(
+    ctx: typer.Context,
+    output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
+) -> None:
+    _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.objectives)
+
+
+@docs_app.command("threats")
+def generate_docs_threats(
+    ctx: typer.Context,
+    output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
+) -> None:
+    _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.threats)
+
+
+@docs_app.command("index")
+def generate_docs_index(
+    ctx: typer.Context,
+    output: str | None = typer.Option(None, "--output"),
+    flavor: str | None = typer.Option(None, "--flavor"),
+) -> None:
+    _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.index)
+
+
+@exports_app.callback(invoke_without_command=True)
+def generate_exports_all(ctx: typer.Context) -> None:
+    """Export navigator layer, objects dump, and revisions snapshot."""
+    if ctx.invoked_subcommand is not None:
+        return
     cli = get_context(ctx)
-    cli.apply_environment()
-    run_generate_docs(rules=rules, threats=threats, objectives=objectives)
-    emit_success(cli, {"message": "Documentation generation completed"})
+    emit_success(cli, run_generate(cli, phase="exports"))
+
+
+@exports_app.command("navigator")
+def generate_exports_navigator(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_export(cli, target=ExportTarget.navigator))
+
+
+@exports_app.command("objects")
+def generate_exports_objects(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_export(cli, target=ExportTarget.objects))
+
+
+@exports_app.command("revisions")
+def generate_exports_revisions(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_export(cli, target=ExportTarget.revisions))
+
+
+@extract_app.command("sentinel")
+def generate_extract_sentinel(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_extract(cli, import_target=ExtractImport.sentinel))
+
+
+@extract_app.command("defender")
+def generate_extract_defender(ctx: typer.Context) -> None:
+    cli = get_context(ctx)
+    emit_success(cli, run_extract(cli, import_target=ExtractImport.defender))
 
 
 validate_app = typer.Typer(help="Object and query validation")
@@ -182,8 +282,6 @@ def deploy_cmd(
     ctx: typer.Context,
     platform: DetectionPlatform | None = typer.Option(None, "--platform"),
     plan: str | None = typer.Option(None, "--plan", envvar="DEPLOYMENT_PLAN"),
-    tenant: str | None = typer.Option(None, "--tenant"),
-    file: str | None = typer.Option(None, "--file"),
     wide: bool = typer.Option(False, "--wide"),
     dry_run: bool = typer.Option(False, "--dry-run"),
     keep_deprecated: bool = typer.Option(False, "--keep-deprecated"),
@@ -200,10 +298,6 @@ def deploy_cmd(
         keep_deprecated=keep_deprecated,
         wide=wide,
     )
-    if tenant:
-        result["tenant"] = tenant
-    if file:
-        result["file"] = file
     emit_success(cli, result)
 
 
@@ -218,8 +312,14 @@ def deploy_metadata_cmd(
     emit_success(cli, {"message": "Metadata deployment signalled", "platform": platform.value})
 
 
-document_app = typer.Typer(help="Documentation generation")
+# --- Deprecated top-level commands (delegate to generate) ---
+
+document_app = typer.Typer(help="[deprecated] Use opentide generate docs", hidden=True)
+export_legacy_app = typer.Typer(help="[deprecated] Use opentide generate exports", hidden=True)
+extract_legacy_app = typer.Typer(help="[deprecated] Use opentide generate extract", hidden=True)
 app.add_typer(document_app, name="document")
+app.add_typer(export_legacy_app, name="export")
+app.add_typer(extract_legacy_app, name="extract")
 
 
 @document_app.callback(invoke_without_command=True)
@@ -228,9 +328,10 @@ def document_cmd(
     output: str | None = typer.Option(None, "--output"),
     flavor: str | None = typer.Option(None, "--flavor"),
 ) -> None:
-    """Generate documentation for rules, objectives, threats, and index."""
-    cli = get_context(ctx)
-    emit_success(cli, run_document(cli, output=output, flavor=flavor))
+    _deprecate("opentide document", "opentide generate docs")
+    if ctx.invoked_subcommand is not None:
+        return
+    _emit_docs(ctx, output=output, flavor=flavor)
 
 
 @document_app.command("rules")
@@ -239,8 +340,8 @@ def document_rules_cmd(
     output: str | None = typer.Option(None, "--output"),
     flavor: str | None = typer.Option(None, "--flavor"),
 ) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_document(cli, scope=DocumentScope.rules, output=output, flavor=flavor))
+    _deprecate("opentide document rules", "opentide generate docs rules")
+    _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.rules)
 
 
 @document_app.command("objectives")
@@ -249,10 +350,8 @@ def document_objectives_cmd(
     output: str | None = typer.Option(None, "--output"),
     flavor: str | None = typer.Option(None, "--flavor"),
 ) -> None:
-    cli = get_context(ctx)
-    emit_success(
-        cli, run_document(cli, scope=DocumentScope.objectives, output=output, flavor=flavor)
-    )
+    _deprecate("opentide document objectives", "opentide generate docs objectives")
+    _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.objectives)
 
 
 @document_app.command("threats")
@@ -261,8 +360,8 @@ def document_threats_cmd(
     output: str | None = typer.Option(None, "--output"),
     flavor: str | None = typer.Option(None, "--flavor"),
 ) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_document(cli, scope=DocumentScope.threats, output=output, flavor=flavor))
+    _deprecate("opentide document threats", "opentide generate docs threats")
+    _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.threats)
 
 
 @document_app.command("index")
@@ -271,86 +370,55 @@ def document_index_cmd(
     output: str | None = typer.Option(None, "--output"),
     flavor: str | None = typer.Option(None, "--flavor"),
 ) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_document(cli, scope=DocumentScope.index, output=output, flavor=flavor))
+    _deprecate("opentide document index", "opentide generate docs index")
+    _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.index)
 
 
-mutate_app = typer.Typer(help="Object mutations")
-app.add_typer(mutate_app, name="mutate")
-
-
-@mutate_app.command("promote")
-def mutate_promote(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_mutate(cli, action="promote"))
-
-
-@mutate_app.command("rename")
-def mutate_rename(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_mutate(cli, action="rename"))
-
-
-@mutate_app.command("references")
-def mutate_references(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_mutate(cli, action="references"))
-
-
-@mutate_app.command("security-domain")
-def mutate_security_domain(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_mutate(cli, action="security-domain"))
-
-
-@mutate_app.callback(invoke_without_command=True)
-def mutate_all(ctx: typer.Context) -> None:
-    if ctx.invoked_subcommand is not None:
-        return
-    cli = get_context(ctx)
-    emit_success(cli, run_mutate(cli))
-
-
-export_app = typer.Typer(help="Data exports")
-app.add_typer(export_app, name="export")
-
-
-@export_app.command("navigator")
+@export_legacy_app.command("navigator")
 def export_navigator(ctx: typer.Context) -> None:
+    _deprecate("opentide export navigator", "opentide generate exports navigator")
     cli = get_context(ctx)
     emit_success(cli, run_export(cli, target=ExportTarget.navigator))
 
 
-@export_app.command("objects")
+@export_legacy_app.command("objects")
 def export_objects(ctx: typer.Context) -> None:
+    _deprecate("opentide export objects", "opentide generate exports objects")
     cli = get_context(ctx)
     emit_success(cli, run_export(cli, target=ExportTarget.objects))
 
 
-@export_app.command("revisions")
+@export_legacy_app.command("revisions")
 def export_revisions(ctx: typer.Context) -> None:
+    _deprecate("opentide export revisions", "opentide generate exports revisions")
     cli = get_context(ctx)
     emit_success(cli, run_export(cli, target=ExportTarget.revisions))
 
 
-@export_app.command("playbook-map")
-def export_playbook_map(ctx: typer.Context) -> None:
+@export_legacy_app.command("playbook-map", hidden=True)
+def export_playbook_map_legacy(ctx: typer.Context) -> None:
+    _deprecate(
+        "opentide export playbook-map",
+        "removed from default generate — export module remains for one release",
+    )
     cli = get_context(ctx)
-    emit_success(cli, run_export(cli, target=ExportTarget.playbook_map))
+    cli.apply_environment()
+    from opentide.cli.services.export import run_playbook_map_export
+
+    run_playbook_map_export()
+    emit_success(cli, {"message": "Export playbook-map completed", "target": "playbook-map"})
 
 
-extract_app = typer.Typer(help="Platform rule imports")
-app.add_typer(extract_app, name="extract")
-
-
-@extract_app.command("sentinel")
+@extract_legacy_app.command("sentinel")
 def import_sentinel(ctx: typer.Context) -> None:
+    _deprecate("opentide extract sentinel", "opentide generate extract sentinel")
     cli = get_context(ctx)
     emit_success(cli, run_extract(cli, import_target=ExtractImport.sentinel))
 
 
-@extract_app.command("defender")
+@extract_legacy_app.command("defender")
 def import_defender(ctx: typer.Context) -> None:
+    _deprecate("opentide extract defender", "opentide generate extract defender")
     cli = get_context(ctx)
     emit_success(cli, run_extract(cli, import_target=ExtractImport.defender))
 
@@ -390,32 +458,6 @@ def info_cmd(
                 caps.append("validate")
             table.add_row(plat["name"], f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]")
         Console().print(table)
-
-
-@app.command("migrate")
-def migrate_cmd(
-    ctx: typer.Context,
-    check: bool = typer.Option(
-        False, "--check", help="Report legacy patterns without changing files"
-    ),
-    apply: bool = typer.Option(False, "--apply", help="Rewrite known legacy patterns in place"),
-) -> None:
-    """Scan or rewrite legacy submodule imports and Orchestration script calls."""
-    from opentide.cli.migrate import apply_migrations, scan_repo
-
-    cli = get_context(ctx)
-    cli.apply_environment()
-    repo = cli.repo
-    if apply:
-        changed = apply_migrations(repo)
-        emit_success(cli, {"message": "Migration applied", "changed_files": changed})
-        return
-    findings = scan_repo(repo)
-    if check or not apply:
-        emit_success(
-            cli,
-            {"message": "Migration scan complete", "findings": findings, "count": len(findings)},
-        )
 
 
 def main() -> None:

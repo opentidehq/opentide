@@ -40,8 +40,8 @@ def test_staging_and_promotion_steps() -> None:
     disabled = CiRenderOptions(ci="github", staging=False, promotion=False)
     assert staging_deploy_steps(enabled) == ["opentide deploy --plan STAGING"]
     assert staging_deploy_steps(disabled) == []
-    assert promotion_steps(enabled) == ["opentide mutate promote --target PRODUCTION"]
+    assert promotion_steps(enabled) == []
     assert promotion_steps(disabled) == []
     assert production_deploy_steps(enabled) == ["opentide deploy --plan PRODUCTION"]
-    assert document_steps(enabled) == ["opentide document --output docs"]
+    assert document_steps(enabled) == ["opentide generate docs --output docs"]
     assert document_steps(CiRenderOptions(ci="github", docs_enabled=False)) == []
