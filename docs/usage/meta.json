@@ -4,15 +4,18 @@
   "description": "Setup, workflows, and day-to-day detection engineering",
   "icon": "BookOpen",
   "pages": [
-    "index",
     "---Getting started---",
     "installation",
     "quickstart",
     "repository-setup",
     "---Workflows---",
-    "workflows",
+    "workflows/detection-as-code",
+    "workflows/ci-cd",
+    "workflows/agentic-setup",
     "---Concepts---",
-    "concepts",
+    "concepts/object-model",
+    "concepts/platforms",
+    "concepts/schema-revision",
     "---Migration---",
     "migration"
   ]
