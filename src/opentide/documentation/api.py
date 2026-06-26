@@ -26,6 +26,9 @@ def _context(*, output: str | None = None, flavor: str | None = None) -> Documen
         formatter=formatter_for(settings.flavor),
         folder_index_pages=settings.folder_index_pages,
         uuid_permalinks=settings.uuid_permalinks,
+        relations_direction=settings.relations_direction,
+        index_relation_counts=settings.index_relation_counts,
+        index_icons=settings.index_icons,
     )
 
 

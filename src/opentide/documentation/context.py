@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from opentide.documentation.format.protocol import MarkdownFormatter
 from opentide.documentation.types import DocumentFlavor
@@ -32,3 +33,6 @@ class DocumentationContext:
     formatter: MarkdownFormatter
     folder_index_pages: bool = True
     uuid_permalinks: bool = False
+    relations_direction: Literal["upstream", "downstream", "both"] = "both"
+    index_relation_counts: bool = True
+    index_icons: bool = False

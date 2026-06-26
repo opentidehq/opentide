@@ -1,0 +1,27 @@
+name: Azure Gather Victim Data
+criticality: High
+
+metadata:
+  uuid: 00000000-0000-4000-8101-000000000001
+  schema: threat::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+
+threat:
+  description: Adversary gathers victim cloud account inventory and telemetry context.
+  severity: High
+  impact: Credential Exposure
+  leverage: High
+  viability: Medium
+  terrain: Cloud
+  actors:
+    - G1028
+  killchain:
+    - Reconnaissance
+  att&ck:
+    - T1589
+  chaining:
+    - vector: 00000000-0000-4000-8101-000000000099
+      relation: preceeds

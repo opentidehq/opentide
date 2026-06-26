@@ -142,6 +142,7 @@ def _emit_docs(
     rules: bool = False,
     threats: bool = False,
     objectives: bool = False,
+    changed: bool = False,
 ) -> None:
     cli = get_context(ctx)
     cli.apply_environment()
@@ -154,6 +155,7 @@ def _emit_docs(
         rules=rules,
         threats=threats,
         objectives=objectives,
+        changed=changed,
     )
     emit_success(cli, result)
 
@@ -166,12 +168,19 @@ def generate_docs_all(
     rules: bool = typer.Option(False, "--rules"),
     threats: bool = typer.Option(False, "--threats"),
     objectives: bool = typer.Option(False, "--objectives"),
+    changed: bool = typer.Option(False, "--changed"),
 ) -> None:
     """Generate documentation (all scopes, then index)."""
     if ctx.invoked_subcommand is not None:
         return
     _emit_docs(
-        ctx, output=output, flavor=flavor, rules=rules, threats=threats, objectives=objectives
+        ctx,
+        output=output,
+        flavor=flavor,
+        rules=rules,
+        threats=threats,
+        objectives=objectives,
+        changed=changed,
     )
 
 

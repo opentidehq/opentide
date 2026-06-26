@@ -89,12 +89,22 @@ def test_objective_renderer_includes_relations(metadata: dict[str, Any]) -> None
             return_value="desc\n",
         ),
         patch(
+            "opentide.documentation.objects.objective.sections.render_objective_meta",
+            return_value="objective-meta\n",
+        ),
+        patch(
             "opentide.documentation.objects.objective.sections.render_signals",
             return_value="signals\n",
+        ),
+        patch(
+            "opentide.documentation.objects.objective.sections.render_signal_mdr_coverage",
+            return_value="signal-matrix\n",
         ),
     ):
         rendered = ObjectiveRenderer(ctx, catalog).render(objective)
     assert "Detect lateral movement" in rendered
+    assert "objective-meta" in rendered
+    assert "signal-matrix" in rendered
     assert "relations-diagram" in rendered
 
 

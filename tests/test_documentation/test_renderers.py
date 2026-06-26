@@ -22,4 +22,5 @@ def test_rule_renderer_uses_context_formatter(rule_payload: dict) -> None:
     md = RuleRenderer(ctx, catalog).render(rule)
     assert "# Test rule" in md
     assert "00000000-0000-4000-8000-000000000001" in md
+    assert "## Status" in md
     assert "T1059" in md

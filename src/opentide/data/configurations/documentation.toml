@@ -18,6 +18,13 @@ default = "generic"
 [gitlab]
 uuid_permalinks = true
 
+[diagrams]
+relations_direction = "both"
+
+[index]
+relation_counts = true
+icons = false
+
 [cve]
 default_db_link = "https://nvd.nist.gov/vuln/detail/"
 retrieve_details = true

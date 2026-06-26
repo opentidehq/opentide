@@ -15,33 +15,37 @@ def render_relations_diagram(
     *,
     uuid: str,
     name: str,
-    direction: Literal["upstream", "downstream", "both"] = "downstream",
+    direction: Literal["upstream", "downstream", "both"] = "both",
 ) -> str:
     """Render relations diagram for an object using catalog lookups."""
-    related = catalog.related_uuids(uuid, direction=direction)
+    related = catalog.related_entries(uuid, direction=direction)
     if not related:
         return ""
 
     rel_type = formatter.diagram_relations_type()
     if rel_type == "mindmap":
         branches: dict[str, list[str]] = {}
-        for ref in related:
-            label = catalog.resolve_name(ref)
+        for entry in related:
+            label = catalog.resolve_name(entry.uuid)
             branches.setdefault(label, [])
         return build_mindmap(formatter, name, branches)
 
     nodes = [Node(uuid, name)]
     edges: list[Edge] = []
-    for ref in related:
-        label = catalog.resolve_name(ref)
-        nodes.append(Node(ref, label))
-        edges.append(Edge(uuid, ref))
+    subgraphs: dict[str, list[str]] = {}
+    for entry in related:
+        label = catalog.resolve_name(entry.uuid)
+        nodes.append(Node(entry.uuid, label))
+        edges.append(Edge(uuid, entry.uuid, label=entry.relation))
+        if entry.relation:
+            subgraphs.setdefault(entry.relation.title(), []).append(entry.uuid)
     return build_flowchart(
         formatter,
         nodes=nodes,
         edges=edges,
         direction="TB",
         diagram_type=rel_type,
+        subgraphs=subgraphs if formatter.diagram_supports_subgraphs() else None,
     )
 
 
@@ -53,18 +57,18 @@ def render_chaining_diagram(
     name: str,
 ) -> str:
     """Render threat chaining flowchart (no subgraphs on Azure DevOps)."""
-    chain = catalog.chaining_uuids(uuid)
+    chain = catalog.chaining_entries(uuid)
     if not chain:
         return ""
 
     nodes = [Node(uuid, name)]
     edges: list[Edge] = []
     previous = uuid
-    for ref in chain:
-        label = catalog.resolve_name(ref)
-        nodes.append(Node(ref, label))
-        edges.append(Edge(previous, ref))
-        previous = ref
+    for entry in chain:
+        label = catalog.resolve_name(entry.uuid)
+        nodes.append(Node(entry.uuid, label))
+        edges.append(Edge(previous, entry.uuid, label=entry.relation))
+        previous = entry.uuid
     return build_flowchart(
         formatter,
         nodes=nodes,

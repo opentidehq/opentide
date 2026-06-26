@@ -36,6 +36,7 @@ The only supported entry point for markdown documentation.
 
 ```bash
 opentide generate docs
+opentide generate docs --changed
 opentide generate docs --rules --threats --objectives
 opentide generate docs --output docs --flavor github
 opentide generate docs rules
@@ -46,9 +47,61 @@ opentide generate docs index
 |------|---------|
 | `--output` | Docs output directory |
 | `--flavor` | Renderer flavour (for example `github`) |
+| `--changed` | Generate only docs for changed object YAMLs (from git merge-base diff + untracked files), expanded with upstream referrer closure, remove pages for deleted objects, then rewrite affected indexes |
 | `--rules` / `--threats` / `--objectives` | Limit scopes on the default callback |
 
+`--changed` is only supported on full `opentide generate docs` runs and cannot be combined with `--rules`, `--threats`, or `--objectives`.
+
 Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--output` and `--flavor` flags.
+
+### Rendered sections by object type
+
+`generate docs` now renders shared metadata and references sections for all object families, plus richer object-specific sections:
+
+- **Shared (rules, objectives, threats):**
+  - `Metadata` (UUID, schema, version, created/modified, TLP, optional author/contributors/organisation)
+  - `References` (`Public`, `Internal`, `Reports` buckets when present)
+- **Rules:**
+  - `Status`, `Techniques`, `Detection model`, `Response`, `Platform configurations`, `Relations`
+- **Objectives:**
+  - `Objective metadata`, `Signals`, `Signal MDR coverage`, `Relations`
+- **Threats:**
+  - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Relations`
+
+### Mermaid behavior and relations direction
+
+Threat chaining and object relations are rendered with Mermaid across flavors:
+
+- **Chaining diagram:** threat-to-threat flow that preserves relation labels between chain entries.
+- **Relations diagram:** related objects grouped by relation label where the flavor supports Mermaid subgraphs.
+
+`relations_direction` controls whether relations diagrams show upstream, downstream, or both sides:
+
+```toml
+[diagrams]
+relations_direction = "both" # upstream | downstream | both
+```
+
+Flavor notes:
+
+- `github` / `gitlab` / `generic` render flowchart-style relations and chaining.
+- `azure-devops` downgrades to `graph` syntax and disables subgraphs for compatibility.
+
+### Index enrichment options
+
+Folder and root index pages can be enriched from `.opentide/configurations/documentation.toml`:
+
+```toml
+folder_index_pages = true
+
+[index]
+relation_counts = true
+icons = false
+```
+
+- `folder_index_pages`: write `README.md` index pages for Rules/Objectives/Threats and root.
+- `index.relation_counts`: include relation counts (or object counts on root index table).
+- `index.icons`: prefix section/object labels with emoji markers.
 
 ## generate exports
 

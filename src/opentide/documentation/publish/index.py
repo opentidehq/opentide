@@ -7,6 +7,37 @@ from opentide.documentation.format.protocol import MarkdownFormatter
 from opentide.documentation.markdown.links import render_link, slugify, wiki_target
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentRecord, PublishTarget
+from opentide.generation import framework as fw
+
+_INDEX_ICON_BY_SCOPE = {
+    "rules": ":shield:",
+    "objectives": ":dart:",
+    "threats": ":warning:",
+}
+
+
+def _render_name(record: DocumentRecord, ctx: DocumentationContext) -> str:
+    if not ctx.index_icons:
+        return record.name
+    icon = _INDEX_ICON_BY_SCOPE.get(record.object_type.value, "")
+    return f"{icon} {record.name}".strip()
+
+
+def _relation_count(record: DocumentRecord, ctx: DocumentationContext) -> int:
+    relations = fw.relations_list(record.uuid, mode="flat", direction=ctx.relations_direction)
+    unique: set[str] = set()
+    for ids in relations.values():
+        unique.update(ids)
+    return len(unique)
+
+
+def _folder_order_entries(ctx: DocumentationContext, records: list[DocumentRecord]) -> list[str]:
+    entries = ["README"]
+    for record in records:
+        slug = record.uuid if ctx.uuid_permalinks else slugify(record.name)
+        filename = ctx.formatter.page_filename(slug, record.uuid)
+        entries.append(filename.removesuffix(".md"))
+    return entries
 
 
 def render_index(
@@ -23,13 +54,19 @@ def render_index(
         slug = record.uuid if ctx.uuid_permalinks else slugify(record.name)
         link = render_link(
             formatter,
-            record.name,
+            _render_name(record, ctx),
             wiki_target(folder=folder, slug=slug),
             wiki=ctx.flavor.value in {"gitlab", "azure_devops"},
         )
-        rows.append([link, record.uuid])
+        row = [link, record.uuid]
+        if ctx.index_relation_counts:
+            row.append(str(_relation_count(record, ctx)))
+        rows.append(row)
     toc = formatter.table_of_contents()
-    table = formatter.index_table(["Name", "UUID"], rows)
+    headers = ["Name", "UUID"]
+    if ctx.index_relation_counts:
+        headers.append("Related")
+    table = formatter.index_table(headers, rows)
     parts = [formatter.heading(1, title)]
     if toc:
         parts.append(toc)
@@ -64,11 +101,10 @@ def write_index(
             records=records,
             ctx=ctx,
         )
-        index_name = "README.md" if ctx.flavor.value in {"github", "generic"} else ".order"
-        if index_name == "README.md":
-            write_page(folder_path / index_name, content)
-        else:
-            write_page(folder_path / "README.md", content)
+        write_page(folder_path / "README.md", content)
+        if ctx.flavor.value == "gitlab":
+            order_entries = _folder_order_entries(ctx, records)
+            write_page(folder_path / ".order", "\n".join(order_entries) + "\n")
 
     root_rows: list[list[str]] = []
     for folder_name, title in (
@@ -76,9 +112,16 @@ def write_index(
         ("Objectives", "Detection Objectives"),
         ("Threats", "Threat Vectors"),
     ):
-        root_rows.append(
-            [render_link(ctx.formatter, title, f"{folder_name}/README.md"), folder_name]
-        )
+        section_title = title
+        if ctx.index_icons:
+            icon = _INDEX_ICON_BY_SCOPE.get(folder_name.lower(), "")
+            if icon:
+                section_title = f"{icon} {title}"
+        row = [render_link(ctx.formatter, section_title, f"{folder_name}/README.md"), folder_name]
+        if ctx.index_relation_counts:
+            count = len({"Rules": rules, "Objectives": objectives, "Threats": threats}[folder_name])
+            row.append(str(count))
+        root_rows.append(row)
     root = render_index(
         ctx.formatter,
         title="OpenTide Documentation",
@@ -87,7 +130,10 @@ def write_index(
         ctx=ctx,
     )
     if root_rows:
+        headers = ["Section", "Folder"]
+        if ctx.index_relation_counts:
+            headers.append("Objects")
         root = ctx.formatter.heading(1, "OpenTide Documentation") + ctx.formatter.index_table(
-            ["Section", "Folder"], root_rows
+            headers, root_rows
         )
     write_page(catalog_targets.output_root / "README.md", root)

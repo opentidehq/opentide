@@ -13,6 +13,7 @@ def test_github_page_filename_uses_slug() -> None:
 def test_gitlab_strike_and_index_table() -> None:
     formatter = GitLabFormatter()
     assert formatter.strike("x") == "[-x-]"
+    assert formatter.wiki_link("Rule", "Rules/my-rule.md") == "[Rule](Rules/my-rule)"
     table = formatter.index_table(["A"], [["B"]])
     assert "json:table" in table
     assert '"fields"' in table

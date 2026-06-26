@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, cast
 
 from opentide.core.registry import OpenTide
 from opentide.documentation.context import resolve_flavor
@@ -18,6 +19,9 @@ class DocumentationSettings:
     flavor: DocumentFlavor
     folder_index_pages: bool
     uuid_permalinks: bool
+    relations_direction: Literal["upstream", "downstream", "both"]
+    index_relation_counts: bool
+    index_icons: bool
 
 
 def load_settings(*, output: str | None = None, flavor: str | None = None) -> DocumentationSettings:
@@ -38,9 +42,19 @@ def load_settings(*, output: str | None = None, flavor: str | None = None) -> Do
     folder_index_pages = bool(docs_cfg.get("folder_index_pages", True))
     gitlab_cfg = docs_cfg.get("gitlab", {})
     uuid_permalinks = bool(gitlab_cfg.get("uuid_permalinks", False))
+    diagrams_cfg = docs_cfg.get("diagrams", {})
+    configured_direction = str(diagrams_cfg.get("relations_direction", "both"))
+    if configured_direction not in {"upstream", "downstream", "both"}:
+        configured_direction = "both"
+    index_cfg = docs_cfg.get("index", {})
+    index_relation_counts = bool(index_cfg.get("relation_counts", True))
+    index_icons = bool(index_cfg.get("icons", False))
     return DocumentationSettings(
         output_dir=target_dir,
         flavor=resolved,
         folder_index_pages=folder_index_pages,
         uuid_permalinks=uuid_permalinks,
+        relations_direction=cast(Literal["upstream", "downstream", "both"], configured_direction),
+        index_relation_counts=index_relation_counts,
+        index_icons=index_icons,
     )

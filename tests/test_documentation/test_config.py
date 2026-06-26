@@ -14,6 +14,8 @@ def test_load_settings_defaults() -> None:
         "flavor": {"default": "github"},
         "folder_index_pages": True,
         "gitlab": {"uuid_permalinks": True},
+        "diagrams": {"relations_direction": "both"},
+        "index": {"relation_counts": True, "icons": True},
     }
     global_cfg = {"paths": {"core": {"docs_folder": "docs"}}}
     with patch("opentide.documentation.config.OpenTide") as mock_ot:
@@ -24,6 +26,9 @@ def test_load_settings_defaults() -> None:
     assert settings.flavor is DocumentFlavor.github
     assert settings.folder_index_pages is True
     assert settings.uuid_permalinks is True
+    assert settings.relations_direction == "both"
+    assert settings.index_relation_counts is True
+    assert settings.index_icons is True
 
 
 def test_load_settings_cli_overrides() -> None:
@@ -33,3 +38,6 @@ def test_load_settings_cli_overrides() -> None:
         settings = load_settings(output="/tmp/out", flavor="gitlab")
     assert str(settings.output_dir) == "/tmp/out"
     assert settings.flavor is DocumentFlavor.gitlab
+    assert settings.relations_direction == "both"
+    assert settings.index_relation_counts is True
+    assert settings.index_icons is False
