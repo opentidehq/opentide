@@ -115,6 +115,13 @@ def generate_snippets_cmd(ctx: typer.Context) -> None:
     emit_success(cli, run_generate(cli, phase="snippets"))
 
 
+@generate_app.command("inflight")
+def generate_inflight_cmd(ctx: typer.Context) -> None:
+    """Write per-UUID preview shards under ``.opentide/inflight/`` for changed objects."""
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="inflight"))
+
+
 def _emit_docs(
     ctx: typer.Context,
     *,

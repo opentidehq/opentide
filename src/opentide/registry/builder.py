@@ -61,6 +61,9 @@ class RegistryBuilder:
         )
 
         objects_index, files_index = self._load_objects(paths, metaschemas)
+        from opentide.indexing.inflight import apply_inflight_overlay
+
+        apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
         index["objects"] = objects_index
         index["files"] = files_index
 
