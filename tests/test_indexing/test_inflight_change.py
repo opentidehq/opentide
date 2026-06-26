@@ -164,6 +164,7 @@ def test_inflight_change_json_override(
     assert meta["number"] == 1
     assert meta["title"] == "override"
     assert meta["source_path"] == "objects/threats/example.yaml"
+    assert "recorded_at" in meta
 
 
 def test_build_shard_payload_wraps_object_and_change(

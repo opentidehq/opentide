@@ -97,6 +97,7 @@ def collect_change_metadata(yaml_path: Path | str) -> dict[str, Any]:
             data = json.loads(override)
             if isinstance(data, dict):
                 data.setdefault("source_path", _normalise_source_path(yaml_path))
+                data.setdefault("recorded_at", datetime.now(timezone.utc).isoformat())
                 return data
         except json.JSONDecodeError:
             pass
