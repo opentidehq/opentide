@@ -366,7 +366,7 @@ _Vocabulary_ : `{source_vocab}`
                         continue
                     s_name = sd.get("name") or stage
                     s_icon = sd.get("icon") or ""
-                    s_desc = sd["description"].strip()
+                    s_desc = str(sd.get("description", "")).strip()
                     limit = VocabularyResolver.Vocabulary._STAGE_DESC_LIMIT
                     if len(s_desc) > limit:
                         s_desc = s_desc[:limit] + "..."
