@@ -84,7 +84,7 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
     )
     return textwrap.dedent(
         f"""\
-        update_inflight:
+        inflight_shards:
           stage: deploy
           image: python:{python_version}-slim
           rules:
@@ -146,8 +146,8 @@ def azure_inflight_job(*, python_version: str, opentide_version: str, default_br
     )
     return textwrap.dedent(
         f"""\
-              - job: update_inflight
-                displayName: Update inflight preview shards
+              - job: inflight_shards
+                displayName: Inflight preview shards
                 dependsOn: generate
                 condition: eq(variables['Build.Reason'], 'PullRequest')
                 steps:

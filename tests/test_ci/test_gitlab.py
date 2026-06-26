@@ -23,11 +23,11 @@ def test_render_gitlab_omits_promote_when_no_steps() -> None:
 def test_render_gitlab_inflight_job_when_enabled() -> None:
     options = CiRenderOptions(ci="gitlab", inflight=True)
     content = render_gitlab(options)
-    assert "update_inflight:" in content
+    assert "inflight_shards:" in content
     assert "opentide generate inflight" in content
 
 
 def test_render_gitlab_no_inflight_skips_inflight_job() -> None:
     options = CiRenderOptions(ci="gitlab", inflight=False)
     content = render_gitlab(options)
-    assert "update_inflight:" not in content
+    assert "inflight_shards:" not in content
