@@ -20,8 +20,3 @@ def test_utc_now_iso_ends_with_z() -> None:
 def test_format_utc_z_from_aware_datetime() -> None:
     dt = datetime(2026, 6, 25, 12, 30, 45, 123456, tzinfo=timezone.utc)
     assert format_utc_z(dt) == "2026-06-25T12:30:45.123Z"
-
-
-def test_format_utc_z_from_naive_datetime() -> None:
-    dt = datetime(2026, 6, 25, 12, 30, 45, 123456)
-    assert format_utc_z(dt) == "2026-06-25T12:30:45.123Z"

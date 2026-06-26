@@ -4,13 +4,14 @@ import os
 import ssl
 import urllib.request
 from abc import ABC
-from datetime import datetime
 from io import BytesIO
 from random import randrange
 from typing import TYPE_CHECKING, Literal
 from urllib.error import HTTPError
 
 import structlog
+
+from opentide.core.time import utc_now
 
 if TYPE_CHECKING:
     from splunklib.client import Service
@@ -166,7 +167,7 @@ def cron_to_timeframe(
         min_val = str(randrange(60))
         hour = str(randrange(24))
     if mode == "current":
-        now = datetime.now()
+        now = utc_now()
         min_val = now.strftime("%M")
         hour = now.strftime("%H")
     if mode == "custom":

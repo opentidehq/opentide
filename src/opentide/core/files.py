@@ -10,7 +10,11 @@ from typing import Literal, overload
 
 import yaml
 
-from opentide.core.io import load_toml
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
 from opentide.core.root import get_data_root, get_repo_root
 from opentide.registry.discovery import client_configurations_dir, discover_workspace
 
@@ -28,7 +32,7 @@ def _deep_merge(source: dict, merge: dict) -> None:
 
 
 def _load_toml(path: Path) -> dict:
-    return load_toml(path)
+    return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
 def _fetch_configs(configuration_path: Path) -> dict[str, dict]:
