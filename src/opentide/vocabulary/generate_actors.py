@@ -17,6 +17,10 @@ def _vocab_dir() -> Path:
     return Path(resolve_paths()["vocabularies"])
 
 
+def _resolve_vocab_dir(vocab_dir: Path | None) -> Path:
+    return vocab_dir if vocab_dir is not None else _vocab_dir()
+
+
 def _stix_dir() -> Path:
     return Path(resolve_paths()["resources"]) / "attack" / "stix"
 
@@ -45,10 +49,11 @@ def _load_misp_galaxy(url: str) -> list[dict[str, Any]]:
     return actors
 
 
-def generate_actors_vocabs(*, misp_url: str | None = None) -> int:
+def generate_actors_vocabs(*, misp_url: str | None = None, vocab_dir: Path | None = None) -> int:
     """Regenerate actors.vocab.toml from STIX groups and MISP."""
     stix_dir = _stix_dir()
-    doc = read_vocab_document(_vocab_dir() / "actors.vocab.toml")
+    output_dir = _resolve_vocab_dir(vocab_dir)
+    doc = read_vocab_document(output_dir / "actors.vocab.toml")
     doc["key"] = "id"
     doc.pop("model", None)
 
@@ -77,5 +82,5 @@ def generate_actors_vocabs(*, misp_url: str | None = None) -> int:
     doc["source"] = "mitre-attack+misp"
     doc["generated_at"] = utc_now_iso()
 
-    write_vocab_file(_vocab_dir() / "actors.vocab.toml", doc)
+    write_vocab_file(output_dir / "actors.vocab.toml", doc)
     return len(actors)

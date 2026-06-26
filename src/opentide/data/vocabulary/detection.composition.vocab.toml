@@ -1,5 +1,6 @@
 name = "Detection Composition Strategy"
 field = "detection.composition"
+version = "1.0"
 description = "Describes how signals should be used in conjuntion, or separated"
 key = "name"
 [[keys]]

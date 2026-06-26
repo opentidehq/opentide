@@ -1,5 +1,6 @@
 name = "Malicious Window API"
 field = "malapi"
+version = "1.0"
 description = "MalAPI.io maps Windows APIs to common techniques used by malware."
 reference = "https://malapi.io"
 

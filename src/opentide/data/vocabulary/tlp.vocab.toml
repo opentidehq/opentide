@@ -1,5 +1,6 @@
 name = "Traffic Light Protocol"
 field = "tlp"
+version = "1.0"
 description = "The Traffic Light Protocol - or short: TLP - was designed with the objective to create a favorable classification scheme for sharing sensitive information while keeping the control over its distribution at the same time."
 reference = "https://www.first.org/tlp/"
 

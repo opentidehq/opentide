@@ -1,5 +1,6 @@
 name = "Criticality"
 field = "criticality"
+version = "1.0"
 description = "Urgency of the model to be implemented into the next layer, based on the severity rating and after analysis of the current defense capabilities to balance urgency. Socio-economic and leadership requirements are also captured."
 reference = "https://www.cisa.gov/uscert/sites/default/files/publications/CISA_National_Cyber_Incident_Scoring_System_S508C.pdf"
 

@@ -1,5 +1,6 @@
 name = "MITRE ATT&CK Data Sources"
 field = "datasources"
+version = "1.0"
 description = "Data sources represent the various subjects/topics of information that can be collected by sensors/logs. Data sources also include data components, which identify specific properties/values of a data source relevant to detecting a given ATT&CK technique or sub-technique."
 reference = "https://attack.mitre.org/datasources/"
 

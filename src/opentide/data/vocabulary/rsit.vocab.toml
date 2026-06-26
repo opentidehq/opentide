@@ -1,5 +1,6 @@
 name = "Reference Security Incident Classification Taxonomy"
 field = "rsit"
+version = "1.0"
 description = "ENISA and TF-CSIRT created the ‘Reference Security Incident Taxonomy Working Group' (RSIT WG) with the aim of enabling the CSIRT community to reach a consensus on a security incident reference taxonomy."
 reference = "https://www.misp-project.org/taxonomies.html#_rsit"
 key = "name"

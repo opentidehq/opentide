@@ -1,5 +1,6 @@
 name = "MITRE ATT&CK Mitigations"
 field = "mitigations"
+version = "1.0"
 description = "Mitigations represent security concepts and classes of technologies that can be used to prevent a technique or sub-technique from being successfully executed."
 reference = "https://attack.mitre.org/mitigations/enterprise/"
 

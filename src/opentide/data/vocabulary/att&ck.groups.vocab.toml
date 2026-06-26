@@ -1,5 +1,6 @@
 name = "MITRE ATT&CK Groups"
 field = "att&ck.groups"
+version = "1.0"
 description = "Groups are activity clusters that are tracked by a common name in the security community.\nAnalysts track these clusters using various analytic methodologies and terms such as threat groups, activity groups, and threat actors. Some groups have multiple names associated with similar activities due to various organizations tracking similar activities by different names.\nOrganizations group definitions may partially overlap with groups designated by other organizations and may disagree on specific activity."
 reference = "https://attack.mitre.org/groups/"
 

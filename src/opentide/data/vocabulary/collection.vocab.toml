@@ -1,6 +1,7 @@
 description = "Logs collection point where  relevant data can be extracted and used to build detections."
 name = "Data Collection"
 field = "collection"
+version = "1.0"
 
 key = "name"
 [[keys]]

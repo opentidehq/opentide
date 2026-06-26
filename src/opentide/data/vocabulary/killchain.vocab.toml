@@ -1,5 +1,6 @@
 name = "Unified Kill Chain"
 field = "killchain"
+version = "1.0"
 description = "Cyber attacks are typically phased progressions towards strategic objectives. The Unified Kill Chains provides insight into the tactics that hackers employ to attain these objectives. This provides a solid basis to develop (or realign) defensive strategies to raise cyber resilience."
 reference = "https://www.unifiedkillchain.com/assets/The-Unified-Kill-Chain.pdf"
 

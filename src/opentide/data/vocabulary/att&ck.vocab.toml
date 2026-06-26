@@ -1,5 +1,6 @@
 name = "MITRE ATT&CK"
 field = "att&ck"
+version = "1.0"
 description = "Techniques represent 'how' an adversary achieves a tactical goal by performing an action."
 reference = "https://attack.mitre.org/techniques/enterprise/"
 

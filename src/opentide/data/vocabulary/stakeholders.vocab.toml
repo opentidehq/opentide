@@ -1,5 +1,6 @@
 name = "Stakeholders to Notify"
 field = "stakeholders"
+version = "1.0"
 description = "When an incident is analyzed and prioritized, the incident response team needs to notify the appropriate  individuals so that all who need to be involved will play their roles. Incident response policies should include provisions concerning incident reporting—at a minimum, what must be reported to whom and at what times (e.g., initial notification, regular status updates)."
 reference = "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf"
 key = "name"

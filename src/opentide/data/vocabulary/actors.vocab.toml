@@ -1,5 +1,6 @@
 name = "Threat Actors"
 field = "actors"
+version = "1.0"
 description = "Groups are activity clusters that are tracked by a common name in the\n  security community.\n\n  Analysts track these clusters using various analytic methodologies and terms such\n  as threat groups, activity groups, and threat actors. Some groups have multiple\n  names associated with similar activities due to various organizations tracking similar\n  activities by different names.\n\n  Organizations group definitions may partially overlap with groups designated by\n  other organizations and may disagree on specific activity."
 
 key = "id"

@@ -1,5 +1,6 @@
 name = "Vector Viability"
 field = "viability"
+version = "1.0"
 description = "Described with estimative language (likelyhood probability), describes how likely the analyst believes the vector to actually be realized on the organization infrastructure. Estimative language describes quality and credibility of underlying sources, data, and methodologies based Intelligence Community Directive 203 (ICD 203) and JP 2-0, Joint Intelligence."
 reference = "https://www.dni.gov/files/documents/ICD/ICD%20203%20Analytic%20Standards.pdf"
 

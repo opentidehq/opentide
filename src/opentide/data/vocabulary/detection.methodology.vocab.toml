@@ -1,5 +1,6 @@
 name = "Detection Methodology"
 field = "detection.methodology"
+version = "1.0"
 description = "Defines the technical approaches and methods used to implement detection logic.\nThese methodologies help categorize how a detection rule processes and analyzes data\nto identify potential security threats, suspicious activities, or malicious behavior.\n\nTracking which methodology is used helps understanding if there are any potential gaps in\nhow signals are implemented, understand which ones are not getting implemented due to\ncomplexity, or even track which types of approach results in the best outcomes.  \n"
 key = "name"
 [[keys]]

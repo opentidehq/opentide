@@ -1,5 +1,6 @@
 name = "Permissible Action Protocol"
 field = "pap"
+version = "1.0"
 description = "The Permissible Actions Protocol - or short: PAP - was designed to indicate how the received information can be used."
 reference = "https://www.misp-project.org/taxonomies.html#_pap"
 key = "name"

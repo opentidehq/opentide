@@ -1,5 +1,6 @@
 name = "Adversary Sophistication"
 field = "sophistication"
+version = "1.0"
 stix = "threat-actor-sophistication-ov"
 description = "Threat actor sophistication vocabulary captures the skill level of a threat actor. It ranges from \"none\", which describes a complete novice, to \"strategic\", which describes an attacker who is able to influence supply chains to introduce vulnerabilities."
 reference = "https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html#_8jm676xbnggg"

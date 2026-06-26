@@ -1,5 +1,6 @@
 name = "Strategic Objectives"
 field = "objectives"
+version = "1.0"
 stix = "attack-motivation-ov"
 description = "Purpose of presence in cyberspace by the adversary, and the end goal of the exploitation of targets."
 reference = "https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html#_dmb1khqsn650"
