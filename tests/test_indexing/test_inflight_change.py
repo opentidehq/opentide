@@ -166,7 +166,12 @@ def test_inflight_change_json_override(
     assert meta["source_path"] == "objects/threats/example.yaml"
 
 
-def test_build_shard_payload_wraps_object_and_change(yaml_path: Path) -> None:
+def test_build_shard_payload_wraps_object_and_change(
+    monkeypatch: pytest.MonkeyPatch, yaml_path: Path
+) -> None:
+    for key in ("TF_BUILD", "GITHUB_ACTIONS", "CI"):
+        monkeypatch.delenv(key, raising=False)
+
     body = {
         "name": "Example",
         "metadata": {"uuid": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "schema": "threat::1.0"},

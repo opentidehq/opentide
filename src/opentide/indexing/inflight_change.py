@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -112,7 +112,7 @@ def collect_change_metadata(yaml_path: Path | str) -> dict[str, Any]:
             meta = _azure_metadata(source_path)
         case _:
             meta = _local_metadata(source_path)
-    meta["recorded_at"] = datetime.now(UTC).isoformat()
+    meta["recorded_at"] = datetime.now(timezone.utc).isoformat()
     return meta
 
 
@@ -120,7 +120,7 @@ def build_shard_payload(object_body: dict[str, Any], yaml_path: Path | str) -> d
     """Wrap a parsed object document with inflight shard envelope and change metadata."""
     return {
         "schema": INFLIGHT_SHARD_SCHEMA,
-        "written_at": datetime.now(UTC).isoformat(),
+        "written_at": datetime.now(timezone.utc).isoformat(),
         "object": object_body,
         "change": collect_change_metadata(yaml_path),
     }
