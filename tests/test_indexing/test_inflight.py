@@ -19,7 +19,7 @@ def sample_threat_body() -> dict:
     return {
         "name": "Inflight example",
         "metadata": {
-            "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "uuid": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
             "schema": "threat::1.0",
             "version": 2,
             "tlp": "clear",
@@ -40,11 +40,11 @@ def test_write_and_load_inflight_shard(tmp_path: Path, sample_threat_body: dict)
     )
     assert result["count"] == 0  # empty yaml has no uuid
 
-    shard_path = inflight_dir / "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.json"
+    shard_path = inflight_dir / "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.json"
     shard_path.write_text(json.dumps(sample_threat_body), encoding="utf-8")
 
     shards = load_inflight_shards(inflight_dir)
-    assert "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" in shards
+    assert "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" in shards
 
 
 def test_apply_inflight_overlay_adds_and_updates(sample_threat_body: dict) -> None:
@@ -79,7 +79,7 @@ def test_write_inflight_from_yaml(tmp_path: Path, sample_threat_body: dict) -> N
     inflight_dir = tmp_path / ".opentide" / "inflight"
     result = write_inflight_shards([yaml_path], inflight_dir=inflight_dir)
     assert result["count"] == 1
-    shard = inflight_dir / "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.json"
+    shard = inflight_dir / "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.json"
     assert shard.is_file()
     loaded = json.loads(shard.read_text(encoding="utf-8"))
     assert loaded["name"] == "Inflight example"

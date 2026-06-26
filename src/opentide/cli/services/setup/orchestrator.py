@@ -40,6 +40,7 @@ class SetupOptions:
     platforms: list[DetectionPlatform] = field(default_factory=list)
     ci: CiPlatform | None = None
     staging: bool = True
+    inflight: bool = True
     promotion: bool = True
     promotion_target: str = "PRODUCTION"
     python_version: str = "3.12"
@@ -71,6 +72,7 @@ def _ci_options(options: SetupOptions) -> CiSetupOptions:
         path=options.path,
         ci=options.ci,
         staging=options.staging,
+        inflight=options.inflight,
         promotion=options.promotion,
         promotion_target=options.promotion_target,
         python_version=options.python_version,
@@ -174,6 +176,10 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
     options.run_ci = options.ci is not CiPlatform.none
     if options.run_ci:
         options.staging = Confirm.ask("Enable staging deployments on PRs?", default=True)
+        options.inflight = Confirm.ask(
+            "Update inflight preview shards on pull requests?",
+            default=True,
+        )
         options.promotion = Confirm.ask("Enable automatic status promotion?", default=True)
 
     if Confirm.ask("Configure OpenTide MCP?", default=True):

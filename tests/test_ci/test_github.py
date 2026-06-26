@@ -45,6 +45,20 @@ def test_render_github_no_staging_skips_staging_job() -> None:
     assert "needs: generate" in workflow
 
 
+def test_render_github_inflight_job_when_enabled() -> None:
+    options = CiRenderOptions(ci="github", inflight=True, default_branch="main")
+    workflow = render_github(options)
+    assert "inflight_shards:" in workflow
+    assert "opentide generate inflight" in workflow
+    assert 'git push origin "HEAD:main"' in workflow
+
+
+def test_render_github_no_inflight_skips_inflight_job() -> None:
+    options = CiRenderOptions(ci="github", inflight=False)
+    workflow = render_github(options)
+    assert "inflight_shards:" not in workflow
+
+
 def test_render_github_promotion_job_omitted_when_no_steps() -> None:
     options = CiRenderOptions(ci="github", promotion=True, promotion_target="PRODUCTION")
     workflow = render_github(options)

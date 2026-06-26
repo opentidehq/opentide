@@ -31,6 +31,8 @@ class CiSetupOptions:
     promotion_target: str = "PRODUCTION"
     python_version: str = "3.12"
     explorer_pages: bool = False
+    inflight: bool = True
+    default_branch: str = "main"
     yes: bool = False
 
 
