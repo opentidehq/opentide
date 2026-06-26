@@ -1,5 +1,6 @@
 name = "Signal Entities"
 field = "signal.entities"
+version = "1.0"
 description = "Represents the core objects or attributes that a detection signal focuses on.\nThese entities are critical for identifying, grouping, and analyzing security\nevents. They align with common detection methodologies and frameworks like\nMITRE ATT&CK.\n"
 key = "name"
 [[stages]]

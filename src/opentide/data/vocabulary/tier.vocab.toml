@@ -1,5 +1,6 @@
 name = "Threat Actor Tier"
 field = "tier"
+version = "1.0"
 stix = "threat-actor-type-ov"
 description = "Category within which the threat actor is best summarized, and which gives an indicator of the adversarial mindset motivated by strategic objectives."
 reference = "https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html#_tqbl8z36yoir"

@@ -79,6 +79,8 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 
 **Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON` in ci.yml). Cobertura upload to GitHub Code Quality is best-effort (`fail-on-error: false` if Code Quality is disabled). HTML report uploaded as artifact.
 
+**Vocabulary drift gate:** when bundled vocab TOML files or `data/specifications.lock.json` change, CI also runs `uv run python scripts/build/sync_vocabularies.py --check`.
+
 **CodeQL:** Python and Actions via [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) (`/language:python` + `/language:actions`); Code Quality may also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`.
 
 **Stack comments:** [`.github/workflows/stack-comment.yml`](.github/workflows/stack-comment.yml) posts merge order **only** on stacked PRs (non-trunk base or child PR exists). Standalone PRs to `development` are skipped.

@@ -138,3 +138,38 @@ def test_generate_attack_vocabs_with_fetch_flag(
 
     assert counts["att&ck"] == 1
     assert counts["datasources"] == 1
+
+
+def test_generate_attack_vocabs_uses_explicit_vocab_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stix_dir = tmp_path / "attack" / "stix"
+    output_dir = tmp_path / "specifications" / "vocabularies"
+    stix_dir.mkdir(parents=True)
+    output_dir.mkdir(parents=True)
+    bundle = {"type": "bundle", "objects": []}
+    (stix_dir / "enterprise-attack.json").write_text(json.dumps(bundle), encoding="utf-8")
+    for field in ("att&ck", "att&ck.groups", "mitigations", "datasources"):
+        (output_dir / f"{field}.vocab.toml").write_text(
+            f'name = "{field}"\nfield = "{field}"\nkeys = []\n',
+            encoding="utf-8",
+        )
+
+    written_paths: list[Path] = []
+
+    monkeypatch.setattr(generate_attack, "_stix_dir", lambda: stix_dir)
+    monkeypatch.setattr(generate_attack, "merge_technique_bundles", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "parse_groups", lambda _b, prefix="": [])
+    monkeypatch.setattr(generate_attack, "parse_mitigations", lambda _b, prefix="": [])
+    monkeypatch.setattr(generate_attack, "parse_datasources", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
+    monkeypatch.setattr(
+        generate_attack,
+        "write_vocab_file",
+        lambda path, _doc: written_paths.append(path),
+    )
+
+    generate_attack.generate_attack_vocabs(vocab_dir=output_dir)
+
+    assert written_paths
+    assert all(path.parent == output_dir for path in written_paths)

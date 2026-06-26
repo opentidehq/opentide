@@ -1,5 +1,6 @@
 name = "Detection Maturity Level (DML-8)"
 field = "maturity"
+version = "1.0"
 description = "The Detection Maturity Level (DML) model is a capability maturity model for referencing ones maturity in detecting cyber attacks. It’s designed for organizations who perform intel-driven detection and response and who put an emphasis on having a mature detection program."
 reference = "http://ryanstillions.blogspot.com/2014/04/the-dml-model_21.html"
 

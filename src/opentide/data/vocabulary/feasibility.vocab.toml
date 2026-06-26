@@ -1,5 +1,6 @@
 name = "Difficulty to Detect"
 field = "feasibility"
+version = "1.0"
 description = "How possible it is to implement the detection objectives, according to data availability, available tooling and sophistication"
 
 key = "name"

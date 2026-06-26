@@ -28,6 +28,10 @@ def _vocab_dir() -> Path:
     return Path(paths["vocabularies"])
 
 
+def _resolve_vocab_dir(vocab_dir: Path | None) -> Path:
+    return vocab_dir if vocab_dir is not None else _vocab_dir()
+
+
 def _stix_dir() -> Path:
     return _resources_root() / "attack" / "stix"
 
@@ -39,13 +43,14 @@ def _manifest() -> dict[str, Any]:
     return {}
 
 
-def _load_template(field: str) -> dict[str, Any]:
-    path = _vocab_dir() / f"{field}.vocab.toml"
+def _load_template(field: str, *, vocab_dir: Path | None = None) -> dict[str, Any]:
+    output_dir = _resolve_vocab_dir(vocab_dir)
+    path = output_dir / f"{field}.vocab.toml"
     if path.is_file():
         doc = read_vocab_document(path)
         doc["keys"] = []
         return doc
-    yaml_legacy = _vocab_dir() / f"{field}.yaml"
+    yaml_legacy = output_dir / f"{field}.yaml"
     if yaml_legacy.is_file():
         import yaml
 
@@ -61,7 +66,7 @@ def _stamp_source(doc: dict[str, Any], manifest: dict[str, Any]) -> None:
     doc["source_fetched_at"] = manifest.get("fetched_at") or utc_now_iso()
 
 
-def generate_attack_vocabs(*, fetch: bool = False) -> dict[str, int]:
+def generate_attack_vocabs(*, fetch: bool = False, vocab_dir: Path | None = None) -> dict[str, int]:
     """Regenerate ATT&CK-related vocabulary files from STIX."""
     if fetch:
         from opentide.vocabulary.fetch_stix import fetch_latest_attack_stix
@@ -70,6 +75,7 @@ def generate_attack_vocabs(*, fetch: bool = False) -> dict[str, int]:
 
     manifest = _manifest()
     stix_dir = _stix_dir()
+    output_dir = _resolve_vocab_dir(vocab_dir)
     counts: dict[str, int] = {}
 
     enterprise = stix_dir / "enterprise-attack.json"
@@ -81,7 +87,7 @@ def generate_attack_vocabs(*, fetch: bool = False) -> dict[str, int]:
             f"STIX bundle not found: {enterprise}. Run fetch_attack_stix first."
         )
 
-    techniques_doc = _load_template("att&ck")
+    techniques_doc = _load_template("att&ck", vocab_dir=output_dir)
     techniques_doc["key"] = "id"
     techniques_doc.pop("model", None)
     bundles = [(enterprise, "")]
@@ -91,10 +97,10 @@ def generate_attack_vocabs(*, fetch: bool = False) -> dict[str, int]:
         bundles.append((ics, "Industrial"))
     techniques_doc["keys"] = merge_technique_bundles(bundles)
     _stamp_source(techniques_doc, manifest)
-    write_vocab_file(_vocab_dir() / "att&ck.vocab.toml", techniques_doc)
+    write_vocab_file(output_dir / "att&ck.vocab.toml", techniques_doc)
     counts["att&ck"] = len(techniques_doc["keys"])
 
-    groups_doc = _load_template("att&ck.groups")
+    groups_doc = _load_template("att&ck.groups", vocab_dir=output_dir)
     groups_doc["key"] = "id"
     groups_doc.pop("model", None)
     all_groups: list[dict[str, Any]] = []
@@ -103,10 +109,10 @@ def generate_attack_vocabs(*, fetch: bool = False) -> dict[str, int]:
             all_groups.extend(parse_groups(load_stix_bundle(path), prefix=prefix))
     groups_doc["keys"] = all_groups
     _stamp_source(groups_doc, manifest)
-    write_vocab_file(_vocab_dir() / "att&ck.groups.vocab.toml", groups_doc)
+    write_vocab_file(output_dir / "att&ck.groups.vocab.toml", groups_doc)
     counts["att&ck.groups"] = len(all_groups)
 
-    mitigations_doc = _load_template("mitigations")
+    mitigations_doc = _load_template("mitigations", vocab_dir=output_dir)
     mitigations_doc["key"] = "name"
     all_mitigations: list[dict[str, Any]] = []
     for path, prefix in [(enterprise, ""), (mobile, "Mobile"), (ics, "Industrial")]:
@@ -114,14 +120,14 @@ def generate_attack_vocabs(*, fetch: bool = False) -> dict[str, int]:
             all_mitigations.extend(parse_mitigations(load_stix_bundle(path), prefix=prefix))
     mitigations_doc["keys"] = all_mitigations
     _stamp_source(mitigations_doc, manifest)
-    write_vocab_file(_vocab_dir() / "mitigations.vocab.toml", mitigations_doc)
+    write_vocab_file(output_dir / "mitigations.vocab.toml", mitigations_doc)
     counts["mitigations"] = len(all_mitigations)
 
-    datasources_doc = _load_template("datasources")
+    datasources_doc = _load_template("datasources", vocab_dir=output_dir)
     datasources_doc["key"] = "name"
     datasources_doc["keys"] = parse_datasources(load_stix_bundle(enterprise))
     _stamp_source(datasources_doc, manifest)
-    write_vocab_file(_vocab_dir() / "datasources.vocab.toml", datasources_doc)
+    write_vocab_file(output_dir / "datasources.vocab.toml", datasources_doc)
     counts["datasources"] = len(datasources_doc["keys"])
 
     return counts

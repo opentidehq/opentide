@@ -1,5 +1,6 @@
 name = "Vector Chaining Relationship"
 field = "chaining_relations"
+version = "1.0"
 description = "Logical relation category between two threat vectors, building block of TVM Chaining"
 
 key = "name"

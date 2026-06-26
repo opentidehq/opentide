@@ -1,7 +1,14 @@
 # Vocabulary generation scripts
 
-Runnable scripts for fetching canonical sources and regenerating bundled
-`{field}.vocab.toml` files under `src/opentide/data/vocabulary/`.
+Runnable scripts for fetching canonical sources and regenerating canonical
+`{field}.vocab.toml` files under `specifications/vocabularies/`, then syncing
+the bundled copy in `src/opentide/data/vocabulary/`.
+
+By default, scripts expect a sibling clone at `../specifications`. Override with:
+
+```bash
+export OPENTIDE_SPECIFICATIONS_ROOT="/absolute/path/to/specifications"
+```
 
 ## ATT&CK (STIX)
 
@@ -9,7 +16,8 @@ Runnable scripts for fetching canonical sources and regenerating bundled
 # Fetch latest MITRE STIX bundles
 uv run python scripts/vocabulary/fetch_attack_stix.py
 
-# Generate att&ck, att&ck.groups, mitigations, datasources
+# Generate att&ck, att&ck.groups, mitigations, datasources into
+# specifications/vocabularies and sync bundle+lockfile in opentide
 uv run python scripts/vocabulary/generate_attack.py
 
 # Fetch + generate in one step
@@ -28,7 +36,9 @@ uv run python scripts/vocabulary/generate_actors.py
 ```
 
 Requires STIX bundles (enterprise/mobile/ics) and fetches MISP galaxy from
-`resources.toml` by default.
+`resources.toml` by default. Output is written to
+`$OPENTIDE_SPECIFICATIONS_ROOT/vocabularies` (or `../specifications/vocabularies`)
+and then synced into the opentide bundle.
 
 ## Migration
 

@@ -1,5 +1,6 @@
 name = "Detection Types"
 field = "detection.types"
+version = "1.0"
 description = "Purpose of different Detection Objectives"
 key = "name"
 [[keys]]

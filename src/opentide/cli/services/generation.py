@@ -66,6 +66,22 @@ def run_generate_phase(phase: str) -> None:
         TableExporter().run()
         export_revisions()
         return
+    if phase == "explorer":
+        from opentide.export.explorer_export import run as export_explorer
+
+        emit_section("Explorer export generation")
+        export_explorer()
+        return
+    if phase == "inflight":
+        from opentide.indexing.inflight import run as generate_inflight
+
+        emit_section("Inflight preview shard generation")
+        return generate_inflight()
+    if phase == "inflight-prune":
+        from opentide.indexing.inflight import run_prune as prune_inflight
+
+        emit_section("Inflight preview shard prune")
+        return prune_inflight()
     if phase == "docs":
         from opentide.documentation.cli import run as run_docs
 
@@ -82,23 +98,41 @@ def run_generate_docs(
     rules: bool = False,
     threats: bool = False,
     objectives: bool = False,
+    changed: bool = False,
     scope: str | None = None,
 ) -> dict[str, object]:
     from opentide.documentation.cli import run as run_docs
     from opentide.documentation.types import DocumentScope
 
     emit_section("Documentation generation")
+    if changed and (scope is not None or rules or threats or objectives):
+        raise ValueError("--changed cannot be combined with scoped docs generation")
     if scope == DocumentScope.index.value:
-        return run_docs(scope=scope, output=output, flavor=flavor)
+        return run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
     if rules:
-        return run_docs(scope=DocumentScope.rules.value, output=output, flavor=flavor)
+        return run_docs(
+            scope=DocumentScope.rules.value,
+            output=output,
+            flavor=flavor,
+            changed=changed,
+        )
     if threats:
-        return run_docs(scope=DocumentScope.threats.value, output=output, flavor=flavor)
+        return run_docs(
+            scope=DocumentScope.threats.value,
+            output=output,
+            flavor=flavor,
+            changed=changed,
+        )
     if objectives:
-        return run_docs(scope=DocumentScope.objectives.value, output=output, flavor=flavor)
+        return run_docs(
+            scope=DocumentScope.objectives.value,
+            output=output,
+            flavor=flavor,
+            changed=changed,
+        )
     if scope:
-        return run_docs(scope=scope, output=output, flavor=flavor)
-    return run_docs(output=output, flavor=flavor)
+        return run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
+    return run_docs(output=output, flavor=flavor, changed=changed)
 
 
 def run_generate_all() -> None:

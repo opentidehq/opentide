@@ -1,5 +1,6 @@
 name = "Threat Severity"
 field = "severity"
+version = "1.0"
 description = "The severity summarizes the overall danger of incident the vector will provoke, and is to be derived (WIP) from impact, leverage, and difficulty to execute."
 reference = "https://www.ncsc.gov.uk/news/new-cyber-attack-categorisation-system-improve-uk-response-incidents"
 

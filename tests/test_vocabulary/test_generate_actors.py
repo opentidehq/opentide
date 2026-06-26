@@ -133,3 +133,34 @@ def test_path_helpers_use_resolve_paths(tmp_path: Path, monkeypatch: pytest.Monk
     )
     assert generate_actors._vocab_dir() == tmp_path / "vocabs"
     assert generate_actors._stix_dir() == tmp_path / "resources" / "attack" / "stix"
+
+
+def test_generate_actors_vocabs_uses_explicit_vocab_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output_dir = tmp_path / "specifications" / "vocabularies"
+    stix_dir = tmp_path / "attack" / "stix"
+    output_dir.mkdir(parents=True)
+    stix_dir.mkdir(parents=True)
+    (output_dir / "actors.vocab.toml").write_text('key = "id"\nkeys = []\n', encoding="utf-8")
+    (stix_dir / "enterprise-attack.json").write_text("{}", encoding="utf-8")
+
+    written_paths: list[Path] = []
+
+    monkeypatch.setattr(generate_actors, "_stix_dir", lambda: stix_dir)
+    monkeypatch.setattr(generate_actors, "parse_groups", lambda _bundle, prefix: [])
+    monkeypatch.setattr(generate_actors, "load_stix_bundle", lambda _path: {"objects": []})
+    monkeypatch.setattr(
+        generate_actors,
+        "read_vocab_document",
+        lambda _path: {"field": "actors", "key": "id", "keys": []},
+    )
+    monkeypatch.setattr(
+        generate_actors,
+        "write_vocab_file",
+        lambda path, _doc: written_paths.append(path),
+    )
+
+    generate_actors.generate_actors_vocabs(vocab_dir=output_dir)
+
+    assert written_paths == [output_dir / "actors.vocab.toml"]

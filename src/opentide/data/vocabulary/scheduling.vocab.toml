@@ -1,5 +1,6 @@
 name = "Rule Scheduling"
 field = "scheduling"
+version = "1.0"
 description = "The frequency at which the rule should be executed on the detection system, when it is not real-time"
 
 key = "name"

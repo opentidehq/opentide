@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import textwrap
 
+from opentide.ci.inflight import azure_inflight_job, azure_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     document_steps,
@@ -57,6 +58,8 @@ def render_azure(options: CiRenderOptions) -> str:
         )
 
     staging_job = ""
+    inflight_job = ""
+    inflight_prune_job = ""
     if options.staging:
         staging_job = textwrap.dedent(
             f"""\
@@ -68,6 +71,17 @@ def render_azure(options: CiRenderOptions) -> str:
             {_python_setup(options)}
             {_bash_script(staging_deploy_steps(options))}
             """
+        )
+    if options.inflight:
+        inflight_job = azure_inflight_job(
+            python_version=options.python_version,
+            opentide_version=options.opentide_version,
+            default_branch=branch,
+        )
+        inflight_prune_job = azure_inflight_prune_job(
+            python_version=options.python_version,
+            opentide_version=options.opentide_version,
+            default_branch=branch,
         )
 
     promote_stage = ""
@@ -134,6 +148,8 @@ def render_azure(options: CiRenderOptions) -> str:
             dependsOn: Generate
             jobs:
         {staging_job}
+        {inflight_job}
+        {inflight_prune_job}
               - job: deploy_production
                 displayName: Deploy Production
                 dependsOn: generate

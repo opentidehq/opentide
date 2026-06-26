@@ -1,5 +1,6 @@
 name = "Threat Level to Organization"
 field = "level"
+version = "1.0"
 description = "Informed estimate of the risk level that can be attributed to the adversary, from public or closed reports, the targets they are actively engaging, their sophistication, and targets. The closer their domains, successes and victims are similar to the organization, the more at risk it is and thus the higher the threat level."
 
 key = "name"

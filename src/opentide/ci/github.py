@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import textwrap
 
+from opentide.ci.inflight import github_inflight_job, github_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     document_steps,
@@ -173,6 +174,22 @@ def render_github(options: CiRenderOptions) -> str:
                   steps:
                 {setup_steps}{_run_steps(staging_cmds)}
                 """
+            )
+        )
+
+    if options.inflight:
+        jobs.append(
+            github_inflight_job(
+                python_version=options.python_version,
+                opentide_version=options.opentide_version,
+                default_branch=branch,
+            )
+        )
+        jobs.append(
+            github_inflight_prune_job(
+                python_version=options.python_version,
+                opentide_version=options.opentide_version,
+                default_branch=branch,
             )
         )
 

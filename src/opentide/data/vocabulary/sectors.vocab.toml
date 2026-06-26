@@ -1,5 +1,6 @@
 name = "Victim Industry Sector"
 field = "sectors"
+version = "1.0"
 description = "Industry sector is an open vocabulary that describes industrial and commercial sectors. It is intended to be holistic; it has been derived from several other lists and is not limited to \"critical infrastructure\" sectors."
 stix = "industry-sector-ov"
 

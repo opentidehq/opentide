@@ -6,6 +6,7 @@ from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     core_cli_steps,
     document_steps,
+    inflight_generate_steps,
     pip_install,
     production_deploy_steps,
     promotion_steps,
@@ -45,3 +46,15 @@ def test_staging_and_promotion_steps() -> None:
     assert production_deploy_steps(enabled) == ["opentide deploy --plan PRODUCTION"]
     assert document_steps(enabled) == ["opentide generate docs --output docs"]
     assert document_steps(CiRenderOptions(ci="github", docs_enabled=False)) == []
+
+
+def test_inflight_generate_steps() -> None:
+    assert inflight_generate_steps(CiRenderOptions(ci="github")) == ["opentide generate inflight"]
+
+
+def test_inflight_prune_steps() -> None:
+    from opentide.ci.stages import inflight_prune_steps
+
+    assert inflight_prune_steps(CiRenderOptions(ci="github")) == [
+        "opentide generate inflight prune"
+    ]

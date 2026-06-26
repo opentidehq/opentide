@@ -1,5 +1,6 @@
 name = "Leverage"
 field = "leverage"
+version = "1.0"
 description = "Technical aftermath of the attack from the target perspective, differentiated from impact as it does not consider the value of the consequence, only what increased control the vector execution provides to the adversary."
 reference = "https://owasp.org/www-community/Threat_Modeling_Process#stride, http://veriscommunity.net/enums.html#section-attributes"
 

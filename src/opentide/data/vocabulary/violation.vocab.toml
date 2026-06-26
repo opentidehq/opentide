@@ -1,5 +1,6 @@
 name = "Policy, mandate or governance violations"
 field = "violation"
+version = "1.0"
 description = "Categories of usage violations which is not directly the result of an exercised threat, but needs to be monitored and accounted for illegitimate behaviours."
 
 key = "name"

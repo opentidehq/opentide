@@ -1,5 +1,6 @@
 name = "Impact"
 field = "impact"
+version = "1.0"
 description = "Analysis of the threat vector from the organizational perspective, in non technical term. This aims at putting a clear denomination on what the attacker will actually be able to act upon if the threat vector is realized."
 reference = "http://veriscommunity.net/enums.html#section-impact"
 

@@ -1,5 +1,6 @@
 name = "Threat Surface"
 field = "surface"
+version = "1.0"
 description = "Hierarchical scoping of the technologies, systems and environments applicable to a threat vector. Uses scoped '::' delimited categories via stages. Replaces the deprecated targets, platforms and domains vocabularies."
 
 key = "name"
