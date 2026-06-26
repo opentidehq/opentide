@@ -30,6 +30,7 @@ class CiSetupOptions:
     promotion: bool = True
     promotion_target: str = "PRODUCTION"
     python_version: str = "3.12"
+    explorer_pages: bool = False
     yes: bool = False
 
 

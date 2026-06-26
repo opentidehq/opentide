@@ -213,6 +213,11 @@ def setup_ci_cmd(
     promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
     promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
     python_version: str = typer.Option("3.12", "--python-version"),
+    explorer_pages: bool = typer.Option(
+        False,
+        "--explorer-pages/--no-explorer-pages",
+        help="Include GitHub Pages explorer build and deploy jobs",
+    ),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
@@ -226,6 +231,7 @@ def setup_ci_cmd(
         promotion=promotion,
         promotion_target=promotion_target,
         python_version=python_version,
+        explorer_pages=explorer_pages,
         yes=yes,
     )
     cli.apply_environment()

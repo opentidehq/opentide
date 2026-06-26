@@ -24,6 +24,7 @@ class CiRenderOptions:
     default_branch: str = "main"
     docs_output: str = "docs"
     docs_enabled: bool = True
+    explorer_pages: bool = False
 
     @classmethod
     def from_init(
@@ -62,6 +63,7 @@ class CiRenderOptions:
             promotion_target=repo.promotion_target,
             python_version=repo.python_version,
             opentide_version=__version__,
+            explorer_pages=repo.explorer_pages,
         )
 
     @classmethod
