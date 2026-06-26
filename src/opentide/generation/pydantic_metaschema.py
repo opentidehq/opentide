@@ -105,13 +105,17 @@ def build_model_schema_source(
     """Build a metaschema-compatible dict from a Pydantic model."""
     raw = model_json_schema(model)
     properties = cast(dict[str, Any], raw.get("properties", {}))
+    defs = cast(dict[str, Any], raw.get("$defs", {}))
     _merge_model_field_extras(model, properties)
+    _merge_nested_def_extras(model, defs)
 
     if root_extras:
         property_extras = root_extras.pop("property_extras", {})
         _apply_nested_property_extras(properties, property_extras)
 
     result: dict[str, Any] = {"type": "object", "properties": properties}
+    if defs:
+        result["$defs"] = defs
     if "required" in raw:
         result["required"] = raw["required"]
     for key, value in (root_extras or {}).items():
@@ -132,7 +136,77 @@ def build_schema_source_for_identifier(schema_id: str) -> dict[str, Any]:
     model = resolve_model(schema_id)
     family = SchemaVersion.parse(schema_id).family
     extras = _core_root_extras_for_model(model, family)
-    return build_model_schema_source(model, root_extras=extras)
+    result = build_model_schema_source(model, root_extras=extras)
+    apply_vocab_pins(result, schema_id)
+    return result
+
+
+def apply_vocab_pins(schema: dict[str, Any], schema_id: str) -> None:
+    """Inject versioned ``tide.vocab`` contracts from the pin manifest onto *schema*."""
+    from opentide.models.vocab_pins import get_pins
+
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return
+    defs = schema.get("$defs", {})
+    defs_map = defs if isinstance(defs, dict) else {}
+    for dot_path, contract in get_pins(schema_id).items():
+        parts = [part for part in dot_path.split(".") if part]
+        if parts:
+            _set_vocab_at_path(properties, parts, contract, defs=defs_map)
+
+
+def _set_vocab_at_path(
+    node: dict[str, Any],
+    parts: list[str],
+    contract: str,
+    *,
+    defs: dict[str, Any],
+) -> None:
+    if not parts:
+        return
+    key = parts[0]
+    if key not in node or not isinstance(node[key], dict):
+        return
+    field_schema = node[key]
+    if "$ref" in field_schema and len(parts) > 1:
+        ref_name = str(field_schema["$ref"]).rsplit("/", 1)[-1]
+        target = defs.get(ref_name)
+        if isinstance(target, dict):
+            nested_props = target.setdefault("properties", {})
+            if isinstance(nested_props, dict):
+                _set_vocab_at_path(nested_props, parts[1:], contract, defs=defs)
+        return
+    if len(parts) == 1:
+        field_schema["tide.vocab"] = contract
+        return
+
+    if field_schema.get("type") == "array":
+        items = field_schema.get("items")
+        if isinstance(items, dict):
+            item_props = items.setdefault("properties", {})
+            if isinstance(item_props, dict):
+                _set_vocab_at_path(item_props, parts[1:], contract, defs=defs)
+        return
+
+    nested_props = field_schema.get("properties")
+    if isinstance(nested_props, dict):
+        _set_vocab_at_path(nested_props, parts[1:], contract, defs=defs)
+
+
+def _merge_nested_def_extras(model: type[TideModel], defs: dict[str, Any]) -> None:
+    """Merge Tide field extras into ``$defs`` entries for nested models."""
+    for field in model.model_fields.values():
+        nested = _resolve_model_type(field.annotation)
+        if not nested:
+            continue
+        def_schema = defs.get(nested.__name__)
+        if not isinstance(def_schema, dict):
+            continue
+        nested_props = def_schema.get("properties")
+        if isinstance(nested_props, dict):
+            _merge_model_field_extras(nested, nested_props)
+            _merge_nested_def_extras(nested, defs)
 
 
 def build_platform_schema_source(model: type[TideModel]) -> dict[str, Any]:

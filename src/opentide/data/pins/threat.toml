@@ -1,0 +1,29 @@
+# Vocabulary pins for threat object schemas.
+# Machine-readable source of truth for threat::* pin tables.
+# See rfcs/0003-per-key-vocabulary-versioning.md
+
+["threat::1.0"]
+"metadata.tlp" = "tlp::1.0"
+"criticality" = "criticality::1.0"
+"threat.severity" = "severity::1.0"
+"threat.impact" = "impact::1.0"
+"threat.leverage" = "leverage::1.0"
+"threat.viability" = "viability::1.0"
+"threat.terrain" = "surface::1.0"
+"threat.att&ck" = "att&ck::1.0"
+"threat.actors" = "actors::1.0"
+"threat.killchain" = "killchain::1.0"
+"threat.chaining" = "chaining_relations::1.0"
+
+["threat::2.1"]
+"metadata.tlp" = "tlp::1.0"
+"criticality" = "criticality::1.0"
+"threat.severity" = "severity::1.0"
+"threat.impact" = "impact::1.0"
+"threat.leverage" = "leverage::1.0"
+"threat.viability" = "viability::1.0"
+"threat.terrain" = "surface::1.0"
+"threat.att&ck" = "att&ck::1.0"
+"threat.actors" = "actors::1.0"
+"threat.killchain" = "killchain::1.1"
+"threat.chaining" = "chaining_relations::1.0"

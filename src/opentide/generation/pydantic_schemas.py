@@ -8,7 +8,6 @@ from typing import Any
 
 from opentide.generation.model_json_schema import model_json_schema
 from opentide.generation.pydantic_metaschema import (
-    build_core_schema_source,
     build_model_schema_source,
 )
 from opentide.generation.schema_utils import strip_framework_keywords
@@ -35,14 +34,18 @@ def pin_schema_identifier(schema: dict[str, Any], identifier: str) -> dict[str, 
 
 def generate_schema_for_identifier(schema_id: str, *, enrich: bool = True) -> dict[str, Any]:
     """Generate a JSON Schema dict for a registered schema identifier."""
+    from opentide.generation.pydantic_metaschema import build_schema_source_for_identifier
     from opentide.generation.schema_pipeline import gen_json_schema
 
     model = resolve_model(schema_id)
     family = SchemaVersion.parse(schema_id).family
     if enrich and family in CORE_OBJECT_TYPES:
-        raw = gen_json_schema(build_core_schema_source(family))
+        raw = gen_json_schema(
+            build_schema_source_for_identifier(schema_id),
+            schema_id=schema_id,
+        )
     elif enrich:
-        raw = gen_json_schema(build_model_schema_source(model))
+        raw = gen_json_schema(build_model_schema_source(model), schema_id=schema_id)
     else:
         raw = model_json_schema(model)
     cleaned = strip_framework_keywords(raw)
@@ -55,7 +58,7 @@ def generate_model_schema(model: type[TideModel], *, enrich: bool = True) -> dic
 
     if enrich:
         raw = build_model_schema_source(model)
-        raw = gen_json_schema(raw)
+        raw = gen_json_schema(raw, schema_id=model.schema_identifier())
     else:
         raw = model_json_schema(model)
     cleaned = strip_framework_keywords(raw)

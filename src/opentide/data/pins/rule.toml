@@ -1,0 +1,10 @@
+# Vocabulary pins for rule object schemas.
+# Machine-readable source of truth for rule::* pin tables.
+# See rfcs/0003-per-key-vocabulary-versioning.md
+
+["rule::1.0"]
+"metadata.tlp" = "tlp::1.0"
+"severity" = "severity::1.0"
+"techniques" = "att&ck::1.0"
+"response.alert_severity" = "alert_severity::1.0"
+"response.responders" = "responders::1.0"

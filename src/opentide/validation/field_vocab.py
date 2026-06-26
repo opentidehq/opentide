@@ -104,6 +104,8 @@ def _validate_vocab_value(
     if not isinstance(vocab, str):
         return []
 
+    # Versioned contracts (``field::M.m``) are passed through to the enum resolver.
+
     scoped = bool(field_schema.get("tide.vocab.scoped"))
     stages = field_schema.get("tide.vocab.stages")
     no_wrap = bool(field_schema.get("tide.vocab.hints.no-wrap"))

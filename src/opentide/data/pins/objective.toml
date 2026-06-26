@@ -1,0 +1,15 @@
+# Vocabulary pins for objective object schemas.
+# Machine-readable source of truth for objective::* pin tables.
+# See rfcs/0003-per-key-vocabulary-versioning.md
+
+["objective::1.0"]
+"metadata.tlp" = "tlp::1.0"
+"composition.strategy" = "detection.composition::1.0"
+"objective.composition.strategy" = "detection.composition::1.0"
+"objective.type" = "detection.types::1.0"
+"objective.signals.severity" = "severity::1.0"
+"objective.signals.methodology" = "detection.methodology::1.0"
+"objective.signals.entities" = "signal.entities::1.0"
+"objective.signals.data.logsources" = "datasources::1.0"
+"objective.signals.effort" = "efforts::1.0"
+"objective.attack" = "att&ck::1.0"
