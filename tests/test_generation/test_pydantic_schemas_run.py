@@ -11,12 +11,12 @@ from opentide.generation import pydantic_schemas
 def test_generate_core_model_schema_enriched() -> None:
     with (
         patch(
-            "opentide.generation.pydantic_metaschema.build_core_schema_source",
+            "opentide.generation.pydantic_metaschema.build_schema_source_for_identifier",
             return_value={"type": "object", "properties": {}},
         ),
         patch(
             "opentide.generation.schema_pipeline.gen_json_schema",
-            side_effect=lambda schema: schema,
+            side_effect=lambda schema, schema_id=None: schema,
         ),
     ):
         schema = pydantic_schemas.generate_core_model_schema("rule")
@@ -26,7 +26,7 @@ def test_generate_core_model_schema_enriched() -> None:
 def test_export_core_model_schema_writes_file(tmp_path: Path) -> None:
     output = tmp_path / "rule.schema.json"
     with patch(
-        "opentide.generation.pydantic_schemas.generate_core_model_schema",
+        "opentide.generation.pydantic_schemas.generate_schema_for_identifier",
         return_value={"title": "Rule"},
     ):
         pydantic_schemas.export_core_model_schema("rule", output)
