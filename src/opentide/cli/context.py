@@ -28,6 +28,12 @@ class CliContext:
     def apply_environment(self) -> None:
         """Push context flags into process environment for engine modules."""
         os.environ["OPENTIDE_REPO_ROOT"] = str(self.repo)
+        if "OPENTIDE_TIDE_WORKSPACE" not in os.environ:
+            os.environ["OPENTIDE_TIDE_WORKSPACE"] = str(self.repo)
+        get_repo_root.cache_clear()
+        from opentide.core.index_manager import IndexManager
+
+        IndexManager._cache = None
         if self.data is not None:
             os.environ["OPENTIDE_DATA_ROOT"] = str(self.data)
         elif "OPENTIDE_DATA_ROOT" not in os.environ:

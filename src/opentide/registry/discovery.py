@@ -16,6 +16,8 @@ def discover_workspace() -> Path:
     if workspace_env:
         return Path(workspace_env).resolve()
     repo = get_repo_root()
+    if (repo / "objects").is_dir():
+        return repo.resolve()
     fixture = repo / "tests/fixtures/generation/tide_workspace"
     if fixture.is_dir():
         return fixture.resolve()

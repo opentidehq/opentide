@@ -142,7 +142,16 @@ def invoke_cli(cli_runner: CliRunner, tide_corpus_repo: Path) -> Callable[..., R
         else:
             cmd.extend(["--repo", str(tide_corpus_repo)])
         cmd.extend(args)
-        env = kwargs.pop("env", None) or {}
+        env = kwargs.pop("env", None)
+        if env is None:
+            repo_path = str(repo if repo is not None else tide_corpus_repo)
+            env = {
+                "OPENTIDE_REPO_ROOT": repo_path,
+                "OPENTIDE_TIDE_WORKSPACE": repo_path,
+                "DEPLOYMENT_PLAN": "FULL",
+            }
+            if "PATH" in os.environ:
+                env["PATH"] = os.environ["PATH"]
         if extra_env:
             env = {**env, **extra_env}
         _clear_runtime_caches()
