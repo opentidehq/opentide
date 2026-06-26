@@ -9,7 +9,13 @@ from opentide.core.logging import get_logger, is_debug_enabled
 from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
 from opentide.generation.framework import get_type, get_vocab_entry
-from opentide.generation.vocabulary import VocabularyDefinition, entry_key_field, is_id_keyed
+from opentide.generation.vocabulary import (
+    VocabularyDefinition,
+    VocabularyRevisionResolver,
+    entry_key_field,
+    is_id_keyed,
+    split_vocab_reference,
+)
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.enabled import enabled_systems
 
@@ -168,6 +174,7 @@ _Vocabulary_ : `{source_vocab}`
             scoped: bool = False,
         ):
             self.vocab = vocab
+            self._field_name, self._pin = split_vocab_reference(vocab)
             self.scoped = scoped
             self.no_wrap = no_wrap
             self.filter_stages: list | None = [stages] if isinstance(stages, str) else stages
@@ -182,7 +189,7 @@ _Vocabulary_ : `{source_vocab}`
         def resolve(self) -> tuple[list[str], list[str]]:
             """Resolve core + extension entries → ``(enum, descriptions)``."""
             logger.debug("resolving_vocab_enums_for", detail=self.vocab)
-            self._ingest(VOCAB_INDEX.get(self.vocab))
+            self._ingest(VOCAB_INDEX.get(self._field_name))
             self._ingest_extensions()
             return self._finalise()
 
@@ -195,20 +202,23 @@ _Vocabulary_ : `{source_vocab}`
                 return
             metadata = vocab_data.metadata
             self._hints_enabled = metadata.get("vocab.search_hints", True)
-            is_model = is_id_keyed(metadata.to_dict()) or (self.vocab in OBJECT_TYPES)
-            entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
+            is_model = is_id_keyed(metadata.to_dict()) or (self._field_name in OBJECT_TYPES)
+            if self._pin:
+                entries = VocabularyRevisionResolver.filter_entry_dicts(vocab_data, self.vocab)
+            else:
+                entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
             self._process(entries, is_model=is_model)
 
         def _ingest_extensions(self):
             """Ingest user-defined extensions from ``schema.toml``."""
-            extensions = VOCAB_EXTENSIONS.get(self.vocab, [])
+            extensions = VOCAB_EXTENSIONS.get(self._field_name, [])
             if not extensions:
                 return
             logger.debug("processing", detail=self.vocab)
-            ext_vocab = VOCAB_INDEX.get(self.vocab)
+            ext_vocab = VOCAB_INDEX.get(self._field_name)
             ext_meta = ext_vocab.metadata if ext_vocab else None
             is_model = (is_id_keyed(ext_meta.to_dict()) if ext_meta else False) or (
-                self.vocab in OBJECT_TYPES
+                self._field_name in OBJECT_TYPES
             )
             key_field = entry_key_field(key="id" if is_model else "name")
             normalised = {}
@@ -289,12 +299,18 @@ _Vocabulary_ : `{source_vocab}`
 
             icon = (
                 key.get("icon")
-                or (vocab_def.metadata.icon if (vocab_def := VOCAB_INDEX.get(self.vocab)) else "")
-                or ICONS.get(self.vocab)
+                or (
+                    vocab_def.metadata.icon
+                    if (vocab_def := VOCAB_INDEX.get(self._field_name))
+                    else ""
+                )
+                or ICONS.get(self._field_name)
                 or ""
             )
             source_vocab = (
-                vocab_def.metadata.name if (vocab_def := VOCAB_INDEX.get(self.vocab)) else None
+                vocab_def.metadata.name
+                if (vocab_def := VOCAB_INDEX.get(self._field_name))
+                else None
             )
             link = key.get("link") or ""
             stage = key.get("tide.vocab.stages") or ""
@@ -334,7 +350,7 @@ _Vocabulary_ : `{source_vocab}`
             )
 
         def _stage_doc(self, stages: str | list) -> str:
-            vocab_def = VOCAB_INDEX.get(self.vocab)
+            vocab_def = VOCAB_INDEX.get(self._field_name)
             vocab_stages = vocab_def.metadata.get("stages") if vocab_def else None
             if not vocab_stages:
                 logger.warning("could_not_find_stages_in_vocabulary")
@@ -566,7 +582,7 @@ def recomposition_handler(entry_point):
     return recomposition
 
 
-def gen_json_schema(dictionary):
+def gen_json_schema(dictionary, *, schema_id: str | None = None):
     """Recursively resolve OpenTide metaschema keywords into JSON Schema.
 
     Walks *dictionary* depth-first and replaces ``tide.*`` annotated
@@ -590,6 +606,11 @@ def gen_json_schema(dictionary):
     icon = ""
     for field in dict_foo.keys():
         query = field
+        if field == "$defs" and isinstance(dict_foo[field], dict):
+            for def_schema in dict_foo[field].values():
+                if isinstance(def_schema, dict):
+                    gen_json_schema(def_schema, schema_id=schema_id)
+            continue
         # checks if the key is a dict
         if type(dict_foo[field]) == dict:
             if "tide.meta.definition" in dict_foo[field].keys():
@@ -611,7 +632,7 @@ def gen_json_schema(dictionary):
 
                 dictionary[field] = temp
 
-                gen_json_schema({field: dictionary[field]})
+                gen_json_schema({field: dictionary[field]}, schema_id=schema_id)
 
             else:
                 title = dict_foo[field].get("title")
@@ -763,7 +784,7 @@ def gen_json_schema(dictionary):
                         dictionary[field]["uniqueItems"] = True
 
                 else:
-                    gen_json_schema(dictionary[field])
+                    gen_json_schema(dictionary[field], schema_id=schema_id)
 
     return dictionary
 
@@ -779,32 +800,36 @@ def run():
         ),
     )
 
-    from opentide.generation.pydantic_metaschema import core_schema_models
-    from opentide.generation.pydantic_schemas import generate_core_model_schema
+    from opentide.generation.pydantic_schemas import generate_schema_for_identifier
+    from opentide.models.schema_registry import identifiers_for_families, latest_identifier
+    from opentide.registry.artifacts import schema_artifact_name
 
-    # Core object schemas are generated from Pydantic models (single source of truth).
-    for meta in GLOBAL_CONFIG.metaschemas:
-        if meta not in GLOBAL_CONFIG.json_schemas:
-            continue
-        json_output = JSON_SCHEMA_FOLDER / GLOBAL_CONFIG.json_schemas[meta]
+    configured_families = set(GLOBAL_CONFIG.metaschemas.keys())
+    legacy_schema_map = dict(GLOBAL_CONFIG.json_schemas)
 
-        if meta in core_schema_models():
-            logger.info("generating_pydantic_json_schema_for_core_model", meta=meta)
-            cleaned = generate_core_model_schema(meta)
-            placeholders: dict[str, str] = {}
-        else:
-            logger.info("no_pydantic_schema_registered_for_meta_key", meta=meta)
-            continue
+    for schema_id in identifiers_for_families(configured_families):
+        family = schema_id.split("::", 1)[0]
+        artifact_name = schema_artifact_name(schema_id)
+        json_output = JSON_SCHEMA_FOLDER / artifact_name
+
+        logger.info(
+            "generating_pydantic_json_schema_for_identifier",
+            detail=schema_id,
+        )
+        cleaned = generate_schema_for_identifier(schema_id)
 
         logger.info("exporting_generated_schema_to_str_json_output", path=str(json_output))
-        output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
-        for placeholder in placeholders:
-            logger.info("replacing_all_occurence_of_placeholder")
-            output = output.replace(f"${placeholder}", placeholders[placeholder])
-
+        output = json.dumps(cleaned, indent=4, sort_keys=False, default=str) + "\n"
         with open(json_output, "w", encoding="utf-8") as output_file:
-            output_file.write(output + "\n")
-        logger.info("correctly_exported")
+            output_file.write(output)
+        logger.info("correctly_exported", detail=artifact_name)
+
+        if family in legacy_schema_map and schema_id == latest_identifier(family):
+            legacy_output = JSON_SCHEMA_FOLDER / legacy_schema_map[family]
+            if legacy_output != json_output:
+                with open(legacy_output, "w", encoding="utf-8") as legacy_file:
+                    legacy_file.write(output)
+                logger.info("exported_legacy_schema_alias", path=str(legacy_output))
 
     logger.info("generated_all_json_schemas")
 

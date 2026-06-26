@@ -8,8 +8,10 @@ from typing import Any
 from opentide.core.logging import get_logger
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
+    VocabularyRevisionResolver,
     entry_key_field,
     is_id_keyed,
+    split_vocab_reference,
 )
 from opentide.models.object_types import CORE_OBJECT_TYPES
 
@@ -65,6 +67,7 @@ class _VocabEnumBuilder:
         scoped: bool = False,
     ) -> None:
         self.vocab = vocab
+        self._field_name, self._pin = split_vocab_reference(vocab)
         self.vocab_index = vocab_index
         self.extensions = extensions
         self.object_types = tuple(object_types)
@@ -80,7 +83,7 @@ class _VocabEnumBuilder:
 
     def resolve(self) -> tuple[list[str], list[str]]:
         logger.debug("resolving_vocab_enums", vocab=self.vocab)
-        self._ingest(self.vocab_index.get(self.vocab))
+        self._ingest(self.vocab_index.get(self._field_name))
         self._ingest_extensions()
         return self._finalise()
 
@@ -90,18 +93,21 @@ class _VocabEnumBuilder:
             return
         metadata = vocab_data.metadata
         self._hints_enabled = bool(metadata.get("vocab.search_hints", True))
-        is_model = is_id_keyed(metadata.to_dict()) or (self.vocab in self.object_types)
-        entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
+        is_model = is_id_keyed(metadata.to_dict()) or (self._field_name in self.object_types)
+        if self._pin:
+            entries = VocabularyRevisionResolver.filter_entry_dicts(vocab_data, self.vocab)
+        else:
+            entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
         self._process(entries, is_model=is_model)
 
     def _ingest_extensions(self) -> None:
         extension_rows = self.extensions.get(self.vocab, [])
         if not extension_rows:
             return
-        ext_vocab = self.vocab_index.get(self.vocab)
+        ext_vocab = self.vocab_index.get(self._field_name)
         ext_meta = ext_vocab.metadata if ext_vocab else None
         is_model = (is_id_keyed(ext_meta.to_dict()) if ext_meta else False) or (
-            self.vocab in self.object_types
+            self._field_name in self.object_types
         )
         key_field = entry_key_field(key="id" if is_model else "name")
         normalised: dict[str, dict[str, Any]] = {}
@@ -177,7 +183,7 @@ class _VocabEnumBuilder:
         if display.islower():
             display = display.title()
 
-        vocab_def = self.vocab_index.get(self.vocab)
+        vocab_def = self.vocab_index.get(self._field_name)
         icon = (
             key.get("icon")
             or (vocab_def.metadata.icon if vocab_def else "")

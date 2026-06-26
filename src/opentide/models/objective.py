@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
-from opentide.models.base import TideModel
+from opentide.models.base import TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 
 
@@ -35,10 +35,10 @@ class DetectionSignal(TideModel):
     name: str
     uuid: str
     description: str
-    severity: str
+    severity: str = VocabField(True)
     data: SignalData
-    methodology: str
-    entities: list[str]
+    methodology: str = VocabField(True)
+    entities: list[str] = VocabField(True)
     effort: int | None = None
     detectors: list[ExternalDetector] | None = None
     examples: list[DetectionExample] | None = None

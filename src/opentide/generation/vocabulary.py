@@ -9,6 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from opentide.core.logging import get_logger
+from opentide.models.version import SchemaVersion
 
 logger = get_logger(__name__)
 
@@ -144,12 +145,95 @@ class VocabularyMetadata(BaseModel):
         return payload
 
 
+def parse_semver(version: str) -> tuple[int, int]:
+    """Parse ``major.minor`` (or major-only) into a comparable tuple."""
+    parsed = SchemaVersion.from_version_string("_", version)
+    return parsed.major, parsed.minor
+
+
+def version_at_or_before(entry_version: str, pin_version: str) -> bool:
+    """Return whether *entry_version* is at or before *pin_version* (cumulative minor)."""
+    entry = parse_semver(entry_version)
+    pin = parse_semver(pin_version)
+    if entry[0] < pin[0]:
+        return True
+    if entry[0] > pin[0]:
+        return False
+    return entry[1] <= pin[1]
+
+
+def version_gt(left: str, right: str) -> bool:
+    """Return whether *left* is strictly greater than *right*."""
+    left_v = parse_semver(left)
+    right_v = parse_semver(right)
+    if left_v[0] != right_v[0]:
+        return left_v[0] > right_v[0]
+    return left_v[1] > right_v[1]
+
+
+def parse_vocab_contract(contract: str) -> tuple[str, str]:
+    """Parse ``field::M.m`` into vocabulary field name and pin version string."""
+    if "::" not in contract:
+        raise ValueError(f"invalid vocabulary contract: {contract!r}")
+    field, version = contract.split("::", 1)
+    field = field.strip()
+    version = version.strip()
+    if not field or not version:
+        raise ValueError(f"invalid vocabulary contract: {contract!r}")
+    # Normalise pin version via SchemaVersion parser.
+    parsed = SchemaVersion.from_version_string(field, version)
+    return field, f"{parsed.major}.{parsed.minor}"
+
+
+def split_vocab_reference(vocab: str) -> tuple[str, str | None]:
+    """Split a vocab reference into field name and optional pin (``field::M.m``)."""
+    if "::" in vocab:
+        field, pin = parse_vocab_contract(vocab)
+        return field, pin
+    return vocab, None
+
+
+class VocabularyRevisionResolver:
+    """Filter vocabulary entries by per-key lifecycle and a contract pin."""
+
+    @staticmethod
+    def entry_active_at_pin(entry: VocabularyEntry, pin_version: str) -> bool:
+        if not version_at_or_before(entry.version, pin_version):
+            return False
+        return not entry.removed or version_gt(entry.removed, pin_version)
+
+    @classmethod
+    def filter_entries(
+        cls,
+        definition: VocabularyDefinition,
+        contract: str,
+    ) -> dict[str, VocabularyEntry]:
+        _field, pin_version = parse_vocab_contract(contract)
+        return {
+            key: entry
+            for key, entry in definition.entries.items()
+            if cls.entry_active_at_pin(entry, pin_version)
+        }
+
+    @classmethod
+    def filter_entry_dicts(
+        cls,
+        definition: VocabularyDefinition,
+        contract: str,
+    ) -> dict[str, dict[str, Any]]:
+        return {
+            key: entry.as_dict() for key, entry in cls.filter_entries(definition, contract).items()
+        }
+
+
 class VocabularyEntry(BaseModel):
     """Single vocabulary entry."""
 
     model_config = _VOCAB_MODEL_CONFIG
 
     name: str
+    version: str = "1.0"
+    removed: str | None = None
     description: str = ""
     icon: str = ""
     link: str = ""
@@ -168,6 +252,10 @@ class VocabularyEntry(BaseModel):
     def get(self, key: str, default: Any = None) -> Any:
         if key == "name":
             return self.name
+        if key == "version":
+            return self.version
+        if key == "removed":
+            return self.removed
         if key == "description":
             return self.description
         if key == "icon":
@@ -305,12 +393,15 @@ def _build_metadata(
 
 
 def _build_entry(entry_data: Mapping[str, Any], *, fallback_name: str) -> VocabularyEntry:
-    reserved = {"name", "description", "icon", "link", "tide.vocab.stages"}
+    reserved = {"name", "version", "removed", "description", "icon", "link", "tide.vocab.stages"}
     stages = normalize_stages(entry_data.get("tide.vocab.stages"))
     extra = {key: value for key, value in entry_data.items() if key not in reserved}
+    removed = entry_data.get("removed")
     return VocabularyEntry.model_validate(
         {
             "name": str(entry_data.get("name", fallback_name)),
+            "version": str(entry_data.get("version", "1.0")),
+            "removed": str(removed) if removed else None,
             "description": str(entry_data.get("description", "")),
             "icon": str(entry_data.get("icon", "")),
             "link": str(entry_data.get("link", "")),

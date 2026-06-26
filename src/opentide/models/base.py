@@ -16,6 +16,15 @@ def TideField(
     return Field(default, json_schema_extra=json_schema_extra, **kwargs)
 
 
+def VocabField(
+    vocab: str | bool = True,
+    default: Any = ...,
+    **kwargs: Any,
+) -> Any:
+    """Field marked as vocabulary-constrained in generated metaschema."""
+    return TideField(default, schema_extra={"tide.vocab": vocab}, **kwargs)
+
+
 class TideModel(BaseModel):
     """Base model for all code-first Tide object definitions."""
 

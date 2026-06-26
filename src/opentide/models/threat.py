@@ -7,20 +7,20 @@ from typing import Any, ClassVar, cast
 
 from pydantic import Field, model_validator
 
-from opentide.models.base import TideModel
+from opentide.models.base import TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 
 
 class ThreatBody(TideModel):
     description: str
-    severity: str
-    impact: str
-    leverage: str
-    viability: str
+    severity: str = VocabField(True)
+    impact: str = VocabField(True)
+    leverage: str = VocabField(True)
+    viability: str = VocabField(True)
     terrain: str
-    att_ck: list[str] = Field(alias="att&ck")
-    actors: list[str] | None = None
-    killchain: str | list[str] | None = None
+    att_ck: list[str] = Field(alias="att&ck", json_schema_extra={"tide.vocab": True})
+    actors: list[str] | None = VocabField(True, default=None)
+    killchain: str | list[str] | None = VocabField(True, default=None)
     chaining: list[dict[str, str]] | None = None
 
     @model_validator(mode="before")
@@ -37,7 +37,7 @@ class ThreatVector(TideModel):
 
     __schema_identifier__: ClassVar[str] = "threat::1.0"
     name: str
-    criticality: str
+    criticality: str = VocabField(True)
     metadata: ObjectMetadata
     threat: ThreatBody
     references: ObjectReferences | None = None
@@ -49,3 +49,9 @@ class ThreatVector(TideModel):
             payload = dict(payload)
             payload["references"] = ObjectReferences.coerce_public_keys(references)
         return cast(ThreatVector, cls.model_validate(payload))
+
+
+class ThreatVector_v2_1(ThreatVector):
+    """Threat vector schema revision ``threat::2.1`` (structure unchanged; pin bump only)."""
+
+    __schema_identifier__: ClassVar[str] = "threat::2.1"
