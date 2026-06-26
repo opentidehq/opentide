@@ -94,7 +94,7 @@ def test_run_interactive_setup_full_wizard(
             "generic",
         ]
     )
-    confirms = iter([True, True, True, True, False])
+    confirms = iter([True, True, True, True, True, False])
 
     monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: next(prompts))
     monkeypatch.setattr("rich.prompt.Confirm.ask", lambda *args, **kwargs: next(confirms))
