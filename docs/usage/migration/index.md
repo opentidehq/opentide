@@ -148,7 +148,7 @@ OpenTide no longer provides `opentide migrate`. Use the [CoreTide migration prom
 
 ## Related
 
+- [ShareTide → Library](./sharetide-to-library.md) — community catalogue migration case study
 - [Behaviour inventory (internal)](../../internal/behaviour-inventory.md) — legacy vs new behaviour mapping
 - [Repository setup](../repository-setup.md)
 - [CoreTide migration prompt](./prompt.md)
-- [Repository setup](../repository-setup.md)
