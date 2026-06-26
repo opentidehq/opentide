@@ -31,13 +31,21 @@ dependencies = [
     "structlog>=24.0",
     "rich>=13.0",
     "typing_extensions>=4.0",
-    "typer[all]>=0.26.7",
-    "ruamel.yaml",
-    "mcp>=1.0",
-    "fastmcp>=2.0",
 ]
 
 [project.optional-dependencies]
+sentinel = []
+splunk = ["splunk-sdk>=2.0", "pandas>=2.0"]
+crowdstrike = []
+carbon-black = ["carbon-black-cloud-sdk>=1.0"]
+cli = [
+    "typer[all]>=0.26.7",
+    "ruamel.yaml",
+]
+mcp = [
+    "mcp>=1.0",
+    "fastmcp>=2.0",
+]
 dev = [
     "typer[all]>=0.26.7",
     "mcp>=1.0",
