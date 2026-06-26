@@ -11,7 +11,7 @@ metadata:
 
 threat:
   description: Simulated threat actor for CLI E2E corpus
-  severity: High
+  severity: Substantial incident
   impact: Data Breach
   leverage: High
   viability: High

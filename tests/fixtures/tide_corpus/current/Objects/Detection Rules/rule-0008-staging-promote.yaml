@@ -11,7 +11,7 @@ metadata:
 description: |
   Rule with higher metadata.version for mutate/promote E2E tests.
 status: STAGING
-severity: Medium
+severity: Moderate incident
 techniques:
   - T1059
 detection_model: 00000000-0000-4000-8002-000000000001

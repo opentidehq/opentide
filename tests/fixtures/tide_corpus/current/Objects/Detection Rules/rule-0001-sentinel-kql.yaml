@@ -11,7 +11,7 @@ metadata:
 description: |
   Simulated Sentinel rule for CLI E2E corpus.
 status: STAGING
-severity: High
+severity: Substantial incident
 techniques:
   - T1059
 detection_model: 00000000-0000-4000-8002-000000000001
