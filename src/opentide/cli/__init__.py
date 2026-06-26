@@ -115,11 +115,22 @@ def generate_snippets_cmd(ctx: typer.Context) -> None:
     emit_success(cli, run_generate(cli, phase="snippets"))
 
 
-@generate_app.command("inflight")
+inflight_app = typer.Typer(help="Inflight preview shard generation and prune")
+generate_app.add_typer(inflight_app, name="inflight")
+
+
+@inflight_app.callback(invoke_without_command=True)
 def generate_inflight_cmd(ctx: typer.Context) -> None:
     """Write per-UUID preview shards under ``.opentide/inflight/`` for changed objects."""
     cli = get_context(ctx)
     emit_success(cli, run_generate(cli, phase="inflight"))
+
+
+@inflight_app.command("prune")
+def generate_inflight_prune_cmd(ctx: typer.Context) -> None:
+    """Remove inflight shards superseded by committed objects on the default branch."""
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="inflight-prune"))
 
 
 def _emit_docs(

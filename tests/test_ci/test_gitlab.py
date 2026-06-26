@@ -24,7 +24,9 @@ def test_render_gitlab_inflight_job_when_enabled() -> None:
     options = CiRenderOptions(ci="gitlab", inflight=True)
     content = render_gitlab(options)
     assert "inflight_shards:" in content
+    assert "inflight_prune:" in content
     assert "opentide generate inflight" in content
+    assert "opentide generate inflight prune" in content
 
 
 def test_render_gitlab_no_inflight_skips_inflight_job() -> None:

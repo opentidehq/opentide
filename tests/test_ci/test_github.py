@@ -49,7 +49,9 @@ def test_render_github_inflight_job_when_enabled() -> None:
     options = CiRenderOptions(ci="github", inflight=True, default_branch="main")
     workflow = render_github(options)
     assert "inflight_shards:" in workflow
+    assert "inflight_prune:" in workflow
     assert "opentide generate inflight" in workflow
+    assert "opentide generate inflight prune" in workflow
     assert 'git push origin "HEAD:main"' in workflow
 
 

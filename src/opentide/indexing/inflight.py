@@ -11,12 +11,18 @@ from typing import Any
 
 from opentide.core.io import load_yaml
 from opentide.core.logging import get_logger
+from opentide.indexing.inflight_change import build_shard_payload
+from opentide.indexing.inflight_shard import (
+    shard_object,
+    should_replace_object,
+)
 from opentide.registry.discovery import discover_workspace
 from opentide.registry.paths import resolve_workspace_paths
 
 logger = get_logger(__name__)
 
 _OBJECT_YAML = re.compile(r"^objects/(threats|objectives|rules)/[^/]+\.(ya?ml)$")
+_OBJECT_FAMILIES = ("threat", "objective", "rule")
 
 
 def _object_version(body: dict[str, Any]) -> int:
@@ -108,6 +114,29 @@ def changed_object_yaml_paths(
     return [root / p for p in scope if _is_object_yaml(p)]
 
 
+def _iter_committed_object_yaml() -> list[tuple[str, Path]]:
+    paths = resolve_workspace_paths()
+    found: list[tuple[str, Path]] = []
+    for family in _OBJECT_FAMILIES:
+        object_dir = paths.get(family)
+        if object_dir is None or not object_dir.is_dir():
+            continue
+        for model_path in sorted(object_dir.rglob("*.yaml")):
+            if model_path.name.endswith(".debug.yaml"):
+                continue
+            found.append((family, model_path))
+    return found
+
+
+def committed_object_body(uuid: str) -> dict[str, Any] | None:
+    """Load the object document committed on the current branch for ``uuid``."""
+    for _family, model_path in _iter_committed_object_yaml():
+        body = load_yaml(model_path)
+        if isinstance(body, dict) and _object_uuid(body) == uuid:
+            return body
+    return None
+
+
 def write_inflight_shards(
     paths: list[Path] | None = None,
     *,
@@ -131,9 +160,10 @@ def write_inflight_shards(
         if not uuid:
             logger.warning("inflight_skip_missing_uuid", path=str(yaml_path))
             continue
+        shard = build_shard_payload(body, yaml_path)
         shard_path = target_dir / f"{uuid}.json"
         shard_path.write_text(
-            json.dumps(body, indent=2, default=str) + "\n",
+            json.dumps(shard, indent=2, default=str) + "\n",
             encoding="utf-8",
         )
         written.append(uuid)
@@ -143,7 +173,7 @@ def write_inflight_shards(
 
 
 def load_inflight_shards(inflight_dir: Path | None = None) -> dict[str, dict[str, Any]]:
-    """Load all inflight shards keyed by object UUID."""
+    """Load all inflight shard envelopes keyed by object UUID."""
     resolved_paths = resolve_workspace_paths()
     directory = inflight_dir or resolved_paths["inflight"]
     if not directory.is_dir():
@@ -158,7 +188,8 @@ def load_inflight_shards(inflight_dir: Path | None = None) -> dict[str, dict[str
             continue
         if not isinstance(body, dict):
             continue
-        uuid = _object_uuid(body)
+        obj = shard_object(body)
+        uuid = _object_uuid(obj)
         if uuid:
             shards[uuid] = body
     return shards
@@ -195,7 +226,8 @@ def apply_inflight_overlay(
     added = 0
     updated = 0
 
-    for uuid, body in overlay.items():
+    for uuid, shard in overlay.items():
+        body = shard_object(shard)
         family = _object_family(body)
         if not family or family not in objects_index:
             logger.warning("inflight_skip_unknown_family", uuid=uuid, family=family)
@@ -206,7 +238,7 @@ def apply_inflight_overlay(
         if existing is None:
             bucket[uuid] = body
             added += 1
-        elif _object_version(body) >= _object_version(existing):
+        elif should_replace_object(existing, shard):
             bucket[uuid] = body
             updated += 1
         else:
@@ -218,6 +250,36 @@ def apply_inflight_overlay(
     if added or updated:
         logger.info("inflight_overlay_applied", added=added, updated=updated)
     return {"added": added, "updated": updated}
+
+
+def prune_inflight_shards(inflight_dir: Path | None = None) -> dict[str, Any]:
+    """Remove shards superseded by committed object YAML on the default branch."""
+    resolved_paths = resolve_workspace_paths()
+    directory = inflight_dir or resolved_paths["inflight"]
+    if not directory.is_dir():
+        return {"pruned": [], "count": 0, "directory": str(directory)}
+
+    pruned: list[str] = []
+    for path in sorted(directory.glob("*.json")):
+        try:
+            shard = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(shard, dict):
+            continue
+        obj = shard_object(shard)
+        uuid = _object_uuid(obj)
+        if not uuid:
+            continue
+        committed = committed_object_body(uuid)
+        if committed is None:
+            continue
+        if _object_version(committed) >= _object_version(obj):
+            path.unlink(missing_ok=True)
+            pruned.append(uuid)
+            logger.info("inflight_shard_pruned", uuid=uuid, path=str(path))
+
+    return {"pruned": pruned, "count": len(pruned), "directory": str(directory)}
 
 
 def run(inflight_dir: Path | None = None) -> dict[str, Any]:
@@ -232,3 +294,11 @@ def run(inflight_dir: Path | None = None) -> dict[str, Any]:
     except KeyError:
         plan = DeploymentStrategy.STAGING
     return write_inflight_shards(inflight_dir=inflight_dir, plan=plan)
+
+
+def run_prune(inflight_dir: Path | None = None) -> dict[str, Any]:
+    """CLI entry: prune inflight shards superseded on the default branch."""
+    from opentide.core.registry import OpenTide
+
+    OpenTide.initialise()
+    return prune_inflight_shards(inflight_dir=inflight_dir)

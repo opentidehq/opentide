@@ -50,3 +50,11 @@ def test_staging_and_promotion_steps() -> None:
 
 def test_inflight_generate_steps() -> None:
     assert inflight_generate_steps(CiRenderOptions(ci="github")) == ["opentide generate inflight"]
+
+
+def test_inflight_prune_steps() -> None:
+    from opentide.ci.stages import inflight_prune_steps
+
+    assert inflight_prune_steps(CiRenderOptions(ci="github")) == [
+        "opentide generate inflight prune"
+    ]

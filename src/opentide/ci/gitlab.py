@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import textwrap
 
-from opentide.ci.inflight import gitlab_inflight_job
+from opentide.ci.inflight import gitlab_inflight_job, gitlab_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     document_steps,
@@ -94,6 +94,12 @@ def render_gitlab(options: CiRenderOptions) -> str:
     if options.inflight:
         deploy_jobs.append(
             gitlab_inflight_job(
+                python_version=options.python_version,
+                opentide_version=options.opentide_version,
+            )
+        )
+        deploy_jobs.append(
+            gitlab_inflight_prune_job(
                 python_version=options.python_version,
                 opentide_version=options.opentide_version,
             )
