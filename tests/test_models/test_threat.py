@@ -18,7 +18,7 @@ def test_threat_vector_from_yaml_dict(metadata: dict[str, Any]) -> None:
             "impact": "Data Breach",
             "leverage": "High",
             "viability": "High",
-            "terrain": "Endpoint",
+            "terrain": ["Windows::Desktop"],
             "att&ck": ["T1059"],
         },
     }

@@ -17,7 +17,7 @@ class ThreatBody(TideModel):
     impact: str = VocabField(True)
     leverage: str = VocabField(True)
     viability: str = VocabField(True)
-    terrain: str
+    terrain: list[str] = VocabField(True)
     att_ck: list[str] = Field(alias="att&ck", json_schema_extra={"tide.vocab": True})
     actors: list[str] | None = VocabField(True, default=None)
     killchain: str | list[str] | None = VocabField(True, default=None)
