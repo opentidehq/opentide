@@ -101,8 +101,12 @@ Install detection engineering agent skills from [OpenTideHQ/skills](https://gith
 ```bash
 opentide setup skills discover
 opentide setup skills discover --query kql
+opentide setup skills discover --path /path/to/repo
 opentide setup skills show opentide-detection-rule
+opentide setup skills show opentide-detection-rule --path /path/to/repo
 ```
+
+JSON output includes `manifest_source` (`remote` or `bundled`) and `manifest_refreshed` when using `--refresh`.
 
 </Step>
 
@@ -114,9 +118,12 @@ opentide setup skills show opentide-detection-rule
 opentide setup skills --yes --generic
 opentide setup skills --yes --install opentide-detection-rule --install detection-engineering
 opentide setup skills --yes --all --cursor
+opentide setup skills --yes --generic --path /path/to/repo
 ```
 
-Place flags **before** the optional `[PATH]` argument: `opentide setup skills --yes .`
+Use positional `[PATH]` or `--path` / `-C` for the repository root. Place flags **before** the optional `[PATH]` argument: `opentide setup skills --yes .`
+
+Installing `--github-copilot` without `--generic` also applies the generic layout; JSON output includes `"also_applied": ["generic"]`.
 
 </Step>
 
@@ -124,12 +131,14 @@ Place flags **before** the optional `[PATH]` argument: `opentide setup skills --
 
 | Flag | Purpose |
 |------|---------|
+| `--path` / `-C` | Repository path (install, discover, show) |
 | `--cursor` / `--claude-code` / `--generic` / `--github-copilot` | Target harness layouts |
 | `--install` | Skill slug (repeatable) |
-| `--all` | Install full bundled catalogue |
+| `--all` | Install full catalogue |
 | `--name`, `--org`, `--description` | Entrypoint metadata |
+| `--refresh` | Re-fetch `manifest.json` from GitHub (`discover` / `show`) |
 
-Offline browse uses the bundled manifest; `--refresh` on `discover` / `show` fetches the latest catalogue from GitHub.
+Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) first; the packaged manifest is an offline fallback only. Remote fetch and install require network access to the public skills repository.
 
 ### setup vscode (deprecated)
 

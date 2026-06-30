@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import shutil
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -17,14 +15,16 @@ from opentide.cli.services.setup.interactive import (
     parse_multi_select,
     skill_targets_from_keys,
 )
-from opentide.cli.services.setup.skills_registry import load_manifest
+from opentide.cli.services.setup.skills_registry import (
+    fetch_github_bytes,
+    known_skill_slugs,
+    load_manifest,
+)
 from opentide.cli.services.setup.templates import render_agent_entrypoint
 
 logger = structlog.get_logger("opentide.cli.services.setup.skills")
 
 _STARTER_SKILLS = ("opentide-detection-rule", "detection-engineering")
-_RAW_TREE = "https://raw.githubusercontent.com/OpenTideHQ/skills/{ref}/skills/{slug}/"
-_RAW_AGENTS = "https://raw.githubusercontent.com/OpenTideHQ/skills/{ref}/AGENTS.md"
 
 
 @dataclass
@@ -49,27 +49,29 @@ def _entrypoint_context(options: SkillsSetupOptions, target: Path) -> dict[str, 
     }
 
 
-def _fetch_bytes(url: str) -> bytes | None:
-    try:
-        return urllib.request.urlopen(url, timeout=20).read()
-    except (urllib.error.URLError, OSError):
-        return None
+def _download_error(slug: str, *, source: str, ref: str) -> str:
+    return (
+        f"Could not download skill '{slug}' from {source}@{ref}. "
+        "Check network access and that the skills repository is publicly reachable."
+    )
 
 
-def _download_skill(slug: str, dest: Path, *, ref: str) -> list[str]:
+def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
     """Download skill tree from GitHub raw; copy references/ if present."""
     written: list[str] = []
-    base_url = _RAW_TREE.format(ref=ref, slug=slug)
-    skill_md = _fetch_bytes(f"{base_url}SKILL.md")
+    skill_md = fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref)
     if skill_md is None:
-        raise typer.BadParameter(f"Could not download skill: {slug}")
+        raise typer.BadParameter(_download_error(slug, source=source, ref=ref))
     dest.mkdir(parents=True, exist_ok=True)
     skill_path = dest / "SKILL.md"
     skill_path.write_bytes(skill_md)
     written.append(str(skill_path.name))
-    # Best-effort: fetch common reference files when present upstream
     for ref_name in ("Best-Practices.md", "Anti-Patterns.md"):
-        payload = _fetch_bytes(f"{base_url}references/{ref_name}")
+        payload = fetch_github_bytes(
+            f"skills/{slug}/references/{ref_name}",
+            source=source,
+            ref=ref,
+        )
         if payload:
             ref_dir = dest / "references"
             ref_dir.mkdir(exist_ok=True)
@@ -79,19 +81,32 @@ def _download_skill(slug: str, dest: Path, *, ref: str) -> list[str]:
 
 
 def _resolve_skill_slugs(options: SkillsSetupOptions) -> list[str]:
-    _, ref, entries = load_manifest()
+    manifest = load_manifest()
     if options.install_all:
-        return [e.slug for e in entries]
+        return [entry.slug for entry in manifest.entries]
     if options.skill_slugs:
+        known = known_skill_slugs()
+        unknown = [slug for slug in options.skill_slugs if slug not in known]
+        if unknown:
+            joined = ", ".join(unknown)
+            raise typer.BadParameter(
+                f"Unknown skill slug(s): {joined}. "
+                "Run 'opentide setup skills discover' to list available skills."
+            )
         return list(options.skill_slugs)
     return list(_STARTER_SKILLS)
 
 
 def _install_skill_trees(target: Path, slugs: list[str]) -> list[str]:
-    _, ref, _ = load_manifest()
+    manifest = load_manifest()
     written: list[str] = []
     for slug in slugs:
-        rel_files = _download_skill(slug, target / ".agents" / "skills" / slug, ref=ref)
+        rel_files = _download_skill(
+            slug,
+            target / ".agents" / "skills" / slug,
+            source=manifest.source,
+            ref=manifest.ref,
+        )
         written.extend(f".agents/skills/{slug}/{name}" for name in rel_files)
     return written
 
@@ -127,8 +142,8 @@ def _install_claude_code(target: Path, slugs: list[str], context: dict[str, str]
 
 def _install_generic(target: Path, slugs: list[str], context: dict[str, str]) -> list[str]:
     written: list[str] = []
-    _, ref, _ = load_manifest()
-    agents_payload = _fetch_bytes(_RAW_AGENTS.format(ref=ref))
+    manifest = load_manifest()
+    agents_payload = fetch_github_bytes("AGENTS.md", source=manifest.source, ref=manifest.ref)
     if agents_payload:
         (target / "AGENTS.md").write_bytes(agents_payload)
     else:
@@ -159,6 +174,7 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
     slugs = _resolve_skill_slugs(options)
     context = _entrypoint_context(options, target)
     written = _install_skill_trees(target, slugs)
+    also_applied: list[str] = []
     for skill_target in options.targets:
         if skill_target is SkillTarget.cursor:
             written.extend(_install_cursor(target, slugs))
@@ -169,14 +185,18 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
         elif skill_target is SkillTarget.github_copilot:
             if SkillTarget.generic not in options.targets:
                 written.extend(_install_generic(target, slugs, context))
+                also_applied.append("generic")
             written.extend(_install_github_copilot(target, context))
     logger.info("agent_skills_created", detail=str(target), files=written, skills=slugs)
-    return {
+    result: dict[str, object] = {
         "message": "Agent skills installed",
         "path": str(target),
         "skills": slugs,
         "files": written,
     }
+    if also_applied:
+        result["also_applied"] = also_applied
+    return result
 
 
 def run_interactive_skills_setup(base_path: Path) -> dict[str, object]:

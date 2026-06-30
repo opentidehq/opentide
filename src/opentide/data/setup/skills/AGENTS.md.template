@@ -23,7 +23,7 @@ opentide deploy --platform sentinel --dry-run
 
 ## Skills
 
-See `.agents/skills/opentide-detection-ops/SKILL.md` for detection engineering workflows.
+See `.agents/skills/opentide-detection-rule/SKILL.md` for detection engineering workflows.
 
 ## MCP
 

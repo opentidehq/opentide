@@ -29,13 +29,16 @@ def cli_runner() -> CliRunner:
 def mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
     """Avoid network calls when tests install skills from OpenTideHQ/skills."""
 
-    def _fake(slug: str, dest: Path, *, ref: str) -> list[str]:
+    def _fake(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
         dest.mkdir(parents=True, exist_ok=True)
-        (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8")
+        (dest / "SKILL.md").write_text(f"# {slug} ({source}@{ref})\n", encoding="utf-8")
         return ["SKILL.md"]
 
     monkeypatch.setattr("opentide.cli.services.setup.skills._download_skill", _fake)
-    monkeypatch.setattr("opentide.cli.services.setup.skills._fetch_bytes", lambda url: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.fetch_github_bytes",
+        lambda path, **_: None,
+    )
 
 
 @pytest.fixture
