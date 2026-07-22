@@ -10,6 +10,7 @@ from opentide.documentation.diagram.builders import (
 )
 from opentide.documentation.objects.base import ObjectRenderer
 from opentide.documentation.parts import sections
+from opentide.documentation.vocabulary import enrich
 from opentide.models.threat import ThreatVector
 
 
@@ -21,6 +22,7 @@ class ThreatRenderer(ObjectRenderer):
         blocks = [
             self.title_block(threat.name),
             sections.render_metadata(threat.metadata, self.formatter),
+            sections.render_references(threat.references, self.formatter),
             sections.render_threat_body(threat, self.formatter),
             self._chaining(threat),
             self._relations(threat),
@@ -34,9 +36,36 @@ class ThreatRenderer(ObjectRenderer):
             uuid=threat.metadata.uuid,
             name=threat.name,
         )
-        if not diagram:
+        details = self._chaining_details(threat)
+        if not diagram and not details:
             return ""
-        return self.formatter.heading(2, "Chaining") + diagram
+        return self.formatter.heading(2, "Chaining") + diagram + details
+
+    def _chaining_details(self, threat: ThreatVector) -> str:
+        if not threat.threat.chaining:
+            return ""
+        chunks: list[str] = [self.formatter.heading(3, "Chaining details")]
+        for entry in threat.threat.chaining:
+            target = (
+                entry.get("vector") or entry.get("target") or entry.get("uuid") or entry.get("id")
+            )
+            if not target:
+                continue
+            relation_key = str(entry.get("relation") or "").strip()
+            relation = enrich("chaining_relations", relation_key) if relation_key else None
+            relation_label = relation.label if relation else "Related"
+            target_name = self.catalog.resolve_name(str(target))
+            heading = f"{relation_label} -> {target_name}"
+            if relation_key and relation_key != relation_label:
+                heading += f" (`{relation_key}`)"
+            chunks.append(self.formatter.heading(4, heading))
+            description = str(entry.get("description") or "").strip()
+            if not description and relation:
+                description = relation.description
+            if description:
+                chunks.append(self.formatter.paragraph(description))
+            chunks.append(f"- **Target UUID**: `{target}`\n")
+        return "".join(chunks)
 
     def _relations(self, threat: ThreatVector) -> str:
         diagram = render_relations_diagram(
@@ -44,6 +73,7 @@ class ThreatRenderer(ObjectRenderer):
             self.catalog,
             uuid=threat.metadata.uuid,
             name=threat.name,
+            direction=self.ctx.relations_direction,
         )
         if not diagram:
             return ""

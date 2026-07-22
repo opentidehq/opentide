@@ -12,10 +12,20 @@ from opentide.documentation.api import (
 from opentide.documentation.cli import run
 from opentide.documentation.context import DocumentationContext
 from opentide.documentation.types import DocumentFlavor
+from opentide.documentation.vocabulary import (
+    EnrichedEntry,
+    chaining_relation_label,
+    enrich,
+    enrich_technique,
+)
 
 __all__ = [
     "DocumentationContext",
     "DocumentFlavor",
+    "EnrichedEntry",
+    "chaining_relation_label",
+    "enrich",
+    "enrich_technique",
     "render_objective",
     "render_rule",
     "render_threat",

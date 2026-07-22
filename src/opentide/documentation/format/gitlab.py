@@ -17,6 +17,10 @@ class GitLabFormatter(BaseFormatter):
     def strike(self, text: str) -> str:
         return f"[-{text}-]"
 
+    def wiki_link(self, text: str, target: str) -> str:
+        page = target.removesuffix(".md")
+        return self.link(text, page)
+
     def index_table(self, headers: list[str], rows: list[list[str]]) -> str:
         char = "a"
         key_by_header: dict[str, str] = {}

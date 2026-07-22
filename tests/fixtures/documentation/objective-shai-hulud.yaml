@@ -1,0 +1,54 @@
+name: Shai-Hulud Objective
+
+metadata:
+  uuid: 00000000-0000-4000-8102-000000000001
+  schema: objective::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+
+composition:
+  strategy: synergetic
+  description: Correlate cloud identity telemetry with control plane actions.
+
+objective:
+  priority: High
+  type: Threat
+  investment: Medium
+  description: Detect cloud victim data collection behavior.
+  composition:
+    strategy: Sequence
+    description: Correlate cloud identity telemetry with control plane actions.
+  threats:
+    - 00000000-0000-4000-8101-000000000001
+  signals:
+    - name: Unusual cloud directory enumeration
+      uuid: 00000000-0000-4000-8199-000000000001
+      description: Enumerations from anomalous identities and hosts.
+      severity: Moderate incident
+      effort: 3
+      methodology: Behavioural
+      entities:
+        - Account
+        - Hostname
+      data:
+        availability: Complete
+        requirements: Cloud activity and identity logs
+        logsources:
+          - Azure AD AuditLogs
+          - Entra ID SignInLogs
+      detectors:
+        - name: Sentinel cloud enumeration baseline
+          technology: Microsoft Sentinel
+          description: Correlates unusual list operations from cloud identities.
+          link: https://example.com/detectors/cloud-enumeration
+      examples:
+        - description: Baseline KQL sequence for identity enumeration.
+          link: https://example.com/examples/cloud-enumeration
+          language: sql
+          query: |
+            AuditLogs
+            | where OperationName has "List"
+            | where Result =~ "success"
+            | take 1

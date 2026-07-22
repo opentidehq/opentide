@@ -18,8 +18,15 @@ class ObjectiveRenderer(ObjectRenderer):
         blocks = [
             self.title_block(objective.name),
             sections.render_metadata(objective.metadata, self.formatter),
+            sections.render_references(objective.references, self.formatter),
             sections.render_description(objective.objective.description, self.formatter),
+            sections.render_objective_meta(objective, self.formatter),
             sections.render_signals(objective, self.formatter),
+            sections.render_signal_mdr_coverage(
+                objective,
+                self.formatter,
+                resolve_name=self.catalog.resolve_name,
+            ),
             self._relations(objective),
         ]
         return self.assemble(blocks)
@@ -30,6 +37,7 @@ class ObjectiveRenderer(ObjectRenderer):
             self.catalog,
             uuid=objective.metadata.uuid,
             name=objective.name,
+            direction=self.ctx.relations_direction,
         )
         if not diagram:
             return ""

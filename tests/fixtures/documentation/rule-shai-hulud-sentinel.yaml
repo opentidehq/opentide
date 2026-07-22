@@ -1,0 +1,58 @@
+name: Shai-Hulud Sentinel Rule
+
+metadata:
+  uuid: 00000000-0000-4000-8103-000000000001
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+
+description: |
+  Detects suspicious cloud data gathering sequences tied to the Shai-Hulud objective.
+status: STAGING
+severity: High
+techniques:
+  - T1589
+detection_model: 00000000-0000-4000-8102-000000000001
+
+response:
+  alert_severity: High
+  playbook: PB-IR-001
+  responders: soc_l1
+  procedure:
+    analysis: Validate whether cloud listing behavior matches approved automation.
+    containment: Temporarily suspend suspicious account sessions and revoke tokens.
+    searches:
+      - purpose: Corroborate suspicious inventory calls
+        system: Sentinel
+        query: |
+          AuditLogs
+          | where OperationName has "List"
+          | summarize count() by Identity
+
+configurations:
+  sentinel:
+    enabled: true
+    name: Shai-Hulud Sentinel Rule
+    status: STAGING
+    query: |
+      AuditLogs
+      | where OperationName has "List"
+      | where Result =~ "success"
+      | take 1
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
+    alert:
+      title: Shai-Hulud Sentinel Rule
+      suppression: false
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false
+    entities:
+      - entity: Account
+        mappings:
+          - identifier: Name
+            column: Identity

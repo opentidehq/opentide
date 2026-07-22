@@ -18,8 +18,18 @@ class RuleRenderer(ObjectRenderer):
         blocks = [
             self.title_block(rule.name),
             sections.render_metadata(rule.metadata, self.formatter),
+            sections.render_references(rule.references, self.formatter),
             sections.render_description(rule.description, self.formatter),
+            sections.render_rule_status(rule, self.formatter),
             sections.render_techniques(rule.techniques, self.formatter),
+            sections.render_detection_model_link(
+                rule,
+                self.formatter,
+                self.catalog,
+                uuid_permalinks=self.ctx.uuid_permalinks,
+                wiki_links=self.ctx.flavor.value in {"gitlab", "azure_devops"},
+            ),
+            sections.render_rule_response(rule, self.formatter),
             sections.render_rule_queries(rule, self.formatter),
             self._relations(rule),
         ]
@@ -31,6 +41,7 @@ class RuleRenderer(ObjectRenderer):
             self.catalog,
             uuid=rule.metadata.uuid,
             name=rule.name,
+            direction=self.ctx.relations_direction,
         )
         if not diagram:
             return ""

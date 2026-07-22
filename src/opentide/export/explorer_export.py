@@ -7,8 +7,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 from opentide.generation.framework import techniques_resolver

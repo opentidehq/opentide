@@ -1,0 +1,199 @@
+# serializer version: 1
+# name: test_github_markdown_snapshots[objective][objective_github]
+  '''
+  # Shai-Hulud Objective
+  
+  ## Metadata
+  
+  - **UUID**: `00000000-0000-4000-8102-000000000001`
+  - **Schema**: `objective::1.0`
+  - **Version**: `1`
+  - **Created**: `2026-01-01`
+  - **Modified**: `2026-01-02`
+  - **TLP**: clear (`TLP:CLEAR`)
+  
+  ## Description
+  Detect cloud victim data collection behavior.
+  
+  ## Objective metadata
+  
+  - **Priority**: High
+  - **Type**: Threat
+  - **Investment**: Medium
+  - **Composition**: Sequence
+  - **Composition rationale**: Correlate cloud identity telemetry with control plane actions.
+  
+  ## Signals
+  ### Unusual cloud directory enumeration
+  Enumerations from anomalous identities and hosts.
+  
+  - **Severity**: Moderate incident
+  - **Methodology**: Behavioural
+  - **Effort**: 3
+  #### Data
+  
+  - **Availability**: Complete
+  - **Requirements**: Cloud activity and identity logs
+  - **Log sources**: Azure AD AuditLogs, Entra ID SignInLogs
+  - **Entities**: Account, Hostname
+  #### Detectors
+  
+  - **Sentinel cloud enumeration baseline** (Microsoft Sentinel): Correlates unusual list operations from cloud identities. ([Reference](https://example.com/detectors/cloud-enumeration))
+  #### Examples
+  
+  1. Baseline KQL sequence for identity enumeration.
+     - **Link**: [https://example.com/examples/cloud-enumeration](https://example.com/examples/cloud-enumeration)
+  ```sql
+  AuditLogs
+  | where OperationName has "List"
+  | where Result =~ "success"
+  | take 1
+  
+  ```
+  
+  ## Signal MDR coverage
+  | Signal | Downstream MDR rules |
+  | --- | --- |
+  | Unusual cloud directory enumeration | _None_ |
+  
+  ## Relations
+  ```mermaid
+  flowchart TB
+  subgraph "Rule"
+  00000000_0000_4000_8103_000000000001["Shai-Hulud Sentinel Rule"]
+  end
+  00000000_0000_4000_8102_000000000001["Shai-Hulud Objective"]
+  00000000_0000_4000_8102_000000000001 -->|rule| 00000000_0000_4000_8103_000000000001
+  ```
+  '''
+# ---
+# name: test_github_markdown_snapshots[rule][rule_github]
+  '''
+  # Shai-Hulud Sentinel Rule
+  
+  ## Metadata
+  
+  - **UUID**: `00000000-0000-4000-8103-000000000001`
+  - **Schema**: `rule::1.0`
+  - **Version**: `1`
+  - **Created**: `2026-01-01`
+  - **Modified**: `2026-01-02`
+  - **TLP**: clear (`TLP:CLEAR`)
+  
+  ## Description
+  Detects suspicious cloud data gathering sequences tied to the Shai-Hulud objective.
+  
+  ## Status
+  
+  - **Status**: `STAGING`
+  - **Severity**: `High`
+  
+  ## Techniques
+  - T1589
+  
+  ## Detection model
+  - **Objective**: [Shai-Hulud Objective](Objectives/shai-hulud-objective.md) (`00000000-0000-4000-8102-000000000001`)
+  
+  ## Response
+  
+  - **Alert severity**: High
+  - **Playbook**: PB-IR-001
+  - **Responders**: soc_l1
+  ### Procedure
+  - **Analysis**: Validate whether cloud listing behavior matches approved automation.
+  - **Containment**: Temporarily suspend suspicious account sessions and revoke tokens.
+  #### Searches
+  - **Corroborate suspicious inventory calls** (Sentinel)
+  ```text
+  AuditLogs
+  | where OperationName has "List"
+  | summarize count() by Identity
+  
+  ```
+  
+  ## Platform configurations
+  <details><summary>sentinel</summary>
+  
+  - **Enabled**: `True`
+  - **Status**: `STAGING`
+  - **Alert title**: Shai-Hulud Sentinel Rule
+  - **Entity mapping**: Account: Name -> Identity
+  
+  ```sql
+  AuditLogs
+  | where OperationName has "List"
+  | where Result =~ "success"
+  | take 1
+  
+  ```
+  
+  
+  </details>
+  '''
+# ---
+# name: test_github_markdown_snapshots[threat][threat_github]
+  '''
+  # Azure Gather Victim Data
+  
+  ## Metadata
+  
+  - **UUID**: `00000000-0000-4000-8101-000000000001`
+  - **Schema**: `threat::1.0`
+  - **Version**: `1`
+  - **Created**: `2026-01-01`
+  - **Modified**: `2026-01-02`
+  - **TLP**: clear (`TLP:CLEAR`)
+  
+  ## Description
+  Adversary gathers victim cloud account inventory and telemetry context.
+  
+  ## Criticality
+  **High** - A High priority incident is likely to result in a demonstrable impact to public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.
+  
+  ## Terrain
+  > **Cloud Services**
+  > Cloud provider service catalogue entries across AWS, Azure, GCP and others
+  
+  ## Threat Assessment
+  | Dimension | Assessment | Description |
+  | --- | --- | --- |
+  | Severity | High | - |
+  | Impact | Credential Exposure | - |
+  | Leverage | High | - |
+  | Viability | Medium | - |
+  | Kill Chain | Reconnaissance | Researching, identifying and selecting targets using active or passive reconnaissance. |
+  
+  ## Actors
+  | Actor | ID | Source | Description |
+  | --- | --- | --- | --- |
+  | [[Enterprise] APT-C-23](https://attack.mitre.org/groups/G1028) | `G1028` | ('att&ck',) | [APT-C-23](https://attack.mitre.org/groups/G1028) is a threat group that has been active since at least 2014.(Citation: symantec_mantis) [APT-C-23](https://attack.mitre.org/groups/G1028) has primarily focused its operations on the Middle East, including Israeli military assets. [APT-C-23](https://attack.mitre.org/groups/G1028) has developed mobile spyware targeting Android and iOS devices since 2017.(Citation: welivesecurity_apt-c-23) |
+  
+  ## ATT&CK Techniques
+  | Technique | Name | Description |
+  | --- | --- | --- |
+  | `T1589` | [Gather Victim Identity Information](https://attack.mitre.org/techniques/T1589) | Adversaries may gather information about the victim's identity that can be used during targeting. Information about identities may include a variety of details, including personal data (ex: employee names, email addresses, security question responses, etc.) as well as sensitive details such as credentials or multi-factor authentication (MFA) configurations.  Adversaries may gather this information in various ways, such as direct elicitation via [Phishing for Information](https://attack.mitre.org/techniques/T1598). Information about users could also be enumerated via other active means (i.e. [Active Scanning](https://attack.mitre.org/techniques/T1595)) such as probing and analyzing responses from authentication services that may reveal valid usernames in a system or permitted MFA /methods associated with those usernames.(Citation: GrimBlog UsernameEnum)(Citation: Obsidian SSPR Abuse 2023) Information about victims may also be exposed to adversaries via online or other accessible data sets (ex: [Social Media](https://attack.mitre.org/techniques/T1593/001) or [Search Victim-Owned Websites](https://attack.mitre.org/techniques/T1594)).(Citation: OPM Leak)(Citation: Register Deloitte)(Citation: Register Uber)(Citation: Detectify Slack Tokens)(Citation: Forbes GitHub Creds)(Citation: GitHub truffleHog)(Citation: GitHub Gitrob)(Citation: CNET Leaks)  Gathering this information may reveal opportunities for other forms of reconnaissance (ex: [Search Open Websites/Domains](https://attack.mitre.org/techniques/T1593) or [Phishing for Information](https://attack.mitre.org/techniques/T1598)), establishing operational resources (ex: [Compromise Accounts](https://attack.mitre.org/techniques/T1586)), and/or initial access (ex: [Phishing](https://attack.mitre.org/techniques/T1566) or [Valid Accounts](https://attack.mitre.org/techniques/T1078)). |
+  
+  ## Chaining
+  ```mermaid
+  flowchart LR
+  00000000_0000_4000_8101_000000000001["Azure Gather Victim Data"]
+  00000000_0000_4000_8101_000000000099["Cloud Discovery Follow-up"]
+  00000000_0000_4000_8101_000000000001 -->|preceeds| 00000000_0000_4000_8101_000000000099
+  ```
+  ### Chaining details
+  #### preceeds -> Cloud Discovery Follow-up
+  The following TVM is occuring **AFTER** this TVM object has been performed.
+  
+  - **Target UUID**: `00000000-0000-4000-8101-000000000099`
+  
+  ## Relations
+  ```mermaid
+  flowchart TB
+  subgraph "Objective"
+  00000000_0000_4000_8102_000000000001["Shai-Hulud Objective"]
+  end
+  00000000_0000_4000_8101_000000000001["Azure Gather Victim Data"]
+  00000000_0000_4000_8101_000000000001 -->|objective| 00000000_0000_4000_8102_000000000001
+  ```
+  '''
+# ---

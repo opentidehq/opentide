@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from opentide.documentation.catalog import DocumentationCatalog
+from opentide.documentation.catalog import DiagramEntry, DocumentationCatalog
 from opentide.documentation.diagram.builders import (
     render_chaining_diagram,
     render_relations_diagram,
@@ -13,19 +13,26 @@ from opentide.documentation.format.github import GitHubFormatter
 
 def _catalog(
     *,
-    related: list[str] | None = None,
-    chain: list[str] | None = None,
+    related: list[DiagramEntry] | None = None,
+    chain: list[DiagramEntry] | None = None,
 ) -> DocumentationCatalog:
     catalog = MagicMock(spec=DocumentationCatalog)
-    catalog.related_uuids.return_value = related or []
-    catalog.chaining_uuids.return_value = chain or []
+    catalog.related_entries.return_value = related or []
+    catalog.chaining_entries.return_value = chain or []
     catalog.resolve_name.side_effect = lambda uuid: f"name-{uuid[:8]}"
     return catalog
 
 
 def test_render_relations_diagram_github() -> None:
     formatter = GitHubFormatter()
-    catalog = _catalog(related=["00000000-0000-4000-8000-000000000002"])
+    catalog = _catalog(
+        related=[
+            DiagramEntry(
+                uuid="00000000-0000-4000-8000-000000000002",
+                relation="objective",
+            )
+        ]
+    )
     diagram = render_relations_diagram(
         formatter,
         catalog,
@@ -35,11 +42,20 @@ def test_render_relations_diagram_github() -> None:
     assert "```mermaid" in diagram
     assert "flowchart TB" in diagram
     assert "Root" in diagram
+    assert 'subgraph "Objective"' in diagram
+    assert "-->|objective|" in diagram
 
 
 def test_render_relations_diagram_azure_uses_graph() -> None:
     formatter = AzureDevOpsFormatter()
-    catalog = _catalog(related=["00000000-0000-4000-8000-000000000002"])
+    catalog = _catalog(
+        related=[
+            DiagramEntry(
+                uuid="00000000-0000-4000-8000-000000000002",
+                relation="objective",
+            )
+        ]
+    )
     diagram = render_relations_diagram(
         formatter,
         catalog,
@@ -49,11 +65,17 @@ def test_render_relations_diagram_azure_uses_graph() -> None:
     assert "::: mermaid" in diagram
     assert "graph TB" in diagram
     assert "flowchart" not in diagram
+    assert "subgraph" not in diagram
 
 
 def test_render_chaining_diagram_linear() -> None:
     formatter = GitHubFormatter()
-    catalog = _catalog(chain=["step-a", "step-b"])
+    catalog = _catalog(
+        chain=[
+            DiagramEntry(uuid="step-a", relation="preceeds"),
+            DiagramEntry(uuid="step-b", relation="enabled"),
+        ]
+    )
     diagram = render_chaining_diagram(
         formatter,
         catalog,
@@ -62,6 +84,7 @@ def test_render_chaining_diagram_linear() -> None:
     )
     assert "flowchart LR" in diagram
     assert "step-a" in diagram
+    assert "-->|preceeds|" in diagram
 
 
 def test_render_chaining_diagram_empty_when_no_chain() -> None:
