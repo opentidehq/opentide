@@ -39,7 +39,7 @@ splunk = ["splunk-sdk>=2.0", "pandas>=2.0"]
 crowdstrike = []
 carbon-black = ["carbon-black-cloud-sdk>=1.0"]
 cli = [
-    "typer[all]>=0.26.7",
+    "typer[all]>=0.26.8",
     "ruamel.yaml",
 ]
 mcp = [
@@ -47,7 +47,7 @@ mcp = [
     "fastmcp>=2.0",
 ]
 dev = [
-    "typer[all]>=0.26.7",
+    "typer[all]>=0.26.8",
     "mcp>=1.0",
     "fastmcp>=2.0",
     "ruamel.yaml",
@@ -65,7 +65,7 @@ dev = [
 
 [dependency-groups]
 dev = [
-    "typer[all]>=0.26.7",
+    "typer[all]>=0.26.8",
     "mcp>=1.0",
     "fastmcp>=2.0",
     "ruamel.yaml",
