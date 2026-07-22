@@ -48,17 +48,22 @@ def test_run_interactive_mcp_setup_defaults_when_empty(monkeypatch, tmp_path: Pa
     assert result["files"] == [".vscode/mcp.json"]
 
 
+def _fake_download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "SKILL.md").write_text(f"# {slug} ({source}@{ref})\n", encoding="utf-8")
+    return ["SKILL.md"]
+
+
 def test_run_interactive_skills_setup(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: "generic")
     monkeypatch.setattr(
         "opentide.cli.services.setup.skills._download_skill",
-        lambda slug, dest, *, ref: (
-            dest.mkdir(parents=True, exist_ok=True),
-            (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8"),
-            ["SKILL.md"],
-        )[2],
+        _fake_download_skill,
     )
-    monkeypatch.setattr("opentide.cli.services.setup.skills._fetch_bytes", lambda url: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.fetch_github_bytes",
+        lambda path, **_: None,
+    )
     result = run_interactive_skills_setup(tmp_path)
     assert (tmp_path / "AGENTS.md").is_file()
     assert "opentide-detection-rule" in result["skills"]
@@ -68,13 +73,12 @@ def test_run_interactive_skills_setup_defaults_when_empty(monkeypatch, tmp_path:
     monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: "")
     monkeypatch.setattr(
         "opentide.cli.services.setup.skills._download_skill",
-        lambda slug, dest, *, ref: (
-            dest.mkdir(parents=True, exist_ok=True),
-            (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8"),
-            ["SKILL.md"],
-        )[2],
+        _fake_download_skill,
     )
-    monkeypatch.setattr("opentide.cli.services.setup.skills._fetch_bytes", lambda url: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.fetch_github_bytes",
+        lambda path, **_: None,
+    )
     result = run_interactive_skills_setup(tmp_path)
     assert (tmp_path / "AGENTS.md").is_file()
     assert "opentide-detection-rule" in result["skills"]
@@ -101,13 +105,12 @@ def test_run_interactive_setup_full_wizard(
     monkeypatch.setattr("rich.console.Console.print", MagicMock())
     monkeypatch.setattr(
         "opentide.cli.services.setup.skills._download_skill",
-        lambda slug, dest, *, ref: (
-            dest.mkdir(parents=True, exist_ok=True),
-            (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8"),
-            ["SKILL.md"],
-        )[2],
+        _fake_download_skill,
     )
-    monkeypatch.setattr("opentide.cli.services.setup.skills._fetch_bytes", lambda url: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.fetch_github_bytes",
+        lambda path, **_: None,
+    )
 
     import warnings
 

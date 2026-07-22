@@ -285,10 +285,18 @@ def setup_mcp_cmd(
     emit_success(cli, result)
 
 
+def _coalesce_setup_path(cli: CliContext, positional: str, option: str) -> Path:
+    """Prefer ``--path`` when set; otherwise use the positional path."""
+    if option != ".":
+        return _resolve_setup_path(cli, option)
+    return _resolve_setup_path(cli, positional)
+
+
 @skills_app.callback(invoke_without_command=True)
 def setup_skills_install_cmd(
     ctx: typer.Context,
     path: str = typer.Argument(".", help="Repository path"),
+    path_flag: str = typer.Option(".", "--path", "-C", help="Repository path"),
     cursor: bool = typer.Option(False, "--cursor"),
     claude_code: bool = typer.Option(False, "--claude-code"),
     generic: bool = typer.Option(False, "--generic"),
@@ -304,7 +312,7 @@ def setup_skills_install_cmd(
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _coalesce_setup_path(cli, path, path_flag)
     targets: list[SkillTarget] = []
     if cursor:
         targets.append(SkillTarget.cursor)
@@ -340,13 +348,14 @@ def setup_skills_install_cmd(
 def setup_skills_discover_cmd(
     ctx: typer.Context,
     path: str = typer.Argument(".", help="Repository path"),
+    path_flag: str = typer.Option(".", "--path", "-C", help="Repository path"),
     query: str | None = typer.Option(None, "--query", "-q"),
     installed: bool = typer.Option(False, "--installed"),
     refresh: bool = typer.Option(False, "--refresh"),
 ) -> None:
     """List skills from the OpenTideHQ/skills catalogue."""
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _coalesce_setup_path(cli, path, path_flag)
     payload = discover_skills(base, query=query, installed_only=installed, refresh=refresh)
     if cli.json_output:
         emit_success(cli, payload)

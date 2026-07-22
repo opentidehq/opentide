@@ -67,9 +67,11 @@ opentide setup skills --yes --install opentide-detection-rule --install detectio
 | `--generic` | `AGENTS.md`, `.agents/skills/<slug>/SKILL.md` |
 | `--cursor` | `.cursor/skills/<slug>/` copies |
 | `--claude-code` | `CLAUDE.md`, `.claude/skills/` |
-| `--github-copilot` | `.github/copilot-instructions.md` |
+| `--github-copilot` | `.github/copilot-instructions.md` (also applies `--generic` unless already selected) |
 
-Default install (no `--install`) pulls starter skills `opentide-detection-rule` and `detection-engineering`. Use `--all` for the full bundled catalogue. Discovery works offline from the packaged manifest; install requires network access to GitHub raw content.
+Default install (no `--install`) pulls starter skills `opentide-detection-rule` and `detection-engineering`. Use `--all` for the full catalogue.
+
+Discovery fetches `manifest.json` from the skills repo first; the packaged snapshot in opentide is an offline fallback. Install downloads skill trees from the manifest `source` and `ref` over the network from the public [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) repository.
 
 ## Recommended agent workflow
 
@@ -86,7 +88,4 @@ After `setup skills --generic`, point agents at `AGENTS.md` at the repo root. Pa
 
 The opentide package repo maintains domain skills under [`.agents/skills/`](https://github.com/OpenTideHQ/opentide/tree/development/.agents/skills/) for VCS, testing, CI, and documentation maintenance.
 
-When adding CLI or MCP surface area, update:
-
-- Bundled skills manifest: `src/opentide/data/skills/manifest.json`
-- [MCP tools](../../mcp/tools.md) and [CLI](../../cli/index.md) reference pages
+When adding CLI or MCP surface area, update the [MCP tools](../../mcp/tools.md) and [CLI](../../cli/index.md) reference pages. New detection skills belong in [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) — the catalogue `manifest.json` there is generated from skill frontmatter, not edited in opentide.

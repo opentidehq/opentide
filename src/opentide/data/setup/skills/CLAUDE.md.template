@@ -24,6 +24,6 @@ opentide deploy --platform sentinel --dry-run
 
 ### Agent skills
 
-Project skills live under `.claude/skills/`. Start with `opentide-detection-ops` for validate/generate/deploy guidance.
+Project skills live under `.claude/skills/`. Start with `opentide-detection-rule` for validate/generate/deploy guidance.
 
 Run `opentide setup mcp` to connect Claude Code to `opentide-mcp`.
