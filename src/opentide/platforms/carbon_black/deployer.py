@@ -29,25 +29,15 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
         self,
         *,
         service: CBCloudAPI,
-        data: dict[str, object] | DetectionRule,
+        data: DetectionRule,
         org: str,
         config_data: dict[str, object],
     ) -> bool:
         from cbc_sdk.enterprise_edr import IOC_V2, Report, Watchlist
 
-        uuid = (
-            data.metadata.uuid
-            if isinstance(data, DetectionRule)
-            else str(data.get("uuid") or data["metadata"]["uuid"])  # type: ignore[index]
-        )
-        name = (
-            data.name.strip() if isinstance(data, DetectionRule) else str(data["name"]).strip()  # type: ignore[index]
-        )
-        description = (
-            data.description.strip()
-            if isinstance(data, DetectionRule)
-            else str(data["description"]).strip()  # type: ignore[index]
-        )
+        uuid = data.metadata.uuid
+        name = data.name.strip()
+        description = (data.description or "").strip()
         status = str(config_data["status"])
         query = str(config_data["query"]).replace("\n", " ")
         deployment = check_status(status) not in (
@@ -57,21 +47,14 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
         removal = not deployment
 
         tags: list[str] = [status]
-        detection_model = (
-            data.detection_model if isinstance(data, DetectionRule) else data.get("detection_model")  # type: ignore[union-attr]
-        )
-        if detection_model:
+        if data.detection_model:
             techniques = techniques_resolver(str(uuid))
-            tags.append(str(detection_model))
+            tags.append(str(data.detection_model))
             tags.extend(techniques)
         if config_tags := config_data.get("tags"):
             tags.extend(list(config_tags))  # type: ignore[arg-type]
 
-        alert_severity = (
-            data.response.alert_severity
-            if isinstance(data, DetectionRule) and data.response
-            else data["response"]["alert_severity"]  # type: ignore[index]
-        )
+        alert_severity = data.response.alert_severity if data.response else "Low"
         severity = self.SEVERITY_MAPPING[str(alert_severity)]
         selected_watchlist = config_data.get("watchlist") or self.DEFAULT_WATCHLIST
         selected_report = config_data.get("report") or name
@@ -139,46 +122,13 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
             logger.info("no_report_to_delete", report=selected_report)
         return True
 
-    def deploy_mdr(self, data: dict[str, object]) -> bool:
-        """MDRv3 deployment routine using dict-based MDR access."""
-        # TODO: DEPRECATED [carbon-black-cloud-mdrv4]
-        custom_orgs = data["configurations"][self.DEPLOYER_IDENTIFIER].get("organization")  # type: ignore[index]
-        deploy_orgs = custom_orgs or self.ORGANIZATIONS
-        for org in deploy_orgs:
-            logger.info("deploying_mdr_on_organization", mdr_name=data["name"], org=org)
-            org = str(org).strip()
-            org_secrets = self.CBC_SECRETS.get(org)
-            if not org_secrets:
-                logger.critical("organization_missing_from_secrets", org=org)
-                raise KeyError(org)
-            org_key = org_secrets.get("org_key")
-            token = org_secrets.get("token")
-            if not org_key or not token:
-                logger.critical("missing_org_credentials", org=org)
-                raise KeyError(org)
-            try:
-                from cbc_sdk.rest_api import CBCloudAPI
-
-                service = CBCloudAPI(
-                    url=self.CBC_URL,
-                    token=token,
-                    org_key=org_key,
-                    ssl_verify=self.SSL_ENABLED,
-                )
-                logger.info("connected_to_cbc_tenant", org=org)
-            except Exception as exc:
-                raise RuntimeError(f"Service could not be reached for organization {org}") from exc
-            config_data = data["configurations"][self.DEPLOYER_IDENTIFIER]  # type: ignore[index]
-            self._deploy_to_org(service=service, data=data, org=org, config_data=config_data)
-        return True
-
-    def deploy_mdr_v4(
+    def deploy_mdr(
         self,
         data: DetectionRule,
         service: CBCloudAPI,
         tenant_config: ConfigurationModels.Systems.CarbonBlackCloud.Tenant,
     ) -> bool | None:
-        """MDRv4 typed deployment for a single MDR on a single tenant."""
+        """Deploy a single typed MDR to Carbon Black Cloud."""
         config = data.configurations.carbon_black_cloud
         if not config or not config.query:
             logger.info("mdr_skipped", mdr_name=data.name, reason="no typed CBC configuration")
@@ -200,56 +150,38 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
 
     def deploy(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str] | None = None,
+        mdr_deployment: Sequence[DetectionRule] | list[str],
         deployment_plan: DeploymentStrategy | None = None,
-        deployment: list[str] | None = None,
     ) -> None:
-        """Deploy CBC MDRs — supports MDRv3 (UUID list) and MDRv4 (typed) signatures."""
+        """Deploy CBC MDRs through TideDeployment tenant routing."""
+        if not deployment_plan:
+            raise ValueError("deployment_plan is required for CBC deployment")
+
         self.configure_proxy()
-
-        if mdr_deployment is not None:
-            loaded_mdr: list[DetectionRule] = []
-            for mdr in mdr_deployment:
-                if isinstance(mdr, str):
-                    loaded_mdr.append(OpenTide.Rules[mdr])
-                elif isinstance(mdr, DetectionRule):
-                    loaded_mdr.append(mdr)
-            if not loaded_mdr:
-                logger.info("no_mdrs_to_deploy_for_carbon_black_cloud")
-                return
-            if not deployment_plan:
-                raise ValueError("deployment_plan is required for MDRv4 CBC deployment")
-
-            tide_deployment = TideDeployment(
-                deployment=loaded_mdr,
-                system=DetectionPlatforms.CARBON_BLACK_CLOUD,
-                strategy=deployment_plan,
-            )
-            for tenant_deployment in tide_deployment.rule_deployment:
-                tenant_deployment = tenant_deployment  # type: TenantDeployment.CarbonBlackCloud
-                logger.info("currently_targeting_tenant", tenant=tenant_deployment.tenant.name)
-                cbc_service = CarbonBlackCloudService(tenant_deployment.tenant)
-                for mdr in tenant_deployment.rules:
-                    logger.info("processing_rule", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
-                    self.deploy_mdr_v4(
-                        data=mdr,
-                        service=cbc_service.service,
-                        tenant_config=tenant_deployment.tenant,
-                    )
+        loaded_mdr: list[DetectionRule] = []
+        for mdr in mdr_deployment:
+            if isinstance(mdr, str):
+                loaded_mdr.append(OpenTide.Rules[mdr])
+            elif isinstance(mdr, DetectionRule):
+                loaded_mdr.append(mdr)
+        if not loaded_mdr:
+            logger.info("no_mdrs_to_deploy_for_carbon_black_cloud")
             return
 
-        # TODO: DEPRECATED [carbon-black-cloud-mdrv4]
-        if not deployment:
-            raise ValueError("DEPLOYMENT NOT FOUND")
-        for mdr in deployment:
-            mdr_data = OpenTide.Models.rules[mdr]
-            if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"]:
-                self.deploy_mdr(mdr_data)
-            else:
-                logger.info(
-                    "mdr_skipped",
-                    mdr_name=mdr_data.get("name"),
-                    reason="no CBC rule configuration",
+        tide_deployment = TideDeployment(
+            deployment=loaded_mdr,
+            system=DetectionPlatforms.CARBON_BLACK_CLOUD,
+            strategy=deployment_plan,
+        )
+        for tenant_deployment in tide_deployment.rule_deployment:
+            logger.info("currently_targeting_tenant", tenant=tenant_deployment.tenant.name)
+            cbc_service = CarbonBlackCloudService(tenant_deployment.tenant)
+            for mdr in tenant_deployment.rules:
+                logger.info("processing_rule", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
+                self.deploy_mdr(
+                    data=mdr,
+                    service=cbc_service.service,
+                    tenant_config=tenant_deployment.tenant,
                 )
 
 
@@ -258,4 +190,6 @@ def declare():
 
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    CarbonBlackCloudDeploy().deploy(deployment=DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)
+    CarbonBlackCloudDeploy().deploy(
+        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG
+    )

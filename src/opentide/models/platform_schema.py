@@ -52,6 +52,7 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
                 "default": "splunk::3.0",
                 "pattern": r"^splunk::[1-9]\.[0-9]$",
             },
+            "tenants": {"tide.config.system.tenants": "splunk"},
             "threshold": {"tide.mdr.parameter": "alert_threshold"},
             "throttling": {
                 "properties": {

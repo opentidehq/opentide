@@ -1,5 +1,4 @@
 from collections.abc import MutableMapping, Sequence
-from dataclasses import asdict
 
 import pandas as pd
 
@@ -11,7 +10,7 @@ from opentide.models.deployment_enums import (
     DetectionPlatforms,
     StatusStrategy,
 )
-from opentide.models.platform import PlatformConfigBase
+from opentide.models.platform import PLATFORM_CONFIG_MODELS, PlatformConfigBase
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import (
     DeploymentBatch,
@@ -23,6 +22,19 @@ SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
 
 logger = get_logger(__name__)
+
+
+def _typed_platform_config_roots(system_identifier: str) -> set[str]:
+    """Return allowed top-level keys for a platform MDR configuration model."""
+    model = PLATFORM_CONFIG_MODELS.get(system_identifier)
+    if model is None:
+        return set()
+    roots: set[str] = set()
+    for name, field in model.model_fields.items():
+        roots.add(name)
+        if field.alias:
+            roots.add(str(field.alias))
+    return roots
 
 
 class TideDeployment:
@@ -227,8 +239,8 @@ class TideDeployment:
         if not mdr_config:
             raise NotImplementedError
 
-        raw_data = asdict(data)
-        raw_mdr_config = asdict(mdr_config)
+        raw_data = data.model_dump(by_alias=True, exclude_none=False)
+        raw_mdr_config = mdr_config.model_dump(by_alias=True, exclude_none=False)
 
         logger.info(
             "checking_modifiers_for_system", detail=str(str(system)) + " | " + str(str(modifiers))
@@ -260,6 +272,7 @@ class TideDeployment:
                         "condition_matching",
                         detail=str(str(mod.name or "")) + " | " + str(str(mod.description or "")),
                     )
+                    typed_roots = _typed_platform_config_roots(system_identifier)
                     flatten_modifications = pd.json_normalize(
                         mod.modifications  # type: ignore
                     ).to_dict(orient="records")[0]
@@ -295,11 +308,24 @@ class TideDeployment:
 
                         updated_config = unroll_dot_dict({modification: new_value})
                         logger.info("applying_modification")
-                        if updated_config:
-                            raw_mdr_config = self._deep_update(
-                                raw_mdr_config.copy(),
-                                updated_config,  # type: ignore
+                        if not updated_config:
+                            continue
+                        # Flat savedsearches.conf / deploy-control keys (e.g.
+                        # dispatch.latest_time, allowed_actions) are applied by
+                        # platform deployers — skipping keeps TideModel extra=forbid.
+                        root_key = next(iter(updated_config))
+                        if typed_roots and root_key not in typed_roots:
+                            logger.info(
+                                "skipping_flat_platform_modifier",
+                                key=modification,
+                                root=root_key,
+                                system=system_identifier,
                             )
+                            continue
+                        raw_mdr_config = self._deep_update(
+                            raw_mdr_config.copy(),
+                            updated_config,  # type: ignore
+                        )
 
         raw_data["configurations"].update({system_identifier: raw_mdr_config})
         logger.info("new_recompiled_modified_deployment", detail=str(raw_data))

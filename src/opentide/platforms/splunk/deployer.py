@@ -4,14 +4,12 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
-import pandas as pd
 import structlog
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, OpenTide
 from opentide.deployment import TideDeployment, check_status
 from opentide.generation.framework import techniques_resolver
-from opentide.generation.pydantic_metaschema import lookup_schema_extra
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels
@@ -20,7 +18,6 @@ from opentide.platforms.splunk.client import (
     SplunkConnection,
     connect_splunk,
     create_query,
-    create_query_v4,
     cron_to_timeframe,
     splunk_timerange,
 )
@@ -32,132 +29,6 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
     def __init__(self) -> None:
         super().__init__()
         self._SPLUNK_SCHEMA = self.SPLUNK_SUBSCHEMA
-
-    def config_mdr(self, mdr: dict[str, Any]) -> dict[str, Any]:
-        """Compile configuration for the saved search object (MDRv3 legacy path)."""
-        # TODO: DEPRECATED [splunk-mdrv4]
-        config: dict[str, Any] = {}
-        uuid = mdr.get("uuid") or mdr["metadata"]["uuid"]
-        name = mdr["name"].strip()
-        description = mdr["description"]
-        mdr_splunk = mdr["configurations"]["splunk"]
-        advanced_config = mdr_splunk.pop("advanced", None)
-        if advanced_config:
-            advanced_config = {k: str(v) for k, v in advanced_config.items()}
-        risk = mdr_splunk.get("risk")
-        if risk:
-            risk = mdr_splunk.pop("risk")
-        mdr_splunk = pd.json_normalize(mdr_splunk, sep="|").to_dict(orient="records")[0]
-        for key in mdr_splunk.copy():
-            new_key = str(key).split("|")[-1]
-            mdr_splunk[new_key] = mdr_splunk.pop(key)
-        for key in mdr_splunk:
-            param_name = lookup_schema_extra(self._SPLUNK_SCHEMA, key, "tide.mdr.parameter")
-            data = mdr_splunk[key]
-            if key == "lookback":
-                data = splunk_timerange(data, skewing=self.SKEWING_VALUE, offset=self.OFFSET)
-            if key == "duration":
-                config["alert.suppress"] = "true"
-            if key == "frequency" and "cron" not in mdr_splunk:
-                custom_time = mdr_splunk.get("custom_time")
-                if custom_time:
-                    data = cron_to_timeframe(data, mode="custom", custom_time=custom_time)
-                else:
-                    data = cron_to_timeframe(data, mode=self.TIMERANGE_MODE)
-                param_name = lookup_schema_extra(self._SPLUNK_SCHEMA, "cron", "tide.mdr.parameter")
-            if isinstance(data, list):
-                data = ", ".join(data)
-            if isinstance(data, str):
-                data = data.strip()
-            if param_name:
-                config[param_name] = data
-        status = mdr_splunk["status"]
-        if check_status(status) is StatusStrategy.DISABLEMENT:
-            config["disabled"] = "true"
-            logger.info("configuring_saved_search_as_disabled")
-        config["alert.severity"] = self.ALERT_SEVERITY_MAPPING[mdr["response"]["alert_severity"]]
-        if risk:
-            risk_param = lookup_schema_extra(self._SPLUNK_SCHEMA, "risk", "tide.mdr.parameter")
-            risk_objects_config = []
-            threat_objects_config = []
-            risk_message = risk.get("message")
-            if ro := risk.get("risk_objects"):
-                for risk_object in ro:
-                    risk_object_paramed = {
-                        lookup_schema_extra(
-                            self._SPLUNK_SCHEMA, key, "tide.mdr.parameter", scope="risk_objects"
-                        ): risk_object[key]
-                        for key in risk_object
-                    }
-                    risk_objects_config.append(risk_object_paramed)
-            if to := risk.get("threat_objects"):
-                for threat_object in to:
-                    threat_object_paramed = {
-                        lookup_schema_extra(
-                            self._SPLUNK_SCHEMA, key, "tide.mdr.parameter", scope="threat_objects"
-                        ): threat_object[key]
-                        for key in threat_object
-                    }
-                    threat_objects_config.append(threat_object_paramed)
-            risk_config = risk_objects_config + threat_objects_config
-            if risk_config:
-                config[risk_param] = json.dumps(risk_config)
-            if risk_message:
-                config[
-                    lookup_schema_extra(
-                        self._SPLUNK_SCHEMA, "message", "tide.mdr.parameter", scope="risk"
-                    )
-                ] = risk_message
-        if advanced_config:
-            config.update(advanced_config)
-        responders = mdr.get("response", {}).get("responders") or ""
-        config["alert.managedBy"] = responders
-        if self.CORRELATION_SEARCHES:
-            config["action.correlationsearch.enabled"] = "true"
-            config["action.correlationsearch.label"] = name + " - Rule"
-            techniques = techniques_resolver(uuid)
-            if techniques:
-                config["action.correlationsearch.annotations.mitre_attack"] = ", ".join(techniques)
-        config["description"] = description
-        return config
-
-    def deploy_mdr(self, mdr: dict[str, Any], service: Any) -> bool | None:
-        """MDRv3 deployment routine using dict-based MDR access."""
-        # TODO: DEPRECATED [splunk-mdrv4]
-        mdr_config = self.config_mdr(mdr)
-        name: str = mdr["name"].strip()
-        if self.CORRELATION_SEARCHES:
-            name += " - Rule"
-        mdr_splunk: dict[str, Any] = mdr["configurations"]["splunk"]
-        status: str = mdr_splunk["status"]
-        query = create_query(mdr)
-        status_allowed_actions = self.SPLUNK_ACTIONS
-        status_modifiers = dict(self.STATUS_MODIFIERS.get(status) or {})
-        if status_modifiers:
-            if "allowed_actions" in status_modifiers:
-                allowed_actions_config = status_modifiers.pop("allowed_actions")
-                if allowed_actions_config in [False, None]:
-                    logger.info("mdr_actions_disabled_in_splunk", status=status)
-                    status_allowed_actions = []
-                else:
-                    logger.info(
-                        "mdr_actions_constrained_by_status", allowed_actions=allowed_actions_config
-                    )
-                    status_allowed_actions = allowed_actions_config
-            if status_modifiers:
-                logger.info(
-                    "status_modifiers_applied", status=status, modifiers=str(status_modifiers)
-                )
-                mdr_config.update(status_modifiers)
-        actions_config = self._build_actions_config(mdr_config, name, mdr, status_allowed_actions)
-        return self._apply_saved_search(
-            service=service,
-            name=name,
-            status=status,
-            query=query,
-            mdr_config=mdr_config,
-            actions_config=actions_config,
-        )
 
     def _should_enable_correlation_search(
         self,
@@ -180,7 +51,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             return es_enabled
         return True
 
-    def config_mdr_v4(
+    def config_mdr(
         self,
         data: DetectionRule,
         tenant_setup: ConfigurationModels.Systems.Splunk.Tenant.Setup,
@@ -348,11 +219,84 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         config["description"] = data.description or ""
         return config
 
+    def _apply_flat_modifiers(
+        self,
+        *,
+        mdr_config: dict[str, Any],
+        status: str,
+        tenant_config: ConfigurationModels.Systems.Splunk.Tenant,
+        flags: Sequence[str] | None = None,
+    ) -> list[str]:
+        """Apply flat savedsearches.conf modifiers with correct precedence.
+
+        Default modifiers fill gaps only; status/tenant overrides always win.
+        Returns the allowed actions list after processing ``allowed_actions``.
+        """
+        status_allowed_actions = list(self.SPLUNK_ACTIONS)
+        default_attributes: dict[str, Any] = {}
+        override_attributes: dict[str, Any] = {}
+
+        modifiers = self.STATUS_MODIFIERS or []
+        if isinstance(modifiers, dict):
+            # Legacy dict-keyed modifiers: treat as unconditional status overrides.
+            legacy = dict(modifiers.get(status) or {})
+            if legacy:
+                override_attributes.update(legacy)
+        else:
+            for mod in modifiers:
+                match = False
+                is_default = mod.conditions.default is True
+
+                if is_default:
+                    match = True
+                if mod.conditions.status and status in mod.conditions.status:
+                    match = True
+                if mod.conditions.tenants:
+                    match = tenant_config.name in mod.conditions.tenants
+                if mod.conditions.flags:
+                    if flags and [tag for tag in flags if tag in mod.conditions.flags]:
+                        match = True
+                    else:
+                        match = False
+
+                if match:
+                    logger.info(
+                        "modifier_matched",
+                        name=mod.name or "unnamed",
+                        conditions=str(mod.conditions),
+                    )
+                    modifications = dict(mod.modifications or {})
+                    if is_default:
+                        default_attributes.update(modifications)
+                    else:
+                        override_attributes.update(modifications)
+
+        for attrs in (default_attributes, override_attributes):
+            if "allowed_actions" in attrs:
+                allowed_actions_config = attrs.pop("allowed_actions")
+                if allowed_actions_config in [False, None]:
+                    logger.info("mdr_actions_disabled_in_splunk", status=status)
+                    status_allowed_actions = []
+                elif isinstance(allowed_actions_config, list):
+                    status_allowed_actions = list(allowed_actions_config)
+
+        for key, value in default_attributes.items():
+            if key not in mdr_config:
+                mdr_config[key] = value
+
+        if override_attributes:
+            logger.info(
+                "status_modifiers_applied", status=status, modifiers=str(override_attributes)
+            )
+            mdr_config.update(override_attributes)
+
+        return status_allowed_actions
+
     def _build_actions_config(
         self,
         mdr_config: dict[str, Any],
         name: str,
-        mdr: dict[str, Any] | DetectionRule,
+        mdr: DetectionRule,
         status_allowed_actions: list[str],
     ) -> dict[str, Any]:
         actions_config: dict[str, Any] = {}
@@ -374,17 +318,8 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             if "notable" in triggered_actions:
                 if "action.notable.param.rule_title" not in mdr_config:
                     actions_config["action.notable.param.rule_title"] = name
-                    if isinstance(mdr, dict):
-                        actions_config["action.notable.param.rule_description"] = (
-                            mdr.get("description") or ""
-                        )
-                        actions_config["action.notable.param.severity"] = mdr["response"][
-                            "alert_severity"
-                        ].lower()
-                    elif mdr.response:
-                        actions_config["action.notable.param.rule_description"] = (
-                            mdr.description or ""
-                        )
+                    actions_config["action.notable.param.rule_description"] = mdr.description or ""
+                    if mdr.response:
                         actions_config["action.notable.param.severity"] = (
                             mdr.response.alert_severity.lower()
                         )
@@ -445,7 +380,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         logger.info("deployed_on_splunk", name=name)
         return True
 
-    def deploy_mdr_v4(
+    def deploy_mdr(
         self,
         data: DetectionRule,
         service: Any,
@@ -458,30 +393,20 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             return None
 
         tenant_setup = tenant_config.setup
-        mdr_config = self.config_mdr_v4(data, tenant_setup)
+        mdr_config = self.config_mdr(data, tenant_setup)
         name = data.name.strip()
         status = splunk_config.status or ""
-        query = create_query_v4(data)
+        query = create_query(data)
 
         if self._should_enable_correlation_search(tenant_setup, splunk_config):
             name += " - Rule"
 
-        status_allowed_actions = list(self.SPLUNK_ACTIONS)
-        status_modifiers = dict((self.STATUS_MODIFIERS or {}).get(status) or {})
-        if status_modifiers:
-            if "allowed_actions" in status_modifiers:
-                allowed_actions_config = status_modifiers.pop("allowed_actions")
-                if allowed_actions_config in [False, None]:
-                    logger.info("mdr_actions_disabled_in_splunk", status=status)
-                    status_allowed_actions = []
-                else:
-                    status_allowed_actions = list(allowed_actions_config)
-            if status_modifiers:
-                logger.info(
-                    "status_modifiers_applied", status=status, modifiers=str(status_modifiers)
-                )
-                mdr_config.update(status_modifiers)
-
+        status_allowed_actions = self._apply_flat_modifiers(
+            mdr_config=mdr_config,
+            status=status,
+            tenant_config=tenant_config,
+            flags=splunk_config.flags,
+        )
         actions_config = self._build_actions_config(mdr_config, name, data, status_allowed_actions)
         return self._apply_saved_search(
             service=service,
@@ -492,44 +417,14 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             actions_config=actions_config,
         )
 
-    def deploy_legacy(self, deployment: list[str]) -> None:
-        """MDRv3 deployment path using dict-based rule access."""
-        if not deployment:
-            raise ValueError("DEPLOYMENT NOT FOUND")
-        self.configure_proxy()
-        service = connect_splunk(
-            host=self.SPLUNK_URL,
-            port=self.SPLUNK_PORT,
-            token=self.SPLUNK_TOKEN,
-            app=self.SPLUNK_APP,
-            ssl_enabled=self.SSL_ENABLED,
-        )
-        for mdr in deployment:
-            mdr_data = OpenTide.Models.rules[mdr]
-            if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"]:
-                logger.info("deploying_mdr", mdr_name=mdr_data["name"])
-                self.deploy_mdr(mdr_data, service)
-            else:
-                logger.info(
-                    "mdr_skipped",
-                    mdr_name=mdr_data.get("name"),
-                    reason="no Splunk rule configuration",
-                )
-
     def deploy(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str] | None = None,
+        mdr_deployment: Sequence[DetectionRule] | list[str],
         deployment_plan: DeploymentStrategy | None = None,
-        deployment: list[str] | None = None,
     ) -> None:
-        """Deploy Splunk MDRs — supports MDRv3 (UUID list) and MDRv4 (typed) signatures."""
-        if deployment is not None and mdr_deployment is None:
-            logger.info("using_legacy_mdrv3_deployment_path_for_splunk")
-            self.deploy_legacy(deployment)
-            return
-
-        if mdr_deployment is None:
-            raise ValueError("No deployment target provided")
+        """Deploy Splunk MDRs through TideDeployment tenant routing."""
+        if not deployment_plan:
+            raise ValueError("deployment_plan is required for Splunk deployment")
 
         self.configure_proxy()
         loaded_mdr: list[DetectionRule] = []
@@ -538,8 +433,10 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                 loaded_mdr.append(OpenTide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
-        if not deployment_plan:
-            raise ValueError("deployment_plan is required for MDRv4 Splunk deployment")
+
+        if not loaded_mdr:
+            logger.info("no_mdrs_to_deploy_for_splunk")
+            return
 
         tide_deployment = TideDeployment(
             deployment=loaded_mdr,
@@ -547,7 +444,6 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             strategy=deployment_plan,
         )
         for tenant_deployment in tide_deployment.rule_deployment:
-            tenant_deployment = tenant_deployment  # type: TenantDeployment.Splunk
             tenant = tenant_deployment.tenant
             logger.info("currently_targeting_tenant", tenant=tenant.name)
             service = connect_splunk(
@@ -559,7 +455,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             )
             for mdr in tenant_deployment.rules:
                 logger.info("processing_rule", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
-                self.deploy_mdr_v4(data=mdr, service=service, tenant_config=tenant)
+                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant)
 
 
 def declare():
@@ -567,4 +463,4 @@ def declare():
 
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    SplunkDeploy().deploy(deployment=DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)
+    SplunkDeploy().deploy(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG)
