@@ -19,8 +19,13 @@
     "threat": {
       "actors": [],
       "killchain": "Reconnaissance",
-      "att&ck": ["T1595"],
+      "att&ck": [
+        "T1595"
+      ],
       "terrain": "Example only — no operational terrain.",
+      "surface": [
+        "Windows::Desktop"
+      ],
       "severity": "Localised incident",
       "leverage": "Example",
       "impact": "Example",
