@@ -77,24 +77,24 @@ class SplunkConnection(ABC):
             }
         )
         self.DEFAULT_CONFIG = getattr(splunk_config, "defaults", {}) or {}
-        self.STATUS_MODIFIERS = getattr(splunk_config, "modifiers", {}) or {}
+        self.STATUS_MODIFIERS = getattr(splunk_config, "modifiers", None) or []
         self._apply_setup(setup, token=first_tenant.setup.token)
 
     def _init_from_legacy(self, splunk_config) -> None:
         SPLUNK_SETUP = DebugHelpers.fetch_config_envvar(splunk_config.setup)
         SPLUNK_SECRETS = DebugHelpers.fetch_config_envvar(splunk_config.secrets)
-        self.DEFAULT_CONFIG = splunk_config.defaults
-        self.STATUS_MODIFIERS = splunk_config.modifiers
+        self.DEFAULT_CONFIG = getattr(splunk_config, "defaults", {}) or {}
+        self.STATUS_MODIFIERS = getattr(splunk_config, "modifiers", None) or []
         self._apply_setup(SPLUNK_SETUP, token=SPLUNK_SECRETS.get("token", ""))
 
     def _apply_setup(self, setup: dict, *, token: str) -> None:
         self.SSL_ENABLED: bool = setup.get("ssl", True)
-        self.SPLUNK_URL = setup["url"]
+        self.SPLUNK_URL = setup.get("url", "")
         try:
-            self.SPLUNK_PORT = int(setup["port"])
+            self.SPLUNK_PORT = int(setup.get("port", 8089))
         except Exception:
-            self.SPLUNK_PORT = setup["port"]
-        self.SPLUNK_APP = setup["app"]
+            self.SPLUNK_PORT = setup.get("port", 8089)
+        self.SPLUNK_APP = setup.get("app", "search")
         self.SPLUNK_TOKEN = token
         self.PROXY_ENABLED = setup.get("proxy", False)
         self.CORRELATION_SEARCHES = setup.get("correlation_searches", True)
@@ -250,20 +250,7 @@ def connect_splunk(
     return service
 
 
-def create_query(data: dict) -> str:
-    """Build SPL from a legacy dict-based MDR."""
-    # TODO: DEPRECATED [splunk-mdrv4]
-    uuid = data.get("uuid") or data["metadata"]["uuid"]
-    mdr_splunk = data["configurations"]["splunk"]
-    status = mdr_splunk["status"]
-    spl = mdr_splunk["query"].strip()
-    macro = (
-        f'| eval MDR_UUID="{uuid}", MDR_status="{status}" \n|`soc_macro_auto_mdr_mapping(MDR_UUID)`'
-    )
-    return spl + "\n" + macro
-
-
-def create_query_v4(data: DetectionRule) -> str:
+def create_query(data: DetectionRule) -> str:
     """Build the final SPL query from a typed DetectionRule."""
     uuid = data.metadata.uuid
     splunk_config = data.configurations.splunk

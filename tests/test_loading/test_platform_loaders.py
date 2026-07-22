@@ -136,6 +136,30 @@ def test_splunk_config_loader_handles_missing_scheduling() -> None:
     assert config.trigger.threshold == 1
 
 
+def test_splunk_config_loader_ignores_unexpected_scheduling_keys() -> None:
+    """Stray keys under scheduling (e.g. from stale index data) must not ValidationError."""
+    config = load_splunk_config(
+        {
+            "schema": "splunk::3.0",
+            "status": "STAGING",
+            "query": "index=main",
+            "scheduling": {
+                "type": "Scheduled",
+                "expires": "2h",
+                "schedule": {"frequency": "1h"},
+                "timerange": {"lookback": "2h"},
+                "event": {"title": "should be ignored"},
+            },
+        }
+    )
+    assert config.scheduling is not None
+    assert config.scheduling.type == "Scheduled"
+    assert config.scheduling.expires == "2h"
+    assert config.scheduling.schedule is not None
+    assert config.scheduling.timerange is not None
+    assert config.scheduling.timerange.lookback == "2h"
+
+
 def test_carbon_black_config_loader_parses_typed_fields() -> None:
     config = load_carbon_black_config(
         {

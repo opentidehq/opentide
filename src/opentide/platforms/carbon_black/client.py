@@ -69,16 +69,17 @@ class CarbonBlackCloudConnection(ABC):
 
     def _init_from_legacy(self, cbc_config) -> None:
         """Initialise from legacy setup/secrets configuration."""
-        CBC_SETUP = DebugHelpers.fetch_config_envvar(cbc_config.setup)
+        CBC_SETUP = DebugHelpers.fetch_config_envvar(getattr(cbc_config, "setup", {}) or {})
         self.DEFAULT_WATCHLIST = CBC_SETUP.get("watchlist", "")
-        self.CBC_URL = CBC_SETUP["url"]
+        self.CBC_URL = CBC_SETUP.get("url", "")
         self.SSL_ENABLED = CBC_SETUP.get("ssl", True)
         self.PROXY_ENABLED = CBC_SETUP.get("proxy", False)
 
         secrets: dict[str, dict[str, str]] = {}
         cbc_secrets_error_flag = False
-        for org in cbc_config.secrets:
-            tenant_secrets = DebugHelpers.fetch_config_envvar(cbc_config.secrets[org])
+        raw_secrets = getattr(cbc_config, "secrets", {}) or {}
+        for org in raw_secrets:
+            tenant_secrets = DebugHelpers.fetch_config_envvar(raw_secrets[org])
             if "org_key" not in tenant_secrets:
                 logger.critical(
                     "could_not_fetch_organization_key_for_organization",
@@ -106,7 +107,8 @@ class CarbonBlackCloudConnection(ABC):
             raise KeyError
         self.CBC_SECRETS = secrets
         self.ORGANIZATIONS = CBC_SETUP.get("organizations", [])
-        self.VALIDATION_ORGANIZATION = cbc_config.validation.get("organization", "")
+        validation = getattr(cbc_config, "validation", {}) or {}
+        self.VALIDATION_ORGANIZATION = validation.get("organization", "")
 
     def configure_proxy(self):
         """Applies the proxy configuration for this system."""

@@ -361,7 +361,10 @@ def _parse_splunk_scheduling(scheduling_data: dict[str, Any] | None) -> SplunkSc
     timerange = None
     if timerange_data := scheduling_data.pop("timerange", None):
         timerange = SplunkTimerange.model_validate(timerange_data)
-    return SplunkScheduling(**scheduling_data, schedule=schedule, timerange=timerange)
+    # Only pass fields SplunkScheduling accepts (extra="forbid" on TideModel).
+    _scheduling_fields = {"type", "expires"}
+    scheduling_kwargs = {k: v for k, v in scheduling_data.items() if k in _scheduling_fields}
+    return SplunkScheduling(**scheduling_kwargs, schedule=schedule, timerange=timerange)
 
 
 def _parse_splunk_trigger(trigger_data: dict[str, Any] | None) -> SplunkTrigger | None:

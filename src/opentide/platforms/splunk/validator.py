@@ -21,30 +21,19 @@ from opentide.platforms.splunk.client import (
     SplunkConnection,
     connect_splunk,
     create_query,
-    create_query_v4,
 )
 
 logger = structlog.get_logger(__name__)
 
 
 class SplunkQueryValidator(SplunkConnection, QueryValidator):
-    def check_query(self, mdr: dict[str, object], service: Service) -> None:
-        mdr_uuid = str(mdr.get("uuid") or mdr["metadata"]["uuid"])  # type: ignore[index]
-        query: str | None = mdr["configurations"][self.DEPLOYER_IDENTIFIER].get("query")  # type: ignore[index]
-        if not query:
-            os.environ["VALIDATION_ERROR_RAISED"] = "True"
-            logger.critical("missing_query_in_mdr", mdr_name=mdr.get("name"), uuid=mdr_uuid)
-            return
-        query = create_query(mdr)  # type: ignore[arg-type]
-        self._validate_spl_query(query, str(mdr["name"]), mdr_uuid, service)
-
-    def check_query_v4(self, data: DetectionRule, service: Service) -> None:
+    def check_query(self, data: DetectionRule, service: Service) -> None:
         splunk_config = data.configurations.splunk
         if not splunk_config or not splunk_config.query:
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
             logger.critical("missing_query_in_mdr", mdr_name=data.name, uuid=data.metadata.uuid)
             return
-        query = create_query_v4(data)
+        query = create_query(data)
         self._validate_spl_query(query, data.name, data.metadata.uuid, service)
 
     def _validate_spl_query(
@@ -84,70 +73,41 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
 
     def validate(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str] | None = None,
+        mdr_deployment: Sequence[DetectionRule] | list[str],
         deployment_plan: DeploymentStrategy | None = None,
-        deployment: list[str] | None = None,
     ) -> None:
-        if mdr_deployment is not None:
-            loaded_mdr: list[DetectionRule] = []
-            for mdr in mdr_deployment:
-                if isinstance(mdr, str):
-                    loaded_mdr.append(OpenTide.Rules[mdr])
-                elif isinstance(mdr, DetectionRule):
-                    loaded_mdr.append(mdr)
-            if not deployment_plan:
-                raise ValueError("deployment_plan is required for MDRv4 Splunk validation")
-            tide_deployment = TideDeployment(
-                deployment=loaded_mdr,
-                system=DetectionPlatforms.SPLUNK,
-                strategy=deployment_plan,
-            )
-            self.configure_proxy()
-            for tenant_deployment in tide_deployment.rule_deployment:
-                tenant = tenant_deployment.tenant
-                service = connect_splunk(
-                    host=tenant.setup.url,
-                    port=tenant.setup.port,
-                    token=tenant.setup.token,
-                    app=tenant.setup.app,
-                    allow_http_errors=True,
-                    ssl_enabled=tenant.setup.ssl,
-                )
-                for mdr in tenant_deployment.rules:
-                    if mdr.configurations.splunk:
-                        logger.info(
-                            "validating_spl_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid
-                        )
-                        self.check_query_v4(mdr, service)
-                    else:
-                        logger.info(
-                            "mdr_skipped", mdr_name=mdr.name, reason="no Splunk configuration"
-                        )
-            return
+        if not deployment_plan:
+            raise ValueError("deployment_plan is required for Splunk validation")
 
-        if not deployment:
-            raise ValueError("DEPLOYMENT NOT FOUND")
-        self.configure_proxy()
-        service = connect_splunk(
-            host=self.SPLUNK_URL,
-            port=self.SPLUNK_PORT,
-            token=self.SPLUNK_TOKEN,
-            app=self.SPLUNK_APP,
-            allow_http_errors=True,
-            ssl_enabled=self.SSL_ENABLED,
+        loaded_mdr: list[DetectionRule] = []
+        for mdr in mdr_deployment:
+            if isinstance(mdr, str):
+                loaded_mdr.append(OpenTide.Rules[mdr])
+            elif isinstance(mdr, DetectionRule):
+                loaded_mdr.append(mdr)
+
+        tide_deployment = TideDeployment(
+            deployment=loaded_mdr,
+            system=DetectionPlatforms.SPLUNK,
+            strategy=deployment_plan,
         )
-        for mdr in deployment:
-            mdr_data: dict = OpenTide.Models.rules[mdr]
-            mdr_uuid = mdr_data.get("uuid") or mdr_data["metadata"]["uuid"]
-            if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"]:
-                logger.info("validating_spl_query", mdr_name=mdr_data["name"], uuid=mdr_uuid)
-                self.check_query(mdr_data, service)
-            else:
-                logger.info(
-                    "mdr_skipped",
-                    mdr_name=mdr_data.get("name"),
-                    reason="no Splunk configuration section",
-                )
+        self.configure_proxy()
+        for tenant_deployment in tide_deployment.rule_deployment:
+            tenant = tenant_deployment.tenant
+            service = connect_splunk(
+                host=tenant.setup.url,
+                port=tenant.setup.port,
+                token=tenant.setup.token,
+                app=tenant.setup.app,
+                allow_http_errors=True,
+                ssl_enabled=tenant.setup.ssl,
+            )
+            for mdr in tenant_deployment.rules:
+                if mdr.configurations.splunk:
+                    logger.info("validating_spl_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
+                    self.check_query(mdr, service)
+                else:
+                    logger.info("mdr_skipped", mdr_name=mdr.name, reason="no Splunk configuration")
 
 
 def declare():
@@ -155,4 +115,6 @@ def declare():
 
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    SplunkQueryValidator().validate(deployment=DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)
+    SplunkQueryValidator().validate(
+        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG
+    )

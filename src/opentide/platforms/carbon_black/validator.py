@@ -24,16 +24,7 @@ logger = structlog.get_logger(__name__)
 
 
 class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator):
-    def check_query(self, mdr: dict[str, object], service: CBCloudAPI) -> None:
-        query: str | None = mdr["configurations"]["carbon_black_cloud"].get("query")  # type: ignore[index]
-        mdr_uuid = str(mdr.get("uuid") or mdr["metadata"]["uuid"])  # type: ignore[index]
-        if not query:
-            os.environ["VALIDATION_ERROR_RAISED"] = "True"
-            logger.critical("missing_query_in_mdr", mdr_name=mdr.get("name"), uuid=mdr_uuid)
-            return
-        self._validate_cbc_query(query, str(mdr["name"]), mdr_uuid, service)
-
-    def check_query_v4(self, data: DetectionRule, service: CBCloudAPI) -> None:
+    def check_query(self, data: DetectionRule, service: CBCloudAPI) -> None:
         config = data.configurations.carbon_black_cloud
         if not config or not config.query:
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
@@ -62,64 +53,37 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
 
     def validate(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str] | None = None,
+        mdr_deployment: Sequence[DetectionRule] | list[str],
         deployment_plan: DeploymentStrategy | None = None,
-        deployment: list[str] | None = None,
     ) -> None:
-        if mdr_deployment is not None:
-            loaded_mdr: list[DetectionRule] = []
-            for mdr in mdr_deployment:
-                if isinstance(mdr, str):
-                    loaded_mdr.append(OpenTide.Rules[mdr])
-                elif isinstance(mdr, DetectionRule):
-                    loaded_mdr.append(mdr)
-            if not deployment_plan:
-                raise ValueError("deployment_plan is required for MDRv4 CBC validation")
-            tide_deployment = TideDeployment(
-                deployment=loaded_mdr,
-                system=DetectionPlatforms.CARBON_BLACK_CLOUD,
-                strategy=deployment_plan,
-            )
-            self.configure_proxy()
-            for tenant_deployment in tide_deployment.rule_deployment:
-                cbc_service = CarbonBlackCloudService(tenant_deployment.tenant)
-                for mdr in tenant_deployment.rules:
-                    if mdr.configurations.carbon_black_cloud:
-                        logger.info(
-                            "validating_cbc_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid
-                        )
-                        self.check_query_v4(mdr, cbc_service.service)
-                    else:
-                        logger.info(
-                            "mdr_skipped",
-                            mdr_name=mdr.name,
-                            reason="no Carbon Black Cloud configuration section",
-                        )
-            return
+        if not deployment_plan:
+            raise ValueError("deployment_plan is required for CBC validation")
 
-        if not deployment:
-            raise ValueError("DEPLOYMENT NOT FOUND")
-        self.configure_proxy()
-        org_key = self.CBC_SECRETS[self.VALIDATION_ORGANIZATION]["org_key"]
-        token = self.CBC_SECRETS[self.VALIDATION_ORGANIZATION]["token"]
-        from cbc_sdk.rest_api import CBCloudAPI
+        loaded_mdr: list[DetectionRule] = []
+        for mdr in mdr_deployment:
+            if isinstance(mdr, str):
+                loaded_mdr.append(OpenTide.Rules[mdr])
+            elif isinstance(mdr, DetectionRule):
+                loaded_mdr.append(mdr)
 
-        service = CBCloudAPI(
-            url=self.CBC_URL, token=token, org_key=org_key, ssl_verify=self.SSL_ENABLED
+        tide_deployment = TideDeployment(
+            deployment=loaded_mdr,
+            system=DetectionPlatforms.CARBON_BLACK_CLOUD,
+            strategy=deployment_plan,
         )
-        logger.info("connected_to_cbc_tenant", org=self.VALIDATION_ORGANIZATION)
-        for mdr in deployment:
-            mdr_data: dict = OpenTide.Models.rules[mdr]
-            mdr_uuid = mdr_data.get("uuid") or mdr_data["metadata"]["uuid"]
-            if self.DEPLOYER_IDENTIFIER in mdr_data["configurations"]:
-                logger.info("validating_cbc_query", mdr_name=mdr_data["name"], uuid=mdr_uuid)
-                self.check_query(mdr_data, service)
-            else:
-                logger.info(
-                    "mdr_skipped",
-                    mdr_name=mdr_data.get("name"),
-                    reason="no Carbon Black Cloud configuration section",
-                )
+        self.configure_proxy()
+        for tenant_deployment in tide_deployment.rule_deployment:
+            cbc_service = CarbonBlackCloudService(tenant_deployment.tenant)
+            for mdr in tenant_deployment.rules:
+                if mdr.configurations.carbon_black_cloud:
+                    logger.info("validating_cbc_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
+                    self.check_query(mdr, cbc_service.service)
+                else:
+                    logger.info(
+                        "mdr_skipped",
+                        mdr_name=mdr.name,
+                        reason="no Carbon Black Cloud configuration section",
+                    )
 
 
 def declare():
@@ -127,4 +91,6 @@ def declare():
 
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    CarbonBlackCloudQueryValidator().validate(deployment=DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS)
+    CarbonBlackCloudQueryValidator().validate(
+        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG
+    )
