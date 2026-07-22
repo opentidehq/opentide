@@ -16,6 +16,7 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: '\.ambr$'
       - id: end-of-file-fixer
       - id: check-yaml
         args: [--unsafe]  # allow custom YAML tags in GitHub Actions

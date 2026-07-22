@@ -151,8 +151,11 @@
   **High** - A High priority incident is likely to result in a demonstrable impact to public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.
   
   ## Terrain
-  > **Cloud Services**
-  > Cloud provider service catalogue entries across AWS, Azure, GCP and others
+  Cloud identity and Azure account inventory telemetry.
+  
+  ## Surface
+  > **Azure**
+  > Microsoft Azure cloud platform
   
   ## Threat Assessment
   | Dimension | Assessment | Description |

@@ -224,6 +224,8 @@ class RegistryBuilder:
             return objects_index, files_index
 
         workers = min(8, max(1, os.cpu_count() or 1))
+        if os.environ.get("OPENTIDE_REGISTRY_WORKERS", "").strip() == "0":
+            workers = 1
         if workers > 1 and len(yaml_files) > 4:
             self._load_objects_parallel(yaml_files, objects_index, files_index)
         else:

@@ -240,6 +240,7 @@ def render_threat_body(threat: ThreatVector, formatter: MarkdownFormatter) -> st
         render_description(body.description, formatter),
         render_criticality(threat, formatter),
         render_terrain(body, formatter),
+        render_surface(body, formatter),
         render_threat_assessment(body, formatter),
         render_actors(body, formatter),
     ]
@@ -361,17 +362,28 @@ def render_criticality(threat: ThreatVector, formatter: MarkdownFormatter) -> st
 
 
 def render_terrain(threat: ThreatBody, formatter: MarkdownFormatter) -> str:
-    stage_details = fw.get_vocab_stage_details("surface", threat.terrain)
-    if stage_details:
-        terrain_label, terrain_description = stage_details
-    else:
-        terrain = enrich("surface", threat.terrain)
-        terrain_label = terrain.label
-        terrain_description = terrain.description
-    quote = f"> **{terrain_label}**\n"
-    if terrain_description:
-        quote += f"> {terrain_description}\n"
-    return formatter.heading(2, "Terrain") + quote + "\n"
+    """Render explanatory terrain prose."""
+    return formatter.heading(2, "Terrain") + formatter.paragraph(threat.terrain)
+
+
+def render_surface(threat: ThreatBody, formatter: MarkdownFormatter) -> str:
+    """Render surface vocabulary values with enrichment."""
+    if not threat.surface:
+        return ""
+    chunks = [formatter.heading(2, "Surface")]
+    for value in threat.surface:
+        stage_details = fw.get_vocab_stage_details("surface", value)
+        if stage_details:
+            label, description = stage_details
+        else:
+            entry = enrich("surface", value)
+            label = entry.label
+            description = entry.description
+        quote = f"> **{label}**\n"
+        if description:
+            quote += f"> {description}\n"
+        chunks.append(quote + "\n")
+    return "".join(chunks)
 
 
 def render_threat_assessment(threat: ThreatBody, formatter: MarkdownFormatter) -> str:

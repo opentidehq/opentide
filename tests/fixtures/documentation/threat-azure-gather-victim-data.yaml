@@ -15,7 +15,9 @@ threat:
   impact: Credential Exposure
   leverage: High
   viability: Medium
-  terrain: Cloud
+  terrain: Cloud identity and Azure account inventory telemetry.
+  surface:
+    - Azure
   actors:
     - G1028
   killchain:

@@ -38,7 +38,8 @@ def test_threat_renderer_includes_diagram_sections(metadata: dict[str, Any]) -> 
                 "impact": "Data Breach",
                 "leverage": "High",
                 "viability": "High",
-                "terrain": "Endpoint",
+                "terrain": "Endpoint workstations and user devices.",
+                "surface": ["Windows::Desktop"],
                 "att&ck": ["T1003"],
             },
         }
