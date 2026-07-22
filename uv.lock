@@ -891,7 +891,7 @@ name = "importlib-metadata"
 version = "9.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp", marker = "python_full_version < '3.13'" },
+    { name = "zipp", marker = "python_full_version < '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/01/15bb152d77b21318514a96f43af312635eb2500c96b55398d020c93d86ea/importlib_metadata-9.0.0.tar.gz", hash = "sha256:a4f57ab599e6a2e3016d7595cfd72eb4661a5106e787a95bcc90c7105b831efc", size = 56405, upload-time = "2026-03-20T06:42:56.999Z" }
 wheels = [
@@ -1445,7 +1445,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9" },
     { name = "splunk-sdk", marker = "extra == 'splunk'", specifier = ">=2.0" },
     { name = "structlog", specifier = ">=24.0" },
-    { name = "syrupy", marker = "extra == 'dev'", specifier = ">=4.6" },
+    { name = "syrupy", marker = "extra == 'dev'", specifier = ">=5.3.4" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
     { name = "tomli", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "tomli-w", specifier = ">=1.0" },
@@ -1468,7 +1468,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruamel-yaml" },
     { name = "ruff", specifier = ">=0.9" },
-    { name = "syrupy", specifier = ">=4.6" },
+    { name = "syrupy", specifier = ">=5.3.4" },
     { name = "tomli", specifier = ">=2.0" },
     { name = "ty", specifier = ">=0.0.9" },
     { name = "typer", extras = ["all"], specifier = ">=0.26.7" },
@@ -2653,14 +2653,14 @@ wheels = [
 
 [[package]]
 name = "syrupy"
-version = "5.3.2"
+version = "5.3.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytest" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/de/72/c793cd7c56b09f71be80ee2f4cc64c8e2b6a3dc8abf37fbfb09785aa00a7/syrupy-5.3.2.tar.gz", hash = "sha256:d4c9d4badb165a5694dcd869812717d899a8aa0b6f14f842437cb57c4ce09b3a", size = 85948, upload-time = "2026-06-09T14:46:32.721Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/81/17/95753634cd02a892cbc74d8df9c15f5ad053885a913eb11aa6061f278344/syrupy-5.3.4.tar.gz", hash = "sha256:10f192655a2d42473ad5772653e64b281f6823fe5e30458d92f8ca8e882884c1", size = 87078, upload-time = "2026-06-26T10:55:42.522Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d8/19/e45765fa26388f42e22af2fc27f06e78e1da56d4211f883f6f8ddaac7646/syrupy-5.3.2-py3-none-any.whl", hash = "sha256:a4cb08f07342655816c16b6b3aef5f6af8859ef5fbad6a57d0e2c20c0f8be54c", size = 52643, upload-time = "2026-06-09T14:46:31.168Z" },
+    { url = "https://files.pythonhosted.org/packages/00/7a/254f95860cebb6d51ddb3e815ee30085e8c8a3ba6df1f44ef4605b385621/syrupy-5.3.4-py3-none-any.whl", hash = "sha256:409348aa20afc4b7dab7c965331de0cd79ab46977877fb189014ce9294e947e5", size = 53103, upload-time = "2026-06-26T10:55:41.007Z" },
 ]
 
 [[package]]
