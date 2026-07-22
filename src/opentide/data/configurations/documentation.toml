@@ -2,6 +2,7 @@ scope = [ "threat", "objective", "rule" ]
 skip_model_keys = ["description",
                             "guidelines",
                             "terrain",
+                            "surface",
                             "tuning",
                             "att&ck",
                             "actors",

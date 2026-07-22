@@ -20,6 +20,7 @@ from opentide.documentation.parts.sections import (
     render_rule_status,
     render_signal_mdr_coverage,
     render_signals,
+    render_surface,
     render_techniques,
     render_terrain,
     render_threat_assessment,
@@ -313,7 +314,8 @@ def test_render_threat_sections_with_enrichment(metadata: dict[str, Any]) -> Non
                 "impact": "Data Breach",
                 "leverage": "High",
                 "viability": "High",
-                "terrain": "Cloud",
+                "terrain": "Cloud identity and Azure account inventory telemetry.",
+                "surface": ["Azure"],
                 "actors": ["G1028"],
                 "killchain": ["Reconnaissance"],
                 "att&ck": ["T1589"],
@@ -323,13 +325,16 @@ def test_render_threat_sections_with_enrichment(metadata: dict[str, Any]) -> Non
 
     criticality = render_criticality(threat, formatter)
     terrain = render_terrain(threat.threat, formatter)
+    surface = render_surface(threat.threat, formatter)
     assessment = render_threat_assessment(threat.threat, formatter)
     actors = render_actors(threat.threat, formatter)
     techniques = render_attack_techniques(threat.threat.att_ck, formatter)
 
     assert "## Criticality" in criticality
     assert "## Terrain" in terrain
-    assert "> **Cloud Services**" in terrain or "> **Cloud**" in terrain
+    assert "Cloud identity and Azure account inventory telemetry." in terrain
+    assert "## Surface" in surface
+    assert "> **Azure**" in surface
     assert "## Threat Assessment" in assessment
     assert "Kill Chain" in assessment
     assert "## Actors" in actors
