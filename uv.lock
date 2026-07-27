@@ -1360,19 +1360,17 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rich" },
+    { name = "ruamel-yaml" },
     { name = "structlog" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "tomli-w" },
+    { name = "typer" },
     { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
 carbon-black = [
     { name = "carbon-black-cloud-sdk" },
-]
-cli = [
-    { name = "ruamel-yaml" },
-    { name = "typer" },
 ]
 dev = [
     { name = "fastmcp" },
@@ -1384,12 +1382,10 @@ dev = [
     { name = "pytest" },
     { name = "pytest-console-scripts" },
     { name = "pytest-cov" },
-    { name = "ruamel-yaml" },
     { name = "ruff" },
     { name = "syrupy" },
     { name = "tomli" },
     { name = "ty" },
-    { name = "typer" },
 ]
 mcp = [
     { name = "fastmcp" },
@@ -1413,12 +1409,10 @@ dev = [
     { name = "pytest" },
     { name = "pytest-console-scripts" },
     { name = "pytest-cov" },
-    { name = "ruamel-yaml" },
     { name = "ruff" },
     { name = "syrupy" },
     { name = "tomli" },
     { name = "ty" },
-    { name = "typer" },
 ]
 
 [package.metadata]
@@ -1440,8 +1434,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "pyyaml" },
     { name = "rich", specifier = ">=13.0" },
-    { name = "ruamel-yaml", marker = "extra == 'cli'" },
-    { name = "ruamel-yaml", marker = "extra == 'dev'" },
+    { name = "ruamel-yaml" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.22" },
     { name = "splunk-sdk", marker = "extra == 'splunk'", specifier = ">=2.0" },
     { name = "structlog", specifier = ">=24.0" },
@@ -1450,8 +1443,7 @@ requires-dist = [
     { name = "tomli", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "tomli-w", specifier = ">=1.0" },
     { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.9" },
-    { name = "typer", extras = ["all"], marker = "extra == 'cli'", specifier = ">=0.26.8" },
-    { name = "typer", extras = ["all"], marker = "extra == 'dev'", specifier = ">=0.26.8" },
+    { name = "typer", extras = ["all"], specifier = ">=0.26.8" },
     { name = "typing-extensions", specifier = ">=4.0" },
 ]
 provides-extras = ["carbon-black", "cli", "crowdstrike", "dev", "mcp", "sentinel", "splunk"]
@@ -1466,12 +1458,10 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-console-scripts", specifier = ">=1.4" },
     { name = "pytest-cov", specifier = ">=5.0" },
-    { name = "ruamel-yaml" },
     { name = "ruff", specifier = ">=0.15.22" },
     { name = "syrupy", specifier = ">=5.3.4" },
     { name = "tomli", specifier = ">=2.0" },
     { name = "ty", specifier = ">=0.0.9" },
-    { name = "typer", extras = ["all"], specifier = ">=0.26.8" },
 ]
 
 [[package]]
