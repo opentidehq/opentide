@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     "pyyaml",
     "pydantic>=2.0",
-    "dulwich>=1.2",
+    "dulwich>=1.2.12",
     "orjson>=3.9",
     "tomli>=2.0; python_version < '3.11'",
     "tomli-w>=1.0",
