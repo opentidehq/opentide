@@ -328,7 +328,7 @@ def keep_active_rules(rule_list: list[str]) -> list[str]:
     which mean none of the system they configure are set with a
     Deprecated status.
     """
-    from opentide.deployment import DEPRECATED_STATUSES, check_status
+    from opentide.deployment.utils import DEPRECATED_STATUSES, check_status
 
     active_rules = []
     for mdr in rule_list:
