@@ -22,8 +22,8 @@ def test_keep_active_rules_filters_deprecated() -> None:
     }
     with (
         patch("opentide.generation.framework.OpenTide") as mock_ot,
-        patch("opentide.deployment.check_status", side_effect=lambda s: s),
-        patch("opentide.deployment.DEPRECATED_STATUSES", {"DEPRECATED"}),
+        patch("opentide.deployment.utils.check_status", side_effect=lambda s: s),
+        patch("opentide.deployment.utils.DEPRECATED_STATUSES", {"DEPRECATED"}),
     ):
         mock_ot.Models.Index = {"rule": rules_index}
         active = fw.keep_active_rules(["u1", "u2"])
