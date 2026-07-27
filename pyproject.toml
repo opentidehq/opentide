@@ -31,6 +31,9 @@ dependencies = [
     "structlog>=24.0",
     "rich>=13.0",
     "typing_extensions>=4.0",
+    # Required by the `opentide` console script (opentide.cli imports typer at import time).
+    "typer[all]>=0.26.8",
+    "ruamel.yaml",
 ]
 
 [project.optional-dependencies]
@@ -38,19 +41,15 @@ sentinel = []
 splunk = ["splunk-sdk>=2.0", "pandas>=2.0"]
 crowdstrike = []
 carbon-black = ["carbon-black-cloud-sdk>=1.0"]
-cli = [
-    "typer[all]>=0.26.8",
-    "ruamel.yaml",
-]
+# Kept for backwards compatibility with `pip install opentide[cli]`.
+cli = []
 mcp = [
     "mcp>=1.28.1",
     "fastmcp>=2.0",
 ]
 dev = [
-    "typer[all]>=0.26.8",
     "mcp>=1.28.1",
     "fastmcp>=2.0",
-    "ruamel.yaml",
     "tomli>=2.0",
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -65,10 +64,8 @@ dev = [
 
 [dependency-groups]
 dev = [
-    "typer[all]>=0.26.8",
     "mcp>=1.28.1",
     "fastmcp>=2.0",
-    "ruamel.yaml",
     "tomli>=2.0",
     "pytest>=8.0",
     "pytest-cov>=5.0",
