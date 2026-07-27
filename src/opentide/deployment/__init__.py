@@ -1,10 +1,11 @@
 """Backward-compatibility re-export shim for deployment module."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from opentide.deployment.ci import CIEnvironment
 from opentide.deployment.git_repo import GitRepository, diff_calculation, modified_mdr_files
-
-TideRepo = GitRepository
-from opentide.deployment.planning import TideDeployment
 from opentide.deployment.utils import (
     DEPRECATED_STATUSES,
     SYSTEMS_CONFIGS_INDEX,
@@ -16,7 +17,12 @@ from opentide.deployment.utils import (
 )
 from opentide.models.deployment_enums import DeploymentStrategy, DetectionPlatforms
 
+if TYPE_CHECKING:
+    from opentide.deployment.planning import TideDeployment
+
+TideRepo = GitRepository
 DetectionSystems = DetectionPlatforms
+
 __all__ = [
     "CIEnvironment",
     "GitRepository",
@@ -35,3 +41,13 @@ __all__ = [
     "DetectionPlatforms",
     "DetectionSystems",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Load pandas-dependent compatibility exports only when requested."""
+    if name == "TideDeployment":
+        from opentide.deployment.planning import TideDeployment
+
+        globals()[name] = TideDeployment
+        return TideDeployment
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
