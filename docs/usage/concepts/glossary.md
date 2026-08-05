@@ -65,7 +65,7 @@ The terms and acronyms you will meet across the OpenTide docs, defined once. Whe
 : Configuration controlling which objects are exposed/deployed in a given context. Validated by a generated `visibility` schema.
 
 **Playbook-map**
-: A generated mapping produced during `generate` that associates detections with response playbooks.
+: A mapping that associates detections with response playbooks. Produced by the legacy `opentide export playbook-map` command (not by the default `opentide generate` pipeline).
 
 **TLP (Traffic Light Protocol)**
 : The sharing-sensitivity classification on `metadata.tlp` (e.g. `clear`, `green`, `amber`, `red`).

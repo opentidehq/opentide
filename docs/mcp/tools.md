@@ -31,7 +31,8 @@ Search the catalogue by keyword, UUID, or ATT&CK technique. Use it first when yo
   {
     "uuid": "00000000-0000-4000-8002-000000000001",
     "type": "objective",
-    "name": "Credential Access Objective"
+    "title": "Credential Access Objective",
+    "status": null
   }
 ]
 ```
@@ -40,7 +41,7 @@ On failure, returns an error dict: `{ "error": "…" }`.
 
 ## get_chaining
 
-Return the threat → objective → rule chaining graph for any UUID in the chain. Use it to understand how an object connects before editing.
+Return chaining data for a UUID from `OpenTide.Models.chaining`. Use it to understand how an object connects before editing.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -48,21 +49,25 @@ Return the threat → objective → rule chaining graph for any UUID in the chai
 
 ```json
 // call
-{ "uuid": "00000000-0000-4000-8002-000000000001" }
+{ "uuid": "00000000-0000-4000-8001-000000000001" }
 
-// returns: graph dict with nodes and edges
+// returns (threat UUID — chaining index is threat→threat via relation)
 {
-  "nodes": [
-    { "uuid": "…8001…", "type": "threat",    "name": "Simulated Actor" },
-    { "uuid": "…8002…", "type": "objective", "name": "Credential Access Objective" },
-    { "uuid": "…8003…", "type": "rule",      "name": "Sentinel KQL Rule" }
-  ],
-  "edges": [
-    { "from": "…8003…", "to": "…8002…", "via": "detection_model" },
-    { "from": "…8002…", "to": "…8001…", "via": "objective.threats" }
-  ]
+  "uuid": "00000000-0000-4000-8001-000000000001",
+  "found": true,
+  "type": "threat",
+  "graph": {
+    "preceeds": ["00000000-0000-4000-8001-000000000002"]
+  },
+  "chaining_index": {
+    "00000000-0000-4000-8001-000000000001": {
+      "preceeds": ["00000000-0000-4000-8001-000000000002"]
+    }
+  }
 }
 ```
+
+When the UUID is missing: `{ "uuid": "…", "found": false, "graph": {} }`. The registry chaining index is `{threat_uuid: {relation: [vector_uuid, …]}}` — not a top-level `nodes`/`edges` graph. Non-threat UUIDs return `found: true` with an empty `graph` when they are not keys in that index.
 
 ## coverage
 
@@ -70,8 +75,8 @@ ATT&CK coverage analysis with gap identification. Use it to answer "what do we d
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `technique` | string | `""` | Filter to one technique |
-| `tactic` | string | `""` | Filter to one tactic |
+| `technique` | string | `""` | When set, return coverage for that technique only |
+| `tactic` | string | `""` | Echoed as `tactic_filter` when no technique is set; **does not filter** the matrix today |
 
 ```json
 // call
@@ -80,9 +85,18 @@ ATT&CK coverage analysis with gap identification. Use it to answer "what do we d
 // returns
 {
   "technique": "T1059",
-  "objectives": 1,
-  "rules": 1,
-  "covered": true
+  "covered": true,
+  "rules": ["00000000-0000-4000-8003-000000000001"]
+}
+```
+
+Without `technique`:
+
+```json
+{
+  "technique_count": 12,
+  "matrix": { "T1059": ["…8003…"], "T1003": [] },
+  "tactic_filter": null
 }
 ```
 
@@ -171,13 +185,17 @@ Deploy a rule to a platform. Defaults to a dry run — a real deploy requires an
 
 // returns
 {
-  "action": "create_or_update",
-  "status": "planned",
+  "action": "dry-run",
+  "tenant": null,
+  "rule_id": "00000000-0000-4000-8003-000000000001",
+  "status": "STAGING",
+  "dry_run": true,
   "platform": "sentinel",
-  "message": "would create/update 'Sentinel KQL Rule'",
-  "dry_run": true
+  "message": ""
 }
 ```
+
+`action` is `"dry-run"` or `"deploy"` (or `"error"` when the rule is missing). `status` is the rule’s current deployment status string from the object, not a planned-action label.
 
 ## deployment_status
 
@@ -194,6 +212,7 @@ Per-platform deployment state for a rule.
 // returns
 {
   "found": true,
+  "uuid": "00000000-0000-4000-8003-000000000001",
   "platforms": {
     "sentinel": { "deployed": true, "rule_id": "abc-123", "tenants": ["contoso"] }
   }
@@ -208,7 +227,7 @@ Chain the tools into safe, end-to-end recipes.
 
 ```text
 search(query="T1059")                     → find or confirm the objective
-get_chaining(uuid=<objective>)            → check it has no rule yet
+get_chaining(uuid=<objective>)            → inspect graph + chaining_index
 # propose objects/rules/<name>.yaml with detection_model=<objective>
 validation_report(uuid=<new rule>)        → must pass before proposing as done
 # (real KQL check runs via CLI: opentide validate query --platform sentinel)
@@ -218,16 +237,18 @@ deploy_rule(uuid=<new rule>, platform="sentinel", dry_run=true)   → preview
 ### Audit coverage
 
 ```text
-coverage(tactic="credential-access")      → list covered vs gap techniques
+coverage()                                → technique_count + matrix of technique → rule UUIDs
+coverage(technique="T1059")               → covered bool + rules list for one technique
 search(technique=<gap>)                   → confirm nothing exists
 # propose new objective/rule for the gap
+# note: tactic= is echoed only; it does not filter the matrix today
 ```
 
 ### Fix a broken reference
 
 ```text
-validation_report(object_type="rule")     → surface dangling detection_model
-get_chaining(uuid=<rule>)                 → find the intended objective
+validation_report(object_type="rule")     → surface dangling detection_model (invalid_ref)
+get_chaining(uuid=<rule>)                 → inspect related objects in chaining_index
 # correct the UUID, then re-run validation_report
 ```
 
@@ -237,6 +258,7 @@ get_chaining(uuid=<rule>)                 → find the intended objective
 2. Use `search` before `get_chaining` when the UUID is unknown.
 3. Default to `dry_run=true` for `deploy_rule`; require explicit human approval for a real deploy.
 4. Never claim query validation for unsupported platforms, and remember `validate_query`/`run_query` are stubs — use the CLI for real syntax checks.
+5. Do not assume `coverage(tactic=…)` filters results — pass `technique` for a filtered answer.
 
 ## Troubleshooting
 

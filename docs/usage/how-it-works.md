@@ -56,7 +56,7 @@ You write **objects** as YAML in `objects/`. A [threat](./concepts/object-model.
 
 ### Validate
 
-`opentide validate` checks every object against its declared schema, verifies UUID format and uniqueness, resolves cross-object references (no orphans, no dangling links), and — for [supported platforms](./concepts/platforms.md) — checks query syntax. `--strict` turns warnings into failures for CI. See [`validate`](../cli/validate.md).
+`opentide validate` checks every object against its declared schema, verifies UUID format and uniqueness, resolves cross-object references (no orphans, no dangling links), and — for [supported platforms](./concepts/platforms.md) — checks query syntax. Errors exit `1`; warnings soft-fail as `19` on GitLab CI only. See [`validate`](../cli/validate.md) and [Exit codes](../cli/exit-codes.md).
 
 </Step>
 

@@ -78,11 +78,7 @@ A rule's `status` (or a platform block's `status`) is not defined in the merged 
 
 ### Warnings fail my build but pass locally
 
-CI runs `validate --strict`, which promotes warnings to errors. Run the same locally to reproduce:
-
-```bash
-opentide validate --strict
-```
+On **GitLab CI**, validation warnings soft-fail with exit `19` (via `VALIDATION_WARNING_RAISED`). Other CI systems pass with exit `0` when there are only warnings. `--strict` does not change this today. Reproduce GitLab behaviour by setting the same GitLab CI environment detection the CLI uses, or inspect the warning list in `--json` output. See [Exit codes](../cli/exit-codes.md).
 
 ## Query validation
 

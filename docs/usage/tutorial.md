@@ -5,7 +5,7 @@ description: Build a complete threat → objective → rule chain, validate it, 
 
 # Tutorial: your first detection
 
-The [quickstart](./quickstart.md) runs commands against an existing repo. This tutorial is different: you will **author a real detection chain from nothing** and take it through the whole lifecycle. By the end you will have a threat, an objective, and a Sentinel rule that reference each other, pass strict validation, and are ready to deploy.
+The [quickstart](./quickstart.md) runs commands against an existing repo. This tutorial is different: you will **author a real detection chain from nothing** and take it through the whole lifecycle. By the end you will have a threat, an objective, and a Sentinel rule that reference each other, pass validation, and are ready to deploy.
 
 Budget 15–20 minutes. You need Python 3.10+ and `opentide` installed — see [Installation](./installation.md).
 
@@ -148,18 +148,28 @@ configurations:
 ## 6. Validate
 
 ```bash
-opentide validate --strict
+opentide validate
 ```
 
-```text
-✓ schema           3 objects
-✓ uuid             format + uniqueness
-✓ cross-object     references resolved
-✓ chaining         rule → objective → threat
-validate: PASS (3 objects, 0 errors)
+On success the CLI logs that all content passed validation (exit `0`). For a machine-readable report:
+
+```bash
+opentide --json validate
 ```
 
-`--strict` treats warnings as failures — this is exactly what CI runs. See [`validate`](../cli/validate.md).
+```json
+{
+  "ok": true,
+  "checks": {
+    "id-uniqueness": { "check": "id-uniqueness", "status": "passed" },
+    "uuid-format": { "check": "uuid-format", "status": "passed" },
+    "schema": { "check": "schema", "status": "passed" }
+  },
+  "report": { "ok": true, "issues": [], "warnings": [], "stats": {} }
+}
+```
+
+See [`validate`](../cli/validate.md).
 
 ## 7. Break it on purpose
 
@@ -172,17 +182,17 @@ detection_model: 00000000-0000-4000-8002-DEADBEEF0000
 Re-run:
 
 ```bash
-opentide validate --strict
+opentide validate
 ```
+
+Console output groups issues by file. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check):
 
 ```text
-✗ chaining         rule 00000000-0000-4000-8003-000000000001
-                   detection_model points to unknown objective
-                   00000000-0000-4000-8002-DEADBEEF0000
-validate: FAIL (1 error)
+## objects/rules/sentinel-kql-rule.yaml
+  [error] detection_model: Unknown objective reference '00000000-0000-4000-8002-DEADBEEF0000'
 ```
 
-This is the **dangling reference** anti-pattern from the [object model](./concepts/object-model.md#anti-patterns-to-avoid). Restore the correct UUID and validation passes again.
+The process exits `1`. This is the **dangling reference** anti-pattern from the [object model](./concepts/object-model.md#anti-patterns-to-avoid). Restore the correct UUID and validation passes again.
 
 ## 8. Check the coverage graph
 
