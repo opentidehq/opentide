@@ -32,7 +32,7 @@ dependencies = [
     "rich>=13.0",
     "typing_extensions>=4.0",
     # Required by the `opentide` console script (opentide.cli imports typer at import time).
-    "typer[all]>=0.26.8",
+    "typer[all]>=0.27.0",
     "ruamel.yaml",
     "questionary>=2.1.1",
 ]
