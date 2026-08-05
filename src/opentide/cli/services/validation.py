@@ -9,6 +9,7 @@ import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
 from opentide.cli.output import emit, emit_error
+from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 from opentide.validation.errors import format_issues_for_console
 from opentide.validation.issues import ValidationReport
@@ -92,10 +93,6 @@ def run_validate_check(
     scope: ValidationScope | None = None,
 ) -> dict[str, object]:
     """Run a single validation check."""
-    if check is ValidateCheck.cve:
-        run_cve_validation()
-        return {"check": check.value, "status": "completed"}
-
     report = run_validation(scope=scope or ValidationScope.full(), checks=frozenset({check}))
     if not report.ok:
         os.environ["VALIDATION_ERROR_RAISED"] = "1"
@@ -138,10 +135,9 @@ def run_validate(
     scope = _build_scope(files=file_list or None, uuids=uuids, object_types=object_types)
     checks = _checks_for(check)
 
-    if check is ValidateCheck.cve:
-        return run_validate_check(ValidateCheck.cve, scope=scope)
-
     report = run_validation(scope=scope, checks=checks)
+    if not report.ok:
+        os.environ["VALIDATION_ERROR_RAISED"] = "1"
 
     if check is None:
         result: dict[str, object] = {
@@ -163,22 +159,24 @@ def run_validate(
         result["check"] = check.value
 
     if not ctx.json_output and report.issues:
-        emit_section("Validation issues")
-        for line in format_issues_for_console(report.issues).splitlines():
-            logger.error("validation_issue", message=line)
+        from rich.panel import Panel
 
-    from opentide.cli.exit_codes import exit_on_validation_errors, exit_on_validation_warnings
+        get_stdout_console().print(
+            Panel(
+                format_issues_for_console(report.issues),
+                title="[bold red]Validation issues[/]",
+                border_style="red",
+            )
+        )
 
-    exit_on_validation_errors()
-    if strict:
-        exit_on_validation_warnings()
-    else:
-        exit_on_validation_warnings()
-    if not ctx.json_output:
-        if os.environ.get("VALIDATION_WARNING_RAISED"):
-            logger.warning("passed_validation_but_with_some_warnings")
-        elif report.ok:
-            logger.info("all_content_successfully_passed_validation")
+    from opentide.cli.exit_codes import validation_outcome
+
+    outcome = validation_outcome(strict=strict)
+    result["status"] = "failed" if outcome.failed else "passed"
+    result["message"] = "Validation failed" if outcome.failed else "Validation passed"
+    if outcome.warned:
+        result["warnings"] = ["Validation reported warnings"]
+    result["_exit_code"] = outcome.exit_code
     return result
 
 
@@ -227,8 +225,22 @@ def validate_query_platform(
     except TypeError:
         logger.warning("trying_mdrv3_style_method")
         validator.validate(deployment=deployment_list[platform])
-    from opentide.cli.exit_codes import exit_on_validation_errors, exit_on_validation_warnings
+    if os.environ.get("VALIDATION_ERROR_RAISED"):
+        emit_error(ctx, f"Query validation failed for {platform}", exit_code=1)
+    from opentide.cli.exit_codes import validation_outcome
 
-    exit_on_validation_errors()
-    exit_on_validation_warnings()
-    return {"platform": platform, "status": "passed", "supported": True}
+    outcome = validation_outcome()
+    result: dict[str, object] = {
+        "platform": platform,
+        "status": "failed" if outcome.failed else "passed",
+        "supported": True,
+        "message": (
+            f"Query validation failed for {platform}"
+            if outcome.failed
+            else f"Query validation passed for {platform}"
+        ),
+        "_exit_code": outcome.exit_code,
+    }
+    if outcome.warned:
+        result["warnings"] = [f"Query validation reported warnings for {platform}"]
+    return result

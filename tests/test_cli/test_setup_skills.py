@@ -10,7 +10,11 @@ import typer
 from opentide.cli.enums import SkillTarget
 from opentide.cli.services.setup import skills as skills_mod
 from opentide.cli.services.setup import skills_registry as registry
-from opentide.cli.services.setup.skills import SkillsSetupOptions, run_skills_setup
+from opentide.cli.services.setup.skills import (
+    SkillsDownloadError,
+    SkillsSetupOptions,
+    run_skills_setup,
+)
 
 _real_download_skill = skills_mod._download_skill
 
@@ -155,7 +159,7 @@ def test_download_skill_actionable_error(monkeypatch: pytest.MonkeyPatch, tmp_pa
         "opentide.cli.services.setup.skills.fetch_github_bytes",
         lambda *_, **__: None,
     )
-    with pytest.raises(typer.BadParameter, match="network access"):
+    with pytest.raises(SkillsDownloadError, match="network access"):
         run_skills_setup(
             SkillsSetupOptions(
                 path=tmp_path,

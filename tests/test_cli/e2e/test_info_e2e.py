@@ -39,5 +39,5 @@ def test_info_no_color_renders_platform_table(cli_runner, tide_corpus_repo) -> N
     plain = _strip_ansi(result.stdout)
     assert "OpenTide Info" in plain
     assert "Rules" in plain and "8" in plain
-    assert "splunk" in plain
+    assert "Splunk Enterprise Security" in plain
     assert "enabled=True" in plain

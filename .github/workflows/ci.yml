@@ -177,3 +177,27 @@ jobs:
 
       - name: CLI E2E pytest
         run: uv run pytest tests/test_cli/e2e/ -m "cli_e2e or cli_smoke" -q --no-cov
+
+  cli-windows-smoke:
+    name: CLI Windows smoke
+    runs-on: windows-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Console launcher and redirect smoke
+        run: >-
+          uv run pytest tests/test_cli/e2e/test_console_script_smoke.py
+          -m cli_smoke -q --no-cov

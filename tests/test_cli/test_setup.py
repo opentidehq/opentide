@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import typer
 
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
 from opentide.cli.services.setup.orchestrator import SetupOptions, run_setup
@@ -82,6 +83,29 @@ def test_run_setup_skills_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert isinstance(steps, list)
     assert len(steps) == 1
     assert (target / "AGENTS.md").is_file()
+
+
+def test_run_setup_soft_fails_optional_skills_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail_skills_setup(options: object) -> None:
+        raise typer.BadParameter("network unavailable")
+
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.run_skills_setup",
+        fail_skills_setup,
+    )
+    result = run_setup(
+        SetupOptions(
+            path=tmp_path,
+            skill_targets=[SkillTarget.generic],
+            yes=True,
+            run_repo=False,
+            run_skills=True,
+        )
+    )
+    assert result["steps"] == []
+    assert result["warnings"] == ["Agent skills skipped: network unavailable"]
 
 
 def test_run_setup_vscode_deprecated(tmp_path: Path) -> None:

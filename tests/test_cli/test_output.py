@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from opentide.cli.context import CliContext
-from opentide.cli.output import emit, emit_error, emit_success
+from opentide.cli.output import CommandResult, emit, emit_error, emit_result, emit_success
 
 
 def test_emit_json_output(capsys) -> None:
@@ -32,7 +32,12 @@ def test_emit_error_json_mode(capsys) -> None:
         emit_error(ctx, "boom", exit_code=3)
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
-    assert payload == {"ok": False, "error": "boom"}
+    assert payload == {
+        "ok": False,
+        "status": "failed",
+        "message": "boom",
+        "error": "boom",
+    }
     assert exc.value.code == 3
 
 
@@ -56,3 +61,52 @@ def test_emit_success_json_and_text_modes(capsys) -> None:
 
     text_ctx = CliContext(json_output=False)
     emit_success(text_ctx, {"message": "finished"})
+
+
+def test_emit_result_renders_skipped_and_warnings() -> None:
+    ctx = CliContext(json_output=False)
+    with (
+        patch("opentide.cli.output.get_stdout_console") as stdout,
+        patch("opentide.cli.output.get_console") as stderr,
+    ):
+        emit_result(
+            ctx,
+            CommandResult(
+                message="Nothing matched",
+                status="skipped",
+                warnings=("Check the selected plan",),
+            ),
+        )
+    stdout.return_value.print.assert_called_once()
+    stderr.return_value.print.assert_called_once()
+
+
+def test_nonzero_exit_with_non_failed_status_is_not_fatal() -> None:
+    ctx = CliContext(json_output=False)
+    result = CommandResult.from_payload(
+        {
+            "status": "skipped",
+            "message": "No rules matched this deployment plan",
+            "_exit_code": 19,
+        }
+    )
+    assert result.ok is True
+    with (
+        patch("opentide.cli.output.emit_fatal") as mock_fatal,
+        patch("opentide.cli.output.get_stdout_console") as stdout,
+        patch("opentide.cli.output.get_console"),
+        pytest.raises(SystemExit) as exc,
+    ):
+        emit_result(ctx, result)
+    mock_fatal.assert_not_called()
+    assert "SKIPPED" in stdout.return_value.print.call_args.args[0]
+    assert exc.value.code == 19
+
+
+def test_from_payload_marks_failed_status() -> None:
+    failed_status = CommandResult.from_payload(
+        {"status": "failed", "message": "nope", "_exit_code": 1}
+    )
+    assert failed_status.ok is False
+    completed = CommandResult.from_payload({"status": "completed", "_exit_code": 0})
+    assert completed.ok is True

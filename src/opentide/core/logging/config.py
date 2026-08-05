@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 _config: LoggingConfig | None = None
 _console = Console(stderr=True, highlight=False)
+_stdout_console = Console(highlight=False)
 
 
 @dataclass(frozen=True)
@@ -33,20 +34,20 @@ class LoggingConfig:
     def from_env(cls) -> LoggingConfig:
         """Build configuration from standard environment variables."""
         no_color = bool(os.getenv("NO_COLOR")) or os.getenv("FORCE_COLOR") == "0"
-        plain = no_color or os.environ.get("TERM_PROGRAM") == "vscode"
         return cls(
             debug=bool(os.getenv("DEBUG_ENABLED")),
             json_output=os.getenv("OPENTIDE_LOG_JSON") == "1",
-            plain=plain,
+            plain=no_color,
         )
 
     @classmethod
     def from_cli_context(cls, ctx: CliContext) -> LoggingConfig:
         """Build configuration from an active CLI context."""
+        no_color = bool(os.getenv("NO_COLOR")) or os.getenv("FORCE_COLOR") == "0"
         return cls(
             debug=ctx.debug,
             json_output=ctx.json_output,
-            plain=ctx.no_color,
+            plain=ctx.no_color or no_color,
         )
 
 
@@ -76,6 +77,23 @@ def get_console() -> Console:
     return _console
 
 
+def get_stdout_console() -> Console:
+    """Return the shared Rich console used for command results."""
+    return _stdout_console
+
+
+def _make_console(*, stderr: bool, config: LoggingConfig) -> Console:
+    """Create a stream-aware console without forcing ANSI into redirects."""
+    force_color = os.getenv("FORCE_COLOR", "").lower() in {"1", "true", "yes"}
+    force_terminal = True if force_color and not config.plain and not config.json_output else None
+    return Console(
+        stderr=stderr,
+        highlight=False,
+        no_color=config.plain or config.json_output,
+        force_terminal=force_terminal,
+    )
+
+
 def _shared_pre_chain() -> list[Any]:
     return [
         structlog.contextvars.merge_contextvars,
@@ -89,13 +107,16 @@ def _shared_pre_chain() -> list[Any]:
 
 def init_logging(config: LoggingConfig | None = None, *, force: bool = False) -> None:
     """Initialise structlog and stdlib logging once per process."""
-    global _config
+    global _config, _console, _stdout_console
     if _config is not None and not force:
         return
 
     _config = config or LoggingConfig.from_env()
-    log_level = logging.DEBUG if _config.debug else logging.INFO
-    use_color = not _config.plain and not _config.json_output
+    log_level = (
+        logging.DEBUG if _config.debug else logging.INFO if _config.json_output else logging.WARNING
+    )
+    _console = _make_console(stderr=True, config=_config)
+    _stdout_console = _make_console(stderr=False, config=_config)
 
     root = logging.getLogger()
     root.handlers.clear()
@@ -118,17 +139,17 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
     else:
         handler = RichHandler(
             console=_console,
-            rich_tracebacks=use_color,
-            show_path=True,
+            rich_tracebacks=not _config.plain,
+            show_path=_config.debug,
             markup=False,
-            show_level=False,
+            show_level=True,
             show_time=False,
         )
         formatter = structlog.stdlib.ProcessorFormatter(
             foreign_pre_chain=_shared_pre_chain(),
             processors=[
                 structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-                OpenTideConsoleRenderer(use_color=use_color),
+                OpenTideConsoleRenderer(use_color=False),
             ],
         )
 

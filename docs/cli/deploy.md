@@ -34,8 +34,6 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 |------|-----|---------|
 | `--platform` | — | Target platform (see [platforms](../usage/concepts/platforms.md)) |
 | `--plan` | `DEPLOYMENT_PLAN` | Deployment plan / strategy |
-| `--tenant` | — | Tenant scope (recorded in result payload) |
-| `--file` | — | Single-file scope (recorded in result payload) |
 | `--wide` | — | Wide output |
 | `--dry-run` | — | Simulate deployment without writes |
 | `--keep-deprecated` | — | Include deprecated rules |
@@ -49,20 +47,22 @@ deploy (dry-run): sentinel
 deploy: 1 rule planned, 0 applied (dry-run)
 ```
 
-A real deploy reports created/updated/skipped counts. With `--json`, the payload includes `"ok"`, the target platform, and per-rule results. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
+A real deploy reports created/updated/skipped counts. With `--json`, the payload includes `"ok"`, status, and plan details. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
+
+When no rules match the selected plan, the command reports `skipped` with a clear message. Empty plans exit successfully except under the legacy GitLab exit-`19` path. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 
 ## Subcommands
 
 ### deploy metadata
 
-Deploy the Splunk metadata lookup table (platform-specific).
+Reserved stub. Hidden from `--help` and exits non-zero with “not implemented”.
 
 ```bash
 opentide deploy metadata --platform splunk
 ```
 
 <Callout type="warn">
-`deploy metadata` currently only signals intent in logs — full metadata deployment integration is pending. Do not rely on it to push lookup tables yet.
+`deploy metadata` is not implemented. Do not rely on it to push lookup tables.
 </Callout>
 
 ## Troubleshooting

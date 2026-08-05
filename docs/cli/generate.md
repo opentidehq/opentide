@@ -12,6 +12,8 @@ opentide generate                    # full pipeline (no extract)
 opentide generate schemas            # single phase
 opentide generate docs --output docs
 opentide generate exports navigator
+opentide generate inflight
+opentide generate inflight prune
 opentide generate extract sentinel   # opt-in platform import
 ```
 
@@ -110,6 +112,15 @@ opentide generate exports              # all export targets
 opentide generate exports navigator
 opentide generate exports objects
 opentide generate exports revisions
+```
+
+## generate inflight
+
+Write preview shards for changed objects, or remove shards superseded by committed objects:
+
+```bash
+opentide generate inflight
+opentide generate inflight prune
 ```
 
 ## generate extract

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import runpy
+from contextlib import redirect_stdout
+from io import StringIO
 from typing import TYPE_CHECKING
 
 from opentide.cli.enums import ExtractImport
@@ -37,5 +39,16 @@ def run_extract(
 ) -> dict[str, object]:
     """Entry point for extract import command."""
     ctx.apply_environment()
-    run_extract_import(import_target)
-    return {"message": f"Imported {import_target.value}", "import": import_target.value}
+    captured = StringIO()
+    if ctx.json_output:
+        with redirect_stdout(captured):
+            run_extract_import(import_target)
+    else:
+        run_extract_import(import_target)
+    result: dict[str, object] = {
+        "message": f"Imported {import_target.value}",
+        "import": import_target.value,
+    }
+    if captured.getvalue().strip():
+        result["output"] = captured.getvalue().strip()
+    return result

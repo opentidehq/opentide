@@ -6,7 +6,7 @@ icon: Terminal
 
 # CLI reference
 
-The `opentide` command is a [Typer](https://typer.tiangolo.com/) application. Install with the `cli` extra:
+The `opentide` command is a [Typer](https://typer.tiangolo.com/) application included in the core package:
 
 ```bash
 pip install opentide
@@ -39,7 +39,7 @@ All commands inherit [global options](./global-options.md):
 | `--repo` | `OPENTIDE_REPO_ROOT` | Detection repository root |
 | `--data` | `OPENTIDE_DATA_ROOT` | Bundled data root override |
 | `--debug` | `DEBUG` | Debug logging |
-| `--no-color` | — | Disable Rich colour |
+| `--no-color` | `NO_COLOR` | Disable Rich colour |
 | `--json` | — | Machine-readable JSON output |
 
 ## Typical CI sequence
@@ -55,11 +55,11 @@ Generated pipelines use `opentide generate docs --output docs` for documentation
 
 ## JSON output
 
-With `--json`, successful completion payloads include `"ok": true`. Gate pipelines on the **exit code**, not the `ok` field alone: object-validation errors often raise exit `1` before a failure wrapper is printed. Explicit error helpers (for example unsupported query platforms) do emit `"ok": false`. (`opentide info` is the one exception — it emits the info object directly without an `ok` wrapper; see [`info`](./info.md).)
+With `--json`, every command writes exactly one JSON document to stdout. Successes include `"ok": true`; failures include `"ok": false`, a status, message, and non-zero exit code. Diagnostics use stderr and never prefix the stdout document. (`opentide info` emits the info object through the same contract.)
 
 ## Exit codes
 
-Commands set a process exit code so CI can gate without parsing output: `0` success, `1` error, `2` usage error, `19` GitLab warning soft-fail. Full reference: [Exit codes](./exit-codes.md).
+Commands set a process exit code so CI can gate without parsing output: `0` success, `1` error, `2` usage error, `19` legacy GitLab warning soft-fail. Full reference: [Exit codes](./exit-codes.md).
 
 ## Choosing between CLI, SDK, and MCP
 

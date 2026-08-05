@@ -35,4 +35,4 @@ def test_setup_repo_readme_uses_setup_command(tmp_path: Path) -> None:
     run_repo_setup(RepoSetupOptions(path=target, name="Test", yes=True))
     readme = (target / "README.md").read_text(encoding="utf-8")
     assert "opentide setup" in readme
-    assert "**Organisation:** Security Operations" in readme
+    assert "**Organisation:**" not in readme

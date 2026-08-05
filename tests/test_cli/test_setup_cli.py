@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import importlib
+
 from typer.testing import CliRunner
 
 from opentide.cli import app
+from opentide.cli.services.setup.skills import SkillsDownloadError
 
 runner = CliRunner()
 
@@ -15,6 +18,16 @@ def test_setup_help_lists_subcommands() -> None:
     assert "repo" in result.stdout
     assert "mcp" in result.stdout
     assert "skills" in result.stdout
+
+
+def test_setup_without_tty_fails_with_scripted_guidance(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        ["--json", "--repo", str(tmp_path), "setup"],
+    )
+    assert result.exit_code == 1
+    assert '"ok": false' in result.stdout
+    assert "--yes" in result.stdout
 
 
 def test_setup_repo_scripted(tmp_path) -> None:
@@ -43,22 +56,45 @@ def test_setup_mcp_vscode(tmp_path) -> None:
     assert (tmp_path / ".vscode" / "mcp.json").is_file()
 
 
-def test_setup_mcp_yes_defaults_to_vscode(tmp_path) -> None:
+def test_setup_mcp_yes_requires_explicit_host(tmp_path) -> None:
     result = runner.invoke(
         app,
         ["--json", "setup", "mcp", str(tmp_path), "--yes"],
     )
-    assert result.exit_code == 0
-    assert (tmp_path / ".vscode" / "mcp.json").is_file()
+    assert result.exit_code == 2
+    assert not (tmp_path / ".vscode" / "mcp.json").exists()
 
 
-def test_setup_skills_yes_defaults_to_generic(tmp_path, mock_skill_download) -> None:
+def test_setup_skills_yes_requires_explicit_target(tmp_path, mock_skill_download) -> None:
     result = runner.invoke(
         app,
         ["--json", "setup", "skills", "--yes", str(tmp_path)],
     )
-    assert result.exit_code == 0
-    assert (tmp_path / "AGENTS.md").is_file()
+    assert result.exit_code == 2
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_setup_skills_download_failure_is_normalized_json(tmp_path, monkeypatch) -> None:
+    def fail_download(options: object) -> None:
+        raise SkillsDownloadError("network unavailable")
+
+    setup_module = importlib.import_module("opentide.cli.setup_app")
+    monkeypatch.setattr(setup_module, "run_skills_setup", fail_download)
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "skills",
+            "--generic",
+            "--yes",
+            "--path",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert '"ok": false' in result.stdout
+    assert "network unavailable" in result.stdout
 
 
 def test_setup_vscode_settings_command(tmp_path) -> None:

@@ -50,7 +50,7 @@ def run_ci_setup(options: CiSetupOptions) -> dict[str, object]:
         logger.warning("ci_platforms_missing", detail=str(target), warnings=warnings)
     render = CiRenderOptions.from_repo_options(options, platform_ids)
     written = write_ci(target, render)
-    logger.info(
+    logger.debug(
         "ci_pipelines_created",
         detail=str(target),
         files=written,

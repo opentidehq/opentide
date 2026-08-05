@@ -26,7 +26,9 @@ opentide validate --check schema
 | `--file` | Validate one YAML file |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
-| `--strict` | Accepted for compatibility; does **not** change exit handling today (warnings still only soft-fail as `19` on GitLab) |
+| `--strict` | Treat warnings as failures (exit `1`) outside GitLab |
+
+`--strict` fails local/GitHub warning runs with exit `1`. GitLab still uses legacy exit `19` for warning soft-fail. Validation failures in `--json` mode include the complete report before the process exits.
 
 ### Default checks
 

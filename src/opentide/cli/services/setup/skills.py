@@ -12,7 +12,9 @@ import typer
 from opentide.cli.enums import SkillTarget
 from opentide.cli.services.setup.interactive import (
     SKILL_LABELS,
-    parse_multi_select,
+    ask_checkbox,
+    ask_confirm,
+    require_interactive,
     skill_targets_from_keys,
 )
 from opentide.cli.services.setup.skills_registry import (
@@ -21,10 +23,15 @@ from opentide.cli.services.setup.skills_registry import (
     load_manifest,
 )
 from opentide.cli.services.setup.templates import render_agent_entrypoint
+from opentide.core.logging.config import get_stdout_console
 
 logger = structlog.get_logger("opentide.cli.services.setup.skills")
 
 _STARTER_SKILLS = ("opentide-detection-rule", "detection-engineering")
+
+
+class SkillsDownloadError(RuntimeError):
+    """Raised when a remote skill cannot be downloaded."""
 
 
 @dataclass
@@ -44,8 +51,8 @@ class SkillsSetupOptions:
 def _entrypoint_context(options: SkillsSetupOptions, target: Path) -> dict[str, str]:
     return {
         "name": options.name or target.name,
-        "org": options.org or "Security Operations",
-        "description": options.description or "Detection-as-code repository powered by OpenTide",
+        "org": options.org or "",
+        "description": options.description or "",
     }
 
 
@@ -61,7 +68,7 @@ def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str
     written: list[str] = []
     skill_md = fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref)
     if skill_md is None:
-        raise typer.BadParameter(_download_error(slug, source=source, ref=ref))
+        raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
     dest.mkdir(parents=True, exist_ok=True)
     skill_path = dest / "SKILL.md"
     skill_path.write_bytes(skill_md)
@@ -109,6 +116,21 @@ def _install_skill_trees(target: Path, slugs: list[str]) -> list[str]:
         )
         written.extend(f".agents/skills/{slug}/{name}" for name in rel_files)
     return written
+
+
+def unavailable_skills(options: SkillsSetupOptions) -> list[str]:
+    """Return skill slugs that cannot be fetched before setup mutates files."""
+    manifest = load_manifest()
+    return [
+        slug
+        for slug in _resolve_skill_slugs(options)
+        if fetch_github_bytes(
+            f"skills/{slug}/SKILL.md",
+            source=manifest.source,
+            ref=manifest.ref,
+        )
+        is None
+    ]
 
 
 def _install_cursor(target: Path, slugs: list[str]) -> list[str]:
@@ -187,7 +209,7 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
                 written.extend(_install_generic(target, slugs, context))
                 also_applied.append("generic")
             written.extend(_install_github_copilot(target, context))
-    logger.info("agent_skills_created", detail=str(target), files=written, skills=slugs)
+    logger.debug("agent_skills_created", detail=str(target), files=written, skills=slugs)
     result: dict[str, object] = {
         "message": "Agent skills installed",
         "path": str(target),
@@ -201,19 +223,23 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
 
 def run_interactive_skills_setup(base_path: Path) -> dict[str, object]:
     """Prompt for skill targets and install packs."""
-    from rich.prompt import Prompt
-
-    print_labels = ", ".join(f"{key} ({label})" for key, label in SKILL_LABELS.items())
-    raw = Prompt.ask(
-        f"Agent environments (comma-separated: {print_labels})",
-        default="generic",
+    require_interactive()
+    keys = ask_checkbox(
+        "Agent environments",
+        [(label, key) for key, label in SKILL_LABELS.items()],
+        require_selection=True,
     )
-    keys = parse_multi_select(raw, SKILL_LABELS)
-    if not keys:
-        keys = ["generic"]
     options = SkillsSetupOptions(
         path=base_path,
         targets=skill_targets_from_keys(keys),
         yes=True,
     )
+    unavailable = unavailable_skills(options)
+    if unavailable:
+        raise RuntimeError("Agent skills unavailable: " + ", ".join(unavailable))
+    get_stdout_console().print(
+        f"[bold]Target:[/] {base_path.resolve()}\n[bold]Agent environments:[/] {', '.join(keys)}"
+    )
+    if not ask_confirm("Install these agent skills?", default=True):
+        return {"message": "Agent skills setup cancelled", "status": "skipped"}
     return run_skills_setup(options)

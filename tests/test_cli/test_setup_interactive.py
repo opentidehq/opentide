@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+import pytest
+
 from opentide.cli.enums import DetectionPlatform, McpHost, SkillTarget
+from opentide.cli.services.setup import interactive
 from opentide.cli.services.setup.interactive import (
     MCP_LABELS,
     SKILL_LABELS,
@@ -45,3 +50,40 @@ def test_mcp_hosts_from_keys() -> None:
 def test_skill_targets_from_keys() -> None:
     targets = skill_targets_from_keys(["generic", "claude-code"])
     assert targets == [SkillTarget.generic, SkillTarget.claude_code]
+
+
+def test_require_interactive_rejects_redirected_stdin(monkeypatch) -> None:
+    monkeypatch.setattr(interactive.sys.stdin, "isatty", lambda: False)
+    with pytest.raises(interactive.InteractiveRequiredError, match="requires a terminal"):
+        interactive.require_interactive()
+
+
+def test_questionary_prompt_helpers(monkeypatch) -> None:
+    prompt = MagicMock()
+    prompt.ask.side_effect = ["text", True, "choice", ["one"]]
+    monkeypatch.setattr(interactive.questionary, "text", lambda *args, **kwargs: prompt)
+    monkeypatch.setattr(interactive.questionary, "confirm", lambda *args, **kwargs: prompt)
+    monkeypatch.setattr(interactive.questionary, "select", lambda *args, **kwargs: prompt)
+    monkeypatch.setattr(interactive.questionary, "checkbox", lambda *args, **kwargs: prompt)
+
+    assert interactive.ask_text("Text") == "text"
+    assert interactive.ask_confirm("Confirm") is True
+    assert interactive.ask_select("Select", [("Choice", "choice")]) == "choice"
+    assert interactive.ask_checkbox("Checkbox", [("One", "one")]) == ["one"]
+
+
+def test_ask_platforms_uses_friendly_checkbox(monkeypatch) -> None:
+    monkeypatch.setattr(
+        interactive,
+        "ask_checkbox",
+        lambda *args, **kwargs: [DetectionPlatform.sentinel],
+    )
+    assert interactive.ask_platforms() == [DetectionPlatform.sentinel]
+
+
+def test_prompt_cancel_raises_keyboard_interrupt(monkeypatch) -> None:
+    prompt = MagicMock()
+    prompt.ask.return_value = None
+    monkeypatch.setattr(interactive.questionary, "text", lambda *args, **kwargs: prompt)
+    with pytest.raises(KeyboardInterrupt):
+        interactive.ask_text("Text")

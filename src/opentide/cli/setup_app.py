@@ -8,8 +8,13 @@ import typer
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
-from opentide.cli.output import emit, emit_success
+from opentide.cli.output import emit, emit_error, emit_success
 from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
+from opentide.cli.services.setup.interactive import (
+    InteractiveRequiredError,
+    ask_confirm,
+    require_interactive,
+)
 from opentide.cli.services.setup.mcp import (
     McpSetupOptions,
     run_interactive_mcp_setup,
@@ -23,6 +28,7 @@ from opentide.cli.services.setup.repo import (
     run_repo_setup,
 )
 from opentide.cli.services.setup.skills import (
+    SkillsDownloadError,
     SkillsSetupOptions,
     run_interactive_skills_setup,
     run_skills_setup,
@@ -32,6 +38,7 @@ from opentide.cli.services.setup.vscode import (
     run_vscode_settings,
     run_vscode_snippets,
 )
+from opentide.core.logging.config import get_console, get_stdout_console
 
 setup_app = typer.Typer(help="Repository and tooling setup")
 skills_app = typer.Typer(help="Agent skills discovery and installation")
@@ -68,6 +75,18 @@ def _should_run_repo(
     return yes and ci is None and not vscode_setup
 
 
+def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) -> bool:
+    """Confirm a scripted write unless explicit non-interactive consent was given."""
+    if yes:
+        return True
+    try:
+        require_interactive()
+    except InteractiveRequiredError as exc:
+        emit_error(cli, f"{exc} Add --yes to confirm this write.")
+    get_stdout_console().print(f"[bold]Target:[/] {target.resolve()}")
+    return ask_confirm(message, default=True)
+
+
 @setup_app.callback(invoke_without_command=True)
 def setup_cmd(
     ctx: typer.Context,
@@ -90,6 +109,11 @@ def setup_cmd(
     promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
     promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
     python_version: str = typer.Option("3.12", "--python-version"),
+    explorer_pages: bool = typer.Option(
+        False,
+        "--explorer-pages/--no-explorer-pages",
+        help="Include GitHub Pages explorer build and deploy jobs",
+    ),
     vscode_setup: bool = typer.Option(
         False, "--vscode-setup", help="Run deprecated VS Code settings + snippets"
     ),
@@ -106,6 +130,9 @@ def setup_cmd(
     scripted = not only_ci_none and (yes or has_repo or ci is not None or vscode_setup)
 
     if scripted:
+        if not _confirm_write(cli, base, "Apply this setup?", yes=yes):
+            emit_success(cli, {"message": "Setup cancelled", "status": "skipped"})
+            return
         options = SetupOptions(
             path=base,
             name=name,
@@ -118,6 +145,7 @@ def setup_cmd(
             promotion=promotion,
             promotion_target=promotion_target,
             python_version=python_version,
+            explorer_pages=explorer_pages,
             vscode_setup=vscode_setup,
             yes=yes,
             run_repo=_should_run_repo(
@@ -133,7 +161,10 @@ def setup_cmd(
         cli.apply_environment()
         result = run_setup(options)
     else:
-        result = run_interactive_setup(cli, base)
+        try:
+            result = run_interactive_setup(cli, base)
+        except (InteractiveRequiredError, RuntimeError) as exc:
+            emit_error(cli, str(exc))
     emit_success(cli, result)
 
 
@@ -153,6 +184,9 @@ def setup_repo_cmd(
     cli = get_context(ctx)
     base = _resolve_setup_path(cli, path)
     if yes or _has_repo_flags(name, org, description, platform):
+        if not _confirm_write(cli, base, "Create this repository scaffold?", yes=yes):
+            emit_success(cli, {"message": "Repository setup cancelled", "status": "skipped"})
+            return
         options = RepoSetupOptions(
             path=base,
             name=name,
@@ -164,7 +198,10 @@ def setup_repo_cmd(
         cli.apply_environment()
         result = run_repo_setup(options)
     else:
-        result = run_interactive_repo_setup(cli, base)
+        try:
+            result = run_interactive_repo_setup(cli, base)
+        except InteractiveRequiredError as exc:
+            emit_error(cli, str(exc))
     emit_success(cli, result)
 
 
@@ -199,10 +236,11 @@ def setup_platforms_cmd(
         platforms.append(DetectionPlatform.carbon_black)
     if harfanglab:
         platforms.append(DetectionPlatform.harfanglab)
-    if yes and not platforms:
-        platforms = [DetectionPlatform.sentinel]
     if not platforms:
         raise typer.BadParameter("Choose at least one platform flag (e.g. --sentinel --splunk)")
+    if not _confirm_write(cli, base, "Write these platform configurations?", yes=yes):
+        emit_success(cli, {"message": "Platform setup cancelled", "status": "skipped"})
+        return
     cli.apply_environment()
     emit_success(
         cli,
@@ -235,8 +273,12 @@ def setup_ci_cmd(
     cli = get_context(ctx)
     if ci_platform is CiPlatform.none:
         raise typer.BadParameter("Choose github, gitlab, or azure")
+    target = _resolve_setup_path(cli, path)
+    if not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
+        emit_success(cli, {"message": "CI/CD setup cancelled", "status": "skipped"})
+        return
     options = CiSetupOptions(
-        path=_resolve_setup_path(cli, path),
+        path=target,
         ci=ci_platform,
         staging=staging,
         inflight=inflight,
@@ -274,14 +316,24 @@ def setup_mcp_cmd(
         hosts.append(McpHost.generic)
 
     if yes and not hosts:
-        hosts = [McpHost.vscode]
+        emit_error(
+            cli,
+            "Choose at least one MCP host (--vscode, --cursor, --claude-code, --generic)",
+            exit_code=2,
+        )
 
     if yes or hosts:
+        if not _confirm_write(cli, base, "Write these MCP configurations?", yes=yes):
+            emit_success(cli, {"message": "MCP setup cancelled", "status": "skipped"})
+            return
         options = McpSetupOptions(path=base, hosts=hosts, yes=yes)
         cli.apply_environment()
         result = run_mcp_setup(options)
     else:
-        result = run_interactive_mcp_setup(base)
+        try:
+            result = run_interactive_mcp_setup(base)
+        except InteractiveRequiredError as exc:
+            emit_error(cli, str(exc))
     emit_success(cli, result)
 
 
@@ -289,6 +341,8 @@ def _coalesce_setup_path(cli: CliContext, positional: str, option: str) -> Path:
     """Prefer ``--path`` when set; otherwise use the positional path."""
     if option != ".":
         return _resolve_setup_path(cli, option)
+    if positional != ".":
+        get_console().print("[yellow]DEPRECATED[/] Positional skills PATH; use --path/-C instead.")
     return _resolve_setup_path(cli, positional)
 
 
@@ -324,9 +378,17 @@ def setup_skills_install_cmd(
         targets.append(SkillTarget.github_copilot)
 
     if yes and not targets:
-        targets = [SkillTarget.generic]
+        emit_error(
+            cli,
+            "Choose at least one skills target "
+            "(--cursor, --claude-code, --generic, --github-copilot)",
+            exit_code=2,
+        )
 
     if yes or targets:
+        if not _confirm_write(cli, base, "Install these agent skills?", yes=yes):
+            emit_success(cli, {"message": "Agent skills setup cancelled", "status": "skipped"})
+            return
         options = SkillsSetupOptions(
             path=base,
             targets=targets,
@@ -338,9 +400,15 @@ def setup_skills_install_cmd(
             yes=yes,
         )
         cli.apply_environment()
-        result = run_skills_setup(options)
+        try:
+            result = run_skills_setup(options)
+        except SkillsDownloadError as exc:
+            emit_error(cli, str(exc))
     else:
-        result = run_interactive_skills_setup(base)
+        try:
+            result = run_interactive_skills_setup(base)
+        except (InteractiveRequiredError, RuntimeError) as exc:
+            emit_error(cli, str(exc))
     emit_success(cli, result)
 
 
@@ -360,7 +428,6 @@ def setup_skills_discover_cmd(
     if cli.json_output:
         emit_success(cli, payload)
         return
-    from rich.console import Console
     from rich.table import Table
 
     table = Table(title="OpenTide Skills")
@@ -373,8 +440,8 @@ def setup_skills_discover_cmd(
             "yes" if item.get("installed") else "no",
             str(item.get("description", ""))[:80],
         )
-    Console().print(table)
-    Console().print(f"Source: {payload['source']} ({payload['count']} skills)")
+    get_stdout_console().print(table)
+    get_stdout_console().print(f"Source: {payload['source']} ({payload['count']} skills)")
 
 
 @skills_app.command("show")
@@ -394,16 +461,14 @@ def setup_skills_show_cmd(
         else:
             emit_success(cli, payload)
         return
-    from rich.console import Console
-
     if "error" in payload:
-        Console().print(f"[red]{payload['error']}[/red]")
+        get_console().print(f"[red]{payload['error']}[/red]")
         raise typer.Exit(1)
     skill = payload["skill"]
-    Console().print(f"[bold]{skill['name']}[/bold] ({skill['slug']})")
-    Console().print(skill.get("description", ""))
-    Console().print(f"Installed: {'yes' if skill.get('installed') else 'no'}")
-    Console().print(payload.get("install_hint", ""))
+    get_stdout_console().print(f"[bold]{skill['name']}[/bold] ({skill['slug']})")
+    get_stdout_console().print(skill.get("description", ""))
+    get_stdout_console().print(f"Installed: {'yes' if skill.get('installed') else 'no'}")
+    get_stdout_console().print(payload.get("install_hint", ""))
 
 
 @setup_app.command("vscode")

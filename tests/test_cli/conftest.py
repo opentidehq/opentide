@@ -114,9 +114,8 @@ def tide_corpus_repo(
 def parse_cli_json(result: Result) -> dict[str, Any]:
     text = result.stdout.strip()
     assert text, "expected JSON on stdout"
-    start = text.find("{")
-    assert start >= 0, f"no JSON object in stdout: {text!r}"
-    payload, _end = json.JSONDecoder().raw_decode(text, start)
+    payload = json.loads(text)
+    assert isinstance(payload, dict)
     return payload
 
 
