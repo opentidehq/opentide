@@ -11,7 +11,36 @@ One install gets the CLI, MCP server (`opentide-mcp`), all seven platform adapte
 
 - Python **3.10–3.14**
 - A detection content repository (or use `opentide setup repo` to scaffold one)
-- Platform credentials under `.opentide/configurations/` when deploying or running live queries
+- Platform credentials when deploying or running live queries — configured under `.opentide/configurations/`, see [Configuration → credentials](./configuration.md#credentials)
+
+## Recommended: an isolated environment
+
+Install OpenTide into a virtual environment so its dependencies never collide with other tools:
+
+<Tabs items={['venv + pip', 'uv']}>
+
+<Tab value="venv + pip">
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install opentide
+```
+
+</Tab>
+
+<Tab value="uv">
+
+```bash
+uv venv
+uv pip install opentide
+```
+
+</Tab>
+
+</Tabs>
+
+For agent/MCP hosts, remember the path to this environment's `opentide-mcp` binary — you point the host at it in [MCP configuration](../mcp/configuration.md).
 
 ## PyPI install
 

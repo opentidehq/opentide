@@ -55,7 +55,15 @@ Generated pipelines use `opentide generate docs --output docs` for documentation
 
 ## JSON output
 
-With `--json`, most success payloads include `"ok": true` and write JSON to stdout. Errors emit `"ok": false` and exit non-zero. Human-oriented log lines may still appear on stderr when structlog is configured for JSON — treat stdout as the contract for automation.
+With `--json`, success payloads include `"ok": true`. Errors emit `"ok": false` and exit non-zero. Use in pipeline gates and agent tooling. (`opentide info` is the one exception — it emits the info object directly without an `ok` wrapper; see [`info`](./info.md).)
+
+## Exit codes
+
+Commands set a process exit code so CI can gate without parsing output: `0` success, `1` error, `2` usage error, `19` GitLab warning soft-fail. Full reference: [Exit codes](./exit-codes.md).
+
+## Choosing between CLI, SDK, and MCP
+
+The CLI is one of three interfaces to the same engine. For humans and pipelines, use the CLI; to embed in Python, use the [SDK](../sdk/index.md); for AI agents, use [MCP](../mcp/index.md). See [Choosing an interface](../usage/choosing-an-interface.md).
 
 ## Shell completion
 

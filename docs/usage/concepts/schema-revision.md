@@ -1,70 +1,64 @@
 ---
 title: Schema revision
-description: How metadata.schema selects validation models and how schema revisions coexist with instance versions.
+description: Why every object has two version fields, what each one controls, and how schema revisions coexist.
 ---
 
 # Schema revision
 
-OpenTide separates **structural schema revisions** from **object instance versions**.
+Every OpenTide object carries **two** version-like fields, and mixing them up is the single most common authoring mistake. This page explains what each controls and why they are separate.
 
-## Two metadata fields
+## Two fields, two jobs
 
-| Field | Example | Meaning |
-|-------|---------|---------|
-| `metadata.schema` | `rule::1.0` | Which Pydantic model / JSON Schema applies |
-| `metadata.version` | `1.2.0` | Business semver for the object instance |
+| Field | Example | Answers | Authoritative history |
+|-------|---------|---------|-----------------------|
+| `metadata.schema` | `rule::1.0` | *Which structure does this object follow?* | The specification |
+| `metadata.version` | `1.2.0` | *Which revision of this object's content?* | Git |
 
-- **Schema revision** selects the validation model and generated `rule.1.0.schema.json` artifact.
-- **Instance version** tracks content evolution; git is the authoritative history.
+- **`metadata.schema`** — the **structural schema revision**. It selects the validation model and the generated `rule.1.0.schema.json` your editor and CLI check against. It changes only when the *shape* of the object changes (new required fields, renamed structures), which is rare and governed by the [specifications](/docs/specifications/specs/versioning/).
+- **`metadata.version`** — the **instance content version**. It is your semver-style marker for how a specific detection has evolved. Bump it when you meaningfully change the rule's logic. The real, line-by-line history lives in git.
 
-Do not use `metadata.version` to pick a JSON Schema file.
+<Callout type="warn">
+Never use `metadata.version` to select a schema file. Content revisions and structural revisions are independent — a rule at content `version: 4` can still be `schema: rule::1.0`.
+</Callout>
 
-## Filename conventions
+## Naming conventions
+
+The schema identifier maps predictably to files and specs:
 
 | Layer | Format | Example |
 |-------|--------|---------|
 | Schema identifier | `{family}::{major}.{minor}` | `rule::1.0` |
-| Schema file | `.opentide/schemas/{family}.{major}.{minor}.schema.json` | `rule.1.0.schema.json` |
-| Template file | `.opentide/templates/{family}.{major}.{minor}.template.yaml` | `rule.1.0.template.yaml` |
+| Specification file | `specs/objects/{family}-{major}.{minor}.md` | `rule-1.0.md` |
+| JSON Schema artifact | `.opentide/schemas/{family}.{major}.{minor}.schema.json` | `rule.1.0.schema.json` |
+| Template artifact | `.opentide/templates/{family}.{major}.{minor}.template.yaml` | `rule.1.0.template.yaml` |
 | IDE router | `.opentide/schemas/opentide.schema.json` | routes `objects/**/*.yaml` by `metadata.schema` |
 
-## Runtime routing
+Your editor validates YAML live because the IDE router reads each file's `metadata.schema` and applies the matching JSON Schema — no per-file configuration required.
 
-1. **Registry** — `schema_registry.py` maps `rule::1.0` → `DetectionRule`.
-2. **Load** — `load_object()` reads `metadata.schema`, resolves the model, optionally migrates via `SchemaVersionChain`, then validates with Pydantic.
-3. **Validate** — `opentide validate` checks every object against its declared schema identifier.
-4. **Index** — `RegistryBuilder` scans `.opentide/schemas/*.schema.json` into the runtime index.
+## How revisions coexist
 
-## Multi-version coexistence
+Schema revisions are additive. When a new revision such as `rule::1.1` ships, both revisions can exist in the same repo at once:
 
-When `rule::1.1` ships:
+1. `opentide generate schemas` emits **both** `rule.1.0.schema.json` and `rule.1.1.schema.json`.
+2. The IDE router adds a branch for each identifier and routes objects by their declared `metadata.schema`.
+3. Objects opt in individually by setting `metadata.schema: rule::1.1`. Objects that still declare `rule::1.0` keep validating against `1.0` until you migrate them.
 
-1. Add a new Pydantic model with `__schema_identifier__ = "rule::1.1"`.
-2. Register the model and a `SchemaVersionChain` migration from `1.0` → `1.1`.
-3. Run `opentide generate schemas`.
-4. Objects opt in by setting `metadata.schema: rule::1.1`; older objects keep `rule::1.0` until migrated.
+This means a schema upgrade never forces a big-bang migration — you move objects over at your own pace. For CoreTide-era repos, see the [migration guide](../migration/index.md).
 
-Concurrent schema files in `.opentide/schemas/` are expected.
+## What to do when
 
-## Generation
+| Situation | Action |
+|-----------|--------|
+| You changed a rule's detection logic | Bump `metadata.version` |
+| You upgraded the OpenTide package | Run `opentide generate` to refresh schema artifacts |
+| A new schema revision is available | Migrate objects to the new `metadata.schema` when ready |
+| Your editor stopped validating YAML | Regenerate: `opentide generate schemas` |
 
-`opentide generate schemas` emits:
-
-- One JSON Schema per registered core-object identifier.
-- `visibility::1.0` for configuration validation.
-- `opentide.schema.json` IDE router with `const` discrimination on `metadata.schema`.
-
-## Source references
-
-- `src/opentide/models/schema_registry.py`
-- `src/opentide/registry/artifacts.py`
-- `src/opentide/models/version.py`
-- `src/opentide/data/configurations/paths.toml`
-
-## SDK
-
-Programmatic schema access via `OpenTide.JsonSchemas`, `OpenTide.Templates`, and `OpenTide.TideSchemas` — see [SDK registry](../../sdk/registry.md).
+<Callout type="info">
+Implementation detail: how the registry resolves identifiers to models and runs migrations is an internal concern documented in the [SDK registry](../../sdk/registry.md) and the opentide source. Authors only need the `metadata.schema` value.
+</Callout>
 
 ## Normative reference
 
-[Versioning spec](/docs/specifications/specs/versioning/) · [Metadata spec](/docs/specifications/specs/metadata/)
+- [Versioning spec](/docs/specifications/specs/versioning/) — the rules for how revisions are numbered and deprecated.
+- [Metadata spec](/docs/specifications/specs/metadata/) — the full `metadata` field contract.

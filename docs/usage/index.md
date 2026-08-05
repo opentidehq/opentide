@@ -1,41 +1,58 @@
 ---
 title: Usage
-description: Human-oriented guides for installing OpenTide, onboarding detection repositories, and day-to-day workflows.
+description: Install OpenTide, learn the object model, and run detection-as-code — a guided path for detection engineers, agents, and integrators.
 icon: BookOpen
 ---
 
 # Usage
 
-Guides for detection engineers who install OpenTide, scaffold repositories, and operate detection-as-code workflows.
+OpenTide is the **DetectionOps engine**: a versioned toolchain for building, validating, deploying, and documenting detection content as code across enterprise security platforms. This section takes you from "what is it?" to a working, CI-gated detection repository.
 
-## Getting started
+<Callout type="info">
+New here? Read [Why OpenTide](./why-opentide.md) and [How OpenTide works](./how-it-works.md) first — they give you the mental model that every other page assumes.
+</Callout>
 
-1. [Installation](./installation.md) — PyPI install, environment variables, and editor prerequisites.
-2. [Quickstart](./quickstart.md) — validate, generate, and inspect a repo in five minutes.
-3. [Repository setup](./repository-setup.md) — what `opentide setup` scaffolds and how to configure platforms.
+## Start with the concepts
 
-## Workflows
+Detection content in OpenTide is a small graph of typed objects. Understanding that graph before you touch the CLI saves hours.
 
-| Guide | When to read |
-|-------|--------------|
-| [Detection-as-code](./workflows/detection-as-code.md) | Authoring and reviewing threat, objective, and rule objects |
-| [CI/CD](./workflows/ci-cd.md) | GitHub, GitLab, and Azure pipeline integration |
-| [Agentic setup](./workflows/agentic-setup.md) | MCP hosts, agent skills, and copilot instructions |
+<Cards>
+  <Card title="How OpenTide works" href="./how-it-works.md" description="The full lifecycle: author → generate → validate → deploy → document." />
+  <Card title="Object model" href="./concepts/object-model.md" description="Threats, objectives, and rules — and how they chain together." />
+  <Card title="Platforms" href="./concepts/platforms.md" description="Which SIEM/EDR platforms deploy and which support query validation." />
+  <Card title="Glossary" href="./concepts/glossary.md" description="TVM, MDR, chaining, promotion, schema revision — defined in one place." />
+</Cards>
 
-## Concepts
+## Pick your path
 
-| Topic | Summary |
-|-------|---------|
-| [Object model](./concepts/object-model.md) | Threat → objective → rule chaining |
-| [Platforms](./concepts/platforms.md) | Deploy and query-validation capabilities |
-| [Schema revision](./concepts/schema-revision.md) | `metadata.schema` vs `metadata.version` |
+OpenTide serves several audiences. Follow the path that matches you.
 
-## Migration
+| You are… | Start here | Then |
+|-----------|-----------|------|
+| **New to OpenTide, greenfield repo** | [Installation](./installation.md) → [Repository setup](./repository-setup.md) | [Tutorial](./tutorial.md) → [Detection-as-code](./workflows/detection-as-code.md) |
+| **Evaluating the project** | [Why OpenTide](./why-opentide.md) → [How it works](./how-it-works.md) | [Object model](./concepts/object-model.md) |
+| **Migrating from CoreTide** | [Migration guide](./migration/index.md) | [Configuration](./configuration.md) |
+| **Wiring up an AI agent** | [Agentic setup](./workflows/agentic-setup.md) | [MCP reference](../mcp/index.md) |
+| **Embedding OpenTide in Python** | [SDK](../sdk/index.md) | [SDK registry](../sdk/registry.md) |
 
-Upgrading from CoreTide git submodules? Start with the [migration guide](./migration/index.md).
+## The recommended read order
 
-## Related reference
+If you read one thing after another, read them in this order:
 
-- [CLI](../cli/index.md) — full command reference
-- [MCP](../mcp/index.md) — agent server setup
-- [SDK](../sdk/index.md) — programmatic API
+```mermaid
+flowchart LR
+  why["Why OpenTide"] --> how["How it works"]
+  how --> model["Object model"]
+  model --> install["Install + setup"]
+  install --> tutorial["Tutorial"]
+  tutorial --> daily["Detection-as-code"]
+  daily --> ci["CI/CD"]
+  ci --> agents["Agents (optional)"]
+```
+
+## Everyday reference
+
+- [Configuration](./configuration.md) — credentials, enabling platforms, deployment plans, promotion.
+- [Troubleshooting](./troubleshooting.md) — what to do when `validate` or `generate` fails.
+- [CLI](../cli/index.md) · [MCP](../mcp/index.md) · [SDK](../sdk/index.md) — the three interfaces to the same engine.
+- [Specifications](/docs/specifications/) — the normative contract behind every object and field.
