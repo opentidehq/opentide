@@ -159,13 +159,15 @@ opentide --json validate
 
 ```json
 {
-  "ok": true,
   "checks": {
     "id-uniqueness": { "check": "id-uniqueness", "status": "passed" },
     "uuid-format": { "check": "uuid-format", "status": "passed" },
     "schema": { "check": "schema", "status": "passed" }
   },
-  "report": { "ok": true, "issues": [], "warnings": [], "stats": {} }
+  "report": { "ok": true, "issues": [], "warnings": [], "stats": {} },
+  "ok": true,
+  "status": "passed",
+  "message": "Validation passed"
 }
 ```
 
@@ -185,7 +187,7 @@ Re-run:
 opentide validate
 ```
 
-Console output groups issues by file. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check):
+Issues print in a "Validation issues" panel, grouped by file. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check):
 
 ```text
 ## objects/rules/sentinel-kql-rule.yaml

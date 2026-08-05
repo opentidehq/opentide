@@ -38,7 +38,7 @@ These principles explain *why* OpenTide behaves the way it does, and where its b
 | **Honest capability reporting** | If a platform cannot validate query syntax, the CLI and MCP say `supported: false` rather than returning a fake pass. See [Platforms](./concepts/platforms.md). |
 | **Deterministic generation** | `generate` is reproducible: the same specs and objects always produce the same schemas and templates. Generated files are safe to commit and diff. |
 | **Git is the history** | Instance content versions (`metadata.version`) track meaning; git tracks the actual change history. See [Schema revision](./concepts/schema-revision.md). |
-| **Fail loud in CI, safe by default locally** | Validation errors exit `1` everywhere; on GitLab CI, warnings soft-fail as `19`. Deploys default to staging and dry-run friendly flows. |
+| **Fail loud in CI, safe by default locally** | Validation errors exit `1` everywhere, and `validate --strict` turns warnings into failures for pipelines. Deploys default to staging and dry-run friendly flows. |
 
 ## When OpenTide is *not* the right fit
 
