@@ -62,13 +62,6 @@ def run_deploy(
         deployment_list = {platform_key: deployment_list[platform_key]}
     if len(deployment_list) == 0:
         environment = CIEnvironment().environment
-        if environment is CIEnvironment.CIPlatforms.GitlabCI:
-            return {
-                "status": "skipped",
-                "message": "No rules matched this deployment plan",
-                "deployed": [],
-                "_exit_code": 19,
-            }
         if environment is CIEnvironment.CIPlatforms.GitHubActions and not ctx.json_output:
             # GitHub only parses workflow commands from stdout, and never wrapped.
             get_stdout_console().print(

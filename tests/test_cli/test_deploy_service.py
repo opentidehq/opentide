@@ -57,7 +57,7 @@ def test_run_deploy_empty_plan_github_actions_warning(
         assert "::warning::" in mock_print.call_args.args[0]
 
 
-def test_run_deploy_empty_plan_gitlab_returns_exit_code(
+def test_run_deploy_empty_plan_gitlab_exits_cleanly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ctx = CliContext(json_output=True)
@@ -75,7 +75,8 @@ def test_run_deploy_empty_plan_gitlab_returns_exit_code(
         patch("opentide.deployment.make_deploy_plan", return_value={}),
     ):
         result = deploy_service.run_deploy(ctx)
-    assert result["_exit_code"] == 19
+    assert result["status"] == "skipped"
+    assert result.get("_exit_code", 0) == 0
 
 
 def test_run_deploy_dry_run_collects_payloads() -> None:
@@ -126,7 +127,7 @@ def test_run_deploy_invokes_deployer() -> None:
 
 def test_run_deploy_warning_marks_result_with_warnings() -> None:
     ctx = CliContext(json_output=True)
-    warned = CiOutcome(exit_code=19, failed=False, warned=True)
+    warned = CiOutcome(exit_code=0, failed=False, warned=True)
     with (
         patch("opentide.core.registry.OpenTide.reload"),
         patch(
@@ -141,7 +142,7 @@ def test_run_deploy_warning_marks_result_with_warnings() -> None:
         mock_tide.return_value.mdr = {"sentinel": MagicMock()}
         result = deploy_service.run_deploy(ctx)
     assert result["status"] == "completed"
-    assert result["_exit_code"] == 19
+    assert result["_exit_code"] == 0
     assert result["warnings"]
 
 

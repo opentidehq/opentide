@@ -198,7 +198,7 @@ def test_validate_query_platform_legacy_validator_signature() -> None:
 
 def test_validate_query_platform_warnings_are_not_fatal() -> None:
     ctx = CliContext(json_output=True)
-    warned = CiOutcome(exit_code=19, failed=False, warned=True)
+    warned = CiOutcome(exit_code=0, failed=False, warned=True)
     validator = MagicMock()
     with (
         patch(
@@ -216,5 +216,5 @@ def test_validate_query_platform_warnings_are_not_fatal() -> None:
         }
         result = validation_service.validate_query_platform(ctx, "sentinel")
     assert result["status"] == "passed"
-    assert result["_exit_code"] == 19
+    assert result["_exit_code"] == 0
     assert result["warnings"]

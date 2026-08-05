@@ -139,7 +139,6 @@ def test_validate_scope_flags_do_not_raise_type_error(monkeypatch) -> None:
         lambda: {"schema": {"status": "passed"}},
     )
     monkeypatch.setattr("opentide.cli.exit_codes.exit_on_validation_errors", lambda: None)
-    monkeypatch.setattr("opentide.cli.exit_codes.exit_on_validation_warnings", lambda: None)
     result = runner.invoke(app, ["--json", "validate", "--file", "Objects/foo.yaml"])
     assert "TypeError" not in (result.stdout + result.stderr)
     assert '"checks"' in result.stdout
