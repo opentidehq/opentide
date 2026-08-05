@@ -47,7 +47,7 @@ Steps:
    - Remove submodules: recursive checkout.
    - Regenerate pipeline: opentide setup ci github (or gitlab/azure).
    - Typical job order: pip install opentide → opentide validate → validate query per enabled platform → opentide generate → opentide generate docs --output docs → deploy stages.
-   - Do not reference opentide mutate, opentide migrate, or opentide document.
+   - Do not reference opentide mutate, opentide migrate, or top-level opentide document/export/extract (use generate docs/exports/extract).
 
 6. Agents and IDE
    - opentide setup mcp --cursor --vscode (as needed)

@@ -7,6 +7,10 @@ description: Render and publish markdown documentation for rules, objectives, an
 
 Programmatic access to the same renderer used by `opentide generate docs`.
 
+<Callout type="info">
+This renders **human wiki pages** from loaded objects. It is distinct from schema/template **generation** (`opentide generate`), which builds framework scaffolding under `.opentide/`. See [How OpenTide works](../usage/how-it-works.md#where-generation-and-deployment-differ).
+</Callout>
+
 ## Render single objects
 
 ```python

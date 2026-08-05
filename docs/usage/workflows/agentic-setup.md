@@ -1,19 +1,27 @@
 ---
 title: Agentic setup
-description: Configure MCP servers and agent skills so AI assistants work safely with detection content.
+description: Configure MCP servers and agent skills so AI assistants work safely with detection content — with an example session and its limits.
 ---
 
 # Agentic setup
 
-OpenTide ships first-class scaffolding for AI agents: an MCP server for catalogue access and validation, plus portable agent skills.
+OpenTide exposes the engine to AI agents through an [MCP server](../../mcp/index.md) and portable agent skills, so an assistant in your editor can search the catalogue, validate objects, and preview deploys. This page sets it up, shows a realistic session, and is honest about what agents can and cannot do today.
+
+## What agents can and cannot do today
 
 <Callout type="warn">
-`validate_query` and `run_query` MCP tools are **stubs** — they return success without parsing. Use `opentide validate query --platform …` via CLI for real query syntax checks. Prefer `validation_report` for structured agent feedback.
+The MCP `validate_query` and `run_query` tools are **stubs** — they return success without parsing queries or contacting platforms. For real query-syntax checks, agents (or you) must use the CLI: `opentide validate query --platform …`. Use `validation_report` for structured object validation an agent can act on.
 </Callout>
 
-## MCP server
+| Capability | Status |
+|-----------|--------|
+| Search catalogue, read objects, inspect chaining | Supported |
+| Validate objects (`validate_rule`, `validation_report`) | Supported |
+| Dry-run deploy (`deploy_rule`, `dry_run=true`) | Supported |
+| Query syntax validation via MCP | Stub — use CLI |
+| Live query execution via MCP | Stub — not available |
 
-Install opentide and configure your editor:
+## Install and configure the server
 
 ```bash
 pip install opentide
@@ -26,13 +34,14 @@ This writes `.cursor/mcp.json`:
 {
   "mcpServers": {
     "opentide": {
-      "command": "opentide-mcp"
+      "command": "opentide-mcp",
+      "env": { "OPENTIDE_REPO_ROOT": "${workspaceFolder}" }
     }
   }
 }
 ```
 
-The server uses **stdio transport**. Set `OPENTIDE_REPO_ROOT` in the MCP host environment so the catalogue resolves correctly.
+The server uses **stdio transport**. It must know where your content lives, so set `OPENTIDE_REPO_ROOT` in the host environment (as above). If the server fails to start, see [MCP configuration](../../mcp/configuration.md).
 
 ### Supported hosts
 
@@ -43,9 +52,9 @@ The server uses **stdio transport**. Set `OPENTIDE_REPO_ROOT` in the MCP host en
 | Claude Code | `--claude-code` | `.mcp.json` |
 | Generic | `--generic` | `opentide.mcp.json` |
 
-Full tool and resource reference: [MCP documentation](../../mcp/index.md).
+## Install agent skills
 
-## Agent skills
+Skills give the agent durable, project-specific instructions (object layout, commands, the validate-before-deploy rule):
 
 Browse the catalogue, then install selected skills from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills):
 
@@ -69,23 +78,66 @@ opentide setup skills --yes --install opentide-detection-rule --install detectio
 | `--claude-code` | `CLAUDE.md`, `.claude/skills/` |
 | `--github-copilot` | `.github/copilot-instructions.md` (also applies `--generic` unless already selected) |
 
-Default install (no `--install`) pulls starter skills `opentide-detection-rule` and `detection-engineering`. Use `--all` for the full catalogue.
+After setup, point your agent at the generated `AGENTS.md` at the repo root — it is the entry point for detection work in your repository.
 
-Discovery fetches `manifest.json` from the skills repo first; the packaged snapshot in opentide is an offline fallback. Install downloads skill trees from the manifest `source` and `ref` over the network from the public [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) repository.
+## A safe agent workflow
 
-## Recommended agent workflow
+Give agents this loop. It searches, validates, and only ever *previews* deploys.
 
-1. **Search** catalogue with MCP `search` (keyword, UUID, ATT&CK technique).
-2. **Validate** with `validate_rule` or `validation_report` before suggesting edits.
-3. **Dry-run deploy** with `deploy_rule` (`dry_run=true` by default).
-4. Never claim query validation passed for CrowdStrike or HarfangLab.
+```mermaid
+flowchart LR
+  search["search()<br/>find relevant objects"] --> read["read object + get_chaining()"]
+  read --> edit["propose YAML edit"]
+  edit --> validate["validation_report()"]
+  validate -->|pass| dryrun["deploy_rule(dry_run=true)"]
+  validate -->|fail| edit
+```
 
-## Repository agent guide
+### Example session
 
-After `setup skills --generic`, point agents at `AGENTS.md` at the repo root. Package contributors use the richer guide at [`AGENTS.md`](https://github.com/OpenTideHQ/opentide/blob/development/AGENTS.md) in the opentide repository.
+> **You:** Add a rule for T1059 credential access on Sentinel.
+>
+> **Agent:** `search(query="T1059")` → finds the *Credential Access* objective `…8002…0001`.
+> `get_chaining(uuid="…8002…0001")` → confirms it covers the *Simulated Actor* threat and has no rule yet.
+> Proposes `objects/rules/sentinel-t1059.yaml` with `detection_model` pointing at the objective.
+> `validation_report()` → passes schema, uuid, chaining.
+> Runs `opentide validate query --platform sentinel` (CLI) for real KQL syntax.
+> `deploy_rule(uuid=…, platform="sentinel", dry_run=true)` → shows the planned change.
+>
+> **You:** review the diff, then deploy for real.
 
-## Skills in this repo
+## Safe vs unsafe edit patterns
 
-The opentide package repo maintains domain skills under [`.agents/skills/`](https://github.com/OpenTideHQ/opentide/tree/development/.agents/skills/) for VCS, testing, CI, and documentation maintenance.
+**Safe — let agents do these**
 
-When adding CLI or MCP surface area, update the [MCP tools](../../mcp/tools.md) and [CLI](../../cli/index.md) reference pages. New detection skills belong in [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) — the catalogue `manifest.json` there is generated from skill frontmatter, not edited in opentide.
+- Search, read, and summarise objects and coverage.
+- Draft new objects from templates, filling required fields.
+- Run `validation_report` and surface concrete errors.
+- Fix dangling references and vocabulary violations the validator flags.
+- Preview deploys with `dry_run=true`.
+
+**Unsafe — keep a human in the loop**
+
+- Real (non-dry-run) deploys to production.
+- Bulk promotion of rules to `PRODUCTION` without an explicit human status change and review.
+- Editing `.opentide/configurations/` credentials or deployment plans.
+- Trusting an MCP `validate_query` "pass" as real syntax validation (it is a stub).
+- Regenerating or hand-editing UUIDs to resolve a conflict.
+
+## Recommended guardrails in AGENTS.md
+
+Add rules like these to the generated `AGENTS.md` so the agent respects them:
+
+```md
+- Always run `validation_report` before proposing a rule as done.
+- Query validation for Sentinel/Defender/Splunk/SentinelOne/Carbon Black MUST use
+  the CLI `opentide validate query`; the MCP tool is a stub.
+- Never claim query validation for CrowdStrike or HarfangLab — they are deploy-only.
+- Deploys are `dry_run=true` unless a human explicitly approves a real deploy.
+```
+
+## Reference
+
+- [MCP tools](../../mcp/tools.md) and [resources](../../mcp/resources.md) — the full agent surface.
+- [MCP configuration](../../mcp/configuration.md) — multi-repo, deploy safety, host specifics.
+- [Detection-as-code](./detection-as-code.md) — the human loop agents assist with.

@@ -137,9 +137,9 @@ Schema and template phases reload `IndexManager` and `OpenTide` registry caches.
 
 | Legacy command | Replacement |
 |----------------|-------------|
-| `opentide document` | `opentide generate docs` |
-| `opentide export …` | `opentide generate exports …` |
-| `opentide extract …` | `opentide generate extract …` |
+| `opentide generate docs` | `opentide generate docs` |
+| `opentide generate exports …` | `opentide generate exports …` |
+| `opentide generate extract …` | `opentide generate extract …` |
 
 ## Source
 

@@ -76,6 +76,21 @@ OpenTide.Platforms["sentinel"].can_validate
 
 See [Platforms](./platforms.md).
 
+## Lazy loading and performance
+
+`initialise()` loads the **index** only; individual objects parse lazily on first access, and parsed objects are cached until `reload()`.
+
+- Accessing a typed collection (`OpenTide.Rules`, `.Threats`, `.Objectives`) parses **every** object of that type. On large repos this is the expensive step — do it once and reuse the dict.
+- `OpenTide.lookup(uuid)` and `OpenTide.Rules[uuid]` parse and cache a single object; prefer them when you need one object, not the whole collection.
+- `OpenTide.Models.rules` is a raw dict view (unparsed) — cheaper when you only need indexed metadata, not full validated models.
+- Call `reload()` after mutating YAML on disk to refresh the index and clear caches; otherwise you will read stale objects.
+
+```python
+OpenTide.initialise()
+rules = OpenTide.Rules          # parse-all: do once
+subset = {u: r for u, r in rules.items() if r.status == "PRODUCTION"}
+```
+
 ## Runtime flags
 
 ```python

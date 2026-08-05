@@ -67,7 +67,29 @@ result = OpenTide.validate_rule(rule)
 
 ## Query validation
 
-Query validators live under platform plugins — use CLI `opentide validate query` or MCP `validate_query` (stub until live integration ships).
+Query validation is a **platform plugin** concern, separate from object validation above. Two Python paths exist:
+
+```python
+from opentide import OpenTide
+OpenTide.initialise()
+
+rule = OpenTide.Rules[uuid]
+result = rule.validate_query("sentinel")   # ValidationResult
+print(result.ok, result.errors)
+```
+
+`rule.validate_query(platform)` delegates to the platform's registered validator. It works for the five platforms that ship validators — `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud` — and reports **unsupported** (not a fake pass) for `crowdstrike` and `harfanglab`. Check capability first:
+
+```python
+if OpenTide.Platforms["sentinel"].can_validate:
+    result = rule.validate_query("sentinel")
+```
+
+<Callout type="info">
+The **CLI** `opentide validate query` uses this same path and is the recommended entry point for CI. The **MCP** `validate_query` tool is a stub and does not parse queries — do not rely on it (see [MCP tools](../mcp/tools.md)). The SDK/CLI path is the real one.
+</Callout>
+
+A failed query validation may raise `Errors.TideQueryValidationError` for exceptional cases; expected pass/fail is returned in the `ValidationResult`. See [Models → errors](./models.md#errors).
 
 ## Source
 

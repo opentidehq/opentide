@@ -46,6 +46,10 @@ The server advertises this purpose to MCP hosts:
 
 > Detection engineering assistant. Search and analyse detection content, validate rules and queries, test queries against live platforms, and deploy detection rules.
 
+<Callout type="warn">
+That description states the server's **intended** scope. Today, query-related capabilities are not fully implemented: `validate_query` and `run_query` are stubs (see below), so "validate queries" and "test queries against live platforms" do not yet work through MCP. For real query-syntax validation, use the CLI `opentide validate query`. Search, object validation (`validate_rule` / `validation_report`), chaining, coverage, and dry-run deploy are fully functional.
+</Callout>
+
 ## Documentation map
 
 | Page | Content |
