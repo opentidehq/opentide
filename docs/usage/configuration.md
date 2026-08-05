@@ -95,7 +95,7 @@ proxy_password = "${PROXY_PASSWORD}"
 
 ## Deployment statuses and strategies
 
-Every rule's `status` must match a status defined in the merged `deployment.toml`. OpenTide ships this lifecycle out of the box:
+Every rule's `status` must match a status defined in the merged `deployment.toml`. That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and OpenTide does not enforce an order between them. OpenTide ships this set out of the box:
 
 | Status | Strategy | What it does |
 |--------|----------|--------------|
@@ -122,7 +122,7 @@ Full field contract: [Deployment spec](/docs/specifications/specs/deployment/).
 
 ## Promotion
 
-Promotion advances rules from a lower status to a higher one — usually `STAGING → PRODUCTION`.
+Promotion rewrites a rule's status directly to `promotion_target` — it is a single jump, not a step through intermediate statuses.
 
 ```toml
 # .opentide/configurations/deployment.toml
@@ -131,7 +131,7 @@ enabled = true
 promotion_target = "PRODUCTION"
 ```
 
-There is no separate promote command. Edit a rule's `status` in YAML for deliberate transitions, then run `opentide deploy` — when promotion is enabled, deploy applies the configured promotion target before production release. See [`deploy`](../cli/deploy.md) and the [detection-as-code workflow](./workflows/detection-as-code.md#status-lifecycle).
+There is no separate promote command. Edit a rule's `status` in YAML for deliberate changes, then run `opentide deploy` — when promotion is enabled, deploy applies the promotion target to every status whose strategy is not `RELEASE`, `DISABLEMENT`, or `DELETION`. See [`deploy`](../cli/deploy.md) and the [detection-as-code workflow](./workflows/detection-as-code.md#status-and-deployment-strategy).
 
 ## Deployment plan
 
