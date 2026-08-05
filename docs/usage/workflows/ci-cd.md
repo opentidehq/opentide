@@ -173,10 +173,10 @@ steps:
 
 ## JSON output for gates
 
-Every command accepts `--json` for machine-readable results. **Gate on the process exit code** first; when a payload is present, inspect `report` / `status` / `issues`. Object-validation errors may exit `1` before a JSON failure wrapper is printed — do not require `"ok": false`.
+Every command accepts `--json` and writes exactly one JSON document to stdout — successes carry `"ok": true`, failures carry `"ok": false` plus `status`, `message`, and the full report. Diagnostics go to stderr. Gate on the process exit code, the `ok`/`status` fields, or both.
 
 ```bash
-opentide validate --json
+opentide validate --strict --json
 ```
 
 See [CLI → JSON output](../../cli/index.md) and [exit codes](../../cli/exit-codes.md).

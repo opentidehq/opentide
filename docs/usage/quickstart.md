@@ -52,9 +52,10 @@ Generation runs first because validation checks objects against these generated 
 
 ```bash
 opentide validate
+opentide validate --strict   # warnings also fail (exit 1) — use in CI
 ```
 
-On success the process exits `0`. For structured detail use `--json` and gate on the exit code (see [Exit codes](../cli/exit-codes.md)). If validation fails, see [Troubleshooting](./troubleshooting.md).
+On success the process exits `0`. For structured detail add `--json`, which writes one result document to stdout (see [Exit codes](../cli/exit-codes.md)). If validation fails, see [Troubleshooting](./troubleshooting.md).
 
 Validate a single platform query language:
 
