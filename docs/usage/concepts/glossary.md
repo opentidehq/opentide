@@ -59,7 +59,7 @@ The terms and acronyms you will meet across the OpenTide docs, defined once. Whe
 : Advancing rules from a lower status to a higher one (typically `STAGING → PRODUCTION`), individually or in bulk via `opentide deploy`.
 
 **Deployment plan (`DEPLOYMENT_PLAN`)**
-: The configuration that decides which rules deploy where and in what status. Referenced by CLI global options and [Configuration](./configuration.md).
+: The configuration that decides which rules deploy where and in what status. Referenced by CLI global options and [Configuration](../configuration.md).
 
 **Visibility**
 : Configuration controlling which objects are exposed/deployed in a given context. Validated by a generated `visibility` schema.

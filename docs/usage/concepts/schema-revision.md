@@ -43,7 +43,7 @@ Schema revisions are additive. When a new revision such as `rule::1.1` ships, bo
 2. The IDE router adds a branch for each identifier and routes objects by their declared `metadata.schema`.
 3. Objects opt in individually by setting `metadata.schema: rule::1.1`. Objects that still declare `rule::1.0` keep validating against `1.0` until you migrate them.
 
-This means a schema upgrade never forces a big-bang migration — you move objects over at your own pace. Bulk transitions are a job for [`opentide migrate`](../../cli/migrate.md).
+This means a schema upgrade never forces a big-bang migration — you move objects over at your own pace. For CoreTide-era repos, see the [migration guide](../migration/index.md).
 
 ## What to do when
 
