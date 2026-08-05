@@ -87,7 +87,7 @@ def test_nonzero_exit_with_non_failed_status_is_not_fatal() -> None:
         {
             "status": "skipped",
             "message": "No rules matched this deployment plan",
-            "_exit_code": 19,
+            "_exit_code": 2,
         }
     )
     assert result.ok is True
@@ -100,7 +100,7 @@ def test_nonzero_exit_with_non_failed_status_is_not_fatal() -> None:
         emit_result(ctx, result)
     mock_fatal.assert_not_called()
     assert "SKIPPED" in stdout.return_value.print.call_args.args[0]
-    assert exc.value.code == 19
+    assert exc.value.code == 2
 
 
 def test_from_payload_marks_failed_status() -> None:

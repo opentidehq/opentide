@@ -49,7 +49,7 @@ deploy: 1 rule planned, 0 applied (dry-run)
 
 A real deploy reports created/updated/skipped counts. With `--json`, the payload includes `"ok"`, status, and plan details. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 
-When no rules match the selected plan, the command reports `skipped` with a clear message. Empty plans exit successfully except under the legacy GitLab exit-`19` path. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
+When no rules match the selected plan, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 
 ## Subcommands
 

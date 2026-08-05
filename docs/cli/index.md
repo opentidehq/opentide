@@ -59,7 +59,7 @@ With `--json`, every command writes exactly one JSON document to stdout. Success
 
 ## Exit codes
 
-Commands set a process exit code so CI can gate without parsing output: `0` success, `1` error, `2` usage error, `19` legacy GitLab warning soft-fail. Full reference: [Exit codes](./exit-codes.md).
+Commands set a process exit code so CI can gate without parsing output: `0` success, `1` error, `2` usage error. Full reference: [Exit codes](./exit-codes.md).
 
 ## Choosing between CLI, SDK, and MCP
 
