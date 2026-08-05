@@ -11,13 +11,13 @@ Every `opentide` command sets a process exit code so pipelines can gate on resul
 
 | Code | Meaning | Emitted when |
 |-----:|---------|--------------|
-| `0` | Success | The command completed with no errors. With `--json`, the payload includes `"ok": true`. |
-| `1` | Error | Validation errors, deployment errors, or a command-level failure. With `--json`, `"ok": false`. |
+| `0` | Success | The command completed with no errors. With `--json`, a success path emits `"ok": true`. |
+| `1` | Error | Validation errors, deployment errors, or a command-level failure. Prefer the exit code over parsing `"ok"`. |
 | `2` | Usage error | Invalid arguments or options (Typer/Click). The command did not run. |
 | `19` | GitLab soft-fail (warnings) | Warnings were raised **and** the run is detected as GitLab CI, so the job fails softly rather than passing silently. |
 
 <Callout type="info">
-`19` is intentional GitLab behaviour: warnings (e.g. deprecated fields) fail the job on GitLab so they are visible, while on other CI systems warnings do not by themselves fail the build. Use `--strict` to turn warnings into hard errors (`1`) everywhere.
+`19` is intentional GitLab behaviour: warnings (e.g. deprecated fields) fail the job on GitLab so they are visible, while on other CI systems warnings do not by themselves fail the build. The `--strict` flag is accepted by `validate` today but does **not** change exit handling — warning soft-fail remains GitLab-only via exit `19`.
 </Callout>
 
 ## How warnings vs errors work
@@ -31,14 +31,14 @@ Every `opentide` command sets a process exit code so pipelines can gate on resul
 | `DEPLOYMENT_ERROR_RAISED` | Any deployment error | Exit `1` |
 | `DEPLOYMENT_WARNING_RAISED` | Any deployment warning | Exit `19` on GitLab |
 
-`--strict` promotes warnings to errors, so a warning becomes exit `1` on every platform.
+Object-validation errors raise `SystemExit(1)` **before** a success JSON wrapper is printed. Gate CI on the process exit code. When a payload is present, inspect `report` / `status` / `issues` — do not assume every failure emits `"ok": false`.
 
 ## Gating CI
 
 Because failures set a non-zero code, a plain step fails the job automatically:
 
 ```bash
-opentide validate --strict          # non-zero on any error → job fails
+opentide validate          # non-zero on any error → job fails
 ```
 
 For finer control, branch on the code:
@@ -49,7 +49,8 @@ if opentide validate --json > result.json; then
 else
   code=$?
   echo "validation failed with exit code $code"
-  cat result.json        # inspect the "issues" array
+  # result.json may be empty when exit 1 is raised before emit
+  [ -s result.json ] && cat result.json
   exit $code
 fi
 ```

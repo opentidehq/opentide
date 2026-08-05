@@ -55,7 +55,7 @@ Generated pipelines use `opentide generate docs --output docs` for documentation
 
 ## JSON output
 
-With `--json`, success payloads include `"ok": true`. Errors emit `"ok": false` and exit non-zero. Use in pipeline gates and agent tooling. (`opentide info` is the one exception — it emits the info object directly without an `ok` wrapper; see [`info`](./info.md).)
+With `--json`, successful completion payloads include `"ok": true`. Gate pipelines on the **exit code**, not the `ok` field alone: object-validation errors often raise exit `1` before a failure wrapper is printed. Explicit error helpers (for example unsupported query platforms) do emit `"ok": false`. (`opentide info` is the one exception — it emits the info object directly without an `ok` wrapper; see [`info`](./info.md).)
 
 ## Exit codes
 

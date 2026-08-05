@@ -26,7 +26,7 @@ opentide validate --check schema
 | `--file` | Validate one YAML file |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
-| `--strict` | Treat warnings as failures |
+| `--strict` | Accepted for compatibility; does **not** change exit handling today (warnings still only soft-fail as `19` on GitLab) |
 
 ### Default checks
 

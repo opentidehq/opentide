@@ -26,7 +26,7 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 
 ### Generate framework artifacts
 
-Schemas, templates, and indexes must exist before strict validation:
+Schemas, templates, and indexes must exist before validation:
 
 ```bash
 opentide generate
@@ -52,15 +52,9 @@ Generation runs first because validation checks objects against these generated 
 
 ```bash
 opentide validate
-opentide validate --strict
 ```
 
-```text
-✓ schema · uuid · uniqueness · cross-object · chaining
-validate: PASS (0 errors)
-```
-
-`--strict` treats warnings as failures — use in CI. If validation fails, see [Troubleshooting](./troubleshooting.md).
+On success the process exits `0`. For structured detail use `--json` and gate on the exit code (see [Exit codes](../cli/exit-codes.md)). If validation fails, see [Troubleshooting](./troubleshooting.md).
 
 Validate a single platform query language:
 
