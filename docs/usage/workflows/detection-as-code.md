@@ -68,28 +68,22 @@ opentide --json info --technique T1059 coverage
 
 Fields like `severity`, `impact`, `surface`, `methodology`, and `att&ck` draw their allowed values from published [vocabularies](/docs/specifications/specs/vocabularies/catalog/). (`terrain` is free-form prose, not a vocabulary.) Using a value outside the vocabulary fails validation — check the catalog when unsure.
 
-## Status lifecycle
+## Status and deployment strategy
 
-Every rule has a `status` that drives whether and how it deploys. The bundled lifecycle:
+Every rule has a `status`, and each status maps to a **strategy** that drives whether and how the rule deploys. Statuses are configurable; the table below is the bundled set:
 
-```mermaid
-flowchart LR
-  DESIGN --> DEVELOPMENT --> IMPROVING --> STAGING --> ACCEPTANCE --> PRODUCTION
-  PRODUCTION --> DISABLED --> REMOVED
-```
-
-| Phase | Statuses | Deploys? |
-|-------|----------|----------|
+| Intent | Bundled statuses | Deploys? |
+|--------|------------------|----------|
 | Design | `DESIGN` | No (`INERT`) |
 | Build & refine | `DEVELOPMENT`, `IMPROVING`, `STAGING`, `ACCEPTANCE` | Staging (`PREVIEW`) |
 | Live | `PRODUCTION` | Production (`RELEASE`) |
 | Retire | `DISABLED`, `REMOVED` | Disable / delete |
 
-A rule's `status` must exist in your merged `deployment.toml` — see [Configuration → deployment statuses](../configuration.md#deployment-statuses-and-strategies).
+OpenTide validates only that a rule's `status` exists in your merged `deployment.toml` — it does not enforce any ordering between statuses, so you can set any configured status directly. If you override `deployment.toml`, these names may not exist at all in your repo. See [Configuration → deployment statuses](../configuration.md#deployment-statuses-and-strategies).
 
 ## Promotion
 
-Move rules up the lifecycle when they are ready. Edit the rule's `status` in YAML (and commit it), then deploy. When `[promotion]` is enabled in `deployment.toml`, `opentide deploy` applies the configured `promotion_target` as part of the deployment flow — there is no separate `mutate promote` command.
+Edit the rule's `status` in YAML (and commit it) for deliberate changes, then deploy. When `[promotion]` is enabled in `deployment.toml`, `opentide deploy` rewrites promotable statuses **directly** to the configured `promotion_target` — it does not walk them one step at a time. Statuses whose strategy is `RELEASE`, `DISABLEMENT`, or `DELETION` are left untouched. There is no separate `mutate promote` command.
 
 ```bash
 # after reviewing and bumping status in YAML
