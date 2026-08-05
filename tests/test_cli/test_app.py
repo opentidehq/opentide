@@ -83,6 +83,18 @@ def test_validate_group_default_check() -> None:
     mock_validate.assert_called_once()
 
 
+def test_validate_failure_emits_json_before_exit() -> None:
+    result_payload = {
+        "report": {"ok": False, "issues": [{"code": "schema"}]},
+        "_exit_code": 1,
+    }
+    with patch("opentide.cli.run_validate", return_value=result_payload):
+        result = runner.invoke(app, ["--json", "validate"])
+    assert result.exit_code == 1
+    assert '"ok": false' in result.stdout
+    assert '"report"' in result.stdout
+
+
 def test_validate_query_supported_platform() -> None:
     with (
         patch(
@@ -182,6 +194,12 @@ def test_info_rules_section_json() -> None:
     assert "r1" in result.stdout
 
 
+def test_info_rejects_unknown_section() -> None:
+    result = runner.invoke(app, ["--json", "info", "mystery"])
+    assert result.exit_code == 1
+    assert "Unknown info section" in result.stdout
+
+
 def test_deploy_metadata_json(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DEPLOYMENT_PLAN", "STAGING")
     with (
@@ -190,5 +208,5 @@ def test_deploy_metadata_json(monkeypatch: pytest.MonkeyPatch) -> None:
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "deploy", "metadata", "--platform", "splunk"])
-    assert result.exit_code == 0
-    assert "splunk" in result.stdout
+    assert result.exit_code == 2
+    assert "not implemented" in result.stdout

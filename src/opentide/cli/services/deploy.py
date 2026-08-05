@@ -9,6 +9,7 @@ import structlog
 
 from opentide.cli.enums import DetectionPlatform
 from opentide.core.index_manager import IndexManager
+from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 
 logger = structlog.get_logger("opentide.cli.services.deploy")
@@ -61,13 +62,26 @@ def run_deploy(
         deployment_list = {platform_key: deployment_list[platform_key]}
     if len(deployment_list) == 0:
         environment = CIEnvironment().environment
-        logger.error("nothing_could_deploy_no_mdr_can_be_addressed_within_this_deploym")
         if environment is CIEnvironment.CIPlatforms.GitlabCI:
-            raise SystemExit(19)
-        if environment is CIEnvironment.CIPlatforms.GitHubActions:
-            print("::warning::No deployment was identified in this context")
-            return {"status": "empty", "deployed": []}
-        raise SystemExit(0)
+            return {
+                "status": "skipped",
+                "message": "No rules matched this deployment plan",
+                "deployed": [],
+                "_exit_code": 19,
+            }
+        if environment is CIEnvironment.CIPlatforms.GitHubActions and not ctx.json_output:
+            # GitHub only parses workflow commands from stdout, and never wrapped.
+            get_stdout_console().print(
+                "::warning::No rules matched this deployment plan",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+        return {
+            "status": "skipped",
+            "message": "No rules matched this deployment plan",
+            "deployed": [],
+        }
     IndexManager.reload()
     mdr_deployers = cast(dict[str, Any], DeployTide().mdr)
     deployed: list[str] = []
@@ -77,8 +91,12 @@ def run_deploy(
     payloads: dict[str, list[dict[str, object]]] = {}
     for system, uuids in deployment_list.items():
         if system not in mdr_deployers:
-            logger.critical("fatal_error", detail=f"Cannot find a deployment engine for {system}")
-            raise SystemExit(1)
+            return {
+                "status": "failed",
+                "message": f"Cannot find a deployment engine for {system}",
+                "deployed": deployed,
+                "_exit_code": 1,
+            }
         emit_section("MDR Deployment")
         deployer = cast(Any, mdr_deployers[system])
         if dry_run:
@@ -94,18 +112,19 @@ def run_deploy(
             logger.warning("switching_to_mdrv3_legacy_methods")
             deployer.deploy(deployment=uuids)
         deployed.append(system)
-    from opentide.cli.exit_codes import exit_on_deployment_errors, exit_on_deployment_warnings
+    from opentide.cli.exit_codes import deployment_outcome
 
-    exit_on_deployment_errors()
-    exit_on_deployment_warnings()
-    if not ctx.json_output:
-        logger.info("all_content_passed_deployment")
+    outcome = deployment_outcome()
     result: dict[str, object] = {
-        "status": "completed",
+        "message": "Deployment finished with errors" if outcome.failed else "Deployment completed",
+        "status": "failed" if outcome.failed else "completed",
         "deployed": deployed,
         "dry_run": dry_run,
         "plan": plan_payload,
+        "_exit_code": outcome.exit_code,
     }
+    if outcome.warned:
+        result["warnings"] = ["Some rules reported deployment warnings"]
     if dry_run:
         result["payloads"] = payloads
     return result

@@ -53,10 +53,18 @@ def test_is_plain_output_respects_no_color() -> None:
     assert is_plain_output() is True
 
 
-def test_is_plain_output_when_vscode() -> None:
+def test_vscode_terminal_does_not_disable_color() -> None:
     with mock.patch.dict(os.environ, {"TERM_PROGRAM": "vscode"}, clear=True):
         init_logging(force=True)
-        assert is_plain_output() is True
+        assert is_plain_output() is False
+
+
+def test_cli_context_honors_ambient_no_color() -> None:
+    from opentide.cli.context import CliContext
+
+    with mock.patch.dict(os.environ, {"NO_COLOR": "1"}, clear=True):
+        config = LoggingConfig.from_cli_context(CliContext())
+    assert config.plain is True
 
 
 def test_is_json_output() -> None:
@@ -192,6 +200,16 @@ def test_console_renderer_uses_level_styling_only() -> None:
         },
         "info",
     )
-    assert "deploying_rule" in rendered
+    assert "Deploying rule" in rendered
     assert "mdr-123" in rendered
     assert "ONGOING" not in rendered
+
+
+def test_console_renderer_does_not_force_ansi_into_redirects() -> None:
+    from opentide.core.logging.render import OpenTideConsoleRenderer
+
+    rendered = OpenTideConsoleRenderer(use_color=True).render(
+        {"event": "setup_complete", "level": "info"},
+        "info",
+    )
+    assert "\x1b[" not in rendered

@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING
 import structlog
 
 from opentide.cli.enums import DetectionPlatform
-from opentide.cli.services.setup.interactive import parse_platform_tokens
+from opentide.cli.services.setup.interactive import (
+    ask_confirm,
+    ask_platforms,
+    ask_text,
+    require_interactive,
+)
+from opentide.core.logging.config import get_stdout_console
 from opentide.registry.discovery import OPENTIDE_DIR
 
 logger = structlog.get_logger("opentide.cli.services.setup.repo")
@@ -46,14 +52,17 @@ class RepoSetupOptions:
 
 def _write_readme(target: Path, options: RepoSetupOptions) -> None:
     name = options.name or target.name
-    org = options.org or "Security Operations"
-    description = options.description or "Detection-as-code repository powered by OpenTide"
     platforms = (
         chr(10).join(f"- {p.value}" for p in options.platforms)
         or f"- (configure platforms in {OPENTIDE_DIR}/configurations/)"
     )
+    metadata = ""
+    if options.description:
+        metadata += f"\n{options.description}\n"
+    if options.org:
+        metadata += f"\n**Organisation:** {options.org}\n"
     content = (
-        f"# {name}\n\n{description}\n\n**Organisation:** {org}\n\n"
+        f"# {name}\n{metadata}\n"
         "## Quick start\n\n```bash\nopentide setup\nopentide validate\n"
         "opentide generate\nopentide deploy --platform sentinel --dry-run\n```\n\n"
         f"## Platforms\n\n{platforms}\n"
@@ -89,7 +98,7 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
     _write_readme(target, options)
     _write_gitignore(target)
     platforms = [p.value for p in options.platforms]
-    logger.info("repo_scaffold_created", path=str(target), platforms=platforms)
+    logger.debug("repo_scaffold_created", path=str(target), platforms=platforms)
     return {
         "message": "Repository scaffold created",
         "path": str(target),
@@ -99,22 +108,21 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
 
 def run_interactive_repo_setup(ctx: CliContext, base_path: Path) -> dict[str, object]:
     """Prompt for repository metadata and scaffold the workspace."""
-    from rich.prompt import Prompt
-
+    require_interactive()
     ctx.apply_environment()
     target = base_path.resolve()
-    name = Prompt.ask("Repository name", default=target.name)
-    org = Prompt.ask("Organisation / team", default="Security Operations")
-    description = Prompt.ask(
-        "Description", default="Detection-as-code repository powered by OpenTide"
-    )
-    platform_input = Prompt.ask("Platforms (comma-separated)", default="sentinel,defender")
+    name = ask_text("Repository name", default=target.name)
+    org = ask_text("Organisation / team (optional)")
+    description = ask_text("Description (optional)")
     options = RepoSetupOptions(
         path=target,
         name=name,
         org=org,
         description=description,
-        platforms=parse_platform_tokens(platform_input),
+        platforms=ask_platforms(),
         yes=True,
     )
+    get_stdout_console().print(f"[bold]Target:[/] {target}")
+    if not ask_confirm("Create this repository scaffold?", default=True):
+        return {"message": "Repository setup cancelled", "status": "skipped"}
     return run_repo_setup(options)

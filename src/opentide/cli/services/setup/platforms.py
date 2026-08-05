@@ -63,7 +63,7 @@ def run_platforms_setup(options: PlatformsSetupOptions) -> dict[str, object]:
         out_path = dest / template_name
         out_path.write_text(content, encoding="utf-8")
         written.append(str(out_path.relative_to(target)))
-    logger.info(
+    logger.debug(
         "platform_configs_created", path=str(target), platforms=[p.value for p in options.platforms]
     )
     return {

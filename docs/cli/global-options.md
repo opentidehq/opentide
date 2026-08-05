@@ -19,7 +19,7 @@ opentide --debug --no-color generate
 | `--repo` | `OPENTIDE_REPO_ROOT` | Auto-detected repo root | Detection content repository |
 | `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Override vocabulary and default configs |
 | `--debug` | `DEBUG` | off | Enable structlog debug logging |
-| `--no-color` | — | off | Disable Rich colour output |
+| `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable Rich colour output |
 | `--json` | — | off | Emit JSON instead of Rich tables / logs |
 
 ## Repository root resolution
@@ -32,9 +32,13 @@ Setup commands honour `--repo` when `--path` is `.` (default).
 
 The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.
 
-## Banner
+## Terminal output
 
-The ASCII banner prints on interactive runs unless `--json` is set.
+Interactive terminals receive Rich colours. Redirected or captured streams automatically use clean plain text. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it.
+
+Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
+
+With `--json`, stdout is one machine-readable JSON document. Diagnostics and debug logs use stderr.
 
 ## Deployment plan
 

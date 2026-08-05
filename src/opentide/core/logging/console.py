@@ -19,14 +19,7 @@ def emit_section(title: str) -> None:
         console.print(f"\n== {title} ==\n")
         return
 
-    console.print(
-        Panel(
-            Text(title, justify="center", style="bold"),
-            title="[bold]OpenTide[/]",
-            border_style="magenta",
-            padding=(0, 2),
-        )
-    )
+    console.rule(f"[bold cyan]{title}[/]")
 
 
 def emit_fatal(message: str, *, detail: str = "", advice: str = "") -> None:

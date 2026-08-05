@@ -12,10 +12,13 @@ import typer
 from opentide.cli.enums import McpHost
 from opentide.cli.services.setup.interactive import (
     MCP_LABELS,
+    ask_checkbox,
+    ask_confirm,
     mcp_hosts_from_keys,
-    parse_multi_select,
+    require_interactive,
 )
 from opentide.cli.services.setup.templates import load_mcp_template
+from opentide.core.logging.config import get_stdout_console
 
 logger = structlog.get_logger("opentide.cli.services.setup.mcp")
 
@@ -56,7 +59,7 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
     written: list[str] = []
     for host in options.hosts:
         written.append(write_mcp_config(target, host))
-    logger.info("mcp_config_created", detail=str(target), files=written)
+    logger.debug("mcp_config_created", detail=str(target), files=written)
     result: dict[str, object] = {
         "message": "MCP configuration generated",
         "path": str(target),
@@ -72,15 +75,16 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
 
 def run_interactive_mcp_setup(base_path: Path) -> dict[str, object]:
     """Prompt for MCP hosts and write configs."""
-    from rich.prompt import Prompt
-
-    print_labels = ", ".join(f"{key} ({label})" for key, label in MCP_LABELS.items())
-    raw = Prompt.ask(
-        f"MCP hosts (comma-separated: {print_labels})",
-        default="vscode",
+    require_interactive()
+    keys = ask_checkbox(
+        "MCP hosts",
+        [(label, key) for key, label in MCP_LABELS.items()],
+        require_selection=True,
     )
-    keys = parse_multi_select(raw, MCP_LABELS)
-    if not keys:
-        keys = ["vscode"]
+    get_stdout_console().print(
+        f"[bold]Target:[/] {base_path.resolve()}\n[bold]Hosts:[/] {', '.join(keys)}"
+    )
+    if not ask_confirm("Write these MCP configurations?", default=True):
+        return {"message": "MCP setup cancelled", "status": "skipped"}
     options = McpSetupOptions(path=base_path, hosts=mcp_hosts_from_keys(keys), yes=True)
     return run_mcp_setup(options)

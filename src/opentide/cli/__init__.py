@@ -12,8 +12,9 @@ from opentide.cli.enums import (
     ExportTarget,
     ExtractImport,
     ValidateCheck,
+    platform_label,
 )
-from opentide.cli.output import emit, emit_success
+from opentide.cli.output import CommandResult, emit_error, emit_result, emit_success
 from opentide.cli.services.deploy import run_deploy
 from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
@@ -22,7 +23,9 @@ from opentide.cli.services.generation import run_generate, run_generate_docs
 from opentide.cli.services.info import collect_info
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
-from opentide.core.logging import LoggingConfig, init_logging, print_banner
+from opentide.core.logging import LoggingConfig, init_logging, is_json_output
+from opentide.core.logging import print_banner as print_banner  # noqa: F401
+from opentide.core.logging.config import get_console, get_stdout_console
 from opentide.core.root import get_repo_root
 
 logger = structlog.get_logger("opentide.cli.__init__")
@@ -35,7 +38,10 @@ app = typer.Typer(
 
 
 def _deprecate(legacy: str, replacement: str) -> None:
-    logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
+    if is_json_output():
+        logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
+        return
+    get_console().print(f"[yellow]DEPRECATED[/] {legacy}; use {replacement}.")
 
 
 @app.callback()
@@ -64,8 +70,6 @@ def main_callback(
     cli_ctx.activate()
     cli_ctx.apply_environment()
     init_logging(LoggingConfig.from_cli_context(cli_ctx), force=True)
-    if not json_output:
-        print_banner()
 
 
 app.add_typer(setup_app, name="setup")
@@ -146,6 +150,8 @@ def _emit_docs(
 ) -> None:
     cli = get_context(ctx)
     cli.apply_environment()
+    if changed and (scope is not None or rules or threats or objectives):
+        emit_error(cli, "--changed cannot be combined with scoped docs generation")
     if scope is not None:
         emit_success(cli, run_document(cli, scope=scope, output=output, flavor=flavor))
         return
@@ -250,13 +256,21 @@ def generate_exports_revisions(ctx: typer.Context) -> None:
 @extract_app.command("sentinel")
 def generate_extract_sentinel(ctx: typer.Context) -> None:
     cli = get_context(ctx)
-    emit_success(cli, run_extract(cli, import_target=ExtractImport.sentinel))
+    try:
+        result = run_extract(cli, import_target=ExtractImport.sentinel)
+    except (FileNotFoundError, RuntimeError) as exc:
+        emit_error(cli, str(exc))
+    emit_success(cli, result)
 
 
 @extract_app.command("defender")
 def generate_extract_defender(ctx: typer.Context) -> None:
     cli = get_context(ctx)
-    emit_success(cli, run_extract(cli, import_target=ExtractImport.defender))
+    try:
+        result = run_extract(cli, import_target=ExtractImport.defender)
+    except (FileNotFoundError, RuntimeError) as exc:
+        emit_error(cli, str(exc))
+    emit_success(cli, result)
 
 
 validate_app = typer.Typer(help="Object and query validation")
@@ -276,6 +290,15 @@ def validate_group(
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
+    valid_object_types = {"rule", "threat", "objective"}
+    unknown_types = sorted(set(object_type or []) - valid_object_types)
+    if unknown_types:
+        emit_error(
+            cli,
+            "Unknown object type(s): "
+            + ", ".join(unknown_types)
+            + ". Choose rule, threat, or objective.",
+        )
     result = run_validate(
         cli,
         check=check,
@@ -284,7 +307,7 @@ def validate_group(
         uuids=uuid,
         object_types=object_type,
     )
-    emit_success(cli, result)
+    emit_result(cli, CommandResult.from_payload(result, default_message="Validation passed"))
 
 
 @validate_app.command("query")
@@ -325,18 +348,20 @@ def deploy_cmd(
         keep_deprecated=keep_deprecated,
         wide=wide,
     )
-    emit_success(cli, result)
+    emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 
 
-@deploy_app.command("metadata")
+@deploy_app.command("metadata", hidden=True)
 def deploy_metadata_cmd(
     ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")
 ) -> None:
-    """Deploy Splunk metadata lookup table (platform-specific)."""
+    """Reserved for a future metadata deployment implementation."""
     cli = get_context(ctx)
-    cli.apply_environment()
-    logger.info("metadata_deployment", platform=platform.value)
-    emit_success(cli, {"message": "Metadata deployment signalled", "platform": platform.value})
+    emit_error(
+        cli,
+        f"Metadata deployment is not implemented for {platform.value}",
+        exit_code=2,
+    )
 
 
 # --- Deprecated top-level commands (delegate to generate) ---
@@ -440,14 +465,22 @@ def export_playbook_map_legacy(ctx: typer.Context) -> None:
 def import_sentinel(ctx: typer.Context) -> None:
     _deprecate("opentide extract sentinel", "opentide generate extract sentinel")
     cli = get_context(ctx)
-    emit_success(cli, run_extract(cli, import_target=ExtractImport.sentinel))
+    try:
+        result = run_extract(cli, import_target=ExtractImport.sentinel)
+    except (FileNotFoundError, RuntimeError) as exc:
+        emit_error(cli, str(exc))
+    emit_success(cli, result)
 
 
 @extract_legacy_app.command("defender")
 def import_defender(ctx: typer.Context) -> None:
     _deprecate("opentide extract defender", "opentide generate extract defender")
     cli = get_context(ctx)
-    emit_success(cli, run_extract(cli, import_target=ExtractImport.defender))
+    try:
+        result = run_extract(cli, import_target=ExtractImport.defender)
+    except (FileNotFoundError, RuntimeError) as exc:
+        emit_error(cli, str(exc))
+    emit_success(cli, result)
 
 
 info_app = typer.Typer(help="System information")
@@ -463,11 +496,15 @@ def info_cmd(
 ) -> None:
     """Show repository and platform information."""
     cli = get_context(ctx)
+    valid_sections = {None, "rules", "threats", "objectives", "coverage"}
+    if section not in valid_sections:
+        emit_error(cli, f"Unknown info section: {section}")
+    if section == "coverage" and not technique:
+        emit_error(cli, "The coverage section requires --technique")
     result = collect_info(cli, platform=platform, section=section, technique=technique)
     if cli.json_output:
-        emit(cli, result)
+        emit_success(cli, result)
     else:
-        from rich.console import Console
         from rich.table import Table
 
         table = Table(title="OpenTide Info")
@@ -483,8 +520,15 @@ def info_cmd(
                 caps.append("deploy")
             if plat["can_validate"]:
                 caps.append("validate")
-            table.add_row(plat["name"], f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]")
-        Console().print(table)
+            try:
+                display_name = platform_label(DetectionPlatform(plat["name"]))
+            except ValueError:
+                display_name = plat["name"]
+            table.add_row(
+                display_name,
+                f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]",
+            )
+        get_stdout_console().print(table)
 
 
 def main() -> None:

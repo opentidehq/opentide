@@ -31,7 +31,7 @@ def test_run_prints_stats_when_validation_passes() -> None:
         patch("opentide.validation.tide_schema.OpenTide", mock_opentide),
         patch("opentide.validation.tide_schema.run_validation", return_value=report),
         patch("opentide.validation.tide_schema.emit_section"),
-        patch("builtins.print") as mock_print,
+        patch.object(tide_schema.get_stdout_console(), "print") as mock_print,
     ):
         tide_schema.run()
 
@@ -57,7 +57,7 @@ def test_run_sets_validation_error_flag_when_issues_present() -> None:
         patch("opentide.validation.tide_schema.run_validation", return_value=report),
         patch("opentide.validation.tide_schema.emit_section"),
         patch("opentide.validation.tide_schema.format_issues_for_console", return_value="issues"),
-        patch("builtins.print"),
+        patch.object(tide_schema.get_stdout_console(), "print"),
     ):
         os.environ.pop("VALIDATION_ERROR_RAISED", None)
         tide_schema.run()

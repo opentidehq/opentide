@@ -14,7 +14,9 @@ cd /path/to/detection-repo
 opentide setup
 ```
 
-The wizard walks through repository metadata, platforms, CI, MCP hosts, and agent skill targets.
+The wizard uses arrow-key menus and checkboxes for repository metadata, platforms, CI workflow features, MCP hosts, and agent skill targets. Only the repository name is inferred from the current directory. Platforms are explicitly selected, CI starts at **Configure later**, and MCP/skills are opt-in.
+
+Before writing, OpenTide displays the target and selected steps and asks for one confirmation. Existing destinations are therefore visible before setup updates them.
 
 ## Scripted onboarding
 
@@ -39,6 +41,8 @@ opentide setup ci github --yes
 opentide setup mcp --cursor --yes
 opentide setup skills --yes --generic
 ```
+
+In non-interactive environments, `--yes` confirms only the flags shown in the command. It never silently selects Sentinel, VS Code, a CI provider, or a generic agent target.
 
 ## What gets created
 

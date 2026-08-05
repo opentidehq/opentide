@@ -44,7 +44,7 @@ class SentinelQueryValidator(QueryValidator):
                 logger.critical('fatal_error', detail=f'The KQL query is invalid for : {mdr.name} ({mdr_uuid})', context_1=error.error.innererror['innererror']['message'], advice=f'Review the error and ensure your search can work in the relevant Sentinel workspace ({tenant_config.setup.workspace_name})')
             except Exception:
                 logger.error('not_able_to_parse_out_the_error_message', detail='This may mean that there is a more complex problem', advice='Will print out the full error package now')
-                print(error)
+                logger.error('full_error_message', detail=str(error))
             os.environ['VALIDATION_ERROR_RAISED'] = 'True'
         except Exception as error:
             logger.critical('fatal_error', detail=f'Unexpected error during query validation for : {mdr.name} ({mdr_uuid})', context_1=f'{type(error).__name__}: {error}', advice='An unhandled exception occurred. Review the error details above.')

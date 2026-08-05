@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from opentide.cli.enums import DetectionPlatform
 from opentide.core.registry import OpenTide
+from opentide.platforms.enabled import enabled_systems
 
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
@@ -20,7 +21,8 @@ def collect_info(
 ) -> dict[str, Any]:
     """Collect system information about the detection repository."""
     ctx.apply_environment()
-    OpenTide.initialise()
+    OpenTide.reload()
+    enabled_platforms = set(enabled_systems())
     platforms_info = []
     for name, plat in OpenTide.Platforms.items():
         if platform is not None and name != platform.value:
@@ -28,7 +30,7 @@ def collect_info(
         platforms_info.append(
             {
                 "name": name,
-                "enabled": plat.enabled,
+                "enabled": name in enabled_platforms,
                 "can_deploy": plat.can_deploy,
                 "can_validate": plat.can_validate,
             }

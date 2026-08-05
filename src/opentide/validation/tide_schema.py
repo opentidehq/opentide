@@ -7,6 +7,7 @@ from typing import Any
 
 import structlog
 
+from opentide.core.logging.config import get_stdout_console, is_json_output
 from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
 from opentide.validation.errors import format_issues_for_console
@@ -39,7 +40,8 @@ def run() -> None:
         stats[schema.upper()] = count
         overall += count
     if report.issues:
-        print(format_issues_for_console(report.issues))
+        if not is_json_output():
+            get_stdout_console().print(format_issues_for_console(report.issues))
         for issue in report.issues:
             logger.critical(
                 "fatal_error",
@@ -58,7 +60,8 @@ def run() -> None:
             statstable.append([key, stats[key]])
         statstable = _format_stats_table(statstable)
         logger.info("step_completed", detail=f"Successfully verified {overall} OpenTide objects")
-        print(statstable)
+        if not is_json_output():
+            get_stdout_console().print(statstable)
 
 
 if __name__ == "__main__":

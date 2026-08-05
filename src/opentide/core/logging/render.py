@@ -43,7 +43,8 @@ class OpenTideConsoleRenderer:
         line.append(f"{level:<8}", style=level_style if self._use_color else "")
 
         line.append("  ")
-        line.append(str(event))
+        label = str(event).replace("_", " ").strip()
+        line.append(label[:1].upper() + label[1:])
 
         for key, value in event_dict.items():
             line.append("\n")
@@ -54,9 +55,9 @@ class OpenTideConsoleRenderer:
         buffer = StringIO()
         Console(
             file=buffer,
-            force_terminal=self._use_color,
-            color_system="truecolor" if self._use_color else None,
-            no_color=not self._use_color,
+            force_terminal=None,
+            color_system=None,
+            no_color=True,
             highlight=False,
         ).print(line, end="")
         return buffer.getvalue().rstrip("\n")

@@ -14,6 +14,8 @@ opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --yes
 ```
 
+The interactive wizard uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
+
 ## Default callback flags
 
 | Flag | Purpose |
@@ -23,13 +25,17 @@ opentide setup ci github --yes
 | `--platform` | Detection platforms — runs the `setup platforms` step when set (repeatable) |
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |
 | `--staging` / `--no-staging` | CI staging stage (default: on) |
+| `--inflight` / `--no-inflight` | Update pull-request preview shards (default: on) |
 | `--promotion` / `--no-promotion` | CI promotion stage (default: on; promotion runs in deploy) |
+| `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs |
 | `--promotion-target` | Promotion target status (default `PRODUCTION`) |
 | `--python-version` | CI Python version (default `3.12`) |
 | `--vscode-setup` | Deprecated VS Code yaml.schemas + snippets |
-| `--yes` / `-y` | Non-interactive mode |
+| `--yes` / `-y` | Confirm explicit options without prompting |
 
 Use subcommands for MCP and skills — parent `--mcp` / `--skills` enums were removed.
+
+`--yes` never chooses a platform, MCP host, or skill target. Commands that require one fail with an actionable error when its flag is omitted.
 
 ## Subcommands
 
@@ -121,7 +127,7 @@ opentide setup skills --yes --all --cursor
 opentide setup skills --yes --generic --path /path/to/repo
 ```
 
-Use positional `[PATH]` or `--path` / `-C` for the repository root. Place flags **before** the optional `[PATH]` argument: `opentide setup skills --yes .`
+Use `--path` / `-C` for the repository root. The positional `[PATH]` remains temporarily as a deprecated compatibility alias.
 
 Installing `--github-copilot` without `--generic` also applies the generic layout; JSON output includes `"also_applied": ["generic"]`.
 
@@ -139,6 +145,8 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | `--refresh` | Re-fetch `manifest.json` from GitHub (`discover` / `show`) |
 
 Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) first; the packaged manifest is an offline fallback only. Remote fetch and install require network access to the public skills repository.
+
+The full wizard checks starter skill availability before writing repository files. If the optional remote pack is unavailable, skills are omitted with a warning. The standalone skills command fails without leaving a partial skill tree.
 
 ### setup vscode (deprecated)
 
@@ -158,6 +166,10 @@ opentide setup vscode --snippets
 ## CI skip
 
 Pass `--ci none` on the default callback to skip CI file generation while still running repo or VS Code steps in the same invocation.
+
+## Non-interactive use
+
+Interactive setup requires a TTY. In CI or an agent subprocess, provide explicit targets and `--yes`; OpenTide fails immediately rather than waiting for hidden input.
 
 ## Source
 

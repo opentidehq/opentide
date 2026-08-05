@@ -23,6 +23,7 @@ def test_setup_ci_github(tmp_path) -> None:
             "--path",
             str(tmp_path),
             "--no-promotion",
+            "--yes",
         ],
     )
     assert result.exit_code == 0
