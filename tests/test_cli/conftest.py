@@ -47,12 +47,16 @@ def tide_corpus_root() -> Path:
 
 
 def _symlink_dir(link: Path, target: Path) -> None:
-    """Symlink ``link`` → ``target`` (directory) using a relative path."""
+    """Point ``link`` at directory ``target``, copying when symlinks are unavailable."""
     if link.exists() or link.is_symlink():
         return
     link.parent.mkdir(parents=True, exist_ok=True)
     rel = Path(os.path.relpath(target.resolve(), link.parent.resolve()))
-    link.symlink_to(rel, target_is_directory=True)
+    try:
+        link.symlink_to(rel, target_is_directory=True)
+    except OSError:
+        # Windows rejects symlink creation without Developer Mode or elevation.
+        shutil.copytree(target, link)
 
 
 def _migrate_tide_corpus_layout(dest: Path) -> None:
