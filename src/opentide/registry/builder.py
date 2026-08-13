@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -223,13 +221,7 @@ class RegistryBuilder:
         if not yaml_files:
             return objects_index, files_index
 
-        workers = min(8, max(1, os.cpu_count() or 1))
-        if os.environ.get("OPENTIDE_REGISTRY_WORKERS", "").strip() == "0":
-            workers = 1
-        if workers > 1 and len(yaml_files) > 4:
-            self._load_objects_parallel(yaml_files, objects_index, files_index)
-        else:
-            self._load_objects_sequential(yaml_files, objects_index, files_index)
+        self._load_object_files(yaml_files, objects_index, files_index)
 
         return objects_index, files_index
 
@@ -269,37 +261,27 @@ class RegistryBuilder:
                 signal_copy["parent"] = identifier
                 objects_index["signal"][str(signal_uuid)] = signal_copy
 
-    def _load_objects_sequential(
+    def _load_object_files(
         self,
         yaml_files: list[tuple[str, str]],
         objects_index: dict[str, Any],
         files_index: dict[str, str],
     ) -> None:
+        """Parse and ingest object YAML files.
+
+        Deliberately sequential. The registry is built during module import, so a
+        process pool here breaks the `opentide` console script: `spawn` children
+        re-import the unguarded entry point, rebuild the registry, and try to spawn
+        again, which Python refuses. Parsing is also CPU-bound under the C YAML
+        loader, so pool overhead measured slower than sequential at every corpus
+        size up to 5k objects.
+        """
         for meta_name, path_str in yaml_files:
             _, body, error = _parse_yaml_file(path_str)
             if error or body is None:
                 logger.error("failed_to_parse_yaml", path=path_str, error=error or "")
                 continue
             self._ingest_object(meta_name, Path(path_str), body, objects_index, files_index)
-
-    def _load_objects_parallel(
-        self,
-        yaml_files: list[tuple[str, str]],
-        objects_index: dict[str, Any],
-        files_index: dict[str, str],
-    ) -> None:
-        path_only = [p for _, p in yaml_files]
-        meta_by_path = {p: m for m, p in yaml_files}
-        with ProcessPoolExecutor(max_workers=min(8, len(path_only))) as pool:
-            futures = {pool.submit(_parse_yaml_file, p): p for p in path_only}
-            for future in as_completed(futures):
-                path_str = futures[future]
-                _, body, error = future.result()
-                if error or body is None:
-                    logger.error("failed_to_parse_yaml", path=path_str, error=error or "")
-                    continue
-                meta_name = meta_by_path[path_str]
-                self._ingest_object(meta_name, Path(path_str), body, objects_index, files_index)
 
 
 def build_registry() -> dict[str, Any]:
