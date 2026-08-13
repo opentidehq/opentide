@@ -57,8 +57,21 @@ uv run pytest tests/test_deployment/test_deploy_payloads.py --snapshot-update
 
 - **Unit matrix** (Python 3.10–3.14): `-m "not cli_e2e and not cli_smoke"`
 - **`cli-e2e` job** (Python 3.14 only, `needs: [test]`): `-m "cli_e2e or cli_smoke"`
+- **`cli-windows-smoke` job**: `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms
 
 E2E does not contribute to coverage metrics.
+
+### `cli_smoke` must stay out-of-process
+
+`cli_e2e` uses `CliRunner`, which calls `app` inside the pytest process and never runs
+the installed console script. `cli_smoke` covers that gap and therefore carries
+`@pytest.mark.script_launch_mode("subprocess")` — `pytest-console-scripts` defaults to
+`inprocess`, which only loads the entry point as a function and cannot catch import-time
+failures (for example multiprocessing `spawn` re-importing the entry point).
+
+Smoke tests also take `tide_corpus_repo` so the console script indexes a real corpus.
+Running them against the default empty workspace makes them pass vacuously, because
+object parsing never engages.
 
 ## Shared fixtures
 
