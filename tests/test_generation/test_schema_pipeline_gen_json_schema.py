@@ -119,6 +119,7 @@ def test_recomposition_handler_skips_disabled_platforms() -> None:
         }
     }
     with (
+        patch.object(sp, "_runtime_ready", True),
         patch.object(sp, "CONFIG_INDEX", config),
         patch("opentide.models.platform_schema.platform_model_for_key") as mock_model,
         patch(

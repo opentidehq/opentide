@@ -20,8 +20,10 @@ def test_vocabulary_resolve_emits_entry_names(monkeypatch: pytest.MonkeyPatch) -
             "Low": VocabularyEntry(name="Low", description="Low severity"),
         },
     )
+    monkeypatch.setattr(schema_pipeline, "_runtime_ready", True)
     monkeypatch.setattr(schema_pipeline, "VOCAB_INDEX", {"severity": vocab})
     monkeypatch.setattr(schema_pipeline, "VOCAB_EXTENSIONS", {})
+    monkeypatch.setattr(schema_pipeline, "OBJECT_TYPES", [])
 
     resolver = schema_pipeline.VocabularyResolver.Vocabulary("severity")
     enum, descriptions = resolver.resolve()
@@ -36,8 +38,10 @@ def test_vocabulary_resolve_empty_vocab_returns_placeholder(
 ) -> None:
     from opentide.generation import schema_pipeline
 
+    monkeypatch.setattr(schema_pipeline, "_runtime_ready", True)
     monkeypatch.setattr(schema_pipeline, "VOCAB_INDEX", {})
     monkeypatch.setattr(schema_pipeline, "VOCAB_EXTENSIONS", {})
+    monkeypatch.setattr(schema_pipeline, "OBJECT_TYPES", [])
 
     resolver = schema_pipeline.VocabularyResolver.Vocabulary("missing")
     enum, descriptions = resolver.resolve()
@@ -63,8 +67,10 @@ def test_vocabulary_finalise_appends_hints_separately(monkeypatch: pytest.Monkey
         ),
         entries={"A": VocabularyEntry(name="Alpha", description="First", extra={"alias": ["a"]})},
     )
+    monkeypatch.setattr(schema_pipeline, "_runtime_ready", True)
     monkeypatch.setattr(schema_pipeline, "VOCAB_INDEX", {"impact": vocab})
     monkeypatch.setattr(schema_pipeline, "VOCAB_EXTENSIONS", {})
+    monkeypatch.setattr(schema_pipeline, "OBJECT_TYPES", [])
 
     resolver = schema_pipeline.VocabularyResolver.Vocabulary("impact")
     enum, descriptions = resolver.resolve()

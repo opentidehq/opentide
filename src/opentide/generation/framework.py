@@ -1,13 +1,50 @@
-from typing import Any, Literal, overload
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any, Literal, TypeVar, overload
 
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 
 logger = get_logger(__name__)
 DEFINITIONS_INDEX: dict[str, Any] = {}
-VOCAB_INDEX = OpenTide.Vocabularies.Index
-MODELS_INDEX = OpenTide.Models.Index
-CHAINING_INDEX = OpenTide.Models.chaining
+
+_KT = TypeVar("_KT")
+_VT = TypeVar("_VT")
+
+
+class _LazyMapping(Mapping[_KT, _VT]):
+    """Dict-like view that resolves the underlying mapping on first use.
+
+    Keeps import of this module free of registry I/O so CLI ``--help`` and other
+    light commands do not pay for an index build. Daily commands that touch the
+    registry still go through :class:`~opentide.core.index_manager.IndexManager`
+    caching, so the cost is paid once per process.
+    """
+
+    def __init__(self, loader: Callable[[], Mapping[_KT, _VT]]) -> None:
+        self._loader = loader
+
+    def _data(self) -> Mapping[_KT, _VT]:
+        return self._loader()
+
+    def __getitem__(self, key: _KT) -> _VT:
+        return self._data()[key]
+
+    def __iter__(self) -> Iterator[_KT]:
+        return iter(self._data())
+
+    def __len__(self) -> int:
+        return len(self._data())
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._data()
+
+    def get(self, key: _KT, default: Any = None) -> Any:
+        return self._data().get(key, default)
+
+
+VOCAB_INDEX: Mapping[str, Any] = _LazyMapping(lambda: OpenTide.Vocabularies.Index)
+MODELS_INDEX: Mapping[str, Any] = _LazyMapping(lambda: OpenTide.Models.Index)
+CHAINING_INDEX: Mapping[str, Any] = _LazyMapping(lambda: OpenTide.Models.chaining)
 
 
 def unroll_dot_dict(dot_dict, separator="."):
