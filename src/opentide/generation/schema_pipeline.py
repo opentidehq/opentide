@@ -28,18 +28,20 @@ def _icon(_name: str, **_kwargs: object) -> str:
 
 get_icon = _icon
 
-GLOBAL_CONFIG: Any
-VOCAB_INDEX: dict[str, Any]
-CONFIG_INDEX: dict[str, Any]
-VOCAB_EXTENSIONS: dict[str, Any]
-JSON_SCHEMA_FOLDER: Path
-ICONS: Any
-OBJECT_TYPES: Any
+_runtime_ready = False
+
+GLOBAL_CONFIG: Any = None
+VOCAB_INDEX: dict[str, Any] = {}
+CONFIG_INDEX: dict[str, Any] = {}
+VOCAB_EXTENSIONS: dict[str, Any] = {}
+JSON_SCHEMA_FOLDER: Path | None = None
+ICONS: dict[str, Any] = {}
+OBJECT_TYPES: list[Any] = []
 
 
 def _refresh_runtime_context() -> None:
     """Rebind module globals after env or index changes (tests, reload)."""
-    global GLOBAL_CONFIG, VOCAB_INDEX, CONFIG_INDEX
+    global _runtime_ready, GLOBAL_CONFIG, VOCAB_INDEX, CONFIG_INDEX
     global VOCAB_EXTENSIONS
     global JSON_SCHEMA_FOLDER
     global ICONS, OBJECT_TYPES
@@ -53,9 +55,17 @@ def _refresh_runtime_context() -> None:
     JSON_SCHEMA_FOLDER = Path(paths["json_schemas"])
     ICONS = {}
     OBJECT_TYPES = OpenTide.Configurations.Global.objects
+    _runtime_ready = True
 
 
-_refresh_runtime_context()
+def _ensure_runtime_context() -> None:
+    """Bind registry-backed globals on first use, not at import time.
+
+    Tests that monkeypatch vocabulary globals should also set
+    ``_runtime_ready = True`` so auto-binding does not overwrite patches.
+    """
+    if not _runtime_ready:
+        _refresh_runtime_context()
 
 
 class VocabularyResolver:
@@ -82,6 +92,7 @@ class VocabularyResolver:
     @staticmethod
     def _visibility():
         """Return the visibility configuration, or ``None``."""
+        _ensure_runtime_context()
         return OpenTide.Configurations.Visibility.visibility
 
     @staticmethod
@@ -188,6 +199,7 @@ _Vocabulary_ : `{source_vocab}`
 
         def resolve(self) -> tuple[list[str], list[str]]:
             """Resolve core + extension entries → ``(enum, descriptions)``."""
+            _ensure_runtime_context()
             logger.debug("resolving_vocab_enums_for", detail=self.vocab)
             self._ingest(VOCAB_INDEX.get(self._field_name))
             self._ingest_extensions()
@@ -453,6 +465,7 @@ _Vocabulary_ : `{source_vocab}`
         """Resolve deployment statuses from configuration."""
 
         def resolve(self) -> tuple[list[str], list[str]]:
+            _ensure_runtime_context()
             enums: list[str] = []
             descriptions: list[str] = []
             for status in OpenTide.Configurations.Deployment.statuses:
@@ -477,6 +490,7 @@ _Vocabulary_ : `{source_vocab}`
             self.dot_path = dot_path
 
         def resolve(self) -> list:
+            _ensure_runtime_context()
             config_index = OpenTide.Configurations.Index
             parts = self.dot_path.split(".")
             key = parts[0]
@@ -515,6 +529,7 @@ _Vocabulary_ : `{source_vocab}`
             self.system = system
 
         def resolve(self) -> tuple[list[str], list[str]]:
+            _ensure_runtime_context()
             config = OpenTide.Configurations.Index
             system_config = config.get("systems", {}).get(self.system)
             if not system_config:
@@ -555,6 +570,7 @@ def recomposition_handler(entry_point):
     from opentide.generation.pydantic_metaschema import build_platform_schema_source
     from opentide.models.platform_schema import platform_model_for_key
 
+    _ensure_runtime_context()
     recompositions = CONFIG_INDEX[entry_point]
     recomposition = dict()
     for entry, data in recompositions.items():
@@ -602,6 +618,7 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
         The same *dictionary*, mutated with all ``tide.*`` keywords
         resolved into standard JSON Schema properties.
     """
+    _ensure_runtime_context()
     dict_foo = dictionary.copy()
     icon = ""
     for field in dict_foo.keys():
