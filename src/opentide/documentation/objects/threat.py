@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
-from opentide.documentation.diagram.builders import (
-    render_chaining_diagram,
-    render_relations_diagram,
-)
+from opentide.documentation.diagram.builders import render_chaining_diagram
+from opentide.documentation.markdown.links import object_link
 from opentide.documentation.objects.base import ObjectRenderer
 from opentide.documentation.parts import sections
 from opentide.documentation.vocabulary import enrich
@@ -17,6 +15,8 @@ from opentide.models.threat import ThreatVector
 class ThreatRenderer(ObjectRenderer):
     """Render threat vectors to markdown."""
 
+    folder = "Threats"
+
     def render(self, obj: ThreatVector) -> str:
         threat = obj
         blocks = [
@@ -25,7 +25,7 @@ class ThreatRenderer(ObjectRenderer):
             sections.render_references(threat.references, self.formatter),
             sections.render_threat_body(threat, self.formatter),
             self._chaining(threat),
-            self._relations(threat),
+            self.coverage_block(threat.metadata.uuid, threat.name),
         ]
         return self.assemble(blocks)
 
@@ -54,8 +54,15 @@ class ThreatRenderer(ObjectRenderer):
             relation_key = str(entry.get("relation") or "").strip()
             relation = enrich("chaining_relations", relation_key) if relation_key else None
             relation_label = relation.label if relation else "Related"
-            target_name = self.catalog.resolve_name(str(target))
-            heading = f"{relation_label} -> {target_name}"
+            target_link = object_link(
+                self.formatter,
+                self.catalog,
+                str(target),
+                from_folder=self.folder,
+                uuid_permalinks=self.ctx.uuid_permalinks,
+                wiki=self.wiki_links,
+            )
+            heading = f"{relation_label} -> {target_link}"
             if relation_key and relation_key != relation_label:
                 heading += f" (`{relation_key}`)"
             chunks.append(self.formatter.heading(4, heading))
@@ -66,18 +73,6 @@ class ThreatRenderer(ObjectRenderer):
                 chunks.append(self.formatter.paragraph(description))
             chunks.append(f"- **Target UUID**: `{target}`\n")
         return "".join(chunks)
-
-    def _relations(self, threat: ThreatVector) -> str:
-        diagram = render_relations_diagram(
-            self.formatter,
-            self.catalog,
-            uuid=threat.metadata.uuid,
-            name=threat.name,
-            direction=self.ctx.relations_direction,
-        )
-        if not diagram:
-            return ""
-        return self.formatter.heading(2, "Relations") + diagram
 
 
 def render_threat_page(

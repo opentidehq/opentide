@@ -27,9 +27,9 @@ md_github = render_rule(rule, flavor=DocumentFlavor.github)
 
 Rendered pages include shared `Metadata` and `References` sections, plus object-specific sections:
 
-- `render_rule`: status/techniques, detection model links, response metadata/procedures, platform query configurations, relations diagram
-- `render_objective`: objective metadata, signal details, signal-to-rule MDR coverage, relations diagram
-- `render_threat`: criticality/terrain/assessment/actors, ATT&CK techniques (when present), chaining + chaining details, relations diagram
+- `render_rule`: status, ATT&CK techniques, detection-model backlinks, response metadata/procedures, platform query configurations, coverage diagram, related-objects table
+- `render_objective`: objective metadata, signal details, signal-to-rule MDR coverage with backlinks, coverage diagram, related-objects table
+- `render_threat`: criticality/terrain/assessment/actors, ATT&CK techniques (when present), chaining + chaining details (with backlinks), coverage diagram, related-objects table
 
 ## Write all pages
 
@@ -70,12 +70,14 @@ Formatters live in `opentide.documentation.format.*`.
 
 ### Mermaid behavior and relation direction
 
-Relations and chaining diagrams are always rendered through flavor-aware Mermaid formatters:
+Relations, coverage, and chaining diagrams are always rendered through flavor-aware Mermaid formatters:
 
-- `github` / `gitlab` / `generic`: flowchart output, with relation subgraphs when available.
+- `github` / `gitlab` / `generic`: flowchart output, with family or kill-chain subgraphs when available. Node shapes distinguish threats, objectives, signals, and rules.
 - `azure-devops`: graph-compatible output with subgraphs disabled.
 
-`relations_direction` is loaded from documentation settings (`upstream`, `downstream`, or `both`) and applied to relations diagrams for rules, objectives, and threats.
+Coverage diagrams are 2-hop (threat → objective → signal → rule). The `Coverage` heading is used only for that graph; a relations-flowchart fallback is titled `Relations`. Related-object tables carry the clickable backlinks; signal UUIDs resolve to the parent objective heading.
+
+`relations_direction` is loaded from documentation settings (`upstream`, `downstream`, or `both`) and applied to the related-objects table.
 
 ### Index enrichment controls
 

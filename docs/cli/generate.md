@@ -64,20 +64,23 @@ Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--out
   - `Metadata` (UUID, schema, version, created/modified, TLP, optional author/contributors/organisation)
   - `References` (`Public`, `Internal`, `Reports` buckets when present)
 - **Rules:**
-  - `Status`, `Techniques`, `Detection model`, `Response`, `Platform configurations`, `Relations`
+  - `Status`, `ATT&CK Techniques`, `Detection model` (relative backlink), `Response`, `Platform configurations`, `Coverage`, `Related objects`
 - **Objectives:**
-  - `Objective metadata`, `Signals`, `Signal MDR coverage`, `Relations`
+  - `Objective metadata`, `Signals`, `Signal MDR coverage` (rule backlinks), `Coverage`, `Related objects`
 - **Threats:**
-  - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Relations`
+  - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Coverage`, `Related objects`
+
+Metadata is a Field/Value table. Folder index tables add Status/Severity (rules), Priority (objectives), or Criticality (threats).
+
+Internal wiki links are relative to the current folder (`../Objectives/…`, `./slug.md` on indexes). Signals are not separate pages — they link to the parent objective heading.
 
 ### Mermaid behavior and relations direction
 
-Threat chaining and object relations are rendered with Mermaid across flavors:
+Threat chaining and coverage are rendered with Mermaid across flavors:
 
-- **Chaining diagram:** threat-to-threat flow that preserves relation labels between chain entries.
-- **Relations diagram:** related objects grouped by relation label where the flavor supports Mermaid subgraphs.
-
-`relations_direction` controls whether relations diagrams show upstream, downstream, or both sides:
+- **Coverage diagram:** 2-hop threat → objective → signal → rule flowchart with typed node shapes (hexagon / stadium / circle / rectangle) and family subgraphs. The section is titled `Coverage` only when this graph is present; a generic relations flowchart uses a `Relations` heading instead.
+- **Chaining diagram:** inbound + outbound threat-to-threat flow, with kill-chain subgraphs when present and bidirectional arrows for synergistic links.
+- **Related objects table:** clickable backlinks (GitHub does not honor Mermaid `click`). `relations_direction` still controls which rows appear (`upstream`, `downstream`, or `both`).
 
 ```toml
 [diagrams]

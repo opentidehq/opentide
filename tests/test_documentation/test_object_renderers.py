@@ -53,7 +53,7 @@ def test_threat_renderer_includes_diagram_sections(metadata: dict[str, Any]) -> 
             return_value="chain-diagram",
         ),
         patch(
-            "opentide.documentation.objects.threat.render_relations_diagram",
+            "opentide.documentation.objects.base.render_relations_diagram",
             return_value="relations-diagram",
         ),
         patch(
@@ -69,6 +69,8 @@ def test_threat_renderer_includes_diagram_sections(metadata: dict[str, Any]) -> 
     assert "Credential Access" in rendered
     assert "chain-diagram" in rendered
     assert "relations-diagram" in rendered
+    assert "## Coverage" not in rendered
+    assert "## Relations" in rendered
 
 
 def test_objective_renderer_includes_relations(metadata: dict[str, Any]) -> None:
@@ -78,7 +80,7 @@ def test_objective_renderer_includes_relations(metadata: dict[str, Any]) -> None
     catalog = MagicMock()
     with (
         patch(
-            "opentide.documentation.objects.objective.render_relations_diagram",
+            "opentide.documentation.objects.base.render_relations_diagram",
             return_value="relations-diagram",
         ),
         patch(
@@ -107,6 +109,8 @@ def test_objective_renderer_includes_relations(metadata: dict[str, Any]) -> None
     assert "objective-meta" in rendered
     assert "signal-matrix" in rendered
     assert "relations-diagram" in rendered
+    assert "## Coverage" not in rendered
+    assert "## Relations" in rendered
 
 
 def test_render_page_helpers_delegate_to_renderer() -> None:

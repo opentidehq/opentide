@@ -38,8 +38,11 @@ def test_render_index_builds_table() -> None:
         )
     assert "Detection Rules" in content
     assert "Rule A" in content
+    assert "[Rule A](rule-a.md)" in content
     assert "u1" in content
     assert "Related" in content
+    assert "Status" in content
+    assert "Severity" in content
     assert "0" in content
 
 
