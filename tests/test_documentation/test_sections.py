@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import MagicMock
 
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.format.factory import formatter_for
@@ -87,10 +88,11 @@ def test_render_metadata_includes_uuid_and_schema(metadata: dict[str, Any]) -> N
     assert "Metadata" in rendered
     assert metadata["uuid"] in rendered
     assert "rule::1.0" in rendered
-    assert "**Version**: `1`" in rendered
-    assert "**Created**: `2026-01-01`" in rendered
-    assert "**Modified**: `2026-01-02`" in rendered
+    assert "`1`" in rendered
+    assert "`2026-01-01`" in rendered
+    assert "`2026-01-02`" in rendered
     assert "TLP:CLEAR" in rendered
+    assert "| Field | Value |" in rendered
 
 
 def test_render_metadata_includes_optional_authoring_fields() -> None:
@@ -113,9 +115,10 @@ def test_render_metadata_includes_optional_authoring_fields() -> None:
     )
     rendered = render_metadata(metadata, formatter)
 
-    assert "**Author**: OpenTide Team" in rendered
-    assert "**Contributors**: Alice, Bob" in rendered
-    assert "**Organisation**: OpenTideHQ (`00000000-0000-4000-8000-000000000123`)" in rendered
+    assert "**Author**: OpenTide Team" not in rendered
+    assert "OpenTide Team" in rendered
+    assert "Alice, Bob" in rendered
+    assert "OpenTideHQ (`00000000-0000-4000-8000-000000000123`)" in rendered
 
 
 def test_render_references_renders_all_reference_groups() -> None:
@@ -198,15 +201,15 @@ def test_render_rule_sections_include_status_response_and_model_link(
     detection_model = render_detection_model_link(rule, formatter, catalog)
 
     assert "## Status" in status
-    assert "**Status**: `STAGING`" in status
-    assert "**Severity**: `High`" in status
+    assert "`STAGING`" in status
+    assert "`High`" in status
     assert "## Response" in response
     assert "**Alert severity**:" in response
     assert "**Playbook**: PB-IR-001" in response
     assert "**Responders**:" in response
     assert "### Procedure" in response
     assert "## Detection model" in detection_model
-    assert "[Shai-Hulud Objective](Objectives/shai-hulud-objective.md)" in detection_model
+    assert "[Shai-Hulud Objective](../Objectives/shai-hulud-objective.md)" in detection_model
     assert "`00000000-0000-4000-8102-000000000001`" in detection_model
 
 
@@ -343,35 +346,21 @@ def test_render_threat_sections_with_enrichment(metadata: dict[str, Any]) -> Non
     assert "Gather Victim Identity Information" in techniques
 
 
-def test_render_signal_mdr_coverage_uses_fw_relations(
-    monkeypatch, metadata: dict[str, Any]
-) -> None:
+def test_render_signal_mdr_coverage_uses_catalog_rules(metadata: dict[str, Any]) -> None:
     formatter = formatter_for(DocumentFlavor.github)
     objective = load_objective_from_dict(_objective_payload(metadata))
 
-    monkeypatch.setattr(
-        "opentide.documentation.parts.sections.fw.childs",
-        lambda _signal_uuid: ["00000000-0000-4000-8000-000000000031"],
-    )
-    monkeypatch.setattr(
-        "opentide.documentation.parts.sections.fw.get_type",
-        lambda uuid, mute=True: (
-            "signal" if uuid == "00000000-0000-4000-8000-000000000021" else "rule"
-        ),
-    )
-    monkeypatch.setattr(
-        "opentide.documentation.parts.sections.fw.relations_list",
-        lambda _signal_uuid, mode="flat", direction="downstream": {
-            "rule": [
-                "00000000-0000-4000-8000-000000000031",
-                "00000000-0000-4000-8000-000000000032",
-            ]
-        },
-    )
+    catalog = MagicMock(spec=DocumentationCatalog)
+    catalog.rules_for_signal.return_value = [
+        "00000000-0000-4000-8000-000000000031",
+        "00000000-0000-4000-8000-000000000032",
+    ]
+    catalog.resolve_record.return_value = None
 
     coverage = render_signal_mdr_coverage(
         objective,
         formatter,
+        catalog,
         resolve_name=lambda uuid: f"Rule {uuid[-4:]}",
     )
 

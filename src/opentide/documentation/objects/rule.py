@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
-from opentide.documentation.diagram.builders import render_relations_diagram
 from opentide.documentation.objects.base import ObjectRenderer
 from opentide.documentation.parts import sections
 from opentide.models.rule import DetectionRule
@@ -12,6 +11,8 @@ from opentide.models.rule import DetectionRule
 
 class RuleRenderer(ObjectRenderer):
     """Render detection rules to markdown."""
+
+    folder = "Rules"
 
     def render(self, obj: DetectionRule) -> str:
         rule = obj
@@ -26,26 +27,15 @@ class RuleRenderer(ObjectRenderer):
                 rule,
                 self.formatter,
                 self.catalog,
+                from_folder=self.folder,
                 uuid_permalinks=self.ctx.uuid_permalinks,
-                wiki_links=self.ctx.flavor.value in {"gitlab", "azure_devops"},
+                wiki_links=self.wiki_links,
             ),
             sections.render_rule_response(rule, self.formatter),
             sections.render_rule_queries(rule, self.formatter),
-            self._relations(rule),
+            self.coverage_block(rule.metadata.uuid, rule.name),
         ]
         return self.assemble(blocks)
-
-    def _relations(self, rule: DetectionRule) -> str:
-        diagram = render_relations_diagram(
-            self.formatter,
-            self.catalog,
-            uuid=rule.metadata.uuid,
-            name=rule.name,
-            direction=self.ctx.relations_direction,
-        )
-        if not diagram:
-            return ""
-        return self.formatter.heading(2, "Relations") + diagram
 
 
 def render_rule_page(

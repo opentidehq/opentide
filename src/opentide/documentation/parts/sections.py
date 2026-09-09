@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from typing import Literal, cast
 
-from opentide.generation import framework as fw
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.format.protocol import MarkdownFormatter
-from opentide.documentation.markdown.links import render_link, slugify, wiki_target
-from opentide.documentation.types import DocumentScope
+from opentide.documentation.markdown.links import object_link
 from opentide.documentation.vocabulary import enrich, enrich_technique
+from opentide.generation import framework as fw
+from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.objective import (
     DetectionExample,
     DetectionObjective,
     DetectionSignal,
     ExternalDetector,
 )
-from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatBody, ThreatVector
 
@@ -28,24 +28,23 @@ def render_metadata(metadata: ObjectMetadata, formatter: MarkdownFormatter) -> s
     if isinstance(tlp_id, str) and tlp_id and tlp_id != tlp_value:
         tlp_value = f"{tlp_value} (`{tlp_id}`)"
 
-    lines = [
-        formatter.heading(2, "Metadata"),
-        f"- **UUID**: `{metadata.uuid}`",
-        f"- **Schema**: `{metadata.schema_id}`",
-        f"- **Version**: `{metadata.version}`",
-        f"- **Created**: `{metadata.created}`",
-        f"- **Modified**: `{metadata.modified}`",
-        f"- **TLP**: {tlp_value}",
+    rows = [
+        ["UUID", f"`{metadata.uuid}`"],
+        ["Schema", f"`{metadata.schema_id}`"],
+        ["Version", f"`{metadata.version}`"],
+        ["Created", f"`{metadata.created}`"],
+        ["Modified", f"`{metadata.modified}`"],
+        ["TLP", tlp_value],
     ]
     if metadata.author:
-        lines.append(f"- **Author**: {metadata.author}")
+        rows.append(["Author", metadata.author])
     if metadata.contributors:
-        lines.append("- **Contributors**: " + ", ".join(metadata.contributors))
+        rows.append(["Contributors", ", ".join(metadata.contributors)])
     if metadata.organisation:
-        lines.append(
-            f"- **Organisation**: {metadata.organisation.name} (`{metadata.organisation.uuid}`)"
+        rows.append(
+            ["Organisation", f"{metadata.organisation.name} (`{metadata.organisation.uuid}`)"]
         )
-    return "\n".join(lines) + "\n"
+    return formatter.heading(2, "Metadata") + formatter.table(["Field", "Value"], rows)
 
 
 def render_references(references: ObjectReferences | None, formatter: MarkdownFormatter) -> str:
@@ -78,17 +77,15 @@ def render_description(text: str, formatter: MarkdownFormatter) -> str:
 def render_techniques(techniques: list[str], formatter: MarkdownFormatter) -> str:
     if not techniques:
         return ""
-    items = "\n".join(f"- {item}" for item in techniques)
-    return formatter.heading(2, "Techniques") + items + "\n"
+    return render_attack_techniques(techniques, formatter)
 
 
 def render_rule_status(rule: DetectionRule, formatter: MarkdownFormatter) -> str:
-    lines = [
-        formatter.heading(2, "Status"),
-        f"- **Status**: `{rule.status}`",
-        f"- **Severity**: `{rule.severity}`",
+    rows = [
+        ["Status", f"`{rule.status}`"],
+        ["Severity", f"`{rule.severity}`"],
     ]
-    return "\n".join(lines) + "\n"
+    return formatter.heading(2, "Status") + formatter.table(["Field", "Value"], rows)
 
 
 def render_detection_model_link(
@@ -96,17 +93,19 @@ def render_detection_model_link(
     formatter: MarkdownFormatter,
     catalog: DocumentationCatalog,
     *,
+    from_folder: str = "Rules",
     uuid_permalinks: bool = False,
     wiki_links: bool = False,
 ) -> str:
     if not rule.detection_model:
         return ""
-    objective = _render_catalog_uuid_link(
-        rule.detection_model,
+    objective = object_link(
         formatter,
         catalog,
+        rule.detection_model,
+        from_folder=from_folder,
         uuid_permalinks=uuid_permalinks,
-        wiki_links=wiki_links,
+        wiki=wiki_links,
     )
     return formatter.heading(2, "Detection model") + f"- **Objective**: {objective}\n"
 
@@ -214,23 +213,81 @@ def render_objective_meta(objective: DetectionObjective, formatter: MarkdownForm
 def render_signal_mdr_coverage(
     objective: DetectionObjective,
     formatter: MarkdownFormatter,
+    catalog: DocumentationCatalog,
     *,
-    resolve_name: Callable[[str], str],
+    from_folder: str = "Objectives",
+    uuid_permalinks: bool = False,
+    wiki_links: bool = False,
+    resolve_name: Callable[[str], str] | None = None,
 ) -> str:
     if not objective.objective.signals:
         return ""
     rows: list[list[str]] = []
     for signal in objective.objective.signals:
-        related_rules = _signal_rule_uuids(signal.uuid)
-        if not related_rules:
+        related_rules = catalog.rules_for_signal(signal.uuid)
+        if not isinstance(related_rules, list) or not related_rules:
             rows.append([signal.name, "_None_"])
             continue
-        display = [f"{resolve_name(rule_uuid)} (`{rule_uuid}`)" for rule_uuid in related_rules]
+        display = [
+            _rule_coverage_label(
+                rule_uuid,
+                formatter,
+                catalog,
+                from_folder=from_folder,
+                uuid_permalinks=uuid_permalinks,
+                wiki_links=wiki_links,
+                resolve_name=resolve_name,
+            )
+            for rule_uuid in related_rules
+        ]
         rows.append([signal.name, "<br>".join(display)])
 
     return (
         formatter.heading(2, "Signal MDR coverage")
         + formatter.table(headers=["Signal", "Downstream MDR rules"], rows=rows)
+    )
+
+
+def render_related_objects(
+    catalog: DocumentationCatalog,
+    uuid: str,
+    formatter: MarkdownFormatter,
+    *,
+    from_folder: str,
+    direction: str = "both",
+    uuid_permalinks: bool = False,
+    wiki_links: bool = False,
+) -> str:
+    """Backlink table for related objects. GitHub cannot click Mermaid nodes."""
+    walk = cast(
+        Literal["upstream", "downstream", "both"],
+        direction if direction in {"upstream", "downstream", "both"} else "both",
+    )
+    entries = catalog.related_entries(uuid, direction=walk)
+    if not isinstance(entries, list) or not entries:
+        return ""
+    rows: list[list[str]] = []
+    for entry in entries:
+        object_type = (entry.object_type or "object").title()
+        name = object_link(
+            formatter,
+            catalog,
+            entry.uuid,
+            from_folder=from_folder,
+            uuid_permalinks=uuid_permalinks,
+            wiki=wiki_links,
+        )
+        rows.append(
+            [
+                object_type,
+                name,
+                (entry.direction or "-").title(),
+                entry.relation or "-",
+            ]
+        )
+    return formatter.heading(2, "Related objects") + formatter.table(
+        ["Type", "Name", "Direction", "Relation"],
+        rows,
     )
 
 
@@ -320,37 +377,6 @@ def _platform_query(config: object) -> str | None:
     if fragments:
         return "\n\n".join(fragments)
     return None
-
-
-def _render_catalog_uuid_link(
-    uuid: str,
-    formatter: MarkdownFormatter,
-    catalog: DocumentationCatalog,
-    *,
-    uuid_permalinks: bool,
-    wiki_links: bool,
-) -> str:
-    record = catalog.resolve_record(uuid)
-    if record is None:
-        return f"`{uuid}`"
-
-    folder_map = {
-        DocumentScope.rules: "Rules",
-        DocumentScope.objectives: "Objectives",
-        DocumentScope.threats: "Threats",
-    }
-    folder = folder_map.get(record.object_type)
-    if folder is None:
-        return f"`{uuid}`"
-
-    slug = uuid if uuid_permalinks else slugify(record.name)
-    link = render_link(
-        formatter,
-        record.name,
-        wiki_target(folder=folder, slug=slug),
-        wiki=wiki_links,
-    )
-    return f"{link} (`{uuid}`)"
 
 
 def render_criticality(threat: ThreatVector, formatter: MarkdownFormatter) -> str:
@@ -510,7 +536,9 @@ def _render_signal_entities(signal: DetectionSignal) -> str:
     return "- **Entities**: " + ", ".join(entities) + "\n"
 
 
-def _render_signal_detectors(detectors: list[ExternalDetector], formatter: MarkdownFormatter) -> str:
+def _render_signal_detectors(
+    detectors: list[ExternalDetector], formatter: MarkdownFormatter
+) -> str:
     lines = [formatter.heading(4, "Detectors")]
     for detector in detectors:
         detector_info = (
@@ -533,23 +561,25 @@ def _render_signal_examples(examples: list[DetectionExample], formatter: Markdow
     return "\n".join(lines) + "\n"
 
 
-def _signal_rule_uuids(signal_uuid: str) -> list[str]:
-    if fw.get_type(signal_uuid, mute=True) != "signal":
-        return []
-
-    downstream_rules: set[str] = set()
-    try:
-        for child_uuid in fw.childs(signal_uuid):
-            if fw.get_type(child_uuid, mute=True) == "rule":
-                downstream_rules.add(child_uuid)
-    except Exception:
-        pass
-
-    try:
-        relations = fw.relations_list(signal_uuid, mode="flat", direction="downstream")
-        for rule_uuid in relations.get("rule", []):
-            downstream_rules.add(rule_uuid)
-    except Exception:
-        pass
-
-    return sorted(downstream_rules)
+def _rule_coverage_label(
+    rule_uuid: str,
+    formatter: MarkdownFormatter,
+    catalog: DocumentationCatalog,
+    *,
+    from_folder: str,
+    uuid_permalinks: bool,
+    wiki_links: bool,
+    resolve_name: Callable[[str], str] | None,
+) -> str:
+    if catalog.resolve_record(rule_uuid) is not None:
+        return object_link(
+            formatter,
+            catalog,
+            rule_uuid,
+            from_folder=from_folder,
+            uuid_permalinks=uuid_permalinks,
+            wiki=wiki_links,
+        )
+    if resolve_name is not None:
+        return f"{resolve_name(rule_uuid)} (`{rule_uuid}`)"
+    return f"`{rule_uuid}`"

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.context import DocumentationContext
-from opentide.documentation.diagram.builders import render_relations_diagram
 from opentide.documentation.objects.base import ObjectRenderer
 from opentide.documentation.parts import sections
 from opentide.models.objective import DetectionObjective
@@ -12,6 +11,8 @@ from opentide.models.objective import DetectionObjective
 
 class ObjectiveRenderer(ObjectRenderer):
     """Render detection objectives to markdown."""
+
+    folder = "Objectives"
 
     def render(self, obj: DetectionObjective) -> str:
         objective = obj
@@ -25,23 +26,14 @@ class ObjectiveRenderer(ObjectRenderer):
             sections.render_signal_mdr_coverage(
                 objective,
                 self.formatter,
-                resolve_name=self.catalog.resolve_name,
+                self.catalog,
+                from_folder=self.folder,
+                uuid_permalinks=self.ctx.uuid_permalinks,
+                wiki_links=self.wiki_links,
             ),
-            self._relations(objective),
+            self.coverage_block(objective.metadata.uuid, objective.name),
         ]
         return self.assemble(blocks)
-
-    def _relations(self, objective: DetectionObjective) -> str:
-        diagram = render_relations_diagram(
-            self.formatter,
-            self.catalog,
-            uuid=objective.metadata.uuid,
-            name=objective.name,
-            direction=self.ctx.relations_direction,
-        )
-        if not diagram:
-            return ""
-        return self.formatter.heading(2, "Relations") + diagram
 
 
 def render_objective_page(
