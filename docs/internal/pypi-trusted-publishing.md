@@ -22,9 +22,9 @@ The project does not exist on PyPI yet. Do not register it by uploading a wheel 
 3. Add a **pending GitHub publisher** with these exact fields:
 
    - PyPI project name: `opentide`
-   - Owner: `OpenTideHQ`
+   - Owner: `opentidehq` (GitHub **login**, lowercase — not the display name `OpenTideHQ`)
    - Repository name: `opentide`
-   - Workflow name: `publish-pypi.yml` (filename only)
+   - Workflow name: `publish-pypi.yml` (filename only, no `.github/workflows/`)
    - Environment name: `pypi`
 
 4. The GitHub Environment `pypi` must exist on `OpenTideHQ/opentide` (Settings → Environments). Optional: required reviewers; optional URL `https://pypi.org/p/opentide`.
@@ -63,4 +63,4 @@ Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https
 - Workflow filename on PyPI must be `publish-pypi.yml`; environment must be `pypi` (lowercase).
 - Job needs `id-token: write` and `contents: read`.
 - `0.1.dev…` means the tag was not on the checked-out commit (`fetch-depth: 0` and Release target).
-- 403: pending publisher missing, or owner/repo mismatch.
+- 403 / `invalid-publisher`: pending publisher missing, or fields do not match the OIDC claims. GitHub sends `repository_owner: opentidehq` (lowercase) and `environment: pypi`. Copy those from the failed Publish to PyPI log, save the pending publisher again, then re-run the workflow (do not retag).
