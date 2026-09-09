@@ -51,6 +51,9 @@ jobs:
       - name: Build sdist and wheel
         run: uv build
 
+      - name: Twine check
+        run: uvx twine check dist/*
+
       - name: Detect vocabulary bundle or lockfile changes
         id: vocab_changes
         run: |
