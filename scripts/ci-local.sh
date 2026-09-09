@@ -12,7 +12,7 @@ Usage: scripts/ci-local.sh [OPTIONS]
 Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 
 Options:
-  --quick       Lint + type-check only (ruff, ty) — ~seconds
+  --quick       Lint + type-check + package build (ruff, ty, uv build)
   --test        Lint + unit pytest (excludes cli_e2e/cli_smoke) — default
   --full        Lint + unit pytest + coverage gate + CLI E2E (3.14) — pre-push
   --coverage    Alias for --full
@@ -48,6 +48,9 @@ uv run ruff format --check tests src/opentide
 
 echo "==> Ty type check"
 uv run ty check src/opentide
+
+echo "==> uv build (sdist + wheel)"
+uv build
 
 if [[ "$mode" == "quick" ]]; then
   echo "==> Quick checks passed"

@@ -28,6 +28,7 @@ MANIFEST
 
 # Virtual environments
 .venv/
+.venv-scaffold/
 venv/
 ENV/
 env/
