@@ -1,19 +1,24 @@
-# PyPI publishing is disabled until trusted publishing and the `pypi` environment are configured.
-# Re-enable by restoring `on.release.types: [published]` and verifying OIDC on PyPI.
+# Publishes to PyPI on GitHub Release via OIDC trusted publishing.
+# First upload: configure a pending publisher at
+# https://pypi.org/manage/account/publishing/ (see docs/internal/pypi-trusted-publishing.md).
 name: Publish to PyPI
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
+  contents: read
   id-token: write
 
 jobs:
   publish:
-    name: Publish to PyPI (disabled)
-    if: false
+    name: Publish to PyPI
     runs-on: ubuntu-latest
-    environment: pypi
+    environment:
+      name: pypi
+      url: https://pypi.org/p/opentide
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

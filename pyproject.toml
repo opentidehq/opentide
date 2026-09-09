@@ -7,12 +7,15 @@ name = "opentide"
 dynamic = ["version"]
 description = "OpenTide — DetectionOps engine (PyPI package)"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "EUPL-1.2"
+license-files = ["LICENSE"]
+authors = [
+    { name = "OpenTide", email = "digit-ec-opentide@ec.europa.eu" },
+]
 requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -78,6 +81,12 @@ dev = [
     "pandas>=2.0",
     "openpyxl>=3.1",
 ]
+
+[project.urls]
+Homepage = "https://opentide.org"
+Documentation = "https://opentide.org/docs/usage/"
+Repository = "https://github.com/OpenTideHQ/opentide"
+Issues = "https://github.com/OpenTideHQ/opentide/issues"
 
 [project.scripts]
 opentide = "opentide.cli:main"

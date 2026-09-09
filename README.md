@@ -14,14 +14,16 @@ opentide validate
 
 ## Documentation
 
+Published docs: [opentide.org/docs/usage/](https://opentide.org/docs/usage/).
+
 | Section | Audience |
 |---------|----------|
-| [Usage](docs/usage/index.md) | Setup, workflows, migration |
-| [CLI](docs/cli/index.md) | Command reference |
-| [MCP](docs/mcp/index.md) | Agent server |
-| [SDK](docs/sdk/index.md) | Python API |
+| [Usage](https://opentide.org/docs/usage/) | Setup, workflows, migration |
+| [CLI](https://opentide.org/docs/cli/) | Command reference |
+| [MCP](https://opentide.org/docs/mcp/) | Agent server |
+| [SDK](https://opentide.org/docs/sdk/) | Python API |
 
-Docs are structured for the [Fumadocs](docs/fumadocs/) site in [OpenTideHQ/website](https://github.com/OpenTideHQ/website). This repo validates content only: `scripts/validate-docs.sh`.
+Source for those pages lives in [`docs/`](docs/) (Fumadocs). This repo validates content only: `scripts/validate-docs.sh`. The site is [OpenTideHQ/website](https://github.com/OpenTideHQ/website).
 
 Contributors: see [`AGENTS.md`](AGENTS.md) and [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md).
 

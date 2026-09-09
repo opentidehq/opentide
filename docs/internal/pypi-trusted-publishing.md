@@ -1,20 +1,64 @@
 ---
 title: PyPI trusted publishing
-description: OIDC trusted publishing setup for PyPI releases.
+description: First publish of opentide 0.1.0 via OIDC — no API tokens.
 ---
 
-# PyPI Trusted Publishing Setup (Human Action Required)
+# PyPI trusted publishing
 
-Phase 8 CI workflows (`.github/workflows/publish-pypi.yml`, `ci.yml` TestPyPI job) use **OIDC Trusted Publishing** — no API tokens in the repository.
+[`.github/workflows/publish-pypi.yml`](../../.github/workflows/publish-pypi.yml) publishes on **GitHub Release** (`release: published`) using [OIDC trusted publishing](https://docs.pypi.org/trusted-publishers/). There is no PyPI token in GitHub secrets.
 
-## Org-admin checklist
+Version comes from hatch-vcs. Tag **`v0.1.0`** (or a later `v*`) on the commit you release. A Release without a matching tag publishes a `0.1.dev…` version.
 
-1. Create PyPI projects: `opentide` (production) and optionally a TestPyPI counterpart.
-2. Configure Trusted Publisher on each PyPI project:
+A **pending publisher does not reserve the name** until the first successful upload. Configure it and cut the Release the same day.
+
+## Pending publisher (first upload only)
+
+The project does not exist on PyPI yet. Do not register it by uploading a wheel by hand.
+
+1. Log in at [pypi.org](https://pypi.org) with **2FA**.
+2. Open [Account → Publishing](https://pypi.org/manage/account/publishing/).
+3. Add a **pending GitHub publisher** with these exact fields:
+
+   - PyPI project name: `opentide`
    - Owner: `OpenTideHQ`
-   - Repository: `opentide`
-   - Workflow: `publish-pypi.yml` (releases) / `ci.yml` (TestPyPI on `development`)
-   - Environment: `pypi` / `testpypi`
-3. Create GitHub Environments `pypi` and `testpypi` in `OpenTideHQ/opentide` with required reviewers if desired.
+   - Repository name: `opentide`
+   - Workflow name: `publish-pypi.yml` (filename only)
+   - Environment name: `pypi`
 
-Until steps 1–3 are complete, publish jobs will fail at the OIDC exchange step. This is expected and does not block merging Phase 8 code.
+4. The GitHub Environment `pypi` must exist on `OpenTideHQ/opentide` (Settings → Environments). Optional: required reviewers; optional URL `https://pypi.org/p/opentide`.
+5. Make `OpenTideHQ/opentide` **public** before the Release so PyPI source links resolve.
+6. Cut the Release (creates tag `v0.1.0` at `--target`):
+
+```bash
+gh release create v0.1.0 \
+  --repo OpenTideHQ/opentide \
+  --target development \
+  --title "0.1.0" \
+  --notes "First public release of the OpenTide DetectionOps engine."
+```
+
+7. Watch [Publish to PyPI](https://github.com/OpenTideHQ/opentide/actions/workflows/publish-pypi.yml). Approve the environment if reviewers are required.
+8. Confirm:
+
+```bash
+pip index versions opentide
+pip install opentide==0.1.0
+python -c "import opentide; print(opentide.__version__)"
+```
+
+Expect `0.1.0`. Then add the other maintainer under PyPI Project → Settings → Collaborators.
+
+The PyPI account that saved the pending publisher **owns** the project.
+
+## Later releases
+
+After the first upload, the pending publisher becomes a normal publisher. Further GitHub Releases on `v*` tags publish new versions. Do not add a PyPI API token.
+
+Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https://test.pypi.org/manage/account/publishing/) with the same GitHub fields (and a `testpypi` environment if you add one). Production `publish-pypi.yml` targets pypi.org only.
+
+## If publish fails
+
+- Workflow filename on PyPI must be `publish-pypi.yml`; environment must be `pypi` (lowercase).
+- Job needs `id-token: write` and `contents: read`.
+- `0.1.dev…` means the tag was not on the checked-out commit (`fetch-depth: 0` and Release target).
+- 403: pending publisher missing, or owner/repo mismatch.
