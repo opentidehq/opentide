@@ -51,6 +51,8 @@ uv run ty check src/opentide
 
 echo "==> uv build (sdist + wheel)"
 uv build
+echo "==> twine check"
+uvx twine check dist/*
 
 if [[ "$mode" == "quick" ]]; then
   echo "==> Quick checks passed"
