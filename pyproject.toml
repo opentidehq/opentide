@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "opentide"
 dynamic = ["version"]
-description = "OpenTide — DetectionOps engine (PyPI package)"
+description = "DetectionOps engine: validate, generate, deploy, and document detection-as-code across seven security platforms."
 readme = "README.md"
 license = "EUPL-1.2"
 license-files = ["LICENSE"]
@@ -85,6 +85,8 @@ dev = [
 [project.urls]
 Homepage = "https://opentide.org"
 Documentation = "https://opentide.org/docs/usage/"
+Changelog = "https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md"
+Releases = "https://opentide.org/docs/usage/releases/"
 Repository = "https://github.com/OpenTideHQ/opentide"
 Issues = "https://github.com/OpenTideHQ/opentide/issues"
 

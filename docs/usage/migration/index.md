@@ -25,7 +25,7 @@ python Orchestration/validate.py
 ### After (pip package)
 
 ```toml
-dependencies = ["opentide>=0.1"]
+dependencies = ["opentide==0.1.0"]
 ```
 
 ```python
@@ -48,7 +48,7 @@ Use `--platform`, not legacy `--system`.
 ### 1. Install
 
 ```bash
-pip install opentide
+pip install 'opentide==0.1.0'
 ```
 
 Enable platforms in the repo (not at pip install time):
@@ -57,7 +57,7 @@ Enable platforms in the repo (not at pip install time):
 opentide setup platforms --sentinel --splunk --yes
 ```
 
-Optional MCP server setup: `opentide setup mcp --cursor --yes` (after `pip install opentide`).
+Optional MCP server setup: `opentide setup mcp --cursor --yes` (after `pip install 'opentide==0.1.0'`).
 
 ### 2. Remove submodule
 
@@ -103,7 +103,7 @@ Query validation: **five platforms only** (no CrowdStrike/HarfangLab).
 Remove `submodules: recursive`. Add:
 
 ```yaml
-- run: pip install opentide
+- run: pip install 'opentide==0.1.0'
 - run: opentide validate --strict
   env:
     OPENTIDE_REPO_ROOT: ${{ github.workspace }}
@@ -137,7 +137,7 @@ OpenTide no longer provides `opentide migrate`. Use the [CoreTide migration prom
 
 ## Verification checklist
 
-- [ ] `pip install opentide` succeeds
+- [ ] `pip install 'opentide==0.1.0'` succeeds
 - [ ] `OPENTIDE_REPO_ROOT` set
 - [ ] `opentide validate --strict` passes
 - [ ] CI no longer uses submodule

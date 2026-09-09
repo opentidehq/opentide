@@ -27,14 +27,14 @@ The project does not exist on PyPI yet. Do not register it by uploading a wheel 
 
 4. The GitHub Environment `pypi` must exist on `OpenTideHQ/opentide` (Settings → Environments). Optional: required reviewers; optional URL `https://pypi.org/p/opentide`.
 5. Make `OpenTideHQ/opentide` **public** before the Release so PyPI source links resolve.
-6. Cut the Release (creates tag `v0.1.0` at `--target`):
+6. Cut the Release (creates tag `v0.1.0` at `--target`). The tag **must** sit on the commit that contains `CHANGELOG.md` and `docs/usage/releases.md`, or the wheel’s long description and docs will lag the GitHub notes:
 
 ```bash
 gh release create v0.1.0 \
   --repo OpenTideHQ/opentide \
   --target development \
   --title "0.1.0" \
-  --notes "First public release of the OpenTide DetectionOps engine."
+  --notes-file .github/release-notes/v0.1.0.md
 ```
 
 7. Watch [Publish to PyPI](https://github.com/OpenTideHQ/opentide/actions/workflows/publish-pypi.yml). Approve the environment if reviewers are required.

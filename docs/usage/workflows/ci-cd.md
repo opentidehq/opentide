@@ -25,7 +25,11 @@ opentide setup ci --ci gitlab --platform sentinel --platform splunk --yes
 opentide setup ci --ci azure  --python-version 3.12 --yes
 ```
 
-`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback).
+`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines install **`opentide>=0.1.0`** (the first public release). Pin a newer floor when you upgrade.
+
+<Callout type="info">
+Hand-written examples below use `pip install 'opentide==0.1.0'` so a first-time pipeline cannot float onto an accidental `0.1.dev…` local build. After 0.1.0 is on PyPI, `opentide setup ci` is the source of truth.
+</Callout>
 
 | Flag | Default | Purpose |
 |------|---------|---------|
@@ -51,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install opentide
+      - run: pip install 'opentide==0.1.0'
       - run: opentide generate
       - run: opentide validate --strict
       - run: opentide validate query --platform sentinel
@@ -82,7 +86,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install opentide
+      - run: pip install 'opentide==0.1.0'
       - run: opentide generate
       - run: opentide deploy --platform sentinel --dry-run   # preview in logs
       - run: opentide deploy --platform sentinel
@@ -108,7 +112,7 @@ Promotion is a deliberate step — gate it behind a protected environment or man
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install opentide
+      - run: pip install 'opentide==0.1.0'
       - run: opentide deploy --platform sentinel
 ```
 
@@ -136,7 +140,7 @@ validate:
   variables:
     OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
   script:
-    - pip install opentide
+    - pip install 'opentide==0.1.0'
     - opentide generate
     - opentide validate --strict
     - opentide validate query --platform sentinel
@@ -150,7 +154,7 @@ deploy-staging:
     OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
     DEPLOYMENT_PLAN: staging
   script:
-    - pip install opentide
+    - pip install 'opentide==0.1.0'
     - opentide generate
     - opentide deploy --platform sentinel
 ```
@@ -166,7 +170,7 @@ variables:
 steps:
   - task: UsePythonVersion@0
     inputs: { versionSpec: '3.12' }
-  - script: pip install opentide
+  - script: pip install 'opentide==0.1.0'
   - script: opentide generate && opentide validate --strict
   - script: opentide validate query --platform sentinel
 ```
