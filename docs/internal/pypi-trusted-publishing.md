@@ -9,6 +9,8 @@ description: First publish of opentide 0.1.0 via OIDC — no API tokens.
 
 Version comes from hatch-vcs. Tag **`v0.1.0`** (or a later `v*`) on the commit you release. A Release without a matching tag publishes a `0.1.dev…` version.
 
+Before tagging, `uv build` must produce both an sdist and a wheel. Overlapping `force-include` paths with `packages` will fail the wheel after hatchling 1.30 (duplicate archive members).
+
 A **pending publisher does not reserve the name** until the first successful upload. Configure it and cut the Release the same day.
 
 ## Pending publisher (first upload only)

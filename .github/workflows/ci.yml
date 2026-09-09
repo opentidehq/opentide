@@ -48,6 +48,9 @@ jobs:
       - name: Ty type check
         run: uv run ty check src/opentide --output-format github
 
+      - name: Build sdist and wheel
+        run: uv build
+
       - name: Detect vocabulary bundle or lockfile changes
         id: vocab_changes
         run: |
