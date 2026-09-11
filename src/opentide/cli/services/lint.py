@@ -53,6 +53,16 @@ def _as_str(value: object) -> str | None:
     return None
 
 
+def _organisation_name(value: object) -> str | None:
+    """Accept a string or the nested ``{name, uuid}`` metadata object."""
+    named = _as_str(value)
+    if named:
+        return named
+    if isinstance(value, dict):
+        return _as_str(value.get("name"))
+    return None
+
+
 def _load_record(root: Path, path: Path) -> _ObjectRecord:
     relative = path.relative_to(root).as_posix()
     record = _ObjectRecord(path=path, relative=relative)
@@ -69,9 +79,9 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
     if isinstance(metadata, dict):
         record.uuid = _as_str(metadata.get("uuid"))
         record.author = _as_str(metadata.get("author"))
-        record.organisation = _as_str(metadata.get("organisation")) or _as_str(
-            metadata.get("organization")
-        )
+        record.organisation = _organisation_name(
+            metadata.get("organisation")
+        ) or _organisation_name(metadata.get("organization"))
     return record
 
 

@@ -31,9 +31,9 @@ SCAFFOLD_DIRS = (
     f"{OPENTIDE_DIR}/templates",
     f"{OPENTIDE_DIR}/exports",
     f"{OPENTIDE_DIR}/inflight",
-    "docs/rules",
-    "docs/threats",
-    "docs/objectives",
+    "docs/Rules",
+    "docs/Threats",
+    "docs/Objectives",
     ".github/workflows",
 )
 

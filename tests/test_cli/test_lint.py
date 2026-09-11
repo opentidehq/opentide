@@ -78,7 +78,20 @@ metadata:
     assert result["fixed"] == 1
 
 
-def test_lint_metadata_missing(tmp_path: Path) -> None:
+def test_lint_metadata_accepts_nested_organisation(tmp_path: Path) -> None:
+    body = """\
+name: Simulated Actor
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000001
+  schema: threat::1.0
+  author: SOC
+  organisation:
+    uuid: 00000000-0000-4000-8000-000000000099
+    name: Example Corp
+"""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", body)
+    result = run_lint(tmp_path, checks=[LintCheck.metadata])
+    assert result["count"] == 0
     body = """\
 name: Simulated Actor
 metadata:

@@ -23,6 +23,7 @@ def test_load_settings_defaults() -> None:
         mock_ot.Configurations.Global.Index = global_cfg
         settings = load_settings()
     assert settings.output_dir.name == "docs"
+    assert settings.output_dir.is_absolute()
     assert settings.flavor is DocumentFlavor.github
     assert settings.folder_index_pages is True
     assert settings.uuid_permalinks is True

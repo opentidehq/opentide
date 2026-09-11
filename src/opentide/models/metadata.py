@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from opentide.models.base import TideModel, VocabField
+from opentide.models.base import TideField, TideModel, VocabField
 
 
 class Organisation(TideModel):
@@ -18,8 +18,8 @@ class ObjectMetadata(TideModel):
     uuid: str
     schema_id: str = Field(alias="schema")
     version: str | int
-    created: str
-    modified: str
+    created: str = TideField(schema_extra={"format": "date"})
+    modified: str = TideField(schema_extra={"format": "date"})
     tlp: str = VocabField(True)
     author: str | None = None
     contributors: list[str] | None = None
