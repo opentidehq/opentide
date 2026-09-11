@@ -1,6 +1,6 @@
 ---
 title: opentide setup
-description: Repository scaffolding, platform configs, CI pipelines, env files, MCP, agent skills, and VS Code helpers.
+description: Repository scaffolding, platform configs, CI pipelines, env files, Git hooks, MCP, agent skills, and VS Code helpers.
 ---
 
 # opentide setup
@@ -13,6 +13,7 @@ opentide setup --yes --platform sentinel --ci github
 opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --yes
 opentide setup env --yes
+opentide setup hooks --yes
 ```
 
 The interactive wizard uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
@@ -92,6 +93,17 @@ opentide setup env ./detection-repo --yes
 ```
 
 Copy `.env.example` to `.env` and adjust the path if the working directory is not the detection repository. OpenTide does not load `.env` automatically — export the variables or pass `--repo`.
+
+### setup hooks
+
+Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is a Git repository, copies that script to `.git/hooks/pre-commit` unless a third-party hook is already there.
+
+```bash
+opentide setup hooks --yes
+opentide setup hooks ./detection-repo --yes --no-install
+```
+
+The hook runs `opentide validate --strict`. Set `OPENTIDE_SKIP_HOOKS=1` to bypass it for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the OpenTide hook is appended when missing.
 
 ### setup mcp
 

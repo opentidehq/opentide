@@ -314,6 +314,29 @@ def setup_env_cmd(
     emit_success(cli, run_env_setup(EnvSetupOptions(path=base, yes=yes)))
 
 
+@setup_app.command("hooks")
+def setup_hooks_cmd(
+    ctx: typer.Context,
+    path: str = typer.Argument(".", help="Repository path"),
+    install: bool = typer.Option(
+        True,
+        "--install/--no-install",
+        help="Install .git/hooks/pre-commit when this path is a Git repository",
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+) -> None:
+    """Configure validate-on-commit hooks (pre-commit config + Git hook)."""
+    from opentide.cli.services.setup.hooks import HooksSetupOptions, run_hooks_setup
+
+    cli = get_context(ctx)
+    base = _resolve_setup_path(cli, path)
+    if not _confirm_write(cli, base, "Configure validate-on-commit hooks?", yes=yes):
+        emit_success(cli, {"message": "Hook setup cancelled", "status": "skipped"})
+        return
+    cli.apply_environment()
+    emit_success(cli, run_hooks_setup(HooksSetupOptions(path=base, install=install, yes=yes)))
+
+
 @setup_app.command("mcp")
 def setup_mcp_cmd(
     ctx: typer.Context,
