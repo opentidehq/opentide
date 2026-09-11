@@ -20,7 +20,7 @@ Detection content in OpenTide is a small graph of typed objects. Understanding t
   <Card title="How OpenTide works" href="./how-it-works.md" description="The full lifecycle: author → generate → validate → deploy → document." />
   <Card title="Object model" href="./concepts/object-model.md" description="Threats, objectives, and rules — and how they chain together." />
   <Card title="Platforms" href="./concepts/platforms.md" description="Which SIEM/EDR platforms deploy and which support query validation." />
-  <Card title="0.1.1 release" href="./releases.md" description="Current PyPI patch — pin opentide==0.1.1 (fixes 0.1.0 pip/skills bugs)." />
+  <Card title="0.1.2 release" href="./releases.md" description="Current PyPI patch — pin opentide==0.1.2 (setup, lint, migrate, live skills)." />
 </Cards>
 
 ## Pick your path
@@ -30,7 +30,7 @@ OpenTide serves several audiences. Follow the path that matches you.
 | You are… | Start here | Then |
 |-----------|-----------|------|
 | **New to OpenTide, greenfield repo** | [Installation](./installation.md) → [Repository setup](./repository-setup.md) | [Tutorial](./tutorial.md) → [Detection-as-code](./workflows/detection-as-code.md) |
-| **Checking what shipped** | [Releases](./releases.md) | [0.1.1 on PyPI](https://pypi.org/project/opentide/0.1.1/) |
+| **Checking what shipped** | [Releases](./releases.md) | [0.1.2 on PyPI](https://pypi.org/project/opentide/0.1.2/) |
 | **Evaluating the project** | [Why OpenTide](./why-opentide.md) → [How it works](./how-it-works.md) | [Object model](./concepts/object-model.md) |
 | **Migrating from CoreTide** | [Migration guide](./migration/index.md) | [Configuration](./configuration.md) |
 | **Wiring up an AI agent** | [Agentic setup](./workflows/agentic-setup.md) | [MCP reference](../mcp/index.md) |

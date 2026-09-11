@@ -7,6 +7,39 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.1.2 — 11 September 2026
+
+Patch on 0.1.1. **Upgrade if you scaffold new repos, generate an empty catalogue, or install agent skills.**
+
+**Install**
+
+```bash
+pip install opentide==0.1.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version adds**
+
+- `opentide setup ci` sets `OPENTIDE_REPO_ROOT` in generated GitHub, GitLab, and Azure pipelines.
+- `opentide setup env` writes `.env.example`; `opentide setup hooks` installs validate-on-commit.
+- `opentide lint` for filename slugs and recommended metadata (`--fix`, `--strict`).
+- `opentide migrate objects` for CoreTide `Configurations/` and `Objects/` layouts.
+
+**What this version changes**
+
+- Skills install from the live OpenTideHQ/skills catalogue. GitHub must be reachable — there is no packaged fallback.
+
+**What this version fixes**
+
+- `opentide generate` completes on a freshly scaffolded empty repository.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.1.2/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.2)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.1.1 — 11 September 2026
 
 Patch on the public 0.1.0 beta. **Upgrade if you installed 0.1.0 from PyPI.**

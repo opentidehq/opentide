@@ -10,7 +10,7 @@ description: Install opentide-mcp — included with pip install opentide — and
 The MCP server ships with the base package:
 
 ```bash
-pip install 'opentide==0.1.1'
+pip install 'opentide==0.1.2'
 ```
 
 Console script: **`opentide-mcp`** → `opentide.mcp_server.server:main`

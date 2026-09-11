@@ -24,7 +24,7 @@ Install OpenTide into a virtual environment so its dependencies never collide wi
 ```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install 'opentide==0.1.1'
+pip install 'opentide==0.1.2'
 ```
 
 </Tab>
@@ -33,7 +33,7 @@ pip install 'opentide==0.1.1'
 
 ```bash
 uv venv
-uv pip install 'opentide==0.1.1'
+uv pip install 'opentide==0.1.2'
 ```
 
 </Tab>
@@ -44,11 +44,11 @@ For agent/MCP hosts, remember the path to this environment's `opentide-mcp` bina
 
 ## PyPI install
 
-The latest patch is **0.1.1** (11 September 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest patch is **0.1.2** (11 September 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 ```bash
 pip install opentide              # latest on PyPI
-pip install 'opentide==0.1.1'     # pin the current patch
+pip install 'opentide==0.1.2'     # pin the current patch
 ```
 
 That installs the **DetectionOps engine**: the `opentide` CLI, `opentide-mcp` MCP server, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
