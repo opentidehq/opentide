@@ -40,6 +40,10 @@ def test_bundled_data_via_importlib_resources() -> None:
     assert data_path.is_dir()
     platforms = list((data_path / "configurations" / "platforms").glob("*.toml"))
     assert len(platforms) == 7
+    skills = data_path / "skills"
+    assert (skills / "manifest.json").is_file()
+    assert (skills / "opentide-detection-rule" / "SKILL.md").is_file()
+    assert (skills / "detection-engineering" / "SKILL.md").is_file()
 
 
 def test_get_data_root_default() -> None:

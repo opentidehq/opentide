@@ -186,6 +186,15 @@ def test_fetch_remote_manifest_parses_json(monkeypatch: pytest.MonkeyPatch) -> N
     assert entries[0].slug == "alpha"
 
 
+def test_bundled_skill_dir_rejects_path_segments() -> None:
+    assert registry.bundled_skill_dir("") is None
+    assert registry.bundled_skill_dir("../configurations") is None
+    assert registry.bundled_skill_dir("manifest.json") is None
+    starter = registry.bundled_skill_dir("opentide-detection-rule")
+    assert starter is not None
+    assert (starter / "SKILL.md").is_file()
+
+
 def test_fetch_github_bytes_unauthenticated(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 

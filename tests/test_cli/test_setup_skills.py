@@ -149,6 +149,75 @@ def test_download_skill_uses_manifest_ref(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert ref
 
 
+def test_copy_skill_tree_includes_references(tmp_path: Path) -> None:
+    src = tmp_path / "src-skill"
+    src.mkdir()
+    (src / "SKILL.md").write_text("# skill\n", encoding="utf-8")
+    refs = src / "references"
+    refs.mkdir()
+    (refs / "Best-Practices.md").write_text("# bp\n", encoding="utf-8")
+    (refs / "nested").mkdir()
+    dest = tmp_path / "dest"
+    written = skills_mod._copy_skill_tree(src, dest)
+    assert written == ["SKILL.md", "references/Best-Practices.md"]
+    assert (dest / "references" / "Best-Practices.md").read_text(encoding="utf-8") == "# bp\n"
+    assert not (dest / "references" / "nested").exists()
+
+
+def test_download_skill_falls_back_to_bundled_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills._download_skill",
+        _real_download_skill,
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.fetch_github_bytes",
+        lambda *_, **__: None,
+    )
+    result = run_skills_setup(
+        SkillsSetupOptions(
+            path=tmp_path,
+            targets=[SkillTarget.generic],
+            skill_slugs=["detection-engineering"],
+            yes=True,
+        )
+    )
+    skill_md = tmp_path / ".agents" / "skills" / "detection-engineering" / "SKILL.md"
+    assert skill_md.is_file()
+    assert "detection-engineering" in skill_md.read_text(encoding="utf-8")
+    assert "detection-engineering" in result["skills"]
+
+
+def test_unavailable_skills_empty_for_bundled_starters(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.fetch_github_bytes",
+        lambda *_, **__: None,
+    )
+    missing = skills_mod.unavailable_skills(
+        SkillsSetupOptions(targets=[SkillTarget.generic], yes=True)
+    )
+    assert missing == []
+
+
+def test_unavailable_skills_reports_remote_only_catalogue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.fetch_github_bytes",
+        lambda *_, **__: None,
+    )
+    missing = skills_mod.unavailable_skills(
+        SkillsSetupOptions(targets=[SkillTarget.generic], install_all=True, yes=True)
+    )
+    assert "opentide-detection-rule" not in missing
+    assert "detection-engineering" not in missing
+    assert "kusto-query-language" in missing
+
+
 def test_download_skill_actionable_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
     monkeypatch.setattr(
@@ -164,7 +233,7 @@ def test_download_skill_actionable_error(monkeypatch: pytest.MonkeyPatch, tmp_pa
             SkillsSetupOptions(
                 path=tmp_path,
                 targets=[SkillTarget.generic],
-                skill_slugs=["detection-engineering"],
+                skill_slugs=["kusto-query-language"],
                 yes=True,
             )
         )

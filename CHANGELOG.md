@@ -4,6 +4,14 @@ All notable changes to the `opentide` package are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers come from git tags via hatch-vcs.
 
+## [Unreleased]
+
+### Fixed
+
+- `opentide generate` and `opentide validate` no longer crash with `UnicodeDecodeError` when pip has compiled `__pycache__` next to bundled configuration TOMLs. Nested configuration directories load `*.toml` only.
+- `opentide setup skills discover` and `show` are parsed as subcommands. A positional PATH on the skills group was consuming those names (and prompting for an install).
+- Starter skill install (`opentide-detection-rule`, `detection-engineering`) falls back to the packaged skill trees when GitHub is unreachable.
+
 ## [0.1.0] — 2026-09-09
 
 First public release of the DetectionOps engine as a **PyPI package**. This is a beta (`Development Status :: 4 - Beta`), not a 1.0. The old engine and companion repos are archived; pinned CoreTide submodules still resolve.
@@ -38,4 +46,5 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.0

@@ -127,7 +127,7 @@ opentide setup skills --yes --all --cursor
 opentide setup skills --yes --generic --path /path/to/repo
 ```
 
-Use `--path` / `-C` for the repository root. The positional `[PATH]` remains temporarily as a deprecated compatibility alias.
+Use `--path` / `-C` for the repository root on install, `discover`, and `show`. Do not pass a positional path to `opentide setup skills` itself — Click would treat `discover` / `show` as that path and skip the subcommands.
 
 Installing `--github-copilot` without `--generic` also applies the generic layout; JSON output includes `"also_applied": ["generic"]`.
 
@@ -144,9 +144,9 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | `--name`, `--org`, `--description` | Entrypoint metadata |
 | `--refresh` | Re-fetch `manifest.json` from GitHub (`discover` / `show`) |
 
-Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) first; the packaged manifest is an offline fallback only. Remote fetch and install require network access to the public skills repository.
+Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) first; the packaged manifest is an offline fallback. Starter skills (`opentide-detection-rule`, `detection-engineering`) are also packaged so install works when GitHub is unreachable. Other catalogue slugs still require network access.
 
-The full wizard checks starter skill availability before writing repository files. If the optional remote pack is unavailable, skills are omitted with a warning. The standalone skills command fails without leaving a partial skill tree.
+The full wizard checks skill availability before writing repository files. Starter skills stay available from the package; remote-only slugs are omitted with a warning. The standalone skills command fails without leaving a partial skill tree when a requested slug cannot be fetched and is not packaged.
 
 ### setup vscode (deprecated)
 

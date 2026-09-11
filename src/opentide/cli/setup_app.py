@@ -349,8 +349,7 @@ def _coalesce_setup_path(cli: CliContext, positional: str, option: str) -> Path:
 @skills_app.callback(invoke_without_command=True)
 def setup_skills_install_cmd(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
-    path_flag: str = typer.Option(".", "--path", "-C", help="Repository path"),
+    path: str = typer.Option(".", "--path", "-C", help="Repository path"),
     cursor: bool = typer.Option(False, "--cursor"),
     claude_code: bool = typer.Option(False, "--claude-code"),
     generic: bool = typer.Option(False, "--generic"),
@@ -362,11 +361,15 @@ def setup_skills_install_cmd(
     description: str | None = typer.Option(None, "--description"),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
-    """Install detection engineering agent skills from OpenTideHQ/skills."""
+    """Install detection engineering agent skills from OpenTideHQ/skills.
+
+    The group callback must not take a positional PATH: Click would consume
+    ``discover`` / ``show`` as that argument and skip those subcommands.
+    """
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
-    base = _coalesce_setup_path(cli, path, path_flag)
+    base = _resolve_setup_path(cli, path)
     targets: list[SkillTarget] = []
     if cursor:
         targets.append(SkillTarget.cursor)

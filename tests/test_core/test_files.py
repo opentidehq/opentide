@@ -83,6 +83,54 @@ def test_fetch_configs_skips_non_file_entries_in_nested_dir(tmp_path: Path) -> N
     assert configs["systems"]["sentinel"]["platform"]["identifier"] == "sentinel"
 
 
+def test_fetch_configs_ignores_pycache_and_non_toml(tmp_path: Path) -> None:
+    """Nested dirs used to be read as TOML; pip-compiled .pyc files crash generate/validate."""
+    (tmp_path / "global.toml").write_text('title = "global"\n', encoding="utf-8")
+    platforms = tmp_path / "platforms"
+    platforms.mkdir()
+    (platforms / "sentinel.toml").write_text(
+        '[platform]\nidentifier = "sentinel"\n',
+        encoding="utf-8",
+    )
+    (platforms / "__init__.py").write_text("", encoding="utf-8")
+    (platforms / "README.md").write_text("# not toml\n", encoding="utf-8")
+    pycache = tmp_path / "__pycache__"
+    pycache.mkdir()
+    # CPython 3.13 magic (0xf3) — the byte from the post-release UnicodeDecodeError.
+    (pycache / "__init__.cpython-313.pyc").write_bytes(b"\xf3\r\r\n" + b"\x00" * 16)
+
+    configs = _fetch_configs(tmp_path)
+    assert configs["global"]["title"] == "global"
+    assert configs["platforms"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert "__pycache__" not in configs
+    assert "__init__" not in configs["platforms"]
+    assert "README" not in configs["platforms"]
+
+
+def test_resolve_configurations_survives_compiled_bytecode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import compileall
+    import shutil
+
+    from opentide.core.root import get_data_root
+
+    dest = tmp_path / "data"
+    shutil.copytree(get_data_root(), dest)
+    compileall.compile_dir(str(dest / "configurations"), quiet=1, force=True)
+    assert any((dest / "configurations" / "__pycache__").glob("*.pyc"))
+
+    monkeypatch.setenv("OPENTIDE_DATA_ROOT", str(dest))
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    get_data_root.cache_clear()
+    try:
+        configs = resolve_configurations()
+    finally:
+        get_data_root.cache_clear()
+    assert "global" in configs
+    assert configs.get("platforms") or configs.get("systems")
+
+
 def test_bundled_platform_configs_returns_empty_when_data_root_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
