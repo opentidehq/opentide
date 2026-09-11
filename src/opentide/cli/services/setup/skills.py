@@ -96,7 +96,7 @@ def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str
         bundled = bundled_skill_dir(slug)
         if bundled is None:
             raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
-        logger.warning("skills_download_fallback_bundled", slug=slug, source=source, ref=ref)
+        logger.info("skills_download_fallback_bundled", slug=slug, source=source, ref=ref)
         return _copy_skill_tree(bundled, dest)
     dest.mkdir(parents=True, exist_ok=True)
     written: list[str] = []

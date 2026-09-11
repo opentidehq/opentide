@@ -20,12 +20,27 @@ def _clear_manifest_cache() -> None:
 
 def test_load_manifest_reads_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    infos: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    monkeypatch.setattr(
+        registry.logger,
+        "info",
+        lambda event, **kwargs: infos.append((event, kwargs)),
+    )
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        registry.logger,
+        "warning",
+        lambda event, **kwargs: warnings.append(str(event)),
+    )
     manifest = registry.load_manifest()
     assert manifest.source == "OpenTideHQ/skills"
     assert manifest.ref
     assert manifest.entries
     assert all(entry.slug for entry in manifest.entries)
     assert manifest.manifest_source == "bundled"
+    assert infos
+    assert infos[0][0] == "skills_manifest_remote_unavailable"
+    assert warnings == []
 
 
 def test_load_manifest_remote_first(monkeypatch: pytest.MonkeyPatch) -> None:

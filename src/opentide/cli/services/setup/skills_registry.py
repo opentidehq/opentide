@@ -170,7 +170,7 @@ def load_manifest(*, refresh: bool = False) -> ManifestLoadResult:
         _manifest_cache = (now, result)
         return result
 
-    logger.warning("skills_manifest_remote_unavailable", fallback="bundled")
+    logger.info("skills_manifest_remote_unavailable", fallback="bundled")
     source, ref, entries = _load_bundled_manifest()
     result = ManifestLoadResult(
         source=source,

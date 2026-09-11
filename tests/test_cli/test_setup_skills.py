@@ -190,6 +190,42 @@ def test_download_skill_falls_back_to_bundled_tree(
     assert "detection-engineering" in result["skills"]
 
 
+def test_download_skill_fallback_logs_info_not_warning(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills._download_skill",
+        _real_download_skill,
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.fetch_github_bytes",
+        lambda *_, **__: None,
+    )
+    infos: list[object] = []
+    warnings: list[object] = []
+    monkeypatch.setattr(
+        skills_mod.logger,
+        "info",
+        lambda event, **kwargs: infos.append(event),
+    )
+    monkeypatch.setattr(
+        skills_mod.logger,
+        "warning",
+        lambda event, **kwargs: warnings.append(event),
+    )
+    run_skills_setup(
+        SkillsSetupOptions(
+            path=tmp_path,
+            targets=[SkillTarget.generic],
+            skill_slugs=["detection-engineering"],
+            yes=True,
+        )
+    )
+    assert "skills_download_fallback_bundled" in infos
+    assert warnings == []
+
+
 def test_unavailable_skills_empty_for_bundled_starters(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
     monkeypatch.setattr(

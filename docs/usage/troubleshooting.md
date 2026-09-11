@@ -53,7 +53,7 @@ opentide setup skills discover
 opentide setup skills --generic --yes
 ```
 
-Use `--path` / `-C` for the repository root. Starter skills install from the packaged trees when GitHub is unreachable.
+Use `--path` / `-C` for the repository root. Starter skills install from the packaged trees when GitHub is unreachable. That fallback is expected and logs at info (not warning) when the bundled files are used successfully.
 
 ## Generation
 

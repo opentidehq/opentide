@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- `opentide setup skills` logs bundled-catalogue fallback at info instead of warning when GitHub is unreachable but packaged starter skills install successfully.
+
 ## [0.1.1] — 2026-09-11
 
 Patch for the public 0.1.0 wheel. Upgrade if you installed from PyPI and hit `UnicodeDecodeError` on `validate` / `generate`, or if `opentide setup skills discover` started an install wizard.
