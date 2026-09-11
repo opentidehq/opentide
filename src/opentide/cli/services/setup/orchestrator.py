@@ -38,6 +38,7 @@ from opentide.cli.services.setup.skills import (
     run_skills_setup,
     unavailable_skills,
 )
+from opentide.cli.services.setup.skills_registry import SkillsManifestError
 from opentide.cli.services.setup.vscode import run_vscode_settings, run_vscode_snippets
 from opentide.core.logging.config import get_stdout_console
 
@@ -147,7 +148,7 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
                 )
             )
             steps.append({"step": "skills", **skills_result})
-        except (typer.BadParameter, SkillsDownloadError) as exc:
+        except (typer.BadParameter, SkillsDownloadError, SkillsManifestError) as exc:
             warnings = results["warnings"]
             assert isinstance(warnings, list)
             warnings.append(f"Agent skills skipped: {exc}")
@@ -258,12 +259,17 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
         options.skill_targets = skill_targets_from_keys(keys)
         options.run_skills = True
         preflight = SkillsSetupOptions(path=base_path, targets=options.skill_targets)
-        unavailable = unavailable_skills(preflight)
-        if unavailable:
+        try:
+            unavailable = unavailable_skills(preflight)
+        except SkillsManifestError as exc:
             options.run_skills = False
-            options.warnings.append(
-                "Agent skills unavailable and omitted: " + ", ".join(unavailable)
-            )
+            options.warnings.append(f"Agent skills skipped: {exc}")
+        else:
+            if unavailable:
+                options.run_skills = False
+                options.warnings.append(
+                    "Agent skills unavailable and omitted: " + ", ".join(unavailable)
+                )
 
     _print_setup_plan(options)
     if options.warnings:

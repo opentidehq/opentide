@@ -56,6 +56,9 @@ def test_run_setup_with_ci_and_mcp(tmp_path: Path) -> None:
 
 
 def test_run_setup_skills_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.test_cli.conftest import stub_remote_skills_manifest
+
+    stub_remote_skills_manifest(monkeypatch)
     monkeypatch.setattr(
         "opentide.cli.services.setup.skills._download_skill",
         lambda slug, dest, *, source, ref: (
@@ -106,6 +109,31 @@ def test_run_setup_soft_fails_optional_skills_download(
     )
     assert result["steps"] == []
     assert result["warnings"] == ["Agent skills skipped: network unavailable"]
+
+
+def test_run_setup_soft_fails_when_skills_manifest_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.cli.services.setup.skills_registry import SkillsManifestError
+
+    def fail_skills_setup(options: object) -> None:
+        raise SkillsManifestError("catalogue unreachable")
+
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.run_skills_setup",
+        fail_skills_setup,
+    )
+    result = run_setup(
+        SetupOptions(
+            path=tmp_path,
+            skill_targets=[SkillTarget.generic],
+            yes=True,
+            run_repo=False,
+            run_skills=True,
+        )
+    )
+    assert result["steps"] == []
+    assert result["warnings"] == ["Agent skills skipped: catalogue unreachable"]
 
 
 def test_run_setup_vscode_deprecated(tmp_path: Path) -> None:
