@@ -38,6 +38,7 @@ Or step-by-step:
 ```bash
 opentide setup platforms --sentinel --defender-for-endpoint --yes
 opentide setup ci github --yes
+opentide setup env --yes
 opentide setup mcp --cursor --yes
 opentide setup skills --yes --generic
 ```
@@ -51,6 +52,7 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 | `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore` |
 | `setup platforms` | Enabled `.opentide/configurations/platforms/*.toml` |
 | `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms; sets `OPENTIDE_REPO_ROOT`) |
+| `setup env` | `.env.example` with `OPENTIDE_REPO_ROOT`; ignores `.env` |
 | `setup mcp` | Editor MCP config pointing at `opentide-mcp` |
 | `setup skills` | Agent skills from the live OpenTideHQ/skills catalogue (`discover`, `show`, install) |
 
@@ -70,6 +72,7 @@ detection-repo/
 │   ├── templates/
 │   └── exports/
 ├── .github/workflows/            # when --ci github
+├── .env.example                 # when setup env
 ├── README.md
 └── AGENTS.md                     # when --skills generic
 ```
@@ -84,6 +87,7 @@ Run individual setup steps when you only need one surface:
 opentide setup repo --yes --name SOC --platform sentinel
 opentide setup platforms --sentinel --yes
 opentide setup ci github --yes
+opentide setup env --yes
 opentide setup mcp --cursor --yes
 opentide setup skills discover
 opentide setup skills --yes --generic --name SOC --org "Example Corp"

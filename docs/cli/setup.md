@@ -1,6 +1,6 @@
 ---
 title: opentide setup
-description: Repository scaffolding, platform configs, CI pipelines, MCP, agent skills, and VS Code helpers.
+description: Repository scaffolding, platform configs, CI pipelines, env files, MCP, agent skills, and VS Code helpers.
 ---
 
 # opentide setup
@@ -12,6 +12,7 @@ opentide setup                              # interactive wizard
 opentide setup --yes --platform sentinel --ci github
 opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --yes
+opentide setup env --yes
 ```
 
 The interactive wizard uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
@@ -80,6 +81,17 @@ opentide setup ci gitlab --no-staging
 ```
 
 Positional argument: `github`, `gitlab`, or `azure` (CI **provider**, not Sentinel/Splunk/etc.).
+
+### setup env
+
+Write `.env.example` with `OPENTIDE_REPO_ROOT` (same variable as `--repo`) and add `.env` to `.gitignore` so copied secrets stay uncommitted. Existing files are left in place when they already set the variable; a missing line is appended.
+
+```bash
+opentide setup env --yes
+opentide setup env ./detection-repo --yes
+```
+
+Copy `.env.example` to `.env` and adjust the path if the working directory is not the detection repository. OpenTide does not load `.env` automatically — export the variables or pass `--repo`.
 
 ### setup mcp
 
