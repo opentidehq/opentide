@@ -66,6 +66,10 @@ opentide setup skills --generic --yes
 
 ## Generation
 
+### `opentide generate` crashes with `subschemas` on a new repo
+
+Snippet generation used a legacy `Paths.Core.subschemas` path that the current layout never populates, so `opentide generate` aborted after docs and exports. This is fixed after 0.1.1. An empty catalogue is valid: generate writes empty exports and creates `.vscode` snippets from whatever templates exist.
+
 ### `validate` complains that schemas are missing
 
 Validation checks objects against generated JSON Schemas. If they do not exist yet, generate them first:

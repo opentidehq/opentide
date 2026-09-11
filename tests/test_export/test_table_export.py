@@ -102,6 +102,21 @@ def test_create_entry_threat(monkeypatch) -> None:
     assert entry.parents == "parent-1"
 
 
+def test_create_dataset_treats_empty_index_as_success(monkeypatch, caplog) -> None:
+    _setup_opentide_for_table(monkeypatch)
+    exporter = TableExporter()
+    exporter.object_scope = ["threat", "objective", "rule"]
+    with (
+        patch("opentide.export.table_export.childs", return_value=[]),
+        patch("opentide.export.table_export.parents", return_value=[]),
+        patch("opentide.export.table_export.get_vocab_entry", return_value={"name": "Evil Actor"}),
+    ):
+        dataset = exporter._create_dataset()
+    names = {entry.name for entry in dataset}
+    assert names == {"Threat One", "Rule One"}
+    assert "object_index_not_found" not in caplog.text
+
+
 def test_create_dataset_skips_missing_index(monkeypatch) -> None:
     _setup_opentide_for_table(monkeypatch)
     exporter = TableExporter()

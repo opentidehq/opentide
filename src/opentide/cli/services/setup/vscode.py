@@ -5,8 +5,10 @@ Superseded by the OpenTide VS Code extension (bundled language server and templa
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
+import sys
 import warnings
 from pathlib import Path
 
@@ -95,16 +97,21 @@ def run_vscode_snippets(target: Path) -> str | None:
         return None
 
     previous_root = os.environ.get("OPENTIDE_REPO_ROOT")
+    previous_workspace = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
     get_repo_root.cache_clear()
     os.environ["OPENTIDE_REPO_ROOT"] = str(resolved)
+    os.environ["OPENTIDE_TIDE_WORKSPACE"] = str(resolved)
+    from opentide.core.index_manager import IndexManager
+
+    IndexManager._cache = None
     snippets_rel = snippet_file_rel(workspace=resolved)
     dest = resolved / snippets_rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     cwd_previous = Path.cwd()
+    vscode_snippets = None
     try:
         os.chdir(resolved)
-        from opentide.generation import vscode_snippets
-
+        vscode_snippets = importlib.import_module("opentide.generation.vscode_snippets")
         vscode_snippets.SNIPPETS_PATH = snippets_rel
         vscode_snippets.run()
     except FileNotFoundError as exc:
@@ -112,11 +119,19 @@ def run_vscode_snippets(target: Path) -> str | None:
         return None
     finally:
         os.chdir(cwd_previous)
+        module = vscode_snippets or sys.modules.get("opentide.generation.vscode_snippets")
+        if module is not None and hasattr(module, "SNIPPETS_PATH"):
+            module.SNIPPETS_PATH = None
         get_repo_root.cache_clear()
+        IndexManager._cache = None
         if previous_root is None:
             os.environ.pop("OPENTIDE_REPO_ROOT", None)
         else:
             os.environ["OPENTIDE_REPO_ROOT"] = previous_root
+        if previous_workspace is None:
+            os.environ.pop("OPENTIDE_TIDE_WORKSPACE", None)
+        else:
+            os.environ["OPENTIDE_TIDE_WORKSPACE"] = previous_workspace
 
     return snippets_rel if dest.is_file() else None
 

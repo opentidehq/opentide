@@ -32,6 +32,8 @@ When run without a subcommand, phases execute in this order:
 
 `extract` is **not** part of the default run — it calls live platform APIs and writes `Imported/` in the working directory. Use `opentide generate extract` explicitly when importing rules.
 
+A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts, and snippet generation skips templates that have not been produced yet instead of failing.
+
 ## generate docs
 
 The only supported entry point for markdown documentation.
