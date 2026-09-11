@@ -7,9 +7,7 @@ from typing import Any
 __all__ = ["declare"]
 
 
-def __getattr__(name: str) -> Any:
-    if name == "declare":
-        from opentide.platforms.sentinel.deployer import declare
+def declare(*args: Any, **kwargs: Any) -> Any:
+    from opentide.platforms.sentinel.deployer import declare as _declare
 
-        return declare
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return _declare(*args, **kwargs)
