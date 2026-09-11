@@ -19,6 +19,7 @@ Run `opentide --help` for the live command tree.
 | Command | Purpose |
 |---------|---------|
 | [`setup`](./setup.md) | Onboard detection repositories (repo, platforms, CI, MCP, skills) |
+| [`migrate`](./migrate.md) | Move legacy `Configurations/` and `Objects/` into the greenfield layout |
 | [`generate`](./generate.md) | Documentation, exports, framework artifacts, optional platform import |
 | [`validate`](./validate.md) | Object and query validation |
 | [`lint`](./lint.md) | Catalogue hygiene (filename slugs, recommended metadata) |
@@ -27,7 +28,7 @@ Run `opentide --help` for the live command tree.
 
 <Callout type="info">
 
-Top-level `document`, `export`, and `extract` remain as **hidden deprecation shims** for one release. They log a warning and delegate to `opentide generate docs`, `generate exports`, and `generate extract`. `mutate` and `migrate` were removed — use `opentide deploy` for promotion and the [CoreTide migration prompt](../usage/migration/prompt.md) for legacy repos.
+Top-level `document`, `export`, and `extract` remain as **hidden deprecation shims** for one release. They log a warning and delegate to `opentide generate docs`, `generate exports`, and `generate extract`. `mutate` was removed — use `opentide deploy` for promotion. Layout-only `opentide migrate objects` moves `Configurations/` and `Objects/` into the greenfield tree; CoreTide submodule replacement still uses the [migration prompt](../usage/migration/prompt.md).
 
 </Callout>
 
