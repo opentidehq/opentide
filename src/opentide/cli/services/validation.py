@@ -210,10 +210,7 @@ def validate_query_platform(
     try:
         deployment_list = make_deploy_plan(deployment_plan, wide_scope=wide, keep_deprecated=False)
     except Exception as exc:
-        message = str(exc).strip() or (
-            "Cannot compile a git-diff deployment plan outside CI. "
-            "Use --plan FULL (the default) to include the local rule tree."
-        )
+        message = str(exc).strip() or (f"{type(exc).__name__} while compiling the deployment plan")
         return {
             "platform": platform,
             "status": "failed",

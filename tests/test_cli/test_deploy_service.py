@@ -174,3 +174,75 @@ def test_run_deploy_invalid_plan_returns_failed(monkeypatch: pytest.MonkeyPatch)
     assert result["status"] == "failed"
     assert "Unsupported deployment plan" in str(result["message"])
     assert result["_exit_code"] == 1
+
+
+def test_run_deploy_dry_run_skips_production_promotion() -> None:
+    from opentide.models.deployment_enums import DeploymentStrategy
+
+    ctx = CliContext(json_output=True)
+    with (
+        patch("opentide.core.registry.OpenTide.reload"),
+        patch(
+            "opentide.deployment.DeploymentStrategy.load_from_environment",
+            return_value=DeploymentStrategy.PRODUCTION,
+        ),
+        patch("opentide.deployment.modified_mdr_files") as mock_modified,
+        patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
+        patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+        patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
+        patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
+    ):
+        mock_tide.return_value.mdr = {"sentinel": MagicMock()}
+        result = deploy_service.run_deploy(ctx, dry_run=True)
+    mock_modified.assert_not_called()
+    mock_promote.assert_not_called()
+    assert result["dry_run"] is True
+
+
+def test_run_deploy_local_debug_skips_production_promotion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from opentide.models.deployment_enums import DeploymentStrategy
+
+    ctx = CliContext(json_output=True)
+    monkeypatch.setattr(
+        CIEnvironment,
+        "_check_ci_environment",
+        lambda self: CIEnvironment.CIPlatforms.LocalDebug,
+    )
+    with (
+        patch("opentide.core.registry.OpenTide.reload"),
+        patch(
+            "opentide.deployment.DeploymentStrategy.load_from_environment",
+            return_value=DeploymentStrategy.PRODUCTION,
+        ),
+        patch("opentide.deployment.modified_mdr_files") as mock_modified,
+        patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
+        patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+        patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
+    ):
+        mock_tide.return_value.mdr = {"sentinel": MagicMock()}
+        result = deploy_service.run_deploy(ctx, dry_run=False)
+    mock_modified.assert_not_called()
+    mock_promote.assert_not_called()
+    assert result["status"] == "completed"
+
+
+def test_run_deploy_empty_exception_does_not_advise_full_plan() -> None:
+    ctx = CliContext(json_output=True)
+    with (
+        patch("opentide.core.registry.OpenTide.reload"),
+        patch(
+            "opentide.deployment.DeploymentStrategy.load_from_environment",
+            return_value=MagicMock(),
+        ),
+        patch("opentide.deployment.make_deploy_plan", side_effect=KeyError()),
+    ):
+        result = deploy_service.run_deploy(ctx, dry_run=True)
+    assert result["status"] == "failed"
+    assert "FULL" not in str(result["message"])
+    assert "KeyError" in str(result["message"])

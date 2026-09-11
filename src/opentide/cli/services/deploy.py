@@ -45,7 +45,13 @@ def run_deploy(
     OpenTide.reload()
     try:
         deployment_plan = DeploymentStrategy.load_from_environment()
-        if deployment_plan is DeploymentStrategy.PRODUCTION and (not skip_promotion):
+        local_debug = CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug
+        if (
+            deployment_plan is DeploymentStrategy.PRODUCTION
+            and not skip_promotion
+            and not dry_run
+            and not local_debug
+        ):
             pre_deployment = modified_mdr_files(deployment_plan)
             emit_section("Pre-deployment Routine")
             PromoteMDR().promote(pre_deployment)
@@ -55,10 +61,7 @@ def run_deploy(
     except ValueError as exc:
         return {"status": "failed", "message": str(exc), "_exit_code": 1}
     except Exception as exc:
-        message = str(exc).strip() or (
-            "Cannot compile a git-diff deployment plan outside CI. "
-            "Use --plan FULL (the default) to include the local rule tree."
-        )
+        message = str(exc).strip() or (f"{type(exc).__name__} while compiling the deployment plan")
         return {"status": "failed", "message": message, "_exit_code": 1}
     if platform is not None:
         platform_key = platform.value
