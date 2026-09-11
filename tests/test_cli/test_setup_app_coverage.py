@@ -113,7 +113,7 @@ def test_setup_scripted_full_flags(tmp_path: Path, mock_skill_download) -> None:
 
     skills_result = runner.invoke(
         app,
-        ["--json", "setup", "skills", "--yes", "--generic", str(tmp_path)],
+        ["--json", "setup", "skills", "--yes", "--generic", "--path", str(tmp_path)],
     )
     assert skills_result.exit_code == 0
     assert (tmp_path / "AGENTS.md").is_file()
@@ -200,6 +200,7 @@ def test_setup_skills_all_targets(tmp_path: Path, mock_skill_download) -> None:
             "SecOps",
             "--description",
             "Detections",
+            "--path",
             str(tmp_path),
         ],
     )
@@ -216,9 +217,20 @@ def test_setup_skills_interactive(tmp_path: Path, monkeypatch) -> None:
         "run_interactive_skills_setup",
         lambda base: {"message": "skills-wizard", "files": []},
     )
-    result = runner.invoke(app, ["--json", "setup", "skills", str(tmp_path)])
+    result = runner.invoke(app, ["--json", "setup", "skills", "--path", str(tmp_path)])
     assert result.exit_code == 0
     assert "skills-wizard" in result.stdout
+
+
+def test_setup_skills_confirm_cancel(tmp_path: Path, monkeypatch, mock_skill_download) -> None:
+    monkeypatch.setattr(setup_app_module, "_confirm_write", lambda *args, **kwargs: False)
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "skills", "--generic", "--path", str(tmp_path)],
+    )
+    assert result.exit_code == 0
+    assert "skipped" in result.stdout
+    assert not (tmp_path / "AGENTS.md").exists()
 
 
 def test_setup_vscode_flags(tmp_path: Path) -> None:

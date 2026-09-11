@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 
 from typer.testing import CliRunner
 
@@ -65,10 +66,134 @@ def test_setup_mcp_yes_requires_explicit_host(tmp_path) -> None:
     assert not (tmp_path / ".vscode" / "mcp.json").exists()
 
 
+def test_setup_skills_help_does_not_bind_positional_path() -> None:
+    result = runner.invoke(app, ["setup", "skills", "--help"])
+    assert result.exit_code == 0
+    assert "discover" in result.stdout
+    assert "show" in result.stdout
+    assert "[PATH] COMMAND" not in result.stdout
+
+
+def test_setup_skills_discover_is_subcommand_not_path(tmp_path, monkeypatch) -> None:
+    from opentide.cli.services.setup import skills_registry as registry
+
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    registry.clear_manifest_cache()
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "skills", "discover", "--path", str(tmp_path)],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert "DEPRECATED" not in result.output
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["count"] >= 1
+    slugs = {item["slug"] for item in payload["skills"]}
+    assert "opentide-detection-rule" in slugs
+    assert "detection-engineering" in slugs
+
+
+def test_setup_skills_discover_human_table(tmp_path, monkeypatch) -> None:
+    from opentide.cli.services.setup import skills_registry as registry
+
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    registry.clear_manifest_cache()
+    result = runner.invoke(
+        app,
+        ["setup", "skills", "discover", "--path", str(tmp_path)],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    combined = result.stdout + result.stderr
+    assert "opentide-detection-rule" in combined or "OpenTide Skills" in combined
+    assert "DEPRECATED" not in combined
+
+
+def test_setup_skills_discover_positional_path_is_deprecated(tmp_path, monkeypatch) -> None:
+    from opentide.cli.services.setup import skills_registry as registry
+
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    registry.clear_manifest_cache()
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "skills", "discover", str(tmp_path)],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert "DEPRECATED" in result.output
+
+
+def test_setup_skills_show_is_subcommand(tmp_path, monkeypatch) -> None:
+    from opentide.cli.services.setup import skills_registry as registry
+
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    registry.clear_manifest_cache()
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "skills",
+            "show",
+            "opentide-detection-rule",
+            "--path",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert "DEPRECATED" not in result.output
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["skill"]["slug"] == "opentide-detection-rule"
+
+
+def test_setup_skills_show_human_and_missing(tmp_path, monkeypatch) -> None:
+    from opentide.cli.services.setup import skills_registry as registry
+
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    registry.clear_manifest_cache()
+    found = runner.invoke(
+        app,
+        [
+            "setup",
+            "skills",
+            "show",
+            "opentide-detection-rule",
+            "--path",
+            str(tmp_path),
+        ],
+    )
+    assert found.exit_code == 0, found.stdout + found.stderr
+    assert "opentide-detection-rule" in found.stdout
+    assert "install" in found.stdout.lower()
+
+    missing = runner.invoke(
+        app,
+        ["setup", "skills", "show", "no-such-skill-xyz", "--path", str(tmp_path)],
+    )
+    assert missing.exit_code == 1
+    assert "skill not found" in (missing.stdout + missing.stderr).lower()
+
+    missing_json = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "skills",
+            "show",
+            "no-such-skill-xyz",
+            "--path",
+            str(tmp_path),
+        ],
+    )
+    assert missing_json.exit_code == 1
+    payload = json.loads(missing_json.stdout)
+    assert payload["ok"] is False
+    assert "error" in payload
+
+
 def test_setup_skills_yes_requires_explicit_target(tmp_path, mock_skill_download) -> None:
     result = runner.invoke(
         app,
-        ["--json", "setup", "skills", "--yes", str(tmp_path)],
+        ["--json", "setup", "skills", "--yes", "--path", str(tmp_path)],
     )
     assert result.exit_code == 2
     assert not (tmp_path / "AGENTS.md").exists()

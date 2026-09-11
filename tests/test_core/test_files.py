@@ -83,6 +83,118 @@ def test_fetch_configs_skips_non_file_entries_in_nested_dir(tmp_path: Path) -> N
     assert configs["systems"]["sentinel"]["platform"]["identifier"] == "sentinel"
 
 
+def test_fetch_configs_ignores_pycache_with_non_utf8_bytecode(tmp_path: Path) -> None:
+    """Top-level ``__pycache__`` must not be read as TOML (PR #150).
+
+    Bundled config packages ship ``__init__.py``. pip compileall writes
+    ``__pycache__/*.pyc`` whose 3.13+ magic (``f3 0d 0d 0a``) is not UTF-8.
+    """
+    (tmp_path / "global.toml").write_text('title = "global"\n', encoding="utf-8")
+    pycache = tmp_path / "__pycache__"
+    pycache.mkdir()
+    (pycache / "__init__.cpython-313.pyc").write_bytes(b"\xf3\r\r\n\x00\x00\x00\x00")
+
+    configs = _fetch_configs(tmp_path)
+
+    assert configs["global"]["title"] == "global"
+    assert "__pycache__" not in configs
+
+
+def test_fetch_configs_ignores_non_toml_files_in_nested_dir(tmp_path: Path) -> None:
+    """Nested config dirs may contain ``__init__.py`` / README that are not TOML."""
+    platforms = tmp_path / "platforms"
+    platforms.mkdir()
+    (platforms / "__init__.py").write_text("\n", encoding="utf-8")
+    (platforms / "README.md").write_text("# not toml\n", encoding="utf-8")
+    (platforms / "sentinel.toml").write_text(
+        '[platform]\nidentifier = "sentinel"\n',
+        encoding="utf-8",
+    )
+
+    configs = _fetch_configs(tmp_path)
+
+    assert configs["platforms"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert "__init__" not in configs["platforms"]
+    assert "README" not in configs["platforms"]
+
+
+def test_fetch_configs_skips_nested_directory_named_toml(tmp_path: Path) -> None:
+    """``Path.glob('*.toml')`` can match a directory; only files are loaded."""
+    platforms = tmp_path / "platforms"
+    platforms.mkdir()
+    (platforms / "decoy.toml").mkdir()
+    (platforms / "sentinel.toml").write_text(
+        '[platform]\nidentifier = "sentinel"\n',
+        encoding="utf-8",
+    )
+
+    configs = _fetch_configs(tmp_path)
+
+    assert configs["platforms"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert "decoy" not in configs["platforms"]
+
+
+def test_fetch_configs_skips_hidden_dirs_and_top_level_bytecode(tmp_path: Path) -> None:
+    (tmp_path / "global.toml").write_text('title = "global"\n', encoding="utf-8")
+    hidden = tmp_path / ".secret"
+    hidden.mkdir()
+    (hidden / "hidden.toml").write_text('title = "hidden"\n', encoding="utf-8")
+    dunder = tmp_path / "__private__"
+    dunder.mkdir()
+    (dunder / "private.toml").write_text('title = "private"\n', encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("not toml\n", encoding="utf-8")
+    (tmp_path / "stray.pyc").write_bytes(b"\xf3\r\r\n\x00")
+
+    configs = _fetch_configs(tmp_path)
+
+    assert configs["global"]["title"] == "global"
+    assert ".secret" not in configs
+    assert "__private__" not in configs
+    assert "notes" not in configs
+    assert "stray" not in configs
+
+
+def test_fetch_configs_ignores_nested_pycache_bytecode(tmp_path: Path) -> None:
+    platforms = tmp_path / "platforms"
+    platforms.mkdir()
+    (platforms / "sentinel.toml").write_text(
+        '[platform]\nidentifier = "sentinel"\n',
+        encoding="utf-8",
+    )
+    pycache = platforms / "__pycache__"
+    pycache.mkdir()
+    (pycache / "__init__.cpython-313.pyc").write_bytes(b"\xf3\r\r\n\x00\x00\x00\x00")
+
+    configs = _fetch_configs(tmp_path)
+
+    assert configs["platforms"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert "__pycache__" not in configs["platforms"]
+
+
+def test_resolve_configurations_survives_compiled_bytecode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import compileall
+    import shutil
+
+    from opentide.core.root import get_data_root
+
+    dest = tmp_path / "data"
+    shutil.copytree(get_data_root(), dest)
+    compileall.compile_dir(str(dest / "configurations"), quiet=1, force=True)
+    assert any((dest / "configurations" / "__pycache__").glob("*.pyc"))
+
+    monkeypatch.setenv("OPENTIDE_DATA_ROOT", str(dest))
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    get_data_root.cache_clear()
+    try:
+        configs = resolve_configurations()
+    finally:
+        get_data_root.cache_clear()
+    assert "global" in configs
+    assert configs.get("platforms") or configs.get("systems")
+
+
 def test_bundled_platform_configs_returns_empty_when_data_root_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

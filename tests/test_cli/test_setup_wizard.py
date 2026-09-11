@@ -101,6 +101,22 @@ def test_run_interactive_skills_setup(monkeypatch, tmp_path: Path) -> None:
     assert "opentide-detection-rule" in result["skills"]
 
 
+def test_run_interactive_skills_setup_can_cancel(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("opentide.cli.services.setup.skills.require_interactive", lambda: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.ask_checkbox",
+        lambda *args, **kwargs: ["generic"],
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.ask_confirm", lambda *args, **kwargs: False
+    )
+    monkeypatch.setattr("opentide.cli.services.setup.skills.unavailable_skills", lambda options: [])
+    result = run_interactive_skills_setup(tmp_path)
+    assert result["status"] == "skipped"
+    assert result["message"] == "Agent skills setup cancelled"
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
 def test_run_interactive_skills_setup_reports_unavailable(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("opentide.cli.services.setup.skills.require_interactive", lambda: None)
     monkeypatch.setattr(

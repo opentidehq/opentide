@@ -26,10 +26,34 @@ See [Installation → environment variables](./installation.md#environment-varia
 The CLI ships as an extra. Install it:
 
 ```bash
-pip install 'opentide==0.1.0'
+pip install 'opentide==0.1.1'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at the venv's `opentide-mcp` — see [MCP configuration](../mcp/configuration.md).
+
+### `UnicodeDecodeError` reading bundled configurations after pip install
+
+`0.1.0` loaded every file under nested configuration directories as UTF-8 TOML. A pip install compiles `opentide/data/configurations/__init__.py` to `__pycache__/*.pyc`. Python 3.13+ bytecode starts with `0xf3`, which is not valid UTF-8, so `validate` and `generate` crashed.
+
+Upgrade:
+
+```bash
+pip install 'opentide==0.1.1'
+```
+
+`0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
+
+### `setup skills discover` starts an install wizard or reports skills unavailable
+
+`0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
+
+```bash
+pip install 'opentide==0.1.1'
+opentide setup skills discover
+opentide setup skills --generic --yes
+```
+
+Use `--path` / `-C` for the repository root. Starter skills install from the packaged trees when GitHub is unreachable.
 
 ## Generation
 

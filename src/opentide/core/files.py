@@ -35,28 +35,39 @@ def _load_toml(path: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
+def _is_skipped_config_dir(name: str) -> bool:
+    """Skip hidden and dunder names (``__pycache__``, ``.DS_Store``, …)."""
+    return name.startswith(".") or name.startswith("__")
+
+
+def _load_nested_configs(directory: Path) -> dict[str, dict]:
+    """Load ``*.toml`` files from one configuration subdirectory."""
+    nested: dict[str, dict] = {}
+    for toml_path in sorted(directory.glob("*.toml")):
+        if not toml_path.is_file():
+            continue
+        configuration = _load_toml(toml_path)
+        key = (
+            configuration.get("platform", {}).get("identifier")
+            or configuration.get("tide", {}).get("identifier")
+            or toml_path.stem
+        )
+        nested[str(key)] = configuration
+    return nested
+
+
 def _fetch_configs(configuration_path: Path) -> dict[str, dict]:
     config_index: dict[str, dict] = {}
     if not configuration_path.is_dir():
         return config_index
 
-    for entry in os.listdir(configuration_path):
-        entry_path = configuration_path / entry
-        if entry_path.is_file() and entry.endswith(".toml"):
-            config_index[entry.removesuffix(".toml")] = _load_toml(entry_path)
-        elif entry_path.is_dir():
-            config_index[entry] = {}
-            for config_name in os.listdir(entry_path):
-                config_path = entry_path / config_name
-                if not config_path.is_file():
-                    continue
-                configuration = _load_toml(config_path)
-                key = (
-                    configuration.get("platform", {}).get("identifier")
-                    or configuration.get("tide", {}).get("identifier")
-                    or config_name.removesuffix(".toml")
-                )
-                config_index[entry][key] = configuration
+    for entry_path in sorted(configuration_path.iterdir(), key=lambda path: path.name):
+        if entry_path.is_file() and entry_path.name.endswith(".toml"):
+            config_index[entry_path.name.removesuffix(".toml")] = _load_toml(entry_path)
+            continue
+        if not entry_path.is_dir() or _is_skipped_config_dir(entry_path.name):
+            continue
+        config_index[entry_path.name] = _load_nested_configs(entry_path)
 
     return config_index
 

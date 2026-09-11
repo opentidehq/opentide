@@ -192,6 +192,16 @@ def known_skill_slugs() -> set[str]:
     return known
 
 
+def bundled_skill_dir(slug: str) -> Path | None:
+    """Return the packaged skill tree for *slug*, or ``None`` if absent."""
+    if not slug or Path(slug).name != slug:
+        return None
+    path = _MANIFEST_PATH.parent / slug
+    if path.is_dir() and (path / "SKILL.md").is_file():
+        return path
+    return None
+
+
 def _installed_slugs(repo: Path) -> set[str]:
     skills_dir = repo / ".agents" / "skills"
     if not skills_dir.is_dir():

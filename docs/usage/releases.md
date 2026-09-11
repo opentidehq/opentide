@@ -7,6 +7,30 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.1.1 — 11 September 2026
+
+Patch on the public 0.1.0 beta. **Upgrade if you installed 0.1.0 from PyPI.**
+
+**Install**
+
+```bash
+pip install opentide==0.1.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version fixes**
+
+- `opentide generate` and `opentide validate` no longer crash with `UnicodeDecodeError` after pip compiles `__pycache__` next to bundled configuration TOMLs.
+- `opentide setup skills discover` and `show` run as subcommands instead of being treated as a repository path.
+- Starter skills (`opentide-detection-rule`, `detection-engineering`) install from the packaged trees when GitHub is unreachable.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.1.1/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.1)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.1.0 — 9 September 2026
 
 First public beta. Not 1.0.
