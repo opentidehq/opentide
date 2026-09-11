@@ -143,6 +143,9 @@ def render_gitlab(options: CiRenderOptions) -> str:
 
     core = textwrap.dedent(
         f"""\
+        variables:
+          OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
+
         stages:
         {stage_lines}
 

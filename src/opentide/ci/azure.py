@@ -127,6 +127,9 @@ def render_azure(options: CiRenderOptions) -> str:
             include:
               - {branch}
 
+        variables:
+          OPENTIDE_REPO_ROOT: $(Build.SourcesDirectory)
+
         stages:
           - stage: Validate
             displayName: Validate

@@ -35,6 +35,8 @@ def test_run_ci_setup(tmp_path: Path, ci: CiPlatform, expected: str) -> None:
     assert (tmp_path / expected).is_file()
     assert expected in result["files"]
     assert result["platforms"] == ["sentinel"]
+    rendered = (tmp_path / expected).read_text(encoding="utf-8")
+    assert "OPENTIDE_REPO_ROOT" in rendered
 
 
 def test_run_ci_setup_skips_none(tmp_path: Path) -> None:

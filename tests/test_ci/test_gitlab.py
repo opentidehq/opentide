@@ -6,6 +6,17 @@ from opentide.ci.gitlab import render_gitlab
 from opentide.ci.models import CiRenderOptions
 
 
+def test_render_gitlab_sets_repo_root_without_inflight() -> None:
+    options = CiRenderOptions(ci="gitlab", inflight=False)
+    content = render_gitlab(options)
+    assert "variables:" in content
+    assert "OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR" in content
+    preamble = content.split("\nstages:", 1)[0]
+    assert "OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR" in preamble
+    assert "validate:" in content
+    assert "generate:" in content
+
+
 def test_render_gitlab_includes_stages() -> None:
     options = CiRenderOptions(ci="gitlab", platforms=["sentinel"])
     content = render_gitlab(options)

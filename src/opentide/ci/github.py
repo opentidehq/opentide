@@ -272,6 +272,9 @@ def render_github(options: CiRenderOptions) -> str:
             branches:
               - {branch}
 
+        env:
+          OPENTIDE_REPO_ROOT: ${{{{ github.workspace }}}}
+
         {permissions}{concurrency}jobs:
         """
     )

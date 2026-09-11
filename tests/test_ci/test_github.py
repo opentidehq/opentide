@@ -68,6 +68,19 @@ def test_render_github_promotion_job_omitted_when_no_steps() -> None:
     assert "opentide mutate promote" not in workflow
 
 
+def test_render_github_sets_repo_root_without_optional_jobs() -> None:
+    """Every generated workflow must export OPENTIDE_REPO_ROOT, even without explorer/inflight."""
+    options = CiRenderOptions(ci="github", inflight=False, explorer_pages=False)
+    workflow = render_github(options)
+    preamble, _, jobs = workflow.partition("\njobs:")
+    assert "OPENTIDE_REPO_ROOT: ${{ github.workspace }}" in preamble
+    assert "OPENTIDE_REPO_ROOT" not in jobs
+    assert "validate:" in workflow
+    assert "generate:" in workflow
+    assert "deploy_production:" in workflow
+    assert "document:" in workflow
+
+
 def test_render_github_header_comment() -> None:
     options = CiRenderOptions(ci="github")
     workflow = render_github(options)
