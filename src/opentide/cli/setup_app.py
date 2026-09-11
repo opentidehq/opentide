@@ -33,7 +33,11 @@ from opentide.cli.services.setup.skills import (
     run_interactive_skills_setup,
     run_skills_setup,
 )
-from opentide.cli.services.setup.skills_registry import discover_skills, show_skill
+from opentide.cli.services.setup.skills_registry import (
+    SkillsManifestError,
+    discover_skills,
+    show_skill,
+)
 from opentide.cli.services.setup.vscode import (
     run_vscode_settings,
     run_vscode_snippets,
@@ -405,12 +409,12 @@ def setup_skills_install_cmd(
         cli.apply_environment()
         try:
             result = run_skills_setup(options)
-        except SkillsDownloadError as exc:
+        except (SkillsDownloadError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     else:
         try:
             result = run_interactive_skills_setup(base)
-        except (InteractiveRequiredError, RuntimeError) as exc:
+        except (InteractiveRequiredError, RuntimeError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     emit_success(cli, result)
 
@@ -427,7 +431,10 @@ def setup_skills_discover_cmd(
     """List skills from the OpenTideHQ/skills catalogue."""
     cli = get_context(ctx)
     base = _coalesce_setup_path(cli, path, path_flag)
-    payload = discover_skills(base, query=query, installed_only=installed, refresh=refresh)
+    try:
+        payload = discover_skills(base, query=query, installed_only=installed, refresh=refresh)
+    except SkillsManifestError as exc:
+        emit_error(cli, str(exc))
     if cli.json_output:
         emit_success(cli, payload)
         return
@@ -457,7 +464,10 @@ def setup_skills_show_cmd(
     """Show details for one skill from the catalogue."""
     cli = get_context(ctx)
     base = _resolve_setup_path(cli, path)
-    payload = show_skill(base, name, refresh=refresh)
+    try:
+        payload = show_skill(base, name, refresh=refresh)
+    except SkillsManifestError as exc:
+        emit_error(cli, str(exc))
     if cli.json_output:
         if "error" in payload:
             emit(cli, {"ok": False, **payload}, exit_code=1)

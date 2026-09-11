@@ -3,7 +3,7 @@
 Unit tests copy bundled data and compile it in-process. This job builds a real
 wheel, installs it into a fresh venv (so pip/compileall write ``__pycache__``
 under site-packages), then runs the same commands users hit: ``validate``,
-``generate``, ``setup skills discover``, and offline starter-skill install.
+``generate``, and ``setup skills discover`` against the live catalogue.
 """
 
 from __future__ import annotations
@@ -69,8 +69,9 @@ def test_pip_installed_wheel_validate_generate_and_skills(
         names = archive.namelist()
     assert any(name.endswith("data/configurations/__init__.py") for name in names)
     assert any(name.endswith("data/configurations/platforms/__init__.py") for name in names)
-    assert any(name.endswith("data/skills/opentide-detection-rule/SKILL.md") for name in names)
-    assert any(name.endswith("data/skills/detection-engineering/SKILL.md") for name in names)
+    assert not any(
+        "/data/skills/" in name or name.endswith("data/skills/manifest.json") for name in names
+    )
 
     venv = _run([uv, "venv", str(env_dir)], timeout=60)
     assert venv.returncode == 0, venv.stdout + venv.stderr
@@ -138,6 +139,7 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     slugs = {item["slug"] for item in discover_payload["skills"]}
     assert "opentide-detection-rule" in slugs
     assert "detection-engineering" in slugs
+    assert discover_payload["manifest_source"] == "remote"
     assert "DEPRECATED" not in discover.stdout + discover.stderr
 
     install_skills = _run(

@@ -1,4 +1,4 @@
-"""Skills catalogue discovery from remote manifest with bundled offline fallback."""
+"""Skills catalogue discovery from the live OpenTideHQ/skills manifest."""
 
 from __future__ import annotations
 
@@ -12,15 +12,15 @@ from typing import Any
 
 import structlog
 
-from opentide.package.paths import bundled_data_root
-
 logger = structlog.get_logger("opentide.cli.services.setup.skills_registry")
 
-_MANIFEST_PATH = bundled_data_root() / "skills" / "manifest.json"
 _DEFAULT_SOURCE = "OpenTideHQ/skills"
 _DEFAULT_REF = "main"
 _CACHE_TTL_SECONDS = 30.0
-_manifest_cache: tuple[float, ManifestLoadResult] | None = None
+
+
+class SkillsManifestError(RuntimeError):
+    """Raised when the live OpenTideHQ/skills catalogue cannot be fetched."""
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,9 @@ class ManifestLoadResult:
     entries: list[SkillEntry]
     manifest_source: str
     manifest_refreshed: bool
+
+
+_manifest_cache: tuple[float, ManifestLoadResult] | None = None
 
 
 def fetch_github_bytes(
@@ -93,24 +96,14 @@ def _parse_manifest(data: dict[str, Any]) -> tuple[str, str, list[SkillEntry]]:
     return source, ref, skills
 
 
-def _bundled_ref_hint() -> str:
-    if not _MANIFEST_PATH.is_file():
-        return _DEFAULT_REF
-    data = json.loads(_MANIFEST_PATH.read_text(encoding="utf-8"))
-    return str(data.get("ref", _DEFAULT_REF))
+def _manifest_unavailable(*, ref: str = _DEFAULT_REF) -> SkillsManifestError:
+    return SkillsManifestError(
+        f"Could not fetch skills catalogue from {_DEFAULT_SOURCE}@{ref}. "
+        "Check network access and that the skills repository is publicly reachable."
+    )
 
 
-def _load_bundled_manifest() -> tuple[str, str, list[SkillEntry]]:
-    if not _MANIFEST_PATH.is_file():
-        return _DEFAULT_SOURCE, _DEFAULT_REF, []
-    data = json.loads(_MANIFEST_PATH.read_text(encoding="utf-8"))
-    return _parse_manifest(data)
-
-
-def _fetch_remote_manifest(
-    *, ref_hint: str | None = None
-) -> tuple[str, str, list[SkillEntry]] | None:
-    ref = ref_hint or _bundled_ref_hint()
+def _fetch_remote_manifest(*, ref: str = _DEFAULT_REF) -> tuple[str, str, list[SkillEntry]] | None:
     payload = fetch_github_bytes("manifest.json", source=_DEFAULT_SOURCE, ref=ref)
     if payload is None:
         return None
@@ -118,12 +111,14 @@ def _fetch_remote_manifest(
         data = json.loads(payload.decode("utf-8"))
     except json.JSONDecodeError:
         return None
+    if not isinstance(data, dict):
+        return None
     source, manifest_ref, entries = _parse_manifest(data)
     return source, manifest_ref, entries
 
 
 def load_manifest(*, refresh: bool = False) -> ManifestLoadResult:
-    """Load skills manifest remote-first; fall back to bundled snapshot."""
+    """Load the live skills catalogue. Never falls back to packaged skill trees."""
     global _manifest_cache
     now = time.monotonic()
     if not refresh and _manifest_cache is not None:
@@ -131,75 +126,30 @@ def load_manifest(*, refresh: bool = False) -> ManifestLoadResult:
         if now - cached_at < _CACHE_TTL_SECONDS:
             return cached
 
-    if refresh:
-        remote = _fetch_remote_manifest()
-        if remote is not None:
-            source, ref, entries = remote
-            result = ManifestLoadResult(
-                source=source,
-                ref=ref,
-                entries=entries,
-                manifest_source="remote",
-                manifest_refreshed=True,
-            )
-            _manifest_cache = (now, result)
-            return result
-        logger.warning("skills_manifest_refresh_failed")
-        source, ref, entries = _load_bundled_manifest()
-        result = ManifestLoadResult(
-            source=source,
-            ref=ref,
-            entries=entries,
-            manifest_source="bundled",
-            manifest_refreshed=False,
-        )
-        # Keep cache coherent with the fallback the caller just received.
-        _manifest_cache = (now, result)
-        return result
-
     remote = _fetch_remote_manifest()
-    if remote is not None:
-        source, ref, entries = remote
-        result = ManifestLoadResult(
-            source=source,
-            ref=ref,
-            entries=entries,
-            manifest_source="remote",
-            manifest_refreshed=False,
+    if remote is None:
+        logger.error(
+            "skills_manifest_remote_unavailable",
+            source=_DEFAULT_SOURCE,
+            ref=_DEFAULT_REF,
         )
-        _manifest_cache = (now, result)
-        return result
+        raise _manifest_unavailable()
 
-    logger.warning("skills_manifest_remote_unavailable", fallback="bundled")
-    source, ref, entries = _load_bundled_manifest()
+    source, ref, entries = remote
     result = ManifestLoadResult(
         source=source,
         ref=ref,
         entries=entries,
-        manifest_source="bundled",
-        manifest_refreshed=False,
+        manifest_source="remote",
+        manifest_refreshed=refresh,
     )
     _manifest_cache = (now, result)
     return result
 
 
 def known_skill_slugs() -> set[str]:
-    """Slugs from the active catalogue plus the bundled offline snapshot."""
-    manifest = load_manifest()
-    known = {entry.slug for entry in manifest.entries}
-    _, _, bundled = _load_bundled_manifest()
-    known.update(entry.slug for entry in bundled)
-    return known
-
-
-def bundled_skill_dir(slug: str) -> Path | None:
-    """Return the packaged skill tree for *slug*, or ``None`` if absent."""
-    if not slug or Path(slug).name != slug:
-        return None
-    path = _MANIFEST_PATH.parent / slug
-    if path.is_dir() and (path / "SKILL.md").is_file():
-        return path
-    return None
+    """Slugs from the live OpenTideHQ/skills catalogue."""
+    return {entry.slug for entry in load_manifest().entries}
 
 
 def _installed_slugs(repo: Path) -> set[str]:

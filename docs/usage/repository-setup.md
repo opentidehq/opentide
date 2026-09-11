@@ -52,7 +52,7 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 | `setup platforms` | Enabled `.opentide/configurations/platforms/*.toml` |
 | `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms) |
 | `setup mcp` | Editor MCP config pointing at `opentide-mcp` |
-| `setup skills` | Agent skills from OpenTideHQ/skills (`discover`, `show`, install) |
+| `setup skills` | Agent skills from the live OpenTideHQ/skills catalogue (`discover`, `show`, install) |
 
 ### Expected layout after setup + generate
 

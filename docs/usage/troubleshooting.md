@@ -53,7 +53,16 @@ opentide setup skills discover
 opentide setup skills --generic --yes
 ```
 
-Use `--path` / `-C` for the repository root. Starter skills install from the packaged trees when GitHub is unreachable.
+Use `--path` / `-C` for the repository root. Skills are discovered and installed from the live [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) catalogue; GitHub must be reachable.
+
+### `setup skills` warns that the remote catalogue is unavailable
+
+`opentide setup skills` fetches `manifest.json` from GitHub, then downloads each requested skill. It does not install a packaged snapshot. If you see `Could not fetch skills catalogue from OpenTideHQ/skills@main`, check network access and that [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) is publicly reachable, then retry:
+
+```bash
+opentide setup skills discover --refresh
+opentide setup skills --generic --yes
+```
 
 ## Generation
 

@@ -112,7 +112,7 @@ opentide setup skills show opentide-detection-rule
 opentide setup skills show opentide-detection-rule --path /path/to/repo
 ```
 
-JSON output includes `manifest_source` (`remote` or `bundled`) and `manifest_refreshed` when using `--refresh`.
+JSON output includes `manifest_source` (`remote`) and `manifest_refreshed` when using `--refresh`. Discovery always fetches the live `manifest.json`; there is no packaged catalogue snapshot.
 
 </Step>
 
@@ -144,9 +144,9 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | `--name`, `--org`, `--description` | Entrypoint metadata |
 | `--refresh` | Re-fetch `manifest.json` from GitHub (`discover` / `show`) |
 
-Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) first; the packaged manifest is an offline fallback. Starter skills (`opentide-detection-rule`, `detection-engineering`) are also packaged so install works when GitHub is unreachable. Other catalogue slugs still require network access.
+Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) on `main`. Default install pulls the starter slugs (`opentide-detection-rule`, `detection-engineering`) from that catalogue; `--install` / `--all` select other live entries. GitHub must be reachable — the wheel does not ship skill trees that can go stale.
 
-The full wizard checks skill availability before writing repository files. Starter skills stay available from the package; remote-only slugs are omitted with a warning. The standalone skills command fails without leaving a partial skill tree when a requested slug cannot be fetched and is not packaged.
+The full wizard checks skill availability before writing repository files. If the catalogue or a requested slug cannot be fetched, the standalone skills command fails without installing a partial tree. The full `opentide setup` wizard omits the skills step with a warning so the rest of the scaffold can still apply.
 
 ### setup vscode (deprecated)
 

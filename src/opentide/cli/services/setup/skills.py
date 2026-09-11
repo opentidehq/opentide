@@ -1,4 +1,4 @@
-"""Agent skills install from OpenTideHQ/skills."""
+"""Agent skills install from the live OpenTideHQ/skills catalogue."""
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from opentide.cli.services.setup.interactive import (
     skill_targets_from_keys,
 )
 from opentide.cli.services.setup.skills_registry import (
-    bundled_skill_dir,
     fetch_github_bytes,
     known_skill_slugs,
     load_manifest,
@@ -64,40 +63,15 @@ def _download_error(slug: str, *, source: str, ref: str) -> str:
     )
 
 
-def _copy_skill_tree(src: Path, dest: Path) -> list[str]:
-    """Copy SKILL.md and optional references/ from a local skill tree."""
-    dest.mkdir(parents=True, exist_ok=True)
-    written: list[str] = []
-    skill_md = src / "SKILL.md"
-    (dest / "SKILL.md").write_bytes(skill_md.read_bytes())
-    written.append("SKILL.md")
-    ref_dir = src / "references"
-    if ref_dir.is_dir():
-        for ref_path in sorted(ref_dir.iterdir()):
-            if not ref_path.is_file():
-                continue
-            target_dir = dest / "references"
-            target_dir.mkdir(exist_ok=True)
-            (target_dir / ref_path.name).write_bytes(ref_path.read_bytes())
-            written.append(f"references/{ref_path.name}")
-    return written
-
-
 def _skill_reachable(slug: str, *, source: str, ref: str) -> bool:
-    if fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref) is not None:
-        return True
-    return bundled_skill_dir(slug) is not None
+    return fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref) is not None
 
 
 def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
-    """Download skill tree from GitHub raw; fall back to the packaged snapshot."""
+    """Download skill tree from GitHub raw. No packaged snapshot fallback."""
     skill_md = fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref)
     if skill_md is None:
-        bundled = bundled_skill_dir(slug)
-        if bundled is None:
-            raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
-        logger.warning("skills_download_fallback_bundled", slug=slug, source=source, ref=ref)
-        return _copy_skill_tree(bundled, dest)
+        raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
     dest.mkdir(parents=True, exist_ok=True)
     written: list[str] = []
     skill_path = dest / "SKILL.md"
