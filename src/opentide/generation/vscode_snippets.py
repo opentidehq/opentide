@@ -1,14 +1,18 @@
+"""Generate VS Code snippets from object and platform templates."""
+
+from __future__ import annotations
+
 import json
 from pathlib import Path
-from opentide.core.registry import OpenTide
+from typing import Any
+
 import structlog
+
 from opentide.core.logging.console import emit_section
-logger = structlog.get_logger('opentide.generation.vscode_snippets')
-PATHS = OpenTide.Configurations.Global.Paths.Index
-SNIPPETS_PATH = OpenTide.Configurations.Global.Paths.Tide.snippet_file
-RECOMPOSITION = OpenTide.Configurations.Global.recomposition
-SUBSCHEMAS_FOLDER = Path(OpenTide.Configurations.Global.Paths.Core.subschemas)
-CONFIG_INDEX = OpenTide.Configurations.Index
+from opentide.core.registry import OpenTide
+
+logger = structlog.get_logger("opentide.generation.vscode_snippets")
+
 
 def vs_code_snippet_generator(template_path, prefix, blanks=0):
     """
@@ -27,57 +31,89 @@ def vs_code_snippet_generator(template_path, prefix, blanks=0):
     snippet : snippet body, to be assembled in final snippet json file
 
     """
-    file = open(template_path, 'r')
-    buffer = []
-    for b in range(0, blanks):
-        buffer.append('')
-    for line in file:
-        buffer.append(line)
-    file.close()
-    buffer = [word.replace('\n', '') for word in buffer]
-    snippet = {}
-    snippet['prefix'] = prefix
-    snippet['body'] = buffer
-    return snippet
+    path = Path(template_path)
+    buffer = [""] * blanks
+    buffer.extend(path.read_text(encoding="utf-8").splitlines())
+    return {"prefix": prefix, "body": buffer}
 
-def run():
-    emit_section('Generate VSCode Snippets')
-    logger.info('converts_the_templates_into_vscode_formatted_snippets_inproject')
-    snippets = {}
-    for model in OpenTide.Configurations.Global.metaschemas:
-        if model in (t := OpenTide.Configurations.Global.templates):
-            model_icon = ""
-            full_name = OpenTide.Configurations.Documentation.object_names[model]
-            keyword = f'{full_name} Template'.strip()
-            template_path = Path(PATHS['templates']) / t[model]
-            logger.info('generating_snippets_for', arg0=full_name)
-            snippet = vs_code_snippet_generator(template_path, keyword)
-            snippets[keyword] = snippet
-    for recomp in RECOMPOSITION:
-        subschema_type_folder = RECOMPOSITION[recomp]
-        subschema_icon = ""
-        for entry in CONFIG_INDEX[recomp]:
-            recomp_entry = CONFIG_INDEX[recomp][entry]
-            enabled = False
-            try:
-                if recomp_entry['tide']['enabled'] == True:
-                    enabled = True
-            except Exception:
-                if recomp_entry['platform']['enabled'] == True:
-                    enabled = True
-            if enabled:
-                try:
-                    subschema_name = recomp_entry['tide']['name']
-                except Exception:
-                    subschema_name = recomp_entry['platform']['name']
-                logger.info('generating_snippets_for', arg0=subschema_name)
-                subchema_template_name = f'{subschema_name} Template.yaml'
-                subschema_template_path = SUBSCHEMAS_FOLDER / subschema_type_folder / 'Templates' / subchema_template_name
-                keyword = f'{subschema_type_folder} : {subschema_name} Template'.strip()
-                snippet = vs_code_snippet_generator(subschema_template_path, keyword, blanks=1)
-                snippets[keyword] = snippet
-    output = open(SNIPPETS_PATH, 'w')
-    json.dump(snippets, output, indent=4, sort_keys=False, default=str)
-    output.close()
-if __name__ == '__main__':
+
+def _platform_templates_dir(core: Any) -> Path:
+    """Resolve bundled platform templates (legacy name: subschemas)."""
+    raw = getattr(core, "subschemas", None) or getattr(core, "platform_templates", None)
+    if raw is None:
+        raise AttributeError("platform template path is not configured")
+    return Path(raw)
+
+
+def _entry_enabled(recomp_entry: dict[str, Any]) -> bool:
+    for section in ("tide", "platform"):
+        block = recomp_entry.get(section)
+        if isinstance(block, dict) and block.get("enabled") is True:
+            return True
+    return False
+
+
+def _entry_name(recomp_entry: dict[str, Any]) -> str | None:
+    for section in ("tide", "platform"):
+        block = recomp_entry.get(section)
+        if isinstance(block, dict) and block.get("name"):
+            return str(block["name"])
+    return None
+
+
+def run() -> None:
+    emit_section("Generate VSCode Snippets")
+    logger.info("converts_the_templates_into_vscode_formatted_snippets_inproject")
+    paths = OpenTide.Configurations.Global.Paths
+    snippets_path = Path(str(paths.Tide.snippet_file))
+    templates_dir = Path(str(paths.Tide.templates))
+    subschemas_folder = _platform_templates_dir(paths.Core)
+    recomposition = OpenTide.Configurations.Global.recomposition
+    config_index = OpenTide.Configurations.Index
+    metaschemas = OpenTide.Configurations.Global.metaschemas
+    templates = OpenTide.Configurations.Global.templates
+    object_names = OpenTide.Configurations.Documentation.object_names
+
+    snippets: dict[str, Any] = {}
+    for model in metaschemas:
+        if model not in templates:
+            continue
+        full_name = object_names.get(model, model)
+        keyword = f"{full_name} Template".strip()
+        template_path = templates_dir / templates[model]
+        logger.info("generating_snippets_for", arg0=full_name)
+        if not template_path.is_file():
+            logger.warning("snippet_template_missing", path=str(template_path))
+            continue
+        snippets[keyword] = vs_code_snippet_generator(template_path, keyword)
+    for recomp, subschema_type_folder in recomposition.items():
+        entries = config_index.get(recomp)
+        if not isinstance(entries, dict):
+            continue
+        for recomp_entry in entries.values():
+            if not isinstance(recomp_entry, dict) or not _entry_enabled(recomp_entry):
+                continue
+            subschema_name = _entry_name(recomp_entry)
+            if not subschema_name:
+                continue
+            logger.info("generating_snippets_for", arg0=subschema_name)
+            subchema_template_name = f"{subschema_name} Template.yaml"
+            subschema_template_path = (
+                subschemas_folder / subschema_type_folder / "Templates" / subchema_template_name
+            )
+            keyword = f"{subschema_type_folder} : {subschema_name} Template".strip()
+            if not subschema_template_path.is_file():
+                logger.warning("snippet_template_missing", path=str(subschema_template_path))
+                continue
+            snippets[keyword] = vs_code_snippet_generator(
+                subschema_template_path, keyword, blanks=1
+            )
+    snippets_path.parent.mkdir(parents=True, exist_ok=True)
+    snippets_path.write_text(
+        json.dumps(snippets, indent=4, sort_keys=False, default=str) + "\n",
+        encoding="utf-8",
+    )
+
+
+if __name__ == "__main__":
     run()

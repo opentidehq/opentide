@@ -148,8 +148,14 @@ class AttackNavigatorLayer:
         )
 
     def export_layer(self, layer: NavigatorLayer):
-        with open(self.EXPORT_FILE_PATH, "w+") as export:
-            json.dump(asdict(layer), export, indent=4, sort_keys=False, default=str)
+        from pathlib import Path
+
+        path = Path(self.EXPORT_FILE_PATH)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(asdict(layer), indent=4, sort_keys=False, default=str) + "\n",
+            encoding="utf-8",
+        )
 
 
 def run():
