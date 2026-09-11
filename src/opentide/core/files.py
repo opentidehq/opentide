@@ -36,7 +36,8 @@ def _load_toml(path: Path) -> dict:
 
 
 def _is_skipped_config_dir(name: str) -> bool:
-    return name.startswith(".") or name == "__pycache__"
+    """Skip hidden and dunder names (``__pycache__``, ``.DS_Store``, …)."""
+    return name.startswith(".") or name.startswith("__")
 
 
 def _load_nested_configs(directory: Path) -> dict[str, dict]:
