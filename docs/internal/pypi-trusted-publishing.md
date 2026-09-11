@@ -56,17 +56,17 @@ The PyPI account that saved the pending publisher **owns** the project.
 
 After the first upload, the pending publisher becomes a normal publisher. Further GitHub Releases on `v*` tags publish new versions. Do not add a PyPI API token.
 
-Cut a patch on `development` after the changelog and release notes land (example: **0.1.2**):
+Cut a patch on `development` after the changelog and release notes land (example: **0.1.3**):
 
 ```bash
-gh release create v0.1.2 \
+gh release create v0.1.3 \
   --repo OpenTideHQ/opentide \
   --target development \
-  --title "0.1.2" \
-  --notes-file .github/release-notes/v0.1.2.md
+  --title "0.1.3" \
+  --notes-file .github/release-notes/v0.1.3.md
 ```
 
-The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.2.md`. Do not tag a feature branch.
+The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.3.md`. Do not tag a feature branch.
 
 Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https://test.pypi.org/manage/account/publishing/) with the same GitHub fields (and a `testpypi` environment if you add one). Production `publish-pypi.yml` targets pypi.org only.
 

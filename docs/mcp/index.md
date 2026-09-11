@@ -11,7 +11,7 @@ The OpenTide MCP server exposes catalogue search, validation, deployment, and re
 ## Quick start
 
 ```bash
-pip install 'opentide==0.1.2'
+pip install 'opentide==0.1.3'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide setup mcp --cursor --yes
 ```
