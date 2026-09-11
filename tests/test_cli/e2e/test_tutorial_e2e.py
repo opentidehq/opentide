@@ -71,13 +71,12 @@ def test_tutorial_objects_validate_and_lint(invoke_cli, tmp_path: Path) -> None:
 
     docs = invoke_cli("generate", "docs", repo=fresh)
     assert_json_ok(docs)
+
     # Flavor follows CI env (GitLab locally via CI=true, GitHub Actions in CI),
     # so filenames are either UUIDs or slugs. Assert object pages exist either way.
     def _object_pages(folder: str) -> list[str]:
         return sorted(
-            p.name
-            for p in (fresh / "docs" / folder).glob("*.md")
-            if p.name.lower() != "readme.md"
+            p.name for p in (fresh / "docs" / folder).glob("*.md") if p.name.lower() != "readme.md"
         )
 
     assert _object_pages("Rules"), "expected generated rule documentation"
