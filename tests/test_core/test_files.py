@@ -83,6 +83,41 @@ def test_fetch_configs_skips_non_file_entries_in_nested_dir(tmp_path: Path) -> N
     assert configs["systems"]["sentinel"]["platform"]["identifier"] == "sentinel"
 
 
+def test_fetch_configs_ignores_pycache_with_non_utf8_bytecode(tmp_path: Path) -> None:
+    """Regression: a top-level ``__pycache__`` dir must not be read as TOML.
+
+    Bundled config packages ship ``__init__.py`` markers that Python compiles
+    into ``__pycache__/*.pyc``. The ``.pyc`` magic bytes (``f3 0d 0d 0a`` on
+    3.13+) are not valid UTF-8, so treating them as TOML raised
+    ``UnicodeDecodeError`` on ``opentide validate``.
+    """
+    (tmp_path / "global.toml").write_text('title = "global"\n', encoding="utf-8")
+    pycache = tmp_path / "__pycache__"
+    pycache.mkdir()
+    (pycache / "__init__.cpython-313.pyc").write_bytes(b"\xf3\r\r\n\x00\x00\x00\x00")
+
+    configs = _fetch_configs(tmp_path)
+
+    assert configs["global"]["title"] == "global"
+    assert "__pycache__" not in configs
+
+
+def test_fetch_configs_ignores_non_toml_files_in_nested_dir(tmp_path: Path) -> None:
+    """Nested config dirs may contain marker/bytecode files that aren't TOML."""
+    platforms = tmp_path / "platforms"
+    platforms.mkdir()
+    (platforms / "__init__.py").write_text("\n", encoding="utf-8")
+    (platforms / "sentinel.toml").write_text(
+        '[platform]\nidentifier = "sentinel"\n',
+        encoding="utf-8",
+    )
+
+    configs = _fetch_configs(tmp_path)
+
+    assert configs["platforms"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert "__init__" not in configs["platforms"]
+
+
 def test_bundled_platform_configs_returns_empty_when_data_root_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

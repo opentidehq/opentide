@@ -41,6 +41,11 @@ def _fetch_configs(configuration_path: Path) -> dict[str, dict]:
         return config_index
 
     for entry in os.listdir(configuration_path):
+        # Skip hidden/dunder entries (e.g. __pycache__, .DS_Store): they are
+        # never config namespaces and their contents (bytecode, metadata) are
+        # not valid TOML.
+        if entry.startswith((".", "__")):
+            continue
         entry_path = configuration_path / entry
         if entry_path.is_file() and entry.endswith(".toml"):
             config_index[entry.removesuffix(".toml")] = _load_toml(entry_path)
@@ -48,7 +53,7 @@ def _fetch_configs(configuration_path: Path) -> dict[str, dict]:
             config_index[entry] = {}
             for config_name in os.listdir(entry_path):
                 config_path = entry_path / config_name
-                if not config_path.is_file():
+                if not config_path.is_file() or not config_name.endswith(".toml"):
                     continue
                 configuration = _load_toml(config_path)
                 key = (
