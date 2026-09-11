@@ -5,7 +5,7 @@ description: Copy-paste LLM prompt for migrating legacy CoreTide submodule repos
 
 # CoreTide migration prompt
 
-OpenTide no longer ships `opentide migrate`. For the few repositories still on CoreTide git submodules, paste the prompt below into your agent (Cursor, Claude Code, Copilot, and so on) and review every diff.
+OpenTide does not automatically remove a CoreTide git submodule. For that work, paste the prompt below into your agent (Cursor, Claude Code, Copilot, and so on) and review every diff. For directory layout only (`Configurations/` → `.opentide/configurations/`, `Objects/` → `objects/`), run `opentide migrate objects` first (dry-run, then `--apply`).
 
 See also the [migration guide](./index.md) for background and verification steps.
 
@@ -40,6 +40,7 @@ Steps:
    - Query validation: opentide validate query --platform <sentinel|defender_for_endpoint|splunk|sentinel_one|carbon_black_cloud>
 
 4. Repository layout
+   - Run `opentide migrate objects` (dry-run) then `opentide migrate objects --apply` when Configurations/ or Objects/ still use CoreTide names.
    - Ensure .opentide/configurations/platforms/*.toml exist (opentide setup platforms --sentinel …).
    - Content under objects/ (lowercase) with metadata.uuid on each object.
 
@@ -47,7 +48,7 @@ Steps:
    - Remove submodules: recursive checkout.
    - Regenerate pipeline: opentide setup ci github (or gitlab/azure).
    - Typical job order: pip install 'opentide==0.1.0' → opentide validate → validate query per enabled platform → opentide generate → opentide generate docs --output docs → deploy stages.
-   - Do not reference opentide mutate, opentide migrate, or top-level opentide document/export/extract (use generate docs/exports/extract).
+   - Do not reference opentide mutate or top-level opentide document/export/extract (use generate docs/exports/extract). Use `opentide migrate objects` only for directory layout.
 
 6. Agents and IDE
    - opentide setup mcp --cursor --vscode (as needed)

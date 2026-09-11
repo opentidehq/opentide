@@ -503,6 +503,26 @@ def import_defender(ctx: typer.Context) -> None:
     emit_success(cli, result)
 
 
+migrate_app = typer.Typer(help="Migrate legacy client repository layouts")
+app.add_typer(migrate_app, name="migrate")
+
+
+@migrate_app.command("objects")
+def migrate_objects_cmd(
+    ctx: typer.Context,
+    apply: bool = typer.Option(
+        False, "--apply", help="Perform the planned moves (default: dry-run)"
+    ),
+    copy: bool = typer.Option(False, "--copy", help="Copy files instead of moving them"),
+) -> None:
+    """Move Configurations/, Objects/, and .opentide/framework into the greenfield layout."""
+    from opentide.cli.services.migrate_objects import run_migrate_objects
+
+    cli = get_context(ctx)
+    cli.apply_environment()
+    emit_success(cli, run_migrate_objects(cli.repo, apply=apply, copy=copy))
+
+
 info_app = typer.Typer(help="System information")
 app.add_typer(info_app, name="info")
 
