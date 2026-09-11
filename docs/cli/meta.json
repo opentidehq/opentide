@@ -12,6 +12,7 @@
     "setup",
     "generate",
     "validate",
+    "lint",
     "deploy",
     "info"
   ]

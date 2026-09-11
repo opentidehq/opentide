@@ -11,6 +11,7 @@ from opentide.cli.enums import (
     DocumentScope,
     ExportTarget,
     ExtractImport,
+    LintCheck,
     ValidateCheck,
     platform_label,
 )
@@ -21,6 +22,7 @@ from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate, run_generate_docs
 from opentide.cli.services.info import collect_info
+from opentide.cli.services.lint import run_lint
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
 from opentide.core.logging import LoggingConfig, init_logging, is_json_output
@@ -308,6 +310,24 @@ def validate_group(
         object_types=object_type,
     )
     emit_result(cli, CommandResult.from_payload(result, default_message="Validation passed"))
+
+
+@app.command("lint")
+def lint_cmd(
+    ctx: typer.Context,
+    fix: bool = typer.Option(False, "--fix", help="Apply safe filename renames"),
+    strict: bool = typer.Option(
+        False, "--strict", help="Exit non-zero when findings exist (CI gate)"
+    ),
+    check: list[LintCheck] = typer.Option(
+        [], "--check", help="Limit to one check: filenames or metadata (repeatable)"
+    ),
+) -> None:
+    """Catalogue hygiene: filename slugs and recommended metadata (not schema validation)."""
+    cli = get_context(ctx)
+    cli.apply_environment()
+    result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)
+    emit_result(cli, CommandResult.from_payload(result, default_message="Catalogue lint passed"))
 
 
 @validate_app.command("query")
