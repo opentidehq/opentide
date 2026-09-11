@@ -71,6 +71,8 @@ Generate CI/CD pipeline files. **CI provider** is the positional argument (`gith
 
 Run `setup platforms` before `setup ci` so `validate query` jobs are included. If none are enabled, `setup ci` still writes the pipeline and returns a `warnings` entry in JSON mode.
 
+Generated pipelines set `OPENTIDE_REPO_ROOT` at workflow (GitHub), `variables` (GitLab), or pipeline (Azure) scope so `opentide` commands resolve the detection repository in CI. Re-run `setup ci` to refresh existing pipeline files.
+
 ```bash
 opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --path . --yes

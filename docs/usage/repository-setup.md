@@ -50,7 +50,7 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 |------------|--------|
 | `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore` |
 | `setup platforms` | Enabled `.opentide/configurations/platforms/*.toml` |
-| `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms) |
+| `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms; sets `OPENTIDE_REPO_ROOT`) |
 | `setup mcp` | Editor MCP config pointing at `opentide-mcp` |
 | `setup skills` | Agent skills from the live OpenTideHQ/skills catalogue (`discover`, `show`, install) |
 

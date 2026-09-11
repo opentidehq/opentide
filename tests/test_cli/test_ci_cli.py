@@ -34,6 +34,7 @@ def test_setup_ci_github(tmp_path) -> None:
     assert "opentide validate" in text
     assert "validate query" in text
     assert "sentinel" in text
+    assert "OPENTIDE_REPO_ROOT: ${{ github.workspace }}" in text
     assert "mutate promote" not in text
 
 
