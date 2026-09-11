@@ -1,22 +1,25 @@
+from __future__ import annotations
 import os
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 from datetime import timedelta
-from azure.identity import ClientSecretCredential, CredentialUnavailableError
-from azure.monitor.query import LogsQueryClient
-from azure.core.exceptions import HttpResponseError, ClientAuthenticationError, ServiceRequestError
 from opentide.platforms.plugins import QueryValidator
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels, TenantDeployment
 from opentide.core.errors import Errors
-from opentide.deployment import TideDeployment, DetectionPlatforms, DeploymentStrategy, Proxy
+from opentide.deployment import DetectionPlatforms, DeploymentStrategy, Proxy
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel.validator')
+
+if TYPE_CHECKING:
+    from azure.monitor.query import LogsQueryClient
 
 class SentinelQueryValidator(QueryValidator):
 
     def check_query(self, mdr: DetectionRule, tenant_config: ConfigurationModels.Systems.Sentinel.Tenant, service: LogsQueryClient):
+        from azure.core.exceptions import ClientAuthenticationError, HttpResponseError, ServiceRequestError
+        from azure.identity import CredentialUnavailableError
         mdr_uuid = mdr.metadata.uuid
         if not mdr.configurations.sentinel:
             raise Errors.TideMDRDataModelErrors('Missing Sentinel')
@@ -58,6 +61,9 @@ class SentinelQueryValidator(QueryValidator):
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
+        from azure.identity import ClientSecretCredential
+        from azure.monitor.query import LogsQueryClient
+        from opentide.deployment import TideDeployment
         deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL, strategy=deployment_plan)
         for tenant_deployment in deployment.rule_deployment:
             tenant_deployment: TenantDeployment.Sentinel

@@ -23,6 +23,10 @@ _VALIDATOR_MODULES = {
     "carbon_black_cloud": "carbon_black_cloud_query",
 }
 
+_PLATFORM_PACKAGES = {
+    "carbon_black_cloud": "carbon_black",
+}
+
 
 class RuleDeployer(Protocol):
     def deploy(
@@ -106,15 +110,24 @@ class PlatformsRegistry:
         return platform
 
     def _load_validator(self, system: str) -> QueryValidator | None:
+        candidates: list[str] = []
         module_suffix = _VALIDATOR_MODULES.get(system)
-        if module_suffix is None:
-            return None
+        if module_suffix is not None:
+            candidates.append(f"opentide.validation.{module_suffix}")
+        pkg = _PLATFORM_PACKAGES.get(system, system)
+        candidates.append(f"opentide.platforms.{pkg}.validator")
         _ensure_repo_on_path()
-        try:
-            module = importlib.import_module(f"opentide.validation.{module_suffix}")
-            return cast(QueryValidator, module.declare())
-        except Exception:
-            return None
+        seen: set[str] = set()
+        for module_name in candidates:
+            if module_name in seen:
+                continue
+            seen.add(module_name)
+            try:
+                module = importlib.import_module(module_name)
+                return cast(QueryValidator, module.declare())
+            except Exception:
+                continue
+        return None
 
     def _ensure_loaded(self) -> None:
         if self._loaded:

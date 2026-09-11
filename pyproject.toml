@@ -38,6 +38,7 @@ dependencies = [
     "typer[all]>=0.26.8",
     "ruamel.yaml",
     "questionary>=2.1.1",
+    "requests>=2.34.2",
 ]
 
 [project.optional-dependencies]

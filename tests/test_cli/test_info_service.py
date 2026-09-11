@@ -99,5 +99,15 @@ def test_technique_coverage_accepts_dict_rules() -> None:
     assert coverage["count"] == 1
 
 
+def test_technique_coverage_matches_top_level_techniques() -> None:
+    with patch.object(info_service, "OpenTide") as mock_ot:
+        mock_ot.Models.rules = {
+            "u3": {"techniques": ["T1059"], "tags": {}},
+        }
+        coverage = info_service._technique_coverage("T1059")
+    assert coverage["count"] == 1
+    assert coverage["rules"] == ["u3"]
+
+
 def test_package_version_helper() -> None:
     assert info_service._package_version()

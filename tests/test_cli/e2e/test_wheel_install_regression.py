@@ -161,6 +161,55 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     assert (skills_dest / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md").is_file()
     assert (skills_dest / ".agents" / "skills" / "detection-engineering" / "SKILL.md").is_file()
 
+    info = _run(
+        [str(opentide), "--json", "info"],
+        cwd=str(tide_corpus_repo),
+        env=env,
+        timeout=60,
+    )
+    _assert_json_ok(info)
+    info_payload = json.loads(info.stdout)
+    platforms = {item["name"]: item for item in info_payload["platforms"]}
+    assert platforms["sentinel"]["can_deploy"] is True
+    assert platforms["sentinel"]["can_validate"] is True
+    assert platforms["splunk"]["can_deploy"] is True
+    assert platforms["crowdstrike"]["can_deploy"] is True
+    assert platforms["crowdstrike"]["can_validate"] is False
+    assert platforms["harfanglab"]["can_validate"] is False
+
+    coverage = _run(
+        [str(opentide), "--json", "info", "--technique", "T1059", "coverage"],
+        cwd=str(tide_corpus_repo),
+        env=env,
+        timeout=60,
+    )
+    _assert_json_ok(coverage)
+    coverage_payload = json.loads(coverage.stdout)
+    assert coverage_payload["coverage"]["count"] >= 1
+
+    dry_run = _run(
+        [
+            str(opentide),
+            "--json",
+            "deploy",
+            "--platform",
+            "sentinel",
+            "--dry-run",
+            "--plan",
+            "FULL",
+            "--wide",
+            "--skip-promotion",
+        ],
+        cwd=str(tide_corpus_repo),
+        env=env,
+        timeout=120,
+    )
+    _assert_json_ok(dry_run)
+    dry_payload = json.loads(dry_run.stdout)
+    assert dry_payload["dry_run"] is True
+    assert "Traceback" not in dry_run.stdout + dry_run.stderr
+    assert "KeyError" not in dry_run.stdout + dry_run.stderr
+
 
 def _assert_json_ok(result: subprocess.CompletedProcess[str]) -> None:
     combined = result.stdout + result.stderr
