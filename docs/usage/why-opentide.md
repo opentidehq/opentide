@@ -52,4 +52,4 @@ Being honest about scope:
 
 - [How OpenTide works](./how-it-works.md) — the end-to-end lifecycle.
 - [Object model](./concepts/object-model.md) — the three object families and chaining.
-- [Installation](./installation.md) — get the CLI on your machine. First public release: [0.1.0](./releases.md).
+- [Installation](./installation.md) — get the CLI on your machine. Latest patch: [0.1.1](./releases.md).

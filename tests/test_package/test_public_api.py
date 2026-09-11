@@ -44,6 +44,8 @@ def test_bundled_data_via_importlib_resources() -> None:
     assert (skills / "manifest.json").is_file()
     assert (skills / "opentide-detection-rule" / "SKILL.md").is_file()
     assert (skills / "detection-engineering" / "SKILL.md").is_file()
+    assert (data_path / "configurations" / "__init__.py").is_file()
+    assert (data_path / "configurations" / "platforms" / "__init__.py").is_file()
 
 
 def test_get_data_root_default() -> None:

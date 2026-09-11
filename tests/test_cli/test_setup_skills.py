@@ -237,3 +237,80 @@ def test_download_skill_actionable_error(monkeypatch: pytest.MonkeyPatch, tmp_pa
                 yes=True,
             )
         )
+
+
+def test_skill_reachable_when_github_returns_skill_md(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        skills_mod,
+        "fetch_github_bytes",
+        lambda path, **_: b"# skill\n" if str(path).endswith("SKILL.md") else None,
+    )
+    assert skills_mod._skill_reachable(
+        "kusto-query-language", source="OpenTideHQ/skills", ref="main"
+    )
+    missing = skills_mod.unavailable_skills(
+        SkillsSetupOptions(targets=[SkillTarget.generic], install_all=True, yes=True)
+    )
+    assert missing == []
+
+
+def test_download_skill_writes_github_reference_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def _fetch(path: str, **_: object) -> bytes | None:
+        if path.endswith("SKILL.md"):
+            return b"# remote skill\n"
+        if path.endswith("Best-Practices.md"):
+            return b"# best\n"
+        if path.endswith("Anti-Patterns.md"):
+            return b"# anti\n"
+        return None
+
+    monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
+    monkeypatch.setattr(skills_mod, "fetch_github_bytes", _fetch)
+    dest = tmp_path / "downloaded"
+    written = skills_mod._download_skill("demo-skill", dest, source="OpenTideHQ/skills", ref="main")
+    assert written == [
+        "SKILL.md",
+        "references/Best-Practices.md",
+        "references/Anti-Patterns.md",
+    ]
+    assert (dest / "SKILL.md").read_text(encoding="utf-8") == "# remote skill\n"
+    assert (dest / "references" / "Best-Practices.md").read_text(encoding="utf-8") == "# best\n"
+    assert (dest / "references" / "Anti-Patterns.md").read_text(encoding="utf-8") == "# anti\n"
+
+
+def test_install_cursor_replaces_existing_destination(tmp_path: Path) -> None:
+    options = SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.cursor], yes=True)
+    run_skills_setup(options)
+    dest = tmp_path / ".cursor" / "skills" / "opentide-detection-rule"
+    stale = dest / "stale.txt"
+    stale.write_text("old", encoding="utf-8")
+    run_skills_setup(options)
+    assert dest.is_dir()
+    assert not stale.exists()
+
+
+def test_install_claude_replaces_existing_destination(tmp_path: Path) -> None:
+    options = SkillsSetupOptions(
+        path=tmp_path, targets=[SkillTarget.claude_code], name="SOC", yes=True
+    )
+    run_skills_setup(options)
+    dest = tmp_path / ".claude" / "skills" / "opentide-detection-rule"
+    stale = dest / "stale.txt"
+    stale.write_text("old", encoding="utf-8")
+    run_skills_setup(options)
+    assert dest.is_dir()
+    assert not stale.exists()
+
+
+def test_install_generic_uses_github_agents_md(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        skills_mod,
+        "fetch_github_bytes",
+        lambda path, **_: b"# remote agents\n" if path == "AGENTS.md" else None,
+    )
+    run_skills_setup(SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.generic], yes=True))
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "# remote agents\n"

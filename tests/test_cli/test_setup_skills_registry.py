@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -211,3 +212,40 @@ def test_fetch_github_bytes_unauthenticated(monkeypatch: pytest.MonkeyPatch) -> 
     assert result == b"ok"
     request = captured["request"]
     assert "Authorization" not in getattr(request, "headers", {})
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [urllib.error.URLError("offline"), OSError("connection reset")],
+)
+def test_fetch_github_bytes_returns_none_on_network_errors(
+    monkeypatch: pytest.MonkeyPatch, exc: BaseException
+) -> None:
+    def _boom(*_: object, **__: object) -> None:
+        raise exc
+
+    monkeypatch.setattr(registry.urllib.request, "urlopen", _boom)
+    assert registry.fetch_github_bytes("manifest.json") is None
+
+
+def test_bundled_manifest_missing_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(registry, "_MANIFEST_PATH", tmp_path / "missing-manifest.json")
+    source, ref, entries = registry._load_bundled_manifest()
+    assert source == "OpenTideHQ/skills"
+    assert ref == "main"
+    assert entries == []
+    assert registry._bundled_ref_hint() == "main"
+
+
+def test_fetch_remote_manifest_returns_none_when_github_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(registry, "fetch_github_bytes", lambda *_, **__: None)
+    assert registry._fetch_remote_manifest() is None
+
+
+def test_fetch_remote_manifest_returns_none_on_invalid_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(registry, "fetch_github_bytes", lambda *_, **__: b"not-json{")
+    assert registry._fetch_remote_manifest() is None
