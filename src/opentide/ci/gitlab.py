@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import textwrap
-
 from opentide.ci.inflight import gitlab_inflight_job, gitlab_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
@@ -17,14 +15,34 @@ from opentide.ci.stages import (
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
 
 
-def _script_block(commands: list[str], indent: int = 4) -> str:
-    pad = " " * indent
-    lines = [f"{pad}- {cmd}" for cmd in commands]
+def _gitlab_job(
+    name: str,
+    *,
+    options: CiRenderOptions,
+    stage: str,
+    script: list[str],
+    needs: str | None = None,
+    rules: str | None = None,
+    extra_lines: list[str] | None = None,
+) -> str:
+    lines = [
+        f"{name}:",
+        f"  stage: {stage}",
+        f"  image: python:{options.python_version}-slim",
+    ]
+    if rules:
+        lines.append("  rules:")
+        lines.append(f"    - if: {rules}")
+    if extra_lines:
+        lines.extend(extra_lines)
+    lines.append("  before_script:")
+    lines.append(f"    - {pip_install(options)}")
+    lines.append("  script:")
+    lines.extend(f"    - {cmd}" for cmd in script)
+    if needs:
+        lines.append("  needs:")
+        lines.append(f"    - {needs}")
     return "\n".join(lines)
-
-
-def _base_before_script(options: CiRenderOptions) -> str:
-    return _script_block([pip_install(options)])
 
 
 def render_gitlab(options: CiRenderOptions) -> str:
@@ -33,61 +51,41 @@ def render_gitlab(options: CiRenderOptions) -> str:
     if promote_cmds:
         stages.insert(3, "promote")
 
-    validate_script = _script_block(["opentide validate"])
     query_jobs: list[str] = []
     for platform in options.platforms:
         if platform not in QUERY_VALIDATION_PLATFORMS:
             continue
         job_name = platform.replace("_", "-")
         query_jobs.append(
-            textwrap.dedent(
-                f"""\
-                validate_query_{job_name}:
-                  stage: validate
-                  image: python:{options.python_version}-slim
-                  before_script:
-                {_base_before_script(options)}
-                  script:
-                    - opentide validate query --platform {platform}
-                """
+            _gitlab_job(
+                f"validate_query_{job_name}",
+                options=options,
+                stage="validate",
+                script=[f"opentide validate query --platform {platform}"],
             )
         )
 
     deploy_jobs: list[str] = []
     if options.staging:
         deploy_jobs.append(
-            textwrap.dedent(
-                f"""\
-                deploy_staging:
-                  stage: deploy
-                  image: python:{options.python_version}-slim
-                  rules:
-                    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-                  before_script:
-                {_base_before_script(options)}
-                  script:
-                {_script_block(staging_deploy_steps(options))}
-                  needs:
-                    - generate
-                """
+            _gitlab_job(
+                "deploy_staging",
+                options=options,
+                stage="deploy",
+                script=staging_deploy_steps(options),
+                needs="generate",
+                rules='$CI_PIPELINE_SOURCE == "merge_request_event"',
             )
         )
 
     deploy_jobs.append(
-        textwrap.dedent(
-            f"""\
-            deploy_production:
-              stage: deploy
-              image: python:{options.python_version}-slim
-              rules:
-                - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-              before_script:
-            {_base_before_script(options)}
-              script:
-            {_script_block(production_deploy_steps(options))}
-              needs:
-                - generate
-            """
+        _gitlab_job(
+            "deploy_production",
+            options=options,
+            stage="deploy",
+            script=production_deploy_steps(options),
+            needs="generate",
+            rules="$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH",
         )
     )
 
@@ -107,67 +105,49 @@ def render_gitlab(options: CiRenderOptions) -> str:
 
     promote_job = ""
     if promote_cmds:
-        promote_job = textwrap.dedent(
-            f"""\
-            promote:
-              stage: promote
-              image: python:{options.python_version}-slim
-              rules:
-                - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-              before_script:
-            {_base_before_script(options)}
-              script:
-            {_script_block(promotion_steps(options))}
-              needs:
-                - deploy_production
-            """
+        promote_job = _gitlab_job(
+            "promote",
+            options=options,
+            stage="promote",
+            script=promote_cmds,
+            needs="deploy_production",
+            rules="$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH",
         )
 
-    document_job = textwrap.dedent(
-        f"""\
-        document:
-          stage: document
-          image: python:{options.python_version}-slim
-          rules:
-            - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-          before_script:
-        {_base_before_script(options)}
-          script:
-        {_script_block(document_steps(options))}
-          needs:
-            - generate
-        """
+    document_job = _gitlab_job(
+        "document",
+        options=options,
+        stage="document",
+        script=document_steps(options),
+        needs="generate",
+        rules="$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH",
     )
 
     stage_lines = "\n".join(f"  - {stage}" for stage in stages)
-
-    core = textwrap.dedent(
-        f"""\
-        variables:
-          OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
-
-        stages:
-        {stage_lines}
-
-        default:
-          image: python:{options.python_version}-slim
-
-        validate:
-          stage: validate
-          before_script:
-        {_base_before_script(options)}
-          script:
-        {validate_script}
-
-        generate:
-          stage: generate
-          before_script:
-        {_base_before_script(options)}
-          script:
-            - opentide generate
-          needs:
-            - validate
-        """
+    core = (
+        "variables:\n"
+        "  OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR\n"
+        "\n"
+        "stages:\n"
+        f"{stage_lines}\n"
+        "\n"
+        f"default:\n"
+        f"  image: python:{options.python_version}-slim\n"
+        "\n"
+        + _gitlab_job(
+            "validate",
+            options=options,
+            stage="validate",
+            script=["opentide validate"],
+        )
+        + "\n\n"
+        + _gitlab_job(
+            "generate",
+            options=options,
+            stage="generate",
+            script=["opentide generate"],
+            needs="validate",
+        )
     )
 
     parts = [header_comment(options), core]
@@ -176,4 +156,4 @@ def render_gitlab(options: CiRenderOptions) -> str:
     if promote_job:
         parts.append(promote_job)
     parts.append(document_job)
-    return "\n".join(parts)
+    return "\n".join(parts) + "\n"

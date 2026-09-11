@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from opentide.cli.enums import CiPlatform
 from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
@@ -37,6 +38,8 @@ def test_run_ci_setup(tmp_path: Path, ci: CiPlatform, expected: str) -> None:
     assert result["platforms"] == ["sentinel"]
     rendered = (tmp_path / expected).read_text(encoding="utf-8")
     assert "OPENTIDE_REPO_ROOT" in rendered
+    parsed = yaml.safe_load(rendered)
+    assert parsed is not None
 
 
 def test_run_ci_setup_skips_none(tmp_path: Path) -> None:

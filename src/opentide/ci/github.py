@@ -15,18 +15,40 @@ from opentide.ci.stages import (
     query_platforms,
     staging_deploy_steps,
 )
+from opentide.ci.text import indent, join_blocks
 
 
-def _indent_yaml(text: str, spaces: int) -> str:
-    pad = " " * spaces
-    return "\n".join(pad + line if line else line for line in text.splitlines())
+def _setup_steps(options: CiRenderOptions) -> str:
+    """Checkout, Python, and pip install — unindented relative to ``steps:``."""
+    return (
+        "- uses: actions/checkout@v4\n"
+        "- uses: actions/setup-python@v5\n"
+        "  with:\n"
+        f'    python-version: "{options.python_version}"\n'
+        f"- run: {pip_install(options)}"
+    )
 
 
-def _run_steps(commands: list[str], indent: int = 10) -> str:
-    lines = []
-    for cmd in commands:
-        lines.append(f"- run: {cmd}")
-    return _indent_yaml("\n".join(lines), indent)
+def _run_steps(commands: list[str]) -> str:
+    return "\n".join(f"- run: {cmd}" for cmd in commands)
+
+
+def _github_job(
+    job_id: str,
+    *,
+    name: str,
+    steps: str,
+    needs: str | None = None,
+    if_cond: str | None = None,
+) -> str:
+    lines = [f"{job_id}:", f"  name: {name}", "  runs-on: ubuntu-latest"]
+    if needs:
+        lines.append(f"  needs: {needs}")
+    if if_cond:
+        lines.append(f"  if: {if_cond}")
+    lines.append("  steps:")
+    lines.append(indent(steps, 4))
+    return "\n".join(lines)
 
 
 def _explorer_jobs(branch: str, python_version: str) -> list[str]:
@@ -117,63 +139,29 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
 
 def render_github(options: CiRenderOptions) -> str:
     branch = options.default_branch
-    setup_steps = textwrap.dedent(
-        f"""\
-        - uses: actions/checkout@v4
-        - uses: actions/setup-python@v5
-          with:
-            python-version: "{options.python_version}"
-        - run: {pip_install(options)}
-        """
+    setup = _setup_steps(options)
+    validate_steps = join_blocks(
+        setup,
+        _run_steps(
+            ["opentide validate"]
+            + [f"opentide validate query --platform {p}" for p in query_platforms(options)]
+        ),
     )
+    generate_steps = join_blocks(setup, _run_steps(["opentide generate"]))
 
-    validate_body = setup_steps + _run_steps(
-        ["opentide validate"]
-        + [f"opentide validate query --platform {p}" for p in query_platforms(options)]
-    )
-
-    generate_body = setup_steps + _run_steps(["opentide generate"])
-
-    jobs: list[str] = []
-
-    jobs.append(
-        textwrap.dedent(
-            f"""\
-            validate:
-              name: Validate
-              runs-on: ubuntu-latest
-              steps:
-            {validate_body}
-            """
-        )
-    )
-
-    jobs.append(
-        textwrap.dedent(
-            f"""\
-            generate:
-              name: Generate
-              needs: validate
-              runs-on: ubuntu-latest
-              steps:
-            {generate_body}
-            """
-        )
-    )
+    jobs: list[str] = [
+        _github_job("validate", name="Validate", steps=validate_steps),
+        _github_job("generate", name="Generate", needs="validate", steps=generate_steps),
+    ]
 
     if options.staging:
-        staging_cmds = staging_deploy_steps(options)
         jobs.append(
-            textwrap.dedent(
-                f"""\
-                deploy_staging:
-                  name: Deploy Staging
-                  needs: generate
-                  if: github.event_name == 'pull_request'
-                  runs-on: ubuntu-latest
-                  steps:
-                {setup_steps}{_run_steps(staging_cmds)}
-                """
+            _github_job(
+                "deploy_staging",
+                name="Deploy Staging",
+                needs="generate",
+                if_cond="github.event_name == 'pull_request'",
+                steps=join_blocks(setup, _run_steps(staging_deploy_steps(options))),
             )
         )
 
@@ -196,45 +184,33 @@ def render_github(options: CiRenderOptions) -> str:
     prod_needs = "deploy_staging" if options.staging else "generate"
     prod_if = f"github.event_name == 'push' && github.ref == format('refs/heads/{branch}')"
     jobs.append(
-        textwrap.dedent(
-            f"""\
-            deploy_production:
-              name: Deploy Production
-              needs: {prod_needs}
-              if: {prod_if}
-              runs-on: ubuntu-latest
-              steps:
-            {setup_steps}{_run_steps(production_deploy_steps(options))}
-            """
+        _github_job(
+            "deploy_production",
+            name="Deploy Production",
+            needs=prod_needs,
+            if_cond=prod_if,
+            steps=join_blocks(setup, _run_steps(production_deploy_steps(options))),
         )
     )
 
     if options.promotion and promotion_steps(options):
         jobs.append(
-            textwrap.dedent(
-                f"""\
-                promote:
-                  name: Promote Rules
-                  needs: deploy_production
-                  if: {prod_if}
-                  runs-on: ubuntu-latest
-                  steps:
-                {setup_steps}{_run_steps(promotion_steps(options))}
-                """
+            _github_job(
+                "promote",
+                name="Promote Rules",
+                needs="deploy_production",
+                if_cond=prod_if,
+                steps=join_blocks(setup, _run_steps(promotion_steps(options))),
             )
         )
 
     jobs.append(
-        textwrap.dedent(
-            f"""\
-            document:
-              name: Document
-              needs: generate
-              if: {prod_if}
-              runs-on: ubuntu-latest
-              steps:
-            {setup_steps}{_run_steps(document_steps(options))}
-            """
+        _github_job(
+            "document",
+            name="Document",
+            needs="generate",
+            if_cond=prod_if,
+            steps=join_blocks(setup, _run_steps(document_steps(options))),
         )
     )
 
@@ -262,21 +238,19 @@ def render_github(options: CiRenderOptions) -> str:
             """
         )
 
-    body = textwrap.dedent(
-        f"""\
-        name: OpenTide
-
-        on:
-          pull_request:
-          push:
-            branches:
-              - {branch}
-
-        env:
-          OPENTIDE_REPO_ROOT: ${{{{ github.workspace }}}}
-
-        {permissions}{concurrency}jobs:
-        """
+    preamble = (
+        "name: OpenTide\n"
+        "\n"
+        "on:\n"
+        "  pull_request:\n"
+        "  push:\n"
+        "    branches:\n"
+        f"      - {branch}\n"
+        "\n"
+        "env:\n"
+        "  OPENTIDE_REPO_ROOT: ${{ github.workspace }}\n"
+        "\n"
+        f"{permissions}{concurrency}jobs:\n"
     )
-    job_yaml = "\n".join(_indent_yaml(job, 2) for job in jobs)
-    return header_comment(options) + body + job_yaml
+    job_yaml = "\n".join(indent(job, 2) for job in jobs)
+    return header_comment(options) + preamble + job_yaml
