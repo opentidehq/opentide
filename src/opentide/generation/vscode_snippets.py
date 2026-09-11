@@ -13,6 +13,11 @@ from opentide.core.registry import OpenTide
 
 logger = structlog.get_logger("opentide.generation.vscode_snippets")
 
+# Overridable output path. ``opentide setup vscode`` assigns this before ``run()``.
+# Must stay unset at import time: evaluating ``Paths.Core.subschemas`` on import
+# crashed fresh repositories after the platform_templates rename (issue #153).
+SNIPPETS_PATH: str | Path | None = None
+
 
 def vs_code_snippet_generator(template_path, prefix, blanks=0):
     """
@@ -39,10 +44,16 @@ def vs_code_snippet_generator(template_path, prefix, blanks=0):
 
 def _platform_templates_dir(core: Any) -> Path:
     """Resolve bundled platform templates (legacy name: subschemas)."""
-    raw = getattr(core, "subschemas", None) or getattr(core, "platform_templates", None)
+    raw = getattr(core, "platform_templates", None) or getattr(core, "subschemas", None)
     if raw is None:
         raise AttributeError("platform template path is not configured")
     return Path(raw)
+
+
+def _snippets_output_path(paths: Any) -> Path:
+    if SNIPPETS_PATH is not None:
+        return Path(str(SNIPPETS_PATH))
+    return Path(str(paths.Tide.snippet_file))
 
 
 def _entry_enabled(recomp_entry: dict[str, Any]) -> bool:
@@ -65,7 +76,7 @@ def run() -> None:
     emit_section("Generate VSCode Snippets")
     logger.info("converts_the_templates_into_vscode_formatted_snippets_inproject")
     paths = OpenTide.Configurations.Global.Paths
-    snippets_path = Path(str(paths.Tide.snippet_file))
+    snippets_path = _snippets_output_path(paths)
     templates_dir = Path(str(paths.Tide.templates))
     subschemas_folder = _platform_templates_dir(paths.Core)
     recomposition = OpenTide.Configurations.Global.recomposition
