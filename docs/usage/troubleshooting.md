@@ -26,7 +26,7 @@ See [Installation → environment variables](./installation.md#environment-varia
 The CLI ships as an extra. Install it:
 
 ```bash
-pip install 'opentide==0.1.1'
+pip install 'opentide==0.1.2'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at the venv's `opentide-mcp` — see [MCP configuration](../mcp/configuration.md).
@@ -38,7 +38,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 Upgrade:
 
 ```bash
-pip install 'opentide==0.1.1'
+pip install 'opentide==0.1.2'
 ```
 
 `0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
@@ -48,7 +48,7 @@ pip install 'opentide==0.1.1'
 `0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
 
 ```bash
-pip install 'opentide==0.1.1'
+pip install 'opentide==0.1.2'
 opentide setup skills discover
 opentide setup skills --generic --yes
 ```
@@ -68,7 +68,7 @@ opentide setup skills --generic --yes
 
 ### `opentide generate` crashes with `subschemas` on a new repo
 
-Snippet generation used a legacy `Paths.Core.subschemas` path that the current layout never populates, so `opentide generate` aborted after docs and exports. This is fixed after 0.1.1. An empty catalogue is valid: generate writes empty exports and creates `.vscode` snippets from whatever templates exist.
+Snippet generation used a legacy `Paths.Core.subschemas` path that the current layout never populates, so `opentide generate` aborted after docs and exports. This is fixed in **0.1.2**. An empty catalogue is valid: generate writes empty exports and creates `.vscode` snippets from whatever templates exist.
 
 ### `validate` complains that schemas are missing
 
