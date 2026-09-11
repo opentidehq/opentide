@@ -218,3 +218,15 @@ def test_validate_query_platform_warnings_are_not_fatal() -> None:
     assert result["status"] == "passed"
     assert result["_exit_code"] == 0
     assert result["warnings"]
+
+
+def test_validate_query_empty_exception_does_not_advise_full_plan() -> None:
+    ctx = CliContext(json_output=True)
+    with (
+        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
+        patch("opentide.deployment.make_deploy_plan", side_effect=KeyError()),
+    ):
+        result = validation_service.validate_query_platform(ctx, "sentinel")
+    assert result["status"] == "failed"
+    assert "FULL" not in str(result["message"])
+    assert "KeyError" in str(result["message"])

@@ -93,10 +93,7 @@ def make_deploy_plan(
                 )
                 continue
 
-            if (
-                keep_deprecated is False
-                and check_status(platform_status) in DEPRECATED_STATUSES
-            ):
+            if keep_deprecated is False and check_status(platform_status) in DEPRECATED_STATUSES:
                 logger.info(
                     "skip_deprecated_status",
                     system=system,
@@ -117,6 +114,14 @@ def make_deploy_plan(
                 )
             elif plan is DeploymentStrategy.STAGING:
                 allowed = (StatusStrategy.PREVIEW, StatusStrategy.UNIVERSAL)
+            elif plan in (DeploymentStrategy.FULL, DeploymentStrategy.ALWAYS):
+                allowed = (
+                    StatusStrategy.RELEASE,
+                    StatusStrategy.UNIVERSAL,
+                    StatusStrategy.PREVIEW,
+                    StatusStrategy.DISABLEMENT,
+                    StatusStrategy.DELETION,
+                )
             else:
                 allowed = ()
 
@@ -150,9 +155,7 @@ class Proxy:
             return
 
         logger.info("setting_proxy_from_ci_variables")
-        proxy_config = DebugHelpers.fetch_config_envvar(
-            OpenTide.Configurations.Deployment.proxy
-        )
+        proxy_config = DebugHelpers.fetch_config_envvar(OpenTide.Configurations.Deployment.proxy)
         proxy_user = proxy_config.get("proxy_user")
         proxy_pass = proxy_config.get("proxy_password")
         proxy_host = proxy_config.get("proxy_host")
@@ -185,16 +188,9 @@ class ExternalIdHelper:
 
     @staticmethod
     def remove_id(rule_id: int | str, tenant_name: str, mdr_uuid: str) -> None:
-        file_path = (
-            OpenTide.Configurations.Global.Paths.Tide.rule
-            / OpenTide.Models.files[mdr_uuid]
-        )
+        file_path = OpenTide.Configurations.Global.Paths.Tide.rule / OpenTide.Models.files[mdr_uuid]
         content = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
-        updated = [
-            line
-            for line in content
-            if line.strip() != f"rule_id::{tenant_name}: {rule_id}"
-        ]
+        updated = [line for line in content if line.strip() != f"rule_id::{tenant_name}: {rule_id}"]
         file_path.write_text("".join(updated), encoding="utf-8")
         logger.info("external_id_removed", tenant=tenant_name)
 
@@ -205,10 +201,7 @@ class ExternalIdHelper:
         mdr_uuid: str,
         system_name: str,
     ) -> None:
-        file_path = (
-            OpenTide.Configurations.Global.Paths.Tide.rule
-            / OpenTide.Models.files[mdr_uuid]
-        )
+        file_path = OpenTide.Configurations.Global.Paths.Tide.rule / OpenTide.Models.files[mdr_uuid]
         content = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
         updated: list[str] = []
         for line in content:
