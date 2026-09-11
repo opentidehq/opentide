@@ -164,3 +164,13 @@ def test_run_deploy_error_marks_result_failed() -> None:
         result = deploy_service.run_deploy(ctx)
     assert result["status"] == "failed"
     assert result["_exit_code"] == 1
+
+
+def test_run_deploy_invalid_plan_returns_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = CliContext(json_output=True)
+    monkeypatch.setenv("DEPLOYMENT_PLAN", "None")
+    with patch("opentide.core.registry.OpenTide.reload"):
+        result = deploy_service.run_deploy(ctx, dry_run=True)
+    assert result["status"] == "failed"
+    assert "Unsupported deployment plan" in str(result["message"])
+    assert result["_exit_code"] == 1

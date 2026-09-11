@@ -65,6 +65,15 @@ class GitRepository:
 
 def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
     MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
+    if CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug:
+        files = (
+            [path for path in sorted(MDR_PATH.iterdir()) if path.suffix in {".yaml", ".yml"}]
+            if MDR_PATH.is_dir()
+            else []
+        )
+        logger.info("computed_modified_mdr_files", detail=str(files))
+        return files
+
     MDR_PATH_RAW = OpenTide.Configurations.Global.Paths.Tide._raw["rule"]
     MDR_PATH_RAW = MDR_PATH_RAW.replace(r"/", r"\/")
 
@@ -95,6 +104,22 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
 
     """
     TARGET_CI = CIEnvironment().environment
+
+    if TARGET_CI is CIEnvironment.CIPlatforms.LocalDebug:
+        logger.info(
+            "local_debug_using_full_rule_tree",
+            detail="Git diff is unavailable outside CI; compiling from the local rules folder",
+        )
+        mdr_path = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
+        raw = OpenTide.Configurations.Global.Paths.Tide._raw["rule"]
+        if not mdr_path.is_dir():
+            return []
+        # Repo-relative paths so modified_mdr_files' regex still matches.
+        return [
+            str(Path(raw) / path.name)
+            for path in sorted(mdr_path.iterdir())
+            if path.suffix in {".yaml", ".yml"}
+        ]
 
     repo = TideRepo().repository
 
