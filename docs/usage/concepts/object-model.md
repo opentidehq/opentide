@@ -42,10 +42,12 @@ metadata:
   uuid: 00000000-0000-4000-8001-000000000001
   schema: threat::1.0
   version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
   tlp: clear
 threat:
   description: Simulated threat actor for credential access
-  severity: High
+  severity: Substantial incident
   impact: Data Breach
   leverage: High
   viability: High
@@ -66,6 +68,8 @@ metadata:
   uuid: 00000000-0000-4000-8002-000000000001
   schema: objective::1.0
   version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
   tlp: clear
 composition:
   strategy: synergetic
@@ -83,7 +87,7 @@ objective:
     - name: Suspicious logon signal
       uuid: 00000000-0000-4000-8099-000000000001
       description: Suspicious authentication activity
-      severity: Medium
+      severity: Moderate incident
       methodology: analytics
       entities: [host]
       data:
@@ -101,10 +105,12 @@ metadata:
   uuid: 00000000-0000-4000-8003-000000000001
   schema: rule::1.0
   version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
   tlp: clear
 description: Detects credential access via suspicious process creation
 status: STAGING
-severity: High
+severity: Substantial incident
 techniques: [T1059]
 detection_model: 00000000-0000-4000-8002-000000000001   # ← the objective above
 response:

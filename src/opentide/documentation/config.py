@@ -32,6 +32,10 @@ def load_settings(*, output: str | None = None, flavor: str | None = None) -> Do
 
     configured_output = docs_cfg.get("output") or core_paths.get("docs_folder") or "docs"
     target_dir = Path(output or configured_output)
+    if not target_dir.is_absolute():
+        from opentide.core.root import get_repo_root
+
+        target_dir = get_repo_root() / target_dir
     flavor_cfg = docs_cfg.get("flavor", {})
     default_flavor = (
         str(flavor_cfg.get("default", "generic"))
