@@ -41,7 +41,7 @@ Upgrade:
 pip install 'opentide==0.1.2'
 ```
 
-`0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
+`0.1.1` and later skip hidden/dunder directories and load nested `*.toml` only.
 
 ### `setup skills discover` starts an install wizard or reports skills unavailable
 

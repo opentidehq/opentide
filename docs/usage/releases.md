@@ -21,18 +21,18 @@ opentide validate --strict
 
 **What this version adds**
 
-- `opentide setup ci` sets `OPENTIDE_REPO_ROOT` in generated GitHub, GitLab, and Azure pipelines.
-- `opentide setup env` writes `.env.example`; `opentide setup hooks` installs validate-on-commit.
-- `opentide lint` for filename slugs and recommended metadata (`--fix`, `--strict`).
-- `opentide migrate objects` for CoreTide `Configurations/` and `Objects/` layouts.
+- `opentide setup ci` sets `OPENTIDE_REPO_ROOT` in generated GitHub, GitLab, and Azure pipelines ([#51](https://github.com/opentidehq/opentide/issues/51)).
+- `opentide setup env` writes `.env.example`; `opentide setup hooks` installs validate-on-commit ([#48](https://github.com/opentidehq/opentide/issues/48), [#49](https://github.com/opentidehq/opentide/issues/49)).
+- `opentide lint` for filename slugs and recommended metadata (`--fix`, `--strict`) ([#108](https://github.com/opentidehq/opentide/issues/108)).
+- `opentide migrate objects` for CoreTide `Configurations/` and `Objects/` layouts ([#100](https://github.com/opentidehq/opentide/issues/100)).
 
 **What this version changes**
 
-- Skills install from the live OpenTideHQ/skills catalogue. GitHub must be reachable — there is no packaged fallback.
+- Skills install from the live [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) catalogue. GitHub must be reachable — there is no packaged fallback ([#152](https://github.com/opentidehq/opentide/issues/152)).
 
 **What this version fixes**
 
-- `opentide generate` completes on a freshly scaffolded empty repository.
+- `opentide generate` completes on a freshly scaffolded empty repository ([#153](https://github.com/opentidehq/opentide/issues/153)).
 
 **Links**
 
