@@ -12,15 +12,15 @@ from opentide.cli.services import extraction as extraction_service
 
 
 def test_run_extract_import_sentinel() -> None:
-    with patch.object(extraction_service, "_run_engine_script") as mock_run:
+    with patch.object(extraction_service, "_run_engine_module") as mock_run:
         extraction_service.run_extract_import(ExtractImport.sentinel)
-    mock_run.assert_called_once_with("src/opentide/extraction/sentinel_importer.py")
+    mock_run.assert_called_once_with("opentide.extraction.sentinel_importer")
 
 
 def test_run_extract_import_defender() -> None:
-    with patch.object(extraction_service, "_run_engine_script") as mock_run:
+    with patch.object(extraction_service, "_run_engine_module") as mock_run:
         extraction_service.run_extract_import(ExtractImport.defender)
-    mock_run.assert_called_once_with("src/opentide/extraction/mde_importer.py")
+    mock_run.assert_called_once_with("opentide.extraction.mde_importer")
 
 
 def test_run_extract_entrypoint() -> None:
@@ -31,7 +31,10 @@ def test_run_extract_entrypoint() -> None:
     assert result["import"] == "sentinel"
 
 
-def test_run_engine_script_missing_file(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(extraction_service, "get_repo_root", lambda: tmp_path)
-    with pytest.raises(FileNotFoundError, match="Extraction script not found"):
-        extraction_service._run_engine_script("missing.py")
+def test_run_engine_module_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _missing(name: str, run_name: str | None = None) -> dict[str, object]:
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr(extraction_service.runpy, "run_module", _missing)
+    with pytest.raises(FileNotFoundError, match="Extraction module not found"):
+        extraction_service._run_engine_module("opentide.extraction.missing")

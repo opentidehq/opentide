@@ -1,23 +1,27 @@
+from __future__ import annotations
 import json
-from typing import Sequence
-from opentide.platforms.sentinel.client import SentinelService, iso_duration_timedelta
+from typing import TYPE_CHECKING, Sequence
 from opentide.generation.framework import get_vocab_entry, techniques_resolver
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
-from opentide.models.system_config import ConfigurationModels, TenantDeployment
-from opentide.deployment import TideDeployment, check_status
+from opentide.models.system_config import ConfigurationModels
+from opentide.deployment import check_status
 from opentide.platforms.kql import compile_kql_query
 from opentide.core.errors import Errors
-from azure.mgmt.securityinsight import SecurityInsights
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel.deployer')
+
+if TYPE_CHECKING:
+    from azure.mgmt.securityinsight import SecurityInsights
+    from opentide.models.system_config import TenantDeployment
 
 class SentinelDeploy(RuleDeployer):
 
     def compile_deployment(self, service: SecurityInsights, data: DetectionRule, tenant: str):
+        from opentide.platforms.sentinel.client import iso_duration_timedelta
         rule = service.alert_rules.models.ScheduledAlertRule()
         configuration = data.configurations.sentinel
         if not configuration:
@@ -174,6 +178,8 @@ class SentinelDeploy(RuleDeployer):
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
+        from opentide.deployment import TideDeployment
+        from opentide.platforms.sentinel.client import SentinelService
         deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL, strategy=deployment_plan)
         for tenant_deployment in deployment.rule_deployment:
             tenant_deployment: TenantDeployment.Sentinel

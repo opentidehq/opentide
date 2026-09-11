@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from opentide.core.index_manager import IndexManager
-from opentide.models.platform import parse_platform_config
 from opentide.models.system_config import ConfigurationModels, SystemConfig
 
 
@@ -217,24 +216,30 @@ def _build_cbc_config(raw: dict[str, Any]) -> Any:
     )
 
 
+def _identity_platform(system: str, payload: dict[str, Any]) -> SystemConfig.Platform:
+    """Tenant TOML ``[platform]`` identity — not a detection-rule platform config."""
+    flags_raw = payload.get("flags") or []
+    flags = [str(flag) for flag in flags_raw] if isinstance(flags_raw, list) else []
+    return SystemConfig.Platform(
+        enabled=bool(payload.get("enabled", False)),
+        identifier=str(payload.get("identifier") or system),
+        name=str(payload.get("name") or system),
+        subschema=str(payload.get("subschema", "")),
+        description=str(payload.get("description", "")),
+        flags=flags,
+    )
+
+
 def build_system_config(system: str, raw: dict[str, Any] | None = None) -> Any:
     """Build typed platform configuration for a detection system."""
-    index = systems_raw_index()
-    raw = dict(raw if raw is not None else index[system])
+    raw = dict(systems_raw_index()[system]) if raw is None else dict(raw)
     if system == "splunk":
         return _build_splunk_config(raw)
     if system == "carbon_black_cloud":
         return _build_cbc_config(raw)
-    platform_key = {
-        "sentinel": "sentinel",
-        "defender_for_endpoint": "defender_for_endpoint",
-        "sentinel_one": "sentinel_one",
-        "crowdstrike": "crowdstrike",
-        "harfanglab": "harfanglab",
-    }[system]
     raw_config = dict(raw)
     platform_payload = dict(raw_config.get("platform", {}))
-    platform = parse_platform_config(platform_key, platform_payload) if platform_payload else None
+    platform = _identity_platform(system, platform_payload) if platform_payload else None
     return SimpleNamespace(
         raw=raw_config,
         platform=platform,

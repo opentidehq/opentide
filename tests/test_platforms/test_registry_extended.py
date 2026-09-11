@@ -78,6 +78,24 @@ def test_registry_load_validator_returns_none_for_unknown() -> None:
     assert registry._load_validator("crowdstrike") is None
 
 
+def test_registry_load_validator_falls_back_to_platform_package() -> None:
+    registry = PlatformsRegistry()
+    mock_validator = MagicMock()
+    mock_module = MagicMock()
+    mock_module.declare.return_value = mock_validator
+
+    def _import(name: str) -> MagicMock:
+        if name.startswith("opentide.validation"):
+            raise ModuleNotFoundError(name)
+        if name == "opentide.platforms.sentinel.validator":
+            return mock_module
+        raise ModuleNotFoundError(name)
+
+    with patch("importlib.import_module", side_effect=_import):
+        result = registry._load_validator("sentinel")
+    assert result is mock_validator
+
+
 def test_registry_load_validator_imports_module() -> None:
     registry = PlatformsRegistry()
     mock_validator = MagicMock()

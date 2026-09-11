@@ -91,3 +91,24 @@ def test_build_cbc_config_v4_format() -> None:
     )
     assert config.tenants is not None
     assert config.tenants[0].setup.org_key == "key"
+
+
+def test_build_system_config_uses_tenant_identity_not_rule_schema() -> None:
+    from opentide.platforms.config import build_system_config
+
+    config = build_system_config(
+        "crowdstrike",
+        {
+            "platform": {
+                "enabled": True,
+                "identifier": "crowdstrike",
+                "name": "Crowdstrike Falcon Correlation Rules",
+                "subschema": "Crowdstrike",
+                "description": "desc",
+                "flags": [""],
+            }
+        },
+    )
+    assert config.platform.identifier == "crowdstrike"
+    assert config.platform.enabled is True
+    assert config.platform.name == "Crowdstrike Falcon Correlation Rules"

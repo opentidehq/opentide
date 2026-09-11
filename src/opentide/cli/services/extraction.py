@@ -8,28 +8,27 @@ from io import StringIO
 from typing import TYPE_CHECKING
 
 from opentide.cli.enums import ExtractImport
-from opentide.core.root import get_repo_root
 
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
-_IMPORT_SCRIPTS: dict[ExtractImport, str] = {
-    ExtractImport.sentinel: "src/opentide/extraction/sentinel_importer.py",
-    ExtractImport.defender: "src/opentide/extraction/mde_importer.py",
+_IMPORT_MODULES: dict[ExtractImport, str] = {
+    ExtractImport.sentinel: "opentide.extraction.sentinel_importer",
+    ExtractImport.defender: "opentide.extraction.mde_importer",
 }
 
 
-def _run_engine_script(relative_path: str) -> None:
-    """Execute an extraction script via runpy (preserves script-style side effects)."""
-    script = get_repo_root() / relative_path
-    if not script.is_file():
-        raise FileNotFoundError(f"Extraction script not found: {script}")
-    runpy.run_path(str(script), run_name="__main__")
+def _run_engine_module(module_name: str) -> None:
+    """Execute a packaged extraction module via runpy (preserves script-style side effects)."""
+    try:
+        runpy.run_module(module_name, run_name="__main__")
+    except ModuleNotFoundError as exc:
+        raise FileNotFoundError(f"Extraction module not found: {module_name}") from exc
 
 
 def run_extract_import(target: ExtractImport) -> None:
-    """Run a platform import script."""
-    _run_engine_script(_IMPORT_SCRIPTS[target])
+    """Run a platform import module from the installed package."""
+    _run_engine_module(_IMPORT_MODULES[target])
 
 
 def run_extract(
