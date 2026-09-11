@@ -296,6 +296,24 @@ def setup_ci_cmd(
     emit_success(cli, run_ci_setup(options))
 
 
+@setup_app.command("env")
+def setup_env_cmd(
+    ctx: typer.Context,
+    path: str = typer.Argument(".", help="Repository path"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+) -> None:
+    """Write ``.env.example`` with ``OPENTIDE_REPO_ROOT`` and ignore ``.env``."""
+    from opentide.cli.services.setup.env import EnvSetupOptions, run_env_setup
+
+    cli = get_context(ctx)
+    base = _resolve_setup_path(cli, path)
+    if not _confirm_write(cli, base, "Write .env.example with OPENTIDE_REPO_ROOT?", yes=yes):
+        emit_success(cli, {"message": "Environment setup cancelled", "status": "skipped"})
+        return
+    cli.apply_environment()
+    emit_success(cli, run_env_setup(EnvSetupOptions(path=base, yes=yes)))
+
+
 @setup_app.command("mcp")
 def setup_mcp_cmd(
     ctx: typer.Context,

@@ -112,7 +112,7 @@ uv run pre-commit install --install-hooks
 | `DEPLOYMENT_PLAN` | Default deployment plan for `deploy` and `validate query` |
 | `DEBUG` | Enable debug logging when set |
 
-Set the repo root before every command, or pass `--repo`:
+Set the repo root before every command, or pass `--repo`. `opentide setup env --yes` writes `.env.example` with `OPENTIDE_REPO_ROOT` (copy to `.env`; OpenTide does not load dotenv automatically):
 
 ```bash
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
