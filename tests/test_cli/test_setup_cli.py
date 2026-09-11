@@ -20,6 +20,7 @@ def test_setup_help_lists_subcommands() -> None:
     assert "mcp" in result.stdout
     assert "skills" in result.stdout
     assert "env" in result.stdout
+    assert "hooks" in result.stdout
 
 
 def test_setup_without_tty_fails_with_scripted_guidance(tmp_path) -> None:
