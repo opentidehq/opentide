@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-09-11
+
+Patch on the public 0.1.2 beta. Upgrade if you ran `setup ci`, `deploy` / `validate query` locally, followed the tutorial, or installed without Azure/pandas extras.
+
+### Fixed
+
+- `opentide setup ci` emits parseable GitHub, GitLab, and Azure YAML. `textwrap.dedent` no longer strips indentation from already-indented step blocks ([#163](https://github.com/opentidehq/opentide/issues/163)).
+- `opentide deploy` and `validate query` no longer crash locally when `DEPLOYMENT_PLAN` is unset. Unset or blank env defaults to `FULL`; illegal names fail with a clear error. Local debug compiles from the rules folder; PRODUCTION promotion is skipped for `--dry-run` and LocalDebug ([#164](https://github.com/opentidehq/opentide/issues/164)).
+- Tutorial objects validate and lint: required `metadata.created` / `modified`, severity vocabulary, filenames matching `slugify(name)`, nested organisation and author. `setup` scaffolds `docs/Rules`, `docs/Objectives`, and `docs/Threats`. Templates emit `YYYY-MM-DD` dates. `generate docs` joins relative docs paths against the repository root ([#165](https://github.com/opentidehq/opentide/issues/165)).
+- `opentide info` reports `can_deploy: true` after a base `pip install` (no Azure/pandas extras). Platforms lazy-load optional SDKs; `requests` is a core dependency. Tenant `[platform]` identity is not parsed as a detection-rule schema. Coverage counts top-level `techniques`. `generate extract` runs the installed package modules ([#166](https://github.com/opentidehq/opentide/issues/166)).
+
+### Install
+
+```bash
+pip install opentide==0.1.3
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.1.2] — 2026-09-11
 
 Patch on the public 0.1.1 beta. Upgrade if you scaffold new detection repos, generate on an empty catalogue, or install agent skills.
@@ -86,7 +105,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.3
 [0.1.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.2
 [0.1.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.1
 [0.1.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.0
