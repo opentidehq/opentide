@@ -71,6 +71,17 @@ def test_tutorial_objects_validate_and_lint(invoke_cli, tmp_path: Path) -> None:
 
     docs = invoke_cli("generate", "docs", repo=fresh)
     assert_json_ok(docs)
-    assert (fresh / "docs" / "Rules" / "00000000-0000-4000-8003-000000000001.md").is_file()
-    assert (fresh / "docs" / "Objectives" / "00000000-0000-4000-8002-000000000001.md").is_file()
-    assert (fresh / "docs" / "Threats" / "00000000-0000-4000-8001-000000000001.md").is_file()
+    # Flavor follows CI env (GitLab locally via CI=true, GitHub Actions in CI),
+    # so filenames are either UUIDs or slugs. Assert object pages exist either way.
+    def _object_pages(folder: str) -> list[str]:
+        return sorted(
+            p.name
+            for p in (fresh / "docs" / folder).glob("*.md")
+            if p.name.lower() != "readme.md"
+        )
+
+    assert _object_pages("Rules"), "expected generated rule documentation"
+    assert _object_pages("Objectives"), "expected generated objective documentation"
+    assert _object_pages("Threats"), "expected generated threat documentation"
+    rule_text = (fresh / "docs" / "Rules" / _object_pages("Rules")[0]).read_text(encoding="utf-8")
+    assert "00000000-0000-4000-8003-000000000001" in rule_text
