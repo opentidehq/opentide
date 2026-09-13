@@ -7,8 +7,16 @@ from typing import Any, ClassVar, cast
 
 from pydantic import Field, model_validator
 
-from opentide.models.base import TideModel, VocabField
+from opentide.models.base import TideField, TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
+
+
+class ThreatActor(TideModel):
+    """One attributed actor on a threat vector (CoreTide ``actors`` definition)."""
+
+    name: str = VocabField("actors", scoped=True)
+    sighting: str | None = TideField(None, schema_extra={"tide.template.multiline": True})
+    references: list[str] | None = None
 
 
 class ThreatBody(TideModel):
@@ -20,7 +28,7 @@ class ThreatBody(TideModel):
     terrain: str
     surface: list[str] = VocabField(True)
     att_ck: list[str] = Field(alias="att&ck", json_schema_extra={"tide.vocab": True})
-    actors: list[str] | None = VocabField(True, default=None)
+    actors: list[ThreatActor] | None = None
     killchain: str | list[str] | None = VocabField(True, default=None)
     chaining: list[dict[str, str]] | None = None
 

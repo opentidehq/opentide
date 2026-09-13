@@ -57,10 +57,10 @@ threat:
   att&ck:
     - T1059
   actors:
-    - G0006
+    - name: att&ck::G0006
 ```
 
-Optional `threat.actors` entries are keys from the bundled actors vocabulary (ATT&CK group IDs such as `G0006`, or MISP cluster IDs). They are strings, not nested objects.
+Optional `threat.actors` entries are objects. `name` is a scoped key from the bundled actors vocabulary (`att&ck::G0006`, or a MISP cluster ID). Optional `sighting` and `references` sit on the same object — not a bare string list.
 
 ### 2. Objective — what we want to detect
 

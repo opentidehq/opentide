@@ -119,7 +119,7 @@ opentide generate exports objects
 opentide generate exports revisions
 ```
 
-`generate exports objects` writes `.opentide/exports/objects.export.json`. Threat `actors` are vocabulary IDs (`G0006`); the export enriches them to display names. A list of `{name: …}` dicts is no longer the schema — those values are strings.
+`generate exports objects` writes `.opentide/exports/objects.export.json`. Threat `actors` are objects whose `name` is a scoped vocabulary ID (`att&ck::G0006`); the export enriches those names to display names.
 
 ## generate inflight
 

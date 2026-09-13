@@ -34,7 +34,7 @@ def test_generate_all_on_fresh_setup_repo(invoke_cli, tmp_path: Path) -> None:
 
 
 def test_generate_all_on_corpus_enriches_vocab_actors(invoke_cli, tide_corpus_repo: Path) -> None:
-    """Full generate on populated objects must not crash on string actors (issue #172)."""
+    """Full generate on populated objects must enrich object ``actors[].name``."""
     result = invoke_cli("generate")
     assert_json_ok(result)
     export_path = tide_corpus_repo / ".opentide" / "exports" / "objects.export.json"

@@ -19,10 +19,15 @@ def TideField(
 def VocabField(
     vocab: str | bool = True,
     default: Any = ...,
+    *,
+    scoped: bool = False,
     **kwargs: Any,
 ) -> Any:
     """Field marked as vocabulary-constrained in generated metaschema."""
-    return TideField(default, schema_extra={"tide.vocab": vocab}, **kwargs)
+    extra: dict[str, Any] = {"tide.vocab": vocab}
+    if scoped:
+        extra["tide.vocab.scoped"] = True
+    return TideField(default, schema_extra=extra, **kwargs)
 
 
 class TideModel(BaseModel):

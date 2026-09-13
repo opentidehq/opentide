@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+import types
+from typing import Any, Union, cast, get_args, get_origin
 
 from opentide.generation.model_json_schema import model_json_schema
 from opentide.models.base import TideModel, field_json_schema_extra
@@ -156,6 +157,30 @@ def apply_vocab_pins(schema: dict[str, Any], schema_id: str) -> None:
             _set_vocab_at_path(properties, parts, contract, defs=defs_map)
 
 
+def _deref_schema_node(node: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
+    """Follow a local ``$ref`` into ``$defs`` when present."""
+    ref = node.get("$ref")
+    if isinstance(ref, str):
+        target = defs.get(ref.rsplit("/", 1)[-1])
+        if isinstance(target, dict):
+            return target
+    return node
+
+
+def _schema_branch_nodes(node: dict[str, Any], defs: dict[str, Any]) -> list[dict[str, Any]]:
+    """Expand ``$ref`` / ``anyOf`` / ``oneOf`` to concrete schema objects."""
+    resolved = _deref_schema_node(node, defs)
+    alts = resolved.get("anyOf") or resolved.get("oneOf")
+    if isinstance(alts, list):
+        branches: list[dict[str, Any]] = []
+        for alt in alts:
+            if isinstance(alt, dict):
+                branches.append(_deref_schema_node(alt, defs))
+        if branches:
+            return branches
+    return [resolved]
+
+
 def _set_vocab_at_path(
     node: dict[str, Any],
     parts: list[str],
@@ -169,29 +194,23 @@ def _set_vocab_at_path(
     if key not in node or not isinstance(node[key], dict):
         return
     field_schema = node[key]
-    if "$ref" in field_schema and len(parts) > 1:
-        ref_name = str(field_schema["$ref"]).rsplit("/", 1)[-1]
-        target = defs.get(ref_name)
-        if isinstance(target, dict):
-            nested_props = target.setdefault("properties", {})
-            if isinstance(nested_props, dict):
-                _set_vocab_at_path(nested_props, parts[1:], contract, defs=defs)
-        return
     if len(parts) == 1:
         field_schema["tide.vocab"] = contract
         return
 
-    if field_schema.get("type") == "array":
-        items = field_schema.get("items")
-        if isinstance(items, dict):
-            item_props = items.setdefault("properties", {})
+    for branch in _schema_branch_nodes(field_schema, defs):
+        if branch.get("type") == "array":
+            items = branch.get("items")
+            if not isinstance(items, dict):
+                continue
+            item = _deref_schema_node(items, defs)
+            item_props = item.setdefault("properties", {})
             if isinstance(item_props, dict):
                 _set_vocab_at_path(item_props, parts[1:], contract, defs=defs)
-        return
-
-    nested_props = field_schema.get("properties")
-    if isinstance(nested_props, dict):
-        _set_vocab_at_path(nested_props, parts[1:], contract, defs=defs)
+            continue
+        nested_props = branch.get("properties")
+        if isinstance(nested_props, dict):
+            _set_vocab_at_path(nested_props, parts[1:], contract, defs=defs)
 
 
 def _merge_nested_def_extras(model: type[TideModel], defs: dict[str, Any]) -> None:
@@ -256,11 +275,16 @@ def _merge_model_field_extras(model: type[TideModel], properties: dict[str, Any]
 
 
 def _resolve_model_type(annotation: Any) -> type[TideModel] | None:
-    origin = getattr(annotation, "__origin__", None)
-    if origin is list:
-        args = getattr(annotation, "__args__", ())
-        if args:
-            annotation = args[0]
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+    if origin in {Union, types.UnionType} and args:
+        for arg in args:
+            resolved = _resolve_model_type(arg)
+            if resolved:
+                return resolved
+        return None
+    if origin is list and args:
+        return _resolve_model_type(args[0])
     if isinstance(annotation, type) and issubclass(annotation, TideModel):
         return annotation
     return None

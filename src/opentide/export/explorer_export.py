@@ -53,7 +53,13 @@ def _actors(body: dict[str, Any], obj_type: str) -> list[str]:
         return []
     threat = body.get("threat") or {}
     actors = threat.get("actors") or body.get("actors") or []
-    return [str(a) for a in actors if isinstance(a, str)]
+    names: list[str] = []
+    for actor in actors:
+        if isinstance(actor, dict):
+            name = actor.get("name")
+            if isinstance(name, str) and name:
+                names.append(name)
+    return names
 
 
 def _count_relations(uuid: str, flat_index: dict[str, dict[str, Any]]) -> int:

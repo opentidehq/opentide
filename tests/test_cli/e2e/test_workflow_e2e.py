@@ -5,8 +5,8 @@ setup → generate (empty) → author → generate (populated) → validate → 
 info → validate query → deploy dry-run → docs → setup env/hooks/ci.
 
 Does not inject DEPLOYMENT_PLAN=FULL or CI=true on deploy/query steps
-(issue #164). Populated generate must survive vocab-string ``threat.actors``
-(issue #172).
+(issue #164). Populated generate must survive object ``threat.actors``
+(name / optional sighting / references).
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def test_first_user_cli_workflow(
         encoding="utf-8"
     )
     assert "actors:" in threat_yaml
-    assert "G0006" in threat_yaml
+    assert "name: att&ck::G0006" in threat_yaml
 
     populated = invoke_cli("generate", repo=fresh)
     assert_json_ok(populated)

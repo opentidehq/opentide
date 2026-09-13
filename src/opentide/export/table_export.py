@@ -50,10 +50,12 @@ class TableExporter:
         )
 
     def _flatten_actors(self, actors: Sequence[Any]) -> list[str]:
-        """Resolve ``threat.actors`` vocab keys (or legacy dicts) to display names."""
+        """Resolve ``threat.actors[]`` object ``name`` values to display names."""
 
         def _identifier(actor: Any) -> str:
-            raw = actor.get("name") or actor.get("id") or "" if isinstance(actor, dict) else actor
+            if not isinstance(actor, dict):
+                return ""
+            raw = actor.get("name") or ""
             token = str(raw).split(" #", 1)[0].strip()
             if token.startswith("actor::"):
                 return token.split("::", 1)[1]
@@ -69,8 +71,13 @@ class TableExporter:
                     return str(name)
             return identifier
 
-        items: Sequence[Any] = [actors] if isinstance(actors, str) else actors
-        return [_enrich_actor_name(_identifier(actor)) for actor in items]
+        if isinstance(actors, str):
+            return []
+        return [
+            enriched
+            for actor in actors
+            if (enriched := _enrich_actor_name(_identifier(actor)))
+        ]
 
     def _flatten_chaining(self, chains: list[dict[str, Any]]) -> dict[str, list[str]]:
         flat_chains: dict[str, list[str]] = {}

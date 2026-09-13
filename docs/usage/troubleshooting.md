@@ -88,7 +88,12 @@ opentide setup ci github --yes
 
 ### `opentide generate` crashes with `'str' object has no attribute 'get'`
 
-`0.1.3` treated `threat.actors` as a list of `{name: …}` dicts leftover from an older schema. Current objects store vocabulary IDs (`G0006`, `att&ck::G0006`). Running `opentide generate` on a repo that sets `actors` then crashed in the objects export. Upgrade past **0.1.3**, or omit `actors` until you upgrade. Values must be vocabulary strings, not dicts.
+`threat.actors` is a list of objects (`name`, optional `sighting` / `references`), not vocabulary ID strings. A leaked `list[str]` schema taught some repos to write `- G0006`, and the objects export then crashed calling `.get` on a string. Write the object form:
+
+```yaml
+actors:
+  - name: att&ck::G0006
+```
 
 ### `opentide generate` crashes with `subschemas` on a new repo
 

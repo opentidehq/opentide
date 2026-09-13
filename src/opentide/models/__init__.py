@@ -22,7 +22,7 @@ from opentide.models.objective import (
 )
 from opentide.models.results import DeploymentResult, ValidationResult
 from opentide.models.rule import DetectionRule, TideRegistry
-from opentide.models.threat import ThreatBody, ThreatVector
+from opentide.models.threat import ThreatActor, ThreatBody, ThreatVector
 from opentide.models.version import SchemaVersion, SchemaVersionChain
 
 __all__ = [
@@ -48,6 +48,7 @@ __all__ = [
     "SchemaVersion",
     "SchemaVersionChain",
     "SignalData",
+    "ThreatActor",
     "ThreatBody",
     "ThreatVector",
     "TideField",

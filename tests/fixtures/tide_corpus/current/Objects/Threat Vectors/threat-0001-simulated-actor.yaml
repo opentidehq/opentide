@@ -21,4 +21,4 @@ threat:
   att&ck:
     - T1059
   actors:
-    - G0006
+    - name: att&ck::G0006

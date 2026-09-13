@@ -73,6 +73,19 @@ def test_get_pins_for_threat_revisions_differ_on_killchain() -> None:
     pins_21 = get_pins("threat::2.1")
     assert pins_10["threat.killchain"] == "killchain::1.0"
     assert pins_21["threat.killchain"] == "killchain::1.1"
+    assert pins_10["threat.actors.name"] == "actors::1.0"
+    assert pins_21["threat.actors.name"] == "actors::1.0"
+    assert "threat.actors" not in pins_10
+    assert "threat.actors" not in pins_21
+
+
+def test_threat_schema_pins_actors_name_on_object_items() -> None:
+    source = build_schema_source_for_identifier("threat::1.0")
+    actor = source["$defs"]["ThreatActor"]["properties"]["name"]
+    assert actor["tide.vocab"] == "actors::1.0"
+    assert actor.get("tide.vocab.scoped") is True
+    actors_field = source["$defs"]["ThreatBody"]["properties"]["actors"]
+    assert "tide.vocab" not in actors_field
 
 
 def test_threat_schema_identifiers_compile_different_killchain_enums() -> None:
@@ -90,6 +103,7 @@ def test_threat_schema_identifiers_compile_different_killchain_enums() -> None:
             patch.object(sp, "VOCAB_INDEX", {"killchain": vocab}),
             patch.object(sp, "VOCAB_EXTENSIONS", {}),
             patch.object(sp, "OBJECT_TYPES", []),
+            patch.object(sp, "_runtime_ready", True),
         ):
             schema_10 = gen_json_schema(source_10, schema_id="threat::1.0")
             schema_21 = gen_json_schema(source_21, schema_id="threat::2.1")
@@ -114,6 +128,7 @@ def test_generate_schema_for_identifier_uses_registered_revision() -> None:
             patch.object(sp, "VOCAB_INDEX", {"killchain": vocab}),
             patch.object(sp, "VOCAB_EXTENSIONS", {}),
             patch.object(sp, "OBJECT_TYPES", []),
+            patch.object(sp, "_runtime_ready", True),
         ):
             schema = generate_schema_for_identifier("threat::2.1")
         killchain_enum = schema["$defs"]["ThreatBody"]["properties"]["killchain"]["enum"]

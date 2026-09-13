@@ -76,10 +76,10 @@ threat:
   att&ck:
     - T1059
   actors:
-    - G0006
+    - name: att&ck::G0006
 ```
 
-`threat.actors` is a list of vocabulary **IDs** (`G0006` is ATT&CK APT1), not `{name: …}` objects. `opentide generate` enriches those IDs when it writes the objects export.
+`threat.actors` is a list of **objects**. `name` is a scoped actors-vocabulary ID (`att&ck::G0006` is APT1). Optional `sighting` and `references` record why that actor is attributed. `opentide generate` enriches `name` when it writes the objects export.
 
 <Callout type="warn">
 Generate real UUIDs for your own content (`python -c "import uuid; print(uuid.uuid4())"`). The zero-padded UUIDs here match the fixtures so the tutorial is easy to follow — never hand-copy UUIDs into real objects.
