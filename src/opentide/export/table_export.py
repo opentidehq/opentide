@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
@@ -52,10 +53,7 @@ class TableExporter:
         """Resolve ``threat.actors`` vocab keys (or legacy dicts) to display names."""
 
         def _identifier(actor: Any) -> str:
-            if isinstance(actor, dict):
-                raw = actor.get("name") or actor.get("id") or ""
-            else:
-                raw = actor
+            raw = actor.get("name") or actor.get("id") or "" if isinstance(actor, dict) else actor
             token = str(raw).split(" #", 1)[0].strip()
             if token.startswith("actor::"):
                 return token.split("::", 1)[1]

@@ -74,9 +74,7 @@ def test_first_user_cli_workflow(
     assert export_path.is_file()
     catalog = json.loads(export_path.read_text(encoding="utf-8"))
     threat_row = next(
-        row
-        for row in catalog
-        if row["uuid"] == "00000000-0000-4000-8001-000000000001"
+        row for row in catalog if row["uuid"] == "00000000-0000-4000-8001-000000000001"
     )
     assert "APT1" in threat_row["actors"] or "G0006" in threat_row["actors"]
 
@@ -90,9 +88,9 @@ def test_first_user_cli_workflow(
 
     info = invoke_cli("info", repo=fresh)
     info_payload = assert_json_ok(info)
-    assert info_payload["counts"]["threat"] == 1
-    assert info_payload["counts"]["objective"] == 1
-    assert info_payload["counts"]["rule"] == 1
+    assert info_payload["counts"]["threats"] == 1
+    assert info_payload["counts"]["objectives"] == 1
+    assert info_payload["counts"]["rules"] == 1
 
     coverage = invoke_cli("info", "--technique", "T1059", "coverage", repo=fresh)
     coverage_payload = assert_json_ok(coverage)
