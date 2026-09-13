@@ -30,7 +30,7 @@ on Mondays and on `workflow_dispatch`.
 1. **specifications** (`chore/vocab-upstream` → `main`) — canonical `vocabularies/` and `schemas/pins/`.
 2. **opentide** (`chore/vocab-upstream` → `development`) — bundled `src/opentide/data/vocabulary/`, `src/opentide/data/pins/`, and `data/specifications.lock.json`.
 
-Merge specifications first so the lockfile SHA matches canonical vocabs. Nothing auto-merges. `workflow_dispatch` can re-run while a PR is open (`ignore-open-pr`, default true); scheduled runs skip when an ingest PR is already open.
+Merge specifications first so the lockfile SHA matches canonical vocabs. Nothing auto-merges. `workflow_dispatch` can re-run while a PR is open (`ignore-open-pr`, default true); scheduled runs skip when an ingest PR is already open. After those PRs merge, the next run force-pushes the same `chore/vocab-upstream` heads and opens **new** PRs. Create uses `gh pr list --state open` so a merged cycle is not treated as an existing PR.
 
 `att&ck.groups` is ingested but not currently pinned.
 

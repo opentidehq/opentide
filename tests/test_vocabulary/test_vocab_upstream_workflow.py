@@ -1,0 +1,17 @@
+"""Guards for the weekly ATT&CK + MISP ingest workflow."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "vocab-upstream.yml"
+
+
+def test_ingest_creates_pr_when_previous_cycle_is_merged() -> None:
+    """``gh pr view <branch>`` matches merged PRs and would skip later cycles."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "gh pr view" not in text
+    assert text.count("gh pr list") >= 4
+    assert text.count("--state open") >= 4
+    assert "gh pr create --repo OpenTideHQ/specifications" in text
+    assert "gh pr create --base development" in text

@@ -116,7 +116,9 @@ jobs:
           git checkout -B "$UPSTREAM_BRANCH"
           git commit -m "chore(vocab): ingest ATT&CK and MISP threat actors"
           git push --force-with-lease origin "$UPSTREAM_BRANCH"
-          if ! gh pr view "$UPSTREAM_BRANCH" --repo OpenTideHQ/specifications >/dev/null 2>&1; then
+          # Only skip create when an OPEN PR still exists for this head (merged cycles must open a new PR).
+          open_count=$(gh pr list --repo OpenTideHQ/specifications --head "$UPSTREAM_BRANCH" --state open --json number --jq 'length')
+          if [[ "$open_count" -eq 0 ]]; then
             gh pr create --repo OpenTideHQ/specifications --base main --head "$UPSTREAM_BRANCH" \
               --title "chore(vocab): ingest ATT&CK techniques and MISP actors" \
               --body "$(cat <<'EOF'
@@ -149,7 +151,9 @@ jobs:
           git checkout -B "$UPSTREAM_BRANCH"
           git commit -m "chore(vocab): sync ATT&CK and actor vocabularies and pins"
           git push --force-with-lease origin "$UPSTREAM_BRANCH"
-          if ! gh pr view "$UPSTREAM_BRANCH" --json number >/dev/null 2>&1; then
+          # Only skip create when an OPEN PR still exists for this head (merged cycles must open a new PR).
+          open_count=$(gh pr list --head "$UPSTREAM_BRANCH" --state open --json number --jq 'length')
+          if [[ "$open_count" -eq 0 ]]; then
             gh pr create --base development --head "$UPSTREAM_BRANCH" \
               --title "chore(vocab): sync ATT&CK techniques and MISP actors" \
               --body "$(cat <<'EOF'
