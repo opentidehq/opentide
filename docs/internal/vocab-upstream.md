@@ -56,12 +56,12 @@ RFC 0003 pins map **schema fields** to vocab contracts (`field::M.m`). They do n
 | Vocab | Schema pin | Role |
 |-------|------------|------|
 | `att&ck` | `threat.att&ck`, `objective.attack`, `rule.techniques` | Live technique lists |
-| `actors` | `threat.actors` | Live actor lists (ATT&CK intrusion-sets + MISP) |
+| `actors` | `threat.actors.name` | Live actor `name` (ATT&CK intrusion-sets + MISP) |
 | `datasources` | `objective.signals.data.logsources` | Live logsource lists |
 | `att&ck.groups` | none | MITRE catalog only |
 | `mitigations` | none | MITRE catalog only (name-keyed; duplicate MITRE ids) |
 
-ATT&CK groups **are** version-gated on threat objects through `threat.actors` → `actors::*`. `generate_actors` merges STIX intrusion-sets (G-ids) into `actors`. The separate `att&ck.groups` file is a MITRE-only catalog; `ThreatBody` has no `groups` field, so a pin such as `"threat.groups" = "att&ck.groups::1.0"` would be unused.
+ATT&CK groups **are** version-gated on threat objects through `threat.actors.name` → `actors::*`. `generate_actors` merges STIX intrusion-sets (G-ids) into `actors`. The separate `att&ck.groups` file is a MITRE-only catalog; `ThreatBody` has no `groups` field, so a pin such as `"threat.groups" = "att&ck.groups::1.0"` would be unused.
 
 ## Pin policy
 

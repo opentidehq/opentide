@@ -39,7 +39,7 @@ Pin bumps are **additive minors only** (for example `att&ck::1.0` → `att&ck::1
 and only for vocab fields already referenced in schema pin files (`att&ck`,
 `actors`, `datasources`). `att&ck.groups` and `mitigations` are catalog vocabs
 with no schema pin: ATT&CK groups still version-gate live objects through
-`threat.actors` → `actors::*` (STIX intrusion-sets merge into `actors`).
+`threat.actors.name` → `actors::*` (STIX intrusion-sets merge into `actors`).
 Keys that disappear from upstream keep their `version` and get `removed` at the
 next major, so existing schema revisions still accept them. The ingest PRs are
 the review gate — nothing auto-merges.

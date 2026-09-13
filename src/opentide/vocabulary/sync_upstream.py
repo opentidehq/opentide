@@ -88,7 +88,7 @@ def _schema_pinned_versions(
 
     Catalog vocabs such as ``att&ck.groups`` and ``mitigations`` have no
     ``field::M.m`` pin. ATT&CK groups still version-gate live objects through
-    ``threat.actors`` → ``actors::*`` after ``generate_actors`` merges STIX
+    ``threat.actors.name`` → ``actors::*`` after ``generate_actors`` merges STIX
     intrusion-sets into ``actors``.
     """
     pinned_fields = vocab_fields_in_pin_directories(directories)
