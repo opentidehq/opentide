@@ -1,8 +1,14 @@
 """CLI E2E: first-user DetectionOps workflow without Python setup helpers.
 
-Replays the published console path that follow-up PRs kept missing:
+Replays the published tutorial console path in order, asserting each
+``opentide`` invocation exits 0 (or 1 on the intentional dangling-ref):
+
 setup → generate (empty) → author → generate (populated) → validate → lint →
-info → validate query → deploy dry-run → docs → setup env/hooks/ci.
+dangling ``detection_model`` (must fail) → restore → info → coverage →
+validate query → deploy dry-run → docs → setup env/hooks.
+
+This module uses in-process ``CliRunner``. The matching console-script chain
+lives in ``test_workflow_subprocess_e2e.py``.
 
 Does not inject DEPLOYMENT_PLAN=FULL or CI=true on deploy/query steps
 (issue #164). Populated generate must survive object ``threat.actors``
@@ -17,7 +23,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import yaml
-from tests.test_cli.conftest import assert_json_ok
+from tests.test_cli.conftest import assert_json_ok, parse_cli_json
 from tests.test_cli.e2e.helpers import write_tutorial_objects
 
 pytestmark = pytest.mark.cli_e2e
@@ -85,6 +91,22 @@ def test_first_user_cli_workflow(
     lint = invoke_cli("lint", "--strict", repo=fresh)
     lint_payload = assert_json_ok(lint)
     assert lint_payload["count"] == 0
+
+    rule_path = fresh / "objects" / "rules" / "sentinel-kql-rule.yaml"
+    original_rule = rule_path.read_text(encoding="utf-8")
+    good_ref = "detection_model: 00000000-0000-4000-8002-000000000001"
+    dangling_ref = "detection_model: 00000000-0000-4000-8002-DEADBEEF0000"
+    assert good_ref in original_rule
+    rule_path.write_text(original_rule.replace(good_ref, dangling_ref), encoding="utf-8")
+    broken = invoke_cli("validate", "--strict", repo=fresh)
+    assert broken.exit_code == 1, broken.stdout + broken.stderr
+    broken_payload = parse_cli_json(broken)
+    assert broken_payload["ok"] is False
+    assert "DEADBEEF0000" in broken.stdout
+    rule_path.write_text(original_rule, encoding="utf-8")
+    restored = invoke_cli("validate", "--strict", repo=fresh)
+    restored_payload = assert_json_ok(restored)
+    assert restored_payload["report"]["ok"] is True
 
     info = invoke_cli("info", repo=fresh)
     info_payload = assert_json_ok(info)
