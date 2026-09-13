@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from opentide.vocabulary import generate_attack
+from opentide.vocabulary.io import read_vocab_document
 
 
 def test_generate_attack_vocabs_writes_files(
@@ -40,7 +41,7 @@ def test_generate_attack_vocabs_writes_files(
     monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
     monkeypatch.setattr(generate_attack, "write_vocab_file", lambda _p, _d: None)
 
-    counts = generate_attack.generate_attack_vocabs()
+    counts = generate_attack.generate_attack_vocabs().counts
     assert set(counts) == {"att&ck", "att&ck.groups", "mitigations", "datasources"}
 
 
@@ -134,10 +135,65 @@ def test_generate_attack_vocabs_with_fetch_flag(
         raising=False,
     )
     with patch("opentide.vocabulary.fetch_stix.fetch_latest_attack_stix", return_value={}):
-        counts = generate_attack.generate_attack_vocabs(fetch=True)
+        counts = generate_attack.generate_attack_vocabs(fetch=True).counts
 
     assert counts["att&ck"] == 1
     assert counts["datasources"] == 1
+
+
+def test_stix_dir_honours_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENTIDE_ATTACK_STIX_DIR", str(tmp_path / "stix"))
+    assert generate_attack._stix_dir() == tmp_path / "stix"
+
+
+def test_generate_attack_merges_and_versions_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stix_dir = tmp_path / "attack" / "stix"
+    vocab_dir = tmp_path / "vocabs"
+    stix_dir.mkdir(parents=True)
+    vocab_dir.mkdir()
+    bundle = {"type": "bundle", "objects": []}
+    (stix_dir / "enterprise-attack.json").write_text(json.dumps(bundle), encoding="utf-8")
+    (stix_dir / "manifest.json").write_text(
+        json.dumps({"version": "16.1", "fetched_at": "2026-01-01T00:00:00Z"}),
+        encoding="utf-8",
+    )
+    (vocab_dir / "att&ck.vocab.toml").write_text(
+        'name = "MITRE ATT&CK"\nfield = "att&ck"\nversion = "1.0"\nkey = "id"\n\n'
+        '[[keys]]\nid = "T1001"\nname = "Alpha"\n',
+        encoding="utf-8",
+    )
+    for field in ("att&ck.groups", "mitigations", "datasources"):
+        (vocab_dir / f"{field}.vocab.toml").write_text(
+            f'name = "{field}"\nfield = "{field}"\nkeys = []\n',
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(generate_attack, "_stix_dir", lambda: stix_dir)
+    monkeypatch.setattr(
+        generate_attack,
+        "merge_technique_bundles",
+        lambda _b: [
+            {"id": "T1001", "name": "Alpha"},
+            {"id": "T1002", "name": "Beta"},
+        ],
+    )
+    monkeypatch.setattr(generate_attack, "parse_groups", lambda _b, prefix="": [])
+    monkeypatch.setattr(generate_attack, "parse_mitigations", lambda _b, prefix="": [])
+    monkeypatch.setattr(generate_attack, "parse_datasources", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
+
+    report = generate_attack.generate_attack_vocabs(vocab_dir=vocab_dir)
+    assert report.lifecycles["att&ck"].added == ("T1002",)
+    assert report.pin_versions["att&ck"] == "1.1"
+    written = read_vocab_document(vocab_dir / "att&ck.vocab.toml")
+    assert "version" not in written
+    assert written["source"] == "mitre-attack"
+    assert written["source_version"] == "16.1"
+    by_id = {entry["id"]: entry for entry in written["keys"]}
+    assert by_id["T1002"]["version"] == "1.1"
+    assert by_id["T1001"]["version"] == "1.0"
 
 
 def test_generate_attack_vocabs_uses_explicit_vocab_dir(
@@ -173,3 +229,35 @@ def test_generate_attack_vocabs_uses_explicit_vocab_dir(
 
     assert written_paths
     assert all(path.parent == output_dir for path in written_paths)
+
+
+def test_generate_attack_write_false_keeps_disk_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stix_dir = tmp_path / "attack" / "stix"
+    vocab_dir = tmp_path / "vocabs"
+    stix_dir.mkdir(parents=True)
+    vocab_dir.mkdir()
+    bundle = {"type": "bundle", "objects": []}
+    (stix_dir / "enterprise-attack.json").write_text(json.dumps(bundle), encoding="utf-8")
+    original = 'name = "MITRE ATT&CK"\nfield = "att&ck"\nkey = "id"\nkeys = []\n'
+    (vocab_dir / "att&ck.vocab.toml").write_text(original, encoding="utf-8")
+    for field in ("att&ck.groups", "mitigations", "datasources"):
+        (vocab_dir / f"{field}.vocab.toml").write_text(
+            f'name = "{field}"\nfield = "{field}"\nkeys = []\n',
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(generate_attack, "_stix_dir", lambda: stix_dir)
+    monkeypatch.setattr(
+        generate_attack,
+        "merge_technique_bundles",
+        lambda _b: [{"id": "T1001", "name": "Alpha"}],
+    )
+    monkeypatch.setattr(generate_attack, "parse_groups", lambda _b, prefix="": [])
+    monkeypatch.setattr(generate_attack, "parse_mitigations", lambda _b, prefix="": [])
+    monkeypatch.setattr(generate_attack, "parse_datasources", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
+
+    report = generate_attack.generate_attack_vocabs(vocab_dir=vocab_dir, write=False)
+    assert report.lifecycles["att&ck"].added == ("T1001",)
+    assert (vocab_dir / "att&ck.vocab.toml").read_text(encoding="utf-8") == original

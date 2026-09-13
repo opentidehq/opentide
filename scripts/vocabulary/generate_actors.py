@@ -37,9 +37,9 @@ def main() -> None:
     args = parser.parse_args()
     specifications_root = _specifications_root()
     output_dir = specifications_root / "vocabularies"
-    count = generate_actors_vocabs(misp_url=args.misp_url, vocab_dir=output_dir)
+    report = generate_actors_vocabs(misp_url=args.misp_url, vocab_dir=output_dir)
     _sync_bundled_vocabularies(specifications_root)
-    print(f"actors: {count} entries")
+    print(f"actors: {report.counts['actors']} entries")
     print(f"synced bundle from: {output_dir}")
 
 
