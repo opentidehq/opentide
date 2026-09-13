@@ -7,6 +7,30 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.1.4 — 13 September 2026
+
+Patch on 0.1.3. **Upgrade if `opentide generate` crashed on `threat.actors`, or if you wrote actors as vocabulary ID strings.**
+
+**Install**
+
+```bash
+pip install opentide==0.1.4
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version fixes**
+
+- `threat.actors` is a list of objects (`name: att&ck::G0006`, optional `sighting` / `references`), not `list[str]`.
+- `opentide generate` no longer raises `'str' object has no attribute 'get'` on those fields.
+- Nested vocabulary fields are checked against the pinned vocabs.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.1.4/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.4)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.1.3 — 11 September 2026
 
 Patch on 0.1.2. **Upgrade if you ran `setup ci`, deployed or validated queries locally, followed the tutorial, or installed without Azure/pandas extras.**

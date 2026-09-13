@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-09-13
+
+Patch on the public 0.1.3 beta. Upgrade if `opentide generate` crashed with `'str' object has no attribute 'get'` on `threat.actors`, or if you authored actors as vocabulary ID strings.
+
+### Fixed
+
+- `threat.actors` is a list of objects (`name` is a scoped actors-vocabulary ID such as `att&ck::G0006`; optional `sighting` and `references`), matching CoreTide. Generated JSON Schema no longer teaches `list[str]`. `opentide generate` no longer crashes calling `.get` on a string ([#172](https://github.com/opentidehq/opentide/issues/172)).
+- Nested vocabulary fields (for example threat leverage / viability and objective composition) are validated against the pinned vocabs instead of being skipped.
+- Explorer export uses timezone-aware UTC so the package imports on Python 3.10.
+
+### Install
+
+```bash
+pip install opentide==0.1.4
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.1.3] — 2026-09-11
 
 Patch on the public 0.1.2 beta. Upgrade if you ran `setup ci`, `deploy` / `validate query` locally, followed the tutorial, or installed without Azure/pandas extras.
@@ -105,7 +123,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.4
 [0.1.3]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.3
 [0.1.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.2
 [0.1.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.1
