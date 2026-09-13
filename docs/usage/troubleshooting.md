@@ -26,7 +26,7 @@ See [Installation → environment variables](./installation.md#environment-varia
 The CLI ships as an extra. Install it:
 
 ```bash
-pip install 'opentide==0.1.3'
+pip install 'opentide==0.1.4'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at the venv's `opentide-mcp` — see [MCP configuration](../mcp/configuration.md).
@@ -38,7 +38,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 Upgrade:
 
 ```bash
-pip install 'opentide==0.1.3'
+pip install 'opentide==0.1.4'
 ```
 
 `0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
@@ -48,7 +48,7 @@ pip install 'opentide==0.1.3'
 `0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
 
 ```bash
-pip install 'opentide==0.1.3'
+pip install 'opentide==0.1.4'
 opentide setup skills discover
 opentide setup skills --generic --yes
 ```
@@ -88,7 +88,13 @@ opentide setup ci github --yes
 
 ### `opentide generate` crashes with `'str' object has no attribute 'get'`
 
-`threat.actors` is a list of objects (`name`, optional `sighting` / `references`), not vocabulary ID strings. A leaked `list[str]` schema taught some repos to write `- G0006`, and the objects export then crashed calling `.get` on a string. Write the object form:
+`0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the CoreTide object form (`name`, optional `sighting` / `references`). Upgrade:
+
+```bash
+pip install 'opentide==0.1.4'
+```
+
+Write actors as objects, not bare IDs:
 
 ```yaml
 actors:
