@@ -1,4 +1,4 @@
-"""Tests for bundled and remote skills catalogue helpers."""
+"""Tests for remote skills catalogue helpers."""
 
 from __future__ import annotations
 
@@ -7,8 +7,10 @@ import urllib.error
 from pathlib import Path
 
 import pytest
+from tests.test_cli.conftest import stub_remote_skills_manifest
 
 from opentide.cli.services.setup import skills_registry as registry
+from opentide.cli.services.setup.skills_registry import SkillsManifestError
 
 
 @pytest.fixture(autouse=True)
@@ -18,25 +20,17 @@ def _clear_manifest_cache() -> None:
     registry.clear_manifest_cache()
 
 
-def test_load_manifest_reads_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_manifest_requires_remote(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
-    manifest = registry.load_manifest()
-    assert manifest.source == "OpenTideHQ/skills"
-    assert manifest.ref
-    assert manifest.entries
-    assert all(entry.slug for entry in manifest.entries)
-    assert manifest.manifest_source == "bundled"
+    with pytest.raises(SkillsManifestError, match="OpenTideHQ/skills"):
+        registry.load_manifest()
 
 
 def test_load_manifest_remote_first(monkeypatch: pytest.MonkeyPatch) -> None:
     remote_entries = [
         registry.SkillEntry(name="Remote", slug="remote-skill", description="from github")
     ]
-
-    def _remote(**_: object) -> tuple[str, str, list[registry.SkillEntry]]:
-        return "OpenTideHQ/skills", "feature-branch", remote_entries
-
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", _remote)
+    stub_remote_skills_manifest(monkeypatch, remote_entries, ref="feature-branch")
     manifest = registry.load_manifest()
     assert manifest.manifest_source == "remote"
     assert manifest.ref == "feature-branch"
@@ -45,26 +39,32 @@ def test_load_manifest_remote_first(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_load_manifest_refresh_success(monkeypatch: pytest.MonkeyPatch) -> None:
     remote_entries = [registry.SkillEntry(name="Fresh", slug="fresh", description="new")]
-
-    def _remote(**_: object) -> tuple[str, str, list[registry.SkillEntry]]:
-        return "OpenTideHQ/skills", "main", remote_entries
-
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", _remote)
+    stub_remote_skills_manifest(monkeypatch, remote_entries)
     manifest = registry.load_manifest(refresh=True)
     assert manifest.manifest_source == "remote"
     assert manifest.manifest_refreshed is True
 
 
-def test_load_manifest_refresh_falls_back_on_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
-    manifest = registry.load_manifest(refresh=True)
-    assert manifest.manifest_source == "bundled"
-    assert manifest.manifest_refreshed is False
-    assert manifest.entries
-    # Failed refresh must replace TTL cache so follow-up calls match the fallback.
+def test_load_manifest_refresh_raises_on_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub_remote_skills_manifest(monkeypatch)
     cached = registry.load_manifest()
-    assert cached.manifest_source == "bundled"
-    assert [e.slug for e in cached.entries] == [e.slug for e in manifest.entries]
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    with pytest.raises(SkillsManifestError, match="publicly reachable"):
+        registry.load_manifest(refresh=True)
+    # Failed refresh must not replace a still-valid TTL cache.
+    assert registry.load_manifest().entries == cached.entries
+
+
+def test_failed_fetch_does_not_cache_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    with pytest.raises(SkillsManifestError):
+        registry.load_manifest()
+    stub_remote_skills_manifest(
+        monkeypatch,
+        [registry.SkillEntry(name="Recovered", slug="recovered", description="")],
+    )
+    manifest = registry.load_manifest()
+    assert [e.slug for e in manifest.entries] == ["recovered"]
 
 
 def test_parse_manifest_rejects_foreign_source() -> None:
@@ -122,33 +122,34 @@ def test_discover_skills_filters_by_query(tmp_path: Path, monkeypatch: pytest.Mo
             source="OpenTideHQ/skills",
             ref="main",
             entries=entries,
-            manifest_source="bundled",
+            manifest_source="remote",
             manifest_refreshed=False,
         ),
     )
     result = registry.discover_skills(tmp_path, query="alpha")
     assert result["count"] == 1
     assert result["skills"][0]["slug"] == "alpha"
-    assert result["manifest_source"] == "bundled"
+    assert result["manifest_source"] == "remote"
     assert result["manifest_refreshed"] is False
 
 
 def test_discover_skills_installed_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    stub_remote_skills_manifest(monkeypatch)
     installed = tmp_path / ".agents" / "skills" / "detection-engineering"
     installed.mkdir(parents=True)
     (installed / "SKILL.md").write_text("# detection-engineering\n", encoding="utf-8")
     result = registry.discover_skills(tmp_path, installed_only=True)
-    assert result["count"] >= 1
+    assert result["count"] == 1
+    assert result["skills"][0]["slug"] == "detection-engineering"
     assert all(skill["installed"] for skill in result["skills"])
 
 
 def test_show_skill_found_and_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    stub_remote_skills_manifest(monkeypatch)
     found = registry.show_skill(tmp_path, "detection-engineering")
     assert found["skill"]["slug"] == "detection-engineering"
     assert "install_hint" in found
-    assert found["manifest_source"] == "bundled"
+    assert found["manifest_source"] == "remote"
 
     missing = registry.show_skill(tmp_path, "no-such-skill-xyz")
     assert "error" in missing
@@ -187,13 +188,9 @@ def test_fetch_remote_manifest_parses_json(monkeypatch: pytest.MonkeyPatch) -> N
     assert entries[0].slug == "alpha"
 
 
-def test_bundled_skill_dir_rejects_path_segments() -> None:
-    assert registry.bundled_skill_dir("") is None
-    assert registry.bundled_skill_dir("../configurations") is None
-    assert registry.bundled_skill_dir("manifest.json") is None
-    starter = registry.bundled_skill_dir("opentide-detection-rule")
-    assert starter is not None
-    assert (starter / "SKILL.md").is_file()
+def test_fetch_remote_manifest_rejects_non_object_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(registry, "fetch_github_bytes", lambda *_, **__: b'["not", "an", "object"]')
+    assert registry._fetch_remote_manifest() is None
 
 
 def test_fetch_github_bytes_unauthenticated(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -228,15 +225,6 @@ def test_fetch_github_bytes_returns_none_on_network_errors(
     assert registry.fetch_github_bytes("manifest.json") is None
 
 
-def test_bundled_manifest_missing_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(registry, "_MANIFEST_PATH", tmp_path / "missing-manifest.json")
-    source, ref, entries = registry._load_bundled_manifest()
-    assert source == "OpenTideHQ/skills"
-    assert ref == "main"
-    assert entries == []
-    assert registry._bundled_ref_hint() == "main"
-
-
 def test_fetch_remote_manifest_returns_none_when_github_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -249,3 +237,11 @@ def test_fetch_remote_manifest_returns_none_on_invalid_json(
 ) -> None:
     monkeypatch.setattr(registry, "fetch_github_bytes", lambda *_, **__: b"not-json{")
     assert registry._fetch_remote_manifest() is None
+
+
+def test_known_skill_slugs_come_from_live_catalogue(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub_remote_skills_manifest(
+        monkeypatch,
+        [registry.SkillEntry(name="Live", slug="live-only", description="")],
+    )
+    assert registry.known_skill_slugs() == {"live-only"}

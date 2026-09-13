@@ -84,6 +84,13 @@ class GeneratePhase(str, Enum):
     docs = "docs"
 
 
+class LintCheck(str, Enum):
+    """Catalogue hygiene checks for ``opentide lint``."""
+
+    filenames = "filenames"
+    metadata = "metadata"
+
+
 def platform_label(platform: DetectionPlatform) -> str:
     """Human-readable platform label."""
     labels = {
@@ -105,6 +112,7 @@ __all__ = [
     "ExportTarget",
     "ExtractImport",
     "GeneratePhase",
+    "LintCheck",
     "McpHost",
     "QUERY_VALIDATION_PLATFORMS",
     "SkillTarget",

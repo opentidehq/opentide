@@ -26,7 +26,7 @@ See [Installation → environment variables](./installation.md#environment-varia
 The CLI ships as an extra. Install it:
 
 ```bash
-pip install 'opentide==0.1.1'
+pip install 'opentide==0.1.3'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at the venv's `opentide-mcp` — see [MCP configuration](../mcp/configuration.md).
@@ -38,7 +38,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 Upgrade:
 
 ```bash
-pip install 'opentide==0.1.1'
+pip install 'opentide==0.1.3'
 ```
 
 `0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
@@ -48,14 +48,47 @@ pip install 'opentide==0.1.1'
 `0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
 
 ```bash
-pip install 'opentide==0.1.1'
+pip install 'opentide==0.1.3'
 opentide setup skills discover
 opentide setup skills --generic --yes
 ```
 
-Use `--path` / `-C` for the repository root. Starter skills install from the packaged trees when GitHub is unreachable.
+Use `--path` / `-C` for the repository root. Skills are discovered and installed from the live [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) catalogue; GitHub must be reachable.
+
+### `setup skills` warns that the remote catalogue is unavailable
+
+`opentide setup skills` fetches `manifest.json` from GitHub, then downloads each requested skill. It does not install a packaged snapshot. If you see `Could not fetch skills catalogue from OpenTideHQ/skills@main`, check network access and that [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) is publicly reachable, then retry:
+
+```bash
+opentide setup skills discover --refresh
+opentide setup skills --generic --yes
+```
+
+### `setup ci` YAML fails to parse in GitHub, GitLab, or Azure
+
+`0.1.2` built pipeline files with `textwrap.dedent` around already-indented step blocks, which produced invalid YAML. This is fixed in **0.1.3**. Re-run:
+
+```bash
+opentide setup ci --flavor github --force
+```
+
+### `deploy` or `validate query` crashes locally with `illegal_deployment_plan`
+
+`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly.
+
+### Tutorial objects fail `validate --strict` or `lint --strict`
+
+`0.1.2` tutorial YAML omitted `metadata.created` / `modified` and used filename/severity values that lint rejected. Copy the examples from the current [Tutorial](./tutorial.md), or upgrade to **0.1.3** and re-run `opentide setup` so templates include dates.
+
+### `info` reports `can_deploy: false` after `pip install opentide`
+
+`0.1.2` imported Azure and pandas when loading Sentinel (and other) deployers, so a base install reported no deploy capability. **0.1.3** lazy-loads those SDKs. Re-run `opentide info` after upgrading. CrowdStrike and HarfangLab still report `can_validate: false` by design.
 
 ## Generation
+
+### `opentide generate` crashes with `subschemas` on a new repo
+
+Snippet generation used a legacy `Paths.Core.subschemas` path that the current layout never populates, so `opentide generate` aborted after docs and exports. This is fixed in **0.1.2**. An empty catalogue is valid: generate writes empty exports and creates `.vscode` snippets from whatever templates exist.
 
 ### `validate` complains that schemas are missing
 

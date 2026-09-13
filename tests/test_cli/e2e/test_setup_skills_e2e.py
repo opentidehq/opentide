@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import pytest
-from tests.test_cli.conftest import assert_json_ok, parse_cli_json
+from tests.test_cli.conftest import assert_json_ok, parse_cli_json, stub_remote_skills_manifest
 
 pytestmark = pytest.mark.cli_e2e
 
 
 @pytest.fixture(autouse=True)
-def _bundled_skills_catalogue(monkeypatch: pytest.MonkeyPatch) -> None:
-    from opentide.cli.services.setup import skills_registry as registry
-
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
-    registry.clear_manifest_cache()
+def _remote_skills_catalogue(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub_remote_skills_manifest(monkeypatch)
     yield
-    registry.clear_manifest_cache()
 
 
 def test_skills_discover_json(invoke_cli, tide_corpus_repo) -> None:
@@ -25,7 +21,7 @@ def test_skills_discover_json(invoke_cli, tide_corpus_repo) -> None:
     slugs = {item["slug"] for item in payload["skills"]}
     assert "opentide-detection-rule" in slugs
     assert "detection-engineering" in slugs
-    assert payload["manifest_source"] == "bundled"
+    assert payload["manifest_source"] == "remote"
 
 
 def test_skills_discover_human_table(invoke_cli, tide_corpus_repo) -> None:

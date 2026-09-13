@@ -197,8 +197,27 @@ def validate_query_platform(
     from opentide.platforms.plugins import DeployTide
 
     _reset_validation_env()
-    deployment_plan = DeploymentStrategy.load_from_environment()
-    deployment_list = make_deploy_plan(deployment_plan, wide_scope=wide, keep_deprecated=False)
+    try:
+        deployment_plan = DeploymentStrategy.load_from_environment()
+    except ValueError as exc:
+        return {
+            "platform": platform,
+            "status": "failed",
+            "supported": True,
+            "message": str(exc),
+            "_exit_code": 1,
+        }
+    try:
+        deployment_list = make_deploy_plan(deployment_plan, wide_scope=wide, keep_deprecated=False)
+    except Exception as exc:
+        message = str(exc).strip() or (f"{type(exc).__name__} while compiling the deployment plan")
+        return {
+            "platform": platform,
+            "status": "failed",
+            "supported": True,
+            "message": message,
+            "_exit_code": 1,
+        }
     if platform not in deployment_list:
         return {
             "platform": platform,

@@ -113,10 +113,10 @@ class TableExporter:
     def _create_dataset(self) -> Sequence[TableEntry]:
         dataset: list[TableEntry] = []
         for object_type in self.object_scope:
-            object_index = OpenTide.Models.Index.get(object_type)
+            object_index = OpenTide.Models.Index.get(object_type) or {}
             if not object_index:
-                logger.error(
-                    "object_index_not_found",
+                logger.debug(
+                    "object_index_empty",
                     object_type=object_type,
                 )
                 continue

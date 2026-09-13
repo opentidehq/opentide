@@ -1,6 +1,5 @@
 from collections.abc import MutableMapping, Sequence
-
-import pandas as pd
+from typing import Any
 
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
@@ -22,6 +21,13 @@ SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
 
 logger = get_logger(__name__)
+
+
+def _json_normalize(data: Any) -> Any:
+    """Lazy pandas import so platform ``declare()`` works without the Splunk extra."""
+    import pandas as pd
+
+    return pd.json_normalize(data)
 
 
 def _typed_platform_config_roots(system_identifier: str) -> set[str]:
@@ -273,7 +279,7 @@ class TideDeployment:
                         detail=str(str(mod.name or "")) + " | " + str(str(mod.description or "")),
                     )
                     typed_roots = _typed_platform_config_roots(system_identifier)
-                    flatten_modifications = pd.json_normalize(
+                    flatten_modifications = _json_normalize(
                         mod.modifications  # type: ignore
                     ).to_dict(orient="records")[0]
                     for modification in flatten_modifications:
@@ -283,7 +289,7 @@ class TideDeployment:
                             if type(new_value) is not str:
                                 pass
                             elif "::" in new_value:
-                                raw_mdr_config_flatten = pd.json_normalize(
+                                raw_mdr_config_flatten = _json_normalize(
                                     raw_mdr_config  # type: ignore
                                 ).to_dict(orient="records")[0]
                                 operator = new_value.split("::")[0]

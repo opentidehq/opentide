@@ -10,8 +10,10 @@
     "exit-codes",
     "---Commands---",
     "setup",
+    "migrate",
     "generate",
     "validate",
+    "lint",
     "deploy",
     "info"
   ]

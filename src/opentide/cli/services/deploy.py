@@ -43,14 +43,26 @@ def run_deploy(
     from opentide.platforms.plugins import DeployTide
 
     OpenTide.reload()
-    deployment_plan = DeploymentStrategy.load_from_environment()
-    if deployment_plan is DeploymentStrategy.PRODUCTION and (not skip_promotion):
-        pre_deployment = modified_mdr_files(deployment_plan)
-        emit_section("Pre-deployment Routine")
-        PromoteMDR().promote(pre_deployment)
-    deployment_list = make_deploy_plan(
-        deployment_plan, wide_scope=wide, keep_deprecated=keep_deprecated
-    )
+    try:
+        deployment_plan = DeploymentStrategy.load_from_environment()
+        local_debug = CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug
+        if (
+            deployment_plan is DeploymentStrategy.PRODUCTION
+            and not skip_promotion
+            and not dry_run
+            and not local_debug
+        ):
+            pre_deployment = modified_mdr_files(deployment_plan)
+            emit_section("Pre-deployment Routine")
+            PromoteMDR().promote(pre_deployment)
+        deployment_list = make_deploy_plan(
+            deployment_plan, wide_scope=wide, keep_deprecated=keep_deprecated
+        )
+    except ValueError as exc:
+        return {"status": "failed", "message": str(exc), "_exit_code": 1}
+    except Exception as exc:
+        message = str(exc).strip() or (f"{type(exc).__name__} while compiling the deployment plan")
+        return {"status": "failed", "message": message, "_exit_code": 1}
     if platform is not None:
         platform_key = platform.value
         if platform_key not in deployment_list:

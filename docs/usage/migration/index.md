@@ -124,9 +124,20 @@ Or configure manually:
 { "mcpServers": { "opentide": { "command": "opentide-mcp" } } }
 ```
 
+## Layout migration
+
+If the repository still uses CoreTide directory names (`Configurations/`, `Objects/Threat Vectors`, `.opentide/framework/`), preview and apply:
+
+```bash
+opentide migrate objects          # dry-run
+opentide migrate objects --apply
+```
+
+Full flag list: [CLI migrate](../../cli/migrate.md).
+
 ## Agent-assisted migration
 
-OpenTide no longer provides `opentide migrate`. Use the [CoreTide migration prompt](./prompt.md) with your coding agent to replace submodule imports, Orchestration scripts, and CI configuration.
+Replacing a CoreTide **git submodule**, Orchestration scripts, and Python imports is not a single CLI command. Use the [CoreTide migration prompt](./prompt.md) with your coding agent.
 
 ## Deprecation timeline
 
@@ -148,4 +159,4 @@ OpenTide no longer provides `opentide migrate`. Use the [CoreTide migration prom
 - [Behaviour inventory (internal)](../../internal/behaviour-inventory.md) — legacy vs new behaviour mapping
 - [Repository setup](../repository-setup.md)
 - [CoreTide migration prompt](./prompt.md)
-- [Repository setup](../repository-setup.md)
+- [CLI migrate](../../cli/migrate.md)

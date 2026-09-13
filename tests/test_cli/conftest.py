@@ -13,6 +13,8 @@ import pytest
 from typer.testing import CliRunner, Result
 
 from opentide.cli import app
+from opentide.cli.services.setup import skills_registry as skills_registry_mod
+from opentide.cli.services.setup.skills_registry import SkillEntry
 from opentide.core.io import load_toml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +27,44 @@ def cli_runner() -> CliRunner:
     return CliRunner()
 
 
+def default_remote_skill_entries() -> list[SkillEntry]:
+    """Minimal live-catalogue stand-in used by setup tests."""
+    return [
+        SkillEntry(
+            name="OpenTide Detection Rule",
+            slug="opentide-detection-rule",
+            description="Authors OpenTide Detection Rule YAML",
+        ),
+        SkillEntry(
+            name="Detection Engineering",
+            slug="detection-engineering",
+            description="Detection engineering lifecycle",
+        ),
+        SkillEntry(
+            name="Kusto Query Language",
+            slug="kusto-query-language",
+            description="KQL patterns",
+        ),
+    ]
+
+
+def stub_remote_skills_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    entries: list[SkillEntry] | None = None,
+    *,
+    ref: str = "main",
+) -> list[SkillEntry]:
+    """Point catalogue discovery at a fake remote manifest (no packaged fallback)."""
+    resolved = list(entries) if entries is not None else default_remote_skill_entries()
+    monkeypatch.setattr(
+        skills_registry_mod,
+        "_fetch_remote_manifest",
+        lambda **_: ("OpenTideHQ/skills", ref, resolved),
+    )
+    skills_registry_mod.clear_manifest_cache()
+    return resolved
+
+
 @pytest.fixture
 def mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
     """Avoid network calls when tests install skills from OpenTideHQ/skills."""
@@ -34,6 +74,7 @@ def mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
         (dest / "SKILL.md").write_text(f"# {slug} ({source}@{ref})\n", encoding="utf-8")
         return ["SKILL.md"]
 
+    stub_remote_skills_manifest(monkeypatch)
     monkeypatch.setattr("opentide.cli.services.setup.skills._download_skill", _fake)
     monkeypatch.setattr(
         "opentide.cli.services.setup.skills.fetch_github_bytes",

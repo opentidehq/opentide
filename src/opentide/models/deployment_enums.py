@@ -31,19 +31,22 @@ class DeploymentStrategy(Enum):
 
     @staticmethod
     def load_from_environment():
+        """Map DEPLOYMENT_PLAN to a DeploymentStrategy.
+
+        An unset or empty variable defaults to FULL so local CLI usage
+        (deploy --dry-run, validate query) does not require CI secrets.
+        Illegal names raise ValueError with a supported-plan list.
         """
-        Read the DEPLOYMENT_PLAN environment variable and maps it to 
-        DeploymentStrategy valid values. In case of an illegal value, 
-        or missing environment variable will raise an exception
-        """
-        SUPPORTED_PLANS = [plan.name for plan in DeploymentStrategy]
-        DEPLOYMENT_PLAN = str(os.getenv('DEPLOYMENT_PLAN')) or None
-        if not DEPLOYMENT_PLAN:
-            logger.critical('no_deployment_plan_ensure_that_the_ci_variable_deployment_plan_i')
-            raise Exception('NO DEPLOYMENT PLAN')
+        supported = [plan.name for plan in DeploymentStrategy]
+        raw = os.getenv('DEPLOYMENT_PLAN')
+        if raw is None or not str(raw).strip():
+            logger.info('deployment_plan_defaulting_to_full')
+            return DeploymentStrategy.FULL
+        name = str(raw).strip().upper()
         try:
-            DEPLOYMENT_PLAN = DeploymentStrategy[DEPLOYMENT_PLAN]
-        except Exception:
-            logger.critical('the_following_deployment_plan_is_not_supported', arg0=DEPLOYMENT_PLAN, advice=f'Supported plan : {SUPPORTED_PLANS}')
-            raise AttributeError('UNSUPPORTED DEPLOYMENT PLAN')
-        return DEPLOYMENT_PLAN
+            return DeploymentStrategy[name]
+        except KeyError as exc:
+            logger.critical('the_following_deployment_plan_is_not_supported', arg0=raw, advice=f'Supported plan : {supported}')
+            raise ValueError(
+                f"Unsupported deployment plan {raw!r}. Use one of: {', '.join(supported)}"
+            ) from exc

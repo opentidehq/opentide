@@ -33,7 +33,11 @@ from opentide.cli.services.setup.skills import (
     run_interactive_skills_setup,
     run_skills_setup,
 )
-from opentide.cli.services.setup.skills_registry import discover_skills, show_skill
+from opentide.cli.services.setup.skills_registry import (
+    SkillsManifestError,
+    discover_skills,
+    show_skill,
+)
 from opentide.cli.services.setup.vscode import (
     run_vscode_settings,
     run_vscode_snippets,
@@ -292,6 +296,47 @@ def setup_ci_cmd(
     emit_success(cli, run_ci_setup(options))
 
 
+@setup_app.command("env")
+def setup_env_cmd(
+    ctx: typer.Context,
+    path: str = typer.Argument(".", help="Repository path"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+) -> None:
+    """Write ``.env.example`` with ``OPENTIDE_REPO_ROOT`` and ignore ``.env``."""
+    from opentide.cli.services.setup.env import EnvSetupOptions, run_env_setup
+
+    cli = get_context(ctx)
+    base = _resolve_setup_path(cli, path)
+    if not _confirm_write(cli, base, "Write .env.example with OPENTIDE_REPO_ROOT?", yes=yes):
+        emit_success(cli, {"message": "Environment setup cancelled", "status": "skipped"})
+        return
+    cli.apply_environment()
+    emit_success(cli, run_env_setup(EnvSetupOptions(path=base, yes=yes)))
+
+
+@setup_app.command("hooks")
+def setup_hooks_cmd(
+    ctx: typer.Context,
+    path: str = typer.Argument(".", help="Repository path"),
+    install: bool = typer.Option(
+        True,
+        "--install/--no-install",
+        help="Install .git/hooks/pre-commit when this path is a Git repository",
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+) -> None:
+    """Configure validate-on-commit hooks (pre-commit config + Git hook)."""
+    from opentide.cli.services.setup.hooks import HooksSetupOptions, run_hooks_setup
+
+    cli = get_context(ctx)
+    base = _resolve_setup_path(cli, path)
+    if not _confirm_write(cli, base, "Configure validate-on-commit hooks?", yes=yes):
+        emit_success(cli, {"message": "Hook setup cancelled", "status": "skipped"})
+        return
+    cli.apply_environment()
+    emit_success(cli, run_hooks_setup(HooksSetupOptions(path=base, install=install, yes=yes)))
+
+
 @setup_app.command("mcp")
 def setup_mcp_cmd(
     ctx: typer.Context,
@@ -405,12 +450,12 @@ def setup_skills_install_cmd(
         cli.apply_environment()
         try:
             result = run_skills_setup(options)
-        except SkillsDownloadError as exc:
+        except (SkillsDownloadError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     else:
         try:
             result = run_interactive_skills_setup(base)
-        except (InteractiveRequiredError, RuntimeError) as exc:
+        except (InteractiveRequiredError, RuntimeError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     emit_success(cli, result)
 
@@ -427,7 +472,10 @@ def setup_skills_discover_cmd(
     """List skills from the OpenTideHQ/skills catalogue."""
     cli = get_context(ctx)
     base = _coalesce_setup_path(cli, path, path_flag)
-    payload = discover_skills(base, query=query, installed_only=installed, refresh=refresh)
+    try:
+        payload = discover_skills(base, query=query, installed_only=installed, refresh=refresh)
+    except SkillsManifestError as exc:
+        emit_error(cli, str(exc))
     if cli.json_output:
         emit_success(cli, payload)
         return
@@ -457,7 +505,10 @@ def setup_skills_show_cmd(
     """Show details for one skill from the catalogue."""
     cli = get_context(ctx)
     base = _resolve_setup_path(cli, path)
-    payload = show_skill(base, name, refresh=refresh)
+    try:
+        payload = show_skill(base, name, refresh=refresh)
+    except SkillsManifestError as exc:
+        emit_error(cli, str(exc))
     if cli.json_output:
         if "error" in payload:
             emit(cli, {"ok": False, **payload}, exit_code=1)

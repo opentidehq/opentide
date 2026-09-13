@@ -19,6 +19,8 @@ def test_setup_help_lists_subcommands() -> None:
     assert "repo" in result.stdout
     assert "mcp" in result.stdout
     assert "skills" in result.stdout
+    assert "env" in result.stdout
+    assert "hooks" in result.stdout
 
 
 def test_setup_without_tty_fails_with_scripted_guidance(tmp_path) -> None:
@@ -75,10 +77,9 @@ def test_setup_skills_help_does_not_bind_positional_path() -> None:
 
 
 def test_setup_skills_discover_is_subcommand_not_path(tmp_path, monkeypatch) -> None:
-    from opentide.cli.services.setup import skills_registry as registry
+    from tests.test_cli.conftest import stub_remote_skills_manifest
 
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
-    registry.clear_manifest_cache()
+    stub_remote_skills_manifest(monkeypatch)
     result = runner.invoke(
         app,
         ["--json", "setup", "skills", "discover", "--path", str(tmp_path)],
@@ -91,13 +92,52 @@ def test_setup_skills_discover_is_subcommand_not_path(tmp_path, monkeypatch) -> 
     slugs = {item["slug"] for item in payload["skills"]}
     assert "opentide-detection-rule" in slugs
     assert "detection-engineering" in slugs
+    assert payload["manifest_source"] == "remote"
 
 
-def test_setup_skills_discover_human_table(tmp_path, monkeypatch) -> None:
+def test_setup_skills_discover_fails_when_catalogue_unavailable(tmp_path, monkeypatch) -> None:
     from opentide.cli.services.setup import skills_registry as registry
 
     monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
     registry.clear_manifest_cache()
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "skills", "discover", "--path", str(tmp_path)],
+    )
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert "OpenTideHQ/skills" in payload["error"]
+
+
+def test_setup_skills_install_fails_when_catalogue_unavailable(tmp_path, monkeypatch) -> None:
+    from opentide.cli.services.setup import skills_registry as registry
+
+    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
+    registry.clear_manifest_cache()
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "skills",
+            "--generic",
+            "--yes",
+            "--path",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert "OpenTideHQ/skills" in payload["error"]
+    assert not (tmp_path / ".agents").exists()
+
+
+def test_setup_skills_discover_human_table(tmp_path, monkeypatch) -> None:
+    from tests.test_cli.conftest import stub_remote_skills_manifest
+
+    stub_remote_skills_manifest(monkeypatch)
     result = runner.invoke(
         app,
         ["setup", "skills", "discover", "--path", str(tmp_path)],
@@ -109,10 +149,9 @@ def test_setup_skills_discover_human_table(tmp_path, monkeypatch) -> None:
 
 
 def test_setup_skills_discover_positional_path_is_deprecated(tmp_path, monkeypatch) -> None:
-    from opentide.cli.services.setup import skills_registry as registry
+    from tests.test_cli.conftest import stub_remote_skills_manifest
 
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
-    registry.clear_manifest_cache()
+    stub_remote_skills_manifest(monkeypatch)
     result = runner.invoke(
         app,
         ["--json", "setup", "skills", "discover", str(tmp_path)],
@@ -122,10 +161,9 @@ def test_setup_skills_discover_positional_path_is_deprecated(tmp_path, monkeypat
 
 
 def test_setup_skills_show_is_subcommand(tmp_path, monkeypatch) -> None:
-    from opentide.cli.services.setup import skills_registry as registry
+    from tests.test_cli.conftest import stub_remote_skills_manifest
 
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
-    registry.clear_manifest_cache()
+    stub_remote_skills_manifest(monkeypatch)
     result = runner.invoke(
         app,
         [
@@ -146,10 +184,9 @@ def test_setup_skills_show_is_subcommand(tmp_path, monkeypatch) -> None:
 
 
 def test_setup_skills_show_human_and_missing(tmp_path, monkeypatch) -> None:
-    from opentide.cli.services.setup import skills_registry as registry
+    from tests.test_cli.conftest import stub_remote_skills_manifest
 
-    monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
-    registry.clear_manifest_cache()
+    stub_remote_skills_manifest(monkeypatch)
     found = runner.invoke(
         app,
         [

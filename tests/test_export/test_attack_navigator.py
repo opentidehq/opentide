@@ -99,8 +99,7 @@ def test_assemble_full_layer_includes_legend() -> None:
 
 
 def test_export_layer_writes_json(tmp_path: Path, monkeypatch) -> None:
-    export_dir = tmp_path / "exports"
-    export_dir.mkdir()
+    export_dir = tmp_path / "exports" / "nested"
     layer = AttackNavigatorLayer()
     layer.EXPORT_FILE_PATH = export_dir / "layer.json"
     nav = NavigatorLayer(

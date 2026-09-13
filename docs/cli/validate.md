@@ -30,6 +30,8 @@ opentide validate --check schema
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Validation failures in `--json` mode include the complete report before the process exits.
 
+Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
+
 ### Default checks
 
 When no `--check` is specified, the pipeline runs:

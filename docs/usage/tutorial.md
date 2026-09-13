@@ -57,10 +57,16 @@ metadata:
   uuid: 00000000-0000-4000-8001-000000000001
   schema: threat::1.0
   version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
   tlp: clear
+  author: Tutorial Author
+  organisation:
+    uuid: 00000000-0000-4000-8000-000000000099
+    name: Example Corp
 threat:
   description: Simulated threat actor exercising credential access
-  severity: High
+  severity: Substantial incident
   impact: Data Breach
   leverage: High
   viability: High
@@ -77,7 +83,7 @@ Generate real UUIDs for your own content (`python -c "import uuid; print(uuid.uu
 
 ## 4. Author the objective
 
-The objective covers the threat (by UUID) and declares the signals that satisfy it. Create `objects/objectives/credential-access.yaml`:
+The objective covers the threat (by UUID) and declares the signals that satisfy it. Create `objects/objectives/credential-access-objective.yaml`:
 
 ```yaml
 name: Credential Access Objective
@@ -85,7 +91,13 @@ metadata:
   uuid: 00000000-0000-4000-8002-000000000001
   schema: objective::1.0
   version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
   tlp: clear
+  author: Tutorial Author
+  organisation:
+    uuid: 00000000-0000-4000-8000-000000000099
+    name: Example Corp
 composition:
   strategy: synergetic
   description: Compose signals for credential access detection
@@ -102,7 +114,7 @@ objective:
     - name: Suspicious logon signal
       uuid: 00000000-0000-4000-8099-000000000001
       description: Suspicious authentication activity
-      severity: Medium
+      severity: Moderate incident
       methodology: analytics
       entities: [host]
       data:
@@ -112,7 +124,7 @@ objective:
 
 ## 5. Author the rule
 
-The rule implements the objective (via `detection_model`) and carries a Sentinel query. Create `objects/rules/sentinel-suspicious-process.yaml`:
+The rule implements the objective (via `detection_model`) and carries a Sentinel query. Create `objects/rules/sentinel-kql-rule.yaml`:
 
 ```yaml
 name: Sentinel KQL Rule
@@ -120,10 +132,16 @@ metadata:
   uuid: 00000000-0000-4000-8003-000000000001
   schema: rule::1.0
   version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
   tlp: clear
+  author: Tutorial Author
+  organisation:
+    uuid: 00000000-0000-4000-8000-000000000099
+    name: Example Corp
 description: Detects credential access via suspicious process creation
 status: STAGING
-severity: High
+severity: Substantial incident
 techniques: [T1059]
 detection_model: 00000000-0000-4000-8002-000000000001   # the objective from step 4
 response:
@@ -148,10 +166,11 @@ configurations:
 ## 6. Validate
 
 ```bash
-opentide validate
+opentide validate --strict
+opentide lint --strict
 ```
 
-On success the CLI logs that all content passed validation (exit `0`). For a machine-readable report:
+On success the CLI logs that all content passed validation (exit `0`). Filenames must match `slugify(name)` (for example `sentinel-kql-rule.yaml`) and recommended `metadata.author` / `metadata.organisation` must be present. For a machine-readable report:
 
 ```bash
 opentide --json validate
@@ -228,7 +247,7 @@ deploy: 1 rule planned, 0 applied (dry-run)
 opentide generate docs
 ```
 
-This renders wiki-style markdown for each object under `docs/`, including a Mermaid diagram of the chain you just built. See [`generate docs`](../cli/generate.md).
+This renders wiki-style markdown for each object under `docs/Rules`, `docs/Objectives`, and `docs/Threats`, including a Mermaid diagram of the chain you just built. See [`generate docs`](../cli/generate.md).
 
 ## What you built
 

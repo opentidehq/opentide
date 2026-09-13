@@ -58,3 +58,17 @@ def test_validate_query_platform_matrix(
         if "{" in result.stdout:
             body = parse_cli_json(result)
             assert body.get("supported") is False
+
+
+def test_validate_query_without_plan_or_wide(invoke_cli, mock_query_validators) -> None:
+    """Unset DEPLOYMENT_PLAN must not traceback on validate query (issue #164)."""
+    result = invoke_cli(
+        "validate",
+        "query",
+        "--platform",
+        "sentinel",
+        extra_env={"DEPLOYMENT_PLAN": ""},
+    )
+    payload = assert_json_ok(result)
+    assert payload.get("supported") is True
+    assert payload.get("status") == "passed"

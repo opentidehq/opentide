@@ -3,7 +3,7 @@
 Unit tests copy bundled data and compile it in-process. This job builds a real
 wheel, installs it into a fresh venv (so pip/compileall write ``__pycache__``
 under site-packages), then runs the same commands users hit: ``validate``,
-``generate``, ``setup skills discover``, and offline starter-skill install.
+``generate``, and ``setup skills discover`` against the live catalogue.
 """
 
 from __future__ import annotations
@@ -69,8 +69,9 @@ def test_pip_installed_wheel_validate_generate_and_skills(
         names = archive.namelist()
     assert any(name.endswith("data/configurations/__init__.py") for name in names)
     assert any(name.endswith("data/configurations/platforms/__init__.py") for name in names)
-    assert any(name.endswith("data/skills/opentide-detection-rule/SKILL.md") for name in names)
-    assert any(name.endswith("data/skills/detection-engineering/SKILL.md") for name in names)
+    assert not any(
+        "/data/skills/" in name or name.endswith("data/skills/manifest.json") for name in names
+    )
 
     venv = _run([uv, "venv", str(env_dir)], timeout=60)
     assert venv.returncode == 0, venv.stdout + venv.stderr
@@ -138,6 +139,7 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     slugs = {item["slug"] for item in discover_payload["skills"]}
     assert "opentide-detection-rule" in slugs
     assert "detection-engineering" in slugs
+    assert discover_payload["manifest_source"] == "remote"
     assert "DEPRECATED" not in discover.stdout + discover.stderr
 
     install_skills = _run(
@@ -158,6 +160,55 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     assert (skills_dest / "AGENTS.md").is_file()
     assert (skills_dest / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md").is_file()
     assert (skills_dest / ".agents" / "skills" / "detection-engineering" / "SKILL.md").is_file()
+
+    info = _run(
+        [str(opentide), "--json", "info"],
+        cwd=str(tide_corpus_repo),
+        env=env,
+        timeout=60,
+    )
+    _assert_json_ok(info)
+    info_payload = json.loads(info.stdout)
+    platforms = {item["name"]: item for item in info_payload["platforms"]}
+    assert platforms["sentinel"]["can_deploy"] is True
+    assert platforms["sentinel"]["can_validate"] is True
+    assert platforms["splunk"]["can_deploy"] is True
+    assert platforms["crowdstrike"]["can_deploy"] is True
+    assert platforms["crowdstrike"]["can_validate"] is False
+    assert platforms["harfanglab"]["can_validate"] is False
+
+    coverage = _run(
+        [str(opentide), "--json", "info", "--technique", "T1059", "coverage"],
+        cwd=str(tide_corpus_repo),
+        env=env,
+        timeout=60,
+    )
+    _assert_json_ok(coverage)
+    coverage_payload = json.loads(coverage.stdout)
+    assert coverage_payload["coverage"]["count"] >= 1
+
+    dry_run = _run(
+        [
+            str(opentide),
+            "--json",
+            "deploy",
+            "--platform",
+            "sentinel",
+            "--dry-run",
+            "--plan",
+            "FULL",
+            "--wide",
+            "--skip-promotion",
+        ],
+        cwd=str(tide_corpus_repo),
+        env=env,
+        timeout=120,
+    )
+    _assert_json_ok(dry_run)
+    dry_payload = json.loads(dry_run.stdout)
+    assert dry_payload["dry_run"] is True
+    assert "Traceback" not in dry_run.stdout + dry_run.stderr
+    assert "KeyError" not in dry_run.stdout + dry_run.stderr
 
 
 def _assert_json_ok(result: subprocess.CompletedProcess[str]) -> None:

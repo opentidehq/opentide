@@ -79,6 +79,9 @@ def _fake_download_skill(slug: str, dest: Path, *, source: str, ref: str) -> lis
 
 
 def test_run_interactive_skills_setup(monkeypatch, tmp_path: Path) -> None:
+    from tests.test_cli.conftest import stub_remote_skills_manifest
+
+    stub_remote_skills_manifest(monkeypatch)
     monkeypatch.setattr("opentide.cli.services.setup.skills.require_interactive", lambda: None)
     monkeypatch.setattr(
         "opentide.cli.services.setup.skills.ask_checkbox",
@@ -179,6 +182,9 @@ def test_run_interactive_setup_full_wizard(
         "opentide.cli.services.setup.orchestrator.unavailable_skills",
         lambda options: [],
     )
+    from tests.test_cli.conftest import stub_remote_skills_manifest
+
+    stub_remote_skills_manifest(monkeypatch)
     monkeypatch.setattr(
         "opentide.cli.services.setup.skills._download_skill",
         _fake_download_skill,
@@ -197,3 +203,62 @@ def test_run_interactive_setup_full_wizard(
     assert isinstance(steps, list)
     step_names = {step["step"] for step in steps}
     assert {"repo", "platforms", "ci", "mcp", "skills"}.issubset(step_names)
+
+
+def test_run_interactive_setup_skips_skills_when_catalogue_unavailable(
+    monkeypatch, cli_context: CliContext, tmp_path: Path
+) -> None:
+    from opentide.cli.services.setup.skills_registry import SkillsManifestError
+
+    prompts = iter(["Wizard Repo", "Wizard Org", "Wizard Desc"])
+    checkboxes = iter(
+        [
+            ["staging", "inflight", "promotion"],
+            ["vscode"],
+            ["generic"],
+        ]
+    )
+    confirms = iter([True, True, True])
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.require_interactive", lambda: None
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.ask_text",
+        lambda *args, **kwargs: next(prompts),
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.ask_platforms",
+        lambda: [DetectionPlatform.sentinel],
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.ask_select",
+        lambda *args, **kwargs: CiPlatform.github,
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.ask_checkbox",
+        lambda *args, **kwargs: next(checkboxes),
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.ask_confirm",
+        lambda *args, **kwargs: next(confirms),
+    )
+
+    def _boom(options: object) -> list[str]:
+        raise SkillsManifestError("catalogue unreachable")
+
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.unavailable_skills",
+        _boom,
+    )
+
+    import warnings
+
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = run_interactive_setup(cli_context, tmp_path / "wizard-offline")
+    steps = result["steps"]
+    assert isinstance(steps, list)
+    step_names = {step["step"] for step in steps}
+    assert "skills" not in step_names
+    assert {"repo", "platforms", "ci", "mcp"}.issubset(step_names)
+    assert any("catalogue unreachable" in warning for warning in result["warnings"])

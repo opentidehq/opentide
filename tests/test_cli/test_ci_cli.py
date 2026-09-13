@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import yaml
 from typer.testing import CliRunner
 
 from opentide.cli import app
@@ -34,7 +35,11 @@ def test_setup_ci_github(tmp_path) -> None:
     assert "opentide validate" in text
     assert "validate query" in text
     assert "sentinel" in text
+    assert "OPENTIDE_REPO_ROOT: ${{ github.workspace }}" in text
     assert "mutate promote" not in text
+    parsed = yaml.safe_load(text)
+    assert parsed is not None
+    assert "validate" in parsed["jobs"]
 
 
 def test_setup_ci_rejects_none_platform() -> None:

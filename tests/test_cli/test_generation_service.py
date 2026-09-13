@@ -54,12 +54,10 @@ def test_run_generate_exports_phase(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_run_generate_snippets_phase(monkeypatch: pytest.MonkeyPatch) -> None:
-    mock_module = MagicMock()
-    monkeypatch.setitem(
-        __import__("sys").modules, "opentide.generation.vscode_snippets", mock_module
-    )
+    generate = MagicMock()
+    monkeypatch.setattr("opentide.generation.vscode_snippets.run", generate)
     generation.run_generate_phase(GeneratePhase.snippets)
-    mock_module.run.assert_called_once()
+    generate.assert_called_once()
 
 
 def test_run_generate_docs_phase(monkeypatch: pytest.MonkeyPatch) -> None:

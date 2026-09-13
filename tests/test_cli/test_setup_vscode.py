@@ -87,6 +87,32 @@ def test_run_vscode_snippets_writes_when_templates_exist(tmp_path: Path, monkeyp
     assert rel == SNIPPET_REL
 
 
+def test_run_vscode_snippets_writes_with_real_generator(tmp_path: Path, monkeypatch) -> None:
+    from tests.test_cli.conftest import _clear_runtime_caches
+
+    from opentide.generation import vscode_snippets as vscode_snippets_mod
+
+    templates = tmp_path / ".opentide" / "templates"
+    templates.mkdir(parents=True)
+    for name in (
+        "rule.1.0.template.yaml",
+        "threat.1.0.template.yaml",
+        "objective.1.0.template.yaml",
+    ):
+        (templates / name).write_text(f"template: {name}\n", encoding="utf-8")
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(tmp_path))
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path))
+    _clear_runtime_caches()
+    vscode_snippets_mod.SNIPPETS_PATH = None
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        rel = run_vscode_snippets(tmp_path)
+    assert rel == SNIPPET_REL
+    payload = json.loads((tmp_path / SNIPPET_REL).read_text(encoding="utf-8"))
+    assert "Detection Rules Template" in payload
+    assert vscode_snippets_mod.SNIPPETS_PATH is None
+
+
 def test_run_vscode_all_includes_snippets_when_generated(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "opentide.cli.services.setup.vscode.run_vscode_snippets",
@@ -146,6 +172,7 @@ def test_run_vscode_snippets_restores_unset_repo_root(tmp_path: Path, monkeypatc
     from opentide.core.root import get_repo_root
 
     os.environ.pop("OPENTIDE_REPO_ROOT", None)
+    os.environ.pop("OPENTIDE_TIDE_WORKSPACE", None)
     get_repo_root.cache_clear()
 
     templates = tmp_path / ".opentide" / "templates"
@@ -162,4 +189,5 @@ def test_run_vscode_snippets_restores_unset_repo_root(tmp_path: Path, monkeypatc
         run_vscode_snippets(tmp_path)
 
     assert "OPENTIDE_REPO_ROOT" not in os.environ
+    assert "OPENTIDE_TIDE_WORKSPACE" not in os.environ
     get_repo_root.cache_clear()

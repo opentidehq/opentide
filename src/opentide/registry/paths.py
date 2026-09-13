@@ -160,6 +160,8 @@ def legacy_path_aliases(paths: dict[str, Any]) -> dict[str, Any]:
         "log_sources": paths["log_sources"],
         "platform_configs": paths["platform_configs"],
         "platform_templates": paths["platform_templates"],
+        # Legacy CoreTide name still referenced by snippet generation.
+        "subschemas": paths["platform_templates"],
         "docs_folder": paths["docs_folder"],
         "rules_docs_folder": paths["rules_docs_folder"],
         "objectives_docs_folder": paths["objectives_docs_folder"],

@@ -41,3 +41,12 @@ def test_info_no_color_renders_platform_table(cli_runner, tide_corpus_repo) -> N
     assert "Rules" in plain and "8" in plain
     assert "Splunk Enterprise Security" in plain
     assert "enabled=True" in plain
+
+
+def test_info_coverage_matches_top_level_techniques(invoke_cli, corpus_rule_uuids) -> None:
+    result = invoke_cli("info", "--technique", "T1059", "coverage")
+    payload = assert_json_ok(result)
+    coverage = payload["coverage"]
+    assert coverage["technique"] == "T1059"
+    assert coverage["count"] >= 1
+    assert corpus_rule_uuids["sentinel"] in coverage["rules"]

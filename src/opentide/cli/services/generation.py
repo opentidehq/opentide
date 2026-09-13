@@ -51,10 +51,10 @@ def run_generate_phase(phase: str) -> None:
         OpenTide.reload()
         return
     if phase == "snippets":
-        from opentide.generation import vscode_snippets
+        from opentide.generation.vscode_snippets import run as generate_snippets
 
         emit_section("VS Code snippet generation")
-        vscode_snippets.run()
+        generate_snippets()
         return
     if phase == "exports":
         from opentide.export import attack_navigator_layer
