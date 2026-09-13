@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 import pytest
 
-from opentide.vocabulary.io import read_vocab_document
 from opentide.vocabulary import generate_actors
 from opentide.vocabulary.io import read_vocab_document
 
@@ -121,7 +120,6 @@ def test_generate_actors_merges_and_versions_keys(
     assert by_id["G0002"]["version"] == "1.1"
 
 
-
 def test_generate_actors_vocabs_with_explicit_misp_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -148,9 +146,12 @@ def test_generate_actors_vocabs_with_explicit_misp_url(
         lambda _url: ([{"id": "u1", "name": "Actor"}], {"source_misp_sha256": "abc"}),
     )
 
-    assert generate_actors.generate_actors_vocabs(misp_url="https://example/galaxy.json").counts[
-        "actors"
-    ] == 1
+    assert (
+        generate_actors.generate_actors_vocabs(misp_url="https://example/galaxy.json").counts[
+            "actors"
+        ]
+        == 1
+    )
 
 
 def test_default_misp_url_reads_resources_toml(

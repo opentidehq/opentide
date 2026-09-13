@@ -37,7 +37,9 @@ def test_pin_directories_include_specs_and_bundle(tmp_path: Path) -> None:
     assert directories[1].name == "pins"
 
 
-def test_sync_upstream_check_does_not_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sync_upstream_check_does_not_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     vocab_dir = tmp_path / "vocabularies"
     vocab_dir.mkdir()
     empty = GenerateReport(lifecycles={"att&ck": _lifecycle()}, source_changed=False)
@@ -92,7 +94,10 @@ def test_sync_upstream_apply_writes_when_dirty(
         "opentide.vocabulary.sync_upstream.generate_actors_vocabs",
         lambda **_kwargs: actors,
     )
-    monkeypatch.setattr("opentide.vocabulary.sync_upstream._sync_bundled_vocabularies", lambda _root: None)
+    monkeypatch.setattr(
+        "opentide.vocabulary.sync_upstream._sync_bundled_vocabularies",
+        lambda _root: None,
+    )
     monkeypatch.setattr(
         "opentide.vocabulary.sync_upstream.pin_data_dir",
         lambda: pins,
@@ -114,7 +119,9 @@ def test_cli_main_check_exits_one_when_dirty(monkeypatch: pytest.MonkeyPatch) ->
     assert cli_main(["--check", "--no-fetch"]) == 1
 
 
-def test_cli_main_apply_reports_write(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_main_apply_reports_write(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     result = type("R", (), {"dirty": True, "wrote": True, "summary_lines": lambda self: ["ok"]})()
     monkeypatch.setattr("opentide.vocabulary.sync_upstream.sync_upstream", lambda **_k: result)
     assert cli_main(["--apply", "--no-fetch"]) == 0
@@ -182,4 +189,3 @@ def test_sync_report_summary_includes_pin_contract() -> None:
     assert "source provenance changed (actors)" in text
     assert "pin bumps: att&ck::1.1" in text
     assert report.dirty is True
-

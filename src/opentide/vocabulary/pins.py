@@ -32,7 +32,9 @@ def should_bump(current: str, target: str) -> bool:
     return new > old
 
 
-def bump_pin_contents(text: str, field_versions: Mapping[str, str]) -> tuple[str, list[tuple[str, str, str]]]:
+def bump_pin_contents(
+    text: str, field_versions: Mapping[str, str]
+) -> tuple[str, list[tuple[str, str, str]]]:
     """Replace ``field::M.m`` pin values in *text* when a newer same-major minor is supplied.
 
     Never advances a pin to a new major. Returns the rewritten text and

@@ -11,9 +11,9 @@ from urllib.request import urlopen
 from opentide.core.files import resolve_paths
 from opentide.core.io import load_json, load_toml, parse_json
 from opentide.core.time import utc_now_iso
-from opentide.vocabulary.generate_attack import GenerateReport, STIX_DIR_ENV
+from opentide.vocabulary.generate_attack import STIX_DIR_ENV, GenerateReport
 from opentide.vocabulary.io import read_vocab_document, write_vocab_file
-from opentide.vocabulary.lifecycle import LifecycleResult, merge_vocab_keys
+from opentide.vocabulary.lifecycle import merge_vocab_keys
 from opentide.vocabulary.stix_attack import load_stix_bundle, parse_groups
 
 

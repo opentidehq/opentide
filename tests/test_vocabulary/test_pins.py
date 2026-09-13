@@ -58,4 +58,3 @@ def test_bump_pin_file_missing_or_empty_versions(tmp_path: Path) -> None:
     present.write_text('"threat.att&ck" = "att&ck::1.0"\n', encoding="utf-8")
     assert bump_pin_file(present, {}) == []
     assert present.read_text(encoding="utf-8") == '"threat.att&ck" = "att&ck::1.0"\n'
-

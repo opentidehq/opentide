@@ -47,7 +47,9 @@ class SyncReport:
             if report.source_changed:
                 lines.append(f"  source provenance changed ({name})")
         if self.pin_versions:
-            pinned = ", ".join(f"{key}::{value}" for key, value in sorted(self.pin_versions.items()))
+            pinned = ", ".join(
+                f"{key}::{value}" for key, value in sorted(self.pin_versions.items())
+            )
             lines.append(f"pin bumps: {pinned}")
         return lines
 
@@ -74,7 +76,9 @@ def pin_directories(root: Path) -> list[Path]:
     return [root / "schemas" / "pins", pin_data_dir()]
 
 
-def _preview_pin_changes(directories: list[Path], field_versions: dict[str, str]) -> list[PinChange]:
+def _preview_pin_changes(
+    directories: list[Path], field_versions: dict[str, str]
+) -> list[PinChange]:
     changes: list[PinChange] = []
     if not field_versions:
         return changes

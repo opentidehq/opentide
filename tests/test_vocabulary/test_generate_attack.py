@@ -141,9 +141,7 @@ def test_generate_attack_vocabs_with_fetch_flag(
     assert counts["datasources"] == 1
 
 
-def test_stix_dir_honours_env_override(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_stix_dir_honours_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENTIDE_ATTACK_STIX_DIR", str(tmp_path / "stix"))
     assert generate_attack._stix_dir() == tmp_path / "stix"
 
@@ -263,4 +261,3 @@ def test_generate_attack_write_false_keeps_disk_unchanged(
     report = generate_attack.generate_attack_vocabs(vocab_dir=vocab_dir, write=False)
     assert report.lifecycles["att&ck"].added == ("T1001",)
     assert (vocab_dir / "att&ck.vocab.toml").read_text(encoding="utf-8") == original
-
