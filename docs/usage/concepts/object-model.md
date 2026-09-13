@@ -49,8 +49,8 @@ threat:
   description: Simulated threat actor for credential access
   severity: Substantial incident
   impact: Data Breach
-  leverage: High
-  viability: High
+  leverage: Information Gathering
+  viability: Likely
   terrain: Endpoint workstations and user devices.
   surface:
     - Windows::Desktop
@@ -76,14 +76,14 @@ metadata:
   modified: "2026-01-02"
   tlp: clear
 composition:
-  strategy: synergetic
+  strategy: Combined
   description: Compose signals for credential access detection
 objective:
   priority: High
   type: Threat
   description: Detect credential access techniques
   composition:                 # mirrors the top-level composition
-    strategy: synergetic
+    strategy: Combined
     description: Compose signals for credential access detection
   threats:
     - 00000000-0000-4000-8001-000000000001   # ← the threat above
@@ -92,8 +92,8 @@ objective:
       uuid: 00000000-0000-4000-8099-000000000001
       description: Suspicious authentication activity
       severity: Moderate incident
-      methodology: analytics
-      entities: [host]
+      methodology: Statistical
+      entities: [Hostname]
       data:
         availability: Complete
         requirements: Security event logs
