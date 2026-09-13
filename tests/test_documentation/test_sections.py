@@ -319,7 +319,7 @@ def test_render_threat_sections_with_enrichment(metadata: dict[str, Any]) -> Non
                 "viability": "High",
                 "terrain": "Cloud identity and Azure account inventory telemetry.",
                 "surface": ["Azure"],
-                "actors": ["G1028"],
+                "actors": [{"name": "att&ck::G1028"}],
                 "killchain": ["Reconnaissance"],
                 "att&ck": ["T1589"],
             },

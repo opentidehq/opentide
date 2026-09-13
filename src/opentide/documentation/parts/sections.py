@@ -434,14 +434,16 @@ def render_actors(threat: ThreatBody, formatter: MarkdownFormatter) -> str:
         return ""
     rows: list[list[str]] = []
     for actor in threat.actors:
-        actor_meta = enrich("actors", actor)
-        source = fw.get_vocab_entry("actors", actor, field="tide.vocab.stages")
+        actor_id = actor.name
+        actor_meta = enrich("actors", actor_id)
+        source = fw.get_vocab_entry("actors", actor_id, field="tide.vocab.stages")
+        description = actor.sighting or actor_meta.description
         rows.append(
             [
                 _entry_link(actor_meta, actor_meta.label, formatter),
-                f"`{actor}`",
+                f"`{actor_id}`",
                 _table_cell(_stringify(source)),
-                _table_cell(actor_meta.description),
+                _table_cell(description),
             ]
         )
     return (

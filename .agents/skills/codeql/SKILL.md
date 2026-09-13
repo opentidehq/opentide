@@ -12,6 +12,7 @@ Static analysis for Python and GitHub Actions workflows. One workflow, no duplic
 
 [`.github/workflows/codeql.yml`](../../../.github/workflows/codeql.yml):
 
+- **Action:** `github/codeql-action` **v4** (Node 24). Do not pin v3 — GitHub runners force Node 20 actions onto Node 24, and `analyze` then dies during SARIF upload with no `##[error]` line.
 - **Languages:** `python` and `actions` in one matrix job (categories `/language:python` and `/language:actions`)
 - **Why both in the workflow:** PR code-scanning comparison requires the same `(codeql.yml) /language:python` category registered on `development`; Code Quality dynamic scans alone leave PR checks in a NEUTRAL "configuration not found" state
 - **Triggers:** push to `main`/`development`, all PRs, weekly schedule

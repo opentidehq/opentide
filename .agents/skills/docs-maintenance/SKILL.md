@@ -97,4 +97,6 @@ Seven platforms deploy; five validate queries. CrowdStrike and HarfangLab: **`su
 
 **Build and deploy:** [OpenTideHQ/website](https://github.com/OpenTideHQ/website). This repo ships content under `docs/` only.
 
+After CLI/Usage changes, the website still needs `pnpm sync:content` so `content/docs/` picks up new pages (`lint`, `migrate`) and nav. Landing hero copy in `components/landing/hero-terminal.tsx` is independent of this tree — keep it aligned with the first-user sequence (`setup` → `generate` → `validate` → `deploy --dry-run`).
+
 Notes: [`docs/fumadocs/`](../../docs/fumadocs/).

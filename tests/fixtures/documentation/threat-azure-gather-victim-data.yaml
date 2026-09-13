@@ -19,7 +19,7 @@ threat:
   surface:
     - Azure
   actors:
-    - G1028
+    - name: att&ck::G1028
   killchain:
     - Reconnaissance
   att&ck:

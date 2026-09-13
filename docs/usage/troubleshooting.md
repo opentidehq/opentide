@@ -69,7 +69,7 @@ opentide setup skills --generic --yes
 `0.1.2` built pipeline files with `textwrap.dedent` around already-indented step blocks, which produced invalid YAML. This is fixed in **0.1.3**. Re-run:
 
 ```bash
-opentide setup ci --flavor github --force
+opentide setup ci github --yes
 ```
 
 ### `deploy` or `validate query` crashes locally with `illegal_deployment_plan`
@@ -85,6 +85,15 @@ opentide setup ci --flavor github --force
 `0.1.2` imported Azure and pandas when loading Sentinel (and other) deployers, so a base install reported no deploy capability. **0.1.3** lazy-loads those SDKs. Re-run `opentide info` after upgrading. CrowdStrike and HarfangLab still report `can_validate: false` by design.
 
 ## Generation
+
+### `opentide generate` crashes with `'str' object has no attribute 'get'`
+
+`threat.actors` is a list of objects (`name`, optional `sighting` / `references`), not vocabulary ID strings. A leaked `list[str]` schema taught some repos to write `- G0006`, and the objects export then crashed calling `.get` on a string. Write the object form:
+
+```yaml
+actors:
+  - name: att&ck::G0006
+```
 
 ### `opentide generate` crashes with `subschemas` on a new repo
 

@@ -13,8 +13,10 @@ def test_cli_help_lists_commands(cli_runner, invoke_cli) -> None:
     assert result.exit_code == 0
     for command in (
         "setup",
+        "migrate",
         "generate",
         "validate",
+        "lint",
         "deploy",
         "info",
     ):

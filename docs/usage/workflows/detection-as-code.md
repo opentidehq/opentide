@@ -13,7 +13,8 @@ This is the workflow you live in after onboarding: author objects, validate, rev
 flowchart LR
   edit["Edit YAML"] --> gen["generate<br/>(if schemas changed)"]
   gen --> val["validate --strict"]
-  val --> q["validate query"]
+  val --> lint["lint --strict"]
+  lint --> q["validate query"]
   q --> pr["Open PR → CI gate"]
   pr --> deploy["deploy staging"]
   deploy --> promote["promote → production"]
@@ -22,6 +23,7 @@ flowchart LR
 ```bash
 opentide generate                          # only when schemas/templates changed
 opentide validate --strict                 # schema, UUID, uniqueness, chaining
+opentide lint --strict                     # filename slugs and recommended metadata
 opentide validate query --platform sentinel
 opentide deploy --platform sentinel --dry-run
 opentide generate docs                          # refresh wiki pages

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from opentide.generation.pydantic_metaschema import _deref_schema_node, _schema_branch_nodes
 from opentide.validation.deprecated_fields import resolve_metaschema
 from opentide.validation.issues import ValidationIssue
 from opentide.validation.preflight import PreflightGraph
@@ -17,9 +18,13 @@ def walk_vocab_fields(
     object_uuid: str = "",
     object_type: str = "",
     path: tuple[str, ...] = (),
+    defs: dict[str, Any] | None = None,
 ) -> list[ValidationIssue]:
     """Validate ``tide.vocab`` fields in *payload* against the live enum resolver."""
     issues: list[ValidationIssue] = []
+    if defs is None:
+        raw_defs = schema.get("$defs")
+        defs = raw_defs if isinstance(raw_defs, dict) else {}
     properties = schema.get("properties", schema)
     if not isinstance(properties, dict):
         return issues
@@ -28,60 +33,65 @@ def walk_vocab_fields(
         if not isinstance(field_schema, dict):
             continue
         field_path = (*path, field_name)
-        value = _get_nested(payload, field_path)
-        vocab = field_schema.get("tide.vocab")
-        if vocab is not None:
+        value = payload.get(field_name) if isinstance(payload, dict) else None
+        resolved = _deref_schema_node(field_schema, defs)
+        vocab_schema = field_schema if field_schema.get("tide.vocab") is not None else resolved
+        if vocab_schema.get("tide.vocab") is not None:
             issues.extend(
                 _validate_vocab_value(
                     value,
-                    field_schema,
+                    vocab_schema,
                     graph,
                     field_path=field_path,
                     object_uuid=object_uuid,
                     object_type=object_type,
                 )
             )
-        nested_props = field_schema.get("properties")
-        if isinstance(nested_props, dict) and isinstance(value, dict):
-            issues.extend(
-                walk_vocab_fields(
-                    value,
-                    field_schema,
-                    graph,
-                    object_uuid=object_uuid,
-                    object_type=object_type,
-                    path=field_path,
+        for branch in _schema_branch_nodes(field_schema, defs):
+            nested_props = branch.get("properties")
+            if isinstance(nested_props, dict) and isinstance(value, dict):
+                issues.extend(
+                    walk_vocab_fields(
+                        value,
+                        branch,
+                        graph,
+                        object_uuid=object_uuid,
+                        object_type=object_type,
+                        path=field_path,
+                        defs=defs,
+                    )
                 )
-            )
-        items = field_schema.get("items")
-        if isinstance(items, dict) and isinstance(value, list):
-            item_props = items.get("properties")
-            if isinstance(item_props, dict):
-                for index, item in enumerate(value):
-                    if isinstance(item, dict):
+            items = branch.get("items")
+            if isinstance(items, dict) and isinstance(value, list):
+                item_schema = _deref_schema_node(items, defs)
+                item_props = item_schema.get("properties")
+                if isinstance(item_props, dict):
+                    for index, item in enumerate(value):
+                        if isinstance(item, dict):
+                            issues.extend(
+                                walk_vocab_fields(
+                                    cast(dict[str, Any], item),
+                                    item_schema,
+                                    graph,
+                                    object_uuid=object_uuid,
+                                    object_type=object_type,
+                                    path=(*field_path, str(index)),
+                                    defs=defs,
+                                )
+                            )
+                item_vocab_schema = items if items.get("tide.vocab") is not None else item_schema
+                if item_vocab_schema.get("tide.vocab") is not None:
+                    for index, item in enumerate(value):
                         issues.extend(
-                            walk_vocab_fields(
-                                cast(dict[str, Any], item),
-                                items,
+                            _validate_vocab_value(
+                                item,
+                                item_vocab_schema,
                                 graph,
+                                field_path=(*field_path, str(index)),
                                 object_uuid=object_uuid,
                                 object_type=object_type,
-                                path=(*field_path, str(index)),
                             )
                         )
-            item_vocab = items.get("tide.vocab")
-            if item_vocab is not None and isinstance(value, list):
-                for index, item in enumerate(value):
-                    issues.extend(
-                        _validate_vocab_value(
-                            item,
-                            items,
-                            graph,
-                            field_path=(*field_path, str(index)),
-                            object_uuid=object_uuid,
-                            object_type=object_type,
-                        )
-                    )
     return issues
 
 
@@ -153,12 +163,3 @@ def validate_object_vocab_from_metaschema(
         object_uuid=object_uuid,
         object_type=object_type,
     )
-
-
-def _get_nested(data: dict[str, Any], path: tuple[str, ...]) -> Any:
-    node: Any = data
-    for key in path:
-        if not isinstance(node, dict):
-            return None
-        node = node.get(key)
-    return node

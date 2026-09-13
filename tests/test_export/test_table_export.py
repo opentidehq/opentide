@@ -73,6 +73,18 @@ def test_flatten_actors_enriches_names(monkeypatch) -> None:
     assert exporter._flatten_actors(actors) == ["Evil Actor"]
 
 
+def test_flatten_actors_skips_non_object_entries(monkeypatch) -> None:
+    """String leftovers must not crash generate; they are not valid schema values."""
+    exporter = TableExporter()
+    monkeypatch.setattr(
+        "opentide.export.table_export.get_vocab_entry",
+        lambda _vocab, actor_id: {"name": "[Enterprise] APT1"},
+    )
+    assert exporter._flatten_actors(["G0006", {"name": "att&ck::G0006"}]) == ["[Enterprise] APT1"]
+    assert exporter._flatten_actors("G0006") == []
+    assert exporter._flatten_actors([{"id": "orphan"}]) == []
+
+
 def test_flatten_chaining_groups_by_relation() -> None:
     exporter = TableExporter()
     chains = [
@@ -100,6 +112,27 @@ def test_create_entry_threat(monkeypatch) -> None:
     assert entry.attack == "T1059"
     assert entry.childs == "child-1"
     assert entry.parents == "parent-1"
+
+
+def test_create_entry_threat_object_actors(monkeypatch) -> None:
+    _setup_opentide_for_table(monkeypatch)
+    from opentide import OpenTide
+
+    threat_uuid = "00000000-0000-4000-8000-000000000010"
+    OpenTide._index["objects"]["threat"][threat_uuid]["threat"]["actors"] = [
+        {"name": "att&ck::G0006"}
+    ]
+    exporter = TableExporter()
+    with (
+        patch("opentide.export.table_export.childs", return_value=[]),
+        patch("opentide.export.table_export.parents", return_value=[]),
+        patch(
+            "opentide.export.table_export.get_vocab_entry",
+            return_value={"name": "[Enterprise] APT1"},
+        ),
+    ):
+        entry = exporter._create_entry(threat_uuid, "threat")
+    assert entry.actors == "[Enterprise] APT1"
 
 
 def test_create_dataset_treats_empty_index_as_success(monkeypatch, caplog) -> None:

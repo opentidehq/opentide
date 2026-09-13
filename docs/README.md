@@ -1,6 +1,6 @@
 # Documentation authoring guide
 
-OpenTide documentation lives in this directory and is structured for a future **Fumadocs** site with four top-level sections (sidebar tabs):
+OpenTide documentation lives in this directory and is published on **[opentide.org](https://opentide.org/docs)** by [OpenTideHQ/website](https://github.com/OpenTideHQ/website). Four top-level sections become sidebar tabs:
 
 | Tab | Directory | Audience |
 |-----|-----------|----------|

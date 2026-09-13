@@ -1,15 +1,20 @@
 # Fumadocs integration
 
-This folder contains scaffolding for the **future OpenTide docs website** (separate repository). Content lives in the parent `docs/` directory.
+Public docs are built and deployed by **[OpenTideHQ/website](https://github.com/OpenTideHQ/website)** at [opentide.org/docs](https://opentide.org/docs). This folder is authoring notes for that site. Content lives in the parent `docs/` directory.
+
+The website copies this tree with `pnpm sync:content` into `content/docs/{usage,cli,mcp,sdk}` and commits the snapshot so GitHub Pages can build without private-repo access. A weekly Actions job bumps the `vendor/opentide` submodule; the committed snapshot still needs an explicit sync.
+
+When this repo adds CLI pages (`lint`, `migrate`) or changes the first-user command sequence, the website snapshot can lag until someone runs `pnpm sync:content`. Keep Usage/CLI examples accurate here — that is the source of truth.
 
 ## Site repository setup
 
-1. Create a Next.js app with Fumadocs UI and Fumadocs MDX.
-2. Copy `source.config.ts.example` → `source.config.ts` in the site repo.
-3. Point `defineDocs({ dir: … })` at this `docs/` folder:
-   - **Git submodule** — `git submodule add … opentide-docs-content`
-   - **Monorepo path** — symlink or workspace reference
-   - **CI sync** — checkout opentide and copy `docs/` before build
+The live site already exists. For a local preview with sibling clones:
+
+```bash
+OPENTIDE_DOCS_PATH=../opentide/docs SPECIFICATIONS_PATH=../specifications pnpm dev
+```
+
+Alternatively use the website's `vendor/opentide` submodule.
 
 ## Four sidebar tabs
 
@@ -36,18 +41,17 @@ Run validation before publishing:
 scripts/validate-docs.sh
 ```
 
-## Suggested site layout
+## Website layout (OpenTideHQ/website)
 
 ```
-opentide-docs/                 # future website repo
-├── app/
-│   └── docs/
-│       └── [[...slug]]/page.tsx
-├── content/                   # optional: copy or submodule from opentide/docs
-├── source.config.ts
-├── lib/source.ts
-└── package.json
+website/
+├── app/docs/[[...slug]]/page.tsx
+├── content/docs/              # committed snapshot from this docs/ tree
+├── vendor/opentide            # submodule used by pnpm sync:content
+└── source.config.ts
 ```
+
+Landing copy (hero terminal) is **not** generated from this tree. If the first-user command sequence changes (`setup` → `generate` → `validate` → `deploy --dry-run`), update `components/landing/hero-terminal.tsx` in the website repo in the same docs cycle. The current hero skips `generate`, which is the command that failed for empty and populated repos in #153 and #172.
 
 ## Agent maintenance
 

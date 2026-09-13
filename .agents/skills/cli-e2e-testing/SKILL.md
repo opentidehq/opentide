@@ -8,6 +8,7 @@ Typer-native end-to-end tests for the `opentide` CLI using `CliRunner` (in-proce
 - Extending the simulated Tide workspace (`tide_corpus`)
 - Deploy dry-run payload verification (unit + E2E)
 - Schema forward-evolution scaffolds (`future/rule_1_1`)
+- First-user workflow regressions: sequential `opentide` commands that must each exit 0 (`setup` → `generate` empty → author → `generate` → `validate --strict` → `lint --strict` → dangling-ref fail/restore → `info` → coverage → query/deploy dry-run). In-process: `test_workflow_e2e.py`. Console-script subprocess: `test_workflow_subprocess_e2e.py`.
 
 ## Terminology
 
@@ -32,6 +33,8 @@ tests/
   test_cli/
     conftest.py            # cli_runner, tide_corpus_repo, invoke_cli, parse_cli_json
     e2e/                   # @pytest.mark.cli_e2e (and cli_smoke for subprocess)
+                           # test_workflow_e2e.py = published first-user path (CliRunner)
+                           # test_workflow_subprocess_e2e.py = same happy path via `opentide` binary
   test_deployment/
     test_deploy_payloads.py  # per-platform API payload golden tests
 ```
@@ -69,9 +72,14 @@ the installed console script. `cli_smoke` covers that gap and therefore carries
 `inprocess`, which only loads the entry point as a function and cannot catch import-time
 failures (for example multiprocessing `spawn` re-importing the entry point).
 
-Smoke tests also take `tide_corpus_repo` so the console script indexes a real corpus.
-Running them against the default empty workspace makes them pass vacuously, because
-object parsing never engages.
+`test_console_script_smoke.py` takes `tide_corpus_repo` so the console script indexes a
+real corpus. Running those smokes against the default empty workspace makes them pass
+vacuously, because object parsing never engages.
+
+`test_workflow_subprocess_e2e.py` does **not** use the corpus: it scaffolds a fresh
+tutorial repo, then runs `generate` / `validate --strict` / `lint --strict` / `info`
+as child processes. That is the check for "several `opentide` commands in sequence
+exit 0". Query and deploy stay in the CliRunner workflow test (HTTP mocked).
 
 ## Shared fixtures
 

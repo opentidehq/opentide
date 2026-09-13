@@ -119,6 +119,8 @@ opentide generate exports objects
 opentide generate exports revisions
 ```
 
+`generate exports objects` writes `.opentide/exports/objects.export.json`. Threat `actors` are objects whose `name` is a scoped vocabulary ID (`att&ck::G0006`); the export enriches those names to display names.
+
 ## generate inflight
 
 Write preview shards for changed objects, or remove shards superseded by committed objects:

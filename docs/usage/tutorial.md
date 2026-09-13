@@ -68,14 +68,18 @@ threat:
   description: Simulated threat actor exercising credential access
   severity: Substantial incident
   impact: Data Breach
-  leverage: High
-  viability: High
+  leverage: Information Gathering
+  viability: Likely
   terrain: Endpoint workstations and user devices.
   surface:
     - Windows::Desktop
   att&ck:
     - T1059
+  actors:
+    - name: att&ck::G0006
 ```
+
+`threat.actors` is a list of **objects**. `name` is a scoped actors-vocabulary ID (`att&ck::G0006` is APT1). Optional `sighting` and `references` record why that actor is attributed. `opentide generate` enriches `name` when it writes the objects export.
 
 <Callout type="warn">
 Generate real UUIDs for your own content (`python -c "import uuid; print(uuid.uuid4())"`). The zero-padded UUIDs here match the fixtures so the tutorial is easy to follow — never hand-copy UUIDs into real objects.
@@ -99,14 +103,14 @@ metadata:
     uuid: 00000000-0000-4000-8000-000000000099
     name: Example Corp
 composition:
-  strategy: synergetic
+  strategy: Combined
   description: Compose signals for credential access detection
 objective:
   priority: High
   type: Threat
   description: Detect credential access techniques
   composition:
-    strategy: synergetic
+    strategy: Combined
     description: Compose signals for credential access detection
   threats:
     - 00000000-0000-4000-8001-000000000001   # the threat from step 3
@@ -115,8 +119,8 @@ objective:
       uuid: 00000000-0000-4000-8099-000000000001
       description: Suspicious authentication activity
       severity: Moderate incident
-      methodology: analytics
-      entities: [host]
+      methodology: Statistical
+      entities: [Hostname]
       data:
         availability: Complete
         requirements: Security event logs

@@ -37,6 +37,47 @@ def test_walk_vocab_fields_unknown_value() -> None:
     assert issues[0].suggestion == "High"
 
 
+def test_walk_vocab_fields_nested_object_array_via_ref() -> None:
+    graph = _mock_graph(valid=False, suggestion="att&ck::G0006")
+    schema = {
+        "$defs": {
+            "ThreatActor": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "tide.vocab": "actors::1.0",
+                        "tide.vocab.scoped": True,
+                    }
+                },
+            }
+        },
+        "properties": {
+            "threat": {
+                "$ref": "#/$defs/ThreatBody",
+            },
+        },
+    }
+    schema["$defs"]["ThreatBody"] = {
+        "type": "object",
+        "properties": {
+            "actors": {
+                "anyOf": [
+                    {"type": "array", "items": {"$ref": "#/$defs/ThreatActor"}},
+                    {"type": "null"},
+                ]
+            }
+        },
+    }
+    payload = {"threat": {"actors": [{"name": "G0006"}]}}
+    issues = walk_vocab_fields(payload, schema, graph)
+    assert len(issues) == 1
+    assert issues[0].field_path == ("threat", "actors", "0", "name")
+    graph.enum_resolver.is_valid.assert_called_with(
+        "G0006", "actors::1.0", stages=None, scoped=True, no_wrap=False
+    )
+
+
 def test_walk_vocab_fields_array_items() -> None:
     graph = _mock_graph(valid=False, suggestion="T1059")
     schema = {
