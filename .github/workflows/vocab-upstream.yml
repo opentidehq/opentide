@@ -53,6 +53,7 @@ jobs:
         with:
           repository: OpenTideHQ/specifications
           path: specifications
+          fetch-depth: 0
           token: ${{ steps.app.outputs.token || secrets.GITHUB_TOKEN }}
 
       - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
@@ -115,6 +116,10 @@ jobs:
           fi
           git checkout -B "$UPSTREAM_BRANCH"
           git commit -m "chore(vocab): ingest ATT&CK and MISP threat actors"
+          # Single-branch clones have no origin/$UPSTREAM_BRANCH; without it
+          # --force-with-lease requires the remote branch to be absent and later
+          # cycles fail. Fetch the existing head (ok if the branch is new).
+          git fetch origin "$UPSTREAM_BRANCH:refs/remotes/origin/$UPSTREAM_BRANCH" || true
           git push --force-with-lease origin "$UPSTREAM_BRANCH"
           # Only skip create when an OPEN PR still exists for this head (merged cycles must open a new PR).
           open_count=$(gh pr list --repo OpenTideHQ/specifications --head "$UPSTREAM_BRANCH" --state open --json number --jq 'length')
@@ -150,6 +155,7 @@ jobs:
           fi
           git checkout -B "$UPSTREAM_BRANCH"
           git commit -m "chore(vocab): sync ATT&CK and actor vocabularies and pins"
+          git fetch origin "$UPSTREAM_BRANCH:refs/remotes/origin/$UPSTREAM_BRANCH" || true
           git push --force-with-lease origin "$UPSTREAM_BRANCH"
           # Only skip create when an OPEN PR still exists for this head (merged cycles must open a new PR).
           open_count=$(gh pr list --head "$UPSTREAM_BRANCH" --state open --json number --jq 'length')
