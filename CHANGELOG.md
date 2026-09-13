@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-09-13
+
+Patch on the public 0.1.4 beta. Upgrade if you regenerate ATT&CK or MISP vocabularies, or if you run the weekly ingest workflow.
+
 ### Added
 
 - Weekly (and `workflow_dispatch`) ingest for MITRE ATT&CK STIX and MISP threat actors. Vocabularies merge with per-key RFC 0003 versions; schema pins for techniques, actors, and datasources bump in the same PRs. `uv run python scripts/vocabulary/sync_upstream.py --check|--apply`.
@@ -14,6 +18,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - ATT&CK groups are catalog-only (`att&ck.groups`); live objects pin them via `threat.actors.name` → `actors::*`. Ingest no longer reports pin bumps for vocabs that no pin file references (`att&ck.groups`, `mitigations`).
 - Weekly ingest fetches `chore/vocab-upstream` before `git push --force-with-lease` so later cycles can update the specifications branch.
+
+### Install
+
+```bash
+pip install opentide==0.1.5
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.1.4] — 2026-09-13
 
@@ -132,7 +144,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.5
 [0.1.4]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.4
 [0.1.3]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.3
 [0.1.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.2
