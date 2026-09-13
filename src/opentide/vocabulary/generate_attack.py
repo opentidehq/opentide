@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +11,7 @@ from opentide.core.files import resolve_paths
 from opentide.core.io import load_json
 from opentide.core.time import utc_now_iso
 from opentide.vocabulary.io import read_vocab_document, write_vocab_file
+from opentide.vocabulary.lifecycle import LifecycleResult, merge_vocab_keys
 from opentide.vocabulary.stix_attack import (
     load_stix_bundle,
     merge_technique_bundles,
@@ -16,6 +19,34 @@ from opentide.vocabulary.stix_attack import (
     parse_groups,
     parse_mitigations,
 )
+
+STIX_DIR_ENV = "OPENTIDE_ATTACK_STIX_DIR"
+
+
+@dataclass(frozen=True)
+class GenerateReport:
+    """Per-field lifecycle results from a vocabulary generation run."""
+
+    lifecycles: dict[str, LifecycleResult]
+    source_changed: bool = False
+
+    @property
+    def counts(self) -> dict[str, int]:
+        return {field: len(result.keys) for field, result in self.lifecycles.items()}
+
+    @property
+    def pin_versions(self) -> dict[str, str]:
+        """Field → new minor contract for fields that opened a pin bump."""
+        versions: dict[str, str] = {}
+        for field, result in self.lifecycles.items():
+            contract = result.pin_contract
+            if contract is not None:
+                versions[field] = contract
+        return versions
+
+    @property
+    def dirty(self) -> bool:
+        return self.source_changed or any(result.dirty for result in self.lifecycles.values())
 
 
 def _resources_root() -> Path:
@@ -33,6 +64,9 @@ def _resolve_vocab_dir(vocab_dir: Path | None) -> Path:
 
 
 def _stix_dir() -> Path:
+    override = os.environ.get(STIX_DIR_ENV)
+    if override:
+        return Path(override).expanduser().resolve()
     return _resources_root() / "attack" / "stix"
 
 
@@ -48,26 +82,56 @@ def _load_template(field: str, *, vocab_dir: Path | None = None) -> dict[str, An
     path = output_dir / f"{field}.vocab.toml"
     if path.is_file():
         doc = read_vocab_document(path)
-        doc["keys"] = []
+        doc.setdefault("keys", [])
+        if doc["keys"] is None:
+            doc["keys"] = []
         return doc
     yaml_legacy = output_dir / f"{field}.yaml"
     if yaml_legacy.is_file():
         import yaml
 
         doc = yaml.safe_load(yaml_legacy.read_text(encoding="utf-8"))
-        doc["keys"] = []
+        if not isinstance(doc, dict):
+            doc = {}
+        doc.setdefault("keys", [])
+        if doc["keys"] is None:
+            doc["keys"] = []
         return doc
     raise FileNotFoundError(f"No vocabulary template for field '{field}'")
 
 
 def _stamp_source(doc: dict[str, Any], manifest: dict[str, Any]) -> None:
+    doc.pop("version", None)
     doc["source"] = "mitre-attack"
     doc["source_version"] = manifest.get("version", "unknown")
     doc["source_fetched_at"] = manifest.get("fetched_at") or utc_now_iso()
 
 
-def generate_attack_vocabs(*, fetch: bool = False, vocab_dir: Path | None = None) -> dict[str, int]:
-    """Regenerate ATT&CK-related vocabulary files from STIX."""
+def _merge_and_write(
+    *,
+    key_field: str,
+    existing: list[dict[str, Any]],
+    upstream: list[dict[str, Any]],
+    doc: dict[str, Any],
+    output_path: Path,
+    manifest: dict[str, Any],
+    write: bool,
+) -> LifecycleResult:
+    lifecycle = merge_vocab_keys(existing, upstream, key_field=key_field)
+    doc["keys"] = list(lifecycle.keys)
+    _stamp_source(doc, manifest)
+    if write:
+        write_vocab_file(output_path, doc)
+    return lifecycle
+
+
+def generate_attack_vocabs(
+    *,
+    fetch: bool = False,
+    vocab_dir: Path | None = None,
+    write: bool = True,
+) -> GenerateReport:
+    """Regenerate ATT&CK-related vocabulary files from STIX with per-key lifecycle."""
     if fetch:
         from opentide.vocabulary.fetch_stix import fetch_latest_attack_stix
 
@@ -76,7 +140,7 @@ def generate_attack_vocabs(*, fetch: bool = False, vocab_dir: Path | None = None
     manifest = _manifest()
     stix_dir = _stix_dir()
     output_dir = _resolve_vocab_dir(vocab_dir)
-    counts: dict[str, int] = {}
+    lifecycles: dict[str, LifecycleResult] = {}
 
     enterprise = stix_dir / "enterprise-attack.json"
     mobile = stix_dir / "mobile-attack.json"
@@ -88,6 +152,7 @@ def generate_attack_vocabs(*, fetch: bool = False, vocab_dir: Path | None = None
         )
 
     techniques_doc = _load_template("att&ck", vocab_dir=output_dir)
+    previous_source = techniques_doc.get("source_version")
     techniques_doc["key"] = "id"
     techniques_doc.pop("model", None)
     bundles = [(enterprise, "")]
@@ -95,10 +160,15 @@ def generate_attack_vocabs(*, fetch: bool = False, vocab_dir: Path | None = None
         bundles.append((mobile, "Mobile"))
     if ics.is_file():
         bundles.append((ics, "Industrial"))
-    techniques_doc["keys"] = merge_technique_bundles(bundles)
-    _stamp_source(techniques_doc, manifest)
-    write_vocab_file(output_dir / "att&ck.vocab.toml", techniques_doc)
-    counts["att&ck"] = len(techniques_doc["keys"])
+    lifecycles["att&ck"] = _merge_and_write(
+        key_field="id",
+        existing=list(techniques_doc.get("keys") or []),
+        upstream=merge_technique_bundles(bundles),
+        doc=techniques_doc,
+        output_path=output_dir / "att&ck.vocab.toml",
+        manifest=manifest,
+        write=write,
+    )
 
     groups_doc = _load_template("att&ck.groups", vocab_dir=output_dir)
     groups_doc["key"] = "id"
@@ -107,27 +177,47 @@ def generate_attack_vocabs(*, fetch: bool = False, vocab_dir: Path | None = None
     for path, prefix in [(enterprise, ""), (ics, "ICS"), (mobile, "Mobile")]:
         if path.is_file():
             all_groups.extend(parse_groups(load_stix_bundle(path), prefix=prefix))
-    groups_doc["keys"] = all_groups
-    _stamp_source(groups_doc, manifest)
-    write_vocab_file(output_dir / "att&ck.groups.vocab.toml", groups_doc)
-    counts["att&ck.groups"] = len(all_groups)
+    lifecycles["att&ck.groups"] = _merge_and_write(
+        key_field="id",
+        existing=list(groups_doc.get("keys") or []),
+        upstream=all_groups,
+        doc=groups_doc,
+        output_path=output_dir / "att&ck.groups.vocab.toml",
+        manifest=manifest,
+        write=write,
+    )
 
     mitigations_doc = _load_template("mitigations", vocab_dir=output_dir)
     mitigations_doc["key"] = "name"
+    mitigations_doc.pop("model", None)
     all_mitigations: list[dict[str, Any]] = []
     for path, prefix in [(enterprise, ""), (mobile, "Mobile"), (ics, "Industrial")]:
         if path.is_file():
             all_mitigations.extend(parse_mitigations(load_stix_bundle(path), prefix=prefix))
-    mitigations_doc["keys"] = all_mitigations
-    _stamp_source(mitigations_doc, manifest)
-    write_vocab_file(output_dir / "mitigations.vocab.toml", mitigations_doc)
-    counts["mitigations"] = len(all_mitigations)
+    lifecycles["mitigations"] = _merge_and_write(
+        key_field="name",
+        existing=list(mitigations_doc.get("keys") or []),
+        upstream=all_mitigations,
+        doc=mitigations_doc,
+        output_path=output_dir / "mitigations.vocab.toml",
+        manifest=manifest,
+        write=write,
+    )
 
     datasources_doc = _load_template("datasources", vocab_dir=output_dir)
     datasources_doc["key"] = "name"
-    datasources_doc["keys"] = parse_datasources(load_stix_bundle(enterprise))
-    _stamp_source(datasources_doc, manifest)
-    write_vocab_file(output_dir / "datasources.vocab.toml", datasources_doc)
-    counts["datasources"] = len(datasources_doc["keys"])
+    datasources_doc.pop("model", None)
+    lifecycles["datasources"] = _merge_and_write(
+        key_field="name",
+        existing=list(datasources_doc.get("keys") or []),
+        upstream=parse_datasources(load_stix_bundle(enterprise)),
+        doc=datasources_doc,
+        output_path=output_dir / "datasources.vocab.toml",
+        manifest=manifest,
+        write=write,
+    )
 
-    return counts
+    return GenerateReport(
+        lifecycles=lifecycles,
+        source_changed=str(previous_source or "") != str(manifest.get("version", "unknown")),
+    )

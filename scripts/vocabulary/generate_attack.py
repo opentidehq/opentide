@@ -37,9 +37,9 @@ def main() -> None:
     args = parser.parse_args()
     specifications_root = _specifications_root()
     output_dir = specifications_root / "vocabularies"
-    counts = generate_attack_vocabs(fetch=args.fetch, vocab_dir=output_dir)
+    report = generate_attack_vocabs(fetch=args.fetch, vocab_dir=output_dir)
     _sync_bundled_vocabularies(specifications_root)
-    for field, count in counts.items():
+    for field, count in report.counts.items():
         print(f"{field}: {count} entries")
     print(f"synced bundle from: {output_dir}")
 

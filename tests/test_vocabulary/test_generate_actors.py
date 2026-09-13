@@ -9,7 +9,9 @@ from unittest.mock import patch
 
 import pytest
 
+from opentide.vocabulary.io import read_vocab_document
 from opentide.vocabulary import generate_actors
+from opentide.vocabulary.io import read_vocab_document
 
 
 def test_load_misp_galaxy_parses_values() -> None:
@@ -36,12 +38,14 @@ def test_load_misp_galaxy_parses_values() -> None:
             return response.read()
 
     with patch("opentide.vocabulary.generate_actors.urlopen", return_value=_FakeResponse()):
-        actors = generate_actors._load_misp_galaxy("https://example/galaxy.json")
+        actors, provenance = generate_actors._load_misp_galaxy("https://example/galaxy.json")
 
     assert len(actors) == 1
     assert actors[0]["name"] == "APT1"
     assert actors[0]["alias"] == ["Comment Crew"]
     assert actors[0]["tide.vocab.stages"] == "misp"
+    assert provenance["source_misp_url"] == "https://example/galaxy.json"
+    assert len(provenance["source_misp_sha256"]) == 64
 
 
 def test_generate_actors_vocabs_merges_sources(
@@ -72,8 +76,50 @@ def test_generate_actors_vocabs_merges_sources(
     for name in ("enterprise-attack.json", "ics-attack.json", "mobile-attack.json"):
         (stix_dir / name).write_text("{}", encoding="utf-8")
 
-    count = generate_actors.generate_actors_vocabs()
+    count = generate_actors.generate_actors_vocabs().counts["actors"]
     assert count == 3
+
+
+def test_generate_actors_merges_and_versions_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vocab_dir = tmp_path / "vocabs"
+    stix_dir = tmp_path / "attack" / "stix"
+    vocab_dir.mkdir()
+    stix_dir.mkdir(parents=True)
+    (stix_dir / "enterprise-attack.json").write_text("{}", encoding="utf-8")
+    (stix_dir / "manifest.json").write_text(
+        json.dumps({"version": "16.1", "fetched_at": "2026-01-01T00:00:00Z"}),
+        encoding="utf-8",
+    )
+    (vocab_dir / "actors.vocab.toml").write_text(
+        'name = "Actors"\nfield = "actors"\nversion = "1.0"\nkey = "id"\n\n'
+        '[[keys]]\nid = "G0001"\nname = "Old"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(generate_actors, "_stix_dir", lambda: stix_dir)
+    monkeypatch.setattr(generate_actors, "_default_misp_url", lambda: None)
+    monkeypatch.setattr(
+        generate_actors,
+        "parse_groups",
+        lambda _bundle, prefix: [
+            {"id": "G0001", "name": "Old"},
+            {"id": "G0002", "name": "New"},
+        ],
+    )
+    monkeypatch.setattr(generate_actors, "load_stix_bundle", lambda _path: {"objects": []})
+
+    report = generate_actors.generate_actors_vocabs(vocab_dir=vocab_dir)
+    assert report.lifecycles["actors"].added == ("G0002",)
+    assert report.pin_versions["actors"] == "1.1"
+    written = read_vocab_document(vocab_dir / "actors.vocab.toml")
+    assert "version" not in written
+    assert written["source"] == "mitre-attack+misp"
+    assert written["source_version"] == "16.1"
+    by_id = {entry["id"]: entry for entry in written["keys"]}
+    assert by_id["G0001"]["version"] == "1.0"
+    assert by_id["G0002"]["version"] == "1.1"
+
 
 
 def test_generate_actors_vocabs_with_explicit_misp_url(
@@ -99,10 +145,12 @@ def test_generate_actors_vocabs_with_explicit_misp_url(
     monkeypatch.setattr(
         generate_actors,
         "_load_misp_galaxy",
-        lambda _url: [{"id": "u1", "name": "Actor"}],
+        lambda _url: ([{"id": "u1", "name": "Actor"}], {"source_misp_sha256": "abc"}),
     )
 
-    assert generate_actors.generate_actors_vocabs(misp_url="https://example/galaxy.json") == 1
+    assert generate_actors.generate_actors_vocabs(misp_url="https://example/galaxy.json").counts[
+        "actors"
+    ] == 1
 
 
 def test_default_misp_url_reads_resources_toml(
