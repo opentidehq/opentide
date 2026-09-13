@@ -99,11 +99,9 @@ def generate_actors_vocabs(
     doc["keys"] = list(lifecycle.keys)
     doc.pop("version", None)
     manifest_path = stix_dir / "manifest.json"
-    attack_version = "unknown"
     if manifest_path.is_file():
         manifest = load_json(manifest_path)
-        attack_version = str(manifest.get("version", "unknown"))
-        doc["source_version"] = attack_version
+        doc["source_version"] = str(manifest.get("version", "unknown"))
         doc["source_fetched_at"] = manifest.get("fetched_at", "")
     else:
         doc["source_fetched_at"] = utc_now_iso()
