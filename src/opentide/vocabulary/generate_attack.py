@@ -170,6 +170,8 @@ def generate_attack_vocabs(
         write=write,
     )
 
+    # Catalog-only MITRE groups. Live threat objects pin G-ids via actors;
+    # generate_actors merges the same STIX intrusion-sets into actors.vocab.toml.
     groups_doc = _load_template("att&ck.groups", vocab_dir=output_dir)
     groups_doc["key"] = "id"
     groups_doc.pop("model", None)

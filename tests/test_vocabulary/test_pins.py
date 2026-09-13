@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from opentide.vocabulary.pins import bump_pin_contents, bump_pin_dir, bump_pin_file, should_bump
+from opentide.models.vocab_pins import pin_data_dir
+from opentide.vocabulary.pins import (
+    bump_pin_contents,
+    bump_pin_dir,
+    bump_pin_file,
+    should_bump,
+    vocab_fields_in_pin_contents,
+    vocab_fields_in_pin_dir,
+    vocab_fields_in_pin_directories,
+)
 
 
 def test_should_bump_same_major_higher_minor() -> None:
@@ -58,3 +67,31 @@ def test_bump_pin_file_missing_or_empty_versions(tmp_path: Path) -> None:
     present.write_text('"threat.att&ck" = "att&ck::1.0"\n', encoding="utf-8")
     assert bump_pin_file(present, {}) == []
     assert present.read_text(encoding="utf-8") == '"threat.att&ck" = "att&ck::1.0"\n'
+
+
+def test_vocab_fields_in_pin_contents_reads_contract_values() -> None:
+    text = (
+        '["threat::1.0"]\n'
+        '"threat.att&ck" = "att&ck::1.0"\n'
+        '"threat.actors" = "actors::1.0"\n'
+        "# comment\n"
+        '"threat.groups" = "not-a-pin"\n'
+    )
+    assert vocab_fields_in_pin_contents(text) == frozenset({"att&ck", "actors"})
+
+
+def test_vocab_fields_in_pin_dir_skips_missing(tmp_path: Path) -> None:
+    assert vocab_fields_in_pin_dir(tmp_path / "missing") == frozenset()
+    pin_dir = tmp_path / "pins"
+    pin_dir.mkdir()
+    (pin_dir / "threat.toml").write_text('"threat.att&ck" = "att&ck::1.0"\n', encoding="utf-8")
+    (pin_dir / "notes.toml").write_text('"ignored" = "mitigations::1.0"\n', encoding="utf-8")
+    assert vocab_fields_in_pin_dir(pin_dir) == frozenset({"att&ck"})
+    assert vocab_fields_in_pin_directories([pin_dir, tmp_path / "nope"]) == frozenset({"att&ck"})
+
+
+def test_bundled_pins_do_not_reference_catalog_only_vocabs() -> None:
+    fields = vocab_fields_in_pin_dir(pin_data_dir())
+    assert {"att&ck", "actors", "datasources"} <= fields
+    assert "att&ck.groups" not in fields
+    assert "mitigations" not in fields

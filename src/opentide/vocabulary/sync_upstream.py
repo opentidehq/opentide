@@ -12,7 +12,12 @@ from pathlib import Path
 from opentide.models.vocab_pins import pin_data_dir
 from opentide.vocabulary.generate_actors import generate_actors_vocabs
 from opentide.vocabulary.generate_attack import GenerateReport, generate_attack_vocabs
-from opentide.vocabulary.pins import PinChange, bump_pin_contents, bump_pin_dir
+from opentide.vocabulary.pins import (
+    PinChange,
+    bump_pin_contents,
+    bump_pin_dir,
+    vocab_fields_in_pin_directories,
+)
 
 SPECIFICATIONS_ENV = "OPENTIDE_SPECIFICATIONS_ROOT"
 _PIN_FAMILIES = ("threat", "objective", "rule")
@@ -76,6 +81,22 @@ def pin_directories(root: Path) -> list[Path]:
     return [root / "schemas" / "pins", pin_data_dir()]
 
 
+def _schema_pinned_versions(
+    pin_versions: dict[str, str], directories: list[Path]
+) -> dict[str, str]:
+    """Keep ingest pin bumps for vocab fields that appear in schema pin files.
+
+    Catalog vocabs such as ``att&ck.groups`` and ``mitigations`` have no
+    ``field::M.m`` pin. ATT&CK groups still version-gate live objects through
+    ``threat.actors`` → ``actors::*`` after ``generate_actors`` merges STIX
+    intrusion-sets into ``actors``.
+    """
+    pinned_fields = vocab_fields_in_pin_directories(directories)
+    if not pinned_fields:
+        return pin_versions
+    return {field: version for field, version in pin_versions.items() if field in pinned_fields}
+
+
 def _preview_pin_changes(
     directories: list[Path], field_versions: dict[str, str]
 ) -> list[PinChange]:
@@ -112,6 +133,7 @@ def sync_upstream(
     pin_versions = dict(attack.pin_versions)
     pin_versions.update(actors.pin_versions)
     directories = pin_directories(root)
+    pin_versions = _schema_pinned_versions(pin_versions, directories)
     report = SyncReport(
         attack=attack,
         actors=actors,

@@ -32,8 +32,6 @@ on Mondays and on `workflow_dispatch`.
 
 Merge specifications first so the lockfile SHA matches canonical vocabs. Nothing auto-merges. `workflow_dispatch` can re-run while a PR is open (`ignore-open-pr`, default true); scheduled runs skip when an ingest PR is already open. After those PRs merge, the next run force-pushes the same `chore/vocab-upstream` heads and opens **new** PRs. Create uses `gh pr list --state open` so a merged cycle is not treated as an existing PR.
 
-`att&ck.groups` is ingested but not currently pinned.
-
 Local equivalent:
 
 ```bash
@@ -50,6 +48,20 @@ The workflow needs a GitHub App (`GH_APP_ID`, `GH_APP_KEY`) installed on
 **both** `OpenTideHQ/opentide` and `OpenTideHQ/specifications` with `contents`
 and `pull-requests` so it can open the specs PR. Without the App, only a
 public clone of specifications is used and the specs PR step is skipped.
+
+## What is pinned
+
+RFC 0003 pins map **schema fields** to vocab contracts (`field::M.m`). They do not pin vocab files by themselves. Ingest only bumps vocab fields that already appear as pin values.
+
+| Vocab | Schema pin | Role |
+|-------|------------|------|
+| `att&ck` | `threat.att&ck`, `objective.attack`, `rule.techniques` | Live technique lists |
+| `actors` | `threat.actors` | Live actor lists (ATT&CK intrusion-sets + MISP) |
+| `datasources` | `objective.signals.data.logsources` | Live logsource lists |
+| `att&ck.groups` | none | MITRE catalog only |
+| `mitigations` | none | MITRE catalog only (name-keyed; duplicate MITRE ids) |
+
+ATT&CK groups **are** version-gated on threat objects through `threat.actors` → `actors::*`. `generate_actors` merges STIX intrusion-sets (G-ids) into `actors`. The separate `att&ck.groups` file is a MITRE-only catalog; `ThreatBody` has no `groups` field, so a pin such as `"threat.groups" = "att&ck.groups::1.0"` would be unused.
 
 ## Pin policy
 

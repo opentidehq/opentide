@@ -35,7 +35,11 @@ uv run python scripts/vocabulary/sync_upstream.py --apply
 2. Schema pin files in `specifications/schemas/pins/` and `src/opentide/data/pins/`
 3. The OpenTide bundle + `data/specifications.lock.json`
 
-Pin bumps are **additive minors only** (for example `att&ck::1.0` → `att&ck::1.1`).
+Pin bumps are **additive minors only** (for example `att&ck::1.0` → `att&ck::1.1`)
+and only for vocab fields already referenced in schema pin files (`att&ck`,
+`actors`, `datasources`). `att&ck.groups` and `mitigations` are catalog vocabs
+with no schema pin: ATT&CK groups still version-gate live objects through
+`threat.actors` → `actors::*` (STIX intrusion-sets merge into `actors`).
 Keys that disappear from upstream keep their `version` and get `removed` at the
 next major, so existing schema revisions still accept them. The ingest PRs are
 the review gate — nothing auto-merges.

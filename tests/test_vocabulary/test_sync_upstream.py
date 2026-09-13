@@ -10,6 +10,7 @@ from opentide.vocabulary.generate_attack import GenerateReport
 from opentide.vocabulary.lifecycle import LifecycleResult
 from opentide.vocabulary.sync_upstream import (
     SyncReport,
+    _schema_pinned_versions,
     cli_main,
     pin_directories,
     specifications_root,
@@ -107,6 +108,76 @@ def test_sync_upstream_apply_writes_when_dirty(
     assert report.wrote is True
     assert True in calls
     assert "att&ck::1.1" in (pins / "threat.toml").read_text(encoding="utf-8")
+
+
+def test_schema_pinned_versions_drops_catalog_vocabs(tmp_path: Path) -> None:
+    pins = tmp_path / "pins"
+    pins.mkdir()
+    (pins / "threat.toml").write_text(
+        '"threat.att&ck" = "att&ck::1.0"\n"threat.actors" = "actors::1.0"\n',
+        encoding="utf-8",
+    )
+    filtered = _schema_pinned_versions(
+        {"att&ck": "1.1", "att&ck.groups": "1.1", "mitigations": "1.1", "actors": "1.1"},
+        [pins],
+    )
+    assert filtered == {"att&ck": "1.1", "actors": "1.1"}
+
+
+def test_schema_pinned_versions_keeps_all_when_no_pin_files(tmp_path: Path) -> None:
+    versions = {"att&ck.groups": "1.1"}
+    assert _schema_pinned_versions(versions, [tmp_path / "missing"]) == versions
+
+
+def test_sync_upstream_does_not_bump_pins_for_attack_groups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "vocabularies").mkdir()
+    pins = tmp_path / "schemas" / "pins"
+    pins.mkdir(parents=True)
+    original = '"threat.att&ck" = "att&ck::1.0"\n"threat.actors" = "actors::1.0"\n'
+    (pins / "threat.toml").write_text(original, encoding="utf-8")
+    dirty = GenerateReport(
+        lifecycles={
+            "att&ck": _lifecycle(),
+            "att&ck.groups": _lifecycle(
+                added=("G9999",),
+                introducing_version="1.1",
+                keys=({"id": "G9999"},),
+            ),
+            "mitigations": _lifecycle(
+                added=("Fake Mitigation",),
+                introducing_version="1.1",
+                keys=({"name": "Fake Mitigation"},),
+            ),
+        },
+        source_changed=False,
+    )
+    actors = GenerateReport(lifecycles={"actors": _lifecycle()}, source_changed=False)
+
+    monkeypatch.setattr(
+        "opentide.vocabulary.sync_upstream.generate_attack_vocabs",
+        lambda **_kwargs: dirty,
+    )
+    monkeypatch.setattr(
+        "opentide.vocabulary.sync_upstream.generate_actors_vocabs",
+        lambda **_kwargs: actors,
+    )
+    monkeypatch.setattr(
+        "opentide.vocabulary.sync_upstream._sync_bundled_vocabularies",
+        lambda _root: None,
+    )
+    monkeypatch.setattr(
+        "opentide.vocabulary.sync_upstream.pin_data_dir",
+        lambda: pins,
+    )
+
+    report = sync_upstream(fetch=False, apply=True, specifications=tmp_path)
+    assert report.wrote is True
+    assert "att&ck.groups" not in report.pin_versions
+    assert "mitigations" not in report.pin_versions
+    assert report.pin_changes == []
+    assert (pins / "threat.toml").read_text(encoding="utf-8") == original
 
 
 def test_cli_main_rejects_check_and_apply_together() -> None:

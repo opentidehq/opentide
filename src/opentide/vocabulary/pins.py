@@ -23,6 +23,36 @@ class PinChange:
     new_version: str
 
 
+def vocab_fields_in_pin_contents(contents: str) -> frozenset[str]:
+    """Return vocab field names referenced as pin values (``field::M.m``)."""
+    fields: set[str] = set()
+    for line in contents.splitlines():
+        match = _ASSIGN.match(line.rstrip("\r"))
+        if match is not None:
+            fields.add(match.group(2))
+    return frozenset(fields)
+
+
+def vocab_fields_in_pin_dir(pin_dir: Path) -> frozenset[str]:
+    """Union of vocab field names referenced by family pin files in *pin_dir*."""
+    if not pin_dir.is_dir():
+        return frozenset()
+    fields: set[str] = set()
+    for family in _PIN_FAMILIES:
+        path = pin_dir / f"{family}.toml"
+        if path.is_file():
+            fields |= vocab_fields_in_pin_contents(path.read_text(encoding="utf-8"))
+    return frozenset(fields)
+
+
+def vocab_fields_in_pin_directories(pin_dirs: list[Path]) -> frozenset[str]:
+    """Union of vocab field names referenced across schema pin directories."""
+    fields: set[str] = set()
+    for pin_dir in pin_dirs:
+        fields |= vocab_fields_in_pin_dir(pin_dir)
+    return frozenset(fields)
+
+
 def should_bump(current: str, target: str) -> bool:
     """Return whether *current* ``M.m`` should advance to *target* (same major, higher minor)."""
     old = parse_semver(current)
