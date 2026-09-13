@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
+from opentide.core.time import utc_now
 from opentide.generation.framework import techniques_resolver
 
 logger = get_logger(__name__)
@@ -207,13 +207,11 @@ class ExplorerExport:
                 }
             )
 
-        signals = {
-            uuid: body for uuid, body in models["signal"].items() if isinstance(body, dict)
-        }
+        signals = {uuid: body for uuid, body in models["signal"].items() if isinstance(body, dict)}
 
         return {
             "version": "0.1.0",
-            "generatedAt": datetime.now(UTC).isoformat(),
+            "generatedAt": utc_now().isoformat(),
             "models": models,
             "flatIndex": flat_index,
             "chaining": chaining,
@@ -229,7 +227,9 @@ class ExplorerExport:
         search_path = self.export_dir / "explorer.search.json"
         bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
         search_path.write_text(
-            json.dumps({"documents": build_search_documents(bundle["summaries"], bundle["flatIndex"])}),
+            json.dumps(
+                {"documents": build_search_documents(bundle["summaries"], bundle["flatIndex"])}
+            ),
             encoding="utf-8",
         )
         logger.info(
