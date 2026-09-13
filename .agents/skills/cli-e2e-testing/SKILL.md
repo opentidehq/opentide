@@ -8,6 +8,7 @@ Typer-native end-to-end tests for the `opentide` CLI using `CliRunner` (in-proce
 - Extending the simulated Tide workspace (`tide_corpus`)
 - Deploy dry-run payload verification (unit + E2E)
 - Schema forward-evolution scaffolds (`future/rule_1_1`)
+- First-user workflow regressions (`setup` without Python helpers, `generate` on empty **and** populated repos, `lint`/`info`/`deploy` without injected `DEPLOYMENT_PLAN`)
 
 ## Terminology
 
@@ -32,6 +33,7 @@ tests/
   test_cli/
     conftest.py            # cli_runner, tide_corpus_repo, invoke_cli, parse_cli_json
     e2e/                   # @pytest.mark.cli_e2e (and cli_smoke for subprocess)
+                           # test_workflow_e2e.py = published first-user path
   test_deployment/
     test_deploy_payloads.py  # per-platform API payload golden tests
 ```

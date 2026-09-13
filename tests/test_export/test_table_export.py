@@ -73,6 +73,30 @@ def test_flatten_actors_enriches_names(monkeypatch) -> None:
     assert exporter._flatten_actors(actors) == ["Evil Actor"]
 
 
+def test_flatten_actors_accepts_vocab_id_strings(monkeypatch) -> None:
+    """threat::1.0 stores actors as vocabulary IDs (issue #172)."""
+    exporter = TableExporter()
+    seen: list[str] = []
+
+    def _lookup(_vocab: str, actor_id: str) -> dict[str, str]:
+        seen.append(actor_id)
+        return {"name": "[Enterprise] APT1"}
+
+    monkeypatch.setattr("opentide.export.table_export.get_vocab_entry", _lookup)
+    assert exporter._flatten_actors(["G0006", "att&ck::G0006"]) == [
+        "[Enterprise] APT1",
+        "[Enterprise] APT1",
+    ]
+    assert seen == ["G0006", "att&ck::G0006"]
+
+
+def test_flatten_actors_skips_missing_vocab_and_bare_strings(monkeypatch) -> None:
+    exporter = TableExporter()
+    monkeypatch.setattr("opentide.export.table_export.get_vocab_entry", lambda *_a, **_k: "")
+    assert exporter._flatten_actors(["G9999", {"id": "orphan"}]) == ["G9999", "orphan"]
+    assert exporter._flatten_actors("G0006") == ["G0006"]
+
+
 def test_flatten_chaining_groups_by_relation() -> None:
     exporter = TableExporter()
     chains = [
@@ -100,6 +124,25 @@ def test_create_entry_threat(monkeypatch) -> None:
     assert entry.attack == "T1059"
     assert entry.childs == "child-1"
     assert entry.parents == "parent-1"
+
+
+def test_create_entry_threat_vocab_actor_strings(monkeypatch) -> None:
+    _setup_opentide_for_table(monkeypatch)
+    from opentide import OpenTide
+
+    threat_uuid = "00000000-0000-4000-8000-000000000010"
+    OpenTide._index["objects"]["threat"][threat_uuid]["threat"]["actors"] = ["G0006"]
+    exporter = TableExporter()
+    with (
+        patch("opentide.export.table_export.childs", return_value=[]),
+        patch("opentide.export.table_export.parents", return_value=[]),
+        patch(
+            "opentide.export.table_export.get_vocab_entry",
+            return_value={"name": "[Enterprise] APT1"},
+        ),
+    ):
+        entry = exporter._create_entry(threat_uuid, "threat")
+    assert entry.actors == "[Enterprise] APT1"
 
 
 def test_create_dataset_treats_empty_index_as_success(monkeypatch, caplog) -> None:

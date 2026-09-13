@@ -75,7 +75,11 @@ threat:
     - Windows::Desktop
   att&ck:
     - T1059
+  actors:
+    - G0006
 ```
+
+`threat.actors` is a list of vocabulary **IDs** (`G0006` is ATT&CK APT1), not `{name: …}` objects. `opentide generate` enriches those IDs when it writes the objects export.
 
 <Callout type="warn">
 Generate real UUIDs for your own content (`python -c "import uuid; print(uuid.uuid4())"`). The zero-padded UUIDs here match the fixtures so the tutorial is easy to follow — never hand-copy UUIDs into real objects.

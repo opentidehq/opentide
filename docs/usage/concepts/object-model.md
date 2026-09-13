@@ -56,7 +56,11 @@ threat:
     - Windows::Desktop
   att&ck:
     - T1059
+  actors:
+    - G0006
 ```
+
+Optional `threat.actors` entries are keys from the bundled actors vocabulary (ATT&CK group IDs such as `G0006`, or MISP cluster IDs). They are strings, not nested objects.
 
 ### 2. Objective — what we want to detect
 

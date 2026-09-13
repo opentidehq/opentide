@@ -119,6 +119,8 @@ opentide generate exports objects
 opentide generate exports revisions
 ```
 
+`generate exports objects` writes `.opentide/exports/objects.export.json`. Threat `actors` are vocabulary IDs (`G0006`); the export enriches them to display names. A list of `{name: …}` dicts is no longer the schema — those values are strings.
+
 ## generate inflight
 
 Write preview shards for changed objects, or remove shards superseded by committed objects:

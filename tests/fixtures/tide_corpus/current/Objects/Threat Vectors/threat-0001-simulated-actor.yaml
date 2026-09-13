@@ -20,3 +20,5 @@ threat:
     - Windows::Desktop
   att&ck:
     - T1059
+  actors:
+    - G0006

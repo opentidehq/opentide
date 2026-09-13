@@ -9,7 +9,7 @@ The point of detection-as-code is that a machine enforces quality. A good OpenTi
 
 ```mermaid
 flowchart LR
-  pr["Pull request"] --> validate["generate + validate --strict + validate query"]
+  pr["Pull request"] --> validate["generate + validate --strict + lint --strict + validate query"]
   validate -->|pass| merge["Merge to main"]
   merge --> stage["deploy (staging)"]
   stage --> promote["promote → PRODUCTION"]
@@ -20,9 +20,10 @@ flowchart LR
 The fastest start is to let OpenTide write the pipeline for you:
 
 ```bash
-opentide setup ci --ci github --platform sentinel --yes
-opentide setup ci --ci gitlab --platform sentinel --platform splunk --yes
-opentide setup ci --ci azure  --python-version 3.12 --yes
+opentide setup platforms --sentinel --yes
+opentide setup ci github --yes
+opentide setup ci gitlab --yes
+opentide setup ci azure --python-version 3.12 --yes
 ```
 
 `setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines install **`opentide>=0.1.0`** (the first public release) and set `OPENTIDE_REPO_ROOT` for every job (GitHub workflow `env`, GitLab `variables`, Azure pipeline `variables`). Pin a newer floor when you upgrade.

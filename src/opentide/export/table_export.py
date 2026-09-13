@@ -48,14 +48,31 @@ class TableExporter:
             encoding="utf-8",
         )
 
-    def _flatten_actors(self, actors: list[dict[str, Any]]) -> list[str]:
-        def _enrich_actor_name(actor: str) -> str:
-            raw_id = actor.split("::")[1]
-            clean_id = raw_id.split(" #")[0].strip()
-            actor_data = get_vocab_entry("actors", clean_id)
-            return str(actor_data.get("name")) if isinstance(actor_data, dict) else clean_id
+    def _flatten_actors(self, actors: Sequence[Any]) -> list[str]:
+        """Resolve ``threat.actors`` vocab keys (or legacy dicts) to display names."""
 
-        return [_enrich_actor_name(str(actor.get("name"))) for actor in actors]
+        def _identifier(actor: Any) -> str:
+            if isinstance(actor, dict):
+                raw = actor.get("name") or actor.get("id") or ""
+            else:
+                raw = actor
+            token = str(raw).split(" #", 1)[0].strip()
+            if token.startswith("actor::"):
+                return token.split("::", 1)[1]
+            return token
+
+        def _enrich_actor_name(identifier: str) -> str:
+            if not identifier:
+                return ""
+            actor_data = get_vocab_entry("actors", identifier)
+            if isinstance(actor_data, dict):
+                name = actor_data.get("name")
+                if name:
+                    return str(name)
+            return identifier
+
+        items: Sequence[Any] = [actors] if isinstance(actors, str) else actors
+        return [_enrich_actor_name(_identifier(actor)) for actor in items]
 
     def _flatten_chaining(self, chains: list[dict[str, Any]]) -> dict[str, list[str]]:
         flat_chains: dict[str, list[str]] = {}
