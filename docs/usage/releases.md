@@ -7,6 +7,33 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.1.5 — 13 September 2026
+
+Patch on 0.1.4. **Upgrade if you regenerate ATT&CK or MISP vocabularies, or if you run the weekly ingest workflow.**
+
+**Install**
+
+```bash
+pip install opentide==0.1.5
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version adds**
+
+- Weekly (and `workflow_dispatch`) ingest for MITRE ATT&CK STIX and MISP threat actors, with RFC 0003 per-key versions and matching schema pin bumps.
+
+**What this version fixes**
+
+- ATT&CK groups stay catalog-only; live objects pin G-ids through `threat.actors.name` → `actors::*`.
+- Later ingest cycles fetch `chore/vocab-upstream` before `git push --force-with-lease`.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.1.5/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.5)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.1.4 — 13 September 2026
 
 Patch on 0.1.3. **Upgrade if `opentide generate` crashed on `threat.actors`, or if you wrote actors as vocabulary ID strings.**
