@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Sequence
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import questionary
 from questionary import Choice, Style
@@ -84,17 +84,13 @@ def ask_checkbox(
     """Select zero or more values with a checkbox menu."""
     selected = set(defaults)
     entries = [Choice(label, value=value, checked=value in selected) for label, value in choices]
-    validation = (
-        (lambda values: bool(values) or "Select at least one option") if require_selection else None
-    )
-    return _answer(
-        questionary.checkbox(
-            message,
-            choices=entries,
-            validate=validation,
-            style=PROMPT_STYLE,
-        ).ask()
-    )
+    prompt_kwargs: dict[str, Any] = {
+        "choices": entries,
+        "style": PROMPT_STYLE,
+    }
+    if require_selection:
+        prompt_kwargs["validate"] = lambda values: bool(values) or "Select at least one option"
+    return _answer(questionary.checkbox(message, **prompt_kwargs).ask())
 
 
 def ask_platforms(*, require_selection: bool = True) -> list[DetectionPlatform]:

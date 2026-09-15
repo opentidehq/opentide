@@ -72,6 +72,46 @@ def test_questionary_prompt_helpers(monkeypatch) -> None:
     assert interactive.ask_checkbox("Checkbox", [("One", "one")]) == ["one"]
 
 
+def test_ask_checkbox_optional_builds_questionary_prompt(monkeypatch) -> None:
+    """questionary.checkbox rejects validate=None (issue #177)."""
+    prompt = MagicMock()
+    prompt.ask.return_value = ["staging"]
+    real_checkbox = interactive.questionary.checkbox
+
+    def wrapping_checkbox(*args, **kwargs):
+        built = real_checkbox(*args, **kwargs)
+        built.ask = prompt.ask
+        return built
+
+    monkeypatch.setattr(interactive.questionary, "checkbox", wrapping_checkbox)
+    assert interactive.ask_checkbox(
+        "CI workflow features",
+        [("Staging deployments on pull requests", "staging")],
+        defaults=("staging",),
+    ) == ["staging"]
+
+
+def test_ask_checkbox_required_passes_callable_validator(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    prompt = MagicMock()
+    prompt.ask.return_value = ["one"]
+
+    def fake_checkbox(*args, **kwargs):
+        captured.update(kwargs)
+        return prompt
+
+    monkeypatch.setattr(interactive.questionary, "checkbox", fake_checkbox)
+    assert interactive.ask_checkbox(
+        "Required",
+        [("One", "one")],
+        require_selection=True,
+    ) == ["one"]
+    assert callable(captured.get("validate"))
+    validate = captured["validate"]
+    assert validate([]) == "Select at least one option"
+    assert validate(["one"]) is True
+
+
 def test_ask_platforms_uses_friendly_checkbox(monkeypatch) -> None:
     monkeypatch.setattr(
         interactive,
