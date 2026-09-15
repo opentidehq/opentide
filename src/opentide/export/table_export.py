@@ -46,8 +46,7 @@ class TableExporter:
         dataset = [asdict(entry) for entry in self._create_dataset()]
         self.exports_path.mkdir(parents=True, exist_ok=True)
         self.export_path.write_text(
-            json.dumps(dataset, indent=2, sort_keys=True, default=json_timestamp_default)
-            + "\n",
+            json.dumps(dataset, indent=2, sort_keys=True, default=json_timestamp_default) + "\n",
             encoding="utf-8",
         )
 

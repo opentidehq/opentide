@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 from tests.test_cli.conftest import assert_json_ok
+from tests.test_cli.e2e.helpers import write_tutorial_objects
 
 from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
-from tests.test_cli.e2e.helpers import write_tutorial_objects
 
 pytestmark = pytest.mark.cli_e2e
 

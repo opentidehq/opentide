@@ -226,9 +226,7 @@ class ExplorerExport:
         bundle = self.build_bundle()
         bundle_path = self.export_dir / "explorer.bundle.json"
         search_path = self.export_dir / "explorer.search.json"
-        bundle_path.write_text(
-            json.dumps(bundle, default=json_timestamp_default), encoding="utf-8"
-        )
+        bundle_path.write_text(json.dumps(bundle, default=json_timestamp_default), encoding="utf-8")
         search_path.write_text(
             json.dumps(
                 {"documents": build_search_documents(bundle["summaries"], bundle["flatIndex"])},
