@@ -68,6 +68,14 @@ gh release create v0.1.5 \
 
 The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.5.md`. Do not tag a feature branch.
 
+After a successful upload, `publish-pypi.yml` dispatches `opentide-released` to [`OpenTideHQ/website`](https://github.com/OpenTideHQ/website) so docs, changelog pages, and specs rebuild immediately:
+
+```bash
+gh api repos/OpenTideHQ/website/dispatches -f event_type=opentide-released
+```
+
+That call uses the same GitHub App as vocab-upstream (`GH_APP_ID` / `GH_APP_KEY`). Install the App on `OpenTideHQ/website` with **contents: write** (required for `repository_dispatch`). If token minting or the dispatch fails, publish still succeeds; the website hourly cron picks the docs change up. The landing-page version number is fetched live from PyPI and does not wait on a rebuild.
+
 Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https://test.pypi.org/manage/account/publishing/) with the same GitHub fields (and a `testpypi` environment if you add one). Production `publish-pypi.yml` targets pypi.org only.
 
 ## If publish fails

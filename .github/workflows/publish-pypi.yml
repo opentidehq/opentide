@@ -1,6 +1,13 @@
 # Publishes to PyPI on GitHub Release via OIDC trusted publishing.
 # First upload: configure a pending publisher at
 # https://pypi.org/manage/account/publishing/ (see docs/internal/pypi-trusted-publishing.md).
+#
+# After a successful upload, dispatch OpenTideHQ/website so docs/changelog/specs
+# rebuild immediately. The landing version number is fetched live from PyPI and
+# does not wait on that rebuild. Uses GH_APP_ID / GH_APP_KEY (same GitHub App as
+# vocab-upstream). If notify fails, publish still succeeds; website hourly cron
+# is the backup:
+#   gh api repos/OpenTideHQ/website/dispatches -f event_type=opentide-released
 name: Publish to PyPI
 
 on:
@@ -38,3 +45,26 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: dist/
+
+      - name: Token to notify the website
+        id: website
+        continue-on-error: true
+        if: ${{ secrets.GH_APP_ID != '' && secrets.GH_APP_KEY != '' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_KEY }}
+          owner: OpenTideHQ
+          repositories: website
+
+      - name: Notify website to sync docs
+        if: steps.website.outcome == 'success' && steps.website.outputs.token != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.website.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/OpenTideHQ/website/dispatches \
+            -f event_type=opentide-released \
+            -f client_payload[source]=publish-pypi \
+            -f client_payload[tag]="${{ github.event.release.tag_name || github.ref_name }}"
