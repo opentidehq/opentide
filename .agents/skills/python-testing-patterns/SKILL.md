@@ -20,6 +20,12 @@ Comprehensive guide to implementing robust testing strategies in Python using py
 - Testing database operations
 - Debugging failing tests
 
+## OpenTide: mock I/O, not prompt constructors
+
+For `opentide.cli.services.setup.interactive`, call the real `questionary.checkbox` / `select` / `text` / `confirm` factory and stub only `.ask()`. Replacing the factory with a lambda hides constructor validation (`validate=None` raises `ValueError` in Questionary 2.1 — issue #177). Orchestrator tests may stub `ask_checkbox`; constructor tests in `tests/test_cli/test_setup_interactive.py` must still build the real prompt.
+
+CLI first-user YAML shape (unquoted dates, tide_corpus): [cli-e2e-testing](../cli-e2e-testing/SKILL.md).
+
 ## Core Concepts
 
 ### 1. Test Types
