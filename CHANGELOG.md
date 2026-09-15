@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-09-15
+
+Patch on the public 0.1.5 beta. Upgrade if `opentide generate` crashed on unquoted YAML dates, or if interactive `opentide setup` crashed after choosing a CI provider.
+
+### Fixed
+
+- Unquoted `YYYY-MM-DD` values in `metadata.created` / `modified` no longer crash `opentide generate` with `TypeError: Object of type date is not JSON serializable`. The YAML loader stringifies timestamps so export JSON matches the schema's string dates ([#178](https://github.com/opentidehq/opentide/issues/178)).
+- Interactive `opentide setup` no longer raises `ValueError: validate must be callable` on the CI workflow features checkbox. Optional Questionary checkboxes omit `validate` ([#177](https://github.com/opentidehq/opentide/issues/177)).
+
+### Install
+
+```bash
+pip install opentide==0.1.6
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.1.5] — 2026-09-13
 
 Patch on the public 0.1.4 beta. Upgrade if you regenerate ATT&CK or MISP vocabularies, or if you run the weekly ingest workflow.
@@ -144,7 +161,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.6
 [0.1.5]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.5
 [0.1.4]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.4
 [0.1.3]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.3
