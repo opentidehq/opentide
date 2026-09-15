@@ -73,6 +73,8 @@ def test_first_user_cli_workflow(
     )
     assert "actors:" in threat_yaml
     assert "name: att&ck::G0006" in threat_yaml
+    assert "created: 2026-01-01" in threat_yaml
+    assert 'created: "2026-01-01"' not in threat_yaml
 
     populated = invoke_cli("generate", repo=fresh)
     assert_json_ok(populated)
@@ -83,6 +85,7 @@ def test_first_user_cli_workflow(
         row for row in catalog if row["uuid"] == "00000000-0000-4000-8001-000000000001"
     )
     assert "APT1" in threat_row["actors"] or "G0006" in threat_row["actors"]
+    assert threat_row["created"] == "2026-01-01"
 
     validate = invoke_cli("validate", "--strict", repo=fresh)
     payload = assert_json_ok(validate)

@@ -57,8 +57,8 @@ metadata:
   uuid: 00000000-0000-4000-8001-000000000001
   schema: threat::1.0
   version: 1
-  created: "2026-01-01"
-  modified: "2026-01-02"
+  created: 2026-01-01
+  modified: 2026-01-02
   tlp: clear
   author: Tutorial Author
   organisation:
@@ -95,8 +95,8 @@ metadata:
   uuid: 00000000-0000-4000-8002-000000000001
   schema: objective::1.0
   version: 1
-  created: "2026-01-01"
-  modified: "2026-01-02"
+  created: 2026-01-01
+  modified: 2026-01-02
   tlp: clear
   author: Tutorial Author
   organisation:
@@ -136,8 +136,8 @@ metadata:
   uuid: 00000000-0000-4000-8003-000000000001
   schema: rule::1.0
   version: 1
-  created: "2026-01-01"
-  modified: "2026-01-02"
+  created: 2026-01-01
+  modified: 2026-01-02
   tlp: clear
   author: Tutorial Author
   organisation:
