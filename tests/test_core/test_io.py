@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 
 import pytest
@@ -11,10 +13,12 @@ from opentide.core.io import (
     dump_json_text,
     dump_toml,
     dump_yaml,
+    json_timestamp_default,
     load_json,
     load_toml,
     load_yaml,
     parse_yaml,
+    stringify_yaml_temporals,
     write_text,
     yaml_loader_name,
 )
@@ -78,6 +82,61 @@ def test_load_yaml_missing_file(tmp_path: Path) -> None:
 
 def test_parse_yaml_roundtrip() -> None:
     assert parse_yaml("name: alpha\n") == {"name": "alpha"}
+
+
+def test_parse_yaml_unquoted_dates_are_iso_strings() -> None:
+    payload = parse_yaml("metadata:\n  created: 2026-09-11\n  modified: 2026-09-11\n")
+    assert payload["metadata"]["created"] == "2026-09-11"
+    assert payload["metadata"]["modified"] == "2026-09-11"
+    json.dumps(payload)
+
+
+def test_parse_yaml_quoted_dates_stay_strings() -> None:
+    payload = parse_yaml('created: "2026-09-11"\n')
+    assert payload["created"] == "2026-09-11"
+
+
+def test_parse_yaml_timestamps_are_iso_strings() -> None:
+    payload = parse_yaml("created: 2026-09-11T12:00:00Z\nwhen: 2026-09-11 12:00:00\n")
+    assert payload["created"] == "2026-09-11T12:00:00Z"
+    assert payload["when"] == "2026-09-11T12:00:00"
+
+
+def test_load_yaml_unquoted_dates_are_json_serializable(tmp_path: Path) -> None:
+    path = tmp_path / "object.yaml"
+    path.write_text("metadata:\n  created: 2026-09-11\n", encoding="utf-8")
+    payload = load_yaml(path)
+    assert payload["metadata"]["created"] == "2026-09-11"
+    json.dumps(payload)
+
+
+def test_stringify_yaml_temporals_walks_nested_values() -> None:
+    nested = {
+        date(2026, 9, 11): [
+            datetime(2026, 9, 11, 12, 0, tzinfo=timezone.utc),
+            time(13, 14, 15),
+            {"inner": date(2026, 1, 2)},
+        ]
+    }
+    converted = stringify_yaml_temporals(nested)
+    assert converted == {
+        "2026-09-11": [
+            "2026-09-11T12:00:00Z",
+            "13:14:15",
+            {"inner": "2026-01-02"},
+        ]
+    }
+
+
+def test_json_timestamp_default_serializes_dates() -> None:
+    assert json_timestamp_default(date(2026, 9, 11)) == "2026-09-11"
+    rendered = json.dumps({"created": date(2026, 9, 11)}, default=json_timestamp_default)
+    assert json.loads(rendered)["created"] == "2026-09-11"
+
+
+def test_json_timestamp_default_rejects_unknown_types() -> None:
+    with pytest.raises(TypeError, match="object"):
+        json_timestamp_default(object())
 
 
 def test_dump_json_text_supports_default_serializer() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from unittest.mock import patch
 
 from opentide.export import revisions_export
@@ -32,6 +33,32 @@ def test_build_revisions_export_collects_versions() -> None:
     assert "u1" in payload
     assert payload["u1"]["versions"]["1.0"]["schema"] == "rule::1.0"
     assert payload["u1"]["description"] == "Detects X"
+
+
+def test_build_revisions_export_stringifies_native_dates() -> None:
+    sample_index = {
+        "rule": {
+            "u1": {
+                "name": "Rule A",
+                "description": "Detects X",
+                "metadata": {
+                    "version": "1.0",
+                    "schema": "rule::1.0",
+                    "modified": date(2026, 9, 11),
+                    "created": date(2026, 9, 11),
+                    "author": "analyst",
+                },
+            }
+        }
+    }
+    with patch.object(revisions_export, "OpenTide") as mock_ot:
+        mock_ot.initialise.return_value = None
+        mock_ot.Configurations.Documentation.object_names = {"rule": "Detection Rules"}
+        mock_ot.Configurations.Global.objects = ["rule"]
+        mock_ot.Models.Index.get.return_value = sample_index["rule"]
+        payload = revisions_export.build_revisions_export()
+    assert payload["u1"]["versions"]["1.0"]["created"] == "2026-09-11"
+    assert payload["u1"]["versions"]["1.0"]["modified"] == "2026-09-11"
 
 
 def test_description_helpers_for_object_types() -> None:

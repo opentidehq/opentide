@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from unittest.mock import patch
 
 from opentide.export.table_export import TableEntry, TableExporter
@@ -209,3 +210,27 @@ def test_run_exports_json(tmp_path, monkeypatch) -> None:
     payload = json.loads((export_dir / "objects.export.json").read_text(encoding="utf-8"))
     assert payload[0]["name"] == "Test"
     assert payload[0]["attack"] == "T1059"
+
+
+def test_run_serializes_native_metadata_dates(tmp_path, monkeypatch) -> None:
+    """Unquoted YAML dates become datetime.date in the index (issue #178)."""
+    _setup_opentide_for_table(monkeypatch)
+    from opentide import OpenTide
+
+    threat_uuid = "00000000-0000-4000-8000-000000000010"
+    OpenTide._index["objects"]["threat"][threat_uuid]["metadata"]["created"] = date(2026, 9, 11)
+    OpenTide._index["objects"]["threat"][threat_uuid]["metadata"]["modified"] = date(2026, 9, 11)
+    export_dir = tmp_path / "exports"
+    exporter = TableExporter()
+    exporter.exports_path = export_dir
+    exporter.export_path = export_dir / "objects.export.json"
+    with (
+        patch("opentide.export.table_export.childs", return_value=[]),
+        patch("opentide.export.table_export.parents", return_value=[]),
+        patch("opentide.export.table_export.get_vocab_entry", return_value={"name": "Evil Actor"}),
+    ):
+        exporter.run()
+    payload = json.loads((export_dir / "objects.export.json").read_text(encoding="utf-8"))
+    threat_row = next(row for row in payload if row["uuid"] == threat_uuid)
+    assert threat_row["created"] == "2026-09-11"
+    assert threat_row["modified"] == "2026-09-11"

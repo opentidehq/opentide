@@ -9,6 +9,7 @@ import pytest
 from tests.test_cli.conftest import assert_json_ok
 
 from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
+from tests.test_cli.e2e.helpers import write_tutorial_objects
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -45,3 +46,27 @@ def test_generate_all_on_corpus_enriches_vocab_actors(invoke_cli, tide_corpus_re
     )
     assert "APT1" in threat_row["actors"] or "G0006" in threat_row["actors"]
     assert "T1059" in threat_row["attack"]
+
+
+def test_generate_serializes_unquoted_metadata_dates(invoke_cli, tmp_path: Path) -> None:
+    """Unquoted YAML dates must not crash generate JSON export (issue #178)."""
+    fresh = tmp_path / "date-detections"
+    run_repo_setup(RepoSetupOptions(path=fresh, name="Dates", yes=True))
+    write_tutorial_objects(fresh)
+    threat = fresh / "objects" / "threats" / "simulated-actor.yaml"
+    threat.write_text(
+        threat.read_text(encoding="utf-8")
+        .replace('created: "2026-01-01"', "created: 2026-09-11")
+        .replace('modified: "2026-01-02"', "modified: 2026-09-11"),
+        encoding="utf-8",
+    )
+    result = invoke_cli("generate", repo=fresh)
+    assert_json_ok(result)
+    catalog = json.loads(
+        (fresh / ".opentide" / "exports" / "objects.export.json").read_text(encoding="utf-8")
+    )
+    threat_row = next(
+        row for row in catalog if row["uuid"] == "00000000-0000-4000-8001-000000000001"
+    )
+    assert threat_row["created"] == "2026-09-11"
+    assert threat_row["modified"] == "2026-09-11"

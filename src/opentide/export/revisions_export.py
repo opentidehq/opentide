@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from opentide.core.io import json_timestamp_default, stringify_yaml_temporals
 from opentide.core.registry import OpenTide
 
 
@@ -31,8 +32,8 @@ def build_revisions_export() -> dict[str, Any]:
             )
             entry["versions"][version] = {
                 "schema": metadata.get("schema"),
-                "modified": metadata.get("modified"),
-                "created": metadata.get("created"),
+                "modified": stringify_yaml_temporals(metadata.get("modified")),
+                "created": stringify_yaml_temporals(metadata.get("created")),
                 "author": metadata.get("author"),
             }
     return export
@@ -54,4 +55,7 @@ def run() -> None:
     export_path = Path(OpenTide.Configurations.Global.Paths.Tide.exports) / export_name
     export_path.parent.mkdir(parents=True, exist_ok=True)
     payload = build_revisions_export()
-    export_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    export_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True, default=json_timestamp_default) + "\n",
+        encoding="utf-8",
+    )

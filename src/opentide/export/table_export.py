@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from opentide.core.io import json_timestamp_default, stringify_yaml_temporals
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 from opentide.generation.framework import childs, get_vocab_entry, parents
@@ -45,7 +46,8 @@ class TableExporter:
         dataset = [asdict(entry) for entry in self._create_dataset()]
         self.exports_path.mkdir(parents=True, exist_ok=True)
         self.export_path.write_text(
-            json.dumps(dataset, indent=2, sort_keys=True) + "\n",
+            json.dumps(dataset, indent=2, sort_keys=True, default=json_timestamp_default)
+            + "\n",
             encoding="utf-8",
         )
 
@@ -93,8 +95,8 @@ class TableExporter:
         metadata = object_data["metadata"]
         tlp = metadata["tlp"]
         version = str(metadata["version"])
-        created = metadata["created"]
-        modified = metadata["modified"]
+        created = stringify_yaml_temporals(metadata["created"])
+        modified = stringify_yaml_temporals(metadata["modified"])
         actors = attack = chaining = ""
         object_childs = childs(object_uuid)
         object_childs = ", ".join(object_childs) if object_childs else ""

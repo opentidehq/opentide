@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Mapping
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any
 
@@ -27,9 +28,44 @@ def yaml_loader_name() -> str:
     return YamlLoader.__name__
 
 
+def stringify_yaml_temporals(value: Any) -> Any:
+    """Replace YAML timestamp objects with ISO-8601 strings.
+
+    PyYAML's safe loaders parse unquoted ``YYYY-MM-DD`` and timestamp scalars
+    into ``datetime.date`` / ``datetime.datetime``. Tide schemas declare those
+    fields as strings, and ``json.dumps`` cannot serialize native date objects.
+    """
+    if isinstance(value, datetime):
+        rendered = value.isoformat()
+        if rendered.endswith("+00:00"):
+            return rendered[:-6] + "Z"
+        return rendered
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, time):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {
+            stringify_yaml_temporals(key): stringify_yaml_temporals(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [stringify_yaml_temporals(item) for item in value]
+    return value
+
+
+def json_timestamp_default(value: Any) -> str:
+    """``json.dumps`` ``default=`` hook for leftover YAML date/time objects."""
+    if isinstance(value, (date, time)):
+        converted = stringify_yaml_temporals(value)
+        if isinstance(converted, str):
+            return converted
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def parse_yaml(text: str) -> Any:
     """Parse YAML text using the fast safe loader when available."""
-    return yaml.load(text, Loader=YamlLoader)
+    return stringify_yaml_temporals(yaml.load(text, Loader=YamlLoader))
 
 
 def load_yaml(path: Path) -> Any:
