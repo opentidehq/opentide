@@ -85,3 +85,4 @@ Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https
 - `0.1.dev…` means the tag was not on the checked-out commit (`fetch-depth: 0` and Release target).
 - 403 / `invalid-publisher`: pending publisher missing, or fields do not match the OIDC claims. GitHub sends `repository_owner: opentidehq` (lowercase) and `environment: pypi`. Copy those from the failed Publish to PyPI log, save the pending publisher again, then re-run the workflow (do not retag).
 - `'2.5' is not a valid metadata version`: hatchling defaulted to Core Metadata 2.5. This repo pins `core-metadata-version = "2.4"` on sdist/wheel. Confirm `uvx twine check dist/*` is clean before tagging.
+- Release exists but Publish to PyPI never starts: the workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag.
