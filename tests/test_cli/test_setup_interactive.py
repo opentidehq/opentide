@@ -58,13 +58,26 @@ def test_require_interactive_rejects_redirected_stdin(monkeypatch) -> None:
         interactive.require_interactive()
 
 
-def test_questionary_prompt_helpers(monkeypatch) -> None:
-    prompt = MagicMock()
-    prompt.ask.side_effect = ["text", True, "choice", ["one"]]
-    monkeypatch.setattr(interactive.questionary, "text", lambda *args, **kwargs: prompt)
-    monkeypatch.setattr(interactive.questionary, "confirm", lambda *args, **kwargs: prompt)
-    monkeypatch.setattr(interactive.questionary, "select", lambda *args, **kwargs: prompt)
-    monkeypatch.setattr(interactive.questionary, "checkbox", lambda *args, **kwargs: prompt)
+def _construct_and_stub_ask(monkeypatch, prompt_name: str, result):
+    """Build the real Questionary prompt, then stub ``.ask()`` (issue #177)."""
+    real = getattr(interactive.questionary, prompt_name)
+    mock_ask = MagicMock(return_value=result)
+
+    def wrap(*args, **kwargs):
+        assert kwargs.get("validate") is not None or "validate" not in kwargs
+        built = real(*args, **kwargs)
+        built.ask = mock_ask
+        return built
+
+    monkeypatch.setattr(interactive.questionary, prompt_name, wrap)
+    return mock_ask
+
+
+def test_questionary_prompt_helpers_construct_real_prompts(monkeypatch) -> None:
+    _construct_and_stub_ask(monkeypatch, "text", "text")
+    _construct_and_stub_ask(monkeypatch, "confirm", True)
+    _construct_and_stub_ask(monkeypatch, "select", "choice")
+    _construct_and_stub_ask(monkeypatch, "checkbox", ["one"])
 
     assert interactive.ask_text("Text") == "text"
     assert interactive.ask_confirm("Confirm") is True
@@ -74,16 +87,7 @@ def test_questionary_prompt_helpers(monkeypatch) -> None:
 
 def test_ask_checkbox_optional_builds_questionary_prompt(monkeypatch) -> None:
     """questionary.checkbox rejects validate=None (issue #177)."""
-    prompt = MagicMock()
-    prompt.ask.return_value = ["staging"]
-    real_checkbox = interactive.questionary.checkbox
-
-    def wrapping_checkbox(*args, **kwargs):
-        built = real_checkbox(*args, **kwargs)
-        built.ask = prompt.ask
-        return built
-
-    monkeypatch.setattr(interactive.questionary, "checkbox", wrapping_checkbox)
+    _construct_and_stub_ask(monkeypatch, "checkbox", ["staging"])
     assert interactive.ask_checkbox(
         "CI workflow features",
         [("Staging deployments on pull requests", "staging")],
@@ -91,16 +95,18 @@ def test_ask_checkbox_optional_builds_questionary_prompt(monkeypatch) -> None:
     ) == ["staging"]
 
 
-def test_ask_checkbox_required_passes_callable_validator(monkeypatch) -> None:
+def test_ask_checkbox_required_constructs_with_callable_validator(monkeypatch) -> None:
     captured: dict[str, object] = {}
-    prompt = MagicMock()
-    prompt.ask.return_value = ["one"]
+    real_checkbox = interactive.questionary.checkbox
+    mock_ask = MagicMock(return_value=["one"])
 
-    def fake_checkbox(*args, **kwargs):
+    def wrap(*args, **kwargs):
         captured.update(kwargs)
-        return prompt
+        built = real_checkbox(*args, **kwargs)
+        built.ask = mock_ask
+        return built
 
-    monkeypatch.setattr(interactive.questionary, "checkbox", fake_checkbox)
+    monkeypatch.setattr(interactive.questionary, "checkbox", wrap)
     assert interactive.ask_checkbox(
         "Required",
         [("One", "one")],
@@ -112,18 +118,12 @@ def test_ask_checkbox_required_passes_callable_validator(monkeypatch) -> None:
     assert validate(["one"]) is True
 
 
-def test_ask_platforms_uses_friendly_checkbox(monkeypatch) -> None:
-    monkeypatch.setattr(
-        interactive,
-        "ask_checkbox",
-        lambda *args, **kwargs: [DetectionPlatform.sentinel],
-    )
+def test_ask_platforms_constructs_required_checkbox(monkeypatch) -> None:
+    _construct_and_stub_ask(monkeypatch, "checkbox", [DetectionPlatform.sentinel])
     assert interactive.ask_platforms() == [DetectionPlatform.sentinel]
 
 
 def test_prompt_cancel_raises_keyboard_interrupt(monkeypatch) -> None:
-    prompt = MagicMock()
-    prompt.ask.return_value = None
-    monkeypatch.setattr(interactive.questionary, "text", lambda *args, **kwargs: prompt)
+    _construct_and_stub_ask(monkeypatch, "text", None)
     with pytest.raises(KeyboardInterrupt):
         interactive.ask_text("Text")
