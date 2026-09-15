@@ -99,6 +99,14 @@ exit 0". Query and deploy stay in the CliRunner workflow test (HTTP mocked).
 3. Include platform `configurations.*` blocks for deploy payload tests
 4. Register new forward slices in `manifest.toml` (`status = "reserved"` → `"active"`)
 
+### Author-shaped YAML (do not sanitize timestamps)
+
+`metadata.created` / `modified` in **tutorial fences**, **tide_corpus objects**, and **documentation fixtures** must be unquoted `YYYY-MM-DD` (the format templates emit and authors write).
+
+Quoted dates (`created: "2026-01-01"`) stay strings under PyYAML. Unquoted dates become `datetime.date` and crash `json.dumps` in generate/export unless the loader stringifies them. Issue #178 shipped because every first-user simulation quoted dates.
+
+Guard: `tests/test_cli/test_simulation_yaml_shape.py` (unit matrix). Do not re-quote dates to make a test pass.
+
 ## Deploy payload testing
 
 **Unit** (`test_deploy_payloads.py`): load corpus rule → `preview_rule_deployment()` → syrupy snapshot of `api_request`.
@@ -120,6 +128,9 @@ Mock only the network boundary (`DeployTide.mdr` deployer); do not mock payload 
 | HTTP / cloud SDK clients     | Index loading, deploy plan     |
 | Query validators (E2E only)  | JSON emission, exit codes      |
 | `modified_mdr_files` (mutate)| Payload preview compile path   |
+| Prompt `.ask()` only         | `questionary.*` constructors   |
+
+Interactive setup: construct the real Questionary prompt (kwargs are validated there) and stub `.ask()`. Replacing `questionary.checkbox` with a lambda hid `ValueError: validate must be callable` (issue #177). Orchestrator tests may stub `ask_checkbox`; `test_setup_interactive.py` must still construct the real prompt.
 
 ## Schema bump checklist
 

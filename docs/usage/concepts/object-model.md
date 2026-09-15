@@ -22,8 +22,8 @@ metadata:
   uuid: 00000000-0000-4000-8003-000000000001  # stable identity — references use this
   schema: rule::1.0                            # structural revision (selects the model)
   version: 1                                   # instance content version (semver-ish)
-  created: "2026-01-01"
-  modified: "2026-01-02"
+  created: 2026-01-01
+  modified: 2026-01-02
   tlp: clear                                   # sharing sensitivity
 ```
 
@@ -42,8 +42,8 @@ metadata:
   uuid: 00000000-0000-4000-8001-000000000001
   schema: threat::1.0
   version: 1
-  created: "2026-01-01"
-  modified: "2026-01-02"
+  created: 2026-01-01
+  modified: 2026-01-02
   tlp: clear
 threat:
   description: Simulated threat actor for credential access
@@ -72,8 +72,8 @@ metadata:
   uuid: 00000000-0000-4000-8002-000000000001
   schema: objective::1.0
   version: 1
-  created: "2026-01-01"
-  modified: "2026-01-02"
+  created: 2026-01-01
+  modified: 2026-01-02
   tlp: clear
 composition:
   strategy: Combined
@@ -109,8 +109,8 @@ metadata:
   uuid: 00000000-0000-4000-8003-000000000001
   schema: rule::1.0
   version: 1
-  created: "2026-01-01"
-  modified: "2026-01-02"
+  created: 2026-01-01
+  modified: 2026-01-02
   tlp: clear
 description: Detects credential access via suspicious process creation
 status: STAGING

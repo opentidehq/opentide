@@ -160,7 +160,7 @@ def build_search_documents(
                 "platforms": summary.get("platforms", []),
                 "status": summary.get("status") or "",
                 "relatedCount": summary.get("relatedCount", 0),
-                "content": json.dumps(body)[:4000],
+                "content": json.dumps(body, default=json_timestamp_default)[:4000],
             }
         )
     return documents
