@@ -206,6 +206,7 @@ Copied from [`docs/internal/pypi-trusted-publishing.md`](../../../docs/internal/
 |--------|-------------|
 | `0.1.dev…` | Tag not on the checked-out commit. Wrong `--target`. Do not retag; retarget. |
 | 403 `invalid-publisher` | OIDC fields: owner `opentidehq` (lowercase), workflow `publish-pypi.yml`, env `pypi`. Re-run; do not retag. |
+| Release exists but Publish to PyPI never starts | Workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag. |
 | Core Metadata 2.5 | Already pinned to `2.4` in pyproject sdist/wheel. `uvx twine check dist/*` before tag. |
 
 Job needs `id-token: write` and `contents: read` (already set in the workflow).
