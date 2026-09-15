@@ -7,6 +7,29 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.1.6 — 15 September 2026
+
+Patch on 0.1.5. **Upgrade if `opentide generate` crashed on unquoted YAML dates, or if interactive `opentide setup` crashed after choosing a CI provider.**
+
+**Install**
+
+```bash
+pip install opentide==0.1.6
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version fixes**
+
+- Unquoted `created: 2026-09-11` metadata dates no longer crash generate JSON export (`Object of type date is not JSON serializable`).
+- Interactive setup no longer raises `validate must be callable` on optional CI feature checkboxes.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.1.6/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.6)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.1.5 — 13 September 2026
 
 Patch on 0.1.4. **Upgrade if you regenerate ATT&CK or MISP vocabularies, or if you run the weekly ingest workflow.**

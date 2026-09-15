@@ -26,7 +26,7 @@ See [Installation → environment variables](./installation.md#environment-varia
 The CLI ships as an extra. Install it:
 
 ```bash
-pip install 'opentide==0.1.5'
+pip install 'opentide==0.1.6'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at the venv's `opentide-mcp` — see [MCP configuration](../mcp/configuration.md).
@@ -38,7 +38,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 Upgrade:
 
 ```bash
-pip install 'opentide==0.1.5'
+pip install 'opentide==0.1.6'
 ```
 
 `0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
@@ -48,7 +48,7 @@ pip install 'opentide==0.1.5'
 `0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
 
 ```bash
-pip install 'opentide==0.1.5'
+pip install 'opentide==0.1.6'
 opentide setup skills discover
 opentide setup skills --generic --yes
 ```
@@ -62,6 +62,21 @@ Use `--path` / `-C` for the repository root. Skills are discovered and installed
 ```bash
 opentide setup skills discover --refresh
 opentide setup skills --generic --yes
+```
+
+### Interactive `opentide setup` crashes with `validate must be callable`
+
+Selecting GitHub Actions (or another CI provider) in the wizard then failed on **CI workflow features**:
+
+```text
+ValueError: validate must be callable
+```
+
+`0.1.5` passed `validate=None` into Questionary for optional checkboxes. **0.1.6** omits the argument when a selection is optional. Non-interactive `opentide setup --ci github` was already fine. Upgrade:
+
+```bash
+pip install 'opentide==0.1.6'
+opentide setup
 ```
 
 ### `setup ci` YAML fails to parse in GitHub, GitLab, or Azure
@@ -86,12 +101,23 @@ opentide setup ci github --yes
 
 ## Generation
 
+### `opentide generate` crashes with `Object of type date is not JSON serializable`
+
+Unquoted `metadata.created` / `modified` values (`created: 2026-09-11`) are valid Tide YAML. PyYAML loads them as `datetime.date`, and `0.1.5` crashed when writing `.opentide/exports/objects.export.json`. **0.1.6** stringifies those timestamps at YAML load. Upgrade:
+
+```bash
+pip install 'opentide==0.1.6'
+opentide generate
+```
+
+Quoted dates (`created: "2026-09-11"`) already worked; you do not need to quote them.
+
 ### `opentide generate` crashes with `'str' object has no attribute 'get'`
 
 `0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the CoreTide object form (`name`, optional `sighting` / `references`). Upgrade:
 
 ```bash
-pip install 'opentide==0.1.5'
+pip install 'opentide==0.1.6'
 ```
 
 Write actors as objects, not bare IDs:
