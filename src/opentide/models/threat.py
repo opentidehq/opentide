@@ -31,6 +31,7 @@ class ThreatBody(TideModel):
     actors: list[ThreatActor] | None = None
     killchain: str | list[str] | None = VocabField(True, default=None)
     chaining: list[dict[str, str]] | None = None
+    cve: list[str] | None = Field(default=None, title="CVE")
 
     @model_validator(mode="before")
     @classmethod

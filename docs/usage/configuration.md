@@ -147,7 +147,7 @@ See [CLI global options](../cli/global-options.md) for how it resolves.
 ## Visibility and documentation
 
 - `visibility.toml` controls which objects are exposed/deployed in a given context; it is validated by a generated `visibility` schema.
-- `documentation.toml` tunes `opentide generate docs` output (which folders, which sections). See [`generate docs`](../cli/generate.md).
+- `documentation.toml` tunes `opentide generate docs` output (which folders, which sections). CVE links and optional API enrichment use [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu); see [`generate docs`](../cli/generate.md).
 
 ## Paths
 

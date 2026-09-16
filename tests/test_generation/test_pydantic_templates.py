@@ -50,6 +50,7 @@ def test_generate_core_template_threat_expands_body(tmp_path: Path) -> None:
     after_threat = text.split("\nthreat:", 1)[1]
     assert "description:" in after_threat
     assert "att&ck:" in after_threat
+    assert "cve:" in after_threat or "#cve:" in after_threat
 
 
 def test_generate_core_template_objective_expands_composition_and_signals(

@@ -43,6 +43,8 @@ report = run_validation(
 
 Available checks: `id-uniqueness`, `uuid-format`, `schema`, `cve`.
 
+The `cve` check looks up `threat.cve` identifiers on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu) (`GET /api/vulnerability/{id}`). An empty JSON object means the identifier is unknown. The check does not scrape NVD through `mitrecve`.
+
 Default pipeline checks: id uniqueness, UUID format, schema.
 
 ## ValidationReport

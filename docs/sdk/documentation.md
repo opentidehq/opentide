@@ -29,7 +29,7 @@ Rendered pages include shared `Metadata` and `References` sections, plus object-
 
 - `render_rule`: status, ATT&CK techniques, detection-model backlinks, response metadata/procedures, platform query configurations, coverage diagram, related-objects table
 - `render_objective`: objective metadata, signal details, signal-to-rule MDR coverage with backlinks, coverage diagram, related-objects table
-- `render_threat`: criticality/terrain/assessment/actors, ATT&CK techniques (when present), chaining + chaining details (with backlinks), coverage diagram, related-objects table
+- `render_threat`: criticality/terrain/assessment/actors, CVE (Vulnerability-Lookup links + optional API enrichment), ATT&CK techniques (when present), chaining + chaining details (with backlinks), coverage diagram, related-objects table
 
 ## Write all pages
 
@@ -104,9 +104,14 @@ relations_direction = "both"
 [index]
 relation_counts = true
 icons = false
+
+[cve]
+base_url = "https://vulnerability.circl.lu"
+default_db_link = "https://vulnerability.circl.lu/vuln/"
+retrieve_details = true
 ```
 
-See [CLI generate](../cli/generate.md) for flavor-specific Mermaid behaviour.
+See [CLI generate](../cli/generate.md) for flavor-specific Mermaid behaviour and the CVE section.
 
 ## Public exports
 

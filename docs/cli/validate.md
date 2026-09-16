@@ -32,6 +32,12 @@ opentide validate --check schema
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 
+### CVE check
+
+`opentide validate --check cve` looks up each `threat.cve` identifier on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu) (`GET /api/vulnerability/{id}`). Unknown IDs (empty JSON body) fail the check. Links in generated docs use the same aggregator: `https://vulnerability.circl.lu/vuln/{id}`.
+
+The check no longer scrapes NVD through `mitrecve`. If Vulnerability-Lookup is unreachable, those identifiers are skipped (logged) rather than reported as invalid.
+
 ### Default checks
 
 When no `--check` is specified, the pipeline runs:

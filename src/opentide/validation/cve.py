@@ -20,7 +20,7 @@ def run() -> None:
     emit_section("CVE Validation")
     logger.info(
         "cve_validation_start",
-        detail="Checks whether CVE fields exist in public vulnerability databases",
+        detail="Checks whether CVE fields exist in CIRCL Vulnerability-Lookup",
     )
     OpenTide.initialise()
     report = run_validation(checks=frozenset({ValidateCheck.cve}))
