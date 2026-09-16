@@ -3,19 +3,20 @@ criticality:
 
 metadata:
   uuid: 
-  schema: 
+  schema: threat::1.0
   version: 
   created: YYYY-MM-DD
   modified: YYYY-MM-DD
   tlp: 
-  #author: null
+  #author: 
   #contributors:
-    #-
+  #  - 
   #organisation:
-    uuid: 
-    name: 
+  #  uuid: 
+  #  name: 
 threat:
-  description: 
+  description: |
+    ...
   severity: 
   impact: 
   leverage: 
@@ -26,19 +27,19 @@ threat:
   att&ck:
     - 
   #actors:
-    #- name: 
-      #sighting: |
-        #...
-      #references:
-        #-
+  #  - name: 
+  #    #sighting: |
+  #    #  ...
+  #    #references:
+  #    #  - 
   #killchain:
-    #-
+  #  - 
   #chaining:
-    #-
+  #  - key: 
 #references:
-  #public:
-    #example: 
-  #internal:
-    #example: 
-  #reports:
-    #-
+#  #public:
+#  #  1: 
+#  #internal:
+#  #  key: 
+#  #reports:
+#  #  - 

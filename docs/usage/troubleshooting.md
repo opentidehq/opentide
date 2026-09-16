@@ -120,14 +120,14 @@ opentide generate
 
 ### Generated templates contain YAML `null` or attach children under the wrong parent
 
-`0.1.7` dumped `default: None` as YAML `null`, and commented `#organisation:` without commenting nested `uuid` / `name`, so those keys parsed as children of `metadata.tlp`. **0.1.8** skips None defaults, restores typed placeholders, and comments the whole optional subtree. Upgrade and regenerate:
+`0.1.7` dumped `default: None` as YAML `null`, and commented `#organisation:` without commenting nested `uuid` / `name`, so those keys parsed as children of `metadata.tlp`. **0.1.8** patched the legacy JSON Schema walker. **0.2.0** replaces that walker: templates come from Pydantic `FieldInfo`, optional sections are commented as whole blocks, and there are no `null` tokens. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.1.8'
-opentide generate
+pip install -U opentide
+opentide generate templates
 ```
 
-Confirm `.opentide/templates/rule.1.0.template.yaml` has no `null` and that `metadata.tlp` is not a mapping.
+Confirm `.opentide/templates/rule.1.0.template.yaml` has no `null`, `metadata.tlp` is a scalar, and `configurations:` lists commented platform stubs (`#sentinel:`) rather than `{}`.
 
 ### `setup ci` YAML fails to parse in GitHub, GitLab, or Azure
 

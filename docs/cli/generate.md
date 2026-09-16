@@ -34,6 +34,19 @@ When run without a subcommand, phases execute in this order:
 
 A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts. Snippet conversion requires the YAML templates from the templates phase and fails if a core or enabled-platform template is missing. Snippet prefixes are `tide-threat`, `tide-objective`, `tide-rule`, and `tide-<platform>` for enabled platforms, with `scope: yaml` and tabstops on empty values.
 
+## generate templates
+
+`opentide generate templates` walks Pydantic `model_fields` (not JSON Schema `$defs`). Output is line-oriented YAML:
+
+- Uncommented keys are required `FieldInfo` on that model (aliases honoured: `att&ck`, `schema`).
+- Optional fields are the same YAML with `#` inserted at the field indent. Uncomment a block and it is valid YAML.
+- Placeholders are typed: empty strings, `YYYY-MM-DD`, multiline `|` + `...`, `https://`, `3`, `false`. There are no YAML `null` tokens.
+- Vocabulary fields are empty scalars (no enum dump).
+- `DetectionRule.file` and other `Path` / hidden fields are omitted.
+- Rule `configurations` is a live key whose platform slots (`#sentinel:`, `#splunk:`, …) are commented stubs including nested `query: |`. It is never `configurations: {}`.
+
+JSON Schema generation (`generate schemas`) stays a separate pipeline. VS Code snippets copy the YAML templates and add tabstops; they do not re-walk models.
+
 ## generate docs
 
 The only supported entry point for markdown documentation.

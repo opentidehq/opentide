@@ -7,7 +7,7 @@ from typing import Any, ClassVar, Protocol, cast
 
 from pydantic import Field, PrivateAttr
 
-from opentide.models.base import TideModel
+from opentide.models.base import TideField, TideModel
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.platform import RuleConfigurations
 from opentide.models.response import RuleResponse
@@ -37,17 +37,23 @@ class DetectionRule(TideModel):
 
     __schema_identifier__: ClassVar[str] = "rule::1.0"
     name: str
-    metadata: ObjectMetadata
-    description: str
+    metadata: ObjectMetadata = TideField(schema_extra={"tide.template.spacer": True})
+    description: str = TideField(
+        schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
+    )
     status: str = "STAGING"
     severity: str = "Informational"
     techniques: list[str] = Field(default_factory=list)
-    platforms: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    platforms: dict[str, dict[str, Any]] = Field(
+        default_factory=dict, json_schema_extra={"tide.template.hide": True}
+    )
     references: ObjectReferences | None = None
     detection_model: str | None = None
-    response: RuleResponse | None = None
-    configurations: RuleConfigurations | None = None
-    file: Path | None = None
+    response: RuleResponse | None = TideField(None, schema_extra={"tide.template.required": True})
+    configurations: RuleConfigurations | None = TideField(
+        None, schema_extra={"tide.template.required": True}
+    )
+    file: Path | None = TideField(None, schema_extra={"tide.template.hide": True})
     _registry: TideRegistry | None = PrivateAttr(default=None)
 
     def bind_registry(self, registry: TideRegistry) -> DetectionRule:

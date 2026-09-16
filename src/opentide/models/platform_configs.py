@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from opentide.models.base import TideModel
+from opentide.models.base import TideField, TideModel
 
 
 class SentinelTemplate(TideModel):
@@ -71,7 +71,7 @@ class SentinelEntityMapping(TideModel):
 
 
 class SentinelExclusion(TideModel):
-    query: str
+    query: str = TideField(schema_extra={"tide.template.multiline": True})
     reason: str
     tenant: str | None = None
     let: dict[str, Any] | None = None
@@ -134,7 +134,7 @@ class DefenderResponseActions(TideModel):
 
 
 class DefenderExclusion(TideModel):
-    query: str
+    query: str = TideField(schema_extra={"tide.template.multiline": True})
     reason: str
     tenant: str | None = None
     let: dict[str, Any] | None = None
@@ -165,11 +165,11 @@ class SentinelOneDetails(TideModel):
 
 
 class SentinelOneSingleEvent(TideModel):
-    query: str
+    query: str = TideField(schema_extra={"tide.template.multiline": True})
 
 
 class SentinelOneSubQuery(TideModel):
-    query: str
+    query: str = TideField(schema_extra={"tide.template.multiline": True})
     matches_required: int
 
 

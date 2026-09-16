@@ -1,13 +1,29 @@
   #enabled: false
   #name: 
-  #schema: null
-  status: null
-  #flags: null
-  #tenants: null
-  #contributors: null
-  details: 
-  schedule: 
-  
+  schema: platform::crowdstrike::1.0
+  #status: 
+  #flags:
+  #  - 
+  #tenants:
+  #  - 
+  #contributors:
+  #  - 
+  details:
+    trigger: 
+    outcome: 
+    #name: 
+    #description: |
+    #  ...
+    #severity: 
+    #tactic: 
+    #technique: 
+  schedule:
+    frequency: 
+    lookback: 
+    #start: 
+    #end: 
+
   query: |
     ...
-  #rule_id_bundle: null
+  #rule_id_bundle:
+  #  key: 

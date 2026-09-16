@@ -1,14 +1,44 @@
   #enabled: false
   #name: 
-  #schema: null
-  status: null
-  #flags: null
-  #tenants: null
-  #contributors: null
+  schema: platform::harfanglab::1.0
+  #status: 
+  #flags:
+  #  - 
+  #tenants:
+  #  - 
+  #contributors:
+  #  - 
   #maturity: Experimental
   #confidence: Moderate
   #action: Alert
-  #tags: null
-  #sigma: null
-  #yara: null
-  #rule_id_bundle: null
+  #tags:
+  #  - 
+  #sigma:
+  #  logsource:
+  #    category: 
+  #    product: 
+  #  selections:
+  #    - name: 
+  #      field: 
+  #      value:
+  #        - 
+  #      #modifiers:
+  #      #  - 
+  #  condition: 
+  #  #false_positives:
+  #  #  - 
+  #yara:
+  #  meta:
+  #    context:
+  #      - 
+  #    os: 
+  #    #arch:
+  #    #  - 
+  #    #score: 
+  #    #classification: 
+  #  strings: 
+  #  condition: 
+  #  #imports:
+  #  #  - 
+  #rule_id_bundle:
+  #  key: 

@@ -2,41 +2,376 @@ name:
 
 metadata:
   uuid: 
-  schema: 
+  schema: rule::1.0
   version: 
   created: YYYY-MM-DD
   modified: YYYY-MM-DD
   tlp: 
-  #author: null
+  #author: 
   #contributors:
-    #-
+  #  - 
   #organisation:
-    uuid: 
-    name: 
+  #  uuid: 
+  #  name: 
 
 description: |
   ...
 #status: STAGING
 #severity: Informational
 #techniques:
-  #-
+#  - 
 #references:
-  #public:
-    #example: 
-  #internal:
-    #example: 
-  #reports:
-    #-
-#detection_model: null
+#  #public:
+#  #  1: 
+#  #internal:
+#  #  key: 
+#  #reports:
+#  #  - 
+#detection_model: 
 response:
   #alert_severity: Informational
-  #playbook: null
-  #responders: null
+  #playbook: 
+  #responders: 
   #procedure:
-    analysis: 
-    #searches:
-      #- purpose: 
-        #system: 
-        #query: 
-    #containment: null
-configurations: {}
+  #  analysis: |
+  #    ...
+  #  #searches:
+  #  #  - purpose: 
+  #  #    system: 
+  #  #    query: |
+  #  #      ...
+  #  #containment: 
+configurations:
+  #sentinel:
+  #  #enabled: false
+  #  #name: 
+  #  schema: platform::sentinel::1.0
+  #  #status: 
+  #  #flags:
+  #  #  - 
+  #  #tenants:
+  #  #  - 
+  #  #contributors:
+  #  #  - 
+  #
+  #  query: |
+  #    ...
+  #  scheduling:
+  #    #nrt: false
+  #    #frequency: 
+  #    #lookback: 
+  #  alert:
+  #    #title: 
+  #    #description: |
+  #    #  ...
+  #    #severity: 
+  #    #suppression: false
+  #    #create_incident: true
+  #    #tactics:
+  #    #  - 
+  #    #techniques:
+  #    #  - 
+  #    #custom_details:
+  #    #  - key: 
+  #    #    column: 
+  #    #dynamic_properties:
+  #    #  - property: 
+  #    #    column: 
+  #  #exclusions:
+  #  #  - query: |
+  #  #      ...
+  #  #    reason: 
+  #  #    #tenant: 
+  #  #    #let:
+  #  #    #  key: 
+  #  #template:
+  #  #  uuid: 
+  #  #  version: 
+  #  #trigger:
+  #  #  operator: 
+  #  #  threshold: 3
+  #  #grouping:
+  #  #  event: 
+  #  #  #alert:
+  #  #  #  enabled: false
+  #  #  #  #reopen_closed_incidents: false
+  #  #  #  #grouping_lookback: 
+  #  #  #  #matching: 
+  #  #  #  #group_by_entities:
+  #  #  #  #  - 
+  #  #  #  #group_by_alert_details:
+  #  #  #  #  - 
+  #  #  #  #group_by_custom_details:
+  #  #  #  #  - 
+  #  #entities:
+  #  #  - entity: 
+  #  #    mappings:
+  #  #      - identifier: 
+  #  #        column: 
+  #defender_for_endpoint:
+  #  #enabled: false
+  #  #name: 
+  #  schema: platform::defender_for_endpoint::1.0
+  #  #status: 
+  #  #flags:
+  #  #  - 
+  #  #tenants:
+  #  #  - 
+  #  #contributors:
+  #  #  - 
+  #
+  #  query: |
+  #    ...
+  #  alert:
+  #    category: 
+  #    #title: 
+  #    #description: |
+  #    #  ...
+  #    #severity: 
+  #    #recommendation: 
+  #    #techniques:
+  #    #  - 
+  #  impacted_entities:
+  #    #device: 
+  #    #mailbox: 
+  #    #user: 
+  #  scheduling: NRT
+  #  #rule_id:
+  #  #  key: 3
+  #  #actions:
+  #  #  #devices:
+  #  #  #  #isolate_device: 
+  #  #  #  #collect_investigation_package: false
+  #  #  #  #run_antivirus_scan: false
+  #  #  #  #initiate_investigation: false
+  #  #  #  #restrict_app_execution: false
+  #  #  #files:
+  #  #  #  #allow_block:
+  #  #  #  #  action: Allow
+  #  #  #  #  identifier: 
+  #  #  #  #  #groups:
+  #  #  #  #  #  selection: All
+  #  #  #  #  #  #device_groups:
+  #  #  #  #  #  #  - 
+  #  #  #  #quarantine_file: 
+  #  #  #users:
+  #  #  #  #mark_as_compromised: 
+  #  #  #  #disable_user: 
+  #  #  #  #force_password_reset: 
+  #  #scope:
+  #  #  selection: All
+  #  #  #device_groups:
+  #  #  #  - 
+  #  #exclusions:
+  #  #  - query: |
+  #  #      ...
+  #  #    reason: 
+  #  #    #tenant: 
+  #  #    #let:
+  #  #    #  key: 
+  #splunk:
+  #  #enabled: false
+  #  #name: 
+  #  schema: platform::splunk::1.0
+  #  #status: 
+  #  #flags:
+  #  #  - 
+  #  #tenants:
+  #  #  - 
+  #  #contributors:
+  #  #  - 
+  #
+  #  #query: |
+  #  #  ...
+  #  #scheduling:
+  #  #  #type: 
+  #  #  #expires: 
+  #  #  #schedule:
+  #  #  #  #frequency: 
+  #  #  #  #cron: 
+  #  #  #  #custom_time: 
+  #  #  #timerange:
+  #  #  #  #lookback: 
+  #  #  #  #earliest: 
+  #  #  #  #latest: 
+  #  #trigger:
+  #  #  #condition: 
+  #  #  #comparator: 
+  #  #  #threshold: 3
+  #  #  #severity: 3
+  #  #  #custom_condition: 
+  #  #  #type: 
+  #  #  #throttling:
+  #  #  #  #fields:
+  #  #  #  #  - 
+  #  #  #  #duration: 
+  #  #  #  #group_name: 
+  #  #actions:
+  #  #  #notable:
+  #  #  #  #event:
+  #  #  #  #  #title: 
+  #  #  #  #  #description: |
+  #  #  #  #  #  ...
+  #  #  #  #drilldown:
+  #  #  #  #  #name: 
+  #  #  #  #  #search: 
+  #  #  #  #security_domain: 
+  #  #  #risk:
+  #  #  #  #message: 
+  #  #  #  #risk_objects:
+  #  #  #  #  - field: 
+  #  #  #  #    type: 
+  #  #  #  #    score: 3
+  #  #  #  #threat_objects:
+  #  #  #  #  - field: 
+  #  #  #  #    type: 
+  #  #  #email:
+  #  #  #  #to: 
+  #  #  #  #cc: 
+  #  #  #  #bcc: 
+  #  #  #  #priority: 
+  #  #  #  #subject: 
+  #  #  #  #message: 
+  #  #  #  #content_type: 
+  #  #  #  #send_csv: false
+  #  #  #  #send_pdf: false
+  #  #  #  #inline_results: false
+  #  #  #  #include:
+  #  #  #  #  #results_link: false
+  #  #  #  #  #search_string: false
+  #  #  #  #  #trigger_condition: false
+  #  #  #  #  #trigger_time: false
+  #  #correlation_search: false
+  #sentinel_one:
+  #  #enabled: false
+  #  #name: 
+  #  schema: platform::sentinel_one::1.0
+  #  #status: 
+  #  #flags:
+  #  #  - 
+  #  #tenants:
+  #  #  - 
+  #  #contributors:
+  #  #  - 
+  #  condition:
+  #    type: "Single Event"
+  #    #single_event:
+  #    #  query: |
+  #    #    ...
+  #    #correlation:
+  #    #  entity: 
+  #    #  match_in_order: false
+  #    #  time_window: 
+  #    #  sub_queries:
+  #    #    - query: |
+  #    #        ...
+  #    #      matches_required: 3
+  #    #cool_off: 
+  #  #response:
+  #  #  treat_as_threat: false
+  #  #  network_quarantine: false
+  #  #details:
+  #  #  #name: 
+  #  #  #description: |
+  #  #  #  ...
+  #  #  #severity: 
+  #  #  #expiration: 
+  #  #rule_id_bundle:
+  #  #  key: 3
+  #crowdstrike:
+  #  #enabled: false
+  #  #name: 
+  #  schema: platform::crowdstrike::1.0
+  #  #status: 
+  #  #flags:
+  #  #  - 
+  #  #tenants:
+  #  #  - 
+  #  #contributors:
+  #  #  - 
+  #  details:
+  #    trigger: 
+  #    outcome: 
+  #    #name: 
+  #    #description: |
+  #    #  ...
+  #    #severity: 
+  #    #tactic: 
+  #    #technique: 
+  #  schedule:
+  #    frequency: 
+  #    lookback: 
+  #    #start: 
+  #    #end: 
+  #
+  #  query: |
+  #    ...
+  #  #rule_id_bundle:
+  #  #  key: 
+  #harfanglab:
+  #  #enabled: false
+  #  #name: 
+  #  schema: platform::harfanglab::1.0
+  #  #status: 
+  #  #flags:
+  #  #  - 
+  #  #tenants:
+  #  #  - 
+  #  #contributors:
+  #  #  - 
+  #  #maturity: Experimental
+  #  #confidence: Moderate
+  #  #action: Alert
+  #  #tags:
+  #  #  - 
+  #  #sigma:
+  #  #  logsource:
+  #  #    category: 
+  #  #    product: 
+  #  #  selections:
+  #  #    - name: 
+  #  #      field: 
+  #  #      value:
+  #  #        - 
+  #  #      #modifiers:
+  #  #      #  - 
+  #  #  condition: 
+  #  #  #false_positives:
+  #  #  #  - 
+  #  #yara:
+  #  #  meta:
+  #  #    context:
+  #  #      - 
+  #  #    os: 
+  #  #    #arch:
+  #  #    #  - 
+  #  #    #score: 
+  #  #    #classification: 
+  #  #  strings: 
+  #  #  condition: 
+  #  #  #imports:
+  #  #  #  - 
+  #  #rule_id_bundle:
+  #  #  key: 
+  #carbon_black_cloud:
+  #  #enabled: false
+  #  #name: 
+  #  schema: platform::carbon_black_cloud::1.0
+  #  #status: 
+  #  #flags:
+  #  #  - 
+  #  #tenants:
+  #  #  - 
+  #  #contributors:
+  #  #  - 
+  #
+  #  #query: |
+  #  #  ...
+  #  #organizations:
+  #  #  - 
+  #  #watchlist: 
+  #  #report: 
+  #  #tags:
+  #  #  - 
+  #  #rule_id_bundle:
+  #  #  key: 

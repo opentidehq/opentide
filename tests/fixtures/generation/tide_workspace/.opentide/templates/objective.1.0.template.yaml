@@ -2,61 +2,68 @@ name:
 
 metadata:
   uuid: 
-  schema: 
+  schema: objective::1.0
   version: 
   created: YYYY-MM-DD
   modified: YYYY-MM-DD
   tlp: 
-  #author: null
+  #author: 
   #contributors:
-    #-
+  #  - 
   #organisation:
-    uuid: 
-    name: 
+  #  uuid: 
+  #  name: 
 objective:
   priority: 
   type: 
-  description: 
+  description: |
+    ...
   signals:
     - name: 
       uuid: 
-      description: 
+      description: |
+        ...
       severity: 
       data:
         availability: 
         requirements: 
         #logsources:
-          #-
+        #  - 
       methodology: 
       entities:
         - 
-      #effort: null
+      #effort: 3
       #detectors:
-        #- name: 
-          #technology: 
-          #description: 
-          #link: null
+      #  - name: 
+      #    technology: 
+      #    description: |
+      #      ...
+      #    #link: https://
       #examples:
-        #- description: 
-          #link: 
-          #language: null
-          #query: null
-      #parent: null
+      #  - description: |
+      #      ...
+      #    link: https://
+      #    #language: 
+      #    #query: |
+      #    #  ...
+      #parent: 
   composition:
     strategy: 
-    description: 
-  #investment: null
+    description: |
+      ...
+  #investment: 
   #threats:
-    #-
+  #  - 
   #attack:
-    #-
+  #  - 
 composition:
   strategy: 
-  description: 
+  description: |
+    ...
 #references:
-  #public:
-    #example: 
-  #internal:
-    #example: 
-  #reports:
-    #-
+#  #public:
+#  #  1: 
+#  #internal:
+#  #  key: 
+#  #reports:
+#  #  - 
