@@ -12,7 +12,7 @@ metadata:
     #-
   #organisation:
     uuid: 
-    #name: 
+    name: 
 
 description: |
   ...
@@ -33,7 +33,7 @@ response:
   #playbook: null
   #responders: null
   #procedure:
-    #analysis: 
+    analysis: 
     #searches:
       #- purpose: 
         #system: 

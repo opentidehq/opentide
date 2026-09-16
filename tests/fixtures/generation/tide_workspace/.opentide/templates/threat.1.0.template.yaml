@@ -13,7 +13,7 @@ metadata:
     #-
   #organisation:
     uuid: 
-    #name: 
+    name: 
 threat:
   description: 
   severity: 

@@ -12,7 +12,7 @@ metadata:
     #-
   #organisation:
     uuid: 
-    #name: 
+    name: 
 objective:
   priority: 
   type: 
@@ -23,8 +23,8 @@ objective:
       description: 
       severity: 
       data:
-        #availability: 
-        #requirements: 
+        availability: 
+        requirements: 
         #logsources:
           #-
       methodology: 

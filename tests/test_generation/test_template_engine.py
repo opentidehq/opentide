@@ -52,13 +52,14 @@ def test_gen_template_object_with_properties() -> None:
     metaschema = {
         "metadata": {
             "type": "object",
+            "required": ["uuid"],
             "properties": {
                 "uuid": {"type": "string"},
                 "author": {"type": "string"},
             },
         }
     }
-    body = gen_template(metaschema, required=["metadata", "uuid"])
+    body = gen_template(metaschema, required=["metadata"])
     assert body["metadata"]["uuid"] == "blank"
     assert "#author" in body["metadata"]
 
@@ -199,6 +200,7 @@ def test_gen_template_resolves_ref_nested_object() -> None:
     defs = {
         "ThreatBody": {
             "type": "object",
+            "required": ["description"],
             "properties": {
                 "description": {"type": "string"},
                 "att&ck": {"type": "array", "items": {"type": "string"}},
@@ -207,7 +209,7 @@ def test_gen_template_resolves_ref_nested_object() -> None:
     }
     body = gen_template(
         {"threat": {"$ref": "#/$defs/ThreatBody"}},
-        required=["threat", "description"],
+        required=["threat"],
         defs=defs,
     )
     assert body["threat"]["description"] == "blank"
@@ -241,7 +243,7 @@ def test_gen_template_resolves_array_item_ref() -> None:
     defs = {
         "DetectionSignal": {
             "type": "object",
-            "required": ["name"],
+            "required": ["name", "data"],
             "properties": {
                 "name": {"type": "string"},
                 "data": {
@@ -251,7 +253,11 @@ def test_gen_template_resolves_array_item_ref() -> None:
         },
         "SignalData": {
             "type": "object",
-            "properties": {"availability": {"type": "string"}},
+            "required": ["availability"],
+            "properties": {
+                "availability": {"type": "string"},
+                "logsources": {"type": "array", "items": {"type": "string"}},
+            },
         },
     }
     body = gen_template(
@@ -266,8 +272,9 @@ def test_gen_template_resolves_array_item_ref() -> None:
     )
     item = body["signals"][0]
     assert item["name"] == "blank"
-    data = item.get("data") or item.get("#data")
-    assert data.get("availability", data.get("#availability")) == "blank"
+    data = item["data"]
+    assert data["availability"] == "blank"
+    assert "#logsources" in data
 
 
 def test_gen_template_recomposition_runs_after_ref_resolve() -> None:
@@ -310,3 +317,82 @@ def test_gen_template_hides_marked_fields() -> None:
     assert "name" in body
     assert "file" not in body
     assert "#file" not in body
+
+
+def test_gen_template_nested_object_uses_own_required() -> None:
+    body = gen_template(
+        {
+            "outer": {
+                "type": "object",
+                "required": ["inner"],
+                "properties": {
+                    "inner": {
+                        "type": "object",
+                        "required": ["must_have"],
+                        "tide.template.force-required": ["forced"],
+                        "properties": {
+                            "must_have": {"type": "string"},
+                            "forced": {"type": "string"},
+                            "optional": {"type": "string"},
+                        },
+                    }
+                },
+            }
+        },
+        required=["outer"],
+    )
+    inner = body["outer"]["inner"]
+    assert inner["must_have"] == "blank"
+    assert inner["forced"] == "blank"
+    assert "#optional" in inner
+    assert "optional" not in inner
+
+
+def test_gen_template_does_not_inherit_ancestor_required_names() -> None:
+    body = gen_template(
+        {
+            "uuid": {"type": "string"},
+            "child": {
+                "type": "object",
+                "properties": {
+                    "uuid": {"type": "string"},
+                    "name": {"type": "string"},
+                },
+            },
+        },
+        required=["uuid", "child"],
+    )
+    assert body["uuid"] == "blank"
+    child = body["child"]
+    assert "#uuid" in child
+    assert "#name" in child
+    assert "uuid" not in child
+    assert "name" not in child
+
+
+def test_gen_template_optional_object_still_marks_nested_required() -> None:
+    body = gen_template(
+        {
+            "parent": {
+                "type": "object",
+                "required": ["keep"],
+                "properties": {
+                    "keep": {"type": "string"},
+                    "nested": {
+                        "type": "object",
+                        "required": ["need"],
+                        "properties": {
+                            "need": {"type": "string"},
+                            "skip": {"type": "string"},
+                        },
+                    },
+                },
+            }
+        },
+        required=["parent"],
+    )
+    assert body["parent"]["keep"] == "blank"
+    nested = body["parent"]["#nested"]
+    assert nested["need"] == "blank"
+    assert "#skip" in nested
+    assert "skip" not in nested

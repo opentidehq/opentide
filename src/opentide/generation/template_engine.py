@@ -87,6 +87,18 @@ def get_required(
     return required_list
 
 
+def _local_required(schema: dict[str, Any]) -> list[str]:
+    """Return this object's required names, not an ancestor's flattened list."""
+    names: list[str] = []
+    required = schema.get("required")
+    if isinstance(required, list):
+        names.extend(str(item) for item in required)
+    extra = schema.get("tide.template.force-required")
+    if isinstance(extra, list):
+        names.extend(str(item) for item in extra)
+    return names
+
+
 def _is_null_type(node: dict[str, Any]) -> bool:
     return node.get("type") == "null"
 
@@ -181,19 +193,14 @@ def gen_template(
                 temp = definition_handler(key.replace("#", ""))
             else:
                 temp = definition_handler(metadef)
-            definition_required = list(temp.get("required", []))
-            definition_required.extend(temp.get("tide.template.force-required", []))
             nested_defs = temp.get("$defs") if isinstance(temp.get("$defs"), dict) else defs
-            template = gen_template(
-                {key.replace("#", ""): temp},
-                required=definition_required,
-                defs=nested_defs if isinstance(nested_defs, dict) else defs,
-            )
-            resolved = (
-                template.get(key) or template.get(key.replace("#", "")) or template.get("#" + key)
-            )
-            if resolved is not None:
-                body[key] = resolved
+            properties = temp.get("properties")
+            if isinstance(properties, dict):
+                body[key] = gen_template(
+                    properties,
+                    required=_local_required(temp),
+                    defs=nested_defs if isinstance(nested_defs, dict) else defs,
+                )
             continue
 
         field = resolve_field_schema(raw, defs)
@@ -241,18 +248,21 @@ def gen_template(
                     body[key] = {sample: "blank"} if sample else {}
                 elif "properties" in field:
                     body[key] = gen_template(
-                        field.get("properties", {}), required=required, defs=defs
+                        field.get("properties", {}),
+                        required=_local_required(field),
+                        defs=defs,
                     )
 
         elif "items" in field and "properties" in field.get("items", {}):
+            items = field["items"]
             if key in required:
-                sub_req = field["items"].get("required") or []
+                sub_req = _local_required(items)
             else:
                 key = "#" + key
                 sub_req = []
 
             values = gen_template(
-                field["items"]["properties"],
+                items["properties"],
                 required=sub_req,
                 defs=defs,
             )

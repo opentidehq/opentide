@@ -10,7 +10,7 @@
   "tide:.opentide/schemas/rule.1.0.schema.json": "1db7170a6ef4f5003acf8a29538d888070f80d88d2ac3f5f152c0399f54b8de1",
   "tide:.opentide/schemas/threat.1.0.schema.json": "c3a9c066bdbdde3dbc85a8ba6e65b38bd02782b63a64bf1bbaf338986f7f1f37",
   "tide:.opentide/schemas/visibility.1.0.schema.json": "fe98467b3b51256dbc14a22773a433766b5f5e8441a2e5e395bd8bafd6e53097",
-  "tide:.opentide/templates/objective.1.0.template.yaml": "3a416e2da8ae41b6f0c40d39d1ef93be895e4de766ed50c5f826813ef7256646",
-  "tide:.opentide/templates/rule.1.0.template.yaml": "f36c3f8cbbdd1ecb7a7e838eaf102b1af231bd0bf0f9152a1259978e29f12350",
-  "tide:.opentide/templates/threat.1.0.template.yaml": "30eee545921ea7f6cafb8444b816abc20695416190cff903b38d87e19b49a622"
+  "tide:.opentide/templates/objective.1.0.template.yaml": "02cb487adc965ce99feb40dbcb4767e5973691bcd6eeeb37966c1e3eb27a3836",
+  "tide:.opentide/templates/rule.1.0.template.yaml": "c966a4213996d53c2bac747027d3e38ab5659c1bb6f137b3ca7825e050887337",
+  "tide:.opentide/templates/threat.1.0.template.yaml": "1bc4811dd5533def1b568bf407cf4d7c01fe048d2d1115e5de91eca3cf11f983"
 }

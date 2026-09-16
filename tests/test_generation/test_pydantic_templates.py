@@ -43,8 +43,10 @@ def test_generate_core_template_threat_expands_body(tmp_path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     assert "description:" in text
     assert "att&ck:" in text
-    after_org = text.split("#organisation:", 1)[1]
-    assert "uuid:" in after_org.split("threat:", 1)[0]
+    after_org = text.split("#organisation:", 1)[1].split("threat:", 1)[0]
+    assert "uuid:" in after_org
+    assert "\n    name:" in after_org
+    assert "#name:" not in after_org
     after_threat = text.split("\nthreat:", 1)[1]
     assert "description:" in after_threat
     assert "att&ck:" in after_threat
@@ -58,7 +60,12 @@ def test_generate_core_template_objective_expands_composition_and_signals(
     text = path.read_text(encoding="utf-8")
     assert "strategy:" in text
     assert "signals:" in text or "#signals:" in text
-    assert "availability:" in text
+    after_data = text.split("data:", 1)[1].split("methodology:", 1)[0]
+    assert "availability:" in after_data
+    assert "requirements:" in after_data
+    assert "#availability:" not in after_data
+    assert "#requirements:" not in after_data
+    assert "#logsources:" in after_data
 
 
 def test_generate_core_template_rule_expands_response_and_hides_file(tmp_path: Path) -> None:
