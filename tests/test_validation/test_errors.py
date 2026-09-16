@@ -72,7 +72,7 @@ def test_issues_from_pydantic_nested_threat_body_is_not_invalid_ref() -> None:
         "ThreatVector",
         [
             {
-                "type": "model_type",
+                "type": "string_type",
                 "loc": ("threat", "actors"),
                 "msg": "Input should be a valid dictionary",
                 "input": "not-an-actor",
@@ -161,6 +161,26 @@ def test_issues_from_pydantic_chaining_vector_is_invalid_ref() -> None:
     issues = issues_from_pydantic(exc, object_type="threat", graph=graph)
     assert issues[0].code == "invalid_ref"
     graph.suggest_ref.assert_called_once_with("threat", "missing-vector")
+
+
+def test_issues_from_pydantic_nested_vocab_suggestion() -> None:
+    graph = MagicMock()
+    graph.suggest_ref.return_value = None
+    graph.enum_resolver.suggest.return_value = "High"
+    exc = ValidationError.from_exception_data(
+        "ThreatVector",
+        [
+            {
+                "type": "string_type",
+                "loc": ("threat", "severity"),
+                "msg": "invalid severity",
+                "input": "Hgh",
+            }
+        ],
+    )
+    issues = issues_from_pydantic(exc, object_type="threat", graph=graph)
+    assert issues[0].code == "vocab_unknown"
+    assert issues[0].suggestion == "High"
 
 
 def test_format_issues_for_console_groups_by_file() -> None:
