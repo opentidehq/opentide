@@ -11,8 +11,16 @@
 #
 # Build with `uv build` (same as CI). Do not use `hatch build`: hatch 1.18.1 +
 # hatchling 1.32.1 isolated envs import `hatch` from BinaryBuilder and fail with
-# ModuleNotFoundError. Re-run a tagged release via workflow_dispatch +
-# checkout_ref (do not move the tag).
+# ModuleNotFoundError.
+#
+# `release: published` runs the workflow file from the tag commit. A tag cut
+# before this uv-build change cannot be rescued by converting the Release to
+# draft and back. Re-run an existing tag from the default branch:
+#   gh api repos/OpenTideHQ/opentide/dispatches \
+#     -f event_type=publish-pypi \
+#     -f client_payload[checkout_ref]=v0.x.y
+# (workflow_dispatch is equivalent in the Actions UI; GitHub App tokens often
+# lack actions:write and cannot call that endpoint.)
 name: Publish to PyPI
 
 on:
@@ -24,6 +32,8 @@ on:
         description: Git tag to checkout and publish (e.g. v0.1.8). Required for a manual re-run of an existing Release.
         required: true
         type: string
+  repository_dispatch:
+    types: [publish-pypi]
 
 permissions:
   contents: read
@@ -45,7 +55,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref || github.sha }}
+          ref: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.sha }}
 
       - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
         with:
@@ -98,7 +108,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.website.outputs.token }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref || github.event.release.tag_name || github.ref_name }}
+          RELEASE_TAG: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.event.release.tag_name || github.ref_name }}
         run: |
           set -euo pipefail
           gh api repos/OpenTideHQ/website/dispatches \
