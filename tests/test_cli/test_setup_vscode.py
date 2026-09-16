@@ -334,3 +334,48 @@ def test_run_vscode_snippets_restores_unset_repo_root(tmp_path: Path, monkeypatc
     assert "OPENTIDE_REPO_ROOT" not in os.environ
     assert "OPENTIDE_TIDE_WORKSPACE" not in os.environ
     get_repo_root.cache_clear()
+
+
+def test_run_vscode_setup_empty_dir_completes_without_object_folder_errors(
+    tmp_path: Path,
+) -> None:
+    """Issue #212: missing objects/* during generate-first vscode setup is not an error."""
+    from tests.test_cli.conftest import assert_json_ok
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+    from opentide.registry.builder import reset_missing_object_folder_log_cache
+
+    reset_missing_object_folder_log_cache()
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["--json", "--repo", str(tmp_path), "setup", "vscode", str(tmp_path)],
+    )
+    payload = assert_json_ok(result)
+    assert payload["status"] == "completed"
+    assert "could_not_find_object_folder" not in result.stderr
+    assert (tmp_path / ".vscode" / "settings.json").is_file()
+    assert (tmp_path / SNIPPET_REL).is_file()
+
+
+def test_run_vscode_setup_empty_object_dirs_still_quiet(
+    tmp_path: Path,
+) -> None:
+    from tests.test_cli.conftest import assert_json_ok
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+    from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
+    from opentide.registry.builder import reset_missing_object_folder_log_cache
+
+    reset_missing_object_folder_log_cache()
+    run_repo_setup(RepoSetupOptions(path=tmp_path, name="Empty objects", yes=True))
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["--json", "--repo", str(tmp_path), "setup", "vscode", str(tmp_path)],
+    )
+    payload = assert_json_ok(result)
+    assert payload["status"] == "completed"
+    assert "could_not_find_object_folder" not in result.stderr
