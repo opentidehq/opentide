@@ -230,6 +230,25 @@ def test_run_vscode_setup_snippets_only_generates_templates(tmp_path: Path, monk
     assert result["files"] == [SNIPPET_REL]
 
 
+def test_run_vscode_setup_mcp_writes_mcp_json(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "opentide.cli.services.generation.run_generate_phases_for_workspace",
+        lambda target, phases: list(phases),
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.vscode.run_vscode_snippets",
+        lambda target: SNIPPET_REL,
+    )
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        without_mcp = run_vscode_setup(tmp_path, generate=False, mcp=False)
+        with_mcp = run_vscode_setup(tmp_path / "mcp", generate=False, mcp=True)
+    assert ".vscode/mcp.json" not in without_mcp["files"]
+    assert not (tmp_path / ".vscode" / "mcp.json").exists()
+    assert ".vscode/mcp.json" in with_mcp["files"]
+    assert (tmp_path / "mcp" / ".vscode" / "mcp.json").is_file()
+
+
 def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:
     vscode_dir = tmp_path / ".vscode"
     vscode_dir.mkdir()

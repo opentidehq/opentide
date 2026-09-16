@@ -280,12 +280,13 @@ def test_setup_skills_download_failure_is_normalized_json(tmp_path, monkeypatch)
     assert "network unavailable" in result.stdout
 
 
-def test_setup_vscode_settings_command(tmp_path) -> None:
+def test_setup_vscode_mcp_flag_writes_mcp_json(tmp_path) -> None:
     result = runner.invoke(
         app,
-        ["--json", "setup", "vscode", str(tmp_path), "--settings"],
+        ["--json", "setup", "vscode", str(tmp_path), "--settings", "--mcp", "--no-generate"],
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert (tmp_path / ".vscode" / "mcp.json").is_file()
     assert (tmp_path / ".vscode" / "settings.json").is_file()
 
 
