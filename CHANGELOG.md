@@ -17,7 +17,7 @@ Patch on the public 0.1.6 beta. Upgrade if VS Code YAML reported "Matches multip
 - MCP templates use `servers` for VS Code 1.102+ / Cursor, host-specific `OPENTIDE_REPO_ROOT` (`${workspaceFolder}` vs `${CLAUDE_PROJECT_DIR}`), `.vscode/extensions.json`, and `AGENTS.md` ([#188](https://github.com/opentidehq/opentide/issues/188)).
 - Template `$ref` / `$defs` expansion inlines nested object bodies. Nested `required` lists are no longer inherited from the parent, so required nested fields stay uncommented ([#191](https://github.com/opentidehq/opentide/issues/191)).
 - `opentide setup vscode` generates templates and schemas before writing snippets, and fails if snippets were requested but could not be written ([#192](https://github.com/opentidehq/opentide/issues/192)).
-- `opentide setup vscode` creates a missing target directory before generate, so `chdir` no longer raises `FileNotFoundError`.
+- `opentide setup vscode` creates a missing target directory before generate, so `chdir` no longer raises `FileNotFoundError` ([#200](https://github.com/opentidehq/opentide/pull/200)).
 
 ### Install
 

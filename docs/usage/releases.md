@@ -25,7 +25,7 @@ opentide validate --strict
 - VS Code `yaml.schemas` uses recursive per-folder globs (`objects/threats/**/*.yaml`) instead of the router wildcard.
 - MCP templates use `servers` (VS Code/Cursor), host-specific repo-root env, `extensions.json`, and `AGENTS.md`.
 - Generated templates inline `$ref` bodies and keep nested required fields uncommented.
-- `setup vscode` generates templates/schemas first, creates a missing target path, and fails when snippets cannot be written.
+- `setup vscode` generates templates/schemas first, creates a missing target path ([#200](https://github.com/opentidehq/opentide/pull/200)), and fails when snippets cannot be written.
 
 **Links**
 
