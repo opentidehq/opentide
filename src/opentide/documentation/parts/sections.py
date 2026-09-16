@@ -93,7 +93,7 @@ def render_detection_model_link(
     formatter: MarkdownFormatter,
     catalog: DocumentationCatalog,
     *,
-    from_folder: str = "Rules",
+    from_folder: str = "rules",
     uuid_permalinks: bool = False,
     wiki_links: bool = False,
 ) -> str:
@@ -217,7 +217,7 @@ def render_signal_mdr_coverage(
     formatter: MarkdownFormatter,
     catalog: DocumentationCatalog,
     *,
-    from_folder: str = "Objectives",
+    from_folder: str = "objectives",
     uuid_permalinks: bool = False,
     wiki_links: bool = False,
     resolve_name: Callable[[str], str] | None = None,

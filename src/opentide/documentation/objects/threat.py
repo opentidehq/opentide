@@ -15,7 +15,7 @@ from opentide.models.threat import ThreatVector
 class ThreatRenderer(ObjectRenderer):
     """Render threat vectors to markdown."""
 
-    folder = "Threats"
+    folder = "threats"
 
     def render(self, obj: ThreatVector) -> str:
         threat = obj

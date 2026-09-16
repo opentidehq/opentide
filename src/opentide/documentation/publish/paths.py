@@ -14,9 +14,9 @@ def targets(ctx: DocumentationContext) -> PublishTarget:
     root = ctx.output_dir
     return PublishTarget(
         output_root=root,
-        rules_dir=root / "Rules",
-        objectives_dir=root / "Objectives",
-        threats_dir=root / "Threats",
+        rules_dir=root / "rules",
+        objectives_dir=root / "objectives",
+        threats_dir=root / "threats",
     )
 
 

@@ -12,7 +12,7 @@ from opentide.models.objective import DetectionObjective
 class ObjectiveRenderer(ObjectRenderer):
     """Render detection objectives to markdown."""
 
-    folder = "Objectives"
+    folder = "objectives"
 
     def render(self, obj: DetectionObjective) -> str:
         objective = obj

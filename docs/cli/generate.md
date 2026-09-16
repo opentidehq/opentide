@@ -74,7 +74,7 @@ Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--out
 
 Metadata is a Field/Value table. Folder index tables add Status/Severity (rules), Priority (objectives), or Criticality (threats).
 
-Internal wiki links are relative to the current folder (`../Objectives/…`, `./slug.md` on indexes). Signals are not separate pages — they link to the parent objective heading.
+Internal wiki links are relative to the current folder (`../objectives/…`, `./slug.md` on indexes). Signals are not separate pages — they link to the parent objective heading.
 
 ### Mermaid behavior and relations direction
 
@@ -91,6 +91,8 @@ relations_direction = "both" # upstream | downstream | both
 
 Flavor notes:
 
+- `github` / `generic` write lowercase `docs/{rules,objectives,threats}/<slug>.md`. `[gitlab] uuid_permalinks` does not apply.
+- `gitlab` keeps UUID filenames when `[gitlab] uuid_permalinks = true`.
 - `github` / `gitlab` / `generic` render flowchart-style relations and chaining.
 - `azure-devops` downgrades to `graph` syntax and disables subgraphs for compatibility.
 
@@ -106,7 +108,7 @@ relation_counts = true
 icons = false
 ```
 
-- `folder_index_pages`: write `README.md` index pages for Rules/Objectives/Threats and root.
+- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root.
 - `index.relation_counts`: include relation counts (or object counts on root index table).
 - `index.icons`: prefix section/object labels with emoji markers.
 

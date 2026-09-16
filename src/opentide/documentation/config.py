@@ -45,7 +45,10 @@ def load_settings(*, output: str | None = None, flavor: str | None = None) -> Do
     resolved = resolve_flavor(override=flavor, default=default_flavor)
     folder_index_pages = bool(docs_cfg.get("folder_index_pages", True))
     gitlab_cfg = docs_cfg.get("gitlab", {})
-    uuid_permalinks = bool(gitlab_cfg.get("uuid_permalinks", False))
+    # uuid permalinks are a GitLab wiki setting; do not apply them to GitHub/generic.
+    uuid_permalinks = resolved is DocumentFlavor.gitlab and bool(
+        gitlab_cfg.get("uuid_permalinks", False)
+    )
     diagrams_cfg = docs_cfg.get("diagrams", {})
     configured_direction = str(diagrams_cfg.get("relations_direction", "both"))
     if configured_direction not in {"upstream", "downstream", "both"}:

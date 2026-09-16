@@ -12,15 +12,15 @@ if TYPE_CHECKING:
     from opentide.documentation.catalog import DocumentationCatalog
 
 FOLDER_BY_SCOPE = {
-    DocumentScope.rules: "Rules",
-    DocumentScope.objectives: "Objectives",
-    DocumentScope.threats: "Threats",
+    DocumentScope.rules: "rules",
+    DocumentScope.objectives: "objectives",
+    DocumentScope.threats: "threats",
 }
 
 FOLDER_BY_TYPE = {
-    "rule": "Rules",
-    "objective": "Objectives",
-    "threat": "Threats",
+    "rule": "rules",
+    "objective": "objectives",
+    "threat": "threats",
 }
 
 

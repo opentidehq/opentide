@@ -66,16 +66,16 @@ def test_object_link_resolves_signal_to_parent_heading() -> None:
         GitHubFormatter(),
         catalog,
         "sig-1",
-        from_folder="Rules",
+        from_folder="rules",
     )
-    assert "[Exec signal](../Objectives/detect-stuff.md#exec-signal)" in rendered
+    assert "[Exec signal](../objectives/detect-stuff.md#exec-signal)" in rendered
     assert "`sig-1`" in rendered
     assert heading_anchor("Exec signal") == "exec-signal"
 
 
 def test_object_link_missing_uuid_is_code() -> None:
     catalog = DocumentationCatalog(rules=[], objectives=[], threats=[])
-    assert object_link(GitHubFormatter(), catalog, "missing", from_folder="Rules") == "`missing`"
+    assert object_link(GitHubFormatter(), catalog, "missing", from_folder="rules") == "`missing`"
 
 
 def test_object_link_uses_resolve_name_when_unpaged() -> None:
@@ -85,5 +85,5 @@ def test_object_link_uses_resolve_name_when_unpaged() -> None:
     catalog.resolve_name.side_effect = lambda uuid: (
         "Cloud Discovery Follow-up" if uuid == "follow" else uuid
     )
-    rendered = object_link(GitHubFormatter(), catalog, "follow", from_folder="Threats")
+    rendered = object_link(GitHubFormatter(), catalog, "follow", from_folder="threats")
     assert rendered == "Cloud Discovery Follow-up (`follow`)"
