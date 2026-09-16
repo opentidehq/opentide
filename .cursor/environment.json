@@ -1,0 +1,4 @@
+{
+  "name": "OpenTide language server",
+  "install": "bash scripts/cloud-agent-install.sh"
+}

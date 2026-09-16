@@ -1,0 +1,15 @@
+/target
+/node_modules
+/packages/*/node_modules
+/packages/*/dist
+**/*.wasm
+.idea
+.vscode
+*.swp
+.DS_Store
+grammars/*/build
+grammars/*/node_modules
+*.profraw
+coverage
+lcov.info
+/tmp

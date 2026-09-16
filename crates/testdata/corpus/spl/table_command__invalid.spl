@@ -1,0 +1,2 @@
+``` prod:table_command invalid
+index=main | table

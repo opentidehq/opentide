@@ -1,0 +1,77 @@
+{
+  "name": "OpenTide spl",
+  "opentideHighlightSpec": "0.1.0",
+  "patterns": [
+    {
+      "comment": "capture:comment",
+      "match": "//.*$|```[^`]*```",
+      "name": "comment.line.opentide"
+    },
+    {
+      "comment": "capture:string",
+      "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "capture:number",
+      "match": "\\\\b[0-9]+(\\\\.[0-9]+)?\\\\b",
+      "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "capture:keyword",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:AS|append|bin|by|chart|convert|dedup|eval|eventstats|extract|fields|fillnull|foreach|from|head|inputlookup|join|lookup|makemv|makeresults|map|metadata|mvexpand|outputlookup|rare|regex|rename|rest|reverse|rex|search|sort|spath|stats|strcat|streamstats|table|tail|timechart|top|transaction|tstats|union|where)(?![A-Za-z0-9_])",
+      "name": "keyword.control.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:AND|IN|LIKE|NOT|OR|and|not|or)(?![A-Za-z0-9_])",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "!=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "==",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator.pipe",
+      "match": "\\|",
+      "name": "keyword.operator.pipe.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\(",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\)",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\[",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\]",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": ",",
+      "name": "punctuation.delimiter.opentide"
+    }
+  ],
+  "scopeName": "source.spl"
+}

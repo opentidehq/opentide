@@ -1,0 +1,20 @@
+[package]
+name = "opentide-kql"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "I/O-free KQL engine (parse, HIR, catalog, profiles)"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-syntax.workspace = true
+opentide-highlight.workspace = true
+serde.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+regex.workspace = true
+tree-sitter.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

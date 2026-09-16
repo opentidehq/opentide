@@ -1,0 +1,2 @@
+// prod:control_command invalid
+.create table X (a:string)

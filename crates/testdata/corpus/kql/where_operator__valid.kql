@@ -1,0 +1,2 @@
+// prod:where_operator valid
+SecurityEvent | where EventID == 4688

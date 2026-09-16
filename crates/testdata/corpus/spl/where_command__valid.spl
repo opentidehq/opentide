@@ -1,0 +1,2 @@
+``` prod:where_command valid
+index=main | where bytes>0

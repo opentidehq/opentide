@@ -1,0 +1,32 @@
+{
+  "name": "OpenTide opentide-yaml",
+  "opentideHighlightSpec": "0.1.0",
+  "patterns": [
+    {
+      "comment": "capture:comment",
+      "match": "//.*$|```[^`]*```",
+      "name": "comment.line.opentide"
+    },
+    {
+      "comment": "capture:string",
+      "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "capture:number",
+      "match": "\\\\b[0-9]+(\\\\.[0-9]+)?\\\\b",
+      "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "capture:tide.keyword",
+      "match": "(?m)^\\\\s*(name|metadata|description|status|severity|techniques|detection_model|response|configurations|objective|threat|composition|criticality)\\\\s*:",
+      "name": "keyword.control.tide"
+    },
+    {
+      "comment": "capture:tide.property",
+      "match": "(?m)^\\\\s*(uuid|schema|version|created|modified|tlp|author|organisation|query|search|enabled)\\\\s*:",
+      "name": "variable.other.property.tide"
+    }
+  ],
+  "scopeName": "source.opentide-yaml"
+}

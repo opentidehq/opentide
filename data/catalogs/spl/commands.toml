@@ -1,0 +1,1621 @@
+# Splunk search commands and functions. Generated from docs/spl/ — authored SPL is not rewritten.
+
+[[commands]]
+name = "search"
+kind = "generating"
+docs = "Retrieve events from indexes, or filter later using keywords, phrases, wildcards, field-value pairs, booleans, IN, CIDR."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search"
+
+[[commands]]
+name = "tstats"
+kind = "generating"
+docs = "Statistical aggregation on **indexed** fields / accelerated datamodels."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[commands]]
+name = "metadata"
+kind = "generating"
+docs = "List hosts, sources, or sourcetypes from an index / peer."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Metadata"
+
+[[commands]]
+name = "inputlookup"
+kind = "generating"
+docs = "Load a lookup table (CSV / KV Store) as events."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Inputlookup"
+
+[[commands]]
+name = "makeresults"
+kind = "generating"
+docs = "Synthesize empty rows (usually one)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Makeresults"
+
+[[commands]]
+name = "from"
+kind = "generating"
+docs = "Read a dataset: datamodel, lookup, KV Store, saved search, table dataset."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/From"
+
+[[commands]]
+name = "rest"
+kind = "generating"
+docs = "Call a Splunk REST endpoint and emit entities as events."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rest"
+
+[[commands]]
+name = "datamodel"
+kind = "generating"
+docs = "Inspect or search a datamodel / object."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+[[commands]]
+name = "inputcsv"
+kind = "generating"
+docs = "Load a CSV from the search head."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Inputcsv"
+
+[[commands]]
+name = "loadjob"
+kind = "generating"
+docs = "Replay a finished job’s events or results."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Loadjob"
+
+[[commands]]
+name = "gentimes"
+kind = "generating"
+docs = "Generate timestamp rows over a range."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Gentimes"
+
+[[commands]]
+name = "metasearch"
+kind = "generating"
+docs = "Event metadata matching a logical expression."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Metasearch"
+
+[[commands]]
+name = "mstats"
+kind = "generating"
+docs = "Stats on metric indexes."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Mstats"
+
+[[commands]]
+name = "mpreview"
+kind = "generating"
+docs = "Sample raw metric data points (msearch is an alias)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Mpreview"
+
+[[commands]]
+name = "pivot"
+kind = "generating"
+docs = "Pivot against a datamodel dataset."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Pivot"
+
+[[commands]]
+name = "savedsearch"
+kind = "generating"
+docs = "Run a saved search by name."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Savedsearch"
+
+[[commands]]
+name = "multisearch"
+kind = "generating"
+docs = "Run several **streaming** subsearches in parallel."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Multisearch"
+
+[[commands]]
+name = "set"
+kind = "generating"
+docs = "union / diff / intersect of two subsearches."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Set"
+
+[[commands]]
+name = "eventcount"
+kind = "generating"
+docs = "Count events per index."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Eventcount"
+
+[[commands]]
+name = "dbinspect"
+kind = "generating"
+docs = "Index bucket metadata."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Dbinspect"
+
+[[commands]]
+name = "walklex"
+kind = "generating"
+docs = "Terms / indexed fields per bucket."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Walklex"
+
+[[commands]]
+name = "searchtxn"
+kind = "generating"
+docs = "Find transaction-defined events under constraints."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Searchtxn"
+
+[[commands]]
+name = "stats"
+kind = "transforming"
+docs = "Aggregate statistics, optionally BY fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Stats"
+
+[[commands]]
+name = "timechart"
+kind = "transforming"
+docs = "Time-series chart/table of stats."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[commands]]
+name = "chart"
+kind = "transforming"
+docs = "Tabular charting stats over one field, split by another."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[commands]]
+name = "table"
+kind = "transforming"
+docs = "Keep listed fields, in order, as a table."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Table"
+
+[[commands]]
+name = "top"
+kind = "transforming"
+docs = "Most common values of a field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Top"
+
+[[commands]]
+name = "rare"
+kind = "transforming"
+docs = "Least common values of a field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rare"
+
+[[commands]]
+name = "sort"
+kind = "transforming"
+docs = "Sort results by fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Sort"
+
+[[commands]]
+name = "dedup"
+kind = "streaming"
+docs = "Drop subsequent duplicates of listed fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Dedup"
+
+[[commands]]
+name = "transaction"
+kind = "dataset"
+docs = "Group events into transactions (sessionization)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Transaction"
+
+[[commands]]
+name = "eventstats"
+kind = "dataset"
+docs = "Compute aggregations and **attach them to each event**."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Eventstats"
+
+[[commands]]
+name = "streamstats"
+kind = "streaming"
+docs = "Running aggregations as events stream."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Streamstats"
+
+[[commands]]
+name = "xyseries"
+kind = "transforming"
+docs = "Pivot to graphable x/y/series format."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Xyseries"
+
+[[commands]]
+name = "geostats"
+kind = "transforming"
+docs = "Stats clustered into geo bins."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Geostats"
+
+[[commands]]
+name = "addtotals"
+kind = "streaming"
+docs = "Sum numeric fields per result (or column totals)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Addtotals"
+
+[[commands]]
+name = "contingency"
+kind = "transforming"
+docs = "Contingency table for two fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Contingency"
+
+[[commands]]
+name = "anomalydetection"
+kind = "transforming"
+docs = "Probability-based anomalous events."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Anomalydetection"
+
+[[commands]]
+name = "mvcombine"
+kind = "transforming"
+docs = "Collapse events that differ in one field into one mv field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Mvcombine"
+
+[[commands]]
+name = "sistats"
+kind = "transforming"
+docs = "Summary-index prep for later stats."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Sistats"
+
+[[commands]]
+name = "sichart"
+kind = "transforming"
+docs = "Summary-index prep for chart."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Sichart"
+
+[[commands]]
+name = "sitimechart"
+kind = "transforming"
+docs = "Summary-index prep for timechart."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Sitimechart"
+
+[[commands]]
+name = "sitop"
+kind = "transforming"
+docs = "Summary-index prep for top."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Sitop"
+
+[[commands]]
+name = "sirare"
+kind = "transforming"
+docs = "Summary-index prep for rare."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Sirare"
+
+[[commands]]
+name = "timewrap"
+kind = "transforming"
+docs = "Wrap timechart output so each span is a series (WoW)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timewrap"
+
+[[commands]]
+name = "eval"
+kind = "streaming"
+docs = "Calculate / overwrite fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Eval"
+
+[[commands]]
+name = "where"
+kind = "streaming"
+docs = "Keep events whose **eval** expression is true."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Where"
+
+[[commands]]
+name = "rex"
+kind = "streaming"
+docs = "Extract named groups with PCRE, or mode=sed mutate."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rex"
+
+[[commands]]
+name = "regex"
+kind = "streaming"
+docs = "Keep/drop events matching a regex (filter, not extract)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Regex"
+
+[[commands]]
+name = "rename"
+kind = "streaming"
+docs = "Rename fields; wildcards allowed (AS)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rename"
+
+[[commands]]
+name = "fields"
+kind = "streaming"
+docs = "Keep listed fields (fields dest, user) or remove (fields - _raw, punct)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Fields"
+
+[[commands]]
+name = "head"
+kind = "streaming"
+docs = "First N results."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Head"
+
+[[commands]]
+name = "tail"
+kind = "dataset"
+docs = "Last N results (needs the full set)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tail"
+
+[[commands]]
+name = "fillnull"
+kind = "dataset"
+docs = "Replace nulls with a value (default 0)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Fillnull"
+
+[[commands]]
+name = "filldown"
+kind = "streaming"
+docs = "Fill null with last non-null."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Filldown"
+
+[[commands]]
+name = "convert"
+kind = "streaming"
+docs = "Convert field values (ctime, mktime, dur2sec, memk, rmcomma, none)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Convert"
+
+[[commands]]
+name = "replace"
+kind = "streaming"
+docs = "Replace field **values** (not regex eval replace())."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Replace"
+
+[[commands]]
+name = "setfields"
+kind = "streaming"
+docs = "Set listed fields to a common value on all results."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Setfields"
+
+[[commands]]
+name = "fieldformat"
+kind = "streaming"
+docs = "Display-time format via eval; does not change stored value or exports."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Fieldformat"
+
+[[commands]]
+name = "reltime"
+kind = "streaming"
+docs = "Add human reltime from now vs _time."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Reltime"
+
+[[commands]]
+name = "addinfo"
+kind = "streaming"
+docs = "Add info_min_time, info_max_time, info_search_time, …"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Addinfo"
+
+[[commands]]
+name = "spath"
+kind = "streaming"
+docs = "Extract JSON/XML paths into fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Spath"
+
+[[commands]]
+name = "xmlkv"
+kind = "streaming"
+docs = "Extract XML key-value pairs."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Xmlkv"
+
+[[commands]]
+name = "extract"
+kind = "streaming"
+docs = "Auto KV extraction from _raw."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Extract"
+
+[[commands]]
+name = "kv"
+kind = "streaming"
+docs = "Alias of extract."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Extract"
+
+[[commands]]
+name = "erex"
+kind = "streaming"
+docs = "Example-based extraction."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Erex"
+
+[[commands]]
+name = "kvform"
+kind = "streaming"
+docs = "Extract using a form template."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Kvform"
+
+[[commands]]
+name = "multikv"
+kind = "streaming"
+docs = "Extract fields from table-formatted events."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Multikv"
+
+[[commands]]
+name = "makemv"
+kind = "streaming"
+docs = "Split a single-value field into mv."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Makemv"
+
+[[commands]]
+name = "mvexpand"
+kind = "streaming"
+docs = "Explode one mv field into separate events."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Mvexpand"
+
+[[commands]]
+name = "nomv"
+kind = "streaming"
+docs = "Collapse mv to a single (first) value."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Nomv"
+
+[[commands]]
+name = "strcat"
+kind = "streaming"
+docs = "Concatenate strings into a field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Strcat"
+
+[[commands]]
+name = "bin"
+kind = "dataset"
+docs = "Bucket numeric / _time into bins."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"
+
+[[commands]]
+name = "bucket"
+kind = "streaming"
+docs = "Same as bin."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bucket"
+
+[[commands]]
+name = "rangemap"
+kind = "streaming"
+docs = "Set RANGE (or dest field) from numeric ranges."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rangemap"
+
+[[commands]]
+name = "untable"
+kind = "streaming"
+docs = "Inverse of xyseries / maketable."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Untable"
+
+[[commands]]
+name = "iplocation"
+kind = "streaming"
+docs = "Geo fields from IP (City, Country, lat, lon)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Iplocation"
+
+[[commands]]
+name = "tags"
+kind = "streaming"
+docs = "Attach knowledge-object tags to fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tags"
+
+[[commands]]
+name = "xpath"
+kind = "streaming"
+docs = "Extract via XPath."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Xpath"
+
+[[commands]]
+name = "xmlunescape"
+kind = "streaming"
+docs = "Unescape XML entities."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Xmlunescape"
+
+[[commands]]
+name = "tojson"
+kind = "streaming"
+docs = "Convert events to JSON objects."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tojson"
+
+[[commands]]
+name = "fromjson"
+kind = "streaming"
+docs = "Parse a JSON field into events/fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Fromjson"
+
+[[commands]]
+name = "lookup"
+kind = "streaming"
+docs = "Enrich events from a lookup."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Lookup"
+
+[[commands]]
+name = "outputlookup"
+kind = "streaming"
+docs = "Write results to a lookup (CSV / KV Store)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Outputlookup"
+
+[[commands]]
+name = "join"
+kind = "dataset"
+docs = "SQL-like join to a subsearch."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+
+[[commands]]
+name = "append"
+kind = "dataset"
+docs = "Append subsearch results as extra rows."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Append"
+
+[[commands]]
+name = "appendcols"
+kind = "dataset"
+docs = "Bind subsearch fields onto rows by position."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Appendcols"
+
+[[commands]]
+name = "appendpipe"
+kind = "dataset"
+docs = "Append a subpipeline applied to the **current** result set."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Appendpipe"
+
+[[commands]]
+name = "selfjoin"
+kind = "dataset"
+docs = "Join the result set to itself."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Selfjoin"
+
+[[commands]]
+name = "return"
+kind = "streaming"
+docs = "Values to return from a subsearch (return dest → dest=...)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Return"
+
+[[commands]]
+name = "format"
+kind = "streaming"
+docs = "Format subsearch rows into (f=v OR f=v)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Format"
+
+[[commands]]
+name = "foreach"
+kind = "streaming"
+docs = "Templated streaming subsearch per wildcard field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Foreach"
+
+[[commands]]
+name = "union"
+kind = "generating"
+docs = "Merge two or more datasets."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Union"
+
+[[commands]]
+name = "map"
+kind = "dataset"
+docs = "Loop: run a search template per result."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Map"
+
+[[commands]]
+name = "reverse"
+kind = "dataset"
+docs = "Reverse result order."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Reverse"
+
+[[commands]]
+name = "cluster"
+kind = "dataset"
+docs = "Cluster similar events (_raw)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Cluster"
+
+[[commands]]
+name = "outlier"
+kind = "dataset"
+docs = "Remove numeric outliers."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Outlier"
+
+[[commands]]
+name = "fieldsummary"
+kind = "dataset"
+docs = "Per-field summary (count, distinct, types)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Fieldsummary"
+
+[[commands]]
+name = "transpose"
+kind = "dataset"
+docs = "Rows ↔ columns."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Transpose"
+
+[[commands]]
+name = "uniq"
+kind = "dataset"
+docs = "Drop exact duplicate events."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Uniq"
+
+[[commands]]
+name = "concurrency"
+kind = "dataset"
+docs = "Concurrent events from a duration field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Concurrency"
+
+[[commands]]
+name = "localop"
+kind = "orchestrating"
+docs = "Force subsequent commands to the search head."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Localop"
+
+[[commands]]
+name = "noop"
+kind = "orchestrating"
+docs = "No-op / toggle optimizations."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Noop"
+
+[[commands]]
+name = "redistribute"
+kind = "orchestrating"
+docs = "Parallel reduce for high-cardinality stats."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Redistribute"
+
+[[commands]]
+name = "require"
+kind = "orchestrating"
+docs = "Fail the search if prior commands returned zero results."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Require"
+
+[[commands]]
+name = "collect"
+kind = "streaming"
+docs = "Write results to a summary index (stash). Rare inside detection bodies."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Collect"
+
+[[commands]]
+name = "delete"
+kind = "streaming"
+docs = "Permanently delete matching events. Never use in a detection."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Delete"
+
+[[commands]]
+name = "sendemail"
+kind = "streaming"
+docs = "Email search results. Alert action, not query logic."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Sendemail"
+
+[[commands]]
+name = "script"
+kind = "streaming"
+docs = "Run an external script (alias: run). Not portable in OpenTide rules."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Script"
+
+[[commands]]
+name = "outputcsv"
+kind = "streaming"
+docs = "Write results to a CSV on the search head."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Outputcsv"
+
+[[commands]]
+name = "kmeans"
+kind = "streaming"
+docs = "K-means clustering on selected fields. Occasional anomaly detections."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ListOfSearchCommands"
+
+[[commands]]
+name = "highlight"
+kind = "streaming"
+docs = "Highlight terms in the UI event display."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Highlight"
+
+[[commands]]
+name = "history"
+kind = "generating"
+docs = "Return a history of searches as events or a table."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/History"
+
+[[commands]]
+name = "mcollect"
+kind = "streaming"
+docs = "Convert results into metric data on the search head."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Mcollect"
+
+[[commands]]
+name = "geom"
+kind = "streaming"
+docs = "Add a geom field for choropleth map polygons."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Geom"
+
+[[commands]]
+name = "makecontinuous"
+kind = "streaming"
+docs = "Make an x-axis field continuous for chart/timechart."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Makecontinuous"
+
+[[commands]]
+name = "localize"
+kind = "streaming"
+docs = "Return time ranges where results were found."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Localize"
+
+[[commands]]
+name = "scrub"
+kind = "streaming"
+docs = "Anonymize results (PII scrubbing)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Scrub"
+
+[[functions]]
+name = "if"
+kind = "eval"
+docs = "If boolean X is true return Y else Z."
+
+[[functions]]
+name = "case"
+kind = "eval"
+docs = "First true condition’s value; else null unless true() arm."
+
+[[functions]]
+name = "coalesce"
+kind = "eval"
+docs = "First non-null argument."
+
+[[functions]]
+name = "cidrmatch"
+kind = "eval"
+docs = "True if IP is in CIDR."
+
+[[functions]]
+name = "match"
+kind = "eval"
+docs = "True if regex matches."
+
+[[functions]]
+name = "like"
+kind = "eval"
+docs = "SQL-like: % and _."
+
+[[functions]]
+name = "searchmatch"
+kind = "eval"
+docs = "True if the search string matches the event (search semantics)."
+
+[[functions]]
+name = "in"
+kind = "eval"
+docs = "True if field equals one value."
+
+[[functions]]
+name = "validate"
+kind = "eval"
+docs = "Opposite of case: first **false** X returns Y."
+
+[[functions]]
+name = "nullif"
+kind = "eval"
+docs = "Null if X=Y else X."
+
+[[functions]]
+name = "null"
+kind = "eval"
+docs = "Null constant."
+
+[[functions]]
+name = "true"
+kind = "eval"
+docs = "Boolean true (default case arm)."
+
+[[functions]]
+name = "false"
+kind = "eval"
+docs = "Boolean false."
+
+[[functions]]
+name = "lookup"
+kind = "eval"
+docs = "Eval-time CSV lookup returning JSON."
+
+[[functions]]
+name = "len"
+kind = "eval"
+docs = "Character count (not bytes)."
+
+[[functions]]
+name = "lower"
+kind = "eval"
+docs = "Lowercase."
+
+[[functions]]
+name = "upper"
+kind = "eval"
+docs = "Uppercase."
+
+[[functions]]
+name = "replace"
+kind = "eval"
+docs = "Substitute regex Y with Z in X."
+
+[[functions]]
+name = "substr"
+kind = "eval"
+docs = "Substring of X from 1-based Y, length Z."
+
+[[functions]]
+name = "trim"
+kind = "eval"
+docs = "Trim characters in Y (default whitespace) from both ends."
+
+[[functions]]
+name = "ltrim"
+kind = "eval"
+docs = "Left trim."
+
+[[functions]]
+name = "rtrim"
+kind = "eval"
+docs = "Right trim."
+
+[[functions]]
+name = "urldecode"
+kind = "eval"
+docs = "Decode %xx URL encoding."
+
+[[functions]]
+name = "spath"
+kind = "eval"
+docs = "Extract from JSON/XML string X at path Y (eval form of the spath command)."
+
+[[functions]]
+name = "split"
+kind = "eval"
+docs = "Split X on delimiter Y → mv."
+
+[[functions]]
+name = "mvcount"
+kind = "eval"
+docs = "Number of values."
+
+[[functions]]
+name = "mvindex"
+kind = "eval"
+docs = "Slice; negative index counts from end."
+
+[[functions]]
+name = "mvjoin"
+kind = "eval"
+docs = "Join with delimiter."
+
+[[functions]]
+name = "mvfilter"
+kind = "eval"
+docs = "Keep mv values where boolean X is true (mvfilter(match(_,\"(?i)pass\")))."
+
+[[functions]]
+name = "mvappend"
+kind = "eval"
+docs = "Concatenate mv/single values."
+
+[[functions]]
+name = "mvdedup"
+kind = "eval"
+docs = "Drop duplicate mv values."
+
+[[functions]]
+name = "mvfind"
+kind = "eval"
+docs = "Index of first matching value."
+
+[[functions]]
+name = "mvmap"
+kind = "eval"
+docs = "Map expression Y over mv X."
+
+[[functions]]
+name = "mvrange"
+kind = "eval"
+docs = "Numeric range X..Y step Z."
+
+[[functions]]
+name = "mvsort"
+kind = "eval"
+docs = "Lexicographic sort."
+
+[[functions]]
+name = "mvzip"
+kind = "eval"
+docs = "Zip two mv fields with delimiter Z."
+
+[[functions]]
+name = "commands"
+kind = "eval"
+docs = "Mv list of SPL commands used in search string X."
+
+[[functions]]
+name = "tonumber"
+kind = "eval"
+docs = "String → number; BASE 2..36."
+
+[[functions]]
+name = "tostring"
+kind = "eval"
+docs = "To string."
+
+[[functions]]
+name = "printf"
+kind = "eval"
+docs = "C-style format string."
+
+[[functions]]
+name = "ipmask"
+kind = "eval"
+docs = "Mask IPv4 via bitwise AND (ipmask(\"255.255.0.0\", src))."
+
+[[functions]]
+name = "toint"
+kind = "eval"
+docs = "Convert to integer (later platform versions)."
+
+[[functions]]
+name = "todouble"
+kind = "eval"
+docs = "Convert to double."
+
+[[functions]]
+name = "strftime"
+kind = "eval"
+docs = "UNIX time X → string with format Y (%Y-%m-%d %H:%M:%S)."
+
+[[functions]]
+name = "strptime"
+kind = "eval"
+docs = "Parse string X with format Y → UNIX time."
+
+[[functions]]
+name = "now"
+kind = "eval"
+docs = "Search start time (same for all events)."
+
+[[functions]]
+name = "relative_time"
+kind = "eval"
+docs = "Apply relative specifier Y (-1h@h) to UNIX time X."
+
+[[functions]]
+name = "time"
+kind = "eval"
+docs = "Wall time when **this event** was processed (varies per event)."
+
+[[functions]]
+name = "isnull"
+kind = "eval"
+docs = "True if null."
+
+[[functions]]
+name = "isnotnull"
+kind = "eval"
+docs = "True if not null."
+
+[[functions]]
+name = "isnum"
+kind = "eval"
+docs = "True if numeric."
+
+[[functions]]
+name = "isstr"
+kind = "eval"
+docs = "True if string."
+
+[[functions]]
+name = "typeof"
+kind = "eval"
+docs = "\"Number\", \"String\", \"Boolean\", \"Invalid\", …"
+
+[[functions]]
+name = "isbool"
+kind = "eval"
+docs = "True if Boolean."
+
+[[functions]]
+name = "isint"
+kind = "eval"
+docs = "True if integer."
+
+[[functions]]
+name = "md5"
+kind = "eval"
+docs = "MD5 hex digest."
+
+[[functions]]
+name = "sha1"
+kind = "eval"
+docs = "SHA-1 hex digest."
+
+[[functions]]
+name = "sha256"
+kind = "eval"
+docs = "SHA-256 hex digest."
+
+[[functions]]
+name = "sha512"
+kind = "eval"
+docs = "SHA-512 hex digest."
+
+[[functions]]
+name = "json_extract"
+kind = "eval"
+docs = "Value at JSON path(s)."
+
+[[functions]]
+name = "json_object"
+kind = "eval"
+docs = "Build a JSON object."
+
+[[functions]]
+name = "json_array"
+kind = "eval"
+docs = "Build a JSON array."
+
+[[functions]]
+name = "json_keys"
+kind = "eval"
+docs = "Keys as JSON array."
+
+[[functions]]
+name = "json_valid"
+kind = "eval"
+docs = "True if valid JSON."
+
+[[functions]]
+name = "json_set"
+kind = "eval"
+docs = "Insert/overwrite nodes."
+
+[[functions]]
+name = "json_set_exact"
+kind = "eval"
+docs = "Set by literal keys."
+
+[[functions]]
+name = "json_append"
+kind = "eval"
+docs = "Append to arrays."
+
+[[functions]]
+name = "json_extend"
+kind = "eval"
+docs = "Flatten and append array values."
+
+[[functions]]
+name = "json_extract_exact"
+kind = "eval"
+docs = "Extract by literal strings."
+
+[[functions]]
+name = "json_array_to_mv"
+kind = "eval"
+docs = "JSON array → mv field."
+
+[[functions]]
+name = "mv_to_json_array"
+kind = "eval"
+docs = "Mv field → JSON array."
+
+[[functions]]
+name = "round"
+kind = "eval"
+docs = "Round X to Y decimal places (default 0)."
+
+[[functions]]
+name = "abs"
+kind = "eval"
+docs = "Absolute value."
+
+[[functions]]
+name = "ceil"
+kind = "eval"
+docs = "Round up."
+
+[[functions]]
+name = "ceiling"
+kind = "eval"
+docs = "Round up."
+
+[[functions]]
+name = "floor"
+kind = "eval"
+docs = "Round down."
+
+[[functions]]
+name = "log"
+kind = "eval"
+docs = "Log of X, base Y (default 10)."
+
+[[functions]]
+name = "ln"
+kind = "eval"
+docs = "Natural log."
+
+[[functions]]
+name = "pow"
+kind = "eval"
+docs = "X^Y."
+
+[[functions]]
+name = "exp"
+kind = "eval"
+docs = "e^X."
+
+[[functions]]
+name = "sqrt"
+kind = "eval"
+docs = "Square root."
+
+[[functions]]
+name = "pi"
+kind = "eval"
+docs = "π to 11 digits."
+
+[[functions]]
+name = "sigfig"
+kind = "eval"
+docs = "Significant figures."
+
+[[functions]]
+name = "exact"
+kind = "eval"
+docs = "Higher precision numeric eval."
+
+[[functions]]
+name = "sum"
+kind = "eval"
+docs = "Sum of numeric **eval args** (not the stats function)."
+
+[[functions]]
+name = "random"
+kind = "eval"
+docs = "Pseudo-random int in [0, 2^31-1)."
+
+[[functions]]
+name = "min"
+kind = "eval"
+docs = "Min of arguments on this event."
+
+[[functions]]
+name = "max"
+kind = "eval"
+docs = "Max of arguments on this event."
+
+[[functions]]
+name = "avg"
+kind = "eval"
+docs = "Average of numeric arguments."
+
+[[functions]]
+name = "bit_and"
+kind = "eval"
+docs = "Bitwise AND (flags / masks)."
+
+[[functions]]
+name = "bit_or"
+kind = "eval"
+docs = "Bitwise OR."
+
+[[functions]]
+name = "bit_xor"
+kind = "eval"
+docs = "Bitwise XOR."
+
+[[functions]]
+name = "bit_not"
+kind = "eval"
+docs = "Invert bits; optional bitmask truncates width."
+
+[[functions]]
+name = "bit_shift_left"
+kind = "eval"
+docs = "Logical left shift."
+
+[[functions]]
+name = "bit_shift_right"
+kind = "eval"
+docs = "Logical right shift."
+
+[[functions]]
+name = "count"
+kind = "aggregate"
+docs = "Occurrences where the field is non-empty."
+
+[[functions]]
+name = "dc"
+kind = "aggregate"
+docs = "Count of distinct string values (\"1\" ≠ \"1.0\")."
+
+[[functions]]
+name = "median"
+kind = "aggregate"
+docs = "Middle-most numeric value."
+
+[[functions]]
+name = "perc"
+kind = "aggregate"
+docs = "Approximate N-th percentile, N in 1..99."
+
+[[functions]]
+name = "stdev"
+kind = "aggregate"
+docs = "Sample standard deviation."
+
+[[functions]]
+name = "var"
+kind = "aggregate"
+docs = "Sample variance."
+
+[[functions]]
+name = "list"
+kind = "aggregate"
+docs = "Up to 100 values, input order."
+
+[[functions]]
+name = "values"
+kind = "aggregate"
+docs = "Distinct values, lexicographic order."
+
+[[functions]]
+name = "earliest"
+kind = "aggregate"
+docs = "Chronologically oldest value of field."
+
+[[functions]]
+name = "latest"
+kind = "aggregate"
+docs = "Chronologically newest value of field."
+
+[[functions]]
+name = "first"
+kind = "aggregate"
+docs = "First **seen** given input order (often most recent into stats)."
+
+[[functions]]
+name = "last"
+kind = "aggregate"
+docs = "Last seen given input order (often oldest into stats)."
+
+[[functions]]
+name = "mode"
+kind = "aggregate"
+docs = "Most frequent value."
+
+[[functions]]
+name = "range"
+kind = "aggregate"
+docs = "max - min for numeric fields."
+
+[[functions]]
+name = "estdc"
+kind = "aggregate"
+docs = "Estimated distinct count (cheaper than dc at huge cardinality)."
+
+[[functions]]
+name = "exactperc"
+kind = "aggregate"
+docs = "Exact percentile; expensive at high cardinality."
+
+[[functions]]
+name = "upperperc"
+kind = "aggregate"
+docs = "Approximate upper bound of the percentile when n > 1000; else same as perc."
+
+[[functions]]
+name = "mean"
+kind = "aggregate"
+docs = "Arithmetic mean (not on tstats)."
+
+[[functions]]
+name = "stdevp"
+kind = "aggregate"
+docs = "Population standard deviation."
+
+[[functions]]
+name = "varp"
+kind = "aggregate"
+docs = "Population variance."
+
+[[functions]]
+name = "sumsq"
+kind = "aggregate"
+docs = "Sum of squares."
+
+[[functions]]
+name = "estdc_error"
+kind = "aggregate"
+docs = "Theoretical error ratio of estdc."
+
+[[functions]]
+name = "earliest_time"
+kind = "aggregate"
+docs = "UNIX time of earliest occurrence of field."
+
+[[functions]]
+name = "latest_time"
+kind = "aggregate"
+docs = "UNIX time of latest occurrence."
+
+[[functions]]
+name = "rate"
+kind = "aggregate"
+docs = "(latest-earliest)/(latest_time-earliest_time) per second."
+
+[[functions]]
+name = "rate_avg"
+kind = "aggregate"
+docs = "Average rates for an accumulating counter metric."
+
+[[functions]]
+name = "rate_sum"
+kind = "aggregate"
+docs = "Summed rates for an accumulating counter metric."
+
+[[functions]]
+name = "per_day"
+kind = "aggregate"
+docs = "Values per day (charting)."
+
+[[functions]]
+name = "per_hour"
+kind = "aggregate"
+docs = "Values per hour."
+
+[[functions]]
+name = "per_minute"
+kind = "aggregate"
+docs = "Values per minute."
+
+[[functions]]
+name = "per_second"
+kind = "aggregate"
+docs = "Values per second."
+
+[[functions]]
+name = "acos"
+kind = "eval"
+docs = "Arc cosine."
+
+[[functions]]
+name = "acosh"
+kind = "eval"
+docs = "Inverse hyperbolic cosine."
+
+[[functions]]
+name = "asin"
+kind = "eval"
+docs = "Arc sine."
+
+[[functions]]
+name = "asinh"
+kind = "eval"
+docs = "Inverse hyperbolic sine."
+
+[[functions]]
+name = "atan"
+kind = "eval"
+docs = "Arc tangent."
+
+[[functions]]
+name = "atan2"
+kind = "eval"
+docs = "Arc tangent of Y/X."
+
+[[functions]]
+name = "atanh"
+kind = "eval"
+docs = "Inverse hyperbolic tangent."
+
+[[functions]]
+name = "cos"
+kind = "eval"
+docs = "Cosine."
+
+[[functions]]
+name = "cosh"
+kind = "eval"
+docs = "Hyperbolic cosine."
+
+[[functions]]
+name = "hypot"
+kind = "eval"
+docs = "Hypotenuse (sqrt(x^2+y^2))."
+
+[[functions]]
+name = "sin"
+kind = "eval"
+docs = "Sine."
+
+[[functions]]
+name = "sinh"
+kind = "eval"
+docs = "Hyperbolic sine."
+
+[[functions]]
+name = "tan"
+kind = "eval"
+docs = "Tangent."
+
+[[functions]]
+name = "tanh"
+kind = "eval"
+docs = "Hyperbolic tangent."
+
+[[functions]]
+name = "c"
+kind = "aggregate"
+docs = "Alias of count."
+
+[[functions]]
+name = "distinct_count"
+kind = "aggregate"
+docs = "Alias of dc (distinct count)."
+
+[[functions]]
+name = "p"
+kind = "aggregate"
+docs = "Alias of perc (percentile)."
+
+[[functions]]
+name = "percentile"
+kind = "aggregate"
+docs = "Alias of perc (percentile)."
+
+[[commands]]
+name = "abstract"
+kind = "reporting"
+docs = "Produce a summary of the most common terms"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Abstract"
+
+[[commands]]
+name = "accum"
+kind = "streaming"
+docs = "Running total of a numeric field"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Accum"
+
+[[commands]]
+name = "addcoltotals"
+kind = "transforming"
+docs = "Add a row of column totals"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Addcoltotals"
+
+[[commands]]
+name = "analyzefields"
+kind = "reporting"
+docs = "Analyze how fields relate to a target"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Analyzefields"
+
+[[commands]]
+name = "anomalies"
+kind = "streaming"
+docs = "Detect anomalous events"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Anomalies"
+
+[[commands]]
+name = "anomalousvalue"
+kind = "streaming"
+docs = "Flag anomalous values in fields"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Anomalousvalue"
+
+[[commands]]
+name = "arules"
+kind = "reporting"
+docs = "Association rules"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Arules"
+
+[[commands]]
+name = "associate"
+kind = "reporting"
+docs = "See which fields co-occur"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Associate"
+
+[[commands]]
+name = "autoregress"
+kind = "streaming"
+docs = "Prepare data for autoregression"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Autoregress"
+
+[[commands]]
+name = "bucketdir"
+kind = "streaming"
+docs = "Replaces a field value with a more generic path"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bucketdir"
+
+[[commands]]
+name = "cofilter"
+kind = "reporting"
+docs = "Find events that share field values"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Cofilter"
+
+[[commands]]
+name = "correlate"
+kind = "reporting"
+docs = "Calculate correlation between fields"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Correlate"
+
+[[commands]]
+name = "delta"
+kind = "streaming"
+docs = "Difference between adjacent values"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Delta"
+
+[[commands]]
+name = "diff"
+kind = "streaming"
+docs = "Compare two search results"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Diff"
+
+[[commands]]
+name = "findtypes"
+kind = "streaming"
+docs = "Generate suggested event types"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Findtypes"
+
+[[commands]]
+name = "folderize"
+kind = "streaming"
+docs = "Create a hierarchy from delimited fields"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Folderize"
+
+[[commands]]
+name = "gauge"
+kind = "transforming"
+docs = "Transform results into a gauge visualization"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Gauge"
+
+[[commands]]
+name = "geomfilter"
+kind = "streaming"
+docs = "Filter points that fall outside a bounding box"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Geomfilter"
+
+[[commands]]
+name = "iconify"
+kind = "streaming"
+docs = "Display a field as an icon"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Iconify"
+
+[[commands]]
+name = "meventcollect"
+kind = "generating"
+docs = "Converts events into metric data points"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Meventcollect"
+
+[[commands]]
+name = "msearch"
+kind = "generating"
+docs = "Search metric data"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Msearch"
+
+[[commands]]
+name = "outputtext"
+kind = "streaming"
+docs = "Output the raw text of events"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Outputtext"
+
+[[commands]]
+name = "overlap"
+kind = "streaming"
+docs = "Find overlapping events"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Overlap"
+
+[[commands]]
+name = "predict"
+kind = "reporting"
+docs = "Forecast future values"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Predict"
+
+[[commands]]
+name = "rtorder"
+kind = "streaming"
+docs = "Buffer real-time events into time order"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rtorder"
+
+[[commands]]
+name = "sendalert"
+kind = "streaming"
+docs = "Invoke a custom alert action"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Sendalert"
+
+[[commands]]
+name = "trendline"
+kind = "transforming"
+docs = "Compute moving averages"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Trendline"
+
+[[commands]]
+name = "tscollect"
+kind = "streaming"
+docs = "Load events into a tsidx namespace"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tscollect"
+
+[[commands]]
+name = "typeahead"
+kind = "generating"
+docs = "Suggest typeahead terms"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Typeahead"
+
+[[commands]]
+name = "typelearner"
+kind = "streaming"
+docs = "Generate suggested event types"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Typelearner"
+
+[[commands]]
+name = "typer"
+kind = "streaming"
+docs = "Apply event types"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Typer"
+
+[[commands]]
+name = "x11"
+kind = "transforming"
+docs = "Seasonal adjustment of a time series"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/X11"

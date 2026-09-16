@@ -1,0 +1,316 @@
+# KQL tabular operators. Generated from docs/kql/operators.md — edit the inventory, then re-run
+# scripts/generate_catalogs_from_docs.py
+
+[[operators]]
+name = "where"
+kind = "tabular"
+docs = "Keep rows whose predicate is true."
+citation = "https://learn.microsoft.com/kusto/query/where-operator"
+
+[[operators]]
+name = "filter"
+kind = "tabular"
+docs = "Alias of where."
+alias_of = "where"
+
+[[operators]]
+name = "search"
+kind = "tabular"
+docs = "Full-text search across columns/tables."
+warning = "sentinel_star_restricted"
+
+[[operators]]
+name = "find"
+kind = "tabular"
+docs = "Find rows matching a predicate across a set of tables; adds source_ column."
+citation = "https://learn.microsoft.com/kusto/query/find-operator"
+
+[[operators]]
+name = "take"
+kind = "tabular"
+docs = "Return the first *N* rows (not a statistical sample; order undefined unless sort/serialize first)."
+citation = "https://learn.microsoft.com/kusto/query/take-operator"
+
+[[operators]]
+name = "limit"
+kind = "tabular"
+docs = "Alias of take."
+alias_of = "take"
+
+[[operators]]
+name = "top"
+kind = "tabular"
+docs = "top N by expr [asc"
+
+[[operators]]
+name = "top-hitters"
+kind = "tabular"
+docs = "Approximate most frequent values of an expression (performance over fairness)."
+citation = "https://learn.microsoft.com/kusto/query/top-hitters-operator"
+
+[[operators]]
+name = "top-nested"
+kind = "tabular"
+docs = "Nested “top N of X by agg, top M of Y by agg” hierarchies."
+citation = "https://learn.microsoft.com/kusto/query/top-nested-operator"
+
+[[operators]]
+name = "sample"
+kind = "tabular"
+docs = "Random sample of *N* rows (biased; not statistically fair)."
+citation = "https://learn.microsoft.com/kusto/query/sample-operator"
+
+[[operators]]
+name = "sample-distinct"
+kind = "tabular"
+docs = "Up to *N* distinct values of one column (biased)."
+citation = "https://learn.microsoft.com/kusto/query/sample-distinct-operator"
+
+[[operators]]
+name = "project"
+kind = "tabular"
+docs = "Select, rename, and compute columns; drops unspecified columns."
+citation = "https://learn.microsoft.com/kusto/query/project-operator"
+
+[[operators]]
+name = "project-away"
+kind = "tabular"
+docs = "Drop named columns; keep the rest."
+citation = "https://learn.microsoft.com/kusto/query/project-away-operator"
+
+[[operators]]
+name = "project-keep"
+kind = "tabular"
+docs = "Keep columns matching wildcards; drop the rest."
+citation = "https://learn.microsoft.com/kusto/query/project-keep-operator"
+
+[[operators]]
+name = "project-rename"
+kind = "tabular"
+docs = "Rename columns; keep others."
+citation = "https://learn.microsoft.com/kusto/query/project-rename-operator"
+
+[[operators]]
+name = "project-reorder"
+kind = "tabular"
+docs = "Reorder columns (asc, desc, wildcards)."
+citation = "https://learn.microsoft.com/kusto/query/project-reorder-operator"
+
+[[operators]]
+name = "extend"
+kind = "tabular"
+docs = "Append calculated columns; original columns remain."
+citation = "https://learn.microsoft.com/kusto/query/extend-operator"
+
+[[operators]]
+name = "distinct"
+kind = "tabular"
+docs = "Distinct combinations of the listed columns (equivalent to summarize by … with no aggregates)."
+citation = "https://learn.microsoft.com/kusto/query/distinct-operator"
+
+[[operators]]
+name = "summarize"
+kind = "tabular"
+docs = "Group by expressions; compute aggregation functions."
+citation = "https://learn.microsoft.com/kusto/query/summarize-operator"
+
+[[operators]]
+name = "count"
+kind = "tabular"
+docs = "Shorthand for summarize count()."
+citation = "https://learn.microsoft.com/kusto/query/count-operator"
+
+[[operators]]
+name = "make-series"
+kind = "tabular"
+docs = "Build arrays of aggregated values along a timeline (from/to/step, by)."
+citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
+
+[[operators]]
+name = "serialize"
+kind = "tabular"
+docs = "Order rows and enable window functions (next, prev, row_number, row_cumsum)."
+citation = "https://learn.microsoft.com/kusto/query/serialize-operator"
+
+[[operators]]
+name = "scan"
+kind = "tabular"
+docs = "Stateful scan of ordered rows (declare/step/output) for sequences and sessionization."
+citation = "https://learn.microsoft.com/kusto/query/scan-operator"
+
+[[operators]]
+name = "join"
+kind = "tabular"
+docs = "Join two tabular expressions."
+
+[[operators]]
+name = "union"
+kind = "tabular"
+docs = "Concatenate rows from tables/expressions."
+
+[[operators]]
+name = "lookup"
+kind = "tabular"
+docs = "Fact-table left lookup of a small dimension table (kind=leftouter"
+
+[[operators]]
+name = "parse"
+kind = "tabular"
+docs = "Parse a string into typed columns (kind=simple"
+
+[[operators]]
+name = "parse-where"
+kind = "tabular"
+docs = "Like parse but **drops** rows that fail to match."
+citation = "https://learn.microsoft.com/kusto/query/parse-where-operator"
+
+[[operators]]
+name = "parse-kv"
+kind = "tabular"
+docs = "Extract key/value pairs (delimiters or regex) into typed columns."
+citation = "https://learn.microsoft.com/kusto/query/parse-kv-operator"
+
+[[operators]]
+name = "mv-expand"
+kind = "tabular"
+docs = "Expand dynamic arrays/bags to rows (bagexpansion, with_itemindex, limit)."
+citation = "https://learn.microsoft.com/kusto/query/mv-expand-operator"
+
+[[operators]]
+name = "mvexpand"
+kind = "tabular"
+docs = "Alias of mv-expand."
+alias_of = "mv-expand"
+
+[[operators]]
+name = "mv-apply"
+kind = "tabular"
+docs = "Expand arrays and run a **subquery per element**; union results."
+citation = "https://learn.microsoft.com/kusto/query/mv-apply-operator"
+
+[[operators]]
+name = "sort"
+kind = "tabular"
+docs = "sort by expr [asc"
+
+[[operators]]
+name = "order"
+kind = "tabular"
+docs = "Alias of sort."
+alias_of = "sort"
+
+[[operators]]
+name = "print"
+kind = "tabular"
+docs = "One row of scalar expressions."
+citation = "https://learn.microsoft.com/kusto/query/print-operator"
+
+[[operators]]
+name = "datatable"
+kind = "tabular"
+docs = "Inline literal table."
+citation = "https://learn.microsoft.com/kusto/query/datatable-operator"
+
+[[operators]]
+name = "range"
+kind = "tabular"
+docs = "Arithmetic series table: range col from a to b step s."
+citation = "https://learn.microsoft.com/kusto/query/range-operator"
+
+[[operators]]
+name = "externaldata"
+kind = "tabular"
+docs = "Read a schema from an **external** URI (blob/HTTP) into a table."
+citation = "https://learn.microsoft.com/kusto/query/externaldata-operator"
+warning = "nrt_unsupported"
+
+[[operators]]
+name = "invoke"
+kind = "tabular"
+docs = "T"
+
+[[operators]]
+name = "evaluate"
+kind = "tabular"
+docs = "Invoke a service plugin (bag_unpack, autocluster, …)."
+citation = "https://learn.microsoft.com/kusto/query/evaluate-operator"
+
+[[operators]]
+name = "getschema"
+kind = "tabular"
+docs = "One row per input column (ColumnName, DataType, ColumnType)."
+citation = "https://learn.microsoft.com/kusto/query/getschema-operator"
+
+[[operators]]
+name = "as"
+kind = "tabular"
+docs = "Bind a name to the current tabular result (hint.materialized=true wraps materialize())."
+citation = "https://learn.microsoft.com/kusto/query/as-operator"
+
+[[operators]]
+name = "partition"
+kind = "tabular"
+docs = "Run a subquery per distinct value (by Col, strategies native/shuffle/legacy)."
+citation = "https://learn.microsoft.com/kusto/query/partition-operator"
+
+[[operators]]
+name = "fork"
+kind = "tabular"
+docs = "Run several subqueries in parallel; **multiple result tables**."
+citation = "https://learn.microsoft.com/kusto/query/fork-operator"
+
+[[operators]]
+name = "facet"
+kind = "tabular"
+docs = "One summary table per listed column (+ optional with pipe)."
+citation = "https://learn.microsoft.com/kusto/query/facet-operator"
+
+[[operators]]
+name = "consume"
+kind = "tabular"
+docs = "Consume (discard) the data; returns completion stats."
+citation = "https://learn.microsoft.com/kusto/query/consume-operator"
+warning = "not_valid_in_detections"
+
+[[operators]]
+name = "reduce"
+kind = "tabular"
+docs = "Group similar string values (reduce by col) for pattern hunting."
+citation = "https://learn.microsoft.com/kusto/query/reduce-operator"
+
+[[operators]]
+name = "make-graph"
+kind = "tabular"
+docs = "Build a graph from edges (source/target) and optional node tables; partitioned-by for per-tenant graphs."
+citation = "https://learn.microsoft.com/kusto/query/make-graph-operator"
+
+[[operators]]
+name = "graph-match"
+kind = "tabular"
+docs = "Pattern-match nodes/edges (where constraints, project)."
+citation = "https://learn.microsoft.com/kusto/query/graph-match-operator"
+
+[[operators]]
+name = "graph-shortest-paths"
+kind = "tabular"
+docs = "Shortest paths in a graph source."
+citation = "https://learn.microsoft.com/kusto/query/graph-shortest-paths-operator"
+
+[[operators]]
+name = "graph-to-table"
+kind = "tabular"
+docs = "Emit nodes/edges of a graph as tables."
+citation = "https://learn.microsoft.com/kusto/query/graph-to-table-operator"
+
+[[operators]]
+name = "graph-mark-components"
+kind = "tabular"
+docs = "Mark connected components on a graph."
+citation = "https://learn.microsoft.com/kusto/query/graph-mark-components-operator"
+
+[[operators]]
+name = "render"
+kind = "tabular"
+docs = "Render as table, timechart, barchart, piechart, areachart, scatterchart, pivotchart, …"
+citation = "https://learn.microsoft.com/kusto/query/render-operator"
+warning = "not_valid_in_detections"

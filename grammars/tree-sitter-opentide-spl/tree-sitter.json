@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "opentide_spl",
+      "camelcase": "OpentideSpl",
+      "scope": "source.spl",
+      "file-types": ["spl"],
+      "highlights": "../../highlights/queries/spl/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "EUPL-1.2"
+  }
+}

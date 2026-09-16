@@ -1,0 +1,23 @@
+[
+  "comment",
+  "keyword",
+  "operator",
+  "operator.pipe",
+  "function",
+  "function.builtin",
+  "type",
+  "variable",
+  "property",
+  "string",
+  "number",
+  "boolean",
+  "constant",
+  "punctuation",
+  "punctuation.bracket",
+  "punctuation.delimiter",
+  "error",
+  "tide.keyword",
+  "tide.property",
+  "tide.uuid",
+  "tide.schema"
+]

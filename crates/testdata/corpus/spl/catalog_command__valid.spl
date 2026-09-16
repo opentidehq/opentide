@@ -1,0 +1,2 @@
+``` prod:catalog_command valid
+index=main | timechart count by host

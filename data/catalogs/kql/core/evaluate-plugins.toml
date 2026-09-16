@@ -1,0 +1,119 @@
+# KQL evaluate plugins. Invoked as: T | evaluate PluginName(...)
+
+[[plugins]]
+name = "bag_unpack"
+docs = "Expand a dynamic property bag into columns"
+citation = "https://learn.microsoft.com/kusto/query/bag-unpack-plugin"
+
+[[plugins]]
+name = "pivot"
+docs = "Rotate unique values of a column into columns plus aggregate"
+citation = "https://learn.microsoft.com/kusto/query/pivot-plugin"
+
+[[plugins]]
+name = "autocluster"
+docs = "Find common discrete patterns"
+citation = "https://learn.microsoft.com/kusto/query/autocluster-plugin"
+
+[[plugins]]
+name = "basket"
+docs = "Frequent itemsets / association patterns"
+citation = "https://learn.microsoft.com/kusto/query/basket-plugin"
+
+[[plugins]]
+name = "diffpatterns"
+docs = "Contrast patterns between two datasets"
+citation = "https://learn.microsoft.com/kusto/query/diffpatterns-plugin"
+
+[[plugins]]
+name = "diffpatterns_text"
+docs = "Text variant of diffpatterns"
+citation = "https://learn.microsoft.com/kusto/query/diffpatterns-text-plugin"
+
+[[plugins]]
+name = "sequence_detect"
+docs = "Detect sequences of events"
+citation = "https://learn.microsoft.com/kusto/query/sequence-detect-plugin"
+
+[[plugins]]
+name = "narrow"
+docs = "Unpivot columns to name/value rows"
+citation = "https://learn.microsoft.com/kusto/query/narrow-plugin"
+
+[[plugins]]
+name = "preview"
+docs = "Preview plugin output"
+citation = "https://learn.microsoft.com/kusto/query/preview-plugin"
+
+[[plugins]]
+name = "rolling_percentile"
+docs = "Rolling percentile over a window"
+citation = "https://learn.microsoft.com/kusto/query/rolling-percentile-plugin"
+
+[[plugins]]
+name = "rows_near"
+docs = "Rows near matching rows"
+citation = "https://learn.microsoft.com/kusto/query/rows-near-plugin"
+
+[[plugins]]
+name = "dcount_intersect"
+docs = "Intersection of distinct counts / HLL sketches"
+citation = "https://learn.microsoft.com/kusto/query/dcount-intersect-plugin"
+
+[[plugins]]
+name = "ipv4_lookup"
+docs = "Lookup IPs in a CIDR dimension table"
+citation = "https://learn.microsoft.com/kusto/query/ipv4-lookup-plugin"
+
+[[plugins]]
+name = "ipv6_lookup"
+docs = "IPv6 variant of ipv4_lookup"
+citation = "https://learn.microsoft.com/kusto/query/ipv6-lookup-plugin"
+
+[[plugins]]
+name = "schema_merge"
+docs = "Merge schemas"
+citation = "https://learn.microsoft.com/kusto/query/schema-merge-plugin"
+
+[[plugins]]
+name = "infer_storage_schema"
+docs = "Infer schema from storage"
+citation = "https://learn.microsoft.com/kusto/query/infer-storage-schema-plugin"
+warning = "am_no"
+
+[[plugins]]
+name = "sql_request"
+docs = "Query an external SQL database"
+citation = "https://learn.microsoft.com/kusto/query/sql-request-plugin"
+warning = "am_no"
+
+[[plugins]]
+name = "mysql_request"
+docs = "Query MySQL"
+citation = "https://learn.microsoft.com/kusto/query/mysql-request-plugin"
+warning = "am_no"
+
+[[plugins]]
+name = "cosmosdb_sql_request"
+docs = "Query Cosmos DB"
+citation = "https://learn.microsoft.com/kusto/query/cosmosdb-plugin"
+warning = "am_no"
+
+[[plugins]]
+name = "azure_digital_twins_query_request"
+docs = "Query Azure Digital Twins"
+citation = "https://learn.microsoft.com/kusto/query/azure-digital-twins-query-request-plugin"
+warning = "am_no"
+
+[[plugins]]
+name = "python"
+docs = "Sandboxed Python plugin"
+citation = "https://learn.microsoft.com/kusto/query/python-plugin"
+warning = "am_no"
+
+[[plugins]]
+name = "R"
+docs = "Sandboxed R plugin"
+citation = "https://learn.microsoft.com/kusto/query/r-plugin"
+warning = "am_no"
+

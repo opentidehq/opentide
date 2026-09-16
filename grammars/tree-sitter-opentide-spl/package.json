@@ -1,0 +1,12 @@
+{
+  "name": "tree-sitter-opentide-spl",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for Splunk Processing Language (OpenTide)",
+  "license": "EUPL-1.2",
+  "tree-sitter": [
+    {
+      "scope": "source.spl",
+      "file-types": ["spl"]
+    }
+  ]
+}

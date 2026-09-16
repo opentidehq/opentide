@@ -1,0 +1,2 @@
+``` prod:rename_command valid
+index=main | rename host AS hostname

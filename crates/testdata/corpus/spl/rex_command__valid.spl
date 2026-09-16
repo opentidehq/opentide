@@ -1,0 +1,2 @@
+``` prod:rex_command valid
+index=main | rex field=_raw "(?<ip>\d+)"

@@ -1,0 +1,174 @@
+# KQL scalar/comparison operators. Generated from docs/kql/operators-scalar.md
+
+[[scalar_operators]]
+name = "=="
+citation = "https://learn.microsoft.com/kusto/query/datatypes-string-operators"
+
+[[scalar_operators]]
+name = "!="
+
+[[scalar_operators]]
+name = "=~"
+citation = "https://learn.microsoft.com/kusto/query/datatypes-string-operators"
+
+[[scalar_operators]]
+name = "!~"
+
+[[scalar_operators]]
+name = "<>"
+
+[[scalar_operators]]
+name = "contains"
+
+[[scalar_operators]]
+name = "!contains"
+
+[[scalar_operators]]
+name = "contains_cs"
+
+[[scalar_operators]]
+name = "!contains_cs"
+
+[[scalar_operators]]
+name = "startswith"
+
+[[scalar_operators]]
+name = "!startswith"
+
+[[scalar_operators]]
+name = "startswith_cs"
+
+[[scalar_operators]]
+name = "!startswith_cs"
+
+[[scalar_operators]]
+name = "endswith"
+
+[[scalar_operators]]
+name = "!endswith"
+
+[[scalar_operators]]
+name = "endswith_cs"
+
+[[scalar_operators]]
+name = "!endswith_cs"
+
+[[scalar_operators]]
+name = "has"
+
+[[scalar_operators]]
+name = "!has"
+
+[[scalar_operators]]
+name = "has_cs"
+
+[[scalar_operators]]
+name = "!has_cs"
+
+[[scalar_operators]]
+name = "hasprefix"
+
+[[scalar_operators]]
+name = "!hasprefix"
+
+[[scalar_operators]]
+name = "hasprefix_cs"
+
+[[scalar_operators]]
+name = "!hasprefix_cs"
+
+[[scalar_operators]]
+name = "hassuffix"
+
+[[scalar_operators]]
+name = "!hassuffix"
+
+[[scalar_operators]]
+name = "hassuffix_cs"
+
+[[scalar_operators]]
+name = "!hassuffix_cs"
+
+[[scalar_operators]]
+name = "has_any"
+
+[[scalar_operators]]
+name = "has_all"
+
+[[scalar_operators]]
+name = "in"
+
+[[scalar_operators]]
+name = "!in"
+
+[[scalar_operators]]
+name = "in~"
+
+[[scalar_operators]]
+name = "!in~"
+
+[[scalar_operators]]
+name = "matches regex"
+
+[[scalar_operators]]
+name = "has_ipv4"
+
+[[scalar_operators]]
+name = "has_ipv4_prefix"
+
+[[scalar_operators]]
+name = "has_any_ipv4"
+
+[[scalar_operators]]
+name = "has_any_ipv4_prefix"
+
+[[scalar_operators]]
+name = "and"
+
+[[scalar_operators]]
+name = "or"
+
+[[scalar_operators]]
+name = "not()"
+
+[[scalar_operators]]
+name = "+"
+
+[[scalar_operators]]
+name = "/"
+
+[[scalar_operators]]
+name = "%"
+
+[[scalar_operators]]
+name = "<"
+
+[[scalar_operators]]
+name = ">"
+
+[[scalar_operators]]
+name = "<="
+
+[[scalar_operators]]
+name = ">="
+
+
+[[scalar_operators]]
+name = "between"
+docs = "Inclusive range: expr between (from .. to)"
+citation = "https://learn.microsoft.com/kusto/query/between-operator"
+
+[[scalar_operators]]
+name = "!between"
+docs = "Negated inclusive range"
+citation = "https://learn.microsoft.com/kusto/query/not-between-operator"
+
+[[scalar_operators]]
+name = "-"
+docs = "Subtraction / unary negation"
+citation = "https://learn.microsoft.com/kusto/query/numerical-operators"
+
+[[scalar_operators]]
+name = "*"
+docs = "Multiplication"
+citation = "https://learn.microsoft.com/kusto/query/numerical-operators"

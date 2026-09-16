@@ -1,0 +1,133 @@
+# Frozen HighlightSpec. Renaming a capture is a breaking (major) change.
+
+[meta]
+id = "opentide-highlight"
+version = "0.1.0"
+legend = [
+  "comment",
+  "keyword",
+  "operator",
+  "operator.pipe",
+  "function",
+  "function.builtin",
+  "type",
+  "variable",
+  "property",
+  "string",
+  "number",
+  "boolean",
+  "constant",
+  "punctuation",
+  "punctuation.bracket",
+  "punctuation.delimiter",
+  "error",
+  "tide.keyword",
+  "tide.property",
+  "tide.uuid",
+  "tide.schema",
+]
+
+[captures.comment]
+tm = "comment.line.opentide"
+monaco = "comment"
+helix = "comment"
+
+[captures.keyword]
+tm = "keyword.control.opentide"
+monaco = "keyword"
+helix = "keyword"
+
+[captures.operator]
+tm = "keyword.operator.opentide"
+monaco = "operator"
+helix = "operator"
+
+[captures."operator.pipe"]
+tm = "keyword.operator.pipe.opentide"
+monaco = "operator"
+helix = "operator"
+
+[captures.function]
+tm = "entity.name.function.opentide"
+monaco = "function"
+helix = "function"
+
+[captures."function.builtin"]
+tm = "support.function.opentide"
+monaco = "predefined"
+helix = "function.builtin"
+
+[captures.type]
+tm = "entity.name.type.opentide"
+monaco = "type"
+helix = "type"
+
+[captures.variable]
+tm = "variable.other.opentide"
+monaco = "variable"
+helix = "variable"
+
+[captures.property]
+tm = "variable.other.property.opentide"
+monaco = "variable"
+helix = "property"
+
+[captures.string]
+tm = "string.quoted.opentide"
+monaco = "string"
+helix = "string"
+
+[captures.number]
+tm = "constant.numeric.opentide"
+monaco = "number"
+helix = "constant.numeric"
+
+[captures.boolean]
+tm = "constant.language.boolean.opentide"
+monaco = "keyword"
+helix = "constant.builtin"
+
+[captures.constant]
+tm = "constant.language.opentide"
+monaco = "keyword"
+helix = "constant.builtin"
+
+[captures.punctuation]
+tm = "punctuation.opentide"
+monaco = "delimiter"
+helix = "punctuation"
+
+[captures."punctuation.bracket"]
+tm = "punctuation.bracket.opentide"
+monaco = "delimiter.bracket"
+helix = "punctuation.bracket"
+
+[captures."punctuation.delimiter"]
+tm = "punctuation.delimiter.opentide"
+monaco = "delimiter"
+helix = "punctuation.delimiter"
+
+[captures.error]
+tm = "invalid.illegal.opentide"
+monaco = "invalid"
+helix = "error"
+
+[captures."tide.keyword"]
+tm = "keyword.control.tide"
+monaco = "keyword"
+helix = "keyword"
+
+[captures."tide.property"]
+tm = "variable.other.property.tide"
+monaco = "variable"
+helix = "property"
+
+[captures."tide.uuid"]
+tm = "constant.other.uuid.tide"
+monaco = "number"
+helix = "constant"
+
+[captures."tide.schema"]
+tm = "entity.name.type.schema.tide"
+monaco = "type"
+helix = "type"

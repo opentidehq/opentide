@@ -1,0 +1,2787 @@
+# KQL functions. Generated from docs/kql/scalar-functions.md and aggregation-functions.md
+
+[[functions]]
+name = "tobool"
+signature = "tobool(value)"
+docs = "Convert to bool"
+citation = "https://learn.microsoft.com/kusto/query/tobool-function"
+kind = "scalar"
+
+[[functions]]
+name = "toboolean"
+signature = "tobool(value)"
+docs = "Convert to bool"
+citation = "https://learn.microsoft.com/kusto/query/tobool-function"
+kind = "scalar"
+
+[[functions]]
+name = "todatetime"
+signature = "todatetime(value)"
+docs = "Convert to datetime (prefer literals)"
+citation = "https://learn.microsoft.com/kusto/query/todatetime-function"
+kind = "scalar"
+
+[[functions]]
+name = "todecimal"
+signature = "todecimal(value)"
+docs = "Convert to decimal"
+citation = "https://learn.microsoft.com/kusto/query/todecimal-function"
+kind = "scalar"
+
+[[functions]]
+name = "todouble"
+signature = "todouble(value) / toreal(value)"
+docs = "Convert to real"
+citation = "https://learn.microsoft.com/kusto/query/toreal-function"
+kind = "scalar"
+
+[[functions]]
+name = "toreal"
+signature = "todouble(value) / toreal(value)"
+docs = "Convert to real"
+citation = "https://learn.microsoft.com/kusto/query/toreal-function"
+kind = "scalar"
+
+[[functions]]
+name = "toguid"
+signature = "toguid(value)"
+docs = "Convert to guid"
+citation = "https://learn.microsoft.com/kusto/query/toguid-function"
+kind = "scalar"
+
+[[functions]]
+name = "toint"
+signature = "toint(value)"
+docs = "Convert to int"
+citation = "https://learn.microsoft.com/kusto/query/toint-function"
+kind = "scalar"
+
+[[functions]]
+name = "tolong"
+signature = "tolong(value)"
+docs = "Convert to long"
+citation = "https://learn.microsoft.com/kusto/query/tolong-function"
+kind = "scalar"
+
+[[functions]]
+name = "tostring"
+signature = "tostring(value)"
+docs = "Convert to string"
+citation = "https://learn.microsoft.com/kusto/query/tostring-function"
+kind = "scalar"
+
+[[functions]]
+name = "totimespan"
+signature = "totimespan(value)"
+docs = "Convert to timespan"
+citation = "https://learn.microsoft.com/kusto/query/totimespan-function"
+kind = "scalar"
+
+[[functions]]
+name = "todynamic"
+signature = "todynamic(value)"
+docs = "Interpret as dynamic"
+citation = "https://learn.microsoft.com/kusto/query/todynamic-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_json"
+signature = "todynamic(value)"
+docs = "Interpret as dynamic"
+citation = "https://learn.microsoft.com/kusto/query/todynamic-function"
+kind = "scalar"
+
+[[functions]]
+name = "ago"
+signature = "ago(timespan)"
+docs = "now() - timespan (query-start clock)"
+citation = "https://learn.microsoft.com/kusto/query/ago-function"
+kind = "scalar"
+
+[[functions]]
+name = "now"
+signature = "now([offset])"
+docs = "Current UTC query-start time"
+citation = "https://learn.microsoft.com/kusto/query/now-function"
+kind = "scalar"
+
+[[functions]]
+name = "datetime_add"
+signature = "datetime_add(period, amount, datetime)"
+docs = "Add periods (year,month,day,hour,…)"
+citation = "https://learn.microsoft.com/kusto/query/datetime-add-function"
+kind = "scalar"
+
+[[functions]]
+name = "datetime_diff"
+signature = "datetime_diff(period, datetime1, datetime2)"
+docs = "Difference in period units"
+citation = "https://learn.microsoft.com/kusto/query/datetime-diff-function"
+kind = "scalar"
+
+[[functions]]
+name = "datetime_part"
+signature = "datetime_part(part, datetime)"
+docs = "Extract part as int"
+citation = "https://learn.microsoft.com/kusto/query/datetime-part-function"
+kind = "scalar"
+
+[[functions]]
+name = "datetime_local_to_utc"
+signature = "datetime_local_to_utc(dt, tz)"
+docs = "Local → UTC"
+citation = "https://learn.microsoft.com/kusto/query/datetime-local-to-utc-function"
+kind = "scalar"
+
+[[functions]]
+name = "datetime_utc_to_local"
+signature = "datetime_utc_to_local(dt, tz)"
+docs = "UTC → local"
+citation = "https://learn.microsoft.com/kusto/query/datetime-utc-to-local-function"
+kind = "scalar"
+
+[[functions]]
+name = "dayofmonth"
+signature = "dayofmonth(datetime)"
+docs = "Day of month"
+citation = "https://learn.microsoft.com/kusto/query/dayofmonth-function"
+kind = "scalar"
+
+[[functions]]
+name = "dayofweek"
+signature = "dayofweek(datetime)"
+docs = "Timespan since preceding Sunday"
+citation = "https://learn.microsoft.com/kusto/query/dayofweek-function"
+kind = "scalar"
+
+[[functions]]
+name = "dayofyear"
+signature = "dayofyear(datetime)"
+docs = "Day of year"
+citation = "https://learn.microsoft.com/kusto/query/dayofyear-function"
+kind = "scalar"
+
+[[functions]]
+name = "hourofday"
+signature = "hourofday(datetime)"
+docs = "Hour 0–23"
+citation = "https://learn.microsoft.com/kusto/query/hourofday-function"
+kind = "scalar"
+
+[[functions]]
+name = "getyear"
+signature = "getyear(datetime)"
+docs = "Year"
+citation = "https://learn.microsoft.com/kusto/query/getyear-function"
+kind = "scalar"
+
+[[functions]]
+name = "monthofyear"
+signature = "monthofyear(datetime)"
+docs = "Month 1–12"
+citation = "https://learn.microsoft.com/kusto/query/monthofyear-function"
+kind = "scalar"
+
+[[functions]]
+name = "weekofyear"
+signature = "weekofyear(datetime)"
+docs = "ISO-style week number"
+citation = "https://learn.microsoft.com/kusto/query/weekofyear-function"
+kind = "scalar"
+
+[[functions]]
+name = "startofday"
+signature = "startofday(dt [, offset])"
+docs = "Day boundaries"
+citation = "https://learn.microsoft.com/kusto/query/startofday-function"
+kind = "scalar"
+
+[[functions]]
+name = "endofday"
+signature = "startofday(dt [, offset])"
+docs = "Day boundaries"
+citation = "https://learn.microsoft.com/kusto/query/startofday-function"
+kind = "scalar"
+
+[[functions]]
+name = "startofweek"
+signature = "same pattern"
+docs = "Week boundaries"
+citation = "https://learn.microsoft.com/kusto/query/startofweek-function"
+kind = "scalar"
+
+[[functions]]
+name = "endofweek"
+signature = "same pattern"
+docs = "Week boundaries"
+citation = "https://learn.microsoft.com/kusto/query/startofweek-function"
+kind = "scalar"
+
+[[functions]]
+name = "startofmonth"
+signature = "same pattern"
+docs = "Month boundaries"
+citation = "https://learn.microsoft.com/kusto/query/startofmonth-function"
+kind = "scalar"
+
+[[functions]]
+name = "endofmonth"
+signature = "same pattern"
+docs = "Month boundaries"
+citation = "https://learn.microsoft.com/kusto/query/startofmonth-function"
+kind = "scalar"
+
+[[functions]]
+name = "startofyear"
+signature = "same pattern"
+docs = "Year boundaries"
+citation = "https://learn.microsoft.com/kusto/query/startofyear-function"
+kind = "scalar"
+
+[[functions]]
+name = "endofyear"
+signature = "same pattern"
+docs = "Year boundaries"
+citation = "https://learn.microsoft.com/kusto/query/startofyear-function"
+kind = "scalar"
+
+[[functions]]
+name = "make_datetime"
+signature = "make_datetime(year, month, day [, hour, minute, second])"
+docs = "Construct datetime"
+citation = "https://learn.microsoft.com/kusto/query/make-datetime-function"
+kind = "scalar"
+
+[[functions]]
+name = "make_timespan"
+signature = "make_timespan([days][, hours][, minutes][, seconds])"
+docs = "Construct timespan"
+citation = "https://learn.microsoft.com/kusto/query/make-timespan-function"
+kind = "scalar"
+
+[[functions]]
+name = "format_datetime"
+signature = "format_datetime(datetime, format)"
+docs = "Format string"
+citation = "https://learn.microsoft.com/kusto/query/format-datetime-function"
+kind = "scalar"
+
+[[functions]]
+name = "format_timespan"
+signature = "format_timespan(timespan, format)"
+docs = "Format string"
+citation = "https://learn.microsoft.com/kusto/query/format-timespan-function"
+kind = "scalar"
+
+[[functions]]
+name = "unixtime_seconds_todatetime"
+signature = "unixtime_seconds_todatetime(unix)"
+docs = "Epoch seconds → UTC"
+citation = "https://learn.microsoft.com/kusto/query/unixtime-seconds-todatetime-function"
+kind = "scalar"
+
+[[functions]]
+name = "unixtime_milliseconds_todatetime"
+signature = "unixtime_milliseconds_todatetime(unix)"
+docs = "Epoch ms"
+citation = "https://learn.microsoft.com/kusto/query/unixtime-milliseconds-todatetime-function"
+kind = "scalar"
+
+[[functions]]
+name = "unixtime_microseconds_todatetime"
+signature = "unixtime_microseconds_todatetime(unix)"
+docs = "Epoch µs"
+citation = "https://learn.microsoft.com/kusto/query/unixtime-microseconds-todatetime-function"
+kind = "scalar"
+
+[[functions]]
+name = "unixtime_nanoseconds_todatetime"
+signature = "unixtime_nanoseconds_todatetime(unix)"
+docs = "Epoch ns"
+citation = "https://learn.microsoft.com/kusto/query/unixtime-nanoseconds-todatetime-function"
+kind = "scalar"
+
+[[functions]]
+name = "bin"
+signature = "bin(value, roundTo)"
+docs = "Round **down** to multiple of bin size (time or numeric)"
+citation = "https://learn.microsoft.com/kusto/query/bin-function"
+kind = "scalar"
+
+[[functions]]
+name = "floor"
+signature = "bin(value, roundTo)"
+docs = "Round **down** to multiple of bin size (time or numeric)"
+citation = "https://learn.microsoft.com/kusto/query/bin-function"
+kind = "scalar"
+
+[[functions]]
+name = "bin_at"
+signature = "bin_at(value, binSize, origin)"
+docs = "Bins aligned to an origin"
+citation = "https://learn.microsoft.com/kusto/query/bin-at-function"
+kind = "scalar"
+
+[[functions]]
+name = "bin_auto"
+signature = "bin_auto(value)"
+docs = "Query-time automatic bin (mostly UX)"
+citation = "https://learn.microsoft.com/kusto/query/bin-auto-function"
+kind = "scalar"
+
+[[functions]]
+name = "ceiling"
+signature = "ceiling(expr)"
+docs = "Smallest integer ≥ expr"
+citation = "https://learn.microsoft.com/kusto/query/ceiling-function"
+kind = "scalar"
+
+[[functions]]
+name = "iff"
+signature = "iff(predicate, then, else)"
+docs = "Ternary"
+citation = "https://learn.microsoft.com/kusto/query/iff-function"
+kind = "scalar"
+
+[[functions]]
+name = "iif"
+signature = "iff(predicate, then, else)"
+docs = "Ternary"
+citation = "https://learn.microsoft.com/kusto/query/iff-function"
+kind = "scalar"
+
+[[functions]]
+name = "case"
+signature = "case(p1, r1, p2, r2, …, else)"
+docs = "Multi-branch"
+citation = "https://learn.microsoft.com/kusto/query/case-function"
+kind = "scalar"
+
+[[functions]]
+name = "coalesce"
+signature = "coalesce(expr, …)"
+docs = "First non-null (non-empty for strings)"
+citation = "https://learn.microsoft.com/kusto/query/coalesce-function"
+kind = "scalar"
+
+[[functions]]
+name = "max_of"
+signature = "max_of(expr, …)"
+docs = "Max of scalars"
+citation = "https://learn.microsoft.com/kusto/query/max-of-function"
+kind = "scalar"
+
+[[functions]]
+name = "min_of"
+signature = "min_of(expr, …)"
+docs = "Min of scalars"
+citation = "https://learn.microsoft.com/kusto/query/min-of-function"
+kind = "scalar"
+
+[[functions]]
+name = "not"
+signature = "not(bool)"
+docs = "Logical not"
+citation = "https://learn.microsoft.com/kusto/query/not-function"
+kind = "scalar"
+
+[[functions]]
+name = "isnull"
+signature = "isnull(expr)"
+docs = "True if null"
+citation = "https://learn.microsoft.com/kusto/query/isnull-function"
+kind = "scalar"
+
+[[functions]]
+name = "isnotnull"
+signature = "isnotnull(expr)"
+citation = "https://learn.microsoft.com/kusto/query/isnotnull-function"
+kind = "scalar"
+
+[[functions]]
+name = "isempty"
+signature = "isempty(expr)"
+docs = "Empty string or null"
+citation = "https://learn.microsoft.com/kusto/query/isempty-function"
+kind = "scalar"
+
+[[functions]]
+name = "isnotempty"
+signature = "isnotempty(expr)"
+citation = "https://learn.microsoft.com/kusto/query/isnotempty-function"
+kind = "scalar"
+
+[[functions]]
+name = "notempty"
+signature = "isnotempty(expr)"
+citation = "https://learn.microsoft.com/kusto/query/isnotempty-function"
+kind = "scalar"
+
+[[functions]]
+name = "column_ifexists"
+signature = "column_ifexists(\"Name\", default)"
+docs = "Column ref or default — **required** with bag_unpack in Sentinel analytics"
+citation = "https://learn.microsoft.com/kusto/query/column-ifexists-function"
+kind = "scalar"
+
+[[functions]]
+name = "strcat"
+signature = "strcat(s1, s2, …)"
+docs = "Concat 1–64 args"
+citation = "https://learn.microsoft.com/kusto/query/strcat-function"
+kind = "scalar"
+
+[[functions]]
+name = "strcat_delim"
+signature = "strcat_delim(delim, s1, …)"
+docs = "Concat with delimiter"
+citation = "https://learn.microsoft.com/kusto/query/strcat-delim-function"
+kind = "scalar"
+
+[[functions]]
+name = "strcat_array"
+signature = "strcat_array(array, delimiter)"
+docs = "Join dynamic string array"
+citation = "https://learn.microsoft.com/kusto/query/strcat-array-function"
+kind = "scalar"
+
+[[functions]]
+name = "strlen"
+signature = "strlen(string)"
+docs = "Character length"
+citation = "https://learn.microsoft.com/kusto/query/strlen-function"
+kind = "scalar"
+
+[[functions]]
+name = "substring"
+signature = "substring(source, start [, length])"
+docs = "Slice (0-based)"
+citation = "https://learn.microsoft.com/kusto/query/substring-function"
+kind = "scalar"
+
+[[functions]]
+name = "split"
+signature = "split(source, delimiter [, requestedIndex])"
+docs = "Split to dynamic array"
+citation = "https://learn.microsoft.com/kusto/query/split-function"
+kind = "scalar"
+
+[[functions]]
+name = "extract"
+signature = "extract(regex, captureGroup, source)"
+docs = "Regex capture"
+citation = "https://learn.microsoft.com/kusto/query/extract-function"
+kind = "scalar"
+
+[[functions]]
+name = "extract_all"
+signature = "extract_all(regex, [captureGroups,] source)"
+docs = "All matches"
+citation = "https://learn.microsoft.com/kusto/query/extract-all-function"
+kind = "scalar"
+
+[[functions]]
+name = "extractall"
+signature = "extract_all(regex, [captureGroups,] source)"
+docs = "All matches"
+citation = "https://learn.microsoft.com/kusto/query/extract-all-function"
+kind = "scalar"
+
+[[functions]]
+name = "extract_json"
+signature = "extract_json(path, json [, type])"
+docs = "JSONPath-like extract"
+citation = "https://learn.microsoft.com/kusto/query/extract-json-function"
+kind = "scalar"
+
+[[functions]]
+name = "extractjson"
+signature = "extract_json(path, json [, type])"
+docs = "JSONPath-like extract"
+citation = "https://learn.microsoft.com/kusto/query/extract-json-function"
+kind = "scalar"
+
+[[functions]]
+name = "parsejson"
+signature = "parse_json(json)"
+docs = "JSON text → dynamic"
+citation = "https://learn.microsoft.com/kusto/query/parse-json-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_csv"
+signature = "parse_csv(string)"
+docs = "CSV line → array"
+citation = "https://learn.microsoft.com/kusto/query/parse-csv-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_command_line"
+signature = "parse_command_line(cmd, flavor)"
+docs = "Windows/Linux argv array — **very common in MDE hunting**"
+citation = "https://learn.microsoft.com/kusto/query/parse-command-line-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_url"
+signature = "parse_url(url)"
+docs = "URL parts as dynamic"
+citation = "https://learn.microsoft.com/kusto/query/parse-url-function"
+kind = "scalar"
+
+[[functions]]
+name = "parseurl"
+signature = "parse_url(url)"
+docs = "URL parts as dynamic"
+citation = "https://learn.microsoft.com/kusto/query/parse-url-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_urlquery"
+signature = "parse_urlquery(query)"
+docs = "Query-string bag"
+citation = "https://learn.microsoft.com/kusto/query/parse-urlquery-function"
+kind = "scalar"
+
+[[functions]]
+name = "parseurlquery"
+signature = "parse_urlquery(query)"
+docs = "Query-string bag"
+citation = "https://learn.microsoft.com/kusto/query/parse-urlquery-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_path"
+signature = "parse_path(path)"
+docs = "File path parts"
+citation = "https://learn.microsoft.com/kusto/query/parse-path-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_user_agent"
+signature = "parse_user_agent(ua, regex)"
+docs = "Browser/OS from UA"
+citation = "https://learn.microsoft.com/kusto/query/parse-user-agent-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_version"
+signature = "parse_version(string)"
+docs = "Version → comparable decimal"
+citation = "https://learn.microsoft.com/kusto/query/parse-version-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_xml"
+signature = "parse_xml(xml)"
+docs = "XML → dynamic"
+citation = "https://learn.microsoft.com/kusto/query/parse-xml-function"
+kind = "scalar"
+
+[[functions]]
+name = "replace_string"
+signature = "replace_string(source, lookup, rewrite)"
+docs = "Literal replace all"
+citation = "https://learn.microsoft.com/kusto/query/replace-string-function"
+kind = "scalar"
+
+[[functions]]
+name = "replace"
+signature = "replace_string(source, lookup, rewrite)"
+docs = "Literal replace all"
+citation = "https://learn.microsoft.com/kusto/query/replace-string-function"
+kind = "scalar"
+
+[[functions]]
+name = "replace_strings"
+signature = "replace_strings(source, lookups, rewrites)"
+docs = "Multi replace"
+citation = "https://learn.microsoft.com/kusto/query/replace-strings-function"
+kind = "scalar"
+
+[[functions]]
+name = "replace_regex"
+signature = "replace_regex(source, regex, rewrite)"
+docs = "Regex replace"
+citation = "https://learn.microsoft.com/kusto/query/replace-regex-function"
+kind = "scalar"
+
+[[functions]]
+name = "countof"
+signature = "countof(source, search [, kind])"
+docs = "Count substring/regex"
+citation = "https://learn.microsoft.com/kusto/query/countof-function"
+kind = "scalar"
+
+[[functions]]
+name = "indexof"
+signature = "indexof(source, lookup [, start][, length][, occurrence])"
+docs = "First index"
+citation = "https://learn.microsoft.com/kusto/query/indexof-function"
+kind = "scalar"
+
+[[functions]]
+name = "indexof_regex"
+signature = "indexof(source, lookup [, start][, length][, occurrence])"
+docs = "First index"
+citation = "https://learn.microsoft.com/kusto/query/indexof-function"
+kind = "scalar"
+
+[[functions]]
+name = "has_any_index"
+signature = "has_any_index(source, lookupArray)"
+docs = "Index of first matching term"
+citation = "https://learn.microsoft.com/kusto/query/has-any-index-function"
+kind = "scalar"
+
+[[functions]]
+name = "tolower"
+signature = "tolower(s) / toupper(s)"
+docs = "Case fold"
+citation = "https://learn.microsoft.com/kusto/query/tolower-function"
+kind = "scalar"
+
+[[functions]]
+name = "toupper"
+signature = "tolower(s) / toupper(s)"
+docs = "Case fold"
+citation = "https://learn.microsoft.com/kusto/query/tolower-function"
+kind = "scalar"
+
+[[functions]]
+name = "trim"
+signature = "trim(regex, s)"
+docs = "Trim regex matches"
+citation = "https://learn.microsoft.com/kusto/query/trim-function"
+kind = "scalar"
+
+[[functions]]
+name = "trim_start"
+signature = "trim(regex, s)"
+docs = "Trim regex matches"
+citation = "https://learn.microsoft.com/kusto/query/trim-function"
+kind = "scalar"
+
+[[functions]]
+name = "trim_end"
+signature = "trim(regex, s)"
+docs = "Trim regex matches"
+citation = "https://learn.microsoft.com/kusto/query/trim-function"
+kind = "scalar"
+
+[[functions]]
+name = "strrep"
+signature = "strrep(s, n [, delimiter])"
+docs = "Repeat"
+citation = "https://learn.microsoft.com/kusto/query/strrep-function"
+kind = "scalar"
+
+[[functions]]
+name = "strcmp"
+signature = "strcmp(s1, s2)"
+docs = "strcmp-style int"
+citation = "https://learn.microsoft.com/kusto/query/strcmp-function"
+kind = "scalar"
+
+[[functions]]
+name = "reverse"
+signature = "reverse(s)"
+docs = "Reverse string"
+citation = "https://learn.microsoft.com/kusto/query/reverse-function"
+kind = "scalar"
+
+[[functions]]
+name = "translate"
+signature = "translate(searchList, replacementList, s)"
+docs = "1:1 char map"
+citation = "https://learn.microsoft.com/kusto/query/translate-function"
+kind = "scalar"
+
+[[functions]]
+name = "tohex"
+signature = "tohex(value [, minLength])"
+docs = "Hex string"
+citation = "https://learn.microsoft.com/kusto/query/tohex-function"
+kind = "scalar"
+
+[[functions]]
+name = "url_encode"
+signature = "url_encode(url)"
+docs = "Percent-encoding"
+citation = "https://learn.microsoft.com/kusto/query/url-encode-function"
+kind = "scalar"
+
+[[functions]]
+name = "url_decode"
+signature = "url_encode(url)"
+docs = "Percent-encoding"
+citation = "https://learn.microsoft.com/kusto/query/url-encode-function"
+kind = "scalar"
+
+[[functions]]
+name = "url_encode_component"
+signature = "url_encode_component(s)"
+docs = "Encode a component"
+citation = "https://learn.microsoft.com/kusto/query/url-encode-component-function"
+kind = "scalar"
+
+[[functions]]
+name = "base64_encode_tostring"
+signature = "base64_encode_tostring(s)"
+docs = "UTF-8 → base64"
+citation = "https://learn.microsoft.com/kusto/query/base64-encode-tostring-function"
+kind = "scalar"
+
+[[functions]]
+name = "encode_base64"
+signature = "base64_encode_tostring(s)"
+docs = "UTF-8 → base64"
+citation = "https://learn.microsoft.com/kusto/query/base64-encode-tostring-function"
+kind = "scalar"
+
+[[functions]]
+name = "base64_decode_tostring"
+signature = "base64_decode_tostring(b64)"
+docs = "Base64 → UTF-8"
+citation = "https://learn.microsoft.com/kusto/query/base64-decode-tostring-function"
+kind = "scalar"
+
+[[functions]]
+name = "decode_base64"
+signature = "base64_decode_tostring(b64)"
+docs = "Base64 → UTF-8"
+citation = "https://learn.microsoft.com/kusto/query/base64-decode-tostring-function"
+kind = "scalar"
+
+[[functions]]
+name = "base64_encode_fromguid"
+signature = "base64_encode_fromguid(guid)"
+docs = "GUID → base64"
+citation = "https://learn.microsoft.com/kusto/query/base64-encode-fromguid-function"
+kind = "scalar"
+
+[[functions]]
+name = "base64_decode_toguid"
+signature = "base64_decode_toguid(b64)"
+docs = "Base64 → GUID"
+citation = "https://learn.microsoft.com/kusto/query/base64-decode-toguid-function"
+kind = "scalar"
+
+[[functions]]
+name = "base64_decode_toarray"
+signature = "base64_decode_toarray(b64)"
+docs = "Base64 → byte array"
+citation = "https://learn.microsoft.com/kusto/query/base64-decode-toarray-function"
+kind = "scalar"
+
+[[functions]]
+name = "punycode_from_string"
+signature = "punycode_from_string(domain)"
+docs = "IDN encode/decode"
+citation = "https://learn.microsoft.com/kusto/query/punycode-from-string-function"
+kind = "scalar"
+
+[[functions]]
+name = "punycode_to_string"
+signature = "punycode_from_string(domain)"
+docs = "IDN encode/decode"
+citation = "https://learn.microsoft.com/kusto/query/punycode-from-string-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_length"
+signature = "array_length(array)"
+docs = "Length"
+citation = "https://learn.microsoft.com/kusto/query/array-length-function"
+kind = "scalar"
+
+[[functions]]
+name = "arraylength"
+signature = "array_length(array)"
+docs = "Length"
+citation = "https://learn.microsoft.com/kusto/query/array-length-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_concat"
+signature = "array_concat(a1, a2, …)"
+docs = "Concat arrays"
+citation = "https://learn.microsoft.com/kusto/query/array-concat-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_slice"
+signature = "array_slice(array, start, end)"
+docs = "Slice"
+citation = "https://learn.microsoft.com/kusto/query/array-slice-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_split"
+signature = "array_split(array, indices)"
+docs = "Split"
+citation = "https://learn.microsoft.com/kusto/query/array-split-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_reverse"
+signature = "array_reverse(array)"
+docs = "Reverse"
+citation = "https://learn.microsoft.com/kusto/query/array-reverse-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_rotate_left"
+signature = "array_rotate_left(array, n)"
+docs = "Rotate"
+citation = "https://learn.microsoft.com/kusto/query/array-rotate-left-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_rotate_right"
+signature = "array_rotate_left(array, n)"
+docs = "Rotate"
+citation = "https://learn.microsoft.com/kusto/query/array-rotate-left-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_shift_left"
+signature = "array_shift_left(array, n [, default])"
+docs = "Shift"
+citation = "https://learn.microsoft.com/kusto/query/array-shift-left-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_shift_right"
+signature = "array_shift_left(array, n [, default])"
+docs = "Shift"
+citation = "https://learn.microsoft.com/kusto/query/array-shift-left-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_index_of"
+signature = "array_index_of(array, value)"
+docs = "Index"
+citation = "https://learn.microsoft.com/kusto/query/array-index-of-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_iff"
+signature = "array_iff(condArray, ifTrue, ifFalse)"
+docs = "Element-wise iff"
+citation = "https://learn.microsoft.com/kusto/query/array-iff-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_iif"
+signature = "array_iff(condArray, ifTrue, ifFalse)"
+docs = "Element-wise iff"
+citation = "https://learn.microsoft.com/kusto/query/array-iff-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_sum"
+signature = "array_sum(array)"
+docs = "Sum numeric array"
+citation = "https://learn.microsoft.com/kusto/query/array-sum-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_sort_asc"
+signature = "array_sort_asc(array [, …])"
+docs = "Sort parallel arrays"
+citation = "https://learn.microsoft.com/kusto/query/array-sort-asc-function"
+kind = "scalar"
+
+[[functions]]
+name = "array_sort_desc"
+signature = "array_sort_asc(array [, …])"
+docs = "Sort parallel arrays"
+citation = "https://learn.microsoft.com/kusto/query/array-sort-asc-function"
+kind = "scalar"
+
+[[functions]]
+name = "pack_array"
+signature = "pack_array(v1, v2, …)"
+docs = "Values → array"
+citation = "https://learn.microsoft.com/kusto/query/pack-array-function"
+kind = "scalar"
+
+[[functions]]
+name = "pack"
+signature = "pack_array(v1, v2, …)"
+docs = "Values → array"
+citation = "https://learn.microsoft.com/kusto/query/pack-array-function"
+kind = "scalar"
+
+[[functions]]
+name = "pack_all"
+signature = "pack_all([ignoreEmpty])"
+docs = "All columns → bag"
+citation = "https://learn.microsoft.com/kusto/query/pack-all-function"
+kind = "scalar"
+
+[[functions]]
+name = "bag_pack"
+signature = "bag_pack(k1, v1, k2, v2, …)"
+docs = "Build property bag"
+citation = "https://learn.microsoft.com/kusto/query/bag-pack-function"
+kind = "scalar"
+
+[[functions]]
+name = "pack_dictionary"
+signature = "bag_pack(k1, v1, k2, v2, …)"
+docs = "Build property bag"
+citation = "https://learn.microsoft.com/kusto/query/bag-pack-function"
+kind = "scalar"
+
+[[functions]]
+name = "bag_pack_columns"
+signature = "bag_pack_columns(col1, col2, …)"
+docs = "Columns → bag"
+citation = "https://learn.microsoft.com/kusto/query/bag-pack-columns-function"
+kind = "scalar"
+
+[[functions]]
+name = "bag_keys"
+signature = "bag_keys(bag)"
+docs = "Root keys"
+citation = "https://learn.microsoft.com/kusto/query/bag-keys-function"
+kind = "scalar"
+
+[[functions]]
+name = "bag_has_key"
+signature = "bag_has_key(bag, key)"
+docs = "Key exists"
+citation = "https://learn.microsoft.com/kusto/query/bag-has-key-function"
+kind = "scalar"
+
+[[functions]]
+name = "bag_merge"
+signature = "bag_merge(b1, b2, …)"
+docs = "Merge bags"
+citation = "https://learn.microsoft.com/kusto/query/bag-merge-function"
+kind = "scalar"
+
+[[functions]]
+name = "bag_remove_keys"
+signature = "bag_remove_keys(bag, keys)"
+docs = "Drop keys"
+citation = "https://learn.microsoft.com/kusto/query/bag-remove-keys-function"
+kind = "scalar"
+
+[[functions]]
+name = "bag_set_key"
+signature = "bag_set_key(bag, key, value)"
+docs = "Set key (nested path)"
+citation = "https://learn.microsoft.com/kusto/query/bag-set-key-function"
+kind = "scalar"
+
+[[functions]]
+name = "repeat"
+signature = "repeat(value, count)"
+docs = "Array of equals"
+citation = "https://learn.microsoft.com/kusto/query/repeat-function"
+kind = "scalar"
+
+[[functions]]
+name = "range"
+signature = "range(start, stop, step)"
+docs = "**Scalar** array series (not the tabular operator)"
+citation = "https://learn.microsoft.com/kusto/query/range-function"
+kind = "scalar"
+
+[[functions]]
+name = "set_union"
+signature = "set_union(a1, a2, …)"
+docs = "Set ops on arrays"
+citation = "https://learn.microsoft.com/kusto/query/set-union-function"
+kind = "scalar"
+
+[[functions]]
+name = "set_intersect"
+signature = "set_union(a1, a2, …)"
+docs = "Set ops on arrays"
+citation = "https://learn.microsoft.com/kusto/query/set-union-function"
+kind = "scalar"
+
+[[functions]]
+name = "set_difference"
+signature = "set_union(a1, a2, …)"
+docs = "Set ops on arrays"
+citation = "https://learn.microsoft.com/kusto/query/set-union-function"
+kind = "scalar"
+
+[[functions]]
+name = "set_has_element"
+signature = "set_has_element(array, value)"
+docs = "Membership"
+citation = "https://learn.microsoft.com/kusto/query/set-has-element-function"
+kind = "scalar"
+
+[[functions]]
+name = "jaccard_index"
+signature = "jaccard_index(a, b)"
+docs = "Jaccard similarity"
+citation = "https://learn.microsoft.com/kusto/query/jaccard-index-function"
+kind = "scalar"
+
+[[functions]]
+name = "zip"
+signature = "zip(a1, a2, …)"
+docs = "Zip arrays"
+citation = "https://learn.microsoft.com/kusto/query/zip-function"
+kind = "scalar"
+
+[[functions]]
+name = "treepath"
+signature = "treepath(object)"
+docs = "Leaf path expressions"
+citation = "https://learn.microsoft.com/kusto/query/treepath-function"
+kind = "scalar"
+
+[[functions]]
+name = "hash"
+signature = "hash(value [, mod])"
+docs = "Non-crypto xxhash-like (can change between versions — do not persist)"
+citation = "https://learn.microsoft.com/kusto/query/hash-function"
+kind = "scalar"
+
+[[functions]]
+name = "hash_xxhash64"
+signature = "hash_xxhash64(value [, mod])"
+docs = "XXHASH64"
+citation = "https://learn.microsoft.com/kusto/query/hash-xxhash64-function"
+kind = "scalar"
+
+[[functions]]
+name = "hash_md5"
+signature = "hash_md5(value)"
+docs = "MD5"
+citation = "https://learn.microsoft.com/kusto/query/hash-md5-function"
+kind = "scalar"
+
+[[functions]]
+name = "hash_sha1"
+signature = "hash_sha1(value)"
+docs = "SHA1"
+citation = "https://learn.microsoft.com/kusto/query/hash-sha1-function"
+kind = "scalar"
+
+[[functions]]
+name = "hash_sha256"
+signature = "hash_sha256(value)"
+docs = "SHA-256"
+citation = "https://learn.microsoft.com/kusto/query/hash-sha256-function"
+kind = "scalar"
+
+[[functions]]
+name = "hash_combine"
+signature = "hash_combine(h1, h2, …)"
+docs = "Combine hashes"
+citation = "https://learn.microsoft.com/kusto/query/hash-combine-function"
+kind = "scalar"
+
+[[functions]]
+name = "hash_many"
+signature = "hash_many(v1, v2, …)"
+docs = "Hash multiple values"
+citation = "https://learn.microsoft.com/kusto/query/hash-many-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv4_is_private"
+signature = "ipv4_is_private(ip)"
+docs = "RFC1918 / loopback / link-local"
+citation = "https://learn.microsoft.com/kusto/query/ipv4-is-private-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv4_is_in_range"
+signature = "ipv4_is_in_range(ip, range)"
+docs = "CIDR or start-end"
+citation = "https://learn.microsoft.com/kusto/query/ipv4-is-in-range-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv4_is_in_any_range"
+signature = "ipv4_is_in_any_range(ip, r1, …)"
+docs = "Any range"
+citation = "https://learn.microsoft.com/kusto/query/ipv4-is-in-any-range-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv4_is_match"
+signature = "ipv4_is_match(ip1, ip2 [, prefix])"
+docs = "Match with optional prefix"
+citation = "https://learn.microsoft.com/kusto/query/ipv4-is-match-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv4_compare"
+signature = "ipv4_compare(ip1, ip2 [, prefix])"
+docs = "Compare"
+citation = "https://learn.microsoft.com/kusto/query/ipv4-compare-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv4_netmask_suffix"
+signature = "ipv4_netmask_suffix(ip)"
+docs = "Suffix from CIDR string"
+citation = "https://learn.microsoft.com/kusto/query/ipv4-netmask-suffix-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv4_range_to_cidr_list"
+signature = "ipv4_range_to_cidr_list(start, end)"
+docs = "Range → CIDRs"
+citation = "https://learn.microsoft.com/kusto/query/ipv4-range-to-cidr-list-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_ipv4"
+signature = "parse_ipv4(ip)"
+docs = "IPv4 → long"
+citation = "https://learn.microsoft.com/kusto/query/parse-ipv4-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_ipv4_mask"
+signature = "parse_ipv4_mask(ip, prefix)"
+docs = "Masked long"
+citation = "https://learn.microsoft.com/kusto/query/parse-ipv4-mask-function"
+kind = "scalar"
+
+[[functions]]
+name = "format_ipv4"
+signature = "format_ipv4(value [, prefix])"
+docs = "Format IPv4"
+citation = "https://learn.microsoft.com/kusto/query/format-ipv4-function"
+kind = "scalar"
+
+[[functions]]
+name = "format_ipv4_mask"
+signature = "format_ipv4_mask(value, prefix)"
+docs = "CIDR string"
+citation = "https://learn.microsoft.com/kusto/query/format-ipv4-mask-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv6_is_match"
+signature = "ipv6_is_match(ip1, ip2 [, prefix])"
+docs = "IPv6/IPv4 match"
+citation = "https://learn.microsoft.com/kusto/query/ipv6-is-match-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv6_compare"
+signature = "ipv6_compare(ip1, ip2 [, prefix])"
+docs = "Compare"
+citation = "https://learn.microsoft.com/kusto/query/ipv6-compare-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv6_is_in_range"
+signature = "same pattern as v4"
+docs = "CIDR checks"
+citation = "https://learn.microsoft.com/kusto/query/ipv6-is-in-range-function"
+kind = "scalar"
+
+[[functions]]
+name = "ipv6_is_in_any_range"
+signature = "same pattern as v4"
+docs = "CIDR checks"
+citation = "https://learn.microsoft.com/kusto/query/ipv6-is-in-range-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_ipv6"
+signature = "parse_ipv6(ip)"
+docs = "Canonical IPv6 string"
+citation = "https://learn.microsoft.com/kusto/query/parse-ipv6-function"
+kind = "scalar"
+
+[[functions]]
+name = "parse_ipv6_mask"
+signature = "parse_ipv6(ip)"
+docs = "Canonical IPv6 string"
+citation = "https://learn.microsoft.com/kusto/query/parse-ipv6-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_info_from_ip_address"
+signature = "geo_info_from_ip_address(ip)"
+docs = "Geo bag (country, city, coords)"
+citation = "https://learn.microsoft.com/kusto/query/geo-info-from-ip-address-function"
+kind = "scalar"
+
+[[functions]]
+name = "has_ipv4"
+signature = "See [operators-scalar](operators-scalar.md)"
+docs = "Search IPv4 in **text**"
+citation = "https://learn.microsoft.com/kusto/query/has-ipv4-function"
+kind = "scalar"
+
+[[functions]]
+name = "has_ipv4_prefix"
+signature = "See [operators-scalar](operators-scalar.md)"
+docs = "Search IPv4 in **text**"
+citation = "https://learn.microsoft.com/kusto/query/has-ipv4-function"
+kind = "scalar"
+
+[[functions]]
+name = "has_any_ipv4"
+signature = "See [operators-scalar](operators-scalar.md)"
+docs = "Search IPv4 in **text**"
+citation = "https://learn.microsoft.com/kusto/query/has-ipv4-function"
+kind = "scalar"
+
+[[functions]]
+name = "has_any_ipv4_prefix"
+signature = "See [operators-scalar](operators-scalar.md)"
+docs = "Search IPv4 in **text**"
+citation = "https://learn.microsoft.com/kusto/query/has-ipv4-function"
+kind = "scalar"
+
+[[functions]]
+name = "binary_and"
+signature = "binary_and(a, b)"
+citation = "https://learn.microsoft.com/kusto/query/binary-and-function"
+kind = "scalar"
+
+[[functions]]
+name = "binary_or"
+signature = "binary_or(a, b)"
+citation = "https://learn.microsoft.com/kusto/query/binary-or-function"
+kind = "scalar"
+
+[[functions]]
+name = "binary_xor"
+signature = "binary_xor(a, b)"
+citation = "https://learn.microsoft.com/kusto/query/binary-xor-function"
+kind = "scalar"
+
+[[functions]]
+name = "binary_not"
+signature = "binary_not(a)"
+citation = "https://learn.microsoft.com/kusto/query/binary-not-function"
+kind = "scalar"
+
+[[functions]]
+name = "binary_shift_left"
+signature = "binary_shift_left(value, n)"
+citation = "https://learn.microsoft.com/kusto/query/binary-shift-left-function"
+kind = "scalar"
+
+[[functions]]
+name = "binary_shift_right"
+signature = "binary_shift_right(value, n)"
+citation = "https://learn.microsoft.com/kusto/query/binary-shift-right-function"
+kind = "scalar"
+
+[[functions]]
+name = "bitset_count_ones"
+signature = "bitset_count_ones(value)"
+citation = "https://learn.microsoft.com/kusto/query/bitset-count-ones-function"
+kind = "scalar"
+
+[[functions]]
+name = "abs"
+signature = "abs(x)"
+citation = "https://learn.microsoft.com/kusto/query/abs-function"
+kind = "scalar"
+
+[[functions]]
+name = "sqrt"
+signature = "pow(base, exponent)"
+citation = "https://learn.microsoft.com/kusto/query/pow-function"
+kind = "scalar"
+
+[[functions]]
+name = "pow"
+signature = "pow(base, exponent)"
+citation = "https://learn.microsoft.com/kusto/query/pow-function"
+kind = "scalar"
+
+[[functions]]
+name = "exp"
+signature = "pow(base, exponent)"
+citation = "https://learn.microsoft.com/kusto/query/pow-function"
+kind = "scalar"
+
+[[functions]]
+name = "exp2"
+signature = "pow(base, exponent)"
+citation = "https://learn.microsoft.com/kusto/query/pow-function"
+kind = "scalar"
+
+[[functions]]
+name = "exp10"
+signature = "pow(base, exponent)"
+citation = "https://learn.microsoft.com/kusto/query/pow-function"
+kind = "scalar"
+
+[[functions]]
+name = "log"
+signature = "log(x)"
+citation = "https://learn.microsoft.com/kusto/query/log-function"
+kind = "scalar"
+
+[[functions]]
+name = "log2"
+signature = "log(x)"
+citation = "https://learn.microsoft.com/kusto/query/log-function"
+kind = "scalar"
+
+[[functions]]
+name = "log10"
+signature = "log(x)"
+citation = "https://learn.microsoft.com/kusto/query/log-function"
+kind = "scalar"
+
+[[functions]]
+name = "loggamma"
+signature = "log(x)"
+citation = "https://learn.microsoft.com/kusto/query/log-function"
+kind = "scalar"
+
+[[functions]]
+name = "gamma"
+signature = "log(x)"
+citation = "https://learn.microsoft.com/kusto/query/log-function"
+kind = "scalar"
+
+[[functions]]
+name = "sin"
+signature = "radians"
+citation = "https://learn.microsoft.com/kusto/query/sin-function"
+kind = "scalar"
+
+[[functions]]
+name = "cos"
+signature = "radians"
+citation = "https://learn.microsoft.com/kusto/query/sin-function"
+kind = "scalar"
+
+[[functions]]
+name = "tan"
+signature = "radians"
+citation = "https://learn.microsoft.com/kusto/query/sin-function"
+kind = "scalar"
+
+[[functions]]
+name = "cot"
+signature = "radians"
+citation = "https://learn.microsoft.com/kusto/query/sin-function"
+kind = "scalar"
+
+[[functions]]
+name = "asin"
+signature = "radians"
+citation = "https://learn.microsoft.com/kusto/query/sin-function"
+kind = "scalar"
+
+[[functions]]
+name = "acos"
+signature = "radians"
+citation = "https://learn.microsoft.com/kusto/query/sin-function"
+kind = "scalar"
+
+[[functions]]
+name = "atan"
+signature = "radians"
+citation = "https://learn.microsoft.com/kusto/query/sin-function"
+kind = "scalar"
+
+[[functions]]
+name = "atan2"
+signature = "radians"
+citation = "https://learn.microsoft.com/kusto/query/sin-function"
+kind = "scalar"
+
+[[functions]]
+name = "degrees"
+signature = "angle convert"
+citation = "https://learn.microsoft.com/kusto/query/degrees-function"
+kind = "scalar"
+
+[[functions]]
+name = "radians"
+signature = "angle convert"
+citation = "https://learn.microsoft.com/kusto/query/degrees-function"
+kind = "scalar"
+
+[[functions]]
+name = "pi"
+signature = "pi()"
+citation = "https://learn.microsoft.com/kusto/query/pi-function"
+kind = "scalar"
+
+[[functions]]
+name = "sign"
+signature = "sign(x)"
+citation = "https://learn.microsoft.com/kusto/query/sign-function"
+kind = "scalar"
+
+[[functions]]
+name = "round"
+signature = "round(x [, precision])"
+citation = "https://learn.microsoft.com/kusto/query/round-function"
+kind = "scalar"
+
+[[functions]]
+name = "rand"
+signature = "rand([n])"
+citation = "https://learn.microsoft.com/kusto/query/rand-function"
+kind = "scalar"
+
+[[functions]]
+name = "isfinite"
+signature = "isnan(x)"
+citation = "https://learn.microsoft.com/kusto/query/isnan-function"
+kind = "scalar"
+
+[[functions]]
+name = "isinf"
+signature = "isnan(x)"
+citation = "https://learn.microsoft.com/kusto/query/isnan-function"
+kind = "scalar"
+
+[[functions]]
+name = "isnan"
+signature = "isnan(x)"
+citation = "https://learn.microsoft.com/kusto/query/isnan-function"
+kind = "scalar"
+
+[[functions]]
+name = "erf"
+signature = "error function"
+citation = "https://learn.microsoft.com/kusto/query/erf-function"
+kind = "scalar"
+
+[[functions]]
+name = "erfc"
+signature = "error function"
+citation = "https://learn.microsoft.com/kusto/query/erf-function"
+kind = "scalar"
+
+[[functions]]
+name = "beta_cdf"
+signature = "beta distribution"
+citation = "https://learn.microsoft.com/kusto/query/beta-cdf-function"
+kind = "scalar"
+
+[[functions]]
+name = "beta_inv"
+signature = "beta distribution"
+citation = "https://learn.microsoft.com/kusto/query/beta-cdf-function"
+kind = "scalar"
+
+[[functions]]
+name = "beta_pdf"
+signature = "beta distribution"
+citation = "https://learn.microsoft.com/kusto/query/beta-cdf-function"
+kind = "scalar"
+
+[[functions]]
+name = "welch_test"
+signature = "welch_test(m1,v1,c1,m2,v2,c2)"
+citation = "https://learn.microsoft.com/kusto/query/welch-test-function"
+kind = "scalar"
+
+[[functions]]
+name = "next"
+signature = "next(column [, offset][, default])"
+citation = "https://learn.microsoft.com/kusto/query/next-function"
+kind = "scalar"
+
+[[functions]]
+name = "prev"
+signature = "prev(column [, offset][, default])"
+citation = "https://learn.microsoft.com/kusto/query/prev-function"
+kind = "scalar"
+
+[[functions]]
+name = "row_number"
+signature = "row_number([start][, restart])"
+citation = "https://learn.microsoft.com/kusto/query/row-number-function"
+kind = "scalar"
+
+[[functions]]
+name = "row_cumsum"
+signature = "row_cumsum(column [, restart])"
+citation = "https://learn.microsoft.com/kusto/query/row-cumsum-function"
+kind = "scalar"
+
+[[functions]]
+name = "row_rank_dense"
+signature = "row_rank_dense(column [, restart])"
+citation = "https://learn.microsoft.com/kusto/query/row-rank-dense-function"
+kind = "scalar"
+
+[[functions]]
+name = "row_rank_min"
+signature = "row_rank_min(column [, restart])"
+citation = "https://learn.microsoft.com/kusto/query/row-rank-min-function"
+kind = "scalar"
+
+[[functions]]
+name = "row_window_session"
+signature = "sessionize by gap"
+citation = "https://learn.microsoft.com/kusto/query/row-window-session-function"
+kind = "scalar"
+
+[[functions]]
+name = "toscalar"
+signature = "toscalar(tabularExpr)"
+docs = "Force a tabular result to one scalar (first column, first row)"
+citation = "https://learn.microsoft.com/kusto/query/toscalar-function"
+kind = "scalar"
+
+[[functions]]
+name = "materialize"
+signature = "materialize(tabularExpr)"
+docs = "Cache tabular subquery in the query"
+citation = "https://learn.microsoft.com/kusto/query/materialize-function"
+kind = "scalar"
+
+[[functions]]
+name = "gettype"
+signature = "gettype(expr)"
+docs = "Runtime type name"
+citation = "https://learn.microsoft.com/kusto/query/gettype-function"
+kind = "scalar"
+
+[[functions]]
+name = "ingestion_time"
+signature = "ingestion_time()"
+citation = "https://learn.microsoft.com/kusto/query/ingestion-time-function"
+kind = "scalar"
+
+[[functions]]
+name = "estimate_data_size"
+signature = "estimate_data_size(*) or columns"
+citation = "https://learn.microsoft.com/kusto/query/estimate-data-size-function"
+kind = "scalar"
+
+[[functions]]
+name = "current_cluster_endpoint"
+signature = "current_cluster_endpoint()"
+citation = "https://learn.microsoft.com/kusto/query/current-cluster-endpoint-function"
+kind = "scalar"
+
+[[functions]]
+name = "current_database"
+signature = "current_database()"
+citation = "https://learn.microsoft.com/kusto/query/current-database-function"
+kind = "scalar"
+
+[[functions]]
+name = "current_principal"
+signature = "current_principal()"
+citation = "https://learn.microsoft.com/kusto/query/current-principal-function"
+kind = "scalar"
+
+[[functions]]
+name = "current_principal_details"
+signature = "current_principal_details()"
+citation = "https://learn.microsoft.com/kusto/query/current-principal-details-function"
+kind = "scalar"
+
+[[functions]]
+name = "current_principal_is_member_of"
+signature = "current_principal_is_member_of(group)"
+citation = "https://learn.microsoft.com/kusto/query/current-principal-is-member-of-function"
+kind = "scalar"
+
+[[functions]]
+name = "cursor_after"
+signature = "cursor APIs"
+citation = "https://learn.microsoft.com/kusto/query/cursor-after-function"
+kind = "scalar"
+
+[[functions]]
+name = "cursor_before_or_at"
+signature = "cursor APIs"
+citation = "https://learn.microsoft.com/kusto/query/cursor-after-function"
+kind = "scalar"
+
+[[functions]]
+name = "cursor_current"
+signature = "cursor APIs"
+citation = "https://learn.microsoft.com/kusto/query/cursor-after-function"
+kind = "scalar"
+
+[[functions]]
+name = "extent_id"
+signature = "shard metadata"
+citation = "https://learn.microsoft.com/kusto/query/extent-id-function"
+kind = "scalar"
+
+[[functions]]
+name = "extent_tags"
+signature = "shard metadata"
+citation = "https://learn.microsoft.com/kusto/query/extent-id-function"
+kind = "scalar"
+
+[[functions]]
+name = "cluster"
+signature = "cross-cluster"
+citation = "https://learn.microsoft.com/kusto/query/cluster-function"
+kind = "scalar"
+
+[[functions]]
+name = "database"
+signature = "cross-cluster"
+citation = "https://learn.microsoft.com/kusto/query/cluster-function"
+kind = "scalar"
+
+[[functions]]
+name = "table"
+signature = "table(name)"
+citation = "https://learn.microsoft.com/kusto/query/table-function"
+kind = "scalar"
+
+[[functions]]
+name = "dcount_hll"
+signature = "dcount_hll(hll)"
+citation = "https://learn.microsoft.com/kusto/query/dcount-hll-function"
+kind = "scalar"
+
+[[functions]]
+name = "hll_merge"
+signature = "hll_merge(hll1, …) scalar merge"
+citation = "https://learn.microsoft.com/kusto/query/hll-merge-function"
+kind = "scalar"
+
+[[functions]]
+name = "percentile_tdigest"
+signature = "percentile_tdigest(tdigest, p)"
+citation = "https://learn.microsoft.com/kusto/query/percentile-tdigest-function"
+kind = "scalar"
+
+[[functions]]
+name = "percentile_array_tdigest"
+signature = "percentile_array_tdigest(tdigest, pArray)"
+citation = "https://learn.microsoft.com/kusto/query/percentile-array-tdigest-function"
+kind = "scalar"
+
+[[functions]]
+name = "percentrank_tdigest"
+signature = "percentrank_tdigest(digest, value)"
+citation = "https://learn.microsoft.com/kusto/query/percentrank-tdigest-function"
+kind = "scalar"
+
+[[functions]]
+name = "rank_tdigest"
+signature = "rank_tdigest(digest, value)"
+citation = "https://learn.microsoft.com/kusto/query/rank-tdigest-function"
+kind = "scalar"
+
+[[functions]]
+name = "merge_tdigest"
+signature = "merge_tdigest(t1, t2, …)"
+citation = "https://learn.microsoft.com/kusto/query/merge-tdigest-function"
+kind = "scalar"
+
+[[functions]]
+name = "_GetWatchlist"
+signature = "_GetWatchlist('Name')"
+citation = "https://learn.microsoft.com/azure/sentinel/watchlists"
+kind = "scalar"
+
+[[functions]]
+name = "workspace"
+signature = "workspace('id-or-name')"
+citation = "https://learn.microsoft.com/azure/azure-monitor/logs/cross-workspace-query"
+kind = "scalar"
+
+[[functions]]
+name = "binary_all_and"
+signature = "binary_all_and(expr)"
+docs = "Bitwise AND of the group"
+citation = "https://learn.microsoft.com/kusto/query/binary-all-and-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "binary_all_or"
+signature = "binary_all_or(expr)"
+docs = "Bitwise OR of the group"
+citation = "https://learn.microsoft.com/kusto/query/binary-all-or-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "binary_all_xor"
+signature = "binary_all_xor(expr)"
+docs = "Bitwise XOR of the group"
+citation = "https://learn.microsoft.com/kusto/query/binary-all-xor-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "buildschema"
+signature = "buildschema(dynamicExpr)"
+docs = "Minimal schema admitting all dynamic values"
+citation = "https://learn.microsoft.com/kusto/query/buildschema-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "make_bag"
+signature = "make_bag(dynamicExpr [, maxSize])"
+docs = "Merge property bags"
+citation = "https://learn.microsoft.com/kusto/query/make-bag-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "make_bag_if"
+signature = "make_bag_if(expr, predicate [, maxSize])"
+docs = "Conditional make_bag"
+citation = "https://learn.microsoft.com/kusto/query/make-bag-if-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "make_list"
+signature = "make_list(expr [, maxSize])"
+docs = "List of values (order not guaranteed unless serialize)"
+citation = "https://learn.microsoft.com/kusto/query/make-list-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "make_list_if"
+signature = "make_list_if(expr, predicate [, maxSize])"
+docs = "Conditional list"
+citation = "https://learn.microsoft.com/kusto/query/make-list-if-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "make_list_with_nulls"
+signature = "make_list_with_nulls(expr)"
+docs = "List **including** nulls"
+citation = "https://learn.microsoft.com/kusto/query/make-list-with-nulls-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "make_set"
+signature = "make_set(expr [, maxSize])"
+docs = "Distinct values (dynamic array)"
+citation = "https://learn.microsoft.com/kusto/query/make-set-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "make_set_if"
+signature = "make_set_if(expr, predicate [, maxSize])"
+docs = "Conditional distinct set"
+citation = "https://learn.microsoft.com/kusto/query/make-set-if-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "arg_max"
+signature = "arg_max(ExprToMaximize, * "
+docs = "ExprToReturn [, …])"
+kind = "aggregate"
+
+[[functions]]
+name = "arg_min"
+signature = "arg_min(ExprToMinimize, * "
+docs = "ExprToReturn [, …])"
+kind = "aggregate"
+
+[[functions]]
+name = "take_any"
+signature = "take_any(expr [, …])"
+docs = "Arbitrary non-empty value(s)"
+citation = "https://learn.microsoft.com/kusto/query/take-any-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "take_anyif"
+signature = "take_anyif(expr, predicate)"
+docs = "Conditional take_any"
+citation = "https://learn.microsoft.com/kusto/query/take-anyif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "avg"
+signature = "avg(expr)"
+docs = "Average of non-null values"
+citation = "https://learn.microsoft.com/kusto/query/avg-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "avgif"
+signature = "avgif(expr, predicate)"
+docs = "Conditional average"
+citation = "https://learn.microsoft.com/kusto/query/avgif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "count"
+signature = "count() / count(expr)"
+docs = "Row count (optionally non-null expr)"
+citation = "https://learn.microsoft.com/kusto/query/count-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "countif"
+signature = "countif(predicate)"
+docs = "Count rows matching predicate"
+citation = "https://learn.microsoft.com/kusto/query/countif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "count_distinct"
+signature = "count_distinct(expr)"
+docs = "**Exact** distinct count"
+citation = "https://learn.microsoft.com/kusto/query/count-distinct-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "count_distinctif"
+signature = "count_distinctif(expr, predicate)"
+docs = "Conditional exact distinct"
+citation = "https://learn.microsoft.com/kusto/query/count-distinctif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "dcount"
+signature = "dcount(expr [, accuracy])"
+docs = "**Approximate** distinct count (HLL)"
+citation = "https://learn.microsoft.com/kusto/query/dcount-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "dcountif"
+signature = "dcountif(expr, predicate [, accuracy])"
+docs = "Conditional approx distinct"
+citation = "https://learn.microsoft.com/kusto/query/dcountif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "hll"
+signature = "hll(expr [, accuracy])"
+docs = "Intermediate HLL sketch"
+citation = "https://learn.microsoft.com/kusto/query/hll-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "hll_if"
+signature = "hll_if(expr, predicate [, accuracy])"
+docs = "Conditional HLL"
+citation = "https://learn.microsoft.com/kusto/query/hll-if-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "max"
+signature = "max(expr)"
+docs = "Maximum"
+citation = "https://learn.microsoft.com/kusto/query/max-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "maxif"
+signature = "maxif(expr, predicate)"
+docs = "Conditional max"
+citation = "https://learn.microsoft.com/kusto/query/maxif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "min"
+signature = "min(expr)"
+docs = "Minimum"
+citation = "https://learn.microsoft.com/kusto/query/min-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "minif"
+signature = "minif(expr, predicate)"
+docs = "Conditional min"
+citation = "https://learn.microsoft.com/kusto/query/minif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "percentile"
+signature = "percentile(expr, percentile)"
+docs = "Approximate percentile (0–100)"
+citation = "https://learn.microsoft.com/kusto/query/percentiles-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "percentiles"
+signature = "percentiles(expr, p1 [, p2 …])"
+docs = "Multiple percentiles as columns"
+citation = "https://learn.microsoft.com/kusto/query/percentiles-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "percentiles_array"
+signature = "percentiles_array(expr, dynamic([p…]))"
+docs = "Percentiles as dynamic array"
+citation = "https://learn.microsoft.com/kusto/query/percentiles-array-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "percentilesw"
+signature = "percentilesw(expr, weight, p1 [, …])"
+docs = "Weighted percentiles"
+citation = "https://learn.microsoft.com/kusto/query/percentilesw-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "percentilesw_array"
+signature = "percentilesw_array(expr, weight, dynamic([p…]))"
+docs = "Weighted percentile array"
+citation = "https://learn.microsoft.com/kusto/query/percentilesw-array-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "stdev"
+signature = "stdev(expr)"
+docs = "Sample standard deviation"
+citation = "https://learn.microsoft.com/kusto/query/stdev-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "stdevif"
+signature = "stdevif(expr, predicate)"
+docs = "Conditional sample stdev"
+citation = "https://learn.microsoft.com/kusto/query/stdevif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "stdevp"
+signature = "stdevp(expr)"
+docs = "Population stdev"
+citation = "https://learn.microsoft.com/kusto/query/stdevp-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "sum"
+signature = "sum(expr)"
+docs = "Sum of non-null"
+citation = "https://learn.microsoft.com/kusto/query/sum-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "sumif"
+signature = "sumif(expr, predicate)"
+docs = "Conditional sum"
+citation = "https://learn.microsoft.com/kusto/query/sumif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "tdigest"
+signature = "tdigest(expr [, accuracy])"
+docs = "Intermediate t-digest for percentiles"
+citation = "https://learn.microsoft.com/kusto/query/tdigest-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "tdigest_merge"
+signature = "tdigest_merge(tdigestExpr)"
+docs = "Merge t-digests"
+citation = "https://learn.microsoft.com/kusto/query/tdigest-merge-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "variance"
+signature = "variance(expr)"
+docs = "Sample variance"
+citation = "https://learn.microsoft.com/kusto/query/variance-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "varianceif"
+signature = "varianceif(expr, predicate)"
+docs = "Conditional sample variance"
+citation = "https://learn.microsoft.com/kusto/query/varianceif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "variancep"
+signature = "variancep(expr)"
+docs = "Population variance"
+citation = "https://learn.microsoft.com/kusto/query/variancep-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "variancepif"
+signature = "variancepif(expr, predicate)"
+docs = "Conditional population variance"
+citation = "https://learn.microsoft.com/kusto/query/variancepif-aggregation-function"
+kind = "aggregate"
+
+[[functions]]
+name = "convert_angle"
+signature = "convert_angle(...)"
+docs = "Unit conversion"
+citation = "https://learn.microsoft.com/kusto/query/convert-angle-function"
+kind = "scalar"
+
+[[functions]]
+name = "convert_energy"
+signature = "convert_energy(...)"
+docs = "Unit conversion"
+citation = "https://learn.microsoft.com/kusto/query/convert-energy-function"
+kind = "scalar"
+
+[[functions]]
+name = "convert_force"
+signature = "convert_force(...)"
+docs = "Unit conversion"
+citation = "https://learn.microsoft.com/kusto/query/convert-force-function"
+kind = "scalar"
+
+[[functions]]
+name = "convert_length"
+signature = "convert_length(...)"
+docs = "Unit conversion"
+citation = "https://learn.microsoft.com/kusto/query/convert-length-function"
+kind = "scalar"
+
+[[functions]]
+name = "convert_mass"
+signature = "convert_mass(...)"
+docs = "Unit conversion"
+citation = "https://learn.microsoft.com/kusto/query/convert-mass-function"
+kind = "scalar"
+
+[[functions]]
+name = "convert_speed"
+signature = "convert_speed(...)"
+docs = "Unit conversion"
+citation = "https://learn.microsoft.com/kusto/query/convert-speed-function"
+kind = "scalar"
+
+[[functions]]
+name = "convert_temperature"
+signature = "convert_temperature(...)"
+docs = "Unit conversion"
+citation = "https://learn.microsoft.com/kusto/query/convert-temperature-function"
+kind = "scalar"
+
+[[functions]]
+name = "convert_volume"
+signature = "convert_volume(...)"
+docs = "Unit conversion"
+citation = "https://learn.microsoft.com/kusto/query/convert-volume-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_abs"
+signature = "series_abs(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-abs-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_acos"
+signature = "series_acos(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-acos-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_add"
+signature = "series_add(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-add-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_asin"
+signature = "series_asin(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-asin-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_atan"
+signature = "series_atan(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-atan-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_ceiling"
+signature = "series_ceiling(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-ceiling-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_cos"
+signature = "series_cos(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-cos-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_cosine_similarity"
+signature = "series_cosine_similarity(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-cosine-similarity-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_decompose"
+signature = "series_decompose(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-decompose-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_decompose_anomalies"
+signature = "series_decompose_anomalies(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-decompose-anomalies-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_decompose_forecast"
+signature = "series_decompose_forecast(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-decompose-forecast-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_divide"
+signature = "series_divide(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-divide-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_dot_product"
+signature = "series_dot_product(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-dot-product-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_equals"
+signature = "series_equals(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-equals-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_exp"
+signature = "series_exp(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-exp-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fft"
+signature = "series_fft(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fft-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fill_backward"
+signature = "series_fill_backward(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fill-backward-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fill_const"
+signature = "series_fill_const(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fill-const-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fill_forward"
+signature = "series_fill_forward(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fill-forward-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fill_linear"
+signature = "series_fill_linear(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fill-linear-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fir"
+signature = "series_fir(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fir-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fit_2lines"
+signature = "series_fit_2lines(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fit-2lines-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fit_2lines_dynamic"
+signature = "series_fit_2lines_dynamic(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fit-2lines-dynamic-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fit_line"
+signature = "series_fit_line(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fit-line-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fit_line_dynamic"
+signature = "series_fit_line_dynamic(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fit-line-dynamic-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_fit_poly"
+signature = "series_fit_poly(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-fit-poly-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_floor"
+signature = "series_floor(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-floor-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_greater"
+signature = "series_greater(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-greater-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_greater_equals"
+signature = "series_greater_equals(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-greater-equals-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_ifft"
+signature = "series_ifft(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-ifft-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_iir"
+signature = "series_iir(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-iir-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_less"
+signature = "series_less(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-less-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_less_equals"
+signature = "series_less_equals(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-less-equals-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_log"
+signature = "series_log(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-log-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_magnitude"
+signature = "series_magnitude(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-magnitude-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_multiply"
+signature = "series_multiply(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-multiply-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_not_equals"
+signature = "series_not_equals(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-not-equals-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_outliers"
+signature = "series_outliers(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-outliers-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_pearson_correlation"
+signature = "series_pearson_correlation(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-pearson-correlation-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_periods_detect"
+signature = "series_periods_detect(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-periods-detect-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_periods_validate"
+signature = "series_periods_validate(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-periods-validate-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_pow"
+signature = "series_pow(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-pow-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_product"
+signature = "series_product(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-product-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_seasonal"
+signature = "series_seasonal(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-seasonal-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_sign"
+signature = "series_sign(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-sign-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_sin"
+signature = "series_sin(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-sin-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_stats"
+signature = "series_stats(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-stats-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_stats_dynamic"
+signature = "series_stats_dynamic(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-stats-dynamic-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_subtract"
+signature = "series_subtract(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-subtract-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_sum"
+signature = "series_sum(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-sum-function"
+kind = "scalar"
+
+[[functions]]
+name = "series_tan"
+signature = "series_tan(...)"
+docs = "Time-series / array processing"
+citation = "https://learn.microsoft.com/kusto/query/series-tan-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_angle"
+signature = "geo_angle(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-angle-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_azimuth"
+signature = "geo_azimuth(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-azimuth-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_closest_point_on_line"
+signature = "geo_closest_point_on_line(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-closest-point-on-line-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_closest_point_on_polygon"
+signature = "geo_closest_point_on_polygon(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-closest-point-on-polygon-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_distance_2points"
+signature = "geo_distance_2points(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-distance-2points-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_distance_point_to_line"
+signature = "geo_distance_point_to_line(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-distance-point-to-line-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_distance_point_to_polygon"
+signature = "geo_distance_point_to_polygon(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-distance-point-to-polygon-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_from_wkt"
+signature = "geo_from_wkt(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-from-wkt-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_geohash_neighbors"
+signature = "geo_geohash_neighbors(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-geohash-neighbors-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_geohash_to_central_point"
+signature = "geo_geohash_to_central_point(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-geohash-to-central-point-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_geohash_to_polygon"
+signature = "geo_geohash_to_polygon(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-geohash-to-polygon-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_h3cell_children"
+signature = "geo_h3cell_children(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-h3cell-children-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_h3cell_level"
+signature = "geo_h3cell_level(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-h3cell-level-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_h3cell_neighbors"
+signature = "geo_h3cell_neighbors(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-h3cell-neighbors-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_h3cell_parent"
+signature = "geo_h3cell_parent(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-h3cell-parent-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_h3cell_rings"
+signature = "geo_h3cell_rings(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-h3cell-rings-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_h3cell_to_central_point"
+signature = "geo_h3cell_to_central_point(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-h3cell-to-central-point-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_h3cell_to_polygon"
+signature = "geo_h3cell_to_polygon(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-h3cell-to-polygon-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_intersection_2lines"
+signature = "geo_intersection_2lines(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-intersection-2lines-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_intersection_2polygons"
+signature = "geo_intersection_2polygons(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-intersection-2polygons-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_intersection_line_with_polygon"
+signature = "geo_intersection_line_with_polygon(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-intersection-line-with-polygon-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_intersects_2lines"
+signature = "geo_intersects_2lines(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-intersects-2lines-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_intersects_2polygons"
+signature = "geo_intersects_2polygons(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-intersects-2polygons-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_intersects_line_with_polygon"
+signature = "geo_intersects_line_with_polygon(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-intersects-line-with-polygon-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_line_buffer"
+signature = "geo_line_buffer(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-line-buffer-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_line_centroid"
+signature = "geo_line_centroid(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-line-centroid-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_line_densify"
+signature = "geo_line_densify(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-line-densify-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_line_interpolate_point"
+signature = "geo_line_interpolate_point(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-line-interpolate-point-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_line_length"
+signature = "geo_line_length(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-line-length-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_line_locate_point"
+signature = "geo_line_locate_point(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-line-locate-point-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_line_simplify"
+signature = "geo_line_simplify(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-line-simplify-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_line_to_s2cells"
+signature = "geo_line_to_s2cells(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-line-to-s2cells-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_point_buffer"
+signature = "geo_point_buffer(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-point-buffer-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_point_in_circle"
+signature = "geo_point_in_circle(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-point-in-circle-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_point_in_polygon"
+signature = "geo_point_in_polygon(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-point-in-polygon-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_point_to_geohash"
+signature = "geo_point_to_geohash(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-point-to-geohash-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_point_to_h3cell"
+signature = "geo_point_to_h3cell(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-point-to-h3cell-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_point_to_s2cell"
+signature = "geo_point_to_s2cell(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-point-to-s2cell-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_polygon_area"
+signature = "geo_polygon_area(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-polygon-area-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_polygon_buffer"
+signature = "geo_polygon_buffer(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-polygon-buffer-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_polygon_centroid"
+signature = "geo_polygon_centroid(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-polygon-centroid-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_polygon_densify"
+signature = "geo_polygon_densify(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-polygon-densify-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_polygon_perimeter"
+signature = "geo_polygon_perimeter(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-polygon-perimeter-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_polygon_simplify"
+signature = "geo_polygon_simplify(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-polygon-simplify-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_polygon_to_h3cells"
+signature = "geo_polygon_to_h3cells(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-polygon-to-h3cells-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_polygon_to_s2cells"
+signature = "geo_polygon_to_s2cells(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-polygon-to-s2cells-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_s2cell_neighbors"
+signature = "geo_s2cell_neighbors(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-s2cell-neighbors-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_s2cell_to_central_point"
+signature = "geo_s2cell_to_central_point(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-s2cell-to-central-point-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_s2cell_to_polygon"
+signature = "geo_s2cell_to_polygon(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-s2cell-to-polygon-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_simplify_polygons_array"
+signature = "geo_simplify_polygons_array(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-simplify-polygons-array-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_union_lines_array"
+signature = "geo_union_lines_array(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-union-lines-array-function"
+kind = "scalar"
+
+[[functions]]
+name = "geo_union_polygons_array"
+signature = "geo_union_polygons_array(...)"
+docs = "Geospatial scalar"
+citation = "https://learn.microsoft.com/kusto/query/geo-union-polygons-array-function"
+kind = "scalar"

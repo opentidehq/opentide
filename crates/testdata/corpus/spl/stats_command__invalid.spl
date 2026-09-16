@@ -1,0 +1,2 @@
+``` prod:stats_command invalid
+index=main | stats

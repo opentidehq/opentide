@@ -1,0 +1,2 @@
+// prod:join_operator valid
+SecurityEvent | join kind=inner SecurityAlert on EventID

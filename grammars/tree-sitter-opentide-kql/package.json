@@ -1,0 +1,12 @@
+{
+  "name": "tree-sitter-opentide-kql",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for Kusto Query Language (OpenTide)",
+  "license": "EUPL-1.2",
+  "tree-sitter": [
+    {
+      "scope": "source.kql",
+      "file-types": ["kql"]
+    }
+  ]
+}

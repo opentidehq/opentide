@@ -1,0 +1,18 @@
+[package]
+name = "opentide-spl"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "I/O-free SPL engine (parse, catalog, diagnostics)"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-syntax.workspace = true
+opentide-highlight.workspace = true
+serde.workspace = true
+tree-sitter.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

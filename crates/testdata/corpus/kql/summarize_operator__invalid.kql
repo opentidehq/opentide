@@ -1,0 +1,2 @@
+// prod:summarize_operator invalid
+SecurityEvent | summarize
