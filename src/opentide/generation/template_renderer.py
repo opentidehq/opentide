@@ -85,9 +85,10 @@ def run() -> None:
             platform_model = platform_model_for_key(entry)
             parsed = build_platform_schema_source(platform_model)
             logger.info("generating_template", detail=subschema_name)
-            required = get_required(parsed["properties"], list(parsed.get("required", [])))
+            defs = parsed.get("$defs") if isinstance(parsed.get("$defs"), dict) else {}
+            required = get_required(parsed["properties"], list(parsed.get("required", [])), defs)
             required.extend(parsed.get("tide.template.force-required") or [])
-            subschema_template = gen_template(parsed["properties"], required)
+            subschema_template = gen_template(parsed["properties"], required, defs)
             emit_template_file(
                 subschema_template_path,
                 subschema_template,

@@ -113,12 +113,14 @@ Write MCP server configuration for editors.
 opentide setup mcp --cursor --vscode --yes
 ```
 
-| Flag | Output file |
-|------|-------------|
-| `--vscode` | `.vscode/mcp.json` |
-| `--cursor` | `.cursor/mcp.json` |
-| `--claude-code` | `.mcp.json` |
-| `--generic` | `opentide.mcp.json` |
+| Flag | Output file | `OPENTIDE_REPO_ROOT` |
+|------|-------------|----------------------|
+| `--vscode` | `.vscode/mcp.json` | `${workspaceFolder}` |
+| `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
+| `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
+| `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
+
+VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. Generic hosts that do not interpolate editor placeholders should omit the variable so the server discovers the git root from cwd, or set an absolute path. See [MCP configuration](../mcp/configuration.md).
 
 ### setup skills
 
@@ -178,6 +180,8 @@ The full wizard checks skill availability before writing repository files. If th
 
 Interim yaml.schemas and snippet generation. By default the command generates templates and JSON schemas into `.opentide/`, then writes settings and snippets. Deprecation is logged once per invocation.
 
+`yaml.schemas` maps each object folder to its concrete schema (`threat.1.0.schema.json` → `objects/threats/**/*.yaml`, and the same for objectives and rules). Nested files under those folders stay associated; it does not map the `opentide.schema.json` router against `objects/**/*.yaml` — the Red Hat YAML extension reports "Matches multiple schemas" for that glob.
+
 ```bash
 opentide setup vscode                 # generate templates + schemas, then settings + snippets
 opentide setup vscode --settings    # generate schemas, then settings
@@ -189,7 +193,7 @@ If snippets were requested and templates are still missing after generate, the c
 
 | Flag | Purpose |
 |------|---------|
-| `--settings` | Write `.vscode/settings.json` yaml.schemas (generates schemas first) |
+| `--settings` | Write `.vscode/settings.json` yaml.schemas and `.vscode/extensions.json` (generates schemas first) |
 | `--snippets` | Write model template snippets (generates templates first) |
 | `--no-merge` | Replace settings instead of merging |
 | `--no-generate` | Do not run `opentide generate` phases first |

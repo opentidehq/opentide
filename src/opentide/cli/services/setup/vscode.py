@@ -40,20 +40,45 @@ def snippet_file_rel(*, workspace: Path | None = None) -> str:
         return str(snippet)
 
 
+RECOMMENDED_EXTENSIONS: tuple[str, ...] = ("redhat.vscode-yaml",)
+
+
 def emit_vscode_deprecation() -> None:
     warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=3)
     logger.warning("vscode_setup_deprecated", detail=DEPRECATION_MESSAGE)
 
 
 def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, str]:
-    """Build yaml.schemas mappings from bundled paths.toml."""
+    """Build per-folder yaml.schemas mappings from bundled paths.toml.
+
+    The Red Hat YAML extension cannot reliably narrow ``opentide.schema.json``
+    (a oneOf/if-then router) against a single ``objects/**/*.yaml`` glob, which
+    produces "Matches multiple schemas" and disables autocompletion. Map each
+    core object family to its concrete schema with a recursive per-folder glob
+    (``objects/threats/**/*.yaml``), matching ``Path.rglob("*.yaml")`` object
+    discovery. Do not collapse families onto the router glob.
+    """
+    del workspace  # reserved for future workspace-relative schema URIs
     configs = resolve_configurations()
     cfg = configs.get("paths") or configs["global"]
     artifacts = cfg.get("artifacts", {})
     schema_map: dict[str, str] = dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
-    router_name = schema_map.get("router", "opentide.schema.json")
-    schema_uri = f"{OPENTIDE_DIR}/schemas/{router_name}"
-    return {schema_uri: "objects/**/*.yaml"}
+    object_dirs = (cfg.get("paths") or {}).get("objects") or {}
+    mappings: dict[str, str] = {}
+    for object_type in ("threat", "objective", "rule"):
+        schema_name = schema_map.get(object_type, f"{object_type}.1.0.schema.json")
+        folder = str(object_dirs.get(object_type, f"objects/{object_type}s/"))
+        glob = f"{folder.rstrip('/')}/**/*.yaml"
+        mappings[f"{OPENTIDE_DIR}/schemas/{schema_name}"] = glob
+    return mappings
+
+
+def _router_schema_uri() -> str:
+    configs = resolve_configurations()
+    cfg = configs.get("paths") or configs["global"]
+    artifacts = cfg.get("artifacts", {})
+    schema_map: dict[str, str] = dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
+    return f"{OPENTIDE_DIR}/schemas/{schema_map.get('router', 'opentide.schema.json')}"
 
 
 def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
@@ -69,10 +94,31 @@ def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
     yaml_schemas = existing.get("yaml.schemas", {})
     if not isinstance(yaml_schemas, dict):
         yaml_schemas = {}
+    yaml_schemas.pop(_router_schema_uri(), None)
     yaml_schemas.update(mappings)
     existing["yaml.schemas"] = yaml_schemas
     settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
     return ".vscode/settings.json"
+
+
+def write_vscode_extensions(target: Path, *, merge: bool = True) -> str:
+    """Write or merge .vscode/extensions.json recommending the YAML extension."""
+    vscode_dir = target / ".vscode"
+    vscode_dir.mkdir(parents=True, exist_ok=True)
+    extensions_path = vscode_dir / "extensions.json"
+    if merge and extensions_path.is_file():
+        existing = json.loads(extensions_path.read_text(encoding="utf-8"))
+    else:
+        existing = {}
+    recommendations = existing.get("recommendations", [])
+    if not isinstance(recommendations, list):
+        recommendations = []
+    for extension_id in RECOMMENDED_EXTENSIONS:
+        if extension_id not in recommendations:
+            recommendations.append(extension_id)
+    existing["recommendations"] = recommendations
+    extensions_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+    return ".vscode/extensions.json"
 
 
 def _templates_ready(target: Path) -> bool:
@@ -115,8 +161,11 @@ def run_vscode_snippets(target: Path) -> str | None:
 
 
 def run_vscode_settings(target: Path, *, merge: bool = True) -> dict[str, object]:
-    rel = write_vscode_settings(target, merge=merge)
-    return {"message": "VS Code settings generated", "files": [rel]}
+    files = [
+        write_vscode_settings(target, merge=merge),
+        write_vscode_extensions(target, merge=merge),
+    ]
+    return {"message": "VS Code settings generated", "files": files}
 
 
 def run_vscode_setup(
@@ -151,6 +200,7 @@ def run_vscode_setup(
     files: list[str] = []
     if settings:
         files.append(write_vscode_settings(target, merge=merge))
+        files.append(write_vscode_extensions(target, merge=merge))
 
     snippet_path: str | None = None
     if snippets:

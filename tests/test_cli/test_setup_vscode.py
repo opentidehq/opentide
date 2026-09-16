@@ -14,6 +14,7 @@ from opentide.cli.services.setup.vscode import (
     run_vscode_snippets,
     snippet_file_rel,
     validate_schema_fragment_matches_global,
+    write_vscode_extensions,
     write_vscode_settings,
 )
 
@@ -26,7 +27,11 @@ def test_snippet_file_rel_matches_paths_toml(tmp_path: Path) -> None:
 
 def test_build_yaml_schema_mappings() -> None:
     mappings = build_yaml_schema_mappings()
-    assert mappings[".opentide/schemas/opentide.schema.json"] == "objects/**/*.yaml"
+    assert mappings[".opentide/schemas/threat.1.0.schema.json"] == "objects/threats/**/*.yaml"
+    assert mappings[".opentide/schemas/objective.1.0.schema.json"] == "objects/objectives/**/*.yaml"
+    assert mappings[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/**/*.yaml"
+    assert ".opentide/schemas/opentide.schema.json" not in mappings
+    assert "objects/**/*.yaml" not in mappings.values()
 
 
 def test_write_vscode_settings_merge(tmp_path: Path) -> None:
@@ -42,7 +47,10 @@ def test_write_vscode_settings_merge(tmp_path: Path) -> None:
     assert not any(issubclass(item.category, DeprecationWarning) for item in caught)
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["editor.tabSize"] == 4
-    assert ".opentide/schemas/opentide.schema.json" in settings["yaml.schemas"]
+    assert ".opentide/schemas/threat.1.0.schema.json" in settings["yaml.schemas"]
+    assert settings["yaml.schemas"][".opentide/schemas/threat.1.0.schema.json"] == (
+        "objects/threats/**/*.yaml"
+    )
 
 
 def test_schema_fragment_matches_global() -> None:
@@ -62,6 +70,7 @@ def test_run_vscode_setup_no_generate_fails_without_templates(tmp_path: Path) ->
     assert result["status"] == "failed"
     assert result["_exit_code"] == 1
     assert ".vscode/settings.json" in result["files"]
+    assert ".vscode/extensions.json" in result["files"]
     assert SNIPPET_REL not in result["files"]
     assert result["generated"] == []
 
@@ -79,6 +88,7 @@ def test_run_vscode_setup_generate_writes_templates_schemas_and_snippets(tmp_pat
     assert (tmp_path / ".vscode" / "settings.json").is_file()
     assert (tmp_path / SNIPPET_REL).is_file()
     assert SNIPPET_REL in result["files"]
+    assert ".vscode/extensions.json" in result["files"]
 
 
 def test_run_vscode_snippets_writes_when_templates_exist(tmp_path: Path, monkeypatch) -> None:
@@ -195,10 +205,72 @@ def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:
     assert isinstance(settings["yaml.schemas"], dict)
 
 
-def test_build_yaml_schema_mappings_uses_router_schema() -> None:
+def test_write_vscode_extensions_recommends_yaml_extension(tmp_path: Path) -> None:
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        run_vscode_settings(tmp_path)
+    extensions = json.loads((tmp_path / ".vscode" / "extensions.json").read_text(encoding="utf-8"))
+    assert "redhat.vscode-yaml" in extensions["recommendations"]
+
+
+def test_write_vscode_extensions_merges_recommendations(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "extensions.json").write_text(
+        json.dumps({"recommendations": ["ms-python.python"]}),
+        encoding="utf-8",
+    )
+    write_vscode_extensions(tmp_path)
+    extensions = json.loads((vscode_dir / "extensions.json").read_text(encoding="utf-8"))
+    assert extensions["recommendations"] == ["ms-python.python", "redhat.vscode-yaml"]
+
+
+def test_write_vscode_extensions_non_list_recommendations(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "extensions.json").write_text(
+        json.dumps({"recommendations": "invalid"}),
+        encoding="utf-8",
+    )
+    write_vscode_extensions(tmp_path)
+    extensions = json.loads((vscode_dir / "extensions.json").read_text(encoding="utf-8"))
+    assert extensions["recommendations"] == ["redhat.vscode-yaml"]
+
+
+def test_build_yaml_schema_mappings_uses_per_folder_schemas() -> None:
     mappings = build_yaml_schema_mappings()
-    assert len(mappings) == 1
-    assert ".opentide/schemas/opentide.schema.json" in mappings
+    assert len(mappings) == 3
+    assert ".opentide/schemas/opentide.schema.json" not in mappings
+    assert set(mappings.values()) == {
+        "objects/threats/**/*.yaml",
+        "objects/objectives/**/*.yaml",
+        "objects/rules/**/*.yaml",
+    }
+    assert all(glob.endswith("/**/*.yaml") for glob in mappings.values())
+
+
+def test_write_vscode_settings_replaces_legacy_router_wildcard(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "settings.json").write_text(
+        json.dumps(
+            {
+                "yaml.schemas": {
+                    ".opentide/schemas/opentide.schema.json": "objects/**/*.yaml",
+                    "other.schema.json": "other/*.yaml",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        write_vscode_settings(tmp_path)
+    settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
+    schemas = settings["yaml.schemas"]
+    assert ".opentide/schemas/opentide.schema.json" not in schemas
+    assert schemas[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/**/*.yaml"
+    assert schemas["other.schema.json"] == "other/*.yaml"
 
 
 def test_run_vscode_snippets_file_not_found(tmp_path: Path, monkeypatch) -> None:

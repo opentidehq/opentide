@@ -31,9 +31,9 @@ The schema identifier maps predictably to files and specs:
 | Specification file | `specs/objects/{family}-{major}.{minor}.md` | `rule-1.0.md` |
 | JSON Schema artifact | `.opentide/schemas/{family}.{major}.{minor}.schema.json` | `rule.1.0.schema.json` |
 | Template artifact | `.opentide/templates/{family}.{major}.{minor}.template.yaml` | `rule.1.0.template.yaml` |
-| IDE router | `.opentide/schemas/opentide.schema.json` | routes `objects/**/*.yaml` by `metadata.schema` |
+| IDE yaml.schemas | `.opentide/schemas/{family}.{major}.{minor}.schema.json` | `objects/{family}s/**/*.yaml` (recursive per-folder; the router glob is not used) |
 
-Your editor validates YAML live because the IDE router reads each file's `metadata.schema` and applies the matching JSON Schema — no per-file configuration required.
+Your editor validates YAML live because `opentide setup vscode` maps each object folder to its concrete JSON Schema. The bundled `opentide.schema.json` router is still generated for tooling that can follow `oneOf`/`if`/`then`; the YAML language server cannot, so it must not be mapped against `objects/**/*.yaml`.
 
 ## How revisions coexist
 

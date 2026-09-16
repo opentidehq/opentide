@@ -13,18 +13,33 @@ from opentide.cli.services.setup.mcp import McpSetupOptions, run_mcp_setup, writ
 
 
 @pytest.mark.parametrize(
-    ("host", "rel"),
+    ("host", "rel", "repo_root"),
     [
-        (McpHost.vscode, ".vscode/mcp.json"),
-        (McpHost.cursor, ".cursor/mcp.json"),
-        (McpHost.claude_code, ".mcp.json"),
-        (McpHost.generic, "opentide.mcp.json"),
+        (McpHost.vscode, ".vscode/mcp.json", "${workspaceFolder}"),
+        (McpHost.cursor, ".cursor/mcp.json", "${workspaceFolder}"),
+        (McpHost.claude_code, ".mcp.json", "${CLAUDE_PROJECT_DIR}"),
+        (McpHost.generic, "opentide.mcp.json", None),
     ],
 )
-def test_write_mcp_config(tmp_path: Path, host: McpHost, rel: str) -> None:
+def test_write_mcp_config(tmp_path: Path, host: McpHost, rel: str, repo_root: str | None) -> None:
     assert write_mcp_config(tmp_path, host) == rel
     payload = json.loads((tmp_path / rel).read_text(encoding="utf-8"))
-    assert payload["mcpServers"]["opentide"]["command"] == "opentide-mcp"
+    servers = payload.get("servers") if host is McpHost.vscode else payload.get("mcpServers")
+    assert isinstance(servers, dict)
+    server = servers["opentide"]
+    assert isinstance(server, dict)
+    assert server["command"] == "opentide-mcp"
+    env = server.get("env")
+    if repo_root is None:
+        assert env is None
+        assert "${workspaceFolder}" not in json.dumps(payload)
+    else:
+        assert isinstance(env, dict)
+        assert env["OPENTIDE_REPO_ROOT"] == repo_root
+    if host is McpHost.vscode:
+        assert "mcpServers" not in payload
+    else:
+        assert "servers" not in payload
 
 
 def test_run_mcp_setup_requires_host() -> None:
