@@ -26,7 +26,7 @@ See [Installation → environment variables](./installation.md#environment-varia
 The CLI ships as an extra. Install it:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at the venv's `opentide-mcp` — see [MCP configuration](../mcp/configuration.md).
@@ -38,7 +38,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 Upgrade:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 ```
 
 `0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
@@ -48,7 +48,7 @@ pip install 'opentide==0.1.7'
 `0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 opentide setup skills discover
 opentide setup skills --generic --yes
 ```
@@ -75,7 +75,7 @@ ValueError: validate must be callable
 `0.1.5` passed `validate=None` into Questionary for optional checkboxes. **0.1.6** omits the argument when a selection is optional. Non-interactive `opentide setup --ci github` was already fine. Upgrade:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 opentide setup
 ```
 
@@ -84,7 +84,7 @@ opentide setup
 Generate-first `opentide setup vscode` `chdir`s into the target before writing files. **0.1.6** raised `FileNotFoundError` when that path did not exist yet. **0.1.7** creates the directory first (same as other setup commands). Upgrade:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 opentide setup vscode
 ```
 
@@ -93,11 +93,41 @@ opentide setup vscode
 `0.1.6` wrote `.vscode/settings.json` even when templates (and therefore snippets) were missing. **0.1.7** generates templates and schemas first, then fails (`status: failed`) if snippets were requested but could not be written. Re-run:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 opentide setup vscode
 ```
 
 Pass `--no-generate` only when `.opentide/templates` already exist. A missing target directory is created automatically.
+
+### `could_not_find_object_folder` at error on an empty repo
+
+`0.1.7` logged missing `objects/{threats,objectives,rules}` at **error** during generate-first `setup vscode` or `generate` on a brand-new scaffold. Those folders are empty until you author YAML. **0.1.8** logs absence at **debug** (once per path). A path that exists but is not a directory still logs at error. Upgrade:
+
+```bash
+pip install 'opentide==0.1.8'
+opentide generate
+```
+
+### `setup repo --platform` does not enable Sentinel (or other) TOML
+
+`0.1.7` accepted `--platform sentinel` on `opentide setup repo` but did not write `.opentide/configurations/platforms/sentinel.toml`. The parent `opentide setup --platform` path already did. **0.1.8** runs platform setup from `setup repo --platform` as well, so `generate` emits `#sentinel:` configuration stubs. Upgrade and re-run:
+
+```bash
+pip install 'opentide==0.1.8'
+opentide setup repo --yes --name SOC --platform sentinel
+opentide generate
+```
+
+### Generated templates contain YAML `null` or attach children under the wrong parent
+
+`0.1.7` dumped `default: None` as YAML `null`, and commented `#organisation:` without commenting nested `uuid` / `name`, so those keys parsed as children of `metadata.tlp`. **0.1.8** skips None defaults, restores typed placeholders, and comments the whole optional subtree. Upgrade and regenerate:
+
+```bash
+pip install 'opentide==0.1.8'
+opentide generate
+```
+
+Confirm `.opentide/templates/rule.1.0.template.yaml` has no `null` and that `metadata.tlp` is not a mapping.
 
 ### `setup ci` YAML fails to parse in GitHub, GitLab, or Azure
 
@@ -126,7 +156,7 @@ opentide setup ci github --yes
 Unquoted `metadata.created` / `modified` values (`created: 2026-09-11`) are valid Tide YAML. PyYAML loads them as `datetime.date`, and `0.1.5` crashed when writing `.opentide/exports/objects.export.json`. **0.1.6** stringifies those timestamps at YAML load. Upgrade:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 opentide generate
 ```
 
@@ -137,7 +167,7 @@ Quoted dates (`created: "2026-09-11"`) already worked; you do not need to quote 
 `0.1.6` expanded `$ref` / `$defs` in templates but nested objects still inherited a shallow parent `required` list, so required fields under array items were commented out. **0.1.7** uses each nested object's own required list. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 opentide generate
 ```
 
@@ -146,7 +176,7 @@ opentide generate
 `0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the CoreTide object form (`name`, optional `sighting` / `references`). Upgrade:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 ```
 
 Write actors as objects, not bare IDs:
@@ -176,7 +206,7 @@ Run [`generate`](../cli/generate.md) after cloning a repo, after upgrading the O
 `0.1.6` mapped the bundled `opentide.schema.json` router against `objects/**/*.yaml`. The Red Hat YAML extension cannot narrow that `oneOf` router, so it reports **Matches multiple schemas** and disables autocompletion. **0.1.7** maps each object folder recursively (`objects/threats/**/*.yaml` → `threat.1.0.schema.json`, and the same for objectives and rules). Nested files under those folders stay associated.
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 opentide setup vscode
 ```
 
@@ -186,6 +216,26 @@ Then reload the YAML language server. If schemas are stale or missing:
 opentide generate schemas
 ```
 
+## Documentation
+
+### GitHub docs land under `docs/Threats/{uuid}.md` instead of slug paths
+
+`0.1.7` applied GitLab `uuid_permalinks` to every flavour and built index links from the UUID while page files used slugify. GitHub pages were therefore `simulated-actor.md` while indexes linked to `{uuid}.md`, and folders used Title Case (`docs/Threats`). **0.1.8** scopes UUID permalinks to GitLab and writes lowercase `docs/{rules,objectives,threats}/<slug>.md`. Upgrade and regenerate:
+
+```bash
+pip install 'opentide==0.1.8'
+opentide generate docs
+```
+
+### Docs warn that `objective.priority: Critical` is not in `criticality::1.0`
+
+Objective `priority` is an unconstrained alert-style string (High / Critical), not an incident `criticality::1.0` token. **0.1.7** looked it up in that vocab. **0.1.8** renders the author value as-is. Threat `criticality` and impact vocab spelling (including `Impairement`) are unchanged. Upgrade:
+
+```bash
+pip install 'opentide==0.1.8'
+opentide generate docs
+```
+
 ## Validation errors
 
 ### `invalid_ref` points at a parent object (`detection`, not `detection_model`)
@@ -193,7 +243,7 @@ opentide generate schemas
 `0.1.6` attributed `invalid_ref` to the nested object that contained the UUID. **0.1.7** reports the leaf field (`detection_model`, `objective.threats`, …). Vocabulary names also skip YAML list indices (`[0]`). Upgrade:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 opentide validate --strict
 ```
 
@@ -202,7 +252,7 @@ opentide validate --strict
 `--json` used a single repo-wide `valid`/`invalid` for every check name. A vocab failure then looked like a failing `uuid` or `metadata` check. **0.1.7** emits per-check `status`. Upgrade:
 
 ```bash
-pip install 'opentide==0.1.7'
+pip install 'opentide==0.1.8'
 opentide validate --json
 ```
 
