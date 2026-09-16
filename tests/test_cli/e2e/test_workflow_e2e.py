@@ -57,6 +57,9 @@ def test_first_user_cli_workflow(
     )
     assert_json_ok(setup)
     assert (fresh / "objects" / "threats").is_dir()
+    sentinel_toml = fresh / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
+    assert sentinel_toml.is_file()
+    assert "enabled = true" in sentinel_toml.read_text(encoding="utf-8")
     workflow = fresh / ".github" / "workflows" / "opentide.yml"
     assert workflow.is_file()
     parsed = yaml.safe_load(workflow.read_text(encoding="utf-8"))
@@ -66,6 +69,16 @@ def test_first_user_cli_workflow(
     empty_generate = invoke_cli("generate", repo=fresh)
     assert_json_ok(empty_generate)
     assert (fresh / ".opentide" / "schemas" / "rule.1.0.schema.json").is_file()
+    rule_template = (fresh / ".opentide" / "templates" / "rule.1.0.template.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "configurations: {}" not in rule_template
+    assert "#sentinel:" in rule_template
+    assert "null" not in rule_template
+    loaded_template = yaml.safe_load(rule_template)
+    tlp = loaded_template["metadata"]["tlp"]
+    assert tlp in (None, "")
+    assert not isinstance(tlp, dict)
 
     write_tutorial_objects(fresh)
     threat_yaml = (fresh / "objects" / "threats" / "simulated-actor.yaml").read_text(

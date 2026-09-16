@@ -319,6 +319,37 @@ def test_gen_template_recomposition_runs_after_ref_resolve() -> None:
     assert "#splunk" not in body["configurations"]
 
 
+def test_gen_template_recomposition_runs_on_nullable_anyof() -> None:
+    defs = {
+        "RuleConfigurations": {
+            "type": "object",
+            "additionalProperties": True,
+        }
+    }
+    mock_index = {
+        "platforms": {
+            "sentinel": {"platform": {"enabled": True}},
+        }
+    }
+    with patch("opentide.generation.template_engine.OpenTide") as mock_ot:
+        mock_ot.Configurations.Index = mock_index
+        body = gen_template(
+            {
+                "configurations": {
+                    "anyOf": [
+                        {"$ref": "#/$defs/RuleConfigurations"},
+                        {"type": "null"},
+                    ],
+                    "default": None,
+                    "recomposition": "systems",
+                }
+            },
+            required=["configurations"],
+            defs=defs,
+        )
+    assert body["configurations"]["#sentinel"] == "blank"
+
+
 def test_gen_template_hides_marked_fields() -> None:
     body = gen_template(
         {

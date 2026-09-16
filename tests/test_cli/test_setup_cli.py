@@ -50,6 +50,27 @@ def test_setup_repo_scripted(tmp_path) -> None:
     assert (tmp_path / "README.md").is_file()
 
 
+def test_setup_repo_platform_writes_enabled_toml(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "repo",
+            str(tmp_path),
+            "--yes",
+            "--name",
+            "CLI Test",
+            "--platform",
+            "sentinel",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    toml_path = tmp_path / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
+    assert toml_path.is_file()
+    assert "enabled = true" in toml_path.read_text(encoding="utf-8")
+
+
 def test_setup_mcp_vscode(tmp_path) -> None:
     result = runner.invoke(
         app,

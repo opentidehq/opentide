@@ -87,10 +87,19 @@ def test_first_user_console_script_workflow(script_runner: ScriptRunner, tmp_pat
     )
     _payload(setup)
     assert (fresh / "objects" / "threats").is_dir()
+    sentinel_toml = fresh / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
+    assert sentinel_toml.is_file()
+    assert "enabled = true" in sentinel_toml.read_text(encoding="utf-8")
 
     empty = _run(script_runner, fresh, ("generate",))
     _payload(empty)
     assert (fresh / ".opentide" / "schemas" / "rule.1.0.schema.json").is_file()
+    rule_template = (fresh / ".opentide" / "templates" / "rule.1.0.template.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "configurations: {}" not in rule_template
+    assert "#sentinel:" in rule_template
+    assert "null" not in rule_template
 
     write_tutorial_objects(fresh)
     threat_yaml = (fresh / "objects" / "threats" / "simulated-actor.yaml").read_text(

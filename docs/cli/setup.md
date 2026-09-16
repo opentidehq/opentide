@@ -43,7 +43,7 @@ Use subcommands for MCP and skills — parent `--mcp` / `--skills` enums were re
 
 ### setup repo
 
-Scaffold directory layout, README, and `.gitignore`.
+Scaffold directory layout, README, and `.gitignore`. `--platform` writes and enables the matching `.opentide/configurations/platforms/*.toml` files (same as `setup platforms`).
 
 ```bash
 opentide setup repo --yes --name SOC --platform sentinel

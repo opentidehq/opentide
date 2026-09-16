@@ -50,7 +50,7 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 
 | Subcommand | Output |
 |------------|--------|
-| `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore` |
+| `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore`; `--platform` also writes enabled platform TOML |
 | `setup platforms` | Enabled `.opentide/configurations/platforms/*.toml` |
 | `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms; sets `OPENTIDE_REPO_ROOT`) |
 | `setup env` | `.env.example` with `OPENTIDE_REPO_ROOT`; ignores `.env` |

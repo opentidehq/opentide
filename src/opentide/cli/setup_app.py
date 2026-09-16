@@ -177,7 +177,9 @@ def setup_repo_cmd(
     org: str | None = typer.Option(None, "--org"),
     description: str | None = typer.Option(None, "--description"),
     platform: list[DetectionPlatform] = typer.Option(
-        [], "--platform", help="Detection platforms (repeatable)"
+        [],
+        "--platform",
+        help="Detection platforms — writes enabled platform TOML (repeatable)",
     ),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:

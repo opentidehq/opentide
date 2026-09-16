@@ -263,13 +263,20 @@ def gen_template(
                 recomp_cat = field["recomposition"]
                 recomp_entries: dict[str, str] = {}
                 config_index = _config_index()
-                for entry in config_index[recomp_cat]:
-                    recomp_entry = config_index[recomp_cat][entry]
-                    try:
-                        if recomp_entry["tide"]["enabled"] is True:
-                            recomp_entries[f"#{entry}"] = "blank"
-                    except Exception:
-                        if recomp_entry["platform"]["enabled"] is True:
+                catalog = config_index.get(recomp_cat)
+                if not isinstance(catalog, dict):
+                    catalog = config_index.get("platforms")
+                if isinstance(catalog, dict):
+                    for entry, recomp_entry in catalog.items():
+                        if not isinstance(recomp_entry, dict):
+                            continue
+                        enabled = False
+                        for section in ("tide", "platform"):
+                            block = recomp_entry.get(section)
+                            if isinstance(block, dict) and block.get("enabled") is True:
+                                enabled = True
+                                break
+                        if enabled:
                             recomp_entries[f"#{entry}"] = "blank"
                 body[key] = recomp_entries
             else:
