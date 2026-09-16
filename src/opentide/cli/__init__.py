@@ -15,7 +15,7 @@ from opentide.cli.enums import (
     ValidateCheck,
     platform_label,
 )
-from opentide.cli.explorer_app import explorer_app
+from opentide.cli.explorer_app import explorer_app as explorer_cli
 from opentide.cli.output import CommandResult, emit_error, emit_result, emit_success
 from opentide.cli.services.deploy import run_deploy
 from opentide.cli.services.document import run_document
@@ -76,7 +76,9 @@ def main_callback(
 
 
 app.add_typer(setup_app, name="setup")
-app.add_typer(explorer_app, name="explorer")
+# Alias the Typer so ``opentide.cli.explorer_app`` stays the module (Python 3.10
+# ``unittest.mock.patch`` walks package attributes and would otherwise hit Typer).
+app.add_typer(explorer_cli, name="explorer")
 
 generate_app = typer.Typer(help="Framework generation and documentation pipeline")
 app.add_typer(generate_app, name="generate")

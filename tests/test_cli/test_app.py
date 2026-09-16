@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
+import opentide.cli.explorer_app as explorer_mod
 from opentide.cli import app
 
 runner = CliRunner()
@@ -222,9 +224,24 @@ def test_explorer_help_lists_build_dev_serve() -> None:
         assert command in result.stdout
 
 
+def test_explorer_module_is_not_shadowed_by_typer_app() -> None:
+    """Package must expose the submodule, not the Typer instance of the same name.
+
+    Python 3.10 ``patch('opentide.cli.explorer_app.run_explorer_build')`` walks
+    ``opentide.cli.explorer_app`` as a package attribute. Binding the Typer as
+    that name made the patch fail only on 3.10.
+    """
+    assert isinstance(explorer_mod, types.ModuleType)
+    assert callable(explorer_mod.run_explorer_build)
+    import opentide.cli as cli_pkg
+
+    assert isinstance(cli_pkg.explorer_app, types.ModuleType)
+
+
 def test_explorer_build_invokes_service() -> None:
-    with patch(
-        "opentide.cli.explorer_app.run_explorer_build",
+    with patch.object(
+        explorer_mod,
+        "run_explorer_build",
         return_value={"message": "Explorer static site built"},
     ) as mock_build:
         result = runner.invoke(app, ["--json", "explorer", "build", "--output", "/tmp/out"])
@@ -233,8 +250,9 @@ def test_explorer_build_invokes_service() -> None:
 
 
 def test_explorer_build_reports_runtime_error() -> None:
-    with patch(
-        "opentide.cli.explorer_app.run_explorer_build",
+    with patch.object(
+        explorer_mod,
+        "run_explorer_build",
         side_effect=RuntimeError("node is required for opentide explorer build"),
     ):
         result = runner.invoke(app, ["--json", "explorer", "build"])
