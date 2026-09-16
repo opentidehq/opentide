@@ -39,7 +39,7 @@ from opentide.cli.services.setup.skills import (
     unavailable_skills,
 )
 from opentide.cli.services.setup.skills_registry import SkillsManifestError
-from opentide.cli.services.setup.vscode import run_vscode_settings, run_vscode_snippets
+from opentide.cli.services.setup.vscode import run_vscode_setup
 from opentide.core.logging.config import get_stdout_console
 
 logger = structlog.get_logger("opentide.cli.services.setup.orchestrator")
@@ -155,19 +155,17 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
 
     if options.vscode_setup:
         target = options.path.resolve()
-        vscode_result: dict[str, object] = {
-            "message": "VS Code setup complete (deprecated)",
-            "files": [],
-        }
-        settings = run_vscode_settings(target)
-        files = list(settings.get("files", []))  # type: ignore[arg-type]
-        snippet = run_vscode_snippets(target)
-        if snippet:
-            files.append(snippet)
-        vscode_result["files"] = files
+        vscode_result = dict(run_vscode_setup(target))
+        exit_code = vscode_result.pop("_exit_code", None)
         steps.append({"step": "vscode", **vscode_result})
+        if vscode_result.get("status") == "failed":
+            results["status"] = "failed"
+            results["message"] = vscode_result.get("message", "VS Code setup failed")
+            if exit_code:
+                results["_exit_code"] = exit_code
 
-    results["message"] = "Setup complete"
+    if results.get("status") != "failed":
+        results["message"] = "Setup complete"
     if options.run_repo and steps and isinstance(steps[0], dict):
         results["platforms"] = steps[0].get("platforms", [])
     return results

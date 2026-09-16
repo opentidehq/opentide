@@ -245,8 +245,13 @@ def test_setup_vscode_flags(tmp_path: Path) -> None:
 def test_setup_vscode_snippets_success_message(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         setup_app_module,
-        "run_vscode_snippets",
-        lambda target: ".vscode/model-templates.code-snippets",
+        "run_vscode_setup",
+        lambda *args, **kwargs: {
+            "message": "VS Code setup complete (deprecated)",
+            "files": [".vscode/model-templates.code-snippets"],
+            "generated": ["templates"],
+            "status": "completed",
+        },
     )
     result = runner.invoke(
         app,

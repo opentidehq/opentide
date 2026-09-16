@@ -116,7 +116,7 @@ See [Agentic setup](./workflows/agentic-setup.md) for details.
 
 ## VS Code settings (deprecated)
 
-`opentide setup vscode` writes yaml.schemas and snippets — interim scaffolding until the OpenTide VS Code extension ships. Prefer `opentide setup mcp --vscode` for MCP configuration.
+`opentide setup vscode` generates templates and JSON schemas, then writes yaml.schemas and snippets — interim scaffolding until the OpenTide VS Code extension ships. Prefer `opentide setup mcp --vscode` for MCP configuration. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
 
 ## CLI reference
 

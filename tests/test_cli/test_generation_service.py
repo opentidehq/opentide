@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -90,6 +91,26 @@ def test_run_generate_full_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(generation, "run_generate_all", MagicMock())
     result = generation.run_generate(ctx)
     assert "phases" in result
+
+
+def test_run_generate_phases_for_workspace_sets_and_restores_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    from opentide.core.root import get_repo_root
+
+    called: list[str] = []
+    monkeypatch.setattr(generation, "run_generate_phase", lambda phase: called.append(phase))
+    os.environ.pop("OPENTIDE_REPO_ROOT", None)
+    os.environ.pop("OPENTIDE_TIDE_WORKSPACE", None)
+    get_repo_root.cache_clear()
+    ran = generation.run_generate_phases_for_workspace(tmp_path, ["templates", "schemas"])
+    assert ran == ["templates", "schemas"]
+    assert called == ["templates", "schemas"]
+    assert "OPENTIDE_REPO_ROOT" not in os.environ
+    assert "OPENTIDE_TIDE_WORKSPACE" not in os.environ
+    get_repo_root.cache_clear()
 
 
 def test_run_generate_docs_scoped(monkeypatch: pytest.MonkeyPatch) -> None:

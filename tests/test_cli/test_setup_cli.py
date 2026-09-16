@@ -268,12 +268,14 @@ def test_setup_vscode_settings_command(tmp_path) -> None:
     assert (tmp_path / ".vscode" / "settings.json").is_file()
 
 
-def test_setup_vscode_snippets_command_skips_without_templates(tmp_path) -> None:
+def test_setup_vscode_snippets_command_fails_without_templates(tmp_path) -> None:
     result = runner.invoke(
         app,
-        ["--json", "setup", "vscode", str(tmp_path), "--snippets"],
+        ["--json", "setup", "vscode", str(tmp_path), "--snippets", "--no-generate"],
     )
-    assert result.exit_code == 0
+    assert result.exit_code != 0
+    assert '"status": "failed"' in result.stdout
+    assert '"ok": false' in result.stdout
     assert '"files": []' in result.stdout
 
 

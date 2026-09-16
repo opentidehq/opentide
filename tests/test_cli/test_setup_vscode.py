@@ -10,6 +10,7 @@ from opentide.cli.services.setup.vscode import (
     build_yaml_schema_mappings,
     run_vscode_all,
     run_vscode_settings,
+    run_vscode_setup,
     run_vscode_snippets,
     snippet_file_rel,
     validate_schema_fragment_matches_global,
@@ -38,7 +39,7 @@ def test_write_vscode_settings_merge(tmp_path: Path) -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         run_vscode_settings(tmp_path)
-    assert caught
+    assert not any(issubclass(item.category, DeprecationWarning) for item in caught)
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["editor.tabSize"] == 4
     assert ".opentide/schemas/opentide.schema.json" in settings["yaml.schemas"]
@@ -54,12 +55,30 @@ def test_run_vscode_snippets_skips_without_templates(tmp_path: Path) -> None:
         assert run_vscode_snippets(tmp_path) is None
 
 
-def test_run_vscode_all_skips_snippets_on_empty_scaffold(tmp_path: Path) -> None:
+def test_run_vscode_setup_no_generate_fails_without_templates(tmp_path: Path) -> None:
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
-        result = run_vscode_all(tmp_path)
+        result = run_vscode_setup(tmp_path, generate=False)
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
     assert ".vscode/settings.json" in result["files"]
     assert SNIPPET_REL not in result["files"]
+    assert result["generated"] == []
+
+
+def test_run_vscode_setup_generate_writes_templates_schemas_and_snippets(tmp_path: Path) -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = run_vscode_setup(tmp_path)
+    deprecations = [item for item in caught if issubclass(item.category, DeprecationWarning)]
+    assert len(deprecations) == 1
+    assert result["status"] == "completed"
+    assert result["generated"] == ["templates", "schemas"]
+    assert (tmp_path / ".opentide" / "templates" / "threat.1.0.template.yaml").is_file()
+    assert (tmp_path / ".opentide" / "schemas" / "opentide.schema.json").is_file()
+    assert (tmp_path / ".vscode" / "settings.json").is_file()
+    assert (tmp_path / SNIPPET_REL).is_file()
+    assert SNIPPET_REL in result["files"]
 
 
 def test_run_vscode_snippets_writes_when_templates_exist(tmp_path: Path, monkeypatch) -> None:
@@ -115,13 +134,51 @@ def test_run_vscode_snippets_writes_with_real_generator(tmp_path: Path, monkeypa
 
 def test_run_vscode_all_includes_snippets_when_generated(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
+        "opentide.cli.services.generation.run_generate_phases_for_workspace",
+        lambda target, phases: list(phases),
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.vscode.run_vscode_snippets",
+        lambda target: SNIPPET_REL,
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = run_vscode_all(tmp_path)
+    deprecations = [item for item in caught if issubclass(item.category, DeprecationWarning)]
+    assert len(deprecations) == 1
+    assert SNIPPET_REL in result["files"]
+    assert result["generated"] == ["templates", "schemas"]
+
+
+def test_run_vscode_setup_settings_only_generates_schemas(tmp_path: Path, monkeypatch) -> None:
+    recorded: list[str] = []
+    monkeypatch.setattr(
+        "opentide.cli.services.generation.run_generate_phases_for_workspace",
+        lambda target, phases: recorded.extend(phases) or list(phases),
+    )
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = run_vscode_setup(tmp_path, settings=True, snippets=False)
+    assert recorded == ["schemas"]
+    assert result["status"] == "completed"
+    assert SNIPPET_REL not in result["files"]
+
+
+def test_run_vscode_setup_snippets_only_generates_templates(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "opentide.cli.services.generation.run_generate_phases_for_workspace",
+        lambda target, phases: list(phases),
+    )
+    monkeypatch.setattr(
         "opentide.cli.services.setup.vscode.run_vscode_snippets",
         lambda target: SNIPPET_REL,
     )
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
-        result = run_vscode_all(tmp_path)
-    assert SNIPPET_REL in result["files"]
+        result = run_vscode_setup(tmp_path, settings=False, snippets=True)
+    assert result["generated"] == ["templates"]
+    assert result["status"] == "completed"
+    assert result["files"] == [SNIPPET_REL]
 
 
 def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:

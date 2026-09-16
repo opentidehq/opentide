@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
@@ -9,6 +13,7 @@ import structlog
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
+from opentide.core.root import get_repo_root
 
 logger = structlog.get_logger("opentide.cli.services.generation")
 
@@ -89,6 +94,44 @@ def run_generate_phase(phase: str) -> None:
         run_docs()
         return
     raise ValueError(f"Unknown generation phase: {phase}")
+
+
+@contextmanager
+def workspace_repo_env(target: Path) -> Iterator[Path]:
+    """Bind generation/index lookup to ``target`` and restore process state."""
+    resolved = target.resolve()
+    previous_root = os.environ.get("OPENTIDE_REPO_ROOT")
+    previous_workspace = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
+    get_repo_root.cache_clear()
+    os.environ["OPENTIDE_REPO_ROOT"] = str(resolved)
+    os.environ["OPENTIDE_TIDE_WORKSPACE"] = str(resolved)
+    IndexManager._cache = None
+    cwd_previous = Path.cwd()
+    try:
+        os.chdir(resolved)
+        yield resolved
+    finally:
+        os.chdir(cwd_previous)
+        get_repo_root.cache_clear()
+        IndexManager._cache = None
+        if previous_root is None:
+            os.environ.pop("OPENTIDE_REPO_ROOT", None)
+        else:
+            os.environ["OPENTIDE_REPO_ROOT"] = previous_root
+        if previous_workspace is None:
+            os.environ.pop("OPENTIDE_TIDE_WORKSPACE", None)
+        else:
+            os.environ["OPENTIDE_TIDE_WORKSPACE"] = previous_workspace
+
+
+def run_generate_phases_for_workspace(target: Path, phases: Sequence[str]) -> list[str]:
+    """Run ``run_generate_phase`` for each name with ``OPENTIDE_REPO_ROOT`` set."""
+    ran: list[str] = []
+    with workspace_repo_env(target):
+        for phase in phases:
+            run_generate_phase(phase)
+            ran.append(phase)
+    return ran
 
 
 def run_generate_docs(

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import os
 import sys
 import warnings
 from pathlib import Path
@@ -16,7 +15,6 @@ import structlog
 
 from opentide.cli.services.setup.templates import load_yaml_schema_fragment
 from opentide.core.files import resolve_configurations
-from opentide.core.root import get_repo_root
 from opentide.registry.discovery import OPENTIDE_DIR
 
 logger = structlog.get_logger("opentide.cli.services.setup.vscode")
@@ -60,7 +58,6 @@ def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, st
 
 def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
     """Write or merge .vscode/settings.json with OpenTide yaml.schemas."""
-    emit_vscode_deprecation()
     vscode_dir = target / ".vscode"
     vscode_dir.mkdir(parents=True, exist_ok=True)
     settings_path = vscode_dir / "settings.json"
@@ -87,7 +84,8 @@ def _templates_ready(target: Path) -> bool:
 
 def run_vscode_snippets(target: Path) -> str | None:
     """Generate VS Code snippets under ``target``; returns relative path or None."""
-    emit_vscode_deprecation()
+    from opentide.cli.services.generation import workspace_repo_env
+
     resolved = target.resolve()
     if not _templates_ready(resolved):
         logger.warning(
@@ -96,42 +94,22 @@ def run_vscode_snippets(target: Path) -> str | None:
         )
         return None
 
-    previous_root = os.environ.get("OPENTIDE_REPO_ROOT")
-    previous_workspace = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
-    get_repo_root.cache_clear()
-    os.environ["OPENTIDE_REPO_ROOT"] = str(resolved)
-    os.environ["OPENTIDE_TIDE_WORKSPACE"] = str(resolved)
-    from opentide.core.index_manager import IndexManager
-
-    IndexManager._cache = None
     snippets_rel = snippet_file_rel(workspace=resolved)
     dest = resolved / snippets_rel
     dest.parent.mkdir(parents=True, exist_ok=True)
-    cwd_previous = Path.cwd()
     vscode_snippets = None
     try:
-        os.chdir(resolved)
-        vscode_snippets = importlib.import_module("opentide.generation.vscode_snippets")
-        vscode_snippets.SNIPPETS_PATH = snippets_rel
-        vscode_snippets.run()
+        with workspace_repo_env(resolved):
+            vscode_snippets = importlib.import_module("opentide.generation.vscode_snippets")
+            vscode_snippets.SNIPPETS_PATH = snippets_rel
+            vscode_snippets.run()
     except FileNotFoundError as exc:
         logger.warning("vscode_snippets_skipped", detail=str(exc))
         return None
     finally:
-        os.chdir(cwd_previous)
         module = vscode_snippets or sys.modules.get("opentide.generation.vscode_snippets")
         if module is not None and hasattr(module, "SNIPPETS_PATH"):
             module.SNIPPETS_PATH = None
-        get_repo_root.cache_clear()
-        IndexManager._cache = None
-        if previous_root is None:
-            os.environ.pop("OPENTIDE_REPO_ROOT", None)
-        else:
-            os.environ["OPENTIDE_REPO_ROOT"] = previous_root
-        if previous_workspace is None:
-            os.environ.pop("OPENTIDE_TIDE_WORKSPACE", None)
-        else:
-            os.environ["OPENTIDE_TIDE_WORKSPACE"] = previous_workspace
 
     return snippets_rel if dest.is_file() else None
 
@@ -141,17 +119,67 @@ def run_vscode_settings(target: Path, *, merge: bool = True) -> dict[str, object
     return {"message": "VS Code settings generated", "files": [rel]}
 
 
-def run_vscode_all(target: Path, *, merge: bool = True) -> dict[str, object]:
-    settings = run_vscode_settings(target, merge=merge)
-    files = list(settings["files"])
-    snippet_path = run_vscode_snippets(target)
-    if snippet_path:
-        files.append(snippet_path)
-    return {
-        "message": "VS Code setup generated (deprecated)",
+def run_vscode_setup(
+    target: Path,
+    *,
+    settings: bool = True,
+    snippets: bool = True,
+    generate: bool = True,
+    merge: bool = True,
+    warn_deprecated: bool = True,
+) -> dict[str, object]:
+    """Generate prerequisites, then write VS Code settings and/or snippets.
+
+    Deprecation is emitted once at this boundary. Callers must not also call
+    ``emit_vscode_deprecation``.
+    """
+    from opentide.cli.services.generation import run_generate_phases_for_workspace
+
+    if warn_deprecated:
+        emit_vscode_deprecation()
+
+    generated: list[str] = []
+    if generate:
+        phases: list[str] = []
+        if snippets:
+            phases.append("templates")
+        if settings:
+            phases.append("schemas")
+        if phases:
+            generated = run_generate_phases_for_workspace(target, phases)
+
+    files: list[str] = []
+    if settings:
+        files.append(write_vscode_settings(target, merge=merge))
+
+    snippet_path: str | None = None
+    if snippets:
+        snippet_path = run_vscode_snippets(target)
+        if snippet_path:
+            files.append(snippet_path)
+
+    payload: dict[str, object] = {
+        "message": "VS Code setup complete (deprecated)",
         "files": files,
+        "generated": generated,
         "deprecated": DEPRECATION_MESSAGE,
+        "status": "completed",
     }
+    if snippets and snippet_path is None:
+        payload["status"] = "failed"
+        payload["_exit_code"] = 1
+        payload["message"] = (
+            f"VS Code snippets were not generated (no templates in {OPENTIDE_DIR}/templates)"
+        )
+        logger.error(
+            "vscode_snippets_missing",
+            detail=payload["message"],
+        )
+    return payload
+
+
+def run_vscode_all(target: Path, *, merge: bool = True, generate: bool = True) -> dict[str, object]:
+    return run_vscode_setup(target, merge=merge, generate=generate)
 
 
 def validate_schema_fragment_matches_global() -> None:

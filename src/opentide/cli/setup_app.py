@@ -38,10 +38,7 @@ from opentide.cli.services.setup.skills_registry import (
     discover_skills,
     show_skill,
 )
-from opentide.cli.services.setup.vscode import (
-    run_vscode_settings,
-    run_vscode_snippets,
-)
+from opentide.cli.services.setup.vscode import run_vscode_setup
 from opentide.core.logging.config import get_console, get_stdout_console
 
 setup_app = typer.Typer(help="Repository and tooling setup")
@@ -532,6 +529,7 @@ def setup_vscode_cmd(
     settings: bool = typer.Option(False, "--settings"),
     snippets: bool = typer.Option(False, "--snippets"),
     no_merge: bool = typer.Option(False, "--no-merge"),
+    no_generate: bool = typer.Option(False, "--no-generate"),
 ) -> None:
     """Write VS Code yaml.schemas and snippets (deprecated). Default: both."""
     cli = get_context(ctx)
@@ -539,14 +537,11 @@ def setup_vscode_cmd(
     target = _resolve_setup_path(cli, path)
     run_settings_flag = settings or not snippets
     run_snippets_flag = snippets or not settings
-    written: dict[str, object] = {"message": "VS Code setup complete (deprecated)", "files": []}
-    files: list[str] = []
-    if run_settings_flag:
-        result = run_vscode_settings(target, merge=not no_merge)
-        files.extend(result.get("files", []))  # type: ignore[arg-type]
-    if run_snippets_flag:
-        snippet_path = run_vscode_snippets(target)
-        if snippet_path:
-            files.append(snippet_path)
-    written["files"] = files
-    emit_success(cli, written)
+    result = run_vscode_setup(
+        target,
+        settings=run_settings_flag,
+        snippets=run_snippets_flag,
+        generate=not no_generate,
+        merge=not no_merge,
+    )
+    emit_success(cli, result)
