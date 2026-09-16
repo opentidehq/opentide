@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from opentide.models.base import TideModel
+from opentide.models.base import TideField, TideModel
 
 
 class ResponseSearch(TideModel):
     purpose: str
     system: str
-    query: str
+    query: str = TideField(schema_extra={"tide.template.multiline": True})
 
 
 class ResponseProcedure(TideModel):
-    analysis: str
+    analysis: str = TideField(schema_extra={"tide.template.multiline": True})
     searches: list[ResponseSearch] | None = None
     containment: str | None = None
 

@@ -343,7 +343,7 @@ def gen_template(
                 local_required = False
             elif field.get("format") == "date":
                 content = "YYYY-MM-DD"
-            elif field.get("format") == "number":
+            elif field.get("format") == "number" or keyword_type in {"integer", "number"}:
                 content = "3"
             elif field.get("format") == "email":
                 content = "author@domain.com"
@@ -351,13 +351,16 @@ def gen_template(
                 content = "https://"
             elif field.get("tide.template.multiline"):
                 content = "|\n'..." if local_required else "|\n'#..."
-            elif "default" in field:
+            elif "default" in field and field["default"] is not None:
                 content = field["default"]
-            elif "const" in field:
+            elif "const" in field and field["const"] is not None:
                 content = field["const"]
 
             if field.get("tide.template.no-space"):
                 content = "no-space" + str(content)
+
+            if content is None:
+                content = "blank"
 
             if keyword_type == "array":
                 if not local_required:

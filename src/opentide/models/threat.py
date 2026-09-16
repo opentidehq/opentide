@@ -20,7 +20,7 @@ class ThreatActor(TideModel):
 
 
 class ThreatBody(TideModel):
-    description: str
+    description: str = TideField(schema_extra={"tide.template.multiline": True})
     severity: str = VocabField(True)
     impact: str = VocabField(True)
     leverage: str = VocabField(True)
