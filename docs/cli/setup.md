@@ -32,7 +32,7 @@ The interactive wizard uses arrow-key menus and checkboxes for platforms, CI, MC
 | `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs |
 | `--promotion-target` | Promotion target status (default `PRODUCTION`) |
 | `--python-version` | CI Python version (default `3.12`) |
-| `--vscode-setup` | Deprecated VS Code yaml.schemas + snippets |
+| `--vscode-setup` | Deprecated VS Code yaml.schemas + snippets (generate-first) |
 | `--yes` / `-y` | Confirm explicit options without prompting |
 
 Use subcommands for MCP and skills — parent `--mcp` / `--skills` enums were removed.
@@ -178,20 +178,25 @@ The full wizard checks skill availability before writing repository files. If th
 
 ### setup vscode (deprecated)
 
-Interim yaml.schemas and snippet generation. Default with no flags: both settings and snippets.
+Interim yaml.schemas and snippet generation. By default the command generates templates and JSON schemas into `.opentide/`, then writes settings and snippets. Deprecation is logged once per invocation.
 
 `yaml.schemas` maps each object folder to its concrete schema (`threat.1.0.schema.json` → `objects/threats/**/*.yaml`, and the same for objectives and rules). Nested files under those folders stay associated; it does not map the `opentide.schema.json` router against `objects/**/*.yaml` — the Red Hat YAML extension reports "Matches multiple schemas" for that glob.
 
 ```bash
-opentide setup vscode --settings --no-merge
-opentide setup vscode --snippets
+opentide setup vscode                 # generate templates + schemas, then settings + snippets
+opentide setup vscode --settings    # generate schemas, then settings
+opentide setup vscode --snippets     # generate templates, then snippets
+opentide setup vscode --no-generate  # skip generate (power users)
 ```
+
+If snippets were requested and templates are still missing after generate, the command exits non-zero (`status: failed`) instead of reporting success.
 
 | Flag | Purpose |
 |------|---------|
-| `--settings` | Write `.vscode/settings.json` yaml.schemas and `.vscode/extensions.json` |
-| `--snippets` | Write model template snippets |
+| `--settings` | Write `.vscode/settings.json` yaml.schemas and `.vscode/extensions.json` (generates schemas first) |
+| `--snippets` | Write model template snippets (generates templates first) |
 | `--no-merge` | Replace settings instead of merging |
+| `--no-generate` | Do not run `opentide generate` phases first |
 
 ## CI skip
 

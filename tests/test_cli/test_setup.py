@@ -156,7 +156,34 @@ def test_run_setup_vscode_deprecated(tmp_path: Path) -> None:
     assert isinstance(vscode_files, list)
     assert ".vscode/settings.json" in vscode_files
     assert ".vscode/extensions.json" in vscode_files
-    assert ".vscode/model-templates.code-snippets" not in vscode_files
+    assert ".vscode/model-templates.code-snippets" in vscode_files
+
+
+def test_run_setup_vscode_failure_propagates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.orchestrator.run_vscode_setup",
+        lambda target: {
+            "status": "failed",
+            "message": "snippets missing",
+            "files": [".vscode/settings.json"],
+            "_exit_code": 1,
+        },
+    )
+    result = run_setup(
+        SetupOptions(
+            path=tmp_path,
+            yes=True,
+            run_repo=False,
+            vscode_setup=True,
+        )
+    )
+    assert result["status"] == "failed"
+    assert result["message"] == "snippets missing"
+    assert result["_exit_code"] == 1
+    assert result["steps"][0]["status"] == "failed"
+    assert "_exit_code" not in result["steps"][0]
 
 
 def test_run_setup_ci_none_skips_ci_step(tmp_path: Path) -> None:
