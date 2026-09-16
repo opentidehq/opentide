@@ -64,18 +64,95 @@ def remove_blanks(path: Path | str) -> bool:
     return True
 
 
-def get_required(metaschema: dict[str, Any], required_list: list[str]) -> list[str]:
+def get_required(
+    metaschema: dict[str, Any],
+    required_list: list[str],
+    defs: dict[str, Any] | None = None,
+) -> list[str]:
+    defs = defs or {}
     for key in metaschema.keys():
+        field = metaschema[key]
+        if not isinstance(field, dict):
+            continue
+        resolved = resolve_field_schema(field, defs)
         if key in required_list:
-            if metaschema[key].get("type") == "object":
-                if r := metaschema[key].get("required"):
+            if resolved.get("type") == "object":
+                if r := resolved.get("required"):
                     required_list.extend(r)
-                    props = metaschema[key].get("properties")
+                    props = resolved.get("properties")
                     if props:
-                        required_list.extend(get_required(props, required_list=required_list))
-                if fr := metaschema[key].get("tide.template.force-required"):
+                        required_list.extend(get_required(props, required_list, defs))
+                if fr := resolved.get("tide.template.force-required"):
                     required_list.extend(fr)
     return required_list
+
+
+def _is_null_type(node: dict[str, Any]) -> bool:
+    return node.get("type") == "null"
+
+
+def _merge_ref_target(node: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
+    ref = node.get("$ref")
+    if not isinstance(ref, str):
+        return dict(node)
+    name = ref.rsplit("/", 1)[-1]
+    target = defs.get(name)
+    if not isinstance(target, dict):
+        return dict(node)
+    merged = dict(target)
+    for key, value in node.items():
+        if key != "$ref":
+            merged[key] = value
+    return merged
+
+
+def resolve_field_schema(
+    field: dict[str, Any], defs: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Expand ``$ref`` and Tide-nullable ``anyOf``/``oneOf`` against ``$defs``.
+
+    Nested Tide models emit as ``{"$ref": "#/$defs/ThreatBody"}`` with no ``type``
+    or ``properties``. Without this step, ``gen_template`` treats them as strings.
+    """
+    defs = defs or {}
+    resolved = _merge_ref_target(field, defs)
+    alts = resolved.get("anyOf") or resolved.get("oneOf")
+    if isinstance(alts, list):
+        non_null: list[dict[str, Any]] = []
+        for alt in alts:
+            if not isinstance(alt, dict):
+                continue
+            branch = _merge_ref_target(alt, defs)
+            if _is_null_type(branch):
+                continue
+            non_null.append(branch)
+        if len(non_null) == 1:
+            branch = resolve_field_schema(non_null[0], defs)
+            for key, value in resolved.items():
+                if key not in {"anyOf", "oneOf", "$ref"} and key not in branch:
+                    branch[key] = value
+            resolved = branch
+        elif non_null:
+            preferred = next(
+                (item for item in non_null if item.get("type") == "object" or "properties" in item),
+                next((item for item in non_null if item.get("type") == "array"), non_null[0]),
+            )
+            branch = resolve_field_schema(preferred, defs)
+            for key, value in resolved.items():
+                if key not in {"anyOf", "oneOf", "$ref"} and key not in branch:
+                    branch[key] = value
+            resolved = branch
+
+    properties = resolved.get("properties")
+    if isinstance(properties, dict):
+        resolved["properties"] = {
+            name: resolve_field_schema(child, defs) if isinstance(child, dict) else child
+            for name, child in properties.items()
+        }
+    items = resolved.get("items")
+    if isinstance(items, dict):
+        resolved["items"] = resolve_field_schema(items, defs)
+    return resolved
 
 
 def definition_handler(entry_point: str) -> dict[str, Any]:
@@ -84,24 +161,34 @@ def definition_handler(entry_point: str) -> dict[str, Any]:
     return build_model_schema_source(DEFINITION_MODELS[entry_point])
 
 
-def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, Any]:
+def gen_template(
+    metaschema: dict[str, Any],
+    required: list[str],
+    defs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    defs = defs or {}
     body: dict[str, Any] = {}
-    for key in metaschema:
-        if metaschema[key].get("tide.template.hide"):
+    for original_key, raw in metaschema.items():
+        if not isinstance(raw, dict):
             continue
-        if metadef := metaschema[key.replace("#", "")].get("tide.meta.definition"):
+        if raw.get("tide.template.hide"):
+            continue
+        key = original_key
+        if metadef := raw.get("tide.meta.definition"):
             if key not in required:
                 key = "#" + key
             if metadef is True:
                 temp = definition_handler(key.replace("#", ""))
-                definition_required = list(temp.get("required", []))
-                definition_required.extend(temp.get("tide.template.force-required", []))
             else:
                 temp = definition_handler(metadef)
-                definition_required = list(temp.get("required", []))
-                definition_required.extend(temp.get("tide.template.force-required", []))
-
-            template = gen_template({key.replace("#", ""): temp}, required=definition_required)
+            definition_required = list(temp.get("required", []))
+            definition_required.extend(temp.get("tide.template.force-required", []))
+            nested_defs = temp.get("$defs") if isinstance(temp.get("$defs"), dict) else defs
+            template = gen_template(
+                {key.replace("#", ""): temp},
+                required=definition_required,
+                defs=nested_defs if isinstance(nested_defs, dict) else defs,
+            )
             resolved = (
                 template.get(key) or template.get(key.replace("#", "")) or template.get("#" + key)
             )
@@ -109,20 +196,23 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                 body[key] = resolved
             continue
 
-        keyword_type = metaschema[key].get("type") or "string"
+        field = resolve_field_schema(raw, defs)
+        keyword_type = field.get("type") or "string"
         if isinstance(keyword_type, list):
             keyword_type = str(keyword_type[0])
+        if not field.get("type") and field.get("properties"):
+            keyword_type = "object"
 
         if keyword_type == "object":
             if key not in required:
-                if config := metaschema[key].get("tide.template.config.required"):
+                if config := field.get("tide.template.config.required"):
                     if fetch_config_template(config) == "False":
                         key = "#" + key
                 else:
                     key = "#" + key
 
-            if "recomposition" in metaschema[key.replace("#", "")].keys():
-                recomp_cat = metaschema[key.replace("#", "")]["recomposition"]
+            if "recomposition" in field:
+                recomp_cat = field["recomposition"]
                 recomp_entries: dict[str, str] = {}
                 config_index = _config_index()
                 for entry in config_index[recomp_cat]:
@@ -135,8 +225,7 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                             recomp_entries[f"#{entry}"] = "blank"
                 body[key] = recomp_entries
             else:
-                field = metaschema[key.replace("#", "")]
-                if "additionalProperties" in field.keys():
+                if "additionalProperties" in field:
                     if not isinstance(field["additionalProperties"], bool):
                         sample = field.get("additionalProperties", {}).get("example") or "example"
                         if sample not in field.get("additionalProperties", {}).get("required", []):
@@ -151,18 +240,21 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                         sample = "#" + str(sample)
                     body[key] = {sample: "blank"} if sample else {}
                 elif "properties" in field:
-                    body[key] = gen_template(field.get("properties", {}), required=required)
+                    body[key] = gen_template(
+                        field.get("properties", {}), required=required, defs=defs
+                    )
 
-        elif "items" in metaschema[key].keys() and "properties" in metaschema[key].get("items", {}):
+        elif "items" in field and "properties" in field.get("items", {}):
             if key in required:
-                sub_req = metaschema[key]["items"]["required"]
+                sub_req = field["items"].get("required") or []
             else:
                 key = "#" + key
                 sub_req = []
 
             values = gen_template(
-                metaschema[key.replace("#", "")]["items"]["properties"],
+                field["items"]["properties"],
                 required=sub_req,
+                defs=defs,
             )
             if sub_req == [] and values:
                 first_key = list(values)[0]
@@ -173,18 +265,18 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
             content = "blank"
             local_required = key in required
 
-            if config := metaschema[key].get("tide.template.config.required"):
+            if config := field.get("tide.template.config.required"):
                 enabled = fetch_config_template(config)
                 if enabled == "True":
                     local_required = True
                 elif enabled == "False":
                     local_required = False
 
-            if config_path := metaschema[key].get("tide.template.config.default.enabled"):
+            if config_path := field.get("tide.template.config.default.enabled"):
                 if fetch_config_template(config_path) != "False":
-                    if config_path := metaschema[key].get("tide.template.config.default"):
+                    if config_path := field.get("tide.template.config.default"):
                         content = fetch_config_template(config_path)
-                        if metaschema[key].get("tide.template.multiline"):
+                        if field.get("tide.template.multiline"):
                             if not content:
                                 content = "..."
                             if local_required:
@@ -193,26 +285,26 @@ def gen_template(metaschema: dict[str, Any], required: list[str]) -> dict[str, A
                                 content = "\n".join(["#" + line for line in content.split("\n")])
                             content = "|\n'" + content
 
-            if metaschema[key].get("tide.template.required") is True:
+            if field.get("tide.template.required") is True:
                 local_required = True
-            if metaschema[key].get("tide.template.required") is False:
+            if field.get("tide.template.required") is False:
                 local_required = False
-            elif metaschema[key].get("format") == "date":
+            elif field.get("format") == "date":
                 content = "YYYY-MM-DD"
-            elif metaschema[key].get("format") == "number":
+            elif field.get("format") == "number":
                 content = "3"
-            elif metaschema[key].get("format") == "email":
+            elif field.get("format") == "email":
                 content = "author@domain.com"
-            elif metaschema[key].get("format") == "uri":
+            elif field.get("format") == "uri":
                 content = "https://"
-            elif metaschema[key].get("tide.template.multiline"):
+            elif field.get("tide.template.multiline"):
                 content = "|\n'..." if local_required else "|\n'#..."
-            elif "default" in metaschema[key]:
-                content = metaschema[key]["default"]
-            elif "const" in metaschema[key]:
-                content = metaschema[key]["const"]
+            elif "default" in field:
+                content = field["default"]
+            elif "const" in field:
+                content = field["const"]
 
-            if metaschema[key].get("tide.template.no-space"):
+            if field.get("tide.template.no-space"):
                 content = "no-space" + str(content)
 
             if keyword_type == "array":
