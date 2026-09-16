@@ -196,7 +196,9 @@ def render_signals(objective: DetectionObjective, formatter: MarkdownFormatter) 
 def render_objective_meta(objective: DetectionObjective, formatter: MarkdownFormatter) -> str:
     body = objective.objective
     composition = body.composition or objective.composition
-    priority = enrich("criticality", body.priority).label
+    # objective.priority is an unconstrained alert-style string (High / Critical),
+    # not a criticality::1.0 incident token. Do not enrich it against that vocab.
+    priority = body.priority
     objective_type = enrich("detection.types", body.type).label
     composition_label = enrich("detection.composition", composition.strategy).label
 
@@ -242,9 +244,8 @@ def render_signal_mdr_coverage(
         ]
         rows.append([signal.name, "<br>".join(display)])
 
-    return (
-        formatter.heading(2, "Signal MDR coverage")
-        + formatter.table(headers=["Signal", "Downstream MDR rules"], rows=rows)
+    return formatter.heading(2, "Signal MDR coverage") + formatter.table(
+        headers=["Signal", "Downstream MDR rules"], rows=rows
     )
 
 
@@ -339,9 +340,7 @@ def _platform_entity_mappings(config: object) -> list[str]:
     rendered: list[str] = []
     for entity in entities:
         mappings = getattr(entity, "mappings", None) or []
-        pairs = ", ".join(
-            f"{mapping.identifier} -> {mapping.column}" for mapping in mappings
-        )
+        pairs = ", ".join(f"{mapping.identifier} -> {mapping.column}" for mapping in mappings)
         rendered.append(f"{entity.entity}: {pairs}" if pairs else str(entity.entity))
     return rendered
 
@@ -543,9 +542,7 @@ def _render_signal_detectors(
 ) -> str:
     lines = [formatter.heading(4, "Detectors")]
     for detector in detectors:
-        detector_info = (
-            f"- **{detector.name}** ({detector.technology}): {detector.description}"
-        )
+        detector_info = f"- **{detector.name}** ({detector.technology}): {detector.description}"
         if detector.link:
             detector_info += f" ({formatter.link('Reference', detector.link)})"
         lines.append(detector_info)
