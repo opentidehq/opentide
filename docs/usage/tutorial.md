@@ -44,7 +44,7 @@ opentide generate
 generate: complete
 ```
 
-Your editor can now validate `objects/**/*.yaml` live, because the router maps each file's `metadata.schema` to the right JSON Schema.
+Your editor can now validate YAML under `objects/threats/`, `objects/objectives/`, and `objects/rules/` because `opentide setup vscode` maps each folder to its concrete JSON Schema (not the router glob, which the YAML language server cannot narrow).
 
 ## 3. Author the threat
 
