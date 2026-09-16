@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from opentide.generation.pydantic_templates import (
     CORE_TEMPLATE_MODELS,
@@ -44,9 +45,15 @@ def test_generate_core_template_threat_expands_body(tmp_path: Path) -> None:
     assert "description:" in text
     assert "att&ck:" in text
     after_org = text.split("#organisation:", 1)[1].split("threat:", 1)[0]
-    assert "uuid:" in after_org
-    assert "\n    name:" in after_org
-    assert "#name:" not in after_org
+    assert "#  uuid:" in after_org
+    assert "#  name:" in after_org
+    assert "\n    uuid:" not in after_org
+    assert "\n    name:" not in after_org
+    loaded = yaml.safe_load(text)
+    tlp = loaded["metadata"]["tlp"]
+    assert tlp in (None, "")
+    assert not isinstance(tlp, dict)
+    assert "organisation" not in loaded["metadata"]
     after_threat = text.split("\nthreat:", 1)[1]
     assert "description:" in after_threat
     assert "att&ck:" in after_threat
@@ -78,3 +85,7 @@ def test_generate_core_template_rule_expands_response_and_hides_file(tmp_path: P
     assert "#platforms:" not in text
     assert "configurations:" in text or "#configurations:" in text
     assert "playbook:" in text
+    loaded = yaml.safe_load(text)
+    response = loaded.get("response") or {}
+    assert "analysis" not in response
+    assert "procedure" not in response

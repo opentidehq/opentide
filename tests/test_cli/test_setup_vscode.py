@@ -88,9 +88,14 @@ def test_run_vscode_setup_no_generate_fails_without_templates(tmp_path: Path) ->
     assert result["generated"] == []
 
 
-def test_run_vscode_setup_creates_missing_nested_target(tmp_path: Path) -> None:
+def test_run_vscode_setup_creates_missing_nested_target(tmp_path: Path, monkeypatch) -> None:
+    from tests.test_cli.conftest import _clear_runtime_caches
+
     missing = tmp_path / "new" / "detection-repo"
     assert not missing.exists()
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(missing))
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(missing))
+    _clear_runtime_caches()
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         result = run_vscode_setup(missing)
@@ -102,7 +107,14 @@ def test_run_vscode_setup_creates_missing_nested_target(tmp_path: Path) -> None:
     assert (missing / SNIPPET_REL).is_file()
 
 
-def test_run_vscode_setup_generate_writes_templates_schemas_and_snippets(tmp_path: Path) -> None:
+def test_run_vscode_setup_generate_writes_templates_schemas_and_snippets(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from tests.test_cli.conftest import _clear_runtime_caches
+
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(tmp_path))
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path))
+    _clear_runtime_caches()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = run_vscode_setup(tmp_path)
@@ -353,13 +365,14 @@ def test_run_vscode_setup_empty_dir_completes_without_object_folder_errors(
     tmp_path: Path,
 ) -> None:
     """Issue #212: missing objects/* during generate-first vscode setup is not an error."""
-    from tests.test_cli.conftest import assert_json_ok
+    from tests.test_cli.conftest import _clear_runtime_caches, assert_json_ok
     from typer.testing import CliRunner
 
     from opentide.cli import app
     from opentide.registry.builder import reset_missing_object_folder_log_cache
 
     reset_missing_object_folder_log_cache()
+    _clear_runtime_caches()
     runner = CliRunner()
     result = runner.invoke(
         app,
@@ -399,7 +412,7 @@ def test_run_vscode_setup_empty_dir_debug_logs_missing_folders_at_debug(
 def test_run_vscode_setup_empty_object_dirs_still_quiet(
     tmp_path: Path,
 ) -> None:
-    from tests.test_cli.conftest import assert_json_ok
+    from tests.test_cli.conftest import _clear_runtime_caches, assert_json_ok
     from typer.testing import CliRunner
 
     from opentide.cli import app
@@ -407,6 +420,7 @@ def test_run_vscode_setup_empty_object_dirs_still_quiet(
     from opentide.registry.builder import reset_missing_object_folder_log_cache
 
     reset_missing_object_folder_log_cache()
+    _clear_runtime_caches()
     run_repo_setup(RepoSetupOptions(path=tmp_path, name="Empty objects", yes=True))
     runner = CliRunner()
     result = runner.invoke(
