@@ -15,6 +15,7 @@ from opentide.cli.enums import (
     ValidateCheck,
     platform_label,
 )
+from opentide.cli.explorer_app import explorer_app
 from opentide.cli.output import CommandResult, emit_error, emit_result, emit_success
 from opentide.cli.services.deploy import run_deploy
 from opentide.cli.services.document import run_document
@@ -75,6 +76,7 @@ def main_callback(
 
 
 app.add_typer(setup_app, name="setup")
+app.add_typer(explorer_app, name="explorer")
 
 generate_app = typer.Typer(help="Framework generation and documentation pipeline")
 app.add_typer(generate_app, name="generate")
@@ -119,6 +121,13 @@ def generate_vocabs_cmd(ctx: typer.Context) -> None:
 def generate_snippets_cmd(ctx: typer.Context) -> None:
     cli = get_context(ctx)
     emit_success(cli, run_generate(cli, phase="snippets"))
+
+
+@generate_app.command("explorer")
+def generate_explorer_cmd(ctx: typer.Context) -> None:
+    """Write explorer.bundle.json and explorer.search.json for the static UI."""
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="explorer"))
 
 
 inflight_app = typer.Typer(help="Inflight preview shard generation and prune")

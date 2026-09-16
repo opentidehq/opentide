@@ -82,6 +82,7 @@ class GeneratePhase(str, Enum):
     snippets = "snippets"
     exports = "exports"
     docs = "docs"
+    explorer = "explorer"
 
 
 class LintCheck(str, Enum):

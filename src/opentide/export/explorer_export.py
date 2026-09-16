@@ -244,3 +244,6 @@ class ExplorerExport:
 
 def export_explorer_bundle(export_dir: Path | None = None) -> tuple[Path, Path]:
     return ExplorerExport(export_dir=export_dir).export()
+
+
+run = export_explorer_bundle

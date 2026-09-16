@@ -12,6 +12,7 @@
     "setup",
     "migrate",
     "generate",
+    "explorer",
     "validate",
     "lint",
     "deploy",

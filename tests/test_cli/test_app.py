@@ -21,6 +21,8 @@ def test_cli_help_lists_commands() -> None:
         "validate",
         "deploy",
         "info",
+        "explorer",
+        "lint",
     ):
         assert command in result.stdout
 
@@ -45,16 +47,17 @@ def test_info_json_output() -> None:
 
 def test_generate_subcommands_invoke_services() -> None:
     with patch("opentide.cli.run_generate", return_value={"status": "ok"}) as mock_run:
-        for phase in ("schemas", "templates", "vocabs", "snippets", "exports"):
+        for phase in ("schemas", "templates", "vocabs", "snippets", "exports", "explorer"):
             result = runner.invoke(app, ["--json", "generate", phase])
             assert result.exit_code == 0, result.stdout
-        assert mock_run.call_count == 5
+        assert mock_run.call_count == 6
         assert {call.kwargs["phase"] for call in mock_run.call_args_list} == {
             "schemas",
             "templates",
             "vocabs",
             "snippets",
             "exports",
+            "explorer",
         }
 
 
@@ -210,3 +213,30 @@ def test_deploy_metadata_json(monkeypatch: pytest.MonkeyPatch) -> None:
         result = runner.invoke(app, ["--json", "deploy", "metadata", "--platform", "splunk"])
     assert result.exit_code == 2
     assert "not implemented" in result.stdout
+
+
+def test_explorer_help_lists_build_dev_serve() -> None:
+    result = runner.invoke(app, ["explorer", "--help"])
+    assert result.exit_code == 0
+    for command in ("build", "dev", "serve"):
+        assert command in result.stdout
+
+
+def test_explorer_build_invokes_service() -> None:
+    with patch(
+        "opentide.cli.explorer_app.run_explorer_build",
+        return_value={"message": "Explorer static site built"},
+    ) as mock_build:
+        result = runner.invoke(app, ["--json", "explorer", "build", "--output", "/tmp/out"])
+    assert result.exit_code == 0, result.stdout
+    mock_build.assert_called_once()
+
+
+def test_explorer_build_reports_runtime_error() -> None:
+    with patch(
+        "opentide.cli.explorer_app.run_explorer_build",
+        side_effect=RuntimeError("node is required for opentide explorer build"),
+    ):
+        result = runner.invoke(app, ["--json", "explorer", "build"])
+    assert result.exit_code == 1
+    assert "node is required" in result.stdout

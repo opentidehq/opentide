@@ -8,9 +8,10 @@ description: Output-first generation pipeline — docs, exports, vocabs, templat
 Builds client-visible outputs first, then framework internals from Pydantic models and bundled vocabulary.
 
 ```bash
-opentide generate                    # full pipeline (no extract)
+opentide generate                    # full pipeline (no extract / explorer)
 opentide generate schemas            # single phase
 opentide generate docs --output docs
+opentide generate explorer           # explorer.bundle.json (opt-in)
 opentide generate exports navigator
 opentide generate inflight
 opentide generate inflight prune
@@ -30,7 +31,7 @@ When run without a subcommand, phases execute in this order:
 | 5 | schemas | `generate schemas` | `.opentide/schemas/*.schema.json`, IDE router |
 | 6 | snippets | `generate snippets` | VS Code snippets from templates |
 
-`extract` is **not** part of the default run — it calls live platform APIs and writes `Imported/` in the working directory. Use `opentide generate extract` explicitly when importing rules.
+`extract` is **not** part of the default run — it calls live platform APIs and writes `Imported/` in the working directory. Use `opentide generate extract` explicitly when importing rules. `generate explorer` is also opt-in; `opentide explorer build` regenerates the bundle itself.
 
 A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts. Snippet conversion requires the YAML templates from the templates phase and fails if a core or enabled-platform template is missing. Snippet prefixes are `tide-threat`, `tide-objective`, `tide-rule`, and `tide-<platform>` for enabled platforms, with `scope: yaml` and tabstops on empty values.
 
@@ -122,6 +123,16 @@ opentide generate exports revisions
 ```
 
 `generate exports objects` writes `.opentide/exports/objects.export.json`. Threat `actors` are objects whose `name` is a scoped vocabulary ID (`att&ck::G0006`); the export enriches those names to display names.
+
+## generate explorer
+
+Write the static-UI bundle consumed by [`opentide explorer`](./explorer.md):
+
+```bash
+opentide generate explorer
+```
+
+Outputs `.opentide/exports/explorer.bundle.json` and `explorer.search.json`. This phase is not in the default `opentide generate` pipeline.
 
 ## generate inflight
 

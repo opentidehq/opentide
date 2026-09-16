@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from datetime import date
 
-from opentide.export.explorer_export import _actors, build_search_documents
+from opentide.export.explorer_export import (
+    _actors,
+    build_search_documents,
+    export_explorer_bundle,
+    run,
+)
 
 
 def test_actors_extracts_object_names() -> None:
@@ -46,3 +51,7 @@ def test_search_documents_serialize_native_dates() -> None:
     }
     documents = build_search_documents(summaries, flat_index)
     assert "2026-09-11" in documents[0]["content"]
+
+
+def test_run_is_export_explorer_bundle_alias() -> None:
+    assert run is export_explorer_bundle
