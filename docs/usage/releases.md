@@ -7,6 +7,38 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.1.8 — 16 September 2026
+
+Patch on 0.1.7. **Upgrade if first-time `setup` / `generate` logged missing object folders as errors, dumped YAML `null`, attached live children under `#key:` parents, skipped platform TOML from `setup repo --platform`, emitted Title-Case UUID documentation paths, or looked up `objective.priority` in `criticality::1.0`.**
+
+**Install**
+
+```bash
+pip install opentide==0.1.8
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version adds**
+
+- VS Code snippets with `tide-*` prefixes, YAML scope, descriptions, and tabstops ([#194](https://github.com/OpenTideHQ/opentide/issues/194)).
+- `opentide setup vscode --mcp` ([#193](https://github.com/OpenTideHQ/opentide/issues/193)).
+
+**What this version fixes**
+
+- Missing object folders log at debug, not error.
+- Optional template `#key:` blocks comment nested children.
+- Templates never emit YAML `null`.
+- `setup repo --platform` writes enabled platform TOML.
+- Objective `priority` is not checked against `criticality::1.0`.
+- GitHub docs use lowercase slug paths; UUID permalinks stay GitLab-only.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.1.8/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.8)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.1.7 — 16 September 2026
 
 Patch on 0.1.6. **Upgrade if VS Code YAML reported "Matches multiple schemas", generated templates hid required nested fields, `setup vscode` skipped snippets or crashed on a missing path, JSON validate stamped every check failed, or `invalid_ref` pointed at parent objects.**

@@ -56,17 +56,17 @@ The PyPI account that saved the pending publisher **owns** the project.
 
 After the first upload, the pending publisher becomes a normal publisher. Further GitHub Releases on `v*` tags publish new versions. Do not add a PyPI API token.
 
-Cut a patch on `development` after the changelog and release notes land (example: **0.1.7**):
+Cut a patch on `development` after the changelog and release notes land (example: **0.1.8**):
 
 ```bash
-gh release create v0.1.7 \
+gh release create v0.1.8 \
   --repo OpenTideHQ/opentide \
   --target development \
-  --title "0.1.7" \
-  --notes-file .github/release-notes/v0.1.7.md
+  --title "0.1.8" \
+  --notes-file .github/release-notes/v0.1.8.md
 ```
 
-The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.7.md`. Do not tag a feature branch.
+The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.8.md`. Do not tag a feature branch.
 
 After a successful upload, `publish-pypi.yml` dispatches `opentide-released` to [`OpenTideHQ/website`](https://github.com/OpenTideHQ/website) so docs, changelog pages, and specs rebuild immediately:
 
