@@ -24,7 +24,14 @@ from opentide.cli.services.setup.mcp import McpSetupOptions, run_mcp_setup, writ
 def test_write_mcp_config(tmp_path: Path, host: McpHost, rel: str) -> None:
     assert write_mcp_config(tmp_path, host) == rel
     payload = json.loads((tmp_path / rel).read_text(encoding="utf-8"))
-    assert payload["mcpServers"]["opentide"]["command"] == "opentide-mcp"
+    servers = payload.get("servers") if host is McpHost.vscode else payload.get("mcpServers")
+    assert isinstance(servers, dict)
+    assert servers["opentide"]["command"] == "opentide-mcp"
+    assert servers["opentide"]["env"]["OPENTIDE_REPO_ROOT"] == "${workspaceFolder}"
+    if host is McpHost.vscode:
+        assert "mcpServers" not in payload
+    else:
+        assert "servers" not in payload
 
 
 def test_run_mcp_setup_requires_host() -> None:

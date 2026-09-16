@@ -26,8 +26,11 @@ def test_setup_data_root_is_package_data() -> None:
 @pytest.mark.parametrize("host", ["vscode", "cursor", "claude-code", "generic"])
 def test_load_mcp_template(host: str) -> None:
     payload = load_mcp_template(host)
-    assert "mcpServers" in payload
-    assert "opentide" in payload["mcpServers"]
+    key = "servers" if host == "vscode" else "mcpServers"
+    assert key in payload
+    servers = payload[key]
+    assert "opentide" in servers
+    assert servers["opentide"]["env"]["OPENTIDE_REPO_ROOT"] == "${workspaceFolder}"
 
 
 def test_load_mcp_template_unknown_host() -> None:
@@ -59,6 +62,10 @@ def test_render_agent_entrypoint() -> None:
     assert "SOC" in text
     assert "SecOps" in text
     assert "Detections" in text
+    assert ".opentide/configurations/" in text
+    assert ".opentide/schemas/" in text
+    assert "Configurations/" not in text
+    assert "Schemas/" not in text
 
 
 def test_mcp_templates_are_valid_json() -> None:

@@ -185,7 +185,7 @@ opentide setup vscode --snippets
 
 | Flag | Purpose |
 |------|---------|
-| `--settings` | Write `.vscode/settings.json` yaml.schemas |
+| `--settings` | Write `.vscode/settings.json` yaml.schemas and `.vscode/extensions.json` |
 | `--snippets` | Write model template snippets |
 | `--no-merge` | Replace settings instead of merging |
 

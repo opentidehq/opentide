@@ -21,13 +21,33 @@ opentide setup mcp --vscode --generic --yes
 
 ## Minimal config
 
-All hosts use the same server entry:
+VS Code workspace MCP (`.vscode/mcp.json`) uses a top-level `servers` object. Cursor, Claude Code, and the generic template use `mcpServers`.
+
+### VS Code
+
+```json
+{
+  "servers": {
+    "opentide": {
+      "command": "opentide-mcp",
+      "env": {
+        "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}
+```
+
+### Cursor / Claude Code / generic
 
 ```json
 {
   "mcpServers": {
     "opentide": {
-      "command": "opentide-mcp"
+      "command": "opentide-mcp",
+      "env": {
+        "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
+      }
     }
   }
 }

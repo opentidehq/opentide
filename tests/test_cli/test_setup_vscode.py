@@ -13,6 +13,7 @@ from opentide.cli.services.setup.vscode import (
     run_vscode_snippets,
     snippet_file_rel,
     validate_schema_fragment_matches_global,
+    write_vscode_extensions,
     write_vscode_settings,
 )
 
@@ -59,6 +60,7 @@ def test_run_vscode_all_skips_snippets_on_empty_scaffold(tmp_path: Path) -> None
         warnings.simplefilter("always")
         result = run_vscode_all(tmp_path)
     assert ".vscode/settings.json" in result["files"]
+    assert ".vscode/extensions.json" in result["files"]
     assert SNIPPET_REL not in result["files"]
 
 
@@ -136,6 +138,38 @@ def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:
         write_vscode_settings(tmp_path)
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
     assert isinstance(settings["yaml.schemas"], dict)
+
+
+def test_write_vscode_extensions_recommends_yaml_extension(tmp_path: Path) -> None:
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        run_vscode_settings(tmp_path)
+    extensions = json.loads((tmp_path / ".vscode" / "extensions.json").read_text(encoding="utf-8"))
+    assert "redhat.vscode-yaml" in extensions["recommendations"]
+
+
+def test_write_vscode_extensions_merges_recommendations(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "extensions.json").write_text(
+        json.dumps({"recommendations": ["ms-python.python"]}),
+        encoding="utf-8",
+    )
+    write_vscode_extensions(tmp_path)
+    extensions = json.loads((vscode_dir / "extensions.json").read_text(encoding="utf-8"))
+    assert extensions["recommendations"] == ["ms-python.python", "redhat.vscode-yaml"]
+
+
+def test_write_vscode_extensions_non_list_recommendations(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "extensions.json").write_text(
+        json.dumps({"recommendations": "invalid"}),
+        encoding="utf-8",
+    )
+    write_vscode_extensions(tmp_path)
+    extensions = json.loads((vscode_dir / "extensions.json").read_text(encoding="utf-8"))
+    assert extensions["recommendations"] == ["redhat.vscode-yaml"]
 
 
 def test_build_yaml_schema_mappings_uses_router_schema() -> None:

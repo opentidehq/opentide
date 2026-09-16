@@ -47,7 +47,7 @@ The server uses **stdio transport**. It must know where your content lives, so s
 
 | Host | Setup flag | Config path |
 |------|------------|-------------|
-| VS Code | `--vscode` | `.vscode/mcp.json` |
+| VS Code | `--vscode` | `.vscode/mcp.json` (`servers`, not `mcpServers`) |
 | Cursor | `--cursor` | `.cursor/mcp.json` |
 | Claude Code | `--claude-code` | `.mcp.json` |
 | Generic | `--generic` | `opentide.mcp.json` |
