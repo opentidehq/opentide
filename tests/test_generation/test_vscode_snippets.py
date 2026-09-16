@@ -77,6 +77,22 @@ def test_vs_code_snippet_generator_tabstops_empty_values(tmp_path: Path) -> None
     assert not any("${" in line and line.lstrip().startswith("#") for line in body)
 
 
+def test_vs_code_snippet_generator_keeps_commented_mapping_children(
+    tmp_path: Path,
+) -> None:
+    """Commented platform stubs are still children of ``configurations:``."""
+    template = tmp_path / "rule.yaml"
+    template.write_text(
+        "configurations:\n  #sentinel:\n  #  query: |\n  #    ...\n",
+        encoding="utf-8",
+    )
+    snippet = vs_code_snippet_generator(template, "tide-rule")
+    body = "\n".join(snippet["body"])
+    assert "configurations:" in body
+    assert "configurations: ${" not in body
+    assert "  #sentinel:" in body
+
+
 def test_vs_code_snippet_generator_prepends_blank_lines(tmp_path: Path) -> None:
     template = tmp_path / "objective.yaml"
     template.write_text("objective:\n", encoding="utf-8")
@@ -219,6 +235,8 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
     rule_body = "\n".join(payload["Detection Rules Template"]["body"])
     assert "${1:name}" in rule_body or "name: ${" in rule_body
     assert "#author:" in rule_body
+    assert "configurations:" in rule_body
+    assert "configurations: ${" not in rule_body
     assert "${" not in "".join(
         line
         for line in payload["Detection Rules Template"]["body"]
