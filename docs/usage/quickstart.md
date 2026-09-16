@@ -35,7 +35,7 @@ opentide generate
 This runs the full pipeline: docs → exports → vocabs → templates → schemas → snippets. On a repo that already has objects, exports include ATT&CK navigator JSON and `objects.export.json` (actor IDs are enriched from the vocabulary). On a freshly scaffolded empty repo, docs and exports are empty artifacts and the rest of the pipeline still completes.
 
 ```text
-✓ documentation written    docs/Rules docs/Objectives docs/Threats
+✓ documentation written    docs/rules docs/objectives docs/threats
 ✓ exports written          .opentide/exports/
 ✓ templates written        .opentide/templates/
 ✓ schemas written          .opentide/schemas/

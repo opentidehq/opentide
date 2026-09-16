@@ -26,7 +26,7 @@ def test_load_settings_defaults() -> None:
     assert settings.output_dir.is_absolute()
     assert settings.flavor is DocumentFlavor.github
     assert settings.folder_index_pages is True
-    assert settings.uuid_permalinks is True
+    assert settings.uuid_permalinks is False
     assert settings.relations_direction == "both"
     assert settings.index_relation_counts is True
     assert settings.index_icons is True
@@ -42,3 +42,23 @@ def test_load_settings_cli_overrides() -> None:
     assert settings.relations_direction == "both"
     assert settings.index_relation_counts is True
     assert settings.index_icons is False
+
+
+def test_load_settings_uuid_permalinks_are_gitlab_only() -> None:
+    """[gitlab] uuid_permalinks must not leak into GitHub or generic flavors (#203)."""
+    docs_cfg = {
+        "flavor": {"default": "github"},
+        "gitlab": {"uuid_permalinks": True},
+    }
+    global_cfg = {"paths": {"core": {"docs_folder": "docs"}}}
+    with patch("opentide.documentation.config.OpenTide") as mock_ot:
+        mock_ot.Configurations.Documentation.Index = docs_cfg
+        mock_ot.Configurations.Global.Index = global_cfg
+        github = load_settings(flavor="github")
+        generic = load_settings(flavor="generic")
+        gitlab = load_settings(flavor="gitlab")
+        azure = load_settings(flavor="azure-devops")
+    assert github.uuid_permalinks is False
+    assert generic.uuid_permalinks is False
+    assert azure.uuid_permalinks is False
+    assert gitlab.uuid_permalinks is True

@@ -213,7 +213,7 @@ def test_render_rule_sections_include_status_response_and_model_link(
     assert "**Responders**:" in response
     assert "### Procedure" in response
     assert "## Detection model" in detection_model
-    assert "[Shai-Hulud Objective](../Objectives/shai-hulud-objective.md)" in detection_model
+    assert "[Shai-Hulud Objective](../objectives/shai-hulud-objective.md)" in detection_model
     assert "`00000000-0000-4000-8102-000000000001`" in detection_model
 
 

@@ -44,7 +44,7 @@ def test_objective_page_contains_coverage_mermaid(tmp_path) -> None:
     assert "-->|implements|" in rendered
     assert 'subgraph "Rules"' in rendered
     assert "Shai-Hulud Sentinel Rule" in rendered
-    assert "[Shai-Hulud Sentinel Rule](../Rules/shai-hulud-sentinel-rule.md)" in rendered
+    assert "[Shai-Hulud Sentinel Rule](../rules/shai-hulud-sentinel-rule.md)" in rendered
 
 
 def test_rule_page_contains_coverage_when_detection_model_exists(tmp_path) -> None:
@@ -54,7 +54,7 @@ def test_rule_page_contains_coverage_when_detection_model_exists(tmp_path) -> No
     assert "## Coverage" in rendered
     assert "```mermaid" in rendered
     assert "-->|covers|" in rendered
-    assert "[Shai-Hulud Objective](../Objectives/shai-hulud-objective.md)" in rendered
+    assert "[Shai-Hulud Objective](../objectives/shai-hulud-objective.md)" in rendered
 
 
 def test_rule_page_omits_coverage_when_catalog_has_none(tmp_path) -> None:

@@ -53,12 +53,12 @@ def test_tutorial_objects_validate_and_lint(invoke_cli, tmp_path: Path) -> None:
             p.name for p in (fresh / "docs" / folder).glob("*.md") if p.name.lower() != "readme.md"
         )
 
-    assert _object_pages("Rules"), "expected generated rule documentation"
-    assert _object_pages("Objectives"), "expected generated objective documentation"
-    assert _object_pages("Threats"), "expected generated threat documentation"
-    rule_text = (fresh / "docs" / "Rules" / _object_pages("Rules")[0]).read_text(encoding="utf-8")
+    assert _object_pages("rules"), "expected generated rule documentation"
+    assert _object_pages("objectives"), "expected generated objective documentation"
+    assert _object_pages("threats"), "expected generated threat documentation"
+    rule_text = (fresh / "docs" / "rules" / _object_pages("rules")[0]).read_text(encoding="utf-8")
     assert "00000000-0000-4000-8003-000000000001" in rule_text
-    threat_text = (fresh / "docs" / "Threats" / _object_pages("Threats")[0]).read_text(
+    threat_text = (fresh / "docs" / "threats" / _object_pages("threats")[0]).read_text(
         encoding="utf-8"
     )
     assert "G0006" in threat_text
