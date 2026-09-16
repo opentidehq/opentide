@@ -8,12 +8,22 @@
 # vocab-upstream). If notify fails, publish still succeeds; website hourly cron
 # is the backup:
 #   gh api repos/OpenTideHQ/website/dispatches -f event_type=opentide-released
+#
+# Build with `uv build` (same as CI). Do not use `hatch build`: hatch 1.18.1 +
+# hatchling 1.32.1 isolated envs import `hatch` from BinaryBuilder and fail with
+# ModuleNotFoundError. Re-run a tagged release via workflow_dispatch +
+# checkout_ref (do not move the tag).
 name: Publish to PyPI
 
 on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      checkout_ref:
+        description: Git tag to checkout and publish (e.g. v0.1.8). Required for a manual re-run of an existing Release.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -34,16 +44,38 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref || github.sha }}
+
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          enable-cache: true
 
       - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: "3.12"
 
-      - name: Install hatch
-        run: pip install hatch
-
       - name: Build package
-        run: hatch build
+        run: uv build
+
+      - name: Twine check
+        run: uvx twine check dist/*
+
+      - name: Reject untagged / dev versions
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/opentide-*.whl)
+          if [[ ${#wheels[@]} -ne 1 ]]; then
+            echo "Expected exactly one wheel in dist/, found: ${wheels[*]-}" >&2
+            exit 1
+          fi
+          wheel="${wheels[0]}"
+          echo "Built ${wheel}"
+          if [[ "${wheel}" == *dev* ]]; then
+            echo "Refusing to publish a hatch-vcs local/dev version. Checkout a v* tag." >&2
+            exit 1
+          fi
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
@@ -66,9 +98,10 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.website.outputs.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref || github.event.release.tag_name || github.ref_name }}
         run: |
           set -euo pipefail
           gh api repos/OpenTideHQ/website/dispatches \
             -f event_type=opentide-released \
             -f client_payload[source]=publish-pypi \
-            -f client_payload[tag]="${{ github.event.release.tag_name || github.ref_name }}"
+            -f client_payload[tag]="${RELEASE_TAG}"
