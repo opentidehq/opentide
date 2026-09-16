@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+
 from opentide.generation.template_engine import (
+    comment_optional_subtrees,
+    emit_template_file,
     fetch_config_template,
     gen_template,
     get_required,
@@ -370,7 +374,8 @@ def test_gen_template_does_not_inherit_ancestor_required_names() -> None:
     assert "name" not in child
 
 
-def test_gen_template_optional_object_still_marks_nested_required() -> None:
+def test_gen_template_optional_object_keeps_nested_required_in_body() -> None:
+    """In-memory body still has live nested required keys; emit comments them."""
     body = gen_template(
         {
             "parent": {
@@ -396,3 +401,60 @@ def test_gen_template_optional_object_still_marks_nested_required() -> None:
     assert nested["need"] == "blank"
     assert "#skip" in nested
     assert "skip" not in nested
+
+
+def test_comment_optional_subtrees_comments_children_of_hash_keys() -> None:
+    raw = (
+        "metadata:\n"
+        "  tlp: \n"
+        "  #organisation:\n"
+        "    uuid: \n"
+        "    name: \n"
+        "threat:\n"
+        "  description: |\n"
+        "    ...\n"
+    )
+    fixed = comment_optional_subtrees(raw)
+    loaded = yaml.safe_load(fixed)
+    assert loaded["metadata"]["tlp"] in (None, "")
+    assert "organisation" not in (loaded["metadata"] or {})
+    assert "uuid" not in (loaded["metadata"] or {})
+    assert loaded["threat"]["description"].strip() == "..."
+    assert "#  uuid:" in fixed
+    assert "#  name:" in fixed
+
+
+def test_emit_template_file_optional_object_is_parse_safe(tmp_path: Path) -> None:
+    path = tmp_path / "threat.template.yaml"
+    body = gen_template(
+        {
+            "metadata": {
+                "type": "object",
+                "required": ["tlp"],
+                "properties": {
+                    "tlp": {"type": "string"},
+                    "organisation": {
+                        "type": "object",
+                        "required": ["uuid", "name"],
+                        "properties": {
+                            "uuid": {"type": "string"},
+                            "name": {"type": "string"},
+                        },
+                    },
+                },
+            }
+        },
+        required=["metadata"],
+    )
+    emit_template_file(
+        path,
+        body,
+        spacing_properties={},
+        indent=None,
+    )
+    text = path.read_text(encoding="utf-8")
+    loaded = yaml.safe_load(text)
+    assert loaded["metadata"]["tlp"] in (None, "")
+    assert loaded["metadata"].get("organisation") is None
+    assert "#  uuid:" in text
+    assert "#  name:" in text

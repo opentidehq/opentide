@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Callable, cast
 
@@ -97,6 +98,46 @@ def _local_required(schema: dict[str, Any]) -> list[str]:
     if isinstance(extra, list):
         names.extend(str(item) for item in extra)
     return names
+
+
+_OPTIONAL_KEY_COMMENT = re.compile(r"^#[A-Za-z0-9_&.-]+\s*:")
+
+
+def comment_optional_subtrees(text: str) -> str:
+    """Comment nested lines under a dumped ``#key:`` parent.
+
+    Hash-prefixed keys become YAML comments. Nested live lines must also be
+    commented or they attach to the previous real mapping (issue #209).
+    Uncommenting the whole block restores valid structure::
+
+        #organisation:
+        #  uuid:
+        #  name:
+    """
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    commented_indent: int | None = None
+    for line in lines:
+        raw = line[:-1] if line.endswith("\n") else line
+        newline = "\n" if line.endswith("\n") else ""
+        if not raw.strip():
+            out.append(line)
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+        stripped = raw.lstrip(" ")
+        list_item = stripped.startswith("- ") or stripped.startswith("#-")
+        if commented_indent is not None and indent <= commented_indent:
+            if not (list_item and indent == commented_indent):
+                commented_indent = None
+        if commented_indent is not None and indent > commented_indent:
+            if not stripped.startswith("#"):
+                raw = raw[:commented_indent] + "#" + raw[commented_indent:]
+            out.append(raw + newline)
+            continue
+        if _OPTIONAL_KEY_COMMENT.match(stripped):
+            commented_indent = indent
+        out.append(line)
+    return "".join(out)
 
 
 def _is_null_type(node: dict[str, Any]) -> bool:
@@ -247,11 +288,12 @@ def gen_template(
                         sample = "#" + str(sample)
                     body[key] = {sample: "blank"} if sample else {}
                 elif "properties" in field:
-                    body[key] = gen_template(
+                    nested = gen_template(
                         field.get("properties", {}),
                         required=_local_required(field),
                         defs=defs,
                     )
+                    body[key] = nested
 
         elif "items" in field and "properties" in field.get("items", {}):
             items = field["items"]
@@ -386,6 +428,10 @@ def emit_template_file(
         replace_strings_in_file(template_path, [f"${placeholder}"], value)
 
     remove_blanks(template_path)
+    template_path.write_text(
+        comment_optional_subtrees(template_path.read_text(encoding="utf-8")),
+        encoding="utf-8",
+    )
     make_spaces(template_path, spacing_properties)
     if indent is not None:
         indent_template(template_path, indent)
