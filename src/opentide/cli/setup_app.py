@@ -532,6 +532,9 @@ def setup_vscode_cmd(
     snippets: bool = typer.Option(False, "--snippets"),
     no_merge: bool = typer.Option(False, "--no-merge"),
     no_generate: bool = typer.Option(False, "--no-generate"),
+    mcp: bool = typer.Option(
+        False, "--mcp", help="Also write .vscode/mcp.json (same as setup mcp --vscode)"
+    ),
 ) -> None:
     """Write VS Code yaml.schemas and snippets (deprecated). Default: both."""
     cli = get_context(ctx)
@@ -545,5 +548,6 @@ def setup_vscode_cmd(
         snippets=run_snippets_flag,
         generate=not no_generate,
         merge=not no_merge,
+        mcp=mcp,
     )
     emit_success(cli, result)

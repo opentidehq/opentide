@@ -160,6 +160,8 @@ def test_run_setup_vscode_deprecated(tmp_path: Path) -> None:
     assert ".vscode/settings.json" in vscode_files
     assert ".vscode/extensions.json" in vscode_files
     assert ".vscode/model-templates.code-snippets" in vscode_files
+    assert ".vscode/mcp.json" not in vscode_files
+    assert not (target / ".vscode" / "mcp.json").exists()
 
 
 def test_run_setup_vscode_failure_propagates(
