@@ -12,7 +12,7 @@ from opentide.cli.output import emit, emit_error
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 from opentide.validation.errors import format_issues_for_console
-from opentide.validation.issues import ValidationReport
+from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.scope import ValidationScope
 from opentide.validation.session import run_validation
 
@@ -79,6 +79,42 @@ def run_cve_validation() -> None:
     cve.run()
 
 
+# Issue codes produced by each named check. JSON status is per-check, not overall ok.
+_CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
+    ValidateCheck.id_uniqueness.value: frozenset({"duplicate_id"}),
+    ValidateCheck.uuid_format.value: frozenset({"invalid_uuid"}),
+    ValidateCheck.schema.value: frozenset(
+        {
+            "schema_validation",
+            "invalid_ref",
+            "vocab_unknown",
+            "chaining_relation_unknown",
+        }
+    ),
+    ValidateCheck.cve.value: frozenset({"invalid_cve"}),
+}
+
+_OBJECT_CHECKS = frozenset({ValidateCheck.uuid_format.value, ValidateCheck.schema.value})
+
+
+def _issues_for_check(issues: list[ValidationIssue], check_name: str) -> list[ValidationIssue]:
+    codes = _CHECK_ISSUE_CODES.get(check_name, frozenset())
+    matched = [issue for issue in issues if issue.code in codes]
+    if check_name in _OBJECT_CHECKS and any(issue.code == "scope_no_match" for issue in issues):
+        matched.extend(issue for issue in issues if issue.code == "scope_no_match")
+    return matched
+
+
+def _status_for_check(report: ValidationReport, check_name: str) -> str:
+    """Status for one named check based on that check's issues, not overall ok."""
+    return "failed" if _issues_for_check(report.issues, check_name) else "passed"
+
+
+def _dump_check_issues(issues: list[ValidationIssue]) -> list[dict[str, object]]:
+    payload = ValidationReport(ok=not issues, issues=issues).model_dump_json_ready()
+    return list(payload.get("issues", []))
+
+
 def _report_payload(report: ValidationReport) -> dict[str, object]:
     return {
         "status": "passed" if report.ok else "failed",
@@ -107,10 +143,11 @@ def run_validate_all(*, scope: ValidationScope | None = None) -> dict[str, objec
     report = run_validation(scope=scope or ValidationScope.full())
     results: dict[str, object] = {}
     for check in (ValidateCheck.id_uniqueness, ValidateCheck.uuid_format, ValidateCheck.schema):
+        check_issues = _issues_for_check(report.issues, check.value)
         results[check.value] = {
             "check": check.value,
-            "status": "passed" if report.ok else "failed",
-            "issues": report.model_dump_json_ready(),
+            "status": _status_for_check(report, check.value),
+            "issues": _dump_check_issues(check_issues),
         }
     return results
 
@@ -144,7 +181,7 @@ def run_validate(
             "checks": {
                 name: {
                     "check": name,
-                    "status": "passed" if report.ok else "failed",
+                    "status": _status_for_check(report, name),
                 }
                 for name in (
                     ValidateCheck.id_uniqueness.value,

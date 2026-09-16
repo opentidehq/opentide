@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from opentide.generation.pydantic_metaschema import _deref_schema_node, _schema_branch_nodes
 from opentide.validation.deprecated_fields import resolve_metaschema
+from opentide.validation.errors import _leaf_field_name
 from opentide.validation.issues import ValidationIssue
 from opentide.validation.preflight import PreflightGraph
 
@@ -108,7 +109,7 @@ def _validate_vocab_value(
         return []
     vocab = field_schema.get("tide.vocab")
     if vocab is True:
-        vocab = field_path[-1] if field_path else "unknown"
+        vocab = _leaf_field_name(field_path) or "unknown"
     if isinstance(vocab, list):
         vocab = vocab[0]
     if not isinstance(vocab, str):

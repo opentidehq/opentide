@@ -4,15 +4,59 @@ metadata:
   uuid: 
   schema: 
   version: 
-  created: 
-  modified: 
+  created: YYYY-MM-DD
+  modified: YYYY-MM-DD
   tlp: 
   #author: null
-  #contributors: null
-  #organisation: null
-objective: 
-composition: 
+  #contributors:
+    #-
+  #organisation:
+    uuid: 
+    name: 
+objective:
+  priority: 
+  type: 
+  description: 
+  signals:
+    - name: 
+      uuid: 
+      description: 
+      severity: 
+      data:
+        availability: 
+        requirements: 
+        #logsources:
+          #-
+      methodology: 
+      entities:
+        - 
+      #effort: null
+      #detectors:
+        #- name: 
+          #technology: 
+          #description: 
+          #link: null
+      #examples:
+        #- description: 
+          #link: 
+          #language: null
+          #query: null
+      #parent: null
+  composition:
+    strategy: 
+    description: 
+  #investment: null
+  #threats:
+    #-
+  #attack:
+    #-
+composition:
+  strategy: 
+  description: 
 #references:
-  #public: null
-  #internal: null
-  #reports: null
+  #public:
+    #example: 
+  #internal:
+    #example: 
+  #reports:
+    #-

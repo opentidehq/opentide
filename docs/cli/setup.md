@@ -180,6 +180,8 @@ The full wizard checks skill availability before writing repository files. If th
 
 Interim yaml.schemas and snippet generation. Default with no flags: both settings and snippets.
 
+`yaml.schemas` maps each object folder to its concrete schema (`threat.1.0.schema.json` → `objects/threats/**/*.yaml`, and the same for objectives and rules). Nested files under those folders stay associated; it does not map the `opentide.schema.json` router against `objects/**/*.yaml` — the Red Hat YAML extension reports "Matches multiple schemas" for that glob.
+
 ```bash
 opentide setup vscode --settings --no-merge
 opentide setup vscode --snippets

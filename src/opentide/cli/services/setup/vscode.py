@@ -51,14 +51,36 @@ def emit_vscode_deprecation() -> None:
 
 
 def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, str]:
-    """Build yaml.schemas mappings from bundled paths.toml."""
+    """Build per-folder yaml.schemas mappings from bundled paths.toml.
+
+    The Red Hat YAML extension cannot reliably narrow ``opentide.schema.json``
+    (a oneOf/if-then router) against a single ``objects/**/*.yaml`` glob, which
+    produces "Matches multiple schemas" and disables autocompletion. Map each
+    core object family to its concrete schema with a recursive per-folder glob
+    (``objects/threats/**/*.yaml``), matching ``Path.rglob("*.yaml")`` object
+    discovery. Do not collapse families onto the router glob.
+    """
+    del workspace  # reserved for future workspace-relative schema URIs
     configs = resolve_configurations()
     cfg = configs.get("paths") or configs["global"]
     artifacts = cfg.get("artifacts", {})
     schema_map: dict[str, str] = dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
-    router_name = schema_map.get("router", "opentide.schema.json")
-    schema_uri = f"{OPENTIDE_DIR}/schemas/{router_name}"
-    return {schema_uri: "objects/**/*.yaml"}
+    object_dirs = (cfg.get("paths") or {}).get("objects") or {}
+    mappings: dict[str, str] = {}
+    for object_type in ("threat", "objective", "rule"):
+        schema_name = schema_map.get(object_type, f"{object_type}.1.0.schema.json")
+        folder = str(object_dirs.get(object_type, f"objects/{object_type}s/"))
+        glob = f"{folder.rstrip('/')}/**/*.yaml"
+        mappings[f"{OPENTIDE_DIR}/schemas/{schema_name}"] = glob
+    return mappings
+
+
+def _router_schema_uri() -> str:
+    configs = resolve_configurations()
+    cfg = configs.get("paths") or configs["global"]
+    artifacts = cfg.get("artifacts", {})
+    schema_map: dict[str, str] = dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
+    return f"{OPENTIDE_DIR}/schemas/{schema_map.get('router', 'opentide.schema.json')}"
 
 
 def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
@@ -75,6 +97,7 @@ def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
     yaml_schemas = existing.get("yaml.schemas", {})
     if not isinstance(yaml_schemas, dict):
         yaml_schemas = {}
+    yaml_schemas.pop(_router_schema_uri(), None)
     yaml_schemas.update(mappings)
     existing["yaml.schemas"] = yaml_schemas
     settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
