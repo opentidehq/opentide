@@ -25,10 +25,11 @@ def test_snippet_file_rel_matches_paths_toml(tmp_path: Path) -> None:
 
 def test_build_yaml_schema_mappings() -> None:
     mappings = build_yaml_schema_mappings()
-    assert mappings[".opentide/schemas/threat.1.0.schema.json"] == "objects/threats/*.yaml"
-    assert mappings[".opentide/schemas/objective.1.0.schema.json"] == "objects/objectives/*.yaml"
-    assert mappings[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/*.yaml"
+    assert mappings[".opentide/schemas/threat.1.0.schema.json"] == "objects/threats/**/*.yaml"
+    assert mappings[".opentide/schemas/objective.1.0.schema.json"] == "objects/objectives/**/*.yaml"
+    assert mappings[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/**/*.yaml"
     assert ".opentide/schemas/opentide.schema.json" not in mappings
+    assert "objects/**/*.yaml" not in mappings.values()
 
 
 def test_write_vscode_settings_merge(tmp_path: Path) -> None:
@@ -46,7 +47,7 @@ def test_write_vscode_settings_merge(tmp_path: Path) -> None:
     assert settings["editor.tabSize"] == 4
     assert ".opentide/schemas/threat.1.0.schema.json" in settings["yaml.schemas"]
     assert settings["yaml.schemas"][".opentide/schemas/threat.1.0.schema.json"] == (
-        "objects/threats/*.yaml"
+        "objects/threats/**/*.yaml"
     )
 
 
@@ -149,10 +150,11 @@ def test_build_yaml_schema_mappings_uses_per_folder_schemas() -> None:
     assert len(mappings) == 3
     assert ".opentide/schemas/opentide.schema.json" not in mappings
     assert set(mappings.values()) == {
-        "objects/threats/*.yaml",
-        "objects/objectives/*.yaml",
-        "objects/rules/*.yaml",
+        "objects/threats/**/*.yaml",
+        "objects/objectives/**/*.yaml",
+        "objects/rules/**/*.yaml",
     }
+    assert all(glob.endswith("/**/*.yaml") for glob in mappings.values())
 
 
 def test_write_vscode_settings_replaces_legacy_router_wildcard(tmp_path: Path) -> None:
@@ -175,7 +177,7 @@ def test_write_vscode_settings_replaces_legacy_router_wildcard(tmp_path: Path) -
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
     schemas = settings["yaml.schemas"]
     assert ".opentide/schemas/opentide.schema.json" not in schemas
-    assert schemas[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/*.yaml"
+    assert schemas[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/**/*.yaml"
     assert schemas["other.schema.json"] == "other/*.yaml"
 
 

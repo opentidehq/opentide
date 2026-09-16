@@ -53,7 +53,9 @@ def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, st
     The Red Hat YAML extension cannot reliably narrow ``opentide.schema.json``
     (a oneOf/if-then router) against a single ``objects/**/*.yaml`` glob, which
     produces "Matches multiple schemas" and disables autocompletion. Map each
-    core object family to its concrete schema instead.
+    core object family to its concrete schema with a recursive per-folder glob
+    (``objects/threats/**/*.yaml``), matching ``Path.rglob("*.yaml")`` object
+    discovery. Do not collapse families onto the router glob.
     """
     del workspace  # reserved for future workspace-relative schema URIs
     configs = resolve_configurations()
@@ -65,7 +67,7 @@ def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, st
     for object_type in ("threat", "objective", "rule"):
         schema_name = schema_map.get(object_type, f"{object_type}.1.0.schema.json")
         folder = str(object_dirs.get(object_type, f"objects/{object_type}s/"))
-        glob = f"{folder.rstrip('/')}/*.yaml"
+        glob = f"{folder.rstrip('/')}/**/*.yaml"
         mappings[f"{OPENTIDE_DIR}/schemas/{schema_name}"] = glob
     return mappings
 
