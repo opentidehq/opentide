@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.1.7] — 2026-09-16
+
+Patch on the public 0.1.6 beta. Upgrade if VS Code YAML reported "Matches multiple schemas", generated templates hid required nested fields, `setup vscode` skipped snippets or crashed on a missing path, JSON validate stamped every check failed, or `invalid_ref` pointed at parent objects.
+
+### Fixed
+
+- `invalid_ref` is attributed to the leaf UUID field. JSON `validate` reports per-check `status` (`uuid`, `metadata`, `schema`, `vocab`, `query`, `references`). Vocabulary names skip YAML list indices ([#186](https://github.com/opentidehq/opentide/issues/186)).
+- VS Code `yaml.schemas` maps each object folder recursively (`objects/threats/**/*.yaml`) instead of the `opentide.schema.json` router glob, so nested files keep editor association ([#185](https://github.com/opentidehq/opentide/issues/185)).
+- MCP templates use `servers` for VS Code 1.102+ / Cursor, host-specific `OPENTIDE_REPO_ROOT` (`${workspaceFolder}` vs `${CLAUDE_PROJECT_DIR}`), `.vscode/extensions.json`, and `AGENTS.md` ([#188](https://github.com/opentidehq/opentide/issues/188)).
+- Template `$ref` / `$defs` expansion inlines nested object bodies. Nested `required` lists are no longer inherited from the parent, so required nested fields stay uncommented ([#191](https://github.com/opentidehq/opentide/issues/191)).
+- `opentide setup vscode` generates templates and schemas before writing snippets, and fails if snippets were requested but could not be written ([#192](https://github.com/opentidehq/opentide/issues/192)).
+- `opentide setup vscode` creates a missing target directory before generate, so `chdir` no longer raises `FileNotFoundError`.
+
+### Install
+
+```bash
+pip install opentide==0.1.7
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.1.6] — 2026-09-15
 
 Patch on the public 0.1.5 beta. Upgrade if `opentide generate` crashed on unquoted YAML dates, or if interactive `opentide setup` crashed after choosing a CI provider.
@@ -161,7 +182,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.7
 [0.1.6]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.6
 [0.1.5]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.5
 [0.1.4]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.4

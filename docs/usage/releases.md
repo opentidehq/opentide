@@ -7,6 +7,32 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.1.7 — 16 September 2026
+
+Patch on 0.1.6. **Upgrade if VS Code YAML reported "Matches multiple schemas", generated templates hid required nested fields, `setup vscode` skipped snippets or crashed on a missing path, JSON validate stamped every check failed, or `invalid_ref` pointed at parent objects.**
+
+**Install**
+
+```bash
+pip install opentide==0.1.7
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version fixes**
+
+- `invalid_ref` reports the leaf UUID field; JSON validate uses per-check `status`; vocabulary names skip list indices.
+- VS Code `yaml.schemas` uses recursive per-folder globs (`objects/threats/**/*.yaml`) instead of the router wildcard.
+- MCP templates use `servers` (VS Code/Cursor), host-specific repo-root env, `extensions.json`, and `AGENTS.md`.
+- Generated templates inline `$ref` bodies and keep nested required fields uncommented.
+- `setup vscode` generates templates/schemas first, creates a missing target path, and fails when snippets cannot be written.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.1.7/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.7)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.1.6 — 15 September 2026
 
 Patch on 0.1.5. **Upgrade if `opentide generate` crashed on unquoted YAML dates, or if interactive `opentide setup` crashed after choosing a CI provider.**
