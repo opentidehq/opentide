@@ -24,7 +24,7 @@ The MCP `validate_query` and `run_query` tools are **stubs** — they return suc
 ## Install and configure the server
 
 ```bash
-pip install 'opentide==0.1.6'
+pip install 'opentide==0.1.7'
 opentide setup mcp --cursor --yes
 ```
 
