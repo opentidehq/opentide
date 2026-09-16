@@ -1,0 +1,226 @@
+{
+  "language_id": "spl",
+  "tokens": [
+    {
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 0,
+          "character": 5
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 5,
+        "end": 6
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 5
+        },
+        "end": {
+          "line": 0,
+          "character": 6
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 6,
+        "end": 10
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 6
+        },
+        "end": {
+          "line": 0,
+          "character": 10
+        }
+      },
+      "capture": "variable",
+      "token_type": 7
+    },
+    {
+      "span": {
+        "start": 11,
+        "end": 12
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 11
+        },
+        "end": {
+          "line": 0,
+          "character": 12
+        }
+      },
+      "capture": "operator.pipe",
+      "token_type": 3
+    },
+    {
+      "span": {
+        "start": 13,
+        "end": 18
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 13
+        },
+        "end": {
+          "line": 0,
+          "character": 18
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 19,
+        "end": 24
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 19
+        },
+        "end": {
+          "line": 0,
+          "character": 24
+        }
+      },
+      "capture": "variable",
+      "token_type": 7
+    },
+    {
+      "span": {
+        "start": 25,
+        "end": 27
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 25
+        },
+        "end": {
+          "line": 0,
+          "character": 27
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 28,
+        "end": 32
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 28
+        },
+        "end": {
+          "line": 0,
+          "character": 32
+        }
+      },
+      "capture": "variable",
+      "token_type": 7
+    },
+    {
+      "span": {
+        "start": 33,
+        "end": 34
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 33
+        },
+        "end": {
+          "line": 0,
+          "character": 34
+        }
+      },
+      "capture": "operator.pipe",
+      "token_type": 3
+    },
+    {
+      "span": {
+        "start": 35,
+        "end": 39
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 35
+        },
+        "end": {
+          "line": 0,
+          "character": 39
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 40,
+        "end": 41
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 40
+        },
+        "end": {
+          "line": 0,
+          "character": 41
+        }
+      },
+      "capture": "number",
+      "token_type": 10
+    }
+  ],
+  "legend": [
+    "comment",
+    "keyword",
+    "operator",
+    "operator.pipe",
+    "function",
+    "function.builtin",
+    "type",
+    "variable",
+    "property",
+    "string",
+    "number",
+    "boolean",
+    "constant",
+    "punctuation",
+    "punctuation.bracket",
+    "punctuation.delimiter",
+    "error",
+    "tide.keyword",
+    "tide.property",
+    "tide.uuid",
+    "tide.schema"
+  ]
+}

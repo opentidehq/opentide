@@ -1,0 +1,10 @@
+# Oracles are CI-only. Do not ship Microsoft Kusto.Language or Splunk SDKs
+# in the language-server binary.
+
+[[kql]]
+id = "control-command-syntax"
+reason = "Control commands are parsed by our grammar but rejected as detections."
+
+[[spl]]
+id = "implicit-search-prefix"
+reason = "Authored text is not rewritten with an implicit `| search`."

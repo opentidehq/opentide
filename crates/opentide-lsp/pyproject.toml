@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "opentide-lsp"
+version = "0.1.0"
+description = "OpenTide language server (KQL + SPL + Tide YAML)"
+readme = "README.md"
+license = { text = "EUPL-1.2" }
+requires-python = ">=3.10"
+classifiers = [
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[tool.maturin]
+manifest-path = "crates/opentide-lsp/Cargo.toml"
+bindings = "bin"
+python-source = "python"

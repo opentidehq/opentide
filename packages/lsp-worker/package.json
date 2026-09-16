@@ -1,0 +1,8 @@
+{
+  "name": "@opentide/lsp-worker",
+  "version": "0.1.0",
+  "description": "wasm32-unknown-unknown highlight() worker. Do not mix WASI.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts"
+}

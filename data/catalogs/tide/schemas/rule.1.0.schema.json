@@ -1,0 +1,250 @@
+{
+    "type": "object",
+    "properties": {
+        "name": {
+            "title": "Name",
+            "type": "string"
+        },
+        "metadata": {
+            "type": "object",
+            "properties": {
+                "uuid": {
+                    "title": "Uuid",
+                    "type": "string"
+                },
+                "schema": {
+                    "title": "Schema",
+                    "const": "rule::1.0",
+                    "type": "string"
+                },
+                "version": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "integer"
+                        }
+                    ],
+                    "title": "Version"
+                },
+                "created": {
+                    "title": "Created",
+                    "type": "string"
+                },
+                "modified": {
+                    "title": "Modified",
+                    "type": "string"
+                },
+                "tlp": {
+                    "title": "Tlp",
+                    "type": "string"
+                },
+                "author": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Author"
+                },
+                "contributors": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Contributors"
+                },
+                "organisation": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Organisation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Organisation"
+                }
+            },
+            "required": [
+                "uuid",
+                "schema",
+                "version",
+                "created",
+                "modified",
+                "tlp"
+            ],
+            "additionalProperties": false
+        },
+        "description": {
+            "title": "Description",
+            "type": "string"
+        },
+        "status": {
+            "default": "STAGING",
+            "title": "Status",
+            "type": "string"
+        },
+        "severity": {
+            "default": "Informational",
+            "title": "Severity",
+            "type": "string"
+        },
+        "techniques": {
+            "items": {
+                "type": "string"
+            },
+            "title": "Techniques",
+            "type": "array"
+        },
+        "platforms": {
+            "additionalProperties": {
+                "additionalProperties": true,
+                "type": "object"
+            },
+            "title": "Platforms",
+            "type": "object"
+        },
+        "references": {
+            "type": "object",
+            "properties": {
+                "public": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Public"
+                },
+                "internal": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Internal"
+                },
+                "reports": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Reports"
+                }
+            },
+            "additionalProperties": false
+        },
+        "detection_model": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": "Detection Model",
+            "enum": [
+                ""
+            ],
+            "markdownEnumDescriptions": []
+        },
+        "response": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/RuleResponse"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": "Response"
+        },
+        "configurations": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/RuleConfigurations"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": "Detection System Technical Setup",
+            "recomposition": "systems",
+            "properties": {}
+        },
+        "file": {
+            "anyOf": [
+                {
+                    "format": "path",
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": "File"
+        }
+    },
+    "required": [
+        "name",
+        "response",
+        "description",
+        "configurations"
+    ],
+    "title": "Detection Rule Schema",
+    "description": "A detection rule defines how a detection opportunity is implemented.",
+    "additionalProperties": false,
+    "anyOf": [
+        {
+            "required": [
+                "metadata"
+            ]
+        },
+        {
+            "required": [
+                "meta"
+            ]
+        }
+    ]
+}

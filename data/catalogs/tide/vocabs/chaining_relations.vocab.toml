@@ -1,0 +1,72 @@
+name = "Vector Chaining Relationship"
+field = "chaining_relations"
+version = "1.0"
+description = "Logical relation category between two threat vectors, building block of TVM Chaining"
+
+key = "name"
+[[stages]]
+id = "sequence"
+name = "Sequence"
+
+description = "Relative time or ordering of TVM execution"
+
+[[stages]]
+id = "atomicity"
+name = "Atomicity"
+
+description = "TVMs may overlap in concepts, with a scope or granularity hierarchy"
+
+[[stages]]
+id = "support"
+name = "Supportive"
+
+description = "TVMs which successful execution allows other TVMs to be more easily performed,\nor produce larger impact.\n"
+
+[[keys]]
+name = "preceeds"
+
+"tide.vocab.stages" = "sequence"
+"tide.vocab.relation.type" = "from"
+description = "The following TVM is occuring **AFTER** this TVM object has been performed.\n"
+
+[[keys]]
+name = "succeeds"
+
+"tide.vocab.stages" = "sequence"
+"tide.vocab.relation.type" = "to"
+description = "The following TVM is occuring **BEFORE** this TVM object has been performed.\n"
+
+[[keys]]
+name = "implemented"
+
+"tide.vocab.stages" = "atomicity"
+"tide.vocab.relation.type" = "from"
+description = "The following TVM is being performed in this TVM object in a more specific way\n"
+
+[[keys]]
+name = "implements"
+
+"tide.vocab.stages" = "atomicity"
+"tide.vocab.relation.type" = "to"
+description = "The following TVM is performing this TVM object in a more specific way\n"
+
+[[keys]]
+name = "enabled"
+
+"tide.vocab.stages" = "support"
+"tide.vocab.relation.type" = "from"
+description = "The following TVM is allowed by this TVM object to be more easily performed\n"
+
+[[keys]]
+name = "enabling"
+
+"tide.vocab.stages" = "support"
+"tide.vocab.relation.type" = "to"
+description = "The following TVM is allowing this TVM object to be more easily performed\n"
+
+[[keys]]
+name = "synergize"
+
+"tide.vocab.stages" = "support"
+"tide.vocab.relation.type" = "bidirectional"
+description = "Both TVM supports each other in performing adversary operations"

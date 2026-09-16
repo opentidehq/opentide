@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Host triples only until a cross linker (zig/cross) is wired.
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: build
+        run: cargo build --release -p opentide-lsp --target ${{ matrix.target }}
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: opentide-lsp-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/opentide-lsp*
+
+  highlights:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p opentide-lsp -- generate-highlights
+      - name: zip
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          mkdir -p dist
+          cp highlights/spec.toml highlights/generated/* highlights/queries/kql/highlights.scm highlights/queries/spl/highlights.scm highlights/queries/tide/highlights.scm dist/ || true
+          (cd highlights && zip -r "../highlights-${VERSION}.zip" spec.toml generated queries)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: highlights-zip
+          path: highlights-v*.zip
+
+  # PyPI: maturin abi3-py310. 3.14 free-threaded is best-effort.
+  pypi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install maturin
+      - run: maturin build --release -m crates/opentide-lsp/Cargo.toml || maturin build --release
+        continue-on-error: true

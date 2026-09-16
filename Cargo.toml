@@ -6,6 +6,10 @@ members = [
     "crates/opentide-syntax",
     "crates/opentide-kql",
     "crates/opentide-spl",
+    "crates/opentide-tide",
+    "crates/opentide-analysis",
+    "crates/opentide-lsp",
+    "crates/opentide-wasm",
 ]
 
 [workspace.package]
@@ -22,6 +26,8 @@ opentide-highlight = { path = "crates/opentide-highlight" }
 opentide-syntax = { path = "crates/opentide-syntax" }
 opentide-kql = { path = "crates/opentide-kql" }
 opentide-spl = { path = "crates/opentide-spl" }
+opentide-tide = { path = "crates/opentide-tide" }
+opentide-analysis = { path = "crates/opentide-analysis" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"

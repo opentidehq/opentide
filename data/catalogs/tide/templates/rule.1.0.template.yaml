@@ -1,0 +1,30 @@
+name: 
+
+metadata:
+  uuid: 
+  schema: 
+  version: 
+  created: 
+  modified: 
+  tlp: 
+  #author: null
+  #contributors: null
+  #organisation: null
+
+description: |
+  ...
+#status: STAGING
+#severity: Informational
+#techniques:
+  #-
+
+#platforms:
+  #example: 
+#references:
+  #public: null
+  #internal: null
+  #reports: null
+#detection_model: null
+response: null
+configurations: null
+#file: null

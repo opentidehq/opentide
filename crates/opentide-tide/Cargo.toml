@@ -1,0 +1,22 @@
+[package]
+name = "opentide-tide"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Tide YAML objects: schema, vocabs, UUID graph, query injection"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-kql.workspace = true
+opentide-spl.workspace = true
+opentide-highlight.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+toml.workspace = true
+regex.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

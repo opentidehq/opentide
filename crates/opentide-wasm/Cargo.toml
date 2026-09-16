@@ -1,0 +1,19 @@
+[package]
+name = "opentide-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "wasm32-unknown-unknown highlight() export (no WASI mix-in)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+opentide-core.workspace = true
+opentide-analysis.workspace = true
+opentide-highlight.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen.workspace = true
+js-sys.workspace = true

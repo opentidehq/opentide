@@ -1,0 +1,27 @@
+[package]
+name = "opentide-lsp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenTide language server binary (stdio LSP + analyze/highlight CLI)"
+default-run = "opentide-lsp"
+
+[[bin]]
+name = "opentide-lsp"
+path = "src/main.rs"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-analysis.workspace = true
+opentide-highlight.workspace = true
+opentide-kql.workspace = true
+opentide-spl.workspace = true
+opentide-tide.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+lsp-types.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+serde_yaml.workspace = true
+regex.workspace = true

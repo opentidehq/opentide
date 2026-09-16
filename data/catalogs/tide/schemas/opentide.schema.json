@@ -1,0 +1,95 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://opentide.dev/schemas/opentide.schema.json",
+    "title": "OpenTide Object Router",
+    "oneOf": [
+        {
+            "if": {
+                "properties": {
+                    "metadata": {
+                        "properties": {
+                            "schema": {
+                                "const": "objective::1.0"
+                            }
+                        },
+                        "required": [
+                            "schema"
+                        ]
+                    }
+                },
+                "required": [
+                    "metadata"
+                ]
+            },
+            "then": {
+                "$ref": "./objective.1.0.schema.json"
+            }
+        },
+        {
+            "if": {
+                "properties": {
+                    "metadata": {
+                        "properties": {
+                            "schema": {
+                                "const": "rule::1.0"
+                            }
+                        },
+                        "required": [
+                            "schema"
+                        ]
+                    }
+                },
+                "required": [
+                    "metadata"
+                ]
+            },
+            "then": {
+                "$ref": "./rule.1.0.schema.json"
+            }
+        },
+        {
+            "if": {
+                "properties": {
+                    "metadata": {
+                        "properties": {
+                            "schema": {
+                                "const": "threat::1.0"
+                            }
+                        },
+                        "required": [
+                            "schema"
+                        ]
+                    }
+                },
+                "required": [
+                    "metadata"
+                ]
+            },
+            "then": {
+                "$ref": "./threat.1.0.schema.json"
+            }
+        },
+        {
+            "if": {
+                "properties": {
+                    "metadata": {
+                        "properties": {
+                            "schema": {
+                                "const": "visibility::1.0"
+                            }
+                        },
+                        "required": [
+                            "schema"
+                        ]
+                    }
+                },
+                "required": [
+                    "metadata"
+                ]
+            },
+            "then": {
+                "$ref": "./visibility.1.0.schema.json"
+            }
+        }
+    ]
+}

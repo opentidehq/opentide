@@ -1,0 +1,19 @@
+[package]
+name = "opentide-analysis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "I/O-free analysis orchestrator (WorkspaceHost + analyze/highlight)"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-highlight.workspace = true
+opentide-kql.workspace = true
+opentide-spl.workspace = true
+opentide-tide.workspace = true
+serde.workspace = true
+regex.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

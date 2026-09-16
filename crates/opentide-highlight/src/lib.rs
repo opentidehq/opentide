@@ -310,9 +310,14 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         .get("number")
         .map(|m| m.tm.as_str())
         .unwrap_or("constant.numeric");
+    let comment_match = if language == LanguageId::TideYaml {
+        "(?m)^\\s*#.*$"
+    } else {
+        "//.*$|```[^`]*```"
+    };
     patterns.push(serde_json::json!({
         "name": comment_tm,
-        "match": "//.*$|```[^`]*```",
+        "match": comment_match,
         "comment": "capture:comment",
     }));
     patterns.push(serde_json::json!({
@@ -322,22 +327,43 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
     }));
     patterns.push(serde_json::json!({
         "name": number_tm,
-        "match": "\\\\b[0-9]+(\\\\.[0-9]+)?\\\\b",
+        "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
         "comment": "capture:number",
     }));
     if language == LanguageId::TideYaml {
         if let Some(maps) = spec.captures.get("tide.keyword") {
             patterns.push(serde_json::json!({
                 "name": maps.tm,
-                "match": "(?m)^\\\\s*(name|metadata|description|status|severity|techniques|detection_model|response|configurations|objective|threat|composition|criticality)\\\\s*:",
+                "match": "(?m)^\\s*(name|metadata|description|status|severity|techniques|detection_model|response|configurations|objective|threat|composition|criticality|references|procedure)\\s*:",
                 "comment": "capture:tide.keyword",
             }));
         }
         if let Some(maps) = spec.captures.get("tide.property") {
             patterns.push(serde_json::json!({
                 "name": maps.tm,
-                "match": "(?m)^\\\\s*(uuid|schema|version|created|modified|tlp|author|organisation|query|search|enabled)\\\\s*:",
+                "match": "(?m)^\\s*(uuid|schema|version|created|modified|tlp|author|organisation|query|search|enabled)\\s*:",
                 "comment": "capture:tide.property",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("tide.uuid") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                "comment": "capture:tide.uuid",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("tide.schema") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "\\b[A-Za-z][A-Za-z0-9_]*::[0-9.]+",
+                "comment": "capture:tide.schema",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("boolean") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "(?<![A-Za-z0-9_])(?:true|false)(?![A-Za-z0-9_])",
+                "comment": "capture:boolean",
             }));
         }
     }
@@ -545,5 +571,31 @@ mod tm_language_stub_bug {
             has_match,
             "kql.tmLanguage.json patterns are name-only stubs with no match/begin — TextMate-only editors render uncolored source"
         );
+    }
+
+    #[test]
+    fn generated_tide_tm_language_does_not_over_escape_whitespace() {
+        let spec = crate::HighlightSpec::load().unwrap();
+        let tm = crate::generate_tm_language(opentide_core::LanguageId::TideYaml, &spec);
+        let patterns = tm["patterns"].as_array().unwrap();
+        let key = patterns
+            .iter()
+            .find(|p| p["comment"] == "capture:tide.keyword")
+            .unwrap();
+        let m = key["match"].as_str().unwrap();
+        assert!(
+            m.contains(r"^\s*"),
+            "expected real whitespace class, got {m}"
+        );
+        assert!(
+            !m.contains(r"\\s"),
+            "over-escaped whitespace in Tide TextMate match: {m}"
+        );
+        assert!(
+            patterns.iter().any(|p| p["comment"] == "capture:tide.uuid"
+                && p["match"].as_str().unwrap().contains("8}-")),
+            "{tm}"
+        );
+        assert_eq!(tm["patterns"][0]["match"], "(?m)^\\s*#.*$");
     }
 }

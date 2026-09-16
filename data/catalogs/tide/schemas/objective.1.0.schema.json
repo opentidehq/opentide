@@ -1,0 +1,161 @@
+{
+    "type": "object",
+    "properties": {
+        "name": {
+            "title": "Name",
+            "type": "string"
+        },
+        "metadata": {
+            "type": "object",
+            "properties": {
+                "uuid": {
+                    "title": "Uuid",
+                    "type": "string"
+                },
+                "schema": {
+                    "title": "Schema",
+                    "const": "objective::1.0",
+                    "type": "string"
+                },
+                "version": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "integer"
+                        }
+                    ],
+                    "title": "Version"
+                },
+                "created": {
+                    "title": "Created",
+                    "type": "string"
+                },
+                "modified": {
+                    "title": "Modified",
+                    "type": "string"
+                },
+                "tlp": {
+                    "title": "Tlp",
+                    "type": "string"
+                },
+                "author": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Author"
+                },
+                "contributors": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Contributors"
+                },
+                "organisation": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Organisation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Organisation"
+                }
+            },
+            "required": [
+                "uuid",
+                "schema",
+                "version",
+                "created",
+                "modified",
+                "tlp"
+            ],
+            "additionalProperties": false
+        },
+        "objective": {
+            "$ref": "#/$defs/ObjectiveBody",
+            "title": "Objective"
+        },
+        "composition": {
+            "$ref": "#/$defs/ObjectiveComposition",
+            "title": "Composition"
+        },
+        "references": {
+            "type": "object",
+            "properties": {
+                "public": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Public"
+                },
+                "internal": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "string"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Internal"
+                },
+                "reports": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Reports"
+                }
+            },
+            "additionalProperties": false
+        }
+    },
+    "required": [
+        "name",
+        "metadata",
+        "objective",
+        "composition"
+    ],
+    "title": "Detection Objective Schema",
+    "additionalProperties": false
+}

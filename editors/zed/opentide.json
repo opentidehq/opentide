@@ -1,0 +1,24 @@
+{
+  "name": "OpenTide",
+  "languages": {
+    "opentide-yaml": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["yaml", "yml"]
+    },
+    "kql": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["kql"]
+    },
+    "spl": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["spl"]
+    }
+  },
+  "lsp": {
+    "opentide-lsp": {
+      "command": "opentide-lsp",
+      "args": ["--stdio"]
+    }
+  },
+  "notes": "Disable yamlls on objects/**. Copy TextMate from highlights-v*.zip, never hand-author."
+}
