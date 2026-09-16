@@ -89,3 +89,23 @@ def test_generate_core_template_rule_expands_response_and_hides_file(tmp_path: P
     response = loaded.get("response") or {}
     assert "analysis" not in response
     assert "procedure" not in response
+
+
+def test_generate_core_templates_never_emit_yaml_null(tmp_path: Path) -> None:
+    for key in core_template_model_keys():
+        path = tmp_path / f"{key}.template.yaml"
+        generate_core_template(key, path)
+        text = path.read_text(encoding="utf-8")
+        assert "null" not in text, key
+        assert "created: YYYY-MM-DD" in text
+        assert "#author:" in text
+        assert "#author: null" not in text
+
+
+def test_generate_core_template_threat_nested_description_is_multiline(tmp_path: Path) -> None:
+    path = tmp_path / "threat.1.0.template.yaml"
+    generate_core_template("threat", path)
+    text = path.read_text(encoding="utf-8")
+    after_threat = text.split("\nthreat:", 1)[1]
+    assert "description: |" in after_threat
+    assert "..." in after_threat

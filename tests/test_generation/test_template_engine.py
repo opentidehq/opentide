@@ -46,10 +46,19 @@ def test_get_required_collects_nested_fields() -> None:
     assert "uuid" in required
 
 
-def test_gen_template_simple_string_field() -> None:
-    metaschema = {"name": {"type": "string"}}
-    body = gen_template(metaschema, required=["name"])
-    assert body["name"] == "blank"
+def test_gen_template_skips_none_defaults() -> None:
+    body = gen_template(
+        {
+            "author": {"type": "string", "default": None},
+            "effort": {"type": "integer", "default": None},
+            "link": {"type": "string", "format": "uri", "default": None},
+        },
+        required=[],
+    )
+    assert body["#author"] == "blank"
+    assert body["#effort"] == "3"
+    assert body["#link"] == "https://"
+    assert None not in body.values()
 
 
 def test_gen_template_object_with_properties() -> None:
