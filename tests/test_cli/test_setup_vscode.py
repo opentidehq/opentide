@@ -21,6 +21,19 @@ from opentide.cli.services.setup.vscode import (
 SNIPPET_REL = ".vscode/model-templates.code-snippets"
 
 
+def _object_folder_log_levels(stderr: str) -> list[str]:
+    """Levels of ``could_not_find_object_folder`` JSON log lines (issue #212)."""
+    levels: list[str] = []
+    for line in stderr.splitlines():
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if record.get("event") == "could_not_find_object_folder":
+            levels.append(str(record.get("level", "")))
+    return levels
+
+
 def test_snippet_file_rel_matches_paths_toml(tmp_path: Path) -> None:
     assert snippet_file_rel(workspace=tmp_path) == SNIPPET_REL
 
@@ -354,9 +367,33 @@ def test_run_vscode_setup_empty_dir_completes_without_object_folder_errors(
     )
     payload = assert_json_ok(result)
     assert payload["status"] == "completed"
-    assert "could_not_find_object_folder" not in result.stderr
+    assert "error" not in _object_folder_log_levels(result.stderr)
     assert (tmp_path / ".vscode" / "settings.json").is_file()
     assert (tmp_path / SNIPPET_REL).is_file()
+
+
+def test_run_vscode_setup_empty_dir_debug_logs_missing_folders_at_debug(
+    tmp_path: Path,
+) -> None:
+    """With --debug, absent objects/* still must not log at error (issue #212)."""
+    from tests.test_cli.conftest import assert_json_ok
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+    from opentide.registry.builder import reset_missing_object_folder_log_cache
+
+    reset_missing_object_folder_log_cache()
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["--json", "--debug", "--repo", str(tmp_path), "setup", "vscode", str(tmp_path)],
+    )
+    payload = assert_json_ok(result)
+    assert payload["status"] == "completed"
+    levels = _object_folder_log_levels(result.stderr)
+    assert levels
+    assert "error" not in levels
+    assert all(level == "debug" for level in levels)
 
 
 def test_run_vscode_setup_empty_object_dirs_still_quiet(
@@ -378,4 +415,4 @@ def test_run_vscode_setup_empty_object_dirs_still_quiet(
     )
     payload = assert_json_ok(result)
     assert payload["status"] == "completed"
-    assert "could_not_find_object_folder" not in result.stderr
+    assert "error" not in _object_folder_log_levels(result.stderr)
