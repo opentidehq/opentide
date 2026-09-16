@@ -3,7 +3,7 @@
     "opentide": {
       "command": "opentide-mcp",
       "env": {
-        "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
+        "OPENTIDE_REPO_ROOT": "${CLAUDE_PROJECT_DIR}"
       }
     }
   }

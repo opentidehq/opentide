@@ -23,14 +23,32 @@ def test_setup_data_root_is_package_data() -> None:
     assert root == get_data_root() / "setup"
 
 
-@pytest.mark.parametrize("host", ["vscode", "cursor", "claude-code", "generic"])
-def test_load_mcp_template(host: str) -> None:
+@pytest.mark.parametrize(
+    ("host", "repo_root"),
+    [
+        ("vscode", "${workspaceFolder}"),
+        ("cursor", "${workspaceFolder}"),
+        ("claude-code", "${CLAUDE_PROJECT_DIR}"),
+        ("generic", None),
+    ],
+)
+def test_load_mcp_template(host: str, repo_root: str | None) -> None:
     payload = load_mcp_template(host)
     key = "servers" if host == "vscode" else "mcpServers"
     assert key in payload
     servers = payload[key]
-    assert "opentide" in servers
-    assert servers["opentide"]["env"]["OPENTIDE_REPO_ROOT"] == "${workspaceFolder}"
+    assert isinstance(servers, dict)
+    server = servers["opentide"]
+    assert isinstance(server, dict)
+    env = server.get("env")
+    if repo_root is None:
+        assert env is None
+        dumped = json.dumps(payload)
+        assert "${workspaceFolder}" not in dumped
+        assert "${CLAUDE_PROJECT_DIR}" not in dumped
+    else:
+        assert isinstance(env, dict)
+        assert env["OPENTIDE_REPO_ROOT"] == repo_root
 
 
 def test_load_mcp_template_unknown_host() -> None:
