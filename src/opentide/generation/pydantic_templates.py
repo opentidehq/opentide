@@ -31,9 +31,10 @@ def generate_core_template(
     """Generate a YAML template for a core object model."""
     parsed = load_core_template_source(model_key)
     placeholders: dict[str, str] = parsed.get("tide.placeholders") or {}
-    required = get_required(parsed["properties"], list(parsed.get("required", [])))
+    defs = parsed.get("$defs") if isinstance(parsed.get("$defs"), dict) else {}
+    required = get_required(parsed["properties"], list(parsed.get("required", [])), defs)
     required.extend(parsed.get("tide.template.force-required") or [])
-    template_body = gen_template(parsed["properties"], required)
+    template_body = gen_template(parsed["properties"], required, defs)
     emit_template_file(
         template_path,
         template_body,

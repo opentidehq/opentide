@@ -5,14 +5,40 @@ metadata:
   uuid: 
   schema: 
   version: 
-  created: 
-  modified: 
+  created: YYYY-MM-DD
+  modified: YYYY-MM-DD
   tlp: 
   #author: null
-  #contributors: null
-  #organisation: null
-threat: 
+  #contributors:
+    #-
+  #organisation:
+    uuid: 
+    name: 
+threat:
+  description: 
+  severity: 
+  impact: 
+  leverage: 
+  viability: 
+  terrain: 
+  surface:
+    - 
+  att&ck:
+    - 
+  #actors:
+    #- name: 
+      #sighting: |
+        #...
+      #references:
+        #-
+  #killchain:
+    #-
+  #chaining:
+    #-
 #references:
-  #public: null
-  #internal: null
-  #reports: null
+  #public:
+    #example: 
+  #internal:
+    #example: 
+  #reports:
+    #-

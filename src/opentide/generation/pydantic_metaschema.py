@@ -49,6 +49,8 @@ _CORE_ROOT_EXTRAS_BASE: dict[str, dict[str, Any]] = {
                 "title": "Detection System Technical Setup",
                 "recomposition": "systems",
             },
+            "file": {"tide.template.hide": True},
+            "platforms": {"tide.template.hide": True},
         },
     },
     OBJECTIVE: {
