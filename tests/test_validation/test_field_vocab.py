@@ -92,6 +92,35 @@ def test_walk_vocab_fields_array_items() -> None:
     issues = walk_vocab_fields(payload, schema, graph)
     assert len(issues) == 1
     assert issues[0].field_path == ("techniques", "0")
+    graph.enum_resolver.is_valid.assert_called_with(
+        "T9999", "technique", stages=None, scoped=False, no_wrap=False
+    )
+
+
+def test_walk_vocab_true_list_uses_field_name_not_index() -> None:
+    graph = _mock_graph(valid=False, suggestion="Endpoint")
+    schema = {
+        "properties": {
+            "threat": {
+                "type": "object",
+                "properties": {
+                    "surface": {
+                        "type": "array",
+                        "items": {"type": "string", "tide.vocab": True},
+                    }
+                },
+            }
+        }
+    }
+    payload = {"threat": {"surface": ["NotASurface"]}}
+    issues = walk_vocab_fields(payload, schema, graph)
+    assert len(issues) == 1
+    assert issues[0].code == "vocab_unknown"
+    assert issues[0].field_path == ("threat", "surface", "0")
+    graph.enum_resolver.is_valid.assert_called_with(
+        "NotASurface", "surface", stages=None, scoped=False, no_wrap=False
+    )
+    assert "0" not in str(graph.enum_resolver.is_valid.call_args)
 
 
 def test_validate_object_vocab_from_metaschema_missing_type() -> None:

@@ -81,6 +81,26 @@ def test_run_validate_all_default_checks() -> None:
     assert results["id-uniqueness"]["status"] == "passed"
 
 
+def test_run_validate_all_schema_failure_does_not_fail_other_checks() -> None:
+    report = ValidationReport(
+        ok=False,
+        issues=[
+            ValidationIssue(
+                code="schema_validation",
+                message="threat.actors: Input should be a valid dictionary",
+                field_path=("threat", "actors"),
+            )
+        ],
+    )
+    with patch.object(validation_service, "run_validation", return_value=report):
+        results = validation_service.run_validate_all()
+    assert results["schema"]["status"] == "failed"
+    assert results["id-uniqueness"]["status"] == "passed"
+    assert results["uuid-format"]["status"] == "passed"
+    assert results["id-uniqueness"]["issues"] == []
+    assert results["schema"]["issues"]
+
+
 def test_run_validate_check_id_uniqueness() -> None:
     report = ValidationReport(ok=True)
     with patch.object(validation_service, "run_validation", return_value=report):
@@ -107,7 +127,50 @@ def test_run_validate_default_checks_payload() -> None:
         result = validation_service.run_validate(ctx, file="objects/rules/x.yaml")
     assert "checks" in result
     assert "report" in result
+    assert result["checks"]["id-uniqueness"]["status"] == "passed"
+    assert result["checks"]["schema"]["status"] == "passed"
 
+
+def test_run_validate_default_checks_schema_only_failure() -> None:
+    ctx = CliContext(json_output=True)
+    report = ValidationReport(
+        ok=False,
+        issues=[ValidationIssue(code="schema_validation", message="invalid")],
+    )
+    with (
+        patch.object(validation_service, "run_validation", return_value=report),
+        patch("opentide.cli.exit_codes.validation_outcome", return_value=FAILED_OUTCOME),
+    ):
+        result = validation_service.run_validate(ctx)
+    assert result["checks"]["schema"]["status"] == "failed"
+    assert result["checks"]["id-uniqueness"]["status"] == "passed"
+    assert result["checks"]["uuid-format"]["status"] == "passed"
+
+
+def test_run_validate_all_uuid_failure_does_not_fail_schema() -> None:
+    report = ValidationReport(
+        ok=False,
+        issues=[ValidationIssue(code="invalid_uuid", message="not uuidv4")],
+    )
+    with patch.object(validation_service, "run_validation", return_value=report):
+        results = validation_service.run_validate_all()
+    assert results["uuid-format"]["status"] == "failed"
+    assert results["schema"]["status"] == "passed"
+    assert results["id-uniqueness"]["status"] == "passed"
+
+
+def test_run_validate_all_duplicate_id_does_not_fail_schema() -> None:
+    report = ValidationReport(
+        ok=False,
+        issues=[ValidationIssue(code="duplicate_id", message="dup")],
+    )
+    with patch.object(validation_service, "run_validation", return_value=report):
+        results = validation_service.run_validate_all()
+    assert results["id-uniqueness"]["status"] == "failed"
+    assert results["schema"]["status"] == "passed"
+
+
+def test_run_validate_check_schema_failure() -> None:
     report = ValidationReport(
         ok=False,
         issues=[ValidationIssue(code="schema", message="invalid")],
