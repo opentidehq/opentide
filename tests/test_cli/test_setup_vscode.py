@@ -25,7 +25,10 @@ def test_snippet_file_rel_matches_paths_toml(tmp_path: Path) -> None:
 
 def test_build_yaml_schema_mappings() -> None:
     mappings = build_yaml_schema_mappings()
-    assert mappings[".opentide/schemas/opentide.schema.json"] == "objects/**/*.yaml"
+    assert mappings[".opentide/schemas/threat.1.0.schema.json"] == "objects/threats/*.yaml"
+    assert mappings[".opentide/schemas/objective.1.0.schema.json"] == "objects/objectives/*.yaml"
+    assert mappings[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/*.yaml"
+    assert ".opentide/schemas/opentide.schema.json" not in mappings
 
 
 def test_write_vscode_settings_merge(tmp_path: Path) -> None:
@@ -41,7 +44,10 @@ def test_write_vscode_settings_merge(tmp_path: Path) -> None:
     assert caught
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["editor.tabSize"] == 4
-    assert ".opentide/schemas/opentide.schema.json" in settings["yaml.schemas"]
+    assert ".opentide/schemas/threat.1.0.schema.json" in settings["yaml.schemas"]
+    assert settings["yaml.schemas"][".opentide/schemas/threat.1.0.schema.json"] == (
+        "objects/threats/*.yaml"
+    )
 
 
 def test_schema_fragment_matches_global() -> None:
@@ -138,10 +144,39 @@ def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:
     assert isinstance(settings["yaml.schemas"], dict)
 
 
-def test_build_yaml_schema_mappings_uses_router_schema() -> None:
+def test_build_yaml_schema_mappings_uses_per_folder_schemas() -> None:
     mappings = build_yaml_schema_mappings()
-    assert len(mappings) == 1
-    assert ".opentide/schemas/opentide.schema.json" in mappings
+    assert len(mappings) == 3
+    assert ".opentide/schemas/opentide.schema.json" not in mappings
+    assert set(mappings.values()) == {
+        "objects/threats/*.yaml",
+        "objects/objectives/*.yaml",
+        "objects/rules/*.yaml",
+    }
+
+
+def test_write_vscode_settings_replaces_legacy_router_wildcard(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "settings.json").write_text(
+        json.dumps(
+            {
+                "yaml.schemas": {
+                    ".opentide/schemas/opentide.schema.json": "objects/**/*.yaml",
+                    "other.schema.json": "other/*.yaml",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        write_vscode_settings(tmp_path)
+    settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
+    schemas = settings["yaml.schemas"]
+    assert ".opentide/schemas/opentide.schema.json" not in schemas
+    assert schemas[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/*.yaml"
+    assert schemas["other.schema.json"] == "other/*.yaml"
 
 
 def test_run_vscode_snippets_file_not_found(tmp_path: Path, monkeypatch) -> None:

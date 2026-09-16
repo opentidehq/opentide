@@ -116,7 +116,7 @@ See [Agentic setup](./workflows/agentic-setup.md) for details.
 
 ## VS Code settings (deprecated)
 
-`opentide setup vscode` writes yaml.schemas and snippets — interim scaffolding until the OpenTide VS Code extension ships. Prefer `opentide setup mcp --vscode` for MCP configuration.
+`opentide setup vscode` writes per-folder yaml.schemas mappings (`objects/threats/*.yaml` → `threat.1.0.schema.json`, and the same for objectives and rules) plus snippets — interim scaffolding until the OpenTide VS Code extension ships. Prefer `opentide setup mcp --vscode` for MCP configuration.
 
 ## CLI reference
 

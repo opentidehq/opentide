@@ -1,5 +1,7 @@
 {
   "yaml.schemas": {
-    ".opentide/schemas/opentide.schema.json": "objects/**/*.yaml"
+    ".opentide/schemas/threat.1.0.schema.json": "objects/threats/*.yaml",
+    ".opentide/schemas/objective.1.0.schema.json": "objects/objectives/*.yaml",
+    ".opentide/schemas/rule.1.0.schema.json": "objects/rules/*.yaml"
   }
 }
