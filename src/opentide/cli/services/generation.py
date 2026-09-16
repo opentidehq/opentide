@@ -100,6 +100,7 @@ def run_generate_phase(phase: str) -> None:
 def workspace_repo_env(target: Path) -> Iterator[Path]:
     """Bind generation/index lookup to ``target`` and restore process state."""
     resolved = target.resolve()
+    resolved.mkdir(parents=True, exist_ok=True)
     previous_root = os.environ.get("OPENTIDE_REPO_ROOT")
     previous_workspace = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
     get_repo_root.cache_clear()

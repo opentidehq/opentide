@@ -113,6 +113,17 @@ def test_run_generate_phases_for_workspace_sets_and_restores_env(
     get_repo_root.cache_clear()
 
 
+def test_workspace_repo_env_creates_missing_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing = tmp_path / "nested" / "workspace"
+    assert not missing.exists()
+    monkeypatch.setattr(generation, "run_generate_phase", lambda phase: None)
+    ran = generation.run_generate_phases_for_workspace(missing, ["templates"])
+    assert ran == ["templates"]
+    assert missing.is_dir()
+
+
 def test_run_generate_docs_scoped(monkeypatch: pytest.MonkeyPatch) -> None:
     run_docs = MagicMock()
     monkeypatch.setattr("opentide.documentation.cli.run", run_docs)
