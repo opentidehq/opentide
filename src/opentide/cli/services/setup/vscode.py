@@ -42,6 +42,9 @@ def snippet_file_rel(*, workspace: Path | None = None) -> str:
         return str(snippet)
 
 
+RECOMMENDED_EXTENSIONS: tuple[str, ...] = ("redhat.vscode-yaml",)
+
+
 def emit_vscode_deprecation() -> None:
     warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=3)
     logger.warning("vscode_setup_deprecated", detail=DEPRECATION_MESSAGE)
@@ -99,6 +102,26 @@ def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
     existing["yaml.schemas"] = yaml_schemas
     settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
     return ".vscode/settings.json"
+
+
+def write_vscode_extensions(target: Path, *, merge: bool = True) -> str:
+    """Write or merge .vscode/extensions.json recommending the YAML extension."""
+    vscode_dir = target / ".vscode"
+    vscode_dir.mkdir(parents=True, exist_ok=True)
+    extensions_path = vscode_dir / "extensions.json"
+    if merge and extensions_path.is_file():
+        existing = json.loads(extensions_path.read_text(encoding="utf-8"))
+    else:
+        existing = {}
+    recommendations = existing.get("recommendations", [])
+    if not isinstance(recommendations, list):
+        recommendations = []
+    for extension_id in RECOMMENDED_EXTENSIONS:
+        if extension_id not in recommendations:
+            recommendations.append(extension_id)
+    existing["recommendations"] = recommendations
+    extensions_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+    return ".vscode/extensions.json"
 
 
 def _templates_ready(target: Path) -> bool:
@@ -160,8 +183,11 @@ def run_vscode_snippets(target: Path) -> str | None:
 
 
 def run_vscode_settings(target: Path, *, merge: bool = True) -> dict[str, object]:
-    rel = write_vscode_settings(target, merge=merge)
-    return {"message": "VS Code settings generated", "files": [rel]}
+    files = [
+        write_vscode_settings(target, merge=merge),
+        write_vscode_extensions(target, merge=merge),
+    ]
+    return {"message": "VS Code settings generated", "files": files}
 
 
 def run_vscode_all(target: Path, *, merge: bool = True) -> dict[str, object]:

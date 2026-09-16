@@ -113,12 +113,14 @@ Write MCP server configuration for editors.
 opentide setup mcp --cursor --vscode --yes
 ```
 
-| Flag | Output file |
-|------|-------------|
-| `--vscode` | `.vscode/mcp.json` |
-| `--cursor` | `.cursor/mcp.json` |
-| `--claude-code` | `.mcp.json` |
-| `--generic` | `opentide.mcp.json` |
+| Flag | Output file | `OPENTIDE_REPO_ROOT` |
+|------|-------------|----------------------|
+| `--vscode` | `.vscode/mcp.json` | `${workspaceFolder}` |
+| `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
+| `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
+| `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
+
+VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. Generic hosts that do not interpolate editor placeholders should omit the variable so the server discovers the git root from cwd, or set an absolute path. See [MCP configuration](../mcp/configuration.md).
 
 ### setup skills
 
@@ -187,7 +189,7 @@ opentide setup vscode --snippets
 
 | Flag | Purpose |
 |------|---------|
-| `--settings` | Write `.vscode/settings.json` yaml.schemas |
+| `--settings` | Write `.vscode/settings.json` yaml.schemas and `.vscode/extensions.json` |
 | `--snippets` | Write model template snippets |
 | `--no-merge` | Replace settings instead of merging |
 

@@ -45,12 +45,12 @@ The server uses **stdio transport**. It must know where your content lives, so s
 
 ### Supported hosts
 
-| Host | Setup flag | Config path |
-|------|------------|-------------|
-| VS Code | `--vscode` | `.vscode/mcp.json` |
-| Cursor | `--cursor` | `.cursor/mcp.json` |
-| Claude Code | `--claude-code` | `.mcp.json` |
-| Generic | `--generic` | `opentide.mcp.json` |
+| Host | Setup flag | Config path | `OPENTIDE_REPO_ROOT` |
+|------|------------|-------------|----------------------|
+| VS Code | `--vscode` | `.vscode/mcp.json` (`servers`, not `mcpServers`) | `${workspaceFolder}` |
+| Cursor | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
+| Claude Code | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
+| Generic | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
 
 ## Install agent skills
 

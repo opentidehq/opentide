@@ -121,7 +121,7 @@ opentide setup skills --generic --yes
 Or configure manually:
 
 ```json
-{ "mcpServers": { "opentide": { "command": "opentide-mcp" } } }
+{ "mcpServers": { "opentide": { "command": "opentide-mcp", "env": { "OPENTIDE_REPO_ROOT": "${workspaceFolder}" } } } }
 ```
 
 ## Layout migration
