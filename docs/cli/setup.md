@@ -178,7 +178,7 @@ The full wizard checks skill availability before writing repository files. If th
 
 ### setup vscode (deprecated)
 
-Interim yaml.schemas and snippet generation. By default the command generates templates and JSON schemas into `.opentide/`, then writes settings and snippets. Deprecation is logged once per invocation.
+Interim yaml.schemas and snippet generation. By default the command generates templates and JSON schemas into `.opentide/`, then writes settings and snippets. A missing target path is created first so generate-first setup does not `chdir` into a nonexistent directory. Deprecation is logged once per invocation.
 
 `yaml.schemas` maps each object folder to its concrete schema (`threat.1.0.schema.json` → `objects/threats/**/*.yaml`, and the same for objectives and rules). Nested files under those folders stay associated; it does not map the `opentide.schema.json` router against `objects/**/*.yaml` — the Red Hat YAML extension reports "Matches multiple schemas" for that glob.
 
