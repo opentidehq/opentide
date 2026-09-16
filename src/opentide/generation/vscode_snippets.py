@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -18,28 +19,87 @@ logger = structlog.get_logger("opentide.generation.vscode_snippets")
 # crashed fresh repositories after the platform_templates rename (issue #153).
 SNIPPETS_PATH: str | Path | None = None
 
+_CORE_PREFIXES: dict[str, str] = {
+    "threat": "tide-threat",
+    "objective": "tide-objective",
+    "rule": "tide-rule",
+}
 
-def vs_code_snippet_generator(template_path, prefix, blanks=0):
+_EMPTY_SCALAR = re.compile(r"^(\s*)([^:#\n][^:\n]*):\s*$")
+_ELIPSIS_LINE = re.compile(r"^(\s*)(\.\.\.)\s*$")
+
+
+def _indent_width(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _next_content_indent(lines: list[str], index: int) -> int | None:
+    for candidate in lines[index + 1 :]:
+        if not candidate.strip():
+            continue
+        if candidate.lstrip(" ").startswith("#"):
+            continue
+        return _indent_width(candidate)
+    return None
+
+
+def _with_tabstops(lines: list[str]) -> list[str]:
+    """Turn empty YAML scalars into VS Code tabstops; leave comments alone.
+
+    A key with no value whose next content line is more indented is a mapping
+    or list parent, not a fill-in scalar.
     """
-    Generates the body of a snippet by reading the file lines by line, which
-    when dumped to json creates an array of strings preserving spaces as per
-    vscode requirement.
+    body: list[str] = []
+    index = 1
+    for line_no, line in enumerate(lines):
+        stripped = line.lstrip(" ")
+        if stripped.startswith("#"):
+            body.append(line)
+            continue
+        empty = _EMPTY_SCALAR.match(line)
+        if empty:
+            indent, key = empty.groups()
+            child_indent = _next_content_indent(lines, line_no)
+            if child_indent is not None and child_indent > _indent_width(line):
+                body.append(line)
+                continue
+            placeholder = key.strip()
+            body.append(f"{indent}{key}: ${{{index}:{placeholder}}}")
+            index += 1
+            continue
+        ellipsis = _ELIPSIS_LINE.match(line)
+        if ellipsis:
+            indent, token = ellipsis.groups()
+            body.append(f"{indent}${{{index}:{token}}}")
+            index += 1
+            continue
+        body.append(line)
+    return body
 
-    Parameters
-    ----------
-    template_path : path of the template file to convert to vscode snippet
-    description : description of the snippet (will be shown to user)
-    prefix : keywords that will trigger intellisense
 
-    Returns
-    -------
-    snippet : snippet body, to be assembled in final snippet json file
+def vs_code_snippet_generator(
+    template_path: Path | str,
+    prefix: str,
+    blanks: int = 0,
+    *,
+    description: str | None = None,
+    scope: str = "yaml",
+) -> dict[str, Any]:
+    """Convert a YAML template file into a VS Code snippet entry.
 
+    Empty values after ``: `` become ``${n:placeholder}`` tabstops. Commented
+    optional lines stay comments (issue #194).
     """
     path = Path(template_path)
+    raw = path.read_text(encoding="utf-8").splitlines()
     buffer = [""] * blanks
-    buffer.extend(path.read_text(encoding="utf-8").splitlines())
-    return {"prefix": prefix, "body": buffer}
+    buffer.extend(_with_tabstops(raw))
+    return {
+        "prefix": prefix,
+        "scope": scope,
+        "description": description or prefix,
+        "body": buffer,
+    }
 
 
 def _platform_templates_dir(core: Any) -> Path:
@@ -72,6 +132,11 @@ def _entry_name(recomp_entry: dict[str, Any]) -> str | None:
     return None
 
 
+def _require_template(path: Path, *, kind: str) -> None:
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing {kind} template for snippets: {path}")
+
+
 def run() -> None:
     emit_section("Generate VSCode Snippets")
     logger.info("converts_the_templates_into_vscode_formatted_snippets_inproject")
@@ -90,18 +155,22 @@ def run() -> None:
         if model not in templates:
             continue
         full_name = object_names.get(model, model)
-        keyword = f"{full_name} Template".strip()
+        title = f"{full_name} Template".strip()
         template_path = templates_dir / templates[model]
         logger.info("generating_snippets_for", arg0=full_name)
-        if not template_path.is_file():
-            logger.warning("snippet_template_missing", path=str(template_path))
-            continue
-        snippets[keyword] = vs_code_snippet_generator(template_path, keyword)
+        _require_template(template_path, kind=f"core {model}")
+        snippets[title] = vs_code_snippet_generator(
+            template_path,
+            _CORE_PREFIXES.get(str(model), f"tide-{model}"),
+            description=title,
+        )
     for recomp, subschema_type_folder in recomposition.items():
         entries = config_index.get(recomp)
         if not isinstance(entries, dict):
+            entries = config_index.get("platforms")
+        if not isinstance(entries, dict):
             continue
-        for recomp_entry in entries.values():
+        for platform_id, recomp_entry in entries.items():
             if not isinstance(recomp_entry, dict) or not _entry_enabled(recomp_entry):
                 continue
             subschema_name = _entry_name(recomp_entry)
@@ -112,12 +181,13 @@ def run() -> None:
             subschema_template_path = (
                 subschemas_folder / subschema_type_folder / "Templates" / subchema_template_name
             )
-            keyword = f"{subschema_type_folder} : {subschema_name} Template".strip()
-            if not subschema_template_path.is_file():
-                logger.warning("snippet_template_missing", path=str(subschema_template_path))
-                continue
-            snippets[keyword] = vs_code_snippet_generator(
-                subschema_template_path, keyword, blanks=1
+            title = f"{subschema_type_folder} : {subschema_name} Template".strip()
+            _require_template(subschema_template_path, kind=f"platform {platform_id}")
+            snippets[title] = vs_code_snippet_generator(
+                subschema_template_path,
+                f"tide-{platform_id}",
+                blanks=1,
+                description=title,
             )
     snippets_path.parent.mkdir(parents=True, exist_ok=True)
     snippets_path.write_text(

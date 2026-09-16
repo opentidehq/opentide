@@ -93,7 +93,7 @@ Derived from the **current code** in `Engines/` on branch `development` after Ph
 | VS-01 | Read template line-by-line preserving indentation into JSON string array |
 | VS-02 | Leading blank lines via `blanks` parameter |
 | VS-03 | Strip trailing `\n` per line for snippet body |
-| VS-04 | Prefix triggers from platform/object short names |
+| VS-04 | Prefix triggers are short names (`tide-rule`, `tide-threat`, `tide-sentinel`, …), with `scope: yaml`, `description`, and tabstops on empty values |
 | VS-05 | `run()` writes `.code-snippets` under configured snippet path |
 
 ---

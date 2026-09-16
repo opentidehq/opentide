@@ -32,7 +32,7 @@ When run without a subcommand, phases execute in this order:
 
 `extract` is **not** part of the default run — it calls live platform APIs and writes `Imported/` in the working directory. Use `opentide generate extract` explicitly when importing rules.
 
-A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts, and snippet generation skips templates that have not been produced yet instead of failing.
+A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts. Snippet conversion requires the YAML templates from the templates phase and fails if a core or enabled-platform template is missing. Snippet prefixes are `tide-threat`, `tide-objective`, `tide-rule`, and `tide-<platform>` for enabled platforms, with `scope: yaml` and tabstops on empty values.
 
 ## generate docs
 
