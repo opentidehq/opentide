@@ -46,7 +46,7 @@ def test_issues_from_pydantic_with_graph_suggestion() -> None:
         [
             {
                 "type": "string_too_short",
-                "loc": ("objective", "threat"),
+                "loc": ("objective", "threats", 0),
                 "msg": "invalid threat ref",
                 "input": "bad-ref",
                 "ctx": {"min_length": 3},
@@ -62,6 +62,125 @@ def test_issues_from_pydantic_with_graph_suggestion() -> None:
     assert issues
     assert issues[0].code == "invalid_ref"
     assert issues[0].suggestion == "good-uuid"
+
+
+def test_issues_from_pydantic_nested_threat_body_is_not_invalid_ref() -> None:
+    graph = MagicMock()
+    graph.suggest_ref.return_value = "should-not-be-used"
+    graph.enum_resolver.suggest.return_value = None
+    exc = ValidationError.from_exception_data(
+        "ThreatVector",
+        [
+            {
+                "type": "string_type",
+                "loc": ("threat", "actors"),
+                "msg": "Input should be a valid dictionary",
+                "input": "not-an-actor",
+            }
+        ],
+    )
+    issues = issues_from_pydantic(exc, object_uuid="t1", object_type="threat", graph=graph)
+    assert issues[0].code == "schema_validation"
+    graph.suggest_ref.assert_not_called()
+
+
+def test_issues_from_pydantic_threat_impact_is_not_invalid_ref() -> None:
+    graph = MagicMock()
+    graph.suggest_ref.return_value = "ignored"
+    graph.enum_resolver.suggest.return_value = None
+    exc = ValidationError.from_exception_data(
+        "ThreatVector",
+        [
+            {
+                "type": "string_type",
+                "loc": ("threat", "impact"),
+                "msg": "Input should be a valid string",
+                "input": ["Data Breach"],
+            }
+        ],
+    )
+    issues = issues_from_pydantic(exc, object_type="threat", graph=graph)
+    assert issues[0].code == "schema_validation"
+
+
+def test_issues_from_pydantic_objective_threats_index_is_invalid_ref() -> None:
+    graph = MagicMock()
+    graph.suggest_ref.return_value = "good-uuid"
+    graph.enum_resolver.suggest.return_value = None
+    exc = ValidationError.from_exception_data(
+        "DetectionObjective",
+        [
+            {
+                "type": "string_type",
+                "loc": ("objective", "threats", 0),
+                "msg": "Input should be a valid string",
+                "input": "missing-threat",
+            }
+        ],
+    )
+    issues = issues_from_pydantic(exc, object_type="objective", graph=graph)
+    assert issues[0].code == "invalid_ref"
+    graph.suggest_ref.assert_called_once_with("threat", "missing-threat")
+
+
+def test_issues_from_pydantic_detection_model_is_invalid_ref() -> None:
+    graph = MagicMock()
+    graph.suggest_ref.return_value = "obj-uuid"
+    graph.enum_resolver.suggest.return_value = None
+    exc = ValidationError.from_exception_data(
+        "DetectionRule",
+        [
+            {
+                "type": "string_type",
+                "loc": ("detection_model",),
+                "msg": "invalid objective ref",
+                "input": "not-an-objective",
+            }
+        ],
+    )
+    issues = issues_from_pydantic(exc, object_type="rule", graph=graph)
+    assert issues[0].code == "invalid_ref"
+    graph.suggest_ref.assert_called_once_with("objective", "not-an-objective")
+
+
+def test_issues_from_pydantic_chaining_vector_is_invalid_ref() -> None:
+    graph = MagicMock()
+    graph.suggest_ref.return_value = "vector-uuid"
+    graph.enum_resolver.suggest.return_value = None
+    exc = ValidationError.from_exception_data(
+        "ThreatVector",
+        [
+            {
+                "type": "string_type",
+                "loc": ("threat", "chaining", 0, "vector"),
+                "msg": "invalid vector",
+                "input": "missing-vector",
+            }
+        ],
+    )
+    issues = issues_from_pydantic(exc, object_type="threat", graph=graph)
+    assert issues[0].code == "invalid_ref"
+    graph.suggest_ref.assert_called_once_with("threat", "missing-vector")
+
+
+def test_issues_from_pydantic_nested_vocab_suggestion() -> None:
+    graph = MagicMock()
+    graph.suggest_ref.return_value = None
+    graph.enum_resolver.suggest.return_value = "High"
+    exc = ValidationError.from_exception_data(
+        "ThreatVector",
+        [
+            {
+                "type": "string_type",
+                "loc": ("threat", "severity"),
+                "msg": "invalid severity",
+                "input": "Hgh",
+            }
+        ],
+    )
+    issues = issues_from_pydantic(exc, object_type="threat", graph=graph)
+    assert issues[0].code == "vocab_unknown"
+    assert issues[0].suggestion == "High"
 
 
 def test_format_issues_for_console_groups_by_file() -> None:

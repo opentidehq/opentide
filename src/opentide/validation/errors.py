@@ -10,6 +10,30 @@ from pydantic import ValidationError
 from opentide.validation.issues import ValidationIssue
 from opentide.validation.preflight import PreflightGraph
 
+# Leaf names of UUID-bearing cross-object fields. Nested body wrappers such as
+# ``threat`` (ThreatBody) and ``objective`` (ObjectiveBody) are not refs.
+_REF_LEAF_TO_TYPE: dict[str, str] = {
+    "threats": "threat",
+    "detection_model": "objective",
+    "vector": "threat",
+}
+
+
+def _leaf_field_name(field_path: tuple[str, ...]) -> str | None:
+    """Return the last path segment that is not a list index."""
+    for part in reversed(field_path):
+        if not part.isdigit():
+            return part
+    return None
+
+
+def _cross_object_ref_type(field_path: tuple[str, ...]) -> str | None:
+    """Return the object family a path refers to, or None if it is not a UUID ref."""
+    leaf = _leaf_field_name(field_path)
+    if leaf is None:
+        return None
+    return _REF_LEAF_TO_TYPE.get(leaf)
+
 
 def issues_from_pydantic(
     exc: ValidationError,
@@ -26,14 +50,13 @@ def issues_from_pydantic(
         message = str(err.get("msg", "validation error"))
         suggestion = None
         code = "schema_validation"
-        if graph and len(field_path) >= 1:
-            last = field_path[-1]
+        if graph and field_path:
+            last = _leaf_field_name(field_path) or field_path[-1]
             if isinstance(err.get("input"), str):
-                for ref_type in ("threat", "objective", "rule"):
-                    if ref_type in ".".join(field_path):
-                        suggestion = graph.suggest_ref(ref_type, str(err["input"]))
-                        code = "invalid_ref"
-                        break
+                ref_type = _cross_object_ref_type(field_path)
+                if ref_type is not None:
+                    suggestion = graph.suggest_ref(ref_type, str(err["input"]))
+                    code = "invalid_ref"
                 if suggestion is None and graph:
                     suggestion = graph.enum_resolver.suggest(str(err["input"]), last)
                     if suggestion:
