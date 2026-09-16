@@ -68,7 +68,7 @@ Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--out
 - **Rules:**
   - `Status`, `ATT&CK Techniques`, `Detection model` (relative backlink), `Response`, `Platform configurations`, `Coverage`, `Related objects`
 - **Objectives:**
-  - `Objective metadata`, `Signals`, `Signal MDR coverage` (rule backlinks), `Coverage`, `Related objects`
+  - `Objective metadata` (priority is the author string — not looked up in `criticality::1.0`), `Signals`, `Signal MDR coverage` (rule backlinks), `Coverage`, `Related objects`
 - **Threats:**
   - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Coverage`, `Related objects`
 

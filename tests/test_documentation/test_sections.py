@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.format.factory import formatter_for
 from opentide.documentation.parts.sections import (
@@ -28,6 +30,8 @@ from opentide.documentation.parts.sections import (
     render_threat_body,
 )
 from opentide.documentation.types import DocumentFlavor, DocumentRecord, DocumentScope
+from opentide.documentation.vocabulary import EnrichedEntry
+from opentide.documentation.vocabulary import enrich as enrich_vocab
 from opentide.loading.objective_loader import load_objective_from_dict
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.rule import DetectionRule
@@ -253,6 +257,52 @@ def test_render_rule_queries_include_platform_metadata(metadata: dict[str, Any])
     assert "**Entity mapping**: Account: Name -> AccountName" in rendered
     assert "```sql" in rendered
     assert "SecurityEvent | take 1" in rendered
+
+
+def test_render_objective_meta_does_not_lookup_criticality_vocab(
+    metadata: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Alert-style priority (Critical) is not a criticality::1.0 token (#204)."""
+    lookups: list[tuple[str, str]] = []
+
+    def _spy(vocab: str, key: str) -> EnrichedEntry:
+        lookups.append((vocab, key))
+        return enrich_vocab(vocab, key)
+
+    monkeypatch.setattr("opentide.documentation.parts.sections.enrich", _spy)
+    payload = _objective_payload(metadata)
+    payload["objective"]["priority"] = "Critical"
+    objective = load_objective_from_dict(payload)
+    rendered = render_objective_meta(objective, formatter_for(DocumentFlavor.github))
+    assert "**Priority**: Critical" in rendered
+    assert ("criticality", "Critical") not in lookups
+    assert ("criticality", "High") not in lookups
+
+
+def test_render_threat_assessment_keeps_impact_vocab_spelling(
+    metadata: dict[str, Any],
+) -> None:
+    """Catalogue tokens match impact::1.0, including the historical Impairement spelling."""
+    threat = ThreatVector.from_yaml_dict(
+        {
+            "name": "Threat",
+            "criticality": "High",
+            "metadata": {**metadata, "schema": "threat::1.0"},
+            "threat": {
+                "description": "Service disruption",
+                "severity": "High",
+                "impact": "Impairement",
+                "leverage": "High",
+                "viability": "High",
+                "terrain": "Endpoint workstations.",
+                "surface": ["Windows::Desktop"],
+                "att&ck": ["T1486"],
+            },
+        }
+    )
+    rendered = render_threat_assessment(threat.threat, formatter_for(DocumentFlavor.github))
+    assert "Impairement" in rendered
+    assert "Impairment" not in rendered
 
 
 def test_render_signals_and_threat_body(metadata: dict[str, Any]) -> None:
