@@ -75,6 +75,20 @@ def test_run_vscode_setup_no_generate_fails_without_templates(tmp_path: Path) ->
     assert result["generated"] == []
 
 
+def test_run_vscode_setup_creates_missing_nested_target(tmp_path: Path) -> None:
+    missing = tmp_path / "new" / "detection-repo"
+    assert not missing.exists()
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = run_vscode_setup(missing)
+    assert result["status"] == "completed"
+    assert missing.is_dir()
+    assert (missing / ".vscode" / "settings.json").is_file()
+    assert (missing / ".vscode" / "extensions.json").is_file()
+    assert (missing / ".opentide" / "templates" / "threat.1.0.template.yaml").is_file()
+    assert (missing / SNIPPET_REL).is_file()
+
+
 def test_run_vscode_setup_generate_writes_templates_schemas_and_snippets(tmp_path: Path) -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

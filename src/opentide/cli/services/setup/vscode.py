@@ -187,6 +187,8 @@ def run_vscode_setup(
     if warn_deprecated:
         emit_vscode_deprecation()
 
+    target.mkdir(parents=True, exist_ok=True)
+
     generated: list[str] = []
     if generate:
         phases: list[str] = []
