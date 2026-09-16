@@ -85,5 +85,11 @@ Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https
 - `0.1.dev…` means the tag was not on the checked-out commit (`fetch-depth: 0` and Release target).
 - 403 / `invalid-publisher`: pending publisher missing, or fields do not match the OIDC claims. GitHub sends `repository_owner: opentidehq` (lowercase) and `environment: pypi`. Copy those from the failed Publish to PyPI log, save the pending publisher again, then re-run the workflow (do not retag).
 - `'2.5' is not a valid metadata version`: hatchling defaulted to Core Metadata 2.5. This repo pins `core-metadata-version = "2.4"` on sdist/wheel. Confirm `uvx twine check dist/*` is clean before tagging.
-- `ModuleNotFoundError: No module named 'hatch'` during **Build package**: `hatch build` isolated envs (hatch 1.18.1 / hatchling 1.32.1) import `hatch` from `BinaryBuilder`. Publish uses `uv build` like CI. Merge that workflow to `development`, then `gh workflow run publish-pypi.yml --ref development -f checkout_ref=v0.x.y`. Do not retag.
+- `ModuleNotFoundError: No module named 'hatch'` during **Build package**: `hatch build` isolated envs (hatch 1.18.1 / hatchling 1.32.1) import `hatch` from `BinaryBuilder`. Publish uses `uv build` like CI. A `v*` tag cut before that change still runs the old workflow on `release: published` (converting the Release to draft and back does not pick up `development`). From `development`, re-run without moving the tag:
+  ```bash
+  gh api repos/OpenTideHQ/opentide/dispatches \
+    -f event_type=publish-pypi \
+    -f client_payload[checkout_ref]=v0.x.y
+  ```
+  The Actions UI `workflow_dispatch` input `checkout_ref` is the same path. Do not retag.
 - Release exists but Publish to PyPI never starts: the workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag.
