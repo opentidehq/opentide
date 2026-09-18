@@ -19,6 +19,7 @@ def test_cli_help_lists_commands(cli_runner, invoke_cli) -> None:
         "lint",
         "deploy",
         "info",
+        "explorer",
     ):
         assert command in result.stdout
 
