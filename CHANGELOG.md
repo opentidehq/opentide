@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-09-18
+
+Patch on the public 0.2.0 beta. Upgrade if you validate `threat.cve` identifiers or generate threat documentation that should link to CIRCL Vulnerability-Lookup.
+
+### Added
+
+- CVE validation and generated threat CVE tables use [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu) instead of scraping NVD through `mitrecve`. `opentide validate --check cve` looks up CVE, GHSA, and GCVE identifiers (`GET /api/vulnerability/{id}`); unknown IDs return empty JSON. Generated docs link to `https://vulnerability.circl.lu/vuln/{id}` and can enrich published date, severity, and aliases ([#109](https://github.com/OpenTideHQ/opentide/issues/109)).
+- `threat.cve` is a first-class optional list on the threat body, so schema validation accepts CVE identifiers. GNA 0 GCVE ids (`GCVE-0-YEAR-N`) map to the reserved CVE key.
+
+### Changed
+
+- Bundled `documentation.toml` `[cve]` defaults to Vulnerability-Lookup (`base_url` / `default_db_link`). Legacy NVD link prefixes are remapped. The CVE check stays **opt-in** (`--check cve`) so default `opentide validate` stays offline.
+
+### Install
+
+```bash
+pip install opentide==0.2.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.2.0] — 2026-09-18
 
 Minor on the public 0.1.8 beta. Upgrade if you generate templates or VS Code snippets — optional YAML now hugs `#` to each key, spacers stay blank, and rule `configurations` are commented platform stubs rather than `{}`.
@@ -225,7 +246,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.1
 [0.2.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.0
 [0.1.8]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.8
 [0.1.7]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.7

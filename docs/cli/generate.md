@@ -83,7 +83,7 @@ Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--out
 - **Objectives:**
   - `Objective metadata` (priority is the author string — not looked up in `criticality::1.0`), `Signals`, `Signal MDR coverage` (rule backlinks), `Coverage`, `Related objects`
 - **Threats:**
-  - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Coverage`, `Related objects`
+  - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `CVE` (Vulnerability-Lookup links; optional API enrichment), `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Coverage`, `Related objects`
 
 Metadata is a Field/Value table. Folder index tables add Status/Severity (rules), Priority (objectives), or Criticality (threats).
 
@@ -124,6 +124,18 @@ icons = false
 - `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root.
 - `index.relation_counts`: include relation counts (or object counts on root index table).
 - `index.icons`: prefix section/object labels with emoji markers.
+
+CVE sections on threat pages are controlled by the same file:
+
+```toml
+[cve]
+base_url = "https://vulnerability.circl.lu"
+default_db_link = "https://vulnerability.circl.lu/vuln/"
+retrieve_details = true  # fetch title, published date, severity, aliases
+proxy = false
+```
+
+Identifiers always link to Vulnerability-Lookup (`/vuln/{id}`). CVE, GHSA, and GCVE identifiers are accepted. GNA 0 GCVE ids map to the reserved CVE form (`GCVE-0-2024-3094` → `CVE-2024-3094`) for both API lookup and page links. Legacy NVD `default_db_link` values from older configs are remapped to CIRCL. Set `retrieve_details = false` to emit links only (no API calls).
 
 ## generate exports
 

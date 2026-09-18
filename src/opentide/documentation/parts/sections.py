@@ -19,6 +19,17 @@ from opentide.models.objective import (
 )
 from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatBody, ThreatVector
+from opentide.vulnerability_lookup import (
+    CveSettings,
+    VulnerabilityLookupClient,
+    VulnerabilityLookupError,
+    VulnerabilityRecord,
+    apply_cve_proxy_settings,
+    load_cve_settings,
+    lookup_identifier,
+    normalize_identifiers,
+    page_url_for,
+)
 
 
 def render_metadata(metadata: ObjectMetadata, formatter: MarkdownFormatter) -> str:
@@ -301,6 +312,7 @@ def render_threat_body(threat: ThreatVector, formatter: MarkdownFormatter) -> st
         render_surface(body, formatter),
         render_threat_assessment(body, formatter),
         render_actors(body, formatter),
+        render_cve(body.cve, formatter),
     ]
     if body.att_ck:
         chunks.append(render_attack_techniques(body.att_ck, formatter))
@@ -376,6 +388,112 @@ def _platform_query(config: object) -> str | None:
     if fragments:
         return "\n\n".join(fragments)
     return None
+
+
+def render_cve(
+    cve_list: list[str] | None,
+    formatter: MarkdownFormatter,
+    *,
+    client: VulnerabilityLookupClient | None = None,
+    retrieve_details: bool | None = None,
+) -> str:
+    """Render CVE identifiers as Vulnerability-Lookup links, with optional API enrichment."""
+    identifiers = normalize_identifiers(cve_list)
+    if not identifiers:
+        return ""
+
+    unique: list[str] = []
+    seen_keys: set[str] = set()
+    for cve in identifiers:
+        key = lookup_identifier(cve)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        unique.append(cve)
+    identifiers = unique
+
+    settings = load_cve_settings()
+    should_enrich = settings.retrieve_details if retrieve_details is None else retrieve_details
+    heading = formatter.heading(2, "CVE")
+    source_note = formatter.paragraph(
+        "Identifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), "
+        "which aggregates CVE, GHSA, CSAF, NVD, and related feeds."
+    )
+
+    if not should_enrich:
+        bullets = "".join(
+            f"- {formatter.link(cve, page_url_for(cve, settings))}\n" for cve in identifiers
+        )
+        return heading + source_note + bullets + "\n"
+
+    apply_cve_proxy_settings(settings)
+    lookup = client or VulnerabilityLookupClient(settings)
+    rows: list[list[str]] = []
+    missing: list[str] = []
+    lookup_failed = False
+    for cve in identifiers:
+        link = formatter.link(cve, page_url_for(cve, settings))
+        try:
+            record = lookup.get(cve, with_linked=True)
+        except VulnerabilityLookupError:
+            lookup_failed = True
+            rows.append([link, "-", "-", "Details unavailable from Vulnerability-Lookup."])
+            continue
+        if record is None:
+            missing.append(cve)
+            rows.append([link, "-", "-", "Not found in Vulnerability-Lookup."])
+            continue
+        rows.append(_cve_row(record, formatter, fallback_id=cve, settings=settings))
+
+    table = formatter.table(
+        ["Identifier", "Published", "Severity", "Summary"],
+        rows,
+    )
+    warning = ""
+    if missing:
+        warning += formatter.paragraph(
+            "Could not resolve: " + ", ".join(f"`{cve}`" for cve in missing) + "."
+        )
+    if lookup_failed:
+        warning += formatter.paragraph(
+            "Vulnerability-Lookup was unreachable for at least one identifier; "
+            "links still point at the CIRCL record page."
+        )
+    return heading + source_note + table + "\n" + warning
+
+
+def _cve_row(
+    record: VulnerabilityRecord,
+    formatter: MarkdownFormatter,
+    *,
+    fallback_id: str,
+    settings: CveSettings,
+) -> list[str]:
+    ident = record.identifier or fallback_id
+    url = record.page_url or page_url_for(ident, settings)
+    label = formatter.link(ident, url)
+    if record.aliases:
+        alias_links = ", ".join(
+            formatter.link(alias, page_url_for(alias, settings))
+            for alias in record.aliases
+            if alias != ident
+        )
+        if alias_links:
+            label = f"{label}<br>{alias_links}"
+    summary = record.title or record.description or "-"
+    return [
+        label,
+        record.published or "-",
+        record.severity or (record.state or "-"),
+        _table_cell(_truncate(summary, 280)),
+    ]
+
+
+def _truncate(text: str, limit: int) -> str:
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: limit - 1].rstrip() + "…"
 
 
 def render_criticality(threat: ThreatVector, formatter: MarkdownFormatter) -> str:

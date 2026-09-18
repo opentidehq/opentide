@@ -36,6 +36,8 @@ threat:
     #- 
   #chaining:
     #- key: 
+  #cve:
+    #- 
 #references:
   #public:
     #1: 

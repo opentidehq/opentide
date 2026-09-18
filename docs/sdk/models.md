@@ -67,13 +67,14 @@ obj.objective.threats           # ["…8001…"]  (threat UUIDs)
 | `name` | `str` | Display name |
 | `criticality` | `str` | Criticality vocabulary |
 | `metadata` | `ObjectMetadata` | Shared metadata |
-| `threat` | `ThreatBody` | Body: `severity`, `impact`, `terrain`, `surface`, `att&ck`, `actors` (`list[ThreatActor]`), … |
+| `threat` | `ThreatBody` | Body: `severity`, `impact`, `terrain`, `surface`, `att&ck`, `actors` (`list[ThreatActor]`), optional `cve` (`list[str]`, Vulnerability-Lookup IDs), … |
 
 ```python
 threat = OpenTide.Threats["00000000-0000-4000-8001-000000000001"]
 threat.threat.att_ck            # ["T1059"]  (YAML `att&ck`, aliased att_ck)
 threat.threat.terrain           # free-form prose
 threat.threat.surface           # vocabulary list, e.g. ["Windows::Desktop"]
+threat.threat.cve               # ["CVE-2024-3094"] — CIRCL Vulnerability-Lookup (CVE, GHSA, GCVE)
 threat.threat.actors            # list[ThreatActor] | None; name is scoped (att&ck::G0006)
 ```
 

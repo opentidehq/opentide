@@ -58,6 +58,8 @@ threat:
     - T1059
   actors:
     - name: att&ck::G0006
+  # cve:                    # optional; CIRCL Vulnerability-Lookup (CVE, GHSA, GCVE)
+  #   - CVE-2024-3094
 ```
 
 Optional `threat.actors` entries are objects. `name` is a scoped key from the bundled actors vocabulary (`att&ck::G0006`, or a MISP cluster ID). Optional `sighting` and `references` sit on the same object — not a bare string list.

@@ -71,6 +71,13 @@ def test_threat_actors_are_objects(metadata: dict[str, Any]) -> None:
     assert actor.references == ["https://attack.mitre.org/groups/G0006"]
 
 
+def test_threat_cve_field_roundtrip(metadata: dict[str, Any]) -> None:
+    payload = _threat_payload(metadata, actors=None)
+    payload["threat"]["cve"] = ["CVE-2024-3094", "GHSA-rxwq-x6h5-x525", "GCVE-0-2024-3094"]
+    tvm = ThreatVector.from_yaml_dict(payload)
+    assert tvm.threat.cve == ["CVE-2024-3094", "GHSA-rxwq-x6h5-x525", "GCVE-0-2024-3094"]
+
+
 def test_threat_actors_reject_vocab_id_strings(metadata: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         ThreatVector.from_yaml_dict(_threat_payload(metadata, actors=["G0006"]))

@@ -32,15 +32,27 @@ opentide validate --check schema
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 
+### CVE check
+
+`opentide validate --check cve` looks up each `threat.cve` identifier on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu) (`GET /api/vulnerability/{id}`). Unknown IDs (empty JSON body) fail the check. Links in generated docs use the same aggregator: `https://vulnerability.circl.lu/vuln/{id}`.
+
+Accepted identifiers:
+
+- CVE (`CVE-2024-3094`)
+- GitHub Security Advisories (`GHSA-rxwq-x6h5-x525`)
+- GCVE, including GNA 0 which maps to CVE (`GCVE-0-2024-3094` is stored as `CVE-2024-3094`)
+
+The check no longer scrapes NVD through `mitrecve`. If Vulnerability-Lookup is unreachable, those identifiers are skipped (logged) rather than reported as invalid.
+
 ### Default checks
 
 When no `--check` is specified, the pipeline runs:
 
 - `id-uniqueness`
 - `uuid-format`
-- `schema`
+- `schema` (includes vocabulary and cross-object references)
 
-Additional checks (cross-object references, vocabulary, CVE) run in the full validation session.
+CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI pipeline so offline `opentide validate` stays deterministic.
 
 ## Query validation
 

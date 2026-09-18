@@ -43,7 +43,9 @@ report = run_validation(
 
 Available checks: `id-uniqueness`, `uuid-format`, `schema`, `cve`.
 
-Default pipeline checks: id uniqueness, UUID format, schema.
+The `cve` check looks up `threat.cve` identifiers on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu) (`GET /api/vulnerability/{id}`). An empty JSON object means the identifier is unknown. The check does not scrape NVD through `mitrecve`. CVE, GHSA, and GCVE identifiers are accepted; GNA 0 GCVE ids (`GCVE-0-YEAR-N`) are stored under the corresponding `CVE-YEAR-N` key.
+
+Default pipeline checks: id uniqueness, UUID format, schema. CVE lookup is opt-in via `ValidateCheck.cve`.
 
 ## ValidationReport
 

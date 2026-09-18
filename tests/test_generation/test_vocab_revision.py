@@ -86,6 +86,8 @@ def test_threat_schema_pins_actors_name_on_object_items() -> None:
     assert actor.get("tide.vocab.scoped") is True
     actors_field = source["$defs"]["ThreatBody"]["properties"]["actors"]
     assert "tide.vocab" not in actors_field
+    cve_field = source["$defs"]["ThreatBody"]["properties"]["cve"]
+    assert cve_field.get("title") == "CVE"
 
 
 def test_threat_schema_identifiers_compile_different_killchain_enums() -> None:
