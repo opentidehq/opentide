@@ -26,6 +26,7 @@ from opentide.vulnerability_lookup import (
     VulnerabilityRecord,
     apply_cve_proxy_settings,
     load_cve_settings,
+    lookup_identifier,
     normalize_identifiers,
     page_url_for,
 )
@@ -398,6 +399,16 @@ def render_cve(
     identifiers = normalize_identifiers(cve_list)
     if not identifiers:
         return ""
+
+    unique: list[str] = []
+    seen_keys: set[str] = set()
+    for cve in identifiers:
+        key = lookup_identifier(cve)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        unique.append(cve)
+    identifiers = unique
 
     settings = load_cve_settings()
     should_enrich = settings.retrieve_details if retrieve_details is None else retrieve_details

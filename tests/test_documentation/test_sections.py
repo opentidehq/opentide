@@ -400,6 +400,22 @@ def test_render_cve_maps_gcve0_link_to_cve_page() -> None:
     assert "[GCVE-0-2024-3094](https://vulnerability.circl.lu/vuln/CVE-2024-3094)" in rendered
 
 
+def test_render_cve_dedupes_gcve0_and_cve_aliases() -> None:
+    formatter = formatter_for(DocumentFlavor.github)
+    settings = CveSettings(retrieve_details=False)
+    with patch(
+        "opentide.documentation.parts.sections.load_cve_settings",
+        return_value=settings,
+    ):
+        rendered = render_cve(
+            ["CVE-2024-3094", "GCVE-0-2024-3094"],
+            formatter,
+            retrieve_details=False,
+        )
+    assert rendered.count("[CVE-2024-3094]") == 1
+    assert "GCVE-0-2024-3094" not in rendered
+
+
 def test_render_cve_marks_missing_and_unreachable_identifiers() -> None:
     formatter = formatter_for(DocumentFlavor.github)
     client = MagicMock()
