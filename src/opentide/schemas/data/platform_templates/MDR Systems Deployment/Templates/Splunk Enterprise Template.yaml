@@ -9,8 +9,8 @@
   #contributors:
     #- 
 
-  query: |
-    ...
+  #query: |
+    #...
   #scheduling:
     #type: 
     #expires: 

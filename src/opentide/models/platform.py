@@ -77,14 +77,8 @@ class DefenderConfig(PlatformConfigBase):
 
 class SplunkConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::splunk::1.0"
-    # Optional on the model for load/legacy ``search``; live in templates.
     query: str | None = TideField(
-        None,
-        schema_extra={
-            "tide.template.multiline": True,
-            "tide.template.spacer": True,
-            "tide.template.required": True,
-        },
+        None, schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
     scheduling: SplunkScheduling | None = None
     trigger: SplunkTrigger | None = None
@@ -127,14 +121,8 @@ class HarfangLabConfig(PlatformConfigBase):
 
 class CarbonBlackConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::carbon_black_cloud::1.0"
-    # Optional on the model for load compatibility; live in templates.
     query: str | None = TideField(
-        None,
-        schema_extra={
-            "tide.template.multiline": True,
-            "tide.template.spacer": True,
-            "tide.template.required": True,
-        },
+        None, schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
     organizations: list[str] | None = None
     watchlist: str | None = None

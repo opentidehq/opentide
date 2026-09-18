@@ -63,9 +63,6 @@ def test_platform_template_goldens_match_renderer() -> None:
         assert rendered == expected, filename
         _assert_comment_style(rendered)
         assert "configurations: {}" not in rendered
-        if "query" in model.model_fields:
-            assert re.search(r"(?m)^  query: \|", rendered)
-            assert re.search(r"(?m)^  #query:", rendered) is None
 
 
 def test_platform_models_cover_golden_files() -> None:
