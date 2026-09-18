@@ -36,9 +36,9 @@
   #  - query: |
   #      ...
   #    reason: 
-  #    #tenant: 
-  #    #let:
-  #    #  key: 
+  #    tenant: 
+  #    let:
+  #      key: 
   #template:
   #  uuid: 
   #  version: 
@@ -47,17 +47,17 @@
   #  threshold: 3
   #grouping:
   #  event: 
-  #  #alert:
-  #  #  enabled: false
-  #  #  #reopen_closed_incidents: false
-  #  #  #grouping_lookback: 
-  #  #  #matching: 
-  #  #  #group_by_entities:
-  #  #  #  - 
-  #  #  #group_by_alert_details:
-  #  #  #  - 
-  #  #  #group_by_custom_details:
-  #  #  #  - 
+  #  alert:
+  #    enabled: false
+  #    reopen_closed_incidents: false
+  #    grouping_lookback: 
+  #    matching: 
+  #    group_by_entities:
+  #      - 
+  #    group_by_alert_details:
+  #      - 
+  #    group_by_custom_details:
+  #      - 
   #entities:
   #  - entity: 
   #    mappings:

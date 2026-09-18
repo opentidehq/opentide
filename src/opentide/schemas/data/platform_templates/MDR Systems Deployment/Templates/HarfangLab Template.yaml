@@ -22,23 +22,23 @@
   #      field: 
   #      value:
   #        - 
-  #      #modifiers:
-  #      #  - 
+  #      modifiers:
+  #        - 
   #  condition: 
-  #  #false_positives:
-  #  #  - 
+  #  false_positives:
+  #    - 
   #yara:
   #  meta:
   #    context:
   #      - 
   #    os: 
-  #    #arch:
-  #    #  - 
-  #    #score: 
-  #    #classification: 
+  #    arch:
+  #      - 
+  #    score: 
+  #    classification: 
   #  strings: 
   #  condition: 
-  #  #imports:
-  #  #  - 
+  #  imports:
+  #    - 
   #rule_id_bundle:
   #  key: 

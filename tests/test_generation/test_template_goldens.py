@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from opentide.generation.pydantic_skeleton import render_model_template, write_model_template
@@ -40,6 +41,7 @@ def test_core_template_goldens_match_renderer() -> None:
         expected = (CORE_GOLDENS / filename).read_text(encoding="utf-8")
         assert rendered == expected, filename
         assert "null" not in rendered
+        assert re.search(r"(?m)^[ ]*#[ ]+#", rendered) is None
 
 
 def test_platform_template_goldens_match_renderer() -> None:
@@ -50,6 +52,7 @@ def test_platform_template_goldens_match_renderer() -> None:
         assert rendered == expected, filename
         assert "null" not in rendered
         assert "configurations: {}" not in rendered
+        assert re.search(r"(?m)^[ ]*#[ ]+#", rendered) is None
 
 
 def test_platform_models_cover_golden_files() -> None:

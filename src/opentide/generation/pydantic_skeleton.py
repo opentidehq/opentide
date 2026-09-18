@@ -1,8 +1,9 @@
 """Render YAML object skeletons by walking Pydantic ``FieldInfo``.
 
 Templates are line-oriented YAML. Optional fields are the same YAML as the
-required render with ``#`` inserted at the field indent (issue #223). JSON
-Schema ``$ref`` / ``properties`` walking is not used here.
+required render with ``#`` inserted once at the field indent (issue #223).
+Nested optionals are not commented again. JSON Schema ``$ref`` /
+``properties`` walking is not used here.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ class RenderOptions:
 
     schema_id: str | None = None
     required_only: bool = False
+    comment_optionals: bool = True
 
 
 def render_model_template(
@@ -46,8 +48,10 @@ def render_model_template(
     """Return a YAML skeleton for *model* in declaration order.
 
     Uncommented keys are required ``FieldInfo`` entries (aliases honoured).
-    Optional fields emit as commented blocks. Path fields and
-    ``tide.template.hide`` are omitted. No YAML ``null`` tokens.
+    Optional fields emit as commented blocks: the subtree is live YAML with
+    ``#`` inserted once at the field indent (nested optionals are not
+    commented again). Path fields and ``tide.template.hide`` are omitted.
+    No YAML ``null`` tokens.
     """
     options = RenderOptions(schema_id=schema_id, required_only=required_only)
     lines = _render_model(model, indent=indent, options=options, depth=0)
@@ -104,7 +108,11 @@ def _render_model(
         return []
     identifier = getattr(model, "__schema_identifier__", None)
     if isinstance(identifier, str) and identifier:
-        options = RenderOptions(schema_id=identifier, required_only=options.required_only)
+        options = RenderOptions(
+            schema_id=identifier,
+            required_only=options.required_only,
+            comment_optionals=options.comment_optionals,
+        )
     lines: list[str] = []
     first = True
     for name, field in model.model_fields.items():
@@ -140,6 +148,14 @@ def _render_field(
         return []
 
     key = _yaml_key(name, field)
+    child_options = options
+    comment_now = not required and options.comment_optionals
+    if comment_now:
+        child_options = RenderOptions(
+            schema_id=options.schema_id,
+            required_only=options.required_only,
+            comment_optionals=False,
+        )
     value_lines = _render_value(
         name,
         field,
@@ -147,10 +163,10 @@ def _render_field(
         indent=indent,
         key=key,
         extras=extras,
-        options=options,
+        options=child_options,
         depth=depth,
     )
-    if not required:
+    if comment_now:
         value_lines = _comment_at_indent(value_lines, indent)
     return value_lines
 
@@ -382,8 +398,10 @@ def _concrete_default(field: FieldInfo) -> Any:
 def _comment_at_indent(lines: list[str], indent: int) -> list[str]:
     """Insert ``#`` at *indent* on every line, including spacer blanks.
 
-    Blank lines become a ``#`` at the field indent so a commented optional
-    block stays contiguous for editor uncomment.
+    Nested optionals must already be live YAML in *lines*; this prefix is
+    the only ``#`` for the block. Blank lines become a ``#`` at the field
+    indent so a commented optional block stays contiguous for editor
+    uncomment.
     """
     commented: list[str] = []
     prefix = " " * indent

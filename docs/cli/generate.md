@@ -39,7 +39,7 @@ A freshly scaffolded repository (no objects yet) is a valid generate target. Doc
 `opentide generate templates` walks Pydantic `model_fields` (not JSON Schema `$defs`). Output is line-oriented YAML:
 
 - Uncommented keys are required `FieldInfo` on that model (aliases honoured: `att&ck`, `schema`).
-- Optional fields are the same YAML with `#` inserted at the field indent. Uncomment a block and it is valid YAML.
+- Optional fields are the same YAML with `#` inserted once at the field indent. Nested keys inside that block are not commented again. Uncomment a block and it is valid YAML.
 - Placeholders are typed: empty strings, `YYYY-MM-DD`, multiline `|` + `...`, `https://`, `3`, `false`. There are no YAML `null` tokens.
 - Vocabulary fields are empty scalars (no enum dump).
 - `DetectionRule.file` and other `Path` / hidden fields are omitted.

@@ -38,14 +38,14 @@ objective:
       #    technology: 
       #    description: |
       #      ...
-      #    #link: https://
+      #    link: https://
       #examples:
       #  - description: |
       #      ...
       #    link: https://
-      #    #language: 
-      #    #query: |
-      #    #  ...
+      #    language: 
+      #    query: |
+      #      ...
       #parent: 
   composition:
     strategy: 
@@ -61,9 +61,9 @@ composition:
   description: |
     ...
 #references:
-#  #public:
-#  #  1: 
-#  #internal:
-#  #  key: 
-#  #reports:
-#  #  - 
+#  public:
+#    1: 
+#  internal:
+#    key: 
+#  reports:
+#    - 

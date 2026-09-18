@@ -67,6 +67,15 @@ class _ParentModel(TideModel):
     optional_child: _NestedOptional | None = None
 
 
+class _NestedWithOptional(TideModel):
+    uuid: str
+    note: str | None = None
+
+
+class _StackModel(TideModel):
+    wrapper: _NestedWithOptional | None = None
+
+
 def test_required_only_metadata_tlp_is_scalar() -> None:
     text = render_model_template(ObjectMetadata, required_only=True)
     loaded = yaml.safe_load(text)
@@ -175,6 +184,8 @@ def test_rule_response_model_procedure_commented() -> None:
     _assert_no_null(text)
     assert "#procedure:" in text
     assert "#  analysis: |" in text
+    assert "#  searches:" in text
+    assert "#  #searches:" not in text
     loaded = yaml.safe_load(text)
     assert loaded is None
     recovered = uncomment_optional_blocks(text)
@@ -261,6 +272,34 @@ def test_nested_optional_uncomment_roundtrip() -> None:
     loaded = yaml.safe_load(recovered)
     assert loaded["required_child"]["uuid"] in (None, "")
     assert loaded["optional_child"]["name"] in (None, "")
+
+
+def test_optional_subtree_is_commented_once() -> None:
+    """Nested optionals stay live YAML under a single parent ``#``."""
+    text = render_model_template(_StackModel)
+    assert "#wrapper:" in text
+    assert "#  uuid:" in text
+    assert "#  note:" in text
+    assert "#  #note:" not in text
+    assert re.search(r"(?m)^[ ]*#[ ]+#", text) is None
+    recovered = uncomment_optional_blocks(text)
+    loaded = yaml.safe_load(recovered)
+    assert loaded["wrapper"]["uuid"] in (None, "")
+    assert "note" in loaded["wrapper"]
+
+
+def test_core_templates_do_not_stack_comment_markers() -> None:
+    stacked = re.compile(r"(?m)^[ ]*#[ ]+#")
+    for model, schema in (
+        (ThreatVector, "threat::1.0"),
+        (DetectionObjective, "objective::1.0"),
+        (DetectionRule, "rule::1.0"),
+        (SentinelConfig, None),
+    ):
+        kwargs = {"schema_id": schema} if schema else {}
+        text = render_model_template(model, **kwargs)
+        match = stacked.search(text)
+        assert match is None, f"{model.__name__}: {match.group(0)!r}"
 
 
 def test_commented_optional_block_is_contiguous() -> None:

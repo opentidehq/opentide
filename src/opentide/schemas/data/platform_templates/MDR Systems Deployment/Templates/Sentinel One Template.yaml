@@ -26,10 +26,10 @@
   #  treat_as_threat: false
   #  network_quarantine: false
   #details:
-  #  #name: 
-  #  #description: |
-  #  #  ...
-  #  #severity: 
-  #  #expiration: 
+  #  name: 
+  #  description: |
+  #    ...
+  #  severity: 
+  #  expiration: 
   #rule_id_bundle:
   #  key: 3

@@ -28,33 +28,33 @@
   #rule_id:
   #  key: 3
   #actions:
-  #  #devices:
-  #  #  #isolate_device: 
-  #  #  #collect_investigation_package: false
-  #  #  #run_antivirus_scan: false
-  #  #  #initiate_investigation: false
-  #  #  #restrict_app_execution: false
-  #  #files:
-  #  #  #allow_block:
-  #  #  #  action: Allow
-  #  #  #  identifier: 
-  #  #  #  #groups:
-  #  #  #  #  selection: All
-  #  #  #  #  #device_groups:
-  #  #  #  #  #  - 
-  #  #  #quarantine_file: 
-  #  #users:
-  #  #  #mark_as_compromised: 
-  #  #  #disable_user: 
-  #  #  #force_password_reset: 
+  #  devices:
+  #    isolate_device: 
+  #    collect_investigation_package: false
+  #    run_antivirus_scan: false
+  #    initiate_investigation: false
+  #    restrict_app_execution: false
+  #  files:
+  #    allow_block:
+  #      action: Allow
+  #      identifier: 
+  #      groups:
+  #        selection: All
+  #        device_groups:
+  #          - 
+  #    quarantine_file: 
+  #  users:
+  #    mark_as_compromised: 
+  #    disable_user: 
+  #    force_password_reset: 
   #scope:
   #  selection: All
-  #  #device_groups:
-  #  #  - 
+  #  device_groups:
+  #    - 
   #exclusions:
   #  - query: |
   #      ...
   #    reason: 
-  #    #tenant: 
-  #    #let:
-  #    #  key: 
+  #    tenant: 
+  #    let:
+  #      key: 

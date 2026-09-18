@@ -28,18 +28,18 @@ threat:
     - 
   #actors:
   #  - name: 
-  #    #sighting: |
-  #    #  ...
-  #    #references:
-  #    #  - 
+  #    sighting: |
+  #      ...
+  #    references:
+  #      - 
   #killchain:
   #  - 
   #chaining:
   #  - key: 
 #references:
-#  #public:
-#  #  1: 
-#  #internal:
-#  #  key: 
-#  #reports:
-#  #  - 
+#  public:
+#    1: 
+#  internal:
+#    key: 
+#  reports:
+#    - 

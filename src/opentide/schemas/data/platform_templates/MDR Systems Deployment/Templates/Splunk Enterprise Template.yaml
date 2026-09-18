@@ -12,61 +12,61 @@
   #query: |
   #  ...
   #scheduling:
-  #  #type: 
-  #  #expires: 
-  #  #schedule:
-  #  #  #frequency: 
-  #  #  #cron: 
-  #  #  #custom_time: 
-  #  #timerange:
-  #  #  #lookback: 
-  #  #  #earliest: 
-  #  #  #latest: 
+  #  type: 
+  #  expires: 
+  #  schedule:
+  #    frequency: 
+  #    cron: 
+  #    custom_time: 
+  #  timerange:
+  #    lookback: 
+  #    earliest: 
+  #    latest: 
   #trigger:
-  #  #condition: 
-  #  #comparator: 
-  #  #threshold: 3
-  #  #severity: 3
-  #  #custom_condition: 
-  #  #type: 
-  #  #throttling:
-  #  #  #fields:
-  #  #  #  - 
-  #  #  #duration: 
-  #  #  #group_name: 
+  #  condition: 
+  #  comparator: 
+  #  threshold: 3
+  #  severity: 3
+  #  custom_condition: 
+  #  type: 
+  #  throttling:
+  #    fields:
+  #      - 
+  #    duration: 
+  #    group_name: 
   #actions:
-  #  #notable:
-  #  #  #event:
-  #  #  #  #title: 
-  #  #  #  #description: |
-  #  #  #  #  ...
-  #  #  #drilldown:
-  #  #  #  #name: 
-  #  #  #  #search: 
-  #  #  #security_domain: 
-  #  #risk:
-  #  #  #message: 
-  #  #  #risk_objects:
-  #  #  #  - field: 
-  #  #  #    type: 
-  #  #  #    score: 3
-  #  #  #threat_objects:
-  #  #  #  - field: 
-  #  #  #    type: 
-  #  #email:
-  #  #  #to: 
-  #  #  #cc: 
-  #  #  #bcc: 
-  #  #  #priority: 
-  #  #  #subject: 
-  #  #  #message: 
-  #  #  #content_type: 
-  #  #  #send_csv: false
-  #  #  #send_pdf: false
-  #  #  #inline_results: false
-  #  #  #include:
-  #  #  #  #results_link: false
-  #  #  #  #search_string: false
-  #  #  #  #trigger_condition: false
-  #  #  #  #trigger_time: false
+  #  notable:
+  #    event:
+  #      title: 
+  #      description: |
+  #        ...
+  #    drilldown:
+  #      name: 
+  #      search: 
+  #    security_domain: 
+  #  risk:
+  #    message: 
+  #    risk_objects:
+  #      - field: 
+  #        type: 
+  #        score: 3
+  #    threat_objects:
+  #      - field: 
+  #        type: 
+  #  email:
+  #    to: 
+  #    cc: 
+  #    bcc: 
+  #    priority: 
+  #    subject: 
+  #    message: 
+  #    content_type: 
+  #    send_csv: false
+  #    send_pdf: false
+  #    inline_results: false
+  #    include:
+  #      results_link: false
+  #      search_string: false
+  #      trigger_condition: false
+  #      trigger_time: false
   #correlation_search: false
