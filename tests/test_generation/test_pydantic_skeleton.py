@@ -94,8 +94,9 @@ def test_object_metadata_schema_alias_and_dates() -> None:
     assert "modified: YYYY-MM-DD" in text
     assert "schema_id:" not in text
     assert "#organisation:" in text
-    assert "#  uuid:" in text
-    assert "#  name:" in text
+    assert re.search(r"(?m)^  #uuid:", text)
+    assert re.search(r"(?m)^  #name:", text)
+    assert re.search(r"(?m)^#  uuid:", text) is None
     loaded = yaml.safe_load(text)
     assert loaded["tlp"] in (None, "")
     assert "organisation" not in loaded
@@ -183,9 +184,9 @@ def test_rule_response_model_procedure_commented() -> None:
     text = render_model_template(RuleResponse)
     _assert_no_null(text)
     assert "#procedure:" in text
-    assert "#  analysis: |" in text
-    assert "#  searches:" in text
-    assert "#  #searches:" not in text
+    assert re.search(r"(?m)^  #analysis: \|", text)
+    assert re.search(r"(?m)^  #searches:", text)
+    assert re.search(r"(?m)^  ##searches:", text) is None
     loaded = yaml.safe_load(text)
     assert loaded is None
     recovered = uncomment_optional_blocks(text)
@@ -267,7 +268,8 @@ def test_nested_optional_uncomment_roundtrip() -> None:
     assert "required_child:" in text
     assert "  uuid:" in text
     assert "#optional_child:" in text
-    assert "#  uuid:" in text
+    assert re.search(r"(?m)^  #uuid:", text)
+    assert re.search(r"(?m)^#  uuid:", text) is None
     recovered = uncomment_optional_blocks(text)
     loaded = yaml.safe_load(recovered)
     assert loaded["required_child"]["uuid"] in (None, "")
@@ -275,12 +277,12 @@ def test_nested_optional_uncomment_roundtrip() -> None:
 
 
 def test_optional_subtree_is_commented_once() -> None:
-    """Nested optionals stay live YAML under a single parent ``#``."""
+    """Nested optionals stay live YAML; ``#`` hugs each key once."""
     text = render_model_template(_StackModel)
     assert "#wrapper:" in text
-    assert "#  uuid:" in text
-    assert "#  note:" in text
-    assert "#  #note:" not in text
+    assert re.search(r"(?m)^  #uuid:", text)
+    assert re.search(r"(?m)^  #note:", text)
+    assert re.search(r"(?m)^  ##note:", text) is None
     assert re.search(r"(?m)^[ ]*#[ ]+#", text) is None
     recovered = uncomment_optional_blocks(text)
     loaded = yaml.safe_load(recovered)
@@ -300,6 +302,23 @@ def test_core_templates_do_not_stack_comment_markers() -> None:
         text = render_model_template(model, **kwargs)
         match = stacked.search(text)
         assert match is None, f"{model.__name__}: {match.group(0)!r}"
+
+
+def test_optional_comments_hug_field_names() -> None:
+    """``#`` sits against the key, not at the parent indent with padding."""
+    text = render_model_template(ThreatVector, schema_id="threat::1.0")
+    assert re.search(r"(?m)^#references:", text)
+    assert re.search(r"(?m)^  #public:", text)
+    assert re.search(r"(?m)^    #1:", text)
+    assert re.search(r"(?m)^  #internal:", text)
+    assert re.search(r"(?m)^    #key:", text)
+    assert re.search(r"(?m)^  #reports:", text)
+    assert re.search(r"(?m)^    #-", text)
+    assert re.search(r"(?m)^#  public:", text) is None
+    rule = render_model_template(DetectionRule, schema_id="rule::1.0")
+    assert re.search(r"(?m)^  #sentinel:", rule)
+    assert re.search(r"(?m)^    #enabled:", rule)
+    assert re.search(r"(?m)^  #  enabled:", rule) is None
 
 
 def test_commented_optional_block_is_contiguous() -> None:
@@ -398,7 +417,10 @@ def test_comment_and_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert sk._render_model(ObjectMetadata, indent=0, options=sk.RenderOptions(), depth=99) == []
     assert sk._list_item_lines([], 2) == ["  - "]
-    assert sk._comment_at_indent(["x"], 2) == ["  #x"]
+    assert sk._comment_hug_keys(["x"], 2) == ["#x"]
+    assert sk._comment_hug_keys(["  public:", "    1: "], 0) == ["  #public:", "    #1: "]
+    assert sk._comment_hug_keys([""], 2) == ["  #"]
+    assert sk._comment_hug_keys(["  #already"], 0) == ["  #already"]
     assert sk._format_scalar({"a": 1}) == ""
     assert sk._format_scalar((1, 2)) == ""
     assert sk._format_scalar(3) == "3"

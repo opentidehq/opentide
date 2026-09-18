@@ -51,8 +51,9 @@ def test_generate_core_template_threat_expands_body(tmp_path: Path) -> None:
     assert "description:" in text
     assert "att&ck:" in text
     after_org = text.split("#organisation:", 1)[1].split("threat:", 1)[0]
-    assert "#  uuid:" in after_org
-    assert "#  name:" in after_org
+    assert re.search(r"(?m)^    #uuid:", after_org)
+    assert re.search(r"(?m)^    #name:", after_org)
+    assert re.search(r"(?m)^[ ]*#  uuid:", after_org) is None
     assert "\n    uuid:" not in after_org
     assert "\n    name:" not in after_org
     loaded = yaml.safe_load(text)

@@ -3,33 +3,33 @@
   schema: platform::sentinel_one::1.0
   #status: 
   #flags:
-  #  - 
+    #- 
   #tenants:
-  #  - 
+    #- 
   #contributors:
-  #  - 
+    #- 
   condition:
     type: "Single Event"
     #single_event:
-    #  query: |
-    #    ...
+      #query: |
+        #...
     #correlation:
-    #  entity: 
-    #  match_in_order: false
-    #  time_window: 
-    #  sub_queries:
-    #    - query: |
-    #        ...
-    #      matches_required: 3
+      #entity: 
+      #match_in_order: false
+      #time_window: 
+      #sub_queries:
+        #- query: |
+            #...
+          #matches_required: 3
     #cool_off: 
   #response:
-  #  treat_as_threat: false
-  #  network_quarantine: false
+    #treat_as_threat: false
+    #network_quarantine: false
   #details:
-  #  name: 
-  #  description: |
-  #    ...
-  #  severity: 
-  #  expiration: 
+    #name: 
+    #description: |
+      #...
+    #severity: 
+    #expiration: 
   #rule_id_bundle:
-  #  key: 3
+    #key: 3

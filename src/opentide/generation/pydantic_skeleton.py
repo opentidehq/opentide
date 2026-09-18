@@ -1,9 +1,9 @@
 """Render YAML object skeletons by walking Pydantic ``FieldInfo``.
 
 Templates are line-oriented YAML. Optional fields are the same YAML as the
-required render with ``#`` inserted once at the field indent (issue #223).
-Nested optionals are not commented again. JSON Schema ``$ref`` /
-``properties`` walking is not used here.
+required render with ``#`` hugging each key (issue #223). Nested optionals
+are not commented again. JSON Schema ``$ref`` / ``properties`` walking is
+not used here.
 """
 
 from __future__ import annotations
@@ -49,9 +49,8 @@ def render_model_template(
 
     Uncommented keys are required ``FieldInfo`` entries (aliases honoured).
     Optional fields emit as commented blocks: the subtree is live YAML with
-    ``#`` inserted once at the field indent (nested optionals are not
-    commented again). Path fields and ``tide.template.hide`` are omitted.
-    No YAML ``null`` tokens.
+    ``#`` hugging each key (nested optionals are not commented again). Path
+    fields and ``tide.template.hide`` are omitted. No YAML ``null`` tokens.
     """
     options = RenderOptions(schema_id=schema_id, required_only=required_only)
     lines = _render_model(model, indent=indent, options=options, depth=0)
@@ -167,7 +166,7 @@ def _render_field(
         depth=depth,
     )
     if comment_now:
-        value_lines = _comment_at_indent(value_lines, indent)
+        value_lines = _comment_hug_keys(value_lines, indent)
     return value_lines
 
 
@@ -395,11 +394,11 @@ def _concrete_default(field: FieldInfo) -> Any:
     return default
 
 
-def _comment_at_indent(lines: list[str], indent: int) -> list[str]:
-    """Insert ``#`` at *indent* on every line, including spacer blanks.
+def _comment_hug_keys(lines: list[str], indent: int) -> list[str]:
+    """Insert ``#`` immediately before the first non-space token on each line.
 
-    Nested optionals must already be live YAML in *lines*; this prefix is
-    the only ``#`` for the block. Blank lines become a ``#`` at the field
+    Nested optionals must already be live YAML in *lines*; this is the only
+    ``#`` for the block. Blank spacer lines become a ``#`` at the field
     indent so a commented optional block stays contiguous for editor
     uncomment.
     """
@@ -410,10 +409,11 @@ def _comment_at_indent(lines: list[str], indent: int) -> list[str]:
             commented.append(f"{prefix}#")
             continue
         spaces = len(line) - len(line.lstrip(" "))
-        if spaces >= indent:
-            commented.append(line[:indent] + "#" + line[indent:])
-        else:
-            commented.append(prefix + "#" + line.lstrip(" "))
+        rest = line[spaces:]
+        if rest.startswith("#"):
+            commented.append(line)
+            continue
+        commented.append(f"{line[:spaces]}#{rest}")
     return commented
 
 

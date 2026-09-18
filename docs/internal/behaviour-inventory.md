@@ -69,7 +69,7 @@ YAML skeletons are rendered from Pydantic `FieldInfo` (`render_model_template`).
 |----|-----------|----------|
 | TP-01 | Omit `Path` fields and fields with `tide.template.hide` | `_render_field` |
 | TP-02 | Nested `TideModel` fields recurse via `model_fields` (no `$ref` / `$defs`) | `_render_model` |
-| TP-03 | Optional `FieldInfo`: insert `#` once at the field indent on every subtree line; nested optionals stay live under that prefix (no stacked `#`) | `_comment_at_indent` |
+| TP-03 | Optional `FieldInfo`: hug `#` to each subtree token (`#references:` / `  #public:`); nested optionals stay live so they are not commented again (no stacked `#`) | `_comment_hug_keys` |
 | TP-04 | `tide.template.required` overrides `FieldInfo.is_required()` (rule `response` / `configurations`) | `_field_is_required` |
 | TP-05 | `RuleConfigurations` optional platform slots are commented stubs with nested `query: \|` — never `configurations: {}` | `RuleConfigurations` walk |
 | TP-06 | `dict` fields emit one sample key (`1` for int keys, `key` otherwise) | `_render_dict` |

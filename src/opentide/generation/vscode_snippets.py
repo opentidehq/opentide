@@ -36,7 +36,8 @@ def _indent_width(line: str) -> int:
 def _next_content_indent(lines: list[str], index: int) -> int | None:
     """Indent of the next non-blank line, including commented YAML.
 
-    FieldInfo templates comment optional children (``  #sentinel:``).
+    FieldInfo templates comment optional children (``  #sentinel:`` /
+    ``    #query:``).
     Skipping those lines made mapping parents look like empty scalars.
     """
     for candidate in lines[index + 1 :]:

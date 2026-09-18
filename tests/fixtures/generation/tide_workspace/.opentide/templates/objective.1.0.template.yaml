@@ -9,10 +9,10 @@ metadata:
   tlp: 
   #author: 
   #contributors:
-  #  - 
+    #- 
   #organisation:
-  #  uuid: 
-  #  name: 
+    #uuid: 
+    #name: 
 objective:
   priority: 
   type: 
@@ -28,24 +28,24 @@ objective:
         availability: 
         requirements: 
         #logsources:
-        #  - 
+          #- 
       methodology: 
       entities:
         - 
       #effort: 3
       #detectors:
-      #  - name: 
-      #    technology: 
-      #    description: |
-      #      ...
-      #    link: https://
+        #- name: 
+          #technology: 
+          #description: |
+            #...
+          #link: https://
       #examples:
-      #  - description: |
-      #      ...
-      #    link: https://
-      #    language: 
-      #    query: |
-      #      ...
+        #- description: |
+            #...
+          #link: https://
+          #language: 
+          #query: |
+            #...
       #parent: 
   composition:
     strategy: 
@@ -53,17 +53,17 @@ objective:
       ...
   #investment: 
   #threats:
-  #  - 
+    #- 
   #attack:
-  #  - 
+    #- 
 composition:
   strategy: 
   description: |
     ...
 #references:
-#  public:
-#    1: 
-#  internal:
-#    key: 
-#  reports:
-#    - 
+  #public:
+    #1: 
+  #internal:
+    #key: 
+  #reports:
+    #- 

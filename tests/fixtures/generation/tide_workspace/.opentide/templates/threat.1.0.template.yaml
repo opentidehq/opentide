@@ -10,10 +10,10 @@ metadata:
   tlp: 
   #author: 
   #contributors:
-  #  - 
+    #- 
   #organisation:
-  #  uuid: 
-  #  name: 
+    #uuid: 
+    #name: 
 threat:
   description: |
     ...
@@ -27,19 +27,19 @@ threat:
   att&ck:
     - 
   #actors:
-  #  - name: 
-  #    sighting: |
-  #      ...
-  #    references:
-  #      - 
+    #- name: 
+      #sighting: |
+        #...
+      #references:
+        #- 
   #killchain:
-  #  - 
+    #- 
   #chaining:
-  #  - key: 
+    #- key: 
 #references:
-#  public:
-#    1: 
-#  internal:
-#    key: 
-#  reports:
-#    - 
+  #public:
+    #1: 
+  #internal:
+    #key: 
+  #reports:
+    #- 

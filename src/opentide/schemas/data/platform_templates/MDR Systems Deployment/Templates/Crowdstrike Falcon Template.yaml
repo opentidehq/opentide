@@ -3,17 +3,17 @@
   schema: platform::crowdstrike::1.0
   #status: 
   #flags:
-  #  - 
+    #- 
   #tenants:
-  #  - 
+    #- 
   #contributors:
-  #  - 
+    #- 
   details:
     trigger: 
     outcome: 
     #name: 
     #description: |
-    #  ...
+      #...
     #severity: 
     #tactic: 
     #technique: 
@@ -26,4 +26,4 @@
   query: |
     ...
   #rule_id_bundle:
-  #  key: 
+    #key: 

@@ -83,7 +83,7 @@ def test_vs_code_snippet_generator_keeps_commented_mapping_children(
     """Commented platform stubs are still children of ``configurations:``."""
     template = tmp_path / "rule.yaml"
     template.write_text(
-        "configurations:\n  #sentinel:\n  #  query: |\n  #    ...\n",
+        "configurations:\n  #sentinel:\n    #query: |\n      #...\n",
         encoding="utf-8",
     )
     snippet = vs_code_snippet_generator(template, "tide-rule")

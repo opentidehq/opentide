@@ -3,19 +3,19 @@
   schema: platform::carbon_black_cloud::1.0
   #status: 
   #flags:
-  #  - 
+    #- 
   #tenants:
-  #  - 
+    #- 
   #contributors:
-  #  - 
+    #- 
 
   #query: |
-  #  ...
+    #...
   #organizations:
-  #  - 
+    #- 
   #watchlist: 
   #report: 
   #tags:
-  #  - 
+    #- 
   #rule_id_bundle:
-  #  key: 
+    #key: 
