@@ -7,6 +7,34 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.2.1 — 18 September 2026
+
+Patch on 0.2.0. **Upgrade if you validate `threat.cve` identifiers or generate threat documentation that should link to CIRCL Vulnerability-Lookup.**
+
+**Install**
+
+```bash
+pip install opentide==0.2.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version adds**
+
+- CVE validation and generated threat CVE tables use [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu) instead of scraping NVD through `mitrecve` ([#109](https://github.com/OpenTideHQ/opentide/issues/109)).
+- `opentide validate --check cve` looks up CVE, GHSA, and GCVE identifiers. GNA 0 GCVE ids map to CVE. Generated docs link to `https://vulnerability.circl.lu/vuln/{id}` and can enrich published date, severity, and aliases.
+- `threat.cve` is a first-class optional list on the threat body.
+
+**What this version changes**
+
+- Bundled `[cve]` defaults point at Vulnerability-Lookup. Legacy NVD link prefixes are remapped. The CVE check stays opt-in so default `opentide validate` stays offline.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.2.1/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.1)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.2.0 — 18 September 2026
 
 Minor on 0.1.8. **Upgrade if you generate templates or VS Code snippets — optional YAML now hugs `#` to each key, spacers stay blank, and rule `configurations` are commented platform stubs rather than `{}`.**
