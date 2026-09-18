@@ -1,19 +1,19 @@
 ---
 title: Behaviour inventory
-description: Pre-Pydantic migration baseline behaviour mapping from legacy CoreTide Engines.
+description: Behaviour inventory — FieldInfo YAML templates (0.2.0) plus CoreTide schema/validation baseline.
 ---
 
-# Behaviour Inventory — Pre-Pydantic Migration Baseline
+# Behaviour Inventory
 
-Derived from the **current code** in `Engines/` on branch `development` after Phase 3 merge (`8fd1fd1`). This document gates Phase 4+ work: regenerated schemas/templates must remain byte-equivalent unless an intentional Phase 3 fix changes them.
+Template generation (section 2) is the **0.2.0 FieldInfo** renderer. Other sections remain the Phase 3/4 CoreTide baseline used to gate schema and validation ports.
 
 **Sources analysed**
 
 | Concern | Primary modules | Lines (approx.) |
 |---------|-----------------|-----------------|
-| Template generation | `Engines/framework/templates.py`, `Engines/templates/dom.py`, `mdr.py`, `models.py` | 457 + ~240 |
+| Template generation | `src/opentide/generation/pydantic_skeleton.py` | FieldInfo walker |
 | JSON Schema generation | `Engines/framework/json_schemas.py` | 870 |
-| VS Code snippets | `Engines/framework/vscode_snippets.py` | 133 |
+| VS Code snippets | `src/opentide/generation/vscode_snippets.py` | copies YAML templates |
 | Schema validation | `Engines/validation/tide_schema.py` | 101 |
 | Indexing | `Engines/indexing/indexer.py`, `objects_indexer.py` | 416 + 137 |
 
@@ -61,28 +61,30 @@ Derived from the **current code** in `Engines/` on branch `development` after Ph
 
 ---
 
-## 2. Template generation (`templates.py`)
+## 2. Template generation (`pydantic_skeleton.py`)
+
+YAML skeletons are rendered from Pydantic `FieldInfo` (`render_model_template`). The JSON Schema walker `gen_template` is gone. JSON Schema generation (`schema_pipeline.py`) is a separate pipeline.
 
 | ID | Behaviour | Function |
 |----|-----------|----------|
-| TP-01 | Skip fields with `tide.template.hide` | `gen_template` |
-| TP-02 | Expand `tide.meta.definition` inline (forced or referenced) | `gen_template` |
-| TP-03 | Prefix optional object keys with `#` when not required | `gen_template` |
-| TP-04 | Config-gated optional sections via `tide.template.config.required` | `gen_template` |
-| TP-05 | Recomposition placeholders as `#{entry}: blank` for enabled systems | `gen_template` |
-| TP-06 | `additionalProperties` object templates recurse or emit `blank` | `gen_template` |
-| TP-07 | Array templates: optional → `#key` + `"Comment out"` | `gen_template` |
-| TP-08 | Sentinel strings: `blank`, `no-space`, `force_space`, `Comment out` | `gen_template` |
-| TP-09 | Vocabulary placeholders from enum first value | `gen_template` |
-| TP-10 | Example values from metaschema `example` keyword | `gen_template` |
-| TP-11 | Boolean defaults to `false` / example | `gen_template` |
-| TP-12 | Insert blank lines from `tide.template.spacer` / `force_space` | `make_spaces` |
-| TP-13 | Strip `no-space` / `force_space` sentinel markers from output | `make_spaces` |
-| TP-14 | Re-indent entire template by N spaces | `indent_template` |
-| TP-15 | `run()` pipeline: generate → spaces → indent → remove blanks | `run` |
-| TP-16 | `remove_blanks` strips trailing empty YAML lines | `remove_blanks` |
-| TP-17 | `replace_strings_in_file` post-processing for template paths | `replace_strings_in_file` |
-| TP-18 | `get_required` merges metaschema `required` + `tide.template.force-required` | `get_required` |
+| TP-01 | Omit `Path` fields and fields with `tide.template.hide` | `_render_field` |
+| TP-02 | Nested `TideModel` fields recurse via `model_fields` (no `$ref` / `$defs`) | `_render_model` |
+| TP-03 | Optional `FieldInfo`: hug `#` to each subtree token (`#references:` / `  #public:`); nested optionals stay live so they are not commented again (no stacked `#`) | `_comment_hug_keys` |
+| TP-04 | `tide.template.required` overrides `FieldInfo.is_required()` (rule `response` / `configurations`) | `_field_is_required` |
+| TP-05 | `RuleConfigurations` optional platform slots are commented stubs with nested `query: \|` — never `configurations: {}` | `RuleConfigurations` walk |
+| TP-06 | `dict` fields emit one sample key (`1` for int keys, `key` otherwise) | `_render_dict` |
+| TP-07 | `list` fields emit one sample element | `_render_list` |
+| TP-08 | Typed placeholders: empty `str`, `YYYY-MM-DD`, `\|` + `...`, `https://`, `3`, `false` — never YAML `null` | `_scalar_placeholder` |
+| TP-09 | `VocabField` / `tide.vocab` → empty scalar (no enum dump) | `_scalar_placeholder` |
+| TP-10 | Non-null default is the placeholder (`STAGING`); still commented if optional | `_concrete_default` |
+| TP-11 | Boolean placeholder is `false` unless a default is set | `_scalar_placeholder` |
+| TP-12 | `tide.template.spacer` inserts a blank line before the field; that blank stays blank when the parent block is commented (no lone `#`) | `_wants_spacer` |
+| TP-13 | `serialization_alias` / `alias` is the YAML key (`att&ck`, `schema`) | `_yaml_key` |
+| TP-14 | Platform templates are emitted at indent 2 from `write_model_template` | `write_model_template` |
+| TP-15 | `run()` writes FieldInfo YAML for core objects and enabled platforms | `template_renderer.run` |
+| TP-16 | `remove_blanks` leftover file helper (not on the generate path) | `remove_blanks` |
+| TP-17 | `replace_strings_in_file` leftover helper (not on the generate path) | `replace_strings_in_file` |
+| TP-18 | Uncommented keys = `FieldInfo.is_required()` or `tide.template.required`; schema id from the owning model's `schema_identifier()` | `_field_is_required` |
 
 ---
 

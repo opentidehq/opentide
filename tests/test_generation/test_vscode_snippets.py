@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -75,6 +76,37 @@ def test_vs_code_snippet_generator_tabstops_empty_values(tmp_path: Path) -> None
     assert "  #author: " in body
     assert "    ${3:...}" in body
     assert not any("${" in line and line.lstrip().startswith("#") for line in body)
+
+
+def test_vs_code_snippet_generator_keeps_commented_mapping_children(
+    tmp_path: Path,
+) -> None:
+    """Commented platform stubs are still children of ``configurations:``."""
+    template = tmp_path / "rule.yaml"
+    template.write_text(
+        "configurations:\n  #sentinel:\n    #query: |\n      #...\n",
+        encoding="utf-8",
+    )
+    snippet = vs_code_snippet_generator(template, "tide-rule")
+    body = "\n".join(snippet["body"])
+    assert "configurations:" in body
+    assert "configurations: ${" not in body
+    assert "  #sentinel:" in body
+
+
+def test_vs_code_snippet_generator_blank_between_commented_children(
+    tmp_path: Path,
+) -> None:
+    """Spacer blanks must not make ``configurations:`` look like an empty scalar."""
+    template = tmp_path / "rule.yaml"
+    template.write_text(
+        "configurations:\n\n  #sentinel:\n    #query: |\n      #...\n",
+        encoding="utf-8",
+    )
+    snippet = vs_code_snippet_generator(template, "tide-rule")
+    body = "\n".join(snippet["body"])
+    assert "configurations:" in body
+    assert "configurations: ${" not in body
 
 
 def test_vs_code_snippet_generator_prepends_blank_lines(tmp_path: Path) -> None:
@@ -208,7 +240,11 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
     templates_dir = fresh / ".opentide" / "templates"
     templates_dir.mkdir(parents=True, exist_ok=True)
     for key in ("rule", "threat", "objective"):
-        generate_core_template(key, templates_dir / f"{key}.1.0.template.yaml")
+        path = templates_dir / f"{key}.1.0.template.yaml"
+        generate_core_template(key, path)
+        yaml_text = path.read_text(encoding="utf-8")
+        assert re.search(r"(?m)^[ ]*#[ ]*$", yaml_text) is None
+        assert re.search(r"(?m)^[ ]*#[ ]+#", yaml_text) is None
     run()
     snippets = fresh / ".vscode" / "model-templates.code-snippets"
     assert snippets.is_file()
@@ -219,6 +255,8 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
     rule_body = "\n".join(payload["Detection Rules Template"]["body"])
     assert "${1:name}" in rule_body or "name: ${" in rule_body
     assert "#author:" in rule_body
+    assert "configurations:" in rule_body
+    assert "configurations: ${" not in rule_body
     assert "${" not in "".join(
         line
         for line in payload["Detection Rules Template"]["body"]

@@ -1,17 +1,60 @@
   #enabled: false
   #name: 
-  #schema: null
-  status: null
-  #flags: null
-  #tenants: null
-  #contributors: null
-  
+  schema: platform::defender_for_endpoint::1.0
+  #status: 
+  #flags:
+    #- 
+  #tenants:
+    #- 
+  #contributors:
+    #- 
+
   query: |
     ...
-  alert: 
-  impacted_entities: 
-  scheduling: 
-  #rule_id: null
-  #actions: null
-  #scope: null
-  #exclusions: null
+  alert:
+    category: 
+    #title: 
+    #description: |
+      #...
+    #severity: 
+    #recommendation: 
+    #techniques:
+      #- 
+  impacted_entities:
+    #device: 
+    #mailbox: 
+    #user: 
+  scheduling: NRT
+  #rule_id:
+    #key: 3
+  #actions:
+    #devices:
+      #isolate_device: 
+      #collect_investigation_package: false
+      #run_antivirus_scan: false
+      #initiate_investigation: false
+      #restrict_app_execution: false
+    #files:
+      #allow_block:
+        #action: Allow
+        #identifier: 
+        #groups:
+          #selection: All
+          #device_groups:
+            #- 
+      #quarantine_file: 
+    #users:
+      #mark_as_compromised: 
+      #disable_user: 
+      #force_password_reset: 
+  #scope:
+    #selection: All
+    #device_groups:
+      #- 
+  #exclusions:
+    #- query: |
+        #...
+      #reason: 
+      #tenant: 
+      #let:
+        #key: 

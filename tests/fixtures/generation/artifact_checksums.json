@@ -1,16 +1,18 @@
 {
-  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Carbon Black Cloud Enterprise EDR Template.yaml": "43bc94ea6c49ce44b7413745e20110d5e3a1b399c8ed852cece8065058b93e8e",
-  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Crowdstrike Falcon Correlation Rules Template.yaml": "ecd1685decb41621fecf40cc006f3c458cb1677163cf486676e2a0e339a431b5",
-  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Crowdstrike Falcon Template.yaml": "ecd1685decb41621fecf40cc006f3c458cb1677163cf486676e2a0e339a431b5",
-  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Microsoft Defender for Endpoint Template.yaml": "54fa58f17edcdc3bbe64067b879f1951b26b1b9741ce242c958b1642ff8060a4",
-  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Microsoft Sentinel Template.yaml": "894ebcaa8bc8e085fb121feb95af8a1ef6b4f774c390acbc6f8147eafab9750b",
-  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Sentinel One Template.yaml": "9666232b36bf6c9f2b39d6ab5ab195287c4423636674a7b043a50458160dcc36",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Carbon Black Cloud Enterprise EDR Template.yaml": "f02b0da625526cd8f36494b7eaa1c3e1f33f6167a09c2744a880a5d8d09738e6",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Crowdstrike Falcon Correlation Rules Template.yaml": "5f8da093ae594b25a6b0967ad34cfc672f1d802f53a5d32b28364c2dbd10a875",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Crowdstrike Falcon Template.yaml": "5f8da093ae594b25a6b0967ad34cfc672f1d802f53a5d32b28364c2dbd10a875",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/HarfangLab Template.yaml": "0e56741dfd2cb11f4f4f155fcc8947966d0d41ca5d05d4f356ca7c33afcadaea",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Microsoft Defender for Endpoint Template.yaml": "db9b3de095841ce9cb2c6b17d26a82053fa230ebe10b24e4d55d56090a8f0a08",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Microsoft Sentinel Template.yaml": "51bdf24a70cedf5287c99ad81720cfe5775eb06d367bd51b5e3debb1648e6db6",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Sentinel One Template.yaml": "600582806998dbc0a9f9f96ff9c8b9d30a0d73688f944d6081b80ec0a9805f2b",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Splunk Enterprise Template.yaml": "a2d8f3e3d1e2f8d230c6942b4dd28526e61db0c6ee19dc91400c99f3616a0f2c",
   "tide:.opentide/schemas/objective.1.0.schema.json": "4ba96f3c39d254abdcbf1f5bebb7f5b828bb96aa076ced1eec314754484853eb",
   "tide:.opentide/schemas/opentide.schema.json": "21105afdbd57e663e598c80bb1044269e026d72a2ee4a3af60a4e8b5a07438a5",
   "tide:.opentide/schemas/rule.1.0.schema.json": "1db7170a6ef4f5003acf8a29538d888070f80d88d2ac3f5f152c0399f54b8de1",
   "tide:.opentide/schemas/threat.1.0.schema.json": "c3a9c066bdbdde3dbc85a8ba6e65b38bd02782b63a64bf1bbaf338986f7f1f37",
   "tide:.opentide/schemas/visibility.1.0.schema.json": "fe98467b3b51256dbc14a22773a433766b5f5e8441a2e5e395bd8bafd6e53097",
-  "tide:.opentide/templates/objective.1.0.template.yaml": "02cb487adc965ce99feb40dbcb4767e5973691bcd6eeeb37966c1e3eb27a3836",
-  "tide:.opentide/templates/rule.1.0.template.yaml": "c966a4213996d53c2bac747027d3e38ab5659c1bb6f137b3ca7825e050887337",
-  "tide:.opentide/templates/threat.1.0.template.yaml": "1bc4811dd5533def1b568bf407cf4d7c01fe048d2d1115e5de91eca3cf11f983"
+  "tide:.opentide/templates/objective.1.0.template.yaml": "9ee27b932321d25d81e7d3867dedddfbcdad39fb1029f43284e1e65bb902fc82",
+  "tide:.opentide/templates/rule.1.0.template.yaml": "0fe0a4ae3ebe8ea54602ec6a10d50c6629d744fcf81afbd45f669fd48b018407",
+  "tide:.opentide/templates/threat.1.0.template.yaml": "6d28521d5f4c76b18b97de905cddba736a57d2e52f1b6893dc109fe901e42efd"
 }

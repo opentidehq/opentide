@@ -66,7 +66,7 @@ class DetectionObjective(TideModel):
 
     __schema_identifier__: ClassVar[str] = "objective::1.0"
     name: str
-    metadata: ObjectMetadata
+    metadata: ObjectMetadata = TideField(schema_extra={"tide.template.spacer": True})
     objective: ObjectiveBody
     composition: ObjectiveComposition
     references: ObjectReferences | None = None

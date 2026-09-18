@@ -47,7 +47,7 @@ class ThreatVector(TideModel):
     __schema_identifier__: ClassVar[str] = "threat::1.0"
     name: str
     criticality: str = VocabField(True)
-    metadata: ObjectMetadata
+    metadata: ObjectMetadata = TideField(schema_extra={"tide.template.spacer": True})
     threat: ThreatBody
     references: ObjectReferences | None = None
 

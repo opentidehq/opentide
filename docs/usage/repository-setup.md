@@ -129,3 +129,5 @@ opentide generate
 opentide validate --strict
 opentide setup mcp --cursor --yes   # if not done during setup
 ```
+
+`generate` writes `.opentide/templates/*.template.yaml` from Pydantic models (required keys live, optional fields commented with `#` hugging each key, no YAML `null`). Copy a template into `objects/` or use the `tide-threat` / `tide-objective` / `tide-rule` VS Code snippets.

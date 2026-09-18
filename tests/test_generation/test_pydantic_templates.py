@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,11 @@ def test_load_core_template_source_unknown_model() -> None:
         load_core_template_source("not-a-model")
 
 
+def test_generate_core_template_unknown_model(tmp_path: Path) -> None:
+    with pytest.raises(KeyError, match="not-a-model"):
+        generate_core_template("not-a-model", tmp_path / "x.yaml")
+
+
 def test_core_template_sources_cover_all_models() -> None:
     for key in core_template_model_keys():
         source = load_core_template_source(key)
@@ -45,8 +51,9 @@ def test_generate_core_template_threat_expands_body(tmp_path: Path) -> None:
     assert "description:" in text
     assert "att&ck:" in text
     after_org = text.split("#organisation:", 1)[1].split("threat:", 1)[0]
-    assert "#  uuid:" in after_org
-    assert "#  name:" in after_org
+    assert re.search(r"(?m)^    #uuid:", after_org)
+    assert re.search(r"(?m)^    #name:", after_org)
+    assert re.search(r"(?m)^[ ]*#  uuid:", after_org) is None
     assert "\n    uuid:" not in after_org
     assert "\n    name:" not in after_org
     loaded = yaml.safe_load(text)
@@ -80,8 +87,7 @@ def test_generate_core_template_rule_expands_response_and_hides_file(tmp_path: P
     generate_core_template("rule", path)
     text = path.read_text(encoding="utf-8")
     assert "alert_severity:" in text
-    assert "file:" not in text
-    assert "#file:" not in text
+    assert re.search(r"(?m)^[ ]*#?file:", text) is None
     assert "#platforms:" not in text
     assert "configurations:" in text or "#configurations:" in text
     assert "playbook:" in text
@@ -100,6 +106,8 @@ def test_generate_core_templates_never_emit_yaml_null(tmp_path: Path) -> None:
         assert "created: YYYY-MM-DD" in text
         assert "#author:" in text
         assert "#author: null" not in text
+        assert re.search(r"(?m)^[ ]*#[ ]*$", text) is None, key
+        assert re.search(r"(?m)^[ ]*#[ ]+#", text) is None, key
 
 
 def test_generate_core_template_threat_nested_description_is_multiline(tmp_path: Path) -> None:
