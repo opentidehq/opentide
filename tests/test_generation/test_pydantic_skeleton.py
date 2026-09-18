@@ -21,7 +21,14 @@ from opentide.generation.pydantic_templates import generate_core_template
 from opentide.models.base import TideField, TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata
 from opentide.models.objective import DetectionObjective
-from opentide.models.platform import RuleConfigurations, SentinelConfig
+from opentide.models.platform import (
+    CarbonBlackConfig,
+    CrowdstrikeConfig,
+    DefenderConfig,
+    RuleConfigurations,
+    SentinelConfig,
+    SplunkConfig,
+)
 from opentide.models.response import RuleResponse
 from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatVector
@@ -94,6 +101,11 @@ class _SpacedOptional(TideModel):
     body: str | None = TideField(
         None, schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
+
+
+class _ForcedRequired(TideModel):
+    optional_live: str | None = TideField(None, schema_extra={"tide.template.required": True})
+    optional_commented: str | None = None
 
 
 def test_required_only_metadata_tlp_is_scalar() -> None:
@@ -234,6 +246,54 @@ def test_sentinel_config_from_model_fields() -> None:
     assert loaded["schema"] == "platform::sentinel::1.0"
 
 
+@pytest.mark.parametrize(
+    "model",
+    [
+        SentinelConfig,
+        DefenderConfig,
+        SplunkConfig,
+        CrowdstrikeConfig,
+        CarbonBlackConfig,
+    ],
+)
+def test_standalone_platform_query_is_live(model: type[TideModel]) -> None:
+    """``query`` is live in standalone platform templates, including Splunk/CBC.
+
+    Splunk and Carbon Black keep ``query`` optional on the Pydantic model for
+    load/legacy, and force it live with ``tide.template.required``.
+    """
+    text = render_model_template(model)
+    _assert_comment_style(text)
+    assert re.search(r"(?m)^query: \|", text)
+    assert re.search(r"(?m)^#query:", text) is None
+    loaded = yaml.safe_load(text)
+    assert loaded["query"].strip() == "..."
+    indented = render_model_template(model, indent=2)
+    assert re.search(r"(?m)^  query: \|", indented)
+    assert re.search(r"(?m)^  #query:", indented) is None
+
+
+def test_splunk_and_cbc_query_fieldinfo_stays_optional() -> None:
+    for model in (SplunkConfig, CarbonBlackConfig):
+        field = model.model_fields["query"]
+        assert field.is_required() is False
+        extras = field.json_schema_extra
+        assert isinstance(extras, dict)
+        assert extras["tide.template.required"] is True
+    SplunkConfig(schema="splunk::3.0", status="STAGING", correlation_search=True)
+    CarbonBlackConfig()
+
+
+def test_template_required_override_makes_optional_field_live() -> None:
+    text = render_model_template(_ForcedRequired)
+    _assert_comment_style(text)
+    assert re.search(r"(?m)^optional_live:", text)
+    assert re.search(r"(?m)^#optional_commented:", text)
+    loaded = yaml.safe_load(text)
+    assert "optional_live" in loaded
+    assert "optional_commented" not in loaded
+
+
 def test_rule_configurations_walks_all_platform_slots() -> None:
     text = render_model_template(RuleConfigurations)
     for key in (
@@ -321,6 +381,8 @@ def test_core_templates_do_not_stack_comment_markers() -> None:
         (DetectionObjective, "objective::1.0"),
         (DetectionRule, "rule::1.0"),
         (SentinelConfig, None),
+        (SplunkConfig, None),
+        (CarbonBlackConfig, None),
         (RuleConfigurations, None),
         (RuleResponse, None),
     ):

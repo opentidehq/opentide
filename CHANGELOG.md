@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - `opentide generate templates` walks Pydantic `FieldInfo` instead of the JSON Schema `gen_template` walker. Optional sections are commented YAML blocks (`#` hugs each key; nested optionals are not commented again; spacer blanks stay blank), placeholders are typed (no `null`), nested bodies come from nested models, and rule `configurations` are commented platform stubs rather than `{}` ([#223](https://github.com/OpenTideHQ/opentide/issues/223)).
 - VS Code snippet conversion treats commented nested keys as mapping children, so `configurations:` with only `#sentinel:` stubs is not turned into a tabstop.
+- Splunk and Carbon Black standalone templates emit live `query: |` via `tide.template.required`. The Pydantic field stays optional so load/legacy `search` still constructs without a query.
 
 ## [0.1.8] — 2026-09-16
 

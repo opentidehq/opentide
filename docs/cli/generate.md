@@ -38,7 +38,7 @@ A freshly scaffolded repository (no objects yet) is a valid generate target. Doc
 
 `opentide generate templates` walks Pydantic `model_fields` (not JSON Schema `$defs`). Output is line-oriented YAML:
 
-- Uncommented keys are required `FieldInfo` on that model (aliases honoured: `att&ck`, `schema`).
+- Uncommented keys are `FieldInfo.is_required()` or `tide.template.required` (aliases honoured: `att&ck`, `schema`). Splunk and Carbon Black `query` stay optional on the model for load/legacy but are live in templates.
 - Optional fields are the same YAML with `#` hugging each key (`#references:` / `  #public:`). Nested optionals inside that block are not commented again. Spacer blank lines stay blank (they are not turned into a lone `#`). Uncomment a block and it is valid YAML.
 - Placeholders are typed: empty strings, `YYYY-MM-DD`, multiline `|` + `...`, `https://`, `3`, `false`. There are no YAML `null` tokens.
 - Vocabulary fields are empty scalars (no enum dump).
