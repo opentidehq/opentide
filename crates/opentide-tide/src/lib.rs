@@ -3,10 +3,14 @@
 //! Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}`
 //! with real source ranges. OpenTide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 
-use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
+mod intel;
+mod vocabs;
+mod yaml_path;
+
+use opentide_core::{codes, span_to_range, ByteSpan, Diagnostic, LanguageId, Range};
 use opentide_highlight::{
-    HighlightSpec, HighlightToken, highlight_markdown_line, tide_field_is_markdown,
-    tide_key_capture, tokens_from_spans,
+    highlight_markdown_line, tide_field_is_markdown, tide_key_capture, tokens_from_spans,
+    HighlightSpec, HighlightToken,
 };
 use opentide_kql::Profile;
 use regex::Regex;
@@ -14,16 +18,17 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
+pub use intel::{
+    completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion, TideInlay,
+    STATUS_VALUES,
+};
+pub use vocabs::{bundled_vocabs, vocab_for_field, Vocab, VocabKey};
+pub use yaml_path::{object_schema_kind, uuid_span, yaml_cursor, YamlCursor};
+
 const RULE_SCHEMA: &str = include_str!("../../../catalogs/tide/schemas/rule.1.0.schema.json");
 const OBJECTIVE_SCHEMA: &str =
     include_str!("../../../catalogs/tide/schemas/objective.1.0.schema.json");
 const THREAT_SCHEMA: &str = include_str!("../../../catalogs/tide/schemas/threat.1.0.schema.json");
-const TLP_VOCAB: &str = include_str!("../../../catalogs/tide/vocabs/tlp.vocab.toml");
-const SEVERITY_VOCAB: &str = include_str!("../../../catalogs/tide/vocabs/severity.vocab.toml");
-const ALERT_SEVERITY_VOCAB: &str =
-    include_str!("../../../catalogs/tide/vocabs/alert_severity.vocab.toml");
-const CHAINING_VOCAB: &str =
-    include_str!("../../../catalogs/tide/vocabs/chaining_relations.vocab.toml");
 const RULE_TEMPLATE: &str = include_str!("../../../catalogs/tide/templates/rule.1.0.template.yaml");
 const OBJECTIVE_TEMPLATE: &str =
     include_str!("../../../catalogs/tide/templates/objective.1.0.template.yaml");
@@ -42,92 +47,6 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "crowdstrike", ..] => None,
         _ => None,
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Vocab {
-    pub field: String,
-    pub keys: Vec<VocabKey>,
-}
-
-#[derive(Debug, Clone)]
-pub struct VocabKey {
-    pub name: String,
-    pub description: Option<String>,
-}
-
-impl Vocab {
-    pub fn contains(&self, value: &str) -> bool {
-        self.keys.iter().any(|k| k.name == value)
-    }
-
-    pub fn suggest(&self, value: &str) -> Option<String> {
-        self.keys
-            .iter()
-            .map(|k| {
-                let d = k
-                    .name
-                    .chars()
-                    .zip(value.chars())
-                    .filter(|(a, b)| a != b)
-                    .count()
-                    + k.name.len().abs_diff(value.len());
-                (k.name.clone(), d)
-            })
-            .filter(|(_, d)| *d <= 4)
-            .min_by_key(|(_, d)| *d)
-            .map(|(n, _)| n)
-    }
-
-    pub fn hover(&self, value: &str) -> Option<String> {
-        self.keys.iter().find(|k| k.name == value).map(|k| {
-            format!(
-                "**{}** (`{}`)\n\n{}",
-                k.name,
-                self.field,
-                k.description.clone().unwrap_or_default()
-            )
-        })
-    }
-}
-
-fn parse_vocab(toml_src: &str) -> Vocab {
-    let v: toml::Value = toml::from_str(toml_src).expect("vocab");
-    let field = v
-        .get("field")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let keys = v
-        .get("keys")
-        .and_then(|v| v.as_array())
-        .into_iter()
-        .flatten()
-        .filter_map(|k| {
-            Some(VocabKey {
-                name: k.get("name")?.as_str()?.to_string(),
-                description: k
-                    .get("description")
-                    .and_then(|d| d.as_str())
-                    .map(str::to_string),
-            })
-        })
-        .collect();
-    Vocab { field, keys }
-}
-
-pub fn bundled_vocabs() -> BTreeMap<String, Vocab> {
-    let mut m = BTreeMap::new();
-    for src in [
-        TLP_VOCAB,
-        SEVERITY_VOCAB,
-        ALERT_SEVERITY_VOCAB,
-        CHAINING_VOCAB,
-    ] {
-        let v = parse_vocab(src);
-        m.insert(v.field.clone(), v);
-    }
-    m
 }
 
 pub fn slugify(name: &str) -> String {
@@ -516,6 +435,56 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                 .with_field_path(vec!["metadata".into(), "uuid".into()]),
             );
         }
+        if meta.schema.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.schema'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "schema".into()]),
+            );
+        }
+        if meta.version.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.version'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "version".into()]),
+            );
+        }
+        if meta.created.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.created'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "created".into()]),
+            );
+        }
+        if meta.modified.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.modified'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "modified".into()]),
+            );
+        }
+        if meta.tlp.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.tlp'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "tlp".into()]),
+            );
+        }
         if let Some(tlp) = &meta.tlp {
             if let Some(vocab) = vocabs.get("tlp") {
                 if !vocab.contains(tlp) {
@@ -560,6 +529,36 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                     Range::point(0, 0),
                 )
                 .with_field_path(vec!["description".into()]),
+            );
+        }
+        if schema == "rule::1.0" && object.response.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'response'",
+                    Range::point(0, 0),
+                )
+                .with_field_path(vec!["response".into()]),
+            );
+        }
+        if schema == "rule::1.0" && object.configurations.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'configurations'",
+                    Range::point(0, 0),
+                )
+                .with_field_path(vec!["configurations".into()]),
+            );
+        }
+        if schema == "rule::1.0" && object.detection_model.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'detection_model'",
+                    Range::point(0, 0),
+                )
+                .with_field_path(vec!["detection_model".into()]),
             );
         }
     }
@@ -818,8 +817,6 @@ fn remap_token(
         token_type: token.token_type,
     })
 }
-
-const STATUS_VALUES: &[&str] = &["STAGING", "DEVELOPMENT", "PRODUCTION", "DEPRECATED"];
 
 fn overlaps(skip: &[ByteSpan], start: usize, end: usize) -> bool {
     skip.iter().any(|s| start < s.end && end > s.start)
@@ -1369,11 +1366,10 @@ configurations:
         );
         let purpose_keys = token_text(src, &r.tokens, "tide.property");
         assert!(purpose_keys.contains(&"purpose"), "{purpose_keys:?}");
-        assert!(
-            r.diagnostics
-                .iter()
-                .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED)
-        );
+        assert!(r
+            .diagnostics
+            .iter()
+            .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED));
     }
 
     #[test]
@@ -1432,11 +1428,10 @@ threat:
             source: src,
             workspace: &[],
         });
-        assert!(
-            r.diagnostics
-                .iter()
-                .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED)
-        );
+        assert!(r
+            .diagnostics
+            .iter()
+            .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED));
     }
 
     #[test]

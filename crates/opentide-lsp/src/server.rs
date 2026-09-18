@@ -7,7 +7,7 @@ use opentide_analysis::{
     analyze, compiled_kql, compiled_spl, completions, hover, index_workspace, signature_help,
     AnalyzeRequest, MemoryWorkspace, WorkspaceHost,
 };
-use opentide_core::{LanguageId, Position, Range};
+use opentide_core::{span_to_range, LanguageId, Position, Range};
 use opentide_highlight::encode_lsp_semantic_tokens;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -171,7 +171,7 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
             )?;
         }
         "completionItem/resolve" => {
-            jsonrpc::write_message(writer, &jsonrpc::success(id, params))?;
+            jsonrpc::write_message(writer, &jsonrpc::success(id, handle_resolve(&params)))?;
         }
         "textDocument/definition" => {
             jsonrpc::write_message(
@@ -432,6 +432,42 @@ fn handle_signature_help(session: &Session, params: &Value) -> Value {
         .unwrap_or(Value::Null)
 }
 
+fn handle_resolve(params: &Value) -> Value {
+    let label = params
+        .get("label")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let kind = match params.get("kind").and_then(|v| v.as_u64()) {
+        Some(5) => "property",
+        Some(13) => "enum",
+        Some(18) => "reference",
+        _ => params
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap_or("property"),
+    };
+    let mut item = opentide_core::CompletionItem::new(label, kind);
+    if let Some(d) = params.get("detail").and_then(|v| v.as_str()) {
+        item = item.with_detail(d);
+    }
+    if let Some(d) = params
+        .pointer("/documentation/value")
+        .or_else(|| params.get("documentation"))
+        .and_then(|v| v.as_str())
+    {
+        item = item.with_docs(d);
+    }
+    let item = opentide_tide::resolve_completion(item);
+    json!({
+        "label": item.label,
+        "detail": item.detail,
+        "documentation": item.documentation.as_ref().map(|d| json!({ "kind": "markdown", "value": d })),
+        "kind": params.get("kind").cloned().unwrap_or(json!(1)),
+        "insertText": item.label,
+    })
+}
+
 fn handle_definition(session: &Session, params: &Value) -> Value {
     let Some((_uri, _, text, pos)) = doc_pos(session, params) else {
         return Value::Null;
@@ -441,9 +477,13 @@ fn handle_definition(session: &Session, params: &Value) -> Value {
     let workspace = index_workspace(&host);
     if let Some(uuid) = uuid {
         if let Some(obj) = opentide_tide::definition(&workspace, &uuid) {
+            let source = host.document(&obj.path).unwrap_or_default();
+            let range = opentide_tide::uuid_span(&source, &uuid)
+                .map(|span| span_to_range(&source, span))
+                .unwrap_or_else(|| Range::point(0, 0));
             return json!({
                 "uri": path_to_uri(&obj.path),
-                "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } }
+                "range": range_json(range)
             });
         }
     }
@@ -461,11 +501,13 @@ fn handle_references(session: &Session, params: &Value) -> Value {
     let workspace = index_workspace(&host);
     let refs: Vec<Value> = opentide_tide::find_refs(&workspace, &uuid)
         .into_iter()
-        .map(|o| {
-            json!({
+        .filter_map(|o| {
+            let source = host.document(&o.path)?;
+            let span = opentide_tide::uuid_span(&source, &uuid)?;
+            Some(json!({
                 "uri": path_to_uri(&o.path),
-                "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } }
-            })
+                "range": range_json(span_to_range(&source, span))
+            }))
         })
         .collect();
     json!(refs)
@@ -638,14 +680,19 @@ fn handle_inlay(session: &Session, params: &Value) -> Value {
     if *language != LanguageId::TideYaml {
         return json!([]);
     }
-    if let Some(obj) = opentide_tide::index_object(&uri_to_path(uri), text) {
-        return json!([{
-            "position": { "line": 0, "character": 0 },
-            "label": format!("{} {}", obj.object_type, obj.uuid),
-            "kind": 1
-        }]);
-    }
-    json!([])
+    let host = session.host();
+    let workspace = index_workspace(&host);
+    let hints: Vec<Value> = opentide_tide::inlay_hints(text, &workspace)
+        .into_iter()
+        .map(|h| {
+            json!({
+                "position": { "line": h.position.line, "character": h.position.character },
+                "label": h.label,
+                "kind": 1
+            })
+        })
+        .collect();
+    json!(hints)
 }
 
 fn handle_document_highlight(session: &Session, params: &Value) -> Value {

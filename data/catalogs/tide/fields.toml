@@ -4,6 +4,7 @@
 
 [[fields]]
 name = "name"
+parents = ["", "organisation", "signals", "sentinel", "defender_for_endpoint", "splunk", "crowdstrike", "sentinel_one", "harfanglab", "carbon_black_cloud"]
 capture = "tide.keyword"
 title = "Name"
 type = "string"
@@ -12,6 +13,7 @@ description = "Human-readable object title. The LSP does not rename this field; 
 
 [[fields]]
 name = "metadata"
+parents = [""]
 capture = "tide.keyword"
 title = "Metadata"
 type = "object"
@@ -20,6 +22,7 @@ description = "Identity envelope: UUID v4, schema id, version, timestamps, TLP, 
 
 [[fields]]
 name = "description"
+parents = ["", "composition", "objective"]
 capture = "tide.keyword"
 title = "Description"
 type = "string"
@@ -29,6 +32,7 @@ description = "Markdown detection narrative (headings, lists, inline code, links
 
 [[fields]]
 name = "status"
+parents = ["", "sentinel", "defender_for_endpoint", "splunk", "crowdstrike", "sentinel_one", "harfanglab", "carbon_black_cloud"]
 capture = "tide.keyword"
 title = "Status"
 type = "string"
@@ -36,6 +40,8 @@ description = "Lifecycle of the object. Common values: STAGING, DEVELOPMENT, PRO
 
 [[fields]]
 name = "severity"
+parents = [""]
+schemas = ["rule", "threat"]
 capture = "tide.keyword"
 title = "Severity"
 type = "string"
@@ -44,6 +50,8 @@ description = "NCSC-style incident severity for the detection or threat (e.g. Su
 
 [[fields]]
 name = "techniques"
+parents = ["", "alert"]
+schemas = ["rule"]
 capture = "tide.keyword"
 title = "Techniques"
 type = "array"
@@ -52,6 +60,8 @@ description = "ATT&CK technique IDs (`T1059`, `T1552.001`). Completions come fro
 
 [[fields]]
 name = "platforms"
+parents = [""]
+schemas = ["rule"]
 capture = "tide.keyword"
 title = "Platforms"
 type = "object"
@@ -59,6 +69,8 @@ description = "Optional per-platform annotations (not the deployable `configurat
 
 [[fields]]
 name = "references"
+parents = [""]
+schemas = ["rule"]
 capture = "tide.keyword"
 title = "References"
 type = "object"
@@ -66,6 +78,9 @@ description = "Public, internal, and report references. Map keys may be integers
 
 [[fields]]
 name = "detection_model"
+parents = [""]
+schemas = ["rule"]
+ref = "objective"
 capture = "tide.keyword"
 title = "Detection Model"
 type = "uuid"
@@ -74,6 +89,8 @@ description = "UUID of the parent `objective::1.0` (detection model) this rule i
 
 [[fields]]
 name = "response"
+parents = [""]
+schemas = ["rule"]
 capture = "tide.keyword"
 title = "Response"
 type = "object"
@@ -82,6 +99,8 @@ description = "Analyst response pack: alert severity and procedure (analysis, hu
 
 [[fields]]
 name = "configurations"
+parents = [""]
+schemas = ["rule"]
 capture = "tide.keyword"
 title = "Detection System Technical Setup"
 type = "object"
@@ -90,6 +109,7 @@ description = "Per-platform deployable configuration (Sentinel, Defender, Splunk
 
 [[fields]]
 name = "file"
+parents = [""]
 capture = "tide.keyword"
 title = "File"
 type = "string"
@@ -97,6 +117,8 @@ description = "Optional path annotation from the CLI; not required in the worksp
 
 [[fields]]
 name = "composition"
+parents = [""]
+schemas = ["objective"]
 capture = "tide.keyword"
 title = "Composition"
 type = "object"
@@ -104,6 +126,8 @@ description = "How signals combine on an objective (strategy + narrative)."
 
 [[fields]]
 name = "objective"
+parents = [""]
+schemas = ["objective"]
 capture = "tide.keyword"
 title = "Objective"
 type = "object"
@@ -111,6 +135,8 @@ description = "Objective body: priority, type, threats, signals."
 
 [[fields]]
 name = "threat"
+parents = [""]
+schemas = ["threat"]
 capture = "tide.keyword"
 title = "Threat"
 type = "object"
@@ -118,6 +144,8 @@ description = "Threat body: impact, leverage, viability, ATT&CK, chaining."
 
 [[fields]]
 name = "criticality"
+parents = [""]
+schemas = ["threat"]
 capture = "tide.keyword"
 title = "Criticality"
 type = "string"
@@ -126,6 +154,7 @@ description = "How critical this threat is to the organisation (threat objects).
 
 [[fields]]
 name = "uuid"
+parents = ["metadata", "organisation", "signals"]
 capture = "tide.property"
 title = "UUID"
 type = "uuid"
@@ -134,6 +163,7 @@ description = "RFC 4122 UUID version 4. Identity of the object (or nested organi
 
 [[fields]]
 name = "schema"
+parents = ["metadata"]
 capture = "tide.property"
 title = "Schema"
 type = "string"
@@ -142,6 +172,7 @@ description = "Object schema id, e.g. `rule::1.0`, `objective::1.0`, `threat::1.
 
 [[fields]]
 name = "version"
+parents = ["metadata"]
 capture = "tide.property"
 title = "Version"
 type = "string | integer"
@@ -150,6 +181,7 @@ description = "Object document version (integer or string)."
 
 [[fields]]
 name = "created"
+parents = ["metadata"]
 capture = "tide.property"
 title = "Created"
 type = "string"
@@ -158,6 +190,7 @@ description = "ISO-8601 creation date."
 
 [[fields]]
 name = "modified"
+parents = ["metadata"]
 capture = "tide.property"
 title = "Modified"
 type = "string"
@@ -166,6 +199,7 @@ description = "ISO-8601 last-modified date."
 
 [[fields]]
 name = "tlp"
+parents = ["metadata"]
 capture = "tide.property"
 title = "TLP"
 type = "string"
@@ -175,6 +209,7 @@ description = "Traffic Light Protocol sharing label (`clear`, `green`, `amber`, 
 
 [[fields]]
 name = "author"
+parents = ["metadata"]
 capture = "tide.property"
 title = "Author"
 type = "string"
@@ -182,6 +217,7 @@ description = "Recommended author of the object. Missing author is a warning (`m
 
 [[fields]]
 name = "contributors"
+parents = ["metadata"]
 capture = "tide.property"
 title = "Contributors"
 type = "array"
@@ -189,6 +225,7 @@ description = "Optional additional authors."
 
 [[fields]]
 name = "organisation"
+parents = ["metadata"]
 capture = "tide.property"
 title = "Organisation"
 type = "object"
@@ -196,6 +233,7 @@ description = "Owning organisation (`uuid` + `name`). Missing organisation is a 
 
 [[fields]]
 name = "public"
+parents = ["references"]
 capture = "tide.property"
 title = "Public references"
 type = "object"
@@ -203,6 +241,7 @@ description = "Public URLs keyed by integer or slug."
 
 [[fields]]
 name = "internal"
+parents = ["references"]
 capture = "tide.property"
 title = "Internal references"
 type = "object"
@@ -210,6 +249,7 @@ description = "Internal document links."
 
 [[fields]]
 name = "reports"
+parents = ["references"]
 capture = "tide.property"
 title = "Reports"
 type = "array"
@@ -217,6 +257,7 @@ description = "Report identifiers related to this object."
 
 [[fields]]
 name = "alert_severity"
+parents = ["response"]
 capture = "tide.property"
 title = "Alert Severity"
 type = "string"
@@ -225,6 +266,7 @@ description = "Alert severity pushed to the detection platform (High, Medium, Lo
 
 [[fields]]
 name = "procedure"
+parents = ["response"]
 capture = "tide.keyword"
 title = "Procedure"
 type = "object"
@@ -232,6 +274,7 @@ description = "Incident procedure: analysis steps, hunt searches, containment."
 
 [[fields]]
 name = "analysis"
+parents = ["procedure"]
 capture = "tide.property"
 title = "Analysis"
 type = "string"
@@ -240,6 +283,7 @@ description = "Markdown investigation steps for the responding analyst."
 
 [[fields]]
 name = "searches"
+parents = ["procedure"]
 capture = "tide.property"
 title = "Searches"
 type = "array"
@@ -247,6 +291,7 @@ description = "Hunt queries (`purpose`, `system`, `query`) used during investiga
 
 [[fields]]
 name = "containment"
+parents = ["procedure"]
 capture = "tide.property"
 title = "Containment"
 type = "string"
@@ -255,6 +300,7 @@ description = "Markdown containment / eradication guidance."
 
 [[fields]]
 name = "purpose"
+parents = ["searches"]
 capture = "tide.property"
 title = "Purpose"
 type = "string"
@@ -262,6 +308,7 @@ description = "Why this hunt query is run."
 
 [[fields]]
 name = "system"
+parents = ["searches"]
 capture = "tide.property"
 title = "System"
 type = "string"
@@ -269,6 +316,7 @@ description = "Detection platform for an injected hunt query (`sentinel`, `defen
 
 [[fields]]
 name = "query"
+parents = ["sentinel", "defender_for_endpoint", "splunk", "searches"]
 capture = "tide.property"
 title = "Query"
 type = "string"
@@ -276,6 +324,7 @@ description = "Injected detection/hunt query. Language follows the parent platfo
 
 [[fields]]
 name = "search"
+parents = ["splunk"]
 capture = "tide.property"
 title = "Search"
 type = "string"
@@ -283,6 +332,7 @@ description = "Legacy Splunk search field; treated as SPL injection."
 
 [[fields]]
 name = "enabled"
+parents = ["sentinel", "defender_for_endpoint", "splunk", "crowdstrike", "sentinel_one", "harfanglab", "carbon_black_cloud", "alert"]
 capture = "tide.property"
 title = "Enabled"
 type = "boolean"
@@ -290,6 +340,7 @@ description = "Whether this platform configuration is active."
 
 [[fields]]
 name = "sentinel"
+parents = ["configurations"]
 capture = "tide.keyword"
 title = "Microsoft Sentinel"
 type = "object"
@@ -297,6 +348,7 @@ description = "Sentinel analytics rule configuration (`query` is KQL)."
 
 [[fields]]
 name = "defender_for_endpoint"
+parents = ["configurations"]
 capture = "tide.keyword"
 title = "Microsoft Defender for Endpoint"
 type = "object"
@@ -304,6 +356,7 @@ description = "Defender XDR custom detection configuration (`query` is KQL)."
 
 [[fields]]
 name = "splunk"
+parents = ["configurations"]
 capture = "tide.keyword"
 title = "Splunk"
 type = "object"
@@ -311,6 +364,7 @@ description = "Splunk ES configuration (`query` / legacy `search` is SPL)."
 
 [[fields]]
 name = "crowdstrike"
+parents = ["configurations"]
 capture = "tide.keyword"
 title = "CrowdStrike"
 type = "object"
@@ -318,6 +372,7 @@ description = "Unsupported platform. OpenTide never fakes CrowdStrike validation
 
 [[fields]]
 name = "sentinel_one"
+parents = ["configurations"]
 capture = "tide.keyword"
 title = "SentinelOne"
 type = "object"
@@ -325,6 +380,7 @@ description = "SentinelOne platform block (no query-language injection in v1)."
 
 [[fields]]
 name = "harfanglab"
+parents = ["configurations"]
 capture = "tide.keyword"
 title = "HarfangLab"
 type = "object"
@@ -332,6 +388,7 @@ description = "HarfangLab platform block (no query-language injection in v1)."
 
 [[fields]]
 name = "carbon_black_cloud"
+parents = ["configurations"]
 capture = "tide.keyword"
 title = "Carbon Black Cloud"
 type = "object"
@@ -339,6 +396,7 @@ description = "Carbon Black Cloud platform block (no query-language injection in
 
 [[fields]]
 name = "scheduling"
+parents = ["sentinel", "defender_for_endpoint", "splunk", "crowdstrike", "sentinel_one", "harfanglab", "carbon_black_cloud"]
 capture = "tide.property"
 title = "Scheduling"
 type = "object | string"
@@ -347,6 +405,7 @@ description = "Run cadence. Object form uses `frequency` / `lookback` (ISO-8601 
 
 [[fields]]
 name = "frequency"
+parents = ["scheduling"]
 capture = "tide.property"
 title = "Frequency"
 type = "string"
@@ -354,6 +413,7 @@ description = "How often the scheduled detection runs (e.g. `PT1H`)."
 
 [[fields]]
 name = "lookback"
+parents = ["scheduling"]
 capture = "tide.property"
 title = "Lookback"
 type = "string"
@@ -361,6 +421,7 @@ description = "Query lookback window (e.g. `PT2H`)."
 
 [[fields]]
 name = "cron_schedule"
+parents = ["sentinel", "defender_for_endpoint", "splunk", "crowdstrike", "sentinel_one", "harfanglab", "carbon_black_cloud"]
 capture = "tide.property"
 title = "Cron schedule"
 type = "string"
@@ -368,6 +429,7 @@ description = "Optional cron expression when the platform uses cron instead of I
 
 [[fields]]
 name = "alert"
+parents = ["sentinel", "defender_for_endpoint", "splunk", "crowdstrike", "sentinel_one", "harfanglab", "carbon_black_cloud", "grouping"]
 capture = "tide.property"
 title = "Alert"
 type = "object"
@@ -375,6 +437,7 @@ description = "Alert presentation: title, category, recommendation, techniques, 
 
 [[fields]]
 name = "title"
+parents = ["alert"]
 capture = "tide.property"
 title = "Title"
 type = "string"
@@ -382,6 +445,7 @@ description = "Alert title. May include platform mustache tokens such as `{{Devi
 
 [[fields]]
 name = "suppression"
+parents = ["alert"]
 capture = "tide.property"
 title = "Suppression"
 type = "boolean"
@@ -389,6 +453,7 @@ description = "Whether duplicate alerts are suppressed."
 
 [[fields]]
 name = "category"
+parents = ["alert"]
 capture = "tide.property"
 title = "Category"
 type = "string"
@@ -396,6 +461,7 @@ description = "Alert category (e.g. Credential Access)."
 
 [[fields]]
 name = "recommendation"
+parents = ["alert"]
 capture = "tide.property"
 title = "Recommendation"
 type = "string"
@@ -404,6 +470,7 @@ description = "Markdown response recommendation shown on the alert."
 
 [[fields]]
 name = "grouping"
+parents = ["sentinel", "defender_for_endpoint", "splunk", "crowdstrike", "sentinel_one", "harfanglab", "carbon_black_cloud"]
 capture = "tide.property"
 title = "Grouping"
 type = "object"
@@ -411,6 +478,7 @@ description = "Alert grouping strategy (`event`, nested `alert.enabled`)."
 
 [[fields]]
 name = "event"
+parents = ["grouping"]
 capture = "tide.property"
 title = "Event grouping"
 type = "string"
@@ -418,6 +486,7 @@ description = "How events collapse into alerts (e.g. `SingleAlert`)."
 
 [[fields]]
 name = "impacted_entities"
+parents = ["sentinel", "defender_for_endpoint", "splunk", "crowdstrike", "sentinel_one", "harfanglab", "carbon_black_cloud"]
 capture = "tide.property"
 title = "Impacted entities"
 type = "object"
@@ -425,6 +494,7 @@ description = "Entity columns surfaced on the alert (e.g. `device: DeviceName`).
 
 [[fields]]
 name = "device"
+parents = ["impacted_entities"]
 capture = "tide.property"
 title = "Device"
 type = "string"
@@ -432,6 +502,7 @@ description = "Device entity column name in the query output."
 
 [[fields]]
 name = "scope"
+parents = ["sentinel", "defender_for_endpoint", "splunk", "crowdstrike", "sentinel_one", "harfanglab", "carbon_black_cloud"]
 capture = "tide.property"
 title = "Scope"
 type = "object"
@@ -439,6 +510,7 @@ description = "Deployment scope (`selection: All` or a device group)."
 
 [[fields]]
 name = "selection"
+parents = ["scope"]
 capture = "tide.property"
 title = "Selection"
 type = "string"
@@ -446,6 +518,7 @@ description = "Scope selector (`All` or a named group)."
 
 [[fields]]
 name = "priority"
+parents = ["objective"]
 capture = "tide.property"
 title = "Priority"
 type = "string"
@@ -453,6 +526,7 @@ description = "Objective priority (High / Medium / Low)."
 
 [[fields]]
 name = "type"
+parents = ["objective"]
 capture = "tide.property"
 title = "Type"
 type = "string"
@@ -461,6 +535,7 @@ description = "Objective type (e.g. Threat)."
 
 [[fields]]
 name = "strategy"
+parents = ["composition"]
 capture = "tide.property"
 title = "Strategy"
 type = "string"
@@ -469,6 +544,8 @@ description = "Composition strategy (e.g. Combined)."
 
 [[fields]]
 name = "threats"
+parents = ["objective"]
+ref = "threat"
 capture = "tide.property"
 title = "Threats"
 type = "array"
@@ -476,6 +553,7 @@ description = "UUIDs of `threat::1.0` objects this objective covers."
 
 [[fields]]
 name = "signals"
+parents = ["objective"]
 capture = "tide.property"
 title = "Signals"
 type = "array"
@@ -483,6 +561,7 @@ description = "Named detection signals with methodology, entities, and data requ
 
 [[fields]]
 name = "methodology"
+parents = ["signals"]
 capture = "tide.property"
 title = "Methodology"
 type = "string"
@@ -491,6 +570,7 @@ description = "How the signal is produced (e.g. Statistical)."
 
 [[fields]]
 name = "entities"
+parents = ["signals"]
 capture = "tide.property"
 title = "Entities"
 type = "array"
@@ -499,6 +579,7 @@ description = "Entity types the signal emits (Hostname, User, …)."
 
 [[fields]]
 name = "data"
+parents = ["signals"]
 capture = "tide.property"
 title = "Data"
 type = "object"
@@ -506,6 +587,7 @@ description = "Data availability and requirements for a signal."
 
 [[fields]]
 name = "availability"
+parents = ["data"]
 capture = "tide.property"
 title = "Availability"
 type = "string"
@@ -513,6 +595,7 @@ description = "How complete the required telemetry is (e.g. Complete)."
 
 [[fields]]
 name = "requirements"
+parents = ["data"]
 capture = "tide.property"
 title = "Requirements"
 type = "string"
@@ -520,6 +603,7 @@ description = "Telemetry / log source requirements in prose."
 
 [[fields]]
 name = "impact"
+parents = ["threat"]
 capture = "tide.property"
 title = "Impact"
 type = "string"
@@ -528,6 +612,7 @@ description = "Threat impact class (e.g. Data Breach)."
 
 [[fields]]
 name = "leverage"
+parents = ["threat"]
 capture = "tide.property"
 title = "Leverage"
 type = "string"
@@ -536,6 +621,7 @@ description = "How the actor gains leverage (e.g. Information Gathering)."
 
 [[fields]]
 name = "viability"
+parents = ["threat"]
 capture = "tide.property"
 title = "Viability"
 type = "string"
@@ -544,6 +630,7 @@ description = "How viable the threat is (e.g. Likely)."
 
 [[fields]]
 name = "terrain"
+parents = ["threat"]
 capture = "tide.property"
 title = "Terrain"
 type = "string"
@@ -552,6 +639,7 @@ description = "Where the threat lives (markdown-capable prose)."
 
 [[fields]]
 name = "surface"
+parents = ["threat"]
 capture = "tide.property"
 title = "Surface"
 type = "array"
@@ -560,6 +648,7 @@ description = "Affected surfaces (e.g. Windows::Desktop)."
 
 [[fields]]
 name = "att&ck"
+parents = ["threat"]
 capture = "tide.property"
 title = "ATT&CK"
 type = "array"
@@ -568,6 +657,7 @@ description = "ATT&CK techniques on a threat object."
 
 [[fields]]
 name = "actors"
+parents = ["threat"]
 capture = "tide.property"
 title = "Actors"
 type = "array"
@@ -576,6 +666,7 @@ description = "Threat actors (`name: att&ck::G0006`)."
 
 [[fields]]
 name = "chaining"
+parents = ["threat"]
 capture = "tide.property"
 title = "Chaining"
 type = "array"
@@ -583,6 +674,7 @@ description = "Related threats: `relation` + `vector` UUID."
 
 [[fields]]
 name = "relation"
+parents = ["chaining"]
 capture = "tide.property"
 title = "Relation"
 type = "string"
@@ -591,6 +683,8 @@ description = "How this threat chains to `vector` (preceeds, follows, …)."
 
 [[fields]]
 name = "vector"
+parents = ["chaining"]
+ref = "threat"
 capture = "tide.property"
 title = "Vector"
 type = "uuid"
