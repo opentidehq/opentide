@@ -73,9 +73,9 @@ def test_threat_actors_are_objects(metadata: dict[str, Any]) -> None:
 
 def test_threat_cve_field_roundtrip(metadata: dict[str, Any]) -> None:
     payload = _threat_payload(metadata, actors=None)
-    payload["threat"]["cve"] = ["CVE-2024-3094", "GHSA-rxwq-x6h5-x525"]
+    payload["threat"]["cve"] = ["CVE-2024-3094", "GHSA-rxwq-x6h5-x525", "GCVE-0-2024-3094"]
     tvm = ThreatVector.from_yaml_dict(payload)
-    assert tvm.threat.cve == ["CVE-2024-3094", "GHSA-rxwq-x6h5-x525"]
+    assert tvm.threat.cve == ["CVE-2024-3094", "GHSA-rxwq-x6h5-x525", "GCVE-0-2024-3094"]
 
 
 def test_threat_actors_reject_vocab_id_strings(metadata: dict[str, Any]) -> None:

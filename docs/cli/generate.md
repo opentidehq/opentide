@@ -120,7 +120,7 @@ retrieve_details = true  # fetch title, published date, severity, aliases
 proxy = false
 ```
 
-Identifiers always link to Vulnerability-Lookup (`/vuln/{id}`). Legacy NVD `default_db_link` values from older configs are remapped to CIRCL. Set `retrieve_details = false` to emit links only (no API calls).
+Identifiers always link to Vulnerability-Lookup (`/vuln/{id}`). CVE, GHSA, and GCVE identifiers are accepted. GNA 0 GCVE ids map to the reserved CVE form (`GCVE-0-2024-3094` → `CVE-2024-3094`) for both API lookup and page links. Legacy NVD `default_db_link` values from older configs are remapped to CIRCL. Set `retrieve_details = false` to emit links only (no API calls).
 
 ## generate exports
 

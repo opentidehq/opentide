@@ -58,7 +58,7 @@ threat:
     - T1059
   actors:
     - name: att&ck::G0006
-  # cve:                    # optional; validated against CIRCL Vulnerability-Lookup
+  # cve:                    # optional; CIRCL Vulnerability-Lookup (CVE, GHSA, GCVE)
   #   - CVE-2024-3094
 ```
 

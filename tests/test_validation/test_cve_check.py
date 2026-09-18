@@ -8,6 +8,7 @@ import opentide.validation.cve_check as cve_check_module
 from opentide.validation.scope import ValidationScope
 from opentide.vulnerability_lookup import (
     CveSettings,
+    VulnerabilityLookupClient,
     VulnerabilityLookupError,
     VulnerabilityRecord,
 )
@@ -106,3 +107,50 @@ def test_check_cve_issues_respects_scope() -> None:
         issues = cve_check_module.check_cve_issues(index, scope, client=client)
     assert issues == []
     client.get.assert_not_called()
+
+
+def test_check_cve_issues_reports_only_unknown_among_mixed_list() -> None:
+    index = _threat_index(["CVE-2024-3094", "CVE-2024-BAD"])
+    with (
+        patch.object(cve_check_module, "load_cve_settings", return_value=CveSettings()),
+        patch.object(cve_check_module, "apply_cve_proxy_settings"),
+    ):
+        issues = cve_check_module.check_cve_issues(
+            index,
+            client=_FakeLookup(found={"CVE-2024-3094"}),
+        )
+    assert len(issues) == 1
+    assert issues[0].context is not None
+    assert issues[0].context["broken_cve"] == ["CVE-2024-BAD"]
+
+
+def test_check_cve_issues_skips_threats_without_cve() -> None:
+    index = _threat_index([])
+    client = MagicMock()
+    with (
+        patch.object(cve_check_module, "load_cve_settings", return_value=CveSettings()),
+        patch.object(cve_check_module, "apply_cve_proxy_settings"),
+    ):
+        issues = cve_check_module.check_cve_issues(index, client=client)
+    assert issues == []
+    client.get.assert_not_called()
+
+
+def test_check_cve_issues_accepts_gcve0_mapped_to_cve() -> None:
+    from tests.test_vulnerability_lookup.test_client import CVE5_PAYLOAD
+
+    session = MagicMock()
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = CVE5_PAYLOAD
+    session.get.return_value = response
+    client = VulnerabilityLookupClient(CveSettings(), session=session)
+    index = _threat_index(["GCVE-0-2024-3094"])
+    with (
+        patch.object(cve_check_module, "load_cve_settings", return_value=CveSettings()),
+        patch.object(cve_check_module, "apply_cve_proxy_settings"),
+    ):
+        issues = cve_check_module.check_cve_issues(index, client=client)
+    assert issues == []
+    called_url = session.get.call_args.kwargs.get("url") or session.get.call_args.args[0]
+    assert called_url.endswith("/api/vulnerability/CVE-2024-3094")

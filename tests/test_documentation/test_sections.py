@@ -33,7 +33,7 @@ from opentide.loading.objective_loader import load_objective_from_dict
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.rule import DetectionRule
 from opentide.models.threat import ThreatVector
-from opentide.vulnerability_lookup import CveSettings, VulnerabilityRecord
+from opentide.vulnerability_lookup import CveSettings, VulnerabilityLookupError, VulnerabilityRecord
 
 
 def _objective_payload(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -387,6 +387,49 @@ def test_render_cve_enriches_from_lookup_client() -> None:
     assert "CRITICAL (10)" in rendered
     assert "GHSA-rxwq-x6h5-x525" in rendered
     assert "https://vulnerability.circl.lu/vuln/CVE-2024-3094" in rendered
+
+
+def test_render_cve_maps_gcve0_link_to_cve_page() -> None:
+    formatter = formatter_for(DocumentFlavor.github)
+    settings = CveSettings(retrieve_details=False)
+    with patch(
+        "opentide.documentation.parts.sections.load_cve_settings",
+        return_value=settings,
+    ):
+        rendered = render_cve(["GCVE-0-2024-3094"], formatter, retrieve_details=False)
+    assert "[GCVE-0-2024-3094](https://vulnerability.circl.lu/vuln/CVE-2024-3094)" in rendered
+
+
+def test_render_cve_marks_missing_and_unreachable_identifiers() -> None:
+    formatter = formatter_for(DocumentFlavor.github)
+    client = MagicMock()
+    client.get.side_effect = [
+        None,
+        VulnerabilityLookupError("offline"),
+    ]
+    with (
+        patch(
+            "opentide.documentation.parts.sections.load_cve_settings",
+            return_value=CveSettings(retrieve_details=True),
+        ),
+        patch("opentide.documentation.parts.sections.apply_cve_proxy_settings"),
+    ):
+        rendered = render_cve(
+            ["CVE-2024-BAD", "CVE-2024-3094"],
+            formatter,
+            client=client,
+            retrieve_details=True,
+        )
+    assert "Not found in Vulnerability-Lookup." in rendered
+    assert "Could not resolve: `CVE-2024-BAD`" in rendered
+    assert "Details unavailable from Vulnerability-Lookup." in rendered
+    assert "was unreachable" in rendered
+
+
+def test_render_cve_empty_returns_nothing() -> None:
+    formatter = formatter_for(DocumentFlavor.github)
+    assert render_cve([], formatter) == ""
+    assert render_cve(None, formatter) == ""
 
 
 def test_render_threat_body_includes_cve_section(metadata: dict[str, Any]) -> None:

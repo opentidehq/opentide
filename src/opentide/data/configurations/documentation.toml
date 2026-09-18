@@ -27,7 +27,7 @@ relation_counts = true
 icons = false
 
 [cve]
-# CIRCL Vulnerability-Lookup aggregates CVE, GHSA, CSAF, NVD, and other feeds.
+# CIRCL Vulnerability-Lookup aggregates CVE, GHSA, GCVE, CSAF, NVD, and other feeds.
 base_url = "https://vulnerability.circl.lu"
 default_db_link = "https://vulnerability.circl.lu/vuln/"
 retrieve_details = true
