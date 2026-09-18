@@ -1,4 +1,4 @@
-"""Template generation orchestration — Pydantic models as sole source."""
+"""Template generation orchestration — Pydantic FieldInfo as sole YAML source."""
 
 from __future__ import annotations
 
@@ -8,24 +8,19 @@ from typing import Any
 from opentide.core.logging import get_logger
 from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
-from opentide.generation.pydantic_metaschema import build_platform_schema_source
+from opentide.generation.pydantic_skeleton import write_model_template
 from opentide.generation.pydantic_templates import (
     core_template_model_keys,
     generate_core_template,
-)
-from opentide.generation.template_engine import (
-    emit_template_file,
-    gen_template,
-    get_required,
 )
 from opentide.models.platform_schema import platform_model_for_key
 
 logger = get_logger(__name__)
 
-CONFIG_INDEX: dict[str, Any]
-PATHS: dict[str, Any]
-PLATFORM_TEMPLATES_FOLDER: Path
-RECOMPOSITION: Any
+CONFIG_INDEX: dict[str, Any] = {}
+PATHS: dict[str, Any] = {}
+PLATFORM_TEMPLATES_FOLDER: Path = Path(".")
+RECOMPOSITION: Any = {}
 
 
 def _platform_section(entry: dict[str, Any]) -> dict[str, Any]:
@@ -48,7 +43,7 @@ def run() -> None:
     emit_section("Generate Templates from Pydantic Models")
     logger.info(
         "template_generation_started",
-        detail="Core and platform templates are generated from Pydantic model metadata.",
+        detail="Core and platform templates are generated from Pydantic FieldInfo.",
     )
 
     templates = OpenTide.Configurations.Global.templates
@@ -65,6 +60,8 @@ def run() -> None:
     for recomp in RECOMPOSITION:
         subschema_type_folder = RECOMPOSITION[recomp]
         recomp_configs = CONFIG_INDEX.get(recomp, {})
+        if not isinstance(recomp_configs, dict):
+            recomp_configs = CONFIG_INDEX.get("platforms", {})
         for entry, recomp_entry in recomp_configs.items():
             if not isinstance(recomp_entry, dict):
                 continue
@@ -83,19 +80,8 @@ def run() -> None:
                 / f"{subschema_name} Template.yaml"
             )
             platform_model = platform_model_for_key(entry)
-            parsed = build_platform_schema_source(platform_model)
             logger.info("generating_template", detail=subschema_name)
-            defs = parsed.get("$defs") if isinstance(parsed.get("$defs"), dict) else {}
-            required = get_required(parsed["properties"], list(parsed.get("required", [])), defs)
-            required.extend(parsed.get("tide.template.force-required") or [])
-            subschema_template = gen_template(parsed["properties"], required, defs)
-            emit_template_file(
-                subschema_template_path,
-                subschema_template,
-                placeholders=None,
-                spacing_properties=parsed["properties"],
-                indent=2,
-            )
+            write_model_template(subschema_template_path, platform_model, indent=2)
 
     logger.info("all_templates_correctly_generated")
 

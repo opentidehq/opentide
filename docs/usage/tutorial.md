@@ -251,7 +251,7 @@ deploy: 1 rule planned, 0 applied (dry-run)
 opentide generate docs
 ```
 
-This renders wiki-style markdown for each object under `docs/Rules`, `docs/Objectives`, and `docs/Threats`, including a Mermaid diagram of the chain you just built. See [`generate docs`](../cli/generate.md).
+This renders wiki-style markdown for each object under `docs/rules`, `docs/objectives`, and `docs/threats`, including a Mermaid diagram of the chain you just built. See [`generate docs`](../cli/generate.md).
 
 ## What you built
 

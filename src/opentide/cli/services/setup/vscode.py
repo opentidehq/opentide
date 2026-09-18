@@ -176,11 +176,12 @@ def run_vscode_setup(
     generate: bool = True,
     merge: bool = True,
     warn_deprecated: bool = True,
+    mcp: bool = False,
 ) -> dict[str, object]:
     """Generate prerequisites, then write VS Code settings and/or snippets.
 
     Deprecation is emitted once at this boundary. Callers must not also call
-    ``emit_vscode_deprecation``.
+    ``emit_vscode_deprecation``. ``mcp`` is opt-in and reuses ``write_mcp_config``.
     """
     from opentide.cli.services.generation import run_generate_phases_for_workspace
 
@@ -209,6 +210,12 @@ def run_vscode_setup(
         snippet_path = run_vscode_snippets(target)
         if snippet_path:
             files.append(snippet_path)
+
+    if mcp:
+        from opentide.cli.enums import McpHost
+        from opentide.cli.services.setup.mcp import write_mcp_config
+
+        files.append(write_mcp_config(target, McpHost.vscode))
 
     payload: dict[str, object] = {
         "message": "VS Code setup complete (deprecated)",

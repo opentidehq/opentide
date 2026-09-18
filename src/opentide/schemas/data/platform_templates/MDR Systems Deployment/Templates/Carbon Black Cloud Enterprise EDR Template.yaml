@@ -1,15 +1,21 @@
   #enabled: false
   #name: 
-  #schema: null
-  status: null
-  #flags: null
-  #tenants: null
-  #contributors: null
-  
-  query: |
-    ...
-  #organizations: null
-  #watchlist: null
-  #report: null
-  #tags: null
-  #rule_id_bundle: null
+  schema: platform::carbon_black_cloud::1.0
+  #status: 
+  #flags:
+    #- 
+  #tenants:
+    #- 
+  #contributors:
+    #- 
+
+  #query: |
+    #...
+  #organizations:
+    #- 
+  #watchlist: 
+  #report: 
+  #tags:
+    #- 
+  #rule_id_bundle:
+    #key: 

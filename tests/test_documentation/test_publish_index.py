@@ -70,9 +70,9 @@ def test_write_index_writes_folder_pages(tmp_path: Path) -> None:
         index_relation_counts=False,
     )
     pub = MagicMock()
-    pub.rules_dir = tmp_path / "Rules"
-    pub.objectives_dir = tmp_path / "Objectives"
-    pub.threats_dir = tmp_path / "Threats"
+    pub.rules_dir = tmp_path / "rules"
+    pub.objectives_dir = tmp_path / "objectives"
+    pub.threats_dir = tmp_path / "threats"
     pub.output_root = tmp_path
     for folder in (pub.rules_dir, pub.objectives_dir, pub.threats_dir):
         folder.mkdir(parents=True)
@@ -98,9 +98,9 @@ def test_write_index_writes_gitlab_order_file(tmp_path: Path) -> None:
         index_relation_counts=False,
     )
     pub = MagicMock()
-    pub.rules_dir = tmp_path / "Rules"
-    pub.objectives_dir = tmp_path / "Objectives"
-    pub.threats_dir = tmp_path / "Threats"
+    pub.rules_dir = tmp_path / "rules"
+    pub.objectives_dir = tmp_path / "objectives"
+    pub.threats_dir = tmp_path / "threats"
     pub.output_root = tmp_path
     for folder in (pub.rules_dir, pub.objectives_dir, pub.threats_dir):
         folder.mkdir(parents=True)
@@ -141,3 +141,63 @@ def test_render_index_includes_icons_when_enabled() -> None:
             ctx=ctx,
         )
     assert ":shield: Rule A" in content
+
+
+def test_render_index_github_uses_slug_not_uuid_filename() -> None:
+    """GitHub indexes must link to slugify(name).md even if uuid_permalinks leaked (#203)."""
+    formatter = formatter_for(DocumentFlavor.github)
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=MagicMock(),
+        formatter=formatter,
+        folder_index_pages=True,
+        uuid_permalinks=True,
+        index_relation_counts=False,
+    )
+    records = [
+        DocumentRecord(
+            object_type=DocumentScope.threats,
+            uuid="00000000-0000-4000-8001-000000000001",
+            name="Simulated Actor",
+            model=MagicMock(),
+        ),
+    ]
+    content = render_index(
+        formatter,
+        title="Threat Vectors",
+        folder="threats",
+        records=records,
+        ctx=ctx,
+    )
+    assert "[Simulated Actor](simulated-actor.md)" in content
+    assert "00000000-0000-4000-8001-000000000001.md" not in content
+
+
+def test_write_index_github_root_uses_lowercase_folders(tmp_path: Path) -> None:
+    formatter = formatter_for(DocumentFlavor.github)
+    ctx = DocumentationContext(
+        flavor=DocumentFlavor.github,
+        output_dir=tmp_path,
+        formatter=formatter,
+        folder_index_pages=True,
+        uuid_permalinks=False,
+        index_relation_counts=False,
+    )
+    pub = MagicMock()
+    pub.rules_dir = tmp_path / "rules"
+    pub.objectives_dir = tmp_path / "objectives"
+    pub.threats_dir = tmp_path / "threats"
+    pub.output_root = tmp_path
+    for folder in (pub.rules_dir, pub.objectives_dir, pub.threats_dir):
+        folder.mkdir(parents=True)
+    record = DocumentRecord(
+        object_type=DocumentScope.threats,
+        uuid="u1",
+        name="Simulated Actor",
+        model=MagicMock(),
+    )
+    write_index(ctx, pub, rules=[], objectives=[], threats=[record])
+    root = (tmp_path / "README.md").read_text(encoding="utf-8")
+    assert "threats/README.md" in root
+    assert "Threats/" not in root
+    assert (pub.threats_dir / "README.md").is_file()

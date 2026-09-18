@@ -28,6 +28,9 @@ def test_run_setup_repo_only(tmp_path: Path) -> None:
     assert len(steps) == 1
     assert steps[0]["step"] == "repo"
     assert (target / "README.md").is_file()
+    sentinel = target / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
+    assert sentinel.is_file()
+    assert "enabled = true" in sentinel.read_text(encoding="utf-8")
 
 
 def test_run_setup_with_ci_and_mcp(tmp_path: Path) -> None:
@@ -157,6 +160,8 @@ def test_run_setup_vscode_deprecated(tmp_path: Path) -> None:
     assert ".vscode/settings.json" in vscode_files
     assert ".vscode/extensions.json" in vscode_files
     assert ".vscode/model-templates.code-snippets" in vscode_files
+    assert ".vscode/mcp.json" not in vscode_files
+    assert not (target / ".vscode" / "mcp.json").exists()
 
 
 def test_run_setup_vscode_failure_propagates(

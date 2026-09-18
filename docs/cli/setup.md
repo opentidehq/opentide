@@ -43,7 +43,7 @@ Use subcommands for MCP and skills — parent `--mcp` / `--skills` enums were re
 
 ### setup repo
 
-Scaffold directory layout, README, and `.gitignore`.
+Scaffold directory layout, README, and `.gitignore`. `--platform` writes and enables the matching `.opentide/configurations/platforms/*.toml` files (same as `setup platforms`).
 
 ```bash
 opentide setup repo --yes --name SOC --platform sentinel
@@ -184,9 +184,11 @@ Interim yaml.schemas and snippet generation. By default the command generates te
 
 ```bash
 opentide setup vscode                 # generate templates + schemas, then settings + snippets
+opentide setup vscode --mcp          # same, plus .vscode/mcp.json via write_mcp_config
 opentide setup vscode --settings    # generate schemas, then settings
 opentide setup vscode --snippets     # generate templates, then snippets
 opentide setup vscode --no-generate  # skip generate (power users)
+opentide setup mcp --vscode          # MCP only (unchanged multi-host path)
 ```
 
 If snippets were requested and templates are still missing after generate, the command exits non-zero (`status: failed`) instead of reporting success.
@@ -197,6 +199,7 @@ If snippets were requested and templates are still missing after generate, the c
 | `--snippets` | Write model template snippets (generates templates first) |
 | `--no-merge` | Replace settings instead of merging |
 | `--no-generate` | Do not run `opentide generate` phases first |
+| `--mcp` | Write `.vscode/mcp.json` by calling `write_mcp_config` (opt-in; parent `--vscode-setup` does not imply this) |
 
 ## CI skip
 

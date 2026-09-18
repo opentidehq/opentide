@@ -48,7 +48,7 @@ You write **objects** as YAML in `objects/`. A [threat](./concepts/object-model.
 
 ### Generate
 
-`opentide generate` compiles the specs and your objects into the scaffolding your repo needs: JSON Schemas per object family, authoring templates, an IDE schema router that validates YAML in your editor, and lookup indexes. Generated files are deterministic and safe to commit. See [`generate`](../cli/generate.md).
+`opentide generate` compiles the specs and your objects into the scaffolding your repo needs: JSON Schemas per object family, authoring templates from Pydantic `FieldInfo`, an IDE schema router that validates YAML in your editor, and lookup indexes. Generated files are deterministic and safe to commit. See [`generate`](../cli/generate.md).
 
 </Step>
 

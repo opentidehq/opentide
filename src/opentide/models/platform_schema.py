@@ -18,11 +18,9 @@ from opentide.models.platform import (
 
 _COMMON_PLATFORM_EXTRAS: dict[str, Any] = {
     "required": ["status", "query"],
-    "tide.template.force-required": ["schema"],
     "property_extras": {
         "platform_schema": {
             "title": "Schema identifier and version",
-            "tide.template.force-required": True,
         },
         "status": {
             "title": "Status of the use-case",
@@ -34,17 +32,12 @@ _COMMON_PLATFORM_EXTRAS: dict[str, Any] = {
         "tenants": {
             "title": "Target Tenants",
         },
-        "query": {
-            "tide.template.multiline": True,
-            "tide.template.spacer": True,
-        },
     },
 }
 
 _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
     SplunkConfig: {
         "required": ["status", "query", "scheduling"],
-        "tide.template.force-required": ["platform_schema"],
         "property_extras": {
             **_COMMON_PLATFORM_EXTRAS["property_extras"],
             "platform_schema": {
@@ -73,7 +66,6 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
                             "title": {"tide.mdr.parameter": "action.notable.param.rule_title"},
                             "description": {
                                 "tide.mdr.parameter": "action.notable.param.rule_description",
-                                "tide.template.multiline": True,
                             },
                         },
                     },
@@ -91,7 +83,6 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
                 },
             },
             "security_domain": {
-                "tide.template.hide": True,
                 "tide.meta.deprecation": "security_domain is now nested under the notable block",
                 "tide.mdr.parameter": "action.notable.param.security_domain",
             },
@@ -118,12 +109,11 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
                     },
                 },
             },
-            "advanced": {"tide.template.hide": True},
+            "advanced": {"tide.meta.deprecation": "Use nested Splunk action blocks"},
         },
     },
     SentinelConfig: {
         "required": ["status", "query", "scheduling", "alert", "grouping", "entities"],
-        "tide.template.force-required": ["trigger", "operator", "threshold"],
         "property_extras": {
             **_COMMON_PLATFORM_EXTRAS["property_extras"],
             "platform_schema": {"default": "sentinel::2.4"},

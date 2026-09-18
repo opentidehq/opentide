@@ -56,17 +56,17 @@ The PyPI account that saved the pending publisher **owns** the project.
 
 After the first upload, the pending publisher becomes a normal publisher. Further GitHub Releases on `v*` tags publish new versions. Do not add a PyPI API token.
 
-Cut a patch on `development` after the changelog and release notes land (example: **0.1.7**):
+Cut a patch on `development` after the changelog and release notes land (example: **0.1.8**):
 
 ```bash
-gh release create v0.1.7 \
+gh release create v0.1.8 \
   --repo OpenTideHQ/opentide \
   --target development \
-  --title "0.1.7" \
-  --notes-file .github/release-notes/v0.1.7.md
+  --title "0.1.8" \
+  --notes-file .github/release-notes/v0.1.8.md
 ```
 
-The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.7.md`. Do not tag a feature branch.
+The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.8.md`. Do not tag a feature branch.
 
 After a successful upload, `publish-pypi.yml` dispatches `opentide-released` to [`OpenTideHQ/website`](https://github.com/OpenTideHQ/website) so docs, changelog pages, and specs rebuild immediately:
 
@@ -85,4 +85,11 @@ Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https
 - `0.1.dev…` means the tag was not on the checked-out commit (`fetch-depth: 0` and Release target).
 - 403 / `invalid-publisher`: pending publisher missing, or fields do not match the OIDC claims. GitHub sends `repository_owner: opentidehq` (lowercase) and `environment: pypi`. Copy those from the failed Publish to PyPI log, save the pending publisher again, then re-run the workflow (do not retag).
 - `'2.5' is not a valid metadata version`: hatchling defaulted to Core Metadata 2.5. This repo pins `core-metadata-version = "2.4"` on sdist/wheel. Confirm `uvx twine check dist/*` is clean before tagging.
+- `ModuleNotFoundError: No module named 'hatch'` during **Build package**: `hatch build` isolated envs (hatch 1.18.1 / hatchling 1.32.1) import `hatch` from `BinaryBuilder`. Publish uses `uv build` like CI. A `v*` tag cut before that change still runs the old workflow on `release: published` (converting the Release to draft and back does not pick up `development`). From `development`, re-run without moving the tag:
+  ```bash
+  gh api repos/OpenTideHQ/opentide/dispatches \
+    -f event_type=publish-pypi \
+    -f client_payload[checkout_ref]=v0.x.y
+  ```
+  The Actions UI `workflow_dispatch` input `checkout_ref` is the same path. Do not retag.
 - Release exists but Publish to PyPI never starts: the workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag.

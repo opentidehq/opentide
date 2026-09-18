@@ -29,19 +29,12 @@ _CORE_ROOT_EXTRAS_BASE: dict[str, dict[str, Any]] = {
         "description": "A detection rule defines how a detection opportunity is implemented.",
         "additionalProperties": False,
         "required": ["name", "response", "description", "configurations"],
-        "tide.template.force-required": ["metadata"],
         "anyOf": [{"required": ["metadata"]}, {"required": ["meta"]}],
         "property_extras": {
-            "metadata": {"tide.template.spacer": True, "tide.meta.definition": True},
+            "metadata": {"tide.meta.definition": True},
             "meta": {
-                "tide.template.hide": True,
                 "tide.meta.deprecation": "Use metadata keyword instead",
                 "tide.meta.definition": "metadata",
-            },
-            "description": {
-                "tide.template.spacer": True,
-                "tide.template.multiline": True,
-                "tide.template.config.default": "schema.templates.rule::description",
             },
             "detection_model": {"tide.vocab": OBJECTIVE},
             "references": {"tide.meta.definition": True},
@@ -49,17 +42,14 @@ _CORE_ROOT_EXTRAS_BASE: dict[str, dict[str, Any]] = {
                 "title": "Detection System Technical Setup",
                 "recomposition": "systems",
             },
-            "file": {"tide.template.hide": True},
-            "platforms": {"tide.template.hide": True},
         },
     },
     OBJECTIVE: {
         "title": "Detection Objective Schema",
         "additionalProperties": False,
         "required": ["name", "metadata", "objective", "composition"],
-        "tide.template.force-required": ["metadata"],
         "property_extras": {
-            "metadata": {"tide.template.spacer": True, "tide.meta.definition": True},
+            "metadata": {"tide.meta.definition": True},
             "references": {"tide.meta.definition": True},
         },
     },
@@ -67,19 +57,16 @@ _CORE_ROOT_EXTRAS_BASE: dict[str, dict[str, Any]] = {
         "title": "Threat Vector Schema",
         "additionalProperties": False,
         "required": ["name", "criticality", "metadata", "threat"],
-        "tide.template.force-required": ["metadata"],
         "property_extras": {
-            "metadata": {"tide.template.spacer": True, "tide.meta.definition": True},
+            "metadata": {"tide.meta.definition": True},
             "references": {"tide.meta.definition": True},
         },
     },
 }
 
 
-def _core_root_extras_for_model(model: type[TideModel], family: str) -> dict[str, Any]:
-    base = dict(_CORE_ROOT_EXTRAS_BASE.get(family, {}))
-    base["tide.placeholders"] = {"SCHEMA_VERSION": model.schema_identifier()}
-    return base
+def _core_root_extras_for_model(_model: type[TideModel], family: str) -> dict[str, Any]:
+    return dict(_CORE_ROOT_EXTRAS_BASE.get(family, {}))
 
 
 def _core_root_extras() -> dict[str, dict[str, Any]]:

@@ -12,6 +12,36 @@ from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
 
 logger = get_logger(__name__)
 
+# Missing object dirs are normal before ``setup repo`` / first generate.
+# Log each absent path once per process so generate-first ``setup vscode``
+# does not spam error lines per phase × object type (issue #212).
+_missing_object_folders_logged: set[str] = set()
+
+
+def reset_missing_object_folder_log_cache() -> None:
+    """Test helper: allow the same absent path to be logged again."""
+    _missing_object_folders_logged.clear()
+
+
+def _log_missing_object_folder(
+    object_dir: Path | None,
+    *,
+    error: bool,
+    reason: str | None = None,
+) -> None:
+    """Log a missing object folder; debug when absent, error when unreadable."""
+    path_key = str(object_dir) if object_dir is not None else ""
+    if not error and path_key in _missing_object_folders_logged:
+        return
+    _missing_object_folders_logged.add(path_key)
+    payload: dict[str, str] = {"path": path_key or "None"}
+    if reason:
+        payload["reason"] = reason
+    if error:
+        logger.error("could_not_find_object_folder", **payload)
+    else:
+        logger.debug("could_not_find_object_folder", **payload)
+
 
 def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | None]:
     """Worker: return (path, body, error)."""
@@ -210,10 +240,26 @@ class RegistryBuilder:
             if meta_name in self.SKIPS:
                 continue
             object_dir = paths.get(meta_name)
-            if object_dir is None or not object_dir.is_dir():
-                logger.error("could_not_find_object_folder", path=str(object_dir))
+            if object_dir is None:
+                _log_missing_object_folder(None, error=False)
                 continue
-            for model_path in sorted(object_dir.rglob("*.yaml")):
+            try:
+                exists = object_dir.exists()
+            except OSError as exc:
+                _log_missing_object_folder(object_dir, error=True, reason=str(exc))
+                continue
+            if not exists:
+                _log_missing_object_folder(object_dir, error=False)
+                continue
+            if not object_dir.is_dir():
+                _log_missing_object_folder(object_dir, error=True, reason="not_a_directory")
+                continue
+            try:
+                model_paths = sorted(object_dir.rglob("*.yaml"))
+            except OSError as exc:
+                _log_missing_object_folder(object_dir, error=True, reason=str(exc))
+                continue
+            for model_path in model_paths:
                 if model_path.name.endswith(".debug.yaml"):
                     continue
                 yaml_files.append((meta_name, str(model_path)))

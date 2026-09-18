@@ -7,6 +7,63 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.2.0 — 18 September 2026
+
+Minor on 0.1.8. **Upgrade if you generate templates or VS Code snippets — optional YAML now hugs `#` to each key, spacers stay blank, and rule `configurations` are commented platform stubs rather than `{}`.**
+
+**Install**
+
+```bash
+pip install opentide==0.2.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version changes**
+
+- `opentide generate templates` walks Pydantic `FieldInfo` instead of the JSON Schema `gen_template` walker ([#223](https://github.com/OpenTideHQ/opentide/issues/223)).
+- Optional sections are commented YAML with `#` hugging each key; nested optionals are not commented again; spacer blanks stay blank.
+- Rule `configurations` are commented platform stubs (`#sentinel:`) rather than `{}`.
+- VS Code snippet conversion treats commented nested keys as mapping children, so `configurations:` is not turned into a tabstop.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.2.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
+## 0.1.8 — 16 September 2026
+
+Patch on 0.1.7. **Upgrade if first-time `setup` / `generate` logged missing object folders as errors, dumped YAML `null`, attached live children under `#key:` parents, skipped platform TOML from `setup repo --platform`, emitted Title-Case UUID documentation paths, or looked up `objective.priority` in `criticality::1.0`.**
+
+**Install**
+
+```bash
+pip install opentide==0.1.8
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version adds**
+
+- VS Code snippets with `tide-*` prefixes, YAML scope, descriptions, and tabstops ([#194](https://github.com/OpenTideHQ/opentide/issues/194)).
+- `opentide setup vscode --mcp` ([#193](https://github.com/OpenTideHQ/opentide/issues/193)).
+
+**What this version fixes**
+
+- Missing object folders log at debug, not error.
+- Optional template `#key:` blocks comment nested children.
+- Templates never emit YAML `null`.
+- `setup repo --platform` writes enabled platform TOML.
+- Objective `priority` is not checked against `criticality::1.0`.
+- GitHub docs use lowercase slug paths; UUID permalinks stay GitLab-only.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.1.8/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.8)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.1.7 — 16 September 2026
 
 Patch on 0.1.6. **Upgrade if VS Code YAML reported "Matches multiple schemas", generated templates hid required nested fields, `setup vscode` skipped snippets or crashed on a missing path, JSON validate stamped every check failed, or `invalid_ref` pointed at parent objects.**

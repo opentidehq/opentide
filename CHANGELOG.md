@@ -6,6 +6,49 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-18
+
+Minor on the public 0.1.8 beta. Upgrade if you generate templates or VS Code snippets — optional YAML now hugs `#` to each key, spacers stay blank, and rule `configurations` are commented platform stubs rather than `{}`.
+
+### Changed
+
+- `opentide generate templates` walks Pydantic `FieldInfo` instead of the JSON Schema `gen_template` walker. Optional sections are commented YAML blocks (`#` hugs each key; nested optionals are not commented again; spacer blanks stay blank), placeholders are typed (no `null`), nested bodies come from nested models, and rule `configurations` are commented platform stubs rather than `{}` ([#223](https://github.com/OpenTideHQ/opentide/issues/223)).
+- VS Code snippet conversion treats commented nested keys as mapping children, so `configurations:` with only `#sentinel:` stubs is not turned into a tabstop.
+
+### Install
+
+```bash
+pip install opentide==0.2.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+## [0.1.8] — 2026-09-16
+
+Patch on the public 0.1.7 beta. Upgrade if first-time `setup` / `generate` logged missing object folders as errors, dumped YAML `null`, attached live children under `#key:` parents, skipped platform TOML from `setup repo --platform`, emitted Title-Case UUID documentation paths, or looked up `objective.priority` in `criticality::1.0`.
+
+### Added
+
+- VS Code snippets use `tide-threat` / `tide-objective` / `tide-rule` / `tide-<platform>` prefixes, `scope: yaml`, descriptions, and tabstops on empty scalars. Missing core or enabled-platform templates fail loud ([#194](https://github.com/opentidehq/opentide/issues/194)).
+- `opentide setup vscode --mcp` writes `.vscode/mcp.json` through the existing MCP helper. Parent `--vscode-setup` still does not imply MCP ([#193](https://github.com/opentidehq/opentide/issues/193)).
+
+### Fixed
+
+- Absent `objects/{threats,objectives,rules}` folders log at **debug**, once per path. Paths that exist but are not a directory still log at **error** ([#212](https://github.com/OpenTideHQ/opentide/issues/212)).
+- Optional template subtrees dumped as `#key:` now comment nested children, so `uuid` / `name` no longer attach to the previous mapping ([#209](https://github.com/OpenTideHQ/opentide/issues/209)).
+- Generated templates skip `default: None` (no YAML `null`) and restore typed placeholders ([#210](https://github.com/OpenTideHQ/opentide/issues/210)).
+- `opentide setup repo --platform` writes and enables `.opentide/configurations/platforms/*.toml`, so `generate` emits `#sentinel:` (and other) configuration stubs ([#211](https://github.com/OpenTideHQ/opentide/issues/211)).
+- Objective documentation renders `priority` as the author string. It is not looked up in `criticality::1.0` ([#204](https://github.com/OpenTideHQ/opentide/issues/204)).
+- GitHub/generic docs use lowercase `docs/{rules,objectives,threats}/<slug>.md`. UUID permalinks stay GitLab-only ([#203](https://github.com/OpenTideHQ/opentide/issues/203)).
+
+### Install
+
+```bash
+pip install opentide==0.1.8
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.1.7] — 2026-09-16
 
 Patch on the public 0.1.6 beta. Upgrade if VS Code YAML reported "Matches multiple schemas", generated templates hid required nested fields, `setup vscode` skipped snippets or crashed on a missing path, JSON validate stamped every check failed, or `invalid_ref` pointed at parent objects.
@@ -182,7 +225,9 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.0
+[0.1.8]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.8
 [0.1.7]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.7
 [0.1.6]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.6
 [0.1.5]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.5

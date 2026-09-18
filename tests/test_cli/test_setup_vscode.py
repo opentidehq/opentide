@@ -21,6 +21,19 @@ from opentide.cli.services.setup.vscode import (
 SNIPPET_REL = ".vscode/model-templates.code-snippets"
 
 
+def _object_folder_log_levels(stderr: str) -> list[str]:
+    """Levels of ``could_not_find_object_folder`` JSON log lines (issue #212)."""
+    levels: list[str] = []
+    for line in stderr.splitlines():
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if record.get("event") == "could_not_find_object_folder":
+            levels.append(str(record.get("level", "")))
+    return levels
+
+
 def test_snippet_file_rel_matches_paths_toml(tmp_path: Path) -> None:
     assert snippet_file_rel(workspace=tmp_path) == SNIPPET_REL
 
@@ -75,9 +88,14 @@ def test_run_vscode_setup_no_generate_fails_without_templates(tmp_path: Path) ->
     assert result["generated"] == []
 
 
-def test_run_vscode_setup_creates_missing_nested_target(tmp_path: Path) -> None:
+def test_run_vscode_setup_creates_missing_nested_target(tmp_path: Path, monkeypatch) -> None:
+    from tests.test_cli.conftest import _clear_runtime_caches
+
     missing = tmp_path / "new" / "detection-repo"
     assert not missing.exists()
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(missing))
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(missing))
+    _clear_runtime_caches()
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         result = run_vscode_setup(missing)
@@ -89,7 +107,14 @@ def test_run_vscode_setup_creates_missing_nested_target(tmp_path: Path) -> None:
     assert (missing / SNIPPET_REL).is_file()
 
 
-def test_run_vscode_setup_generate_writes_templates_schemas_and_snippets(tmp_path: Path) -> None:
+def test_run_vscode_setup_generate_writes_templates_schemas_and_snippets(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from tests.test_cli.conftest import _clear_runtime_caches
+
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(tmp_path))
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path))
+    _clear_runtime_caches()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = run_vscode_setup(tmp_path)
@@ -203,6 +228,25 @@ def test_run_vscode_setup_snippets_only_generates_templates(tmp_path: Path, monk
     assert result["generated"] == ["templates"]
     assert result["status"] == "completed"
     assert result["files"] == [SNIPPET_REL]
+
+
+def test_run_vscode_setup_mcp_writes_mcp_json(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "opentide.cli.services.generation.run_generate_phases_for_workspace",
+        lambda target, phases: list(phases),
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.vscode.run_vscode_snippets",
+        lambda target: SNIPPET_REL,
+    )
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        without_mcp = run_vscode_setup(tmp_path, generate=False, mcp=False)
+        with_mcp = run_vscode_setup(tmp_path / "mcp", generate=False, mcp=True)
+    assert ".vscode/mcp.json" not in without_mcp["files"]
+    assert not (tmp_path / ".vscode" / "mcp.json").exists()
+    assert ".vscode/mcp.json" in with_mcp["files"]
+    assert (tmp_path / "mcp" / ".vscode" / "mcp.json").is_file()
 
 
 def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:
@@ -334,3 +378,74 @@ def test_run_vscode_snippets_restores_unset_repo_root(tmp_path: Path, monkeypatc
     assert "OPENTIDE_REPO_ROOT" not in os.environ
     assert "OPENTIDE_TIDE_WORKSPACE" not in os.environ
     get_repo_root.cache_clear()
+
+
+def test_run_vscode_setup_empty_dir_completes_without_object_folder_errors(
+    tmp_path: Path,
+) -> None:
+    """Issue #212: missing objects/* during generate-first vscode setup is not an error."""
+    from tests.test_cli.conftest import _clear_runtime_caches, assert_json_ok
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+    from opentide.registry.builder import reset_missing_object_folder_log_cache
+
+    reset_missing_object_folder_log_cache()
+    _clear_runtime_caches()
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["--json", "--repo", str(tmp_path), "setup", "vscode", str(tmp_path)],
+    )
+    payload = assert_json_ok(result)
+    assert payload["status"] == "completed"
+    assert "error" not in _object_folder_log_levels(result.stderr)
+    assert (tmp_path / ".vscode" / "settings.json").is_file()
+    assert (tmp_path / SNIPPET_REL).is_file()
+
+
+def test_run_vscode_setup_empty_dir_debug_logs_missing_folders_at_debug(
+    tmp_path: Path,
+) -> None:
+    """With --debug, absent objects/* still must not log at error (issue #212)."""
+    from tests.test_cli.conftest import assert_json_ok
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+    from opentide.registry.builder import reset_missing_object_folder_log_cache
+
+    reset_missing_object_folder_log_cache()
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["--json", "--debug", "--repo", str(tmp_path), "setup", "vscode", str(tmp_path)],
+    )
+    payload = assert_json_ok(result)
+    assert payload["status"] == "completed"
+    levels = _object_folder_log_levels(result.stderr)
+    assert levels
+    assert "error" not in levels
+    assert all(level == "debug" for level in levels)
+
+
+def test_run_vscode_setup_empty_object_dirs_still_quiet(
+    tmp_path: Path,
+) -> None:
+    from tests.test_cli.conftest import _clear_runtime_caches, assert_json_ok
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+    from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
+    from opentide.registry.builder import reset_missing_object_folder_log_cache
+
+    reset_missing_object_folder_log_cache()
+    _clear_runtime_caches()
+    run_repo_setup(RepoSetupOptions(path=tmp_path, name="Empty objects", yes=True))
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["--json", "--repo", str(tmp_path), "setup", "vscode", str(tmp_path)],
+    )
+    payload = assert_json_ok(result)
+    assert payload["status"] == "completed"
+    assert "error" not in _object_folder_log_levels(result.stderr)

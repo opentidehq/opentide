@@ -50,7 +50,7 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 
 | Subcommand | Output |
 |------------|--------|
-| `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore` |
+| `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore`; `--platform` also writes enabled platform TOML |
 | `setup platforms` | Enabled `.opentide/configurations/platforms/*.toml` |
 | `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms; sets `OPENTIDE_REPO_ROOT`) |
 | `setup env` | `.env.example` with `OPENTIDE_REPO_ROOT`; ignores `.env` |
@@ -116,7 +116,7 @@ See [Agentic setup](./workflows/agentic-setup.md) for details.
 
 ## VS Code settings (deprecated)
 
-`opentide setup vscode` generates templates and JSON schemas, then writes per-folder yaml.schemas mappings (`objects/threats/**/*.yaml` → `threat.1.0.schema.json`, and the same for objectives and rules), `.vscode/extensions.json`, and snippets — interim scaffolding until the OpenTide VS Code extension ships. Prefer `opentide setup mcp --vscode` for MCP configuration. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
+`opentide setup vscode` generates templates and JSON schemas, then writes per-folder yaml.schemas mappings (`objects/threats/**/*.yaml` → `threat.1.0.schema.json`, and the same for objectives and rules), `.vscode/extensions.json`, and snippets — interim scaffolding until the OpenTide VS Code extension ships. Pass `--mcp` to also write `.vscode/mcp.json` via the same helper as `opentide setup mcp --vscode`. Both paths are valid; parent `--vscode-setup` does not imply MCP. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
 
 ## CLI reference
 
@@ -129,3 +129,5 @@ opentide generate
 opentide validate --strict
 opentide setup mcp --cursor --yes   # if not done during setup
 ```
+
+`generate` writes `.opentide/templates/*.template.yaml` from Pydantic models (required keys live, optional fields commented with `#` hugging each key, no YAML `null`). Copy a template into `objects/` or use the `tide-threat` / `tide-objective` / `tide-rule` VS Code snippets.

@@ -12,7 +12,7 @@ from opentide.models.rule import DetectionRule
 class RuleRenderer(ObjectRenderer):
     """Render detection rules to markdown."""
 
-    folder = "Rules"
+    folder = "rules"
 
     def render(self, obj: DetectionRule) -> str:
         rule = obj

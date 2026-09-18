@@ -104,7 +104,7 @@ def render_detection_model_link(
     formatter: MarkdownFormatter,
     catalog: DocumentationCatalog,
     *,
-    from_folder: str = "Rules",
+    from_folder: str = "rules",
     uuid_permalinks: bool = False,
     wiki_links: bool = False,
 ) -> str:
@@ -207,7 +207,9 @@ def render_signals(objective: DetectionObjective, formatter: MarkdownFormatter) 
 def render_objective_meta(objective: DetectionObjective, formatter: MarkdownFormatter) -> str:
     body = objective.objective
     composition = body.composition or objective.composition
-    priority = enrich("criticality", body.priority).label
+    # objective.priority is an unconstrained alert-style string (High / Critical),
+    # not a criticality::1.0 incident token. Do not enrich it against that vocab.
+    priority = body.priority
     objective_type = enrich("detection.types", body.type).label
     composition_label = enrich("detection.composition", composition.strategy).label
 
@@ -226,7 +228,7 @@ def render_signal_mdr_coverage(
     formatter: MarkdownFormatter,
     catalog: DocumentationCatalog,
     *,
-    from_folder: str = "Objectives",
+    from_folder: str = "objectives",
     uuid_permalinks: bool = False,
     wiki_links: bool = False,
     resolve_name: Callable[[str], str] | None = None,

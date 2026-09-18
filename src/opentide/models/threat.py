@@ -20,7 +20,7 @@ class ThreatActor(TideModel):
 
 
 class ThreatBody(TideModel):
-    description: str
+    description: str = TideField(schema_extra={"tide.template.multiline": True})
     severity: str = VocabField(True)
     impact: str = VocabField(True)
     leverage: str = VocabField(True)
@@ -48,7 +48,7 @@ class ThreatVector(TideModel):
     __schema_identifier__: ClassVar[str] = "threat::1.0"
     name: str
     criticality: str = VocabField(True)
-    metadata: ObjectMetadata
+    metadata: ObjectMetadata = TideField(schema_extra={"tide.template.spacer": True})
     threat: ThreatBody
     references: ObjectReferences | None = None
 

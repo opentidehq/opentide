@@ -50,6 +50,27 @@ def test_setup_repo_scripted(tmp_path) -> None:
     assert (tmp_path / "README.md").is_file()
 
 
+def test_setup_repo_platform_writes_enabled_toml(tmp_path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "repo",
+            str(tmp_path),
+            "--yes",
+            "--name",
+            "CLI Test",
+            "--platform",
+            "sentinel",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    toml_path = tmp_path / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
+    assert toml_path.is_file()
+    assert "enabled = true" in toml_path.read_text(encoding="utf-8")
+
+
 def test_setup_mcp_vscode(tmp_path) -> None:
     result = runner.invoke(
         app,
@@ -259,12 +280,13 @@ def test_setup_skills_download_failure_is_normalized_json(tmp_path, monkeypatch)
     assert "network unavailable" in result.stdout
 
 
-def test_setup_vscode_settings_command(tmp_path) -> None:
+def test_setup_vscode_mcp_flag_writes_mcp_json(tmp_path) -> None:
     result = runner.invoke(
         app,
-        ["--json", "setup", "vscode", str(tmp_path), "--settings"],
+        ["--json", "setup", "vscode", str(tmp_path), "--settings", "--mcp", "--no-generate"],
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert (tmp_path / ".vscode" / "mcp.json").is_file()
     assert (tmp_path / ".vscode" / "settings.json").is_file()
 
 

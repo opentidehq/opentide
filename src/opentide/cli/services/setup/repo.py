@@ -15,6 +15,7 @@ from opentide.cli.services.setup.interactive import (
     ask_text,
     require_interactive,
 )
+from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
 from opentide.core.logging.config import get_stdout_console
 from opentide.registry.discovery import OPENTIDE_DIR
 
@@ -31,9 +32,9 @@ SCAFFOLD_DIRS = (
     f"{OPENTIDE_DIR}/templates",
     f"{OPENTIDE_DIR}/exports",
     f"{OPENTIDE_DIR}/inflight",
-    "docs/Rules",
-    "docs/Threats",
-    "docs/Objectives",
+    "docs/rules",
+    "docs/threats",
+    "docs/objectives",
     ".github/workflows",
 )
 
@@ -98,12 +99,18 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
     _write_readme(target, options)
     _write_gitignore(target)
     platforms = [p.value for p in options.platforms]
-    logger.debug("repo_scaffold_created", path=str(target), platforms=platforms)
-    return {
+    result: dict[str, object] = {
         "message": "Repository scaffold created",
         "path": str(target),
         "platforms": platforms,
     }
+    if options.platforms:
+        plat = run_platforms_setup(
+            PlatformsSetupOptions(path=target, platforms=options.platforms, yes=options.yes)
+        )
+        result["platform_files"] = plat.get("files", [])
+    logger.debug("repo_scaffold_created", path=str(target), platforms=platforms)
+    return result
 
 
 def run_interactive_repo_setup(ctx: CliContext, base_path: Path) -> dict[str, object]:

@@ -64,11 +64,18 @@ def _extra_cells(record: DocumentRecord) -> list[str]:
     return []
 
 
+def _page_filename(ctx: DocumentationContext, record: DocumentRecord) -> str:
+    """Match ``page_path``: slugify the name; pass UUID only for GitLab permalinks."""
+    return ctx.formatter.page_filename(
+        slugify(record.name),
+        record.uuid if ctx.uuid_permalinks else None,
+    )
+
+
 def _folder_order_entries(ctx: DocumentationContext, records: list[DocumentRecord]) -> list[str]:
     entries = ["README"]
     for record in records:
-        slug = record.uuid if ctx.uuid_permalinks else slugify(record.name)
-        filename = ctx.formatter.page_filename(slug, record.uuid)
+        filename = _page_filename(ctx, record)
         entries.append(filename.removesuffix(".md"))
     return entries
 
@@ -92,8 +99,7 @@ def render_index(
     rows: list[list[str]] = []
     for record in records:
         to_folder = FOLDER_BY_SCOPE.get(record.object_type, folder)
-        slug = record.uuid if ctx.uuid_permalinks else slugify(record.name)
-        filename = formatter.page_filename(slug, record.uuid if ctx.uuid_permalinks else None)
+        filename = _page_filename(ctx, record)
         href = page_href(from_folder=from_folder, to_folder=to_folder, filename=filename)
         link = render_link(
             formatter,
@@ -130,9 +136,9 @@ def write_index(
         return
 
     folders = (
-        (catalog_targets.rules_dir, "Rules", "Detection Rules", rules),
-        (catalog_targets.objectives_dir, "Objectives", "Detection Objectives", objectives),
-        (catalog_targets.threats_dir, "Threats", "Threat Vectors", threats),
+        (catalog_targets.rules_dir, "rules", "Detection Rules", rules),
+        (catalog_targets.objectives_dir, "objectives", "Detection Objectives", objectives),
+        (catalog_targets.threats_dir, "threats", "Threat Vectors", threats),
     )
     for folder_path, folder_name, title, records in folders:
         if not records:
@@ -151,13 +157,13 @@ def write_index(
 
     root_rows: list[list[str]] = []
     for folder_name, title in (
-        ("Rules", "Detection Rules"),
-        ("Objectives", "Detection Objectives"),
-        ("Threats", "Threat Vectors"),
+        ("rules", "Detection Rules"),
+        ("objectives", "Detection Objectives"),
+        ("threats", "Threat Vectors"),
     ):
         section_title = title
         if ctx.index_icons:
-            icon = _INDEX_ICON_BY_SCOPE.get(folder_name.lower(), "")
+            icon = _INDEX_ICON_BY_SCOPE.get(folder_name, "")
             if icon:
                 section_title = f"{icon} {title}"
         row = [
@@ -165,7 +171,7 @@ def write_index(
             folder_name,
         ]
         if ctx.index_relation_counts:
-            count = len({"Rules": rules, "Objectives": objectives, "Threats": threats}[folder_name])
+            count = len({"rules": rules, "objectives": objectives, "threats": threats}[folder_name])
             row.append(str(count))
         root_rows.append(row)
     if root_rows:

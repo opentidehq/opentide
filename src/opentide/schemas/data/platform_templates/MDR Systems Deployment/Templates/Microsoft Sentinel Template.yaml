@@ -1,17 +1,65 @@
   #enabled: false
   #name: 
-  #schema: null
-  status: null
-  #flags: null
-  #tenants: null
-  #contributors: null
-  
+  schema: platform::sentinel::1.0
+  #status: 
+  #flags:
+    #- 
+  #tenants:
+    #- 
+  #contributors:
+    #- 
+
   query: |
     ...
-  scheduling: 
-  alert: 
-  #exclusions: null
-  #template: null
-  trigger: null
-  grouping: null
-  entities: null
+  scheduling:
+    #nrt: false
+    #frequency: 
+    #lookback: 
+  alert:
+    #title: 
+    #description: |
+      #...
+    #severity: 
+    #suppression: false
+    #create_incident: true
+    #tactics:
+      #- 
+    #techniques:
+      #- 
+    #custom_details:
+      #- key: 
+        #column: 
+    #dynamic_properties:
+      #- property: 
+        #column: 
+  #exclusions:
+    #- query: |
+        #...
+      #reason: 
+      #tenant: 
+      #let:
+        #key: 
+  #template:
+    #uuid: 
+    #version: 
+  #trigger:
+    #operator: 
+    #threshold: 3
+  #grouping:
+    #event: 
+    #alert:
+      #enabled: false
+      #reopen_closed_incidents: false
+      #grouping_lookback: 
+      #matching: 
+      #group_by_entities:
+        #- 
+      #group_by_alert_details:
+        #- 
+      #group_by_custom_details:
+        #- 
+  #entities:
+    #- entity: 
+      #mappings:
+        #- identifier: 
+          #column: 

@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Literal, cast
 
-from pydantic import Field
-
-from opentide.models.base import TideModel
+from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
     CrowdstrikeDetails,
     CrowdstrikeSchedule,
@@ -38,7 +36,11 @@ class PlatformConfigBase(TideModel):
 
     enabled: bool = False
     name: str = ""
-    platform_schema: str | None = Field(default=None, alias="schema")
+    platform_schema: str | None = TideField(
+        None,
+        alias="schema",
+        schema_extra={"tide.template.required": True},
+    )
     status: str | None = None
     flags: list[str] | None = None
     tenants: list[str] | None = None
@@ -47,7 +49,9 @@ class PlatformConfigBase(TideModel):
 
 class SentinelConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::sentinel::1.0"
-    query: str
+    query: str = TideField(
+        schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
+    )
     scheduling: SentinelScheduling
     alert: SentinelAlert
     exclusions: list[SentinelExclusion] | None = None
@@ -59,7 +63,9 @@ class SentinelConfig(PlatformConfigBase):
 
 class DefenderConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::defender_for_endpoint::1.0"
-    query: str
+    query: str = TideField(
+        schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
+    )
     alert: DefenderAlert
     impacted_entities: DefenderImpactedEntities
     scheduling: Literal["NRT", "1H", "3H", "12H", "24H"]
@@ -71,15 +77,17 @@ class DefenderConfig(PlatformConfigBase):
 
 class SplunkConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::splunk::1.0"
-    query: str | None = None
+    query: str | None = TideField(
+        None, schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
+    )
     scheduling: SplunkScheduling | None = None
     trigger: SplunkTrigger | None = None
     actions: SplunkActions | None = None
     correlation_search: bool | None = None
-    advanced: dict[str, Any] | None = None
+    advanced: dict[str, Any] | None = TideField(None, schema_extra={"tide.template.hide": True})
     # Legacy flat v2.x fields retained for backward-compatible loading
-    search: str | None = None
-    cron_schedule: str | None = None
+    search: str | None = TideField(None, schema_extra={"tide.template.hide": True})
+    cron_schedule: str | None = TideField(None, schema_extra={"tide.template.hide": True})
 
 
 class SentinelOneConfig(PlatformConfigBase):
@@ -94,7 +102,9 @@ class CrowdstrikeConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::crowdstrike::1.0"
     details: CrowdstrikeDetails
     schedule: CrowdstrikeSchedule
-    query: str
+    query: str = TideField(
+        schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
+    )
     rule_id_bundle: dict[str, str] | None = None
 
 
@@ -111,7 +121,9 @@ class HarfangLabConfig(PlatformConfigBase):
 
 class CarbonBlackConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::carbon_black_cloud::1.0"
-    query: str | None = None
+    query: str | None = TideField(
+        None, schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
+    )
     organizations: list[str] | None = None
     watchlist: str | None = None
     report: str | None = None

@@ -32,7 +32,20 @@ When run without a subcommand, phases execute in this order:
 
 `extract` is **not** part of the default run — it calls live platform APIs and writes `Imported/` in the working directory. Use `opentide generate extract` explicitly when importing rules.
 
-A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts, and snippet generation skips templates that have not been produced yet instead of failing.
+A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts. Snippet conversion requires the YAML templates from the templates phase and fails if a core or enabled-platform template is missing. Snippet prefixes are `tide-threat`, `tide-objective`, `tide-rule`, and `tide-<platform>` for enabled platforms, with `scope: yaml` and tabstops on empty values.
+
+## generate templates
+
+`opentide generate templates` walks Pydantic `model_fields` (not JSON Schema `$defs`). Output is line-oriented YAML:
+
+- Uncommented keys are required `FieldInfo` on that model (aliases honoured: `att&ck`, `schema`).
+- Optional fields are the same YAML with `#` hugging each key (`#references:` / `  #public:`). Nested optionals inside that block are not commented again. Spacer blank lines stay blank (they are not turned into a lone `#`). Uncomment a block and it is valid YAML.
+- Placeholders are typed: empty strings, `YYYY-MM-DD`, multiline `|` + `...`, `https://`, `3`, `false`. There are no YAML `null` tokens.
+- Vocabulary fields are empty scalars (no enum dump).
+- `DetectionRule.file` and other `Path` / hidden fields are omitted.
+- Rule `configurations` is a live key whose platform slots (`#sentinel:`, `#splunk:`, …) are commented stubs including nested `query: |`. It is never `configurations: {}`.
+
+JSON Schema generation (`generate schemas`) stays a separate pipeline. VS Code snippets copy the YAML templates and add tabstops; they do not re-walk models.
 
 ## generate docs
 
@@ -68,13 +81,13 @@ Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--out
 - **Rules:**
   - `Status`, `ATT&CK Techniques`, `Detection model` (relative backlink), `Response`, `Platform configurations`, `Coverage`, `Related objects`
 - **Objectives:**
-  - `Objective metadata`, `Signals`, `Signal MDR coverage` (rule backlinks), `Coverage`, `Related objects`
+  - `Objective metadata` (priority is the author string — not looked up in `criticality::1.0`), `Signals`, `Signal MDR coverage` (rule backlinks), `Coverage`, `Related objects`
 - **Threats:**
   - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `CVE` (Vulnerability-Lookup links; optional API enrichment), `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Coverage`, `Related objects`
 
 Metadata is a Field/Value table. Folder index tables add Status/Severity (rules), Priority (objectives), or Criticality (threats).
 
-Internal wiki links are relative to the current folder (`../Objectives/…`, `./slug.md` on indexes). Signals are not separate pages — they link to the parent objective heading.
+Internal wiki links are relative to the current folder (`../objectives/…`, `./slug.md` on indexes). Signals are not separate pages — they link to the parent objective heading.
 
 ### Mermaid behavior and relations direction
 
@@ -91,6 +104,8 @@ relations_direction = "both" # upstream | downstream | both
 
 Flavor notes:
 
+- `github` / `generic` write lowercase `docs/{rules,objectives,threats}/<slug>.md`. `[gitlab] uuid_permalinks` does not apply.
+- `gitlab` keeps UUID filenames when `[gitlab] uuid_permalinks = true`.
 - `github` / `gitlab` / `generic` render flowchart-style relations and chaining.
 - `azure-devops` downgrades to `graph` syntax and disables subgraphs for compatibility.
 
@@ -106,7 +121,7 @@ relation_counts = true
 icons = false
 ```
 
-- `folder_index_pages`: write `README.md` index pages for Rules/Objectives/Threats and root.
+- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root.
 - `index.relation_counts`: include relation counts (or object counts on root index table).
 - `index.icons`: prefix section/object labels with emoji markers.
 

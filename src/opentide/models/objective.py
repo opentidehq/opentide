@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
-from opentide.models.base import TideModel, VocabField
+from opentide.models.base import TideField, TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 
 
@@ -18,15 +18,15 @@ class SignalData(TideModel):
 class ExternalDetector(TideModel):
     name: str
     technology: str
-    description: str
-    link: str | None = None
+    description: str = TideField(schema_extra={"tide.template.multiline": True})
+    link: str | None = TideField(None, schema_extra={"format": "uri"})
 
 
 class DetectionExample(TideModel):
-    description: str
-    link: str
+    description: str = TideField(schema_extra={"tide.template.multiline": True})
+    link: str = TideField(schema_extra={"format": "uri"})
     language: str | None = None
-    query: str | None = None
+    query: str | None = TideField(None, schema_extra={"tide.template.multiline": True})
 
 
 class DetectionSignal(TideModel):
@@ -34,7 +34,7 @@ class DetectionSignal(TideModel):
 
     name: str
     uuid: str
-    description: str
+    description: str = TideField(schema_extra={"tide.template.multiline": True})
     severity: str = VocabField(True)
     data: SignalData
     methodology: str = VocabField(True)
@@ -47,13 +47,13 @@ class DetectionSignal(TideModel):
 
 class ObjectiveComposition(TideModel):
     strategy: str
-    description: str
+    description: str = TideField(schema_extra={"tide.template.multiline": True})
 
 
 class ObjectiveBody(TideModel):
     priority: str
     type: str
-    description: str
+    description: str = TideField(schema_extra={"tide.template.multiline": True})
     signals: list[DetectionSignal]
     composition: ObjectiveComposition
     investment: str | None = None
@@ -66,7 +66,7 @@ class DetectionObjective(TideModel):
 
     __schema_identifier__: ClassVar[str] = "objective::1.0"
     name: str
-    metadata: ObjectMetadata
+    metadata: ObjectMetadata = TideField(schema_extra={"tide.template.spacer": True})
     objective: ObjectiveBody
     composition: ObjectiveComposition
     references: ObjectReferences | None = None

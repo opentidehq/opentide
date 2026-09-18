@@ -55,7 +55,7 @@
   ## Signal MDR coverage
   | Signal | Downstream MDR rules |
   | --- | --- |
-  | Unusual cloud directory enumeration | [Shai-Hulud Sentinel Rule](../Rules/shai-hulud-sentinel-rule.md) (`00000000-0000-4000-8103-000000000001`) |
+  | Unusual cloud directory enumeration | [Shai-Hulud Sentinel Rule](../rules/shai-hulud-sentinel-rule.md) (`00000000-0000-4000-8103-000000000001`) |
   
   ## Coverage
   ```mermaid
@@ -77,7 +77,7 @@
   ## Related objects
   | Type | Name | Direction | Relation |
   | --- | --- | --- | --- |
-  | Rule | [Shai-Hulud Sentinel Rule](../Rules/shai-hulud-sentinel-rule.md) (`00000000-0000-4000-8103-000000000001`) | Downstream | rule |
+  | Rule | [Shai-Hulud Sentinel Rule](../rules/shai-hulud-sentinel-rule.md) (`00000000-0000-4000-8103-000000000001`) | Downstream | rule |
   '''
 # ---
 # name: test_github_markdown_snapshots[rule][rule_github]
@@ -109,7 +109,7 @@
   | `T1589` | [Gather Victim Identity Information](https://attack.mitre.org/techniques/T1589) | Adversaries may gather information about the victim's identity that can be used during targeting. Information about identities may include a variety of details, including personal data (ex: employee names, email addresses, security question responses, etc.) as well as sensitive details such as credentials or multi-factor authentication (MFA) configurations.  Adversaries may gather this information in various ways, such as direct elicitation via [Phishing for Information](https://attack.mitre.org/techniques/T1598). Information about users could also be enumerated via other active means (i.e. [Active Scanning](https://attack.mitre.org/techniques/T1595)) such as probing and analyzing responses from authentication services that may reveal valid usernames in a system or permitted MFA /methods associated with those usernames.(Citation: GrimBlog UsernameEnum)(Citation: Obsidian SSPR Abuse 2023) Information about victims may also be exposed to adversaries via online or other accessible data sets (ex: [Social Media](https://attack.mitre.org/techniques/T1593/001) or [Search Victim-Owned Websites](https://attack.mitre.org/techniques/T1594)).(Citation: OPM Leak)(Citation: Register Deloitte)(Citation: Register Uber)(Citation: Detectify Slack Tokens)(Citation: Forbes GitHub Creds)(Citation: GitHub truffleHog)(Citation: GitHub Gitrob)(Citation: CNET Leaks)  Gathering this information may reveal opportunities for other forms of reconnaissance (ex: [Search Open Websites/Domains](https://attack.mitre.org/techniques/T1593) or [Phishing for Information](https://attack.mitre.org/techniques/T1598)), establishing operational resources (ex: [Compromise Accounts](https://attack.mitre.org/techniques/T1586)), and/or initial access (ex: [Phishing](https://attack.mitre.org/techniques/T1566) or [Valid Accounts](https://attack.mitre.org/techniques/T1078)). |
   
   ## Detection model
-  - **Objective**: [Shai-Hulud Objective](../Objectives/shai-hulud-objective.md) (`00000000-0000-4000-8102-000000000001`)
+  - **Objective**: [Shai-Hulud Objective](../objectives/shai-hulud-objective.md) (`00000000-0000-4000-8102-000000000001`)
   
   ## Response
   
@@ -163,7 +163,7 @@
   ## Related objects
   | Type | Name | Direction | Relation |
   | --- | --- | --- | --- |
-  | Objective | [Shai-Hulud Objective](../Objectives/shai-hulud-objective.md) (`00000000-0000-4000-8102-000000000001`) | Upstream | objective |
+  | Objective | [Shai-Hulud Objective](../objectives/shai-hulud-objective.md) (`00000000-0000-4000-8102-000000000001`) | Upstream | objective |
   '''
 # ---
 # name: test_github_markdown_snapshots[threat][threat_github]
@@ -247,6 +247,6 @@
   ## Related objects
   | Type | Name | Direction | Relation |
   | --- | --- | --- | --- |
-  | Objective | [Shai-Hulud Objective](../Objectives/shai-hulud-objective.md) (`00000000-0000-4000-8102-000000000001`) | Downstream | objective |
+  | Objective | [Shai-Hulud Objective](../objectives/shai-hulud-objective.md) (`00000000-0000-4000-8102-000000000001`) | Downstream | objective |
   '''
 # ---
