@@ -1,9 +1,10 @@
 //! I/O-free KQL engine. Catalogs are compiled in; no `std::fs`.
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, codes, span_to_range,
+    codes, span_to_range, ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation,
+    Range, SignatureHelp, SignatureInformation,
 };
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::{tokens_from_spans, HighlightSpec, HighlightToken};
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
 use tree_sitter::Node;
@@ -16,6 +17,9 @@ const SCALAR_OPERATORS_TOML: &str =
 const PLUGINS_TOML: &str = include_str!("../../../catalogs/kql/core/evaluate-plugins.toml");
 const SENTINEL_TABLES: &str = include_str!("../../../catalogs/kql/sentinel/tables.toml");
 const DEFENDER_TABLES: &str = include_str!("../../../catalogs/kql/defender/tables.toml");
+const SENTINEL_COLUMNS: &str = include_str!("../../../catalogs/kql/sentinel/columns.toml");
+const DEFENDER_COLUMNS: &str = include_str!("../../../catalogs/kql/defender/columns.toml");
+const OPERATOR_OPTIONS: &str = include_str!("../../../catalogs/kql/core/operator-options.toml");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Profile {
@@ -101,6 +105,39 @@ pub struct TableRow {
     pub citation: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct ColumnsFile {
+    columns: Vec<ColumnRow>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ColumnRow {
+    pub table: String,
+    pub profile: Option<String>,
+    pub name: String,
+    #[serde(default, rename = "type")]
+    pub type_name: Option<String>,
+    pub docs: Option<String>,
+    pub citation: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct OptionsFile {
+    options: Vec<OperatorOption>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OperatorOption {
+    pub operator: String,
+    pub name: String,
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub values: Vec<String>,
+    pub docs: Option<String>,
+    pub citation: Option<String>,
+    pub signature: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Catalog {
     pub operators: Vec<OperatorRow>,
@@ -109,6 +146,8 @@ pub struct Catalog {
     pub plugins: Vec<PluginRow>,
     pub types: Vec<String>,
     pub tables: Vec<TableRow>,
+    pub columns: Vec<ColumnRow>,
+    pub options: Vec<OperatorOption>,
 }
 
 impl Catalog {
@@ -126,6 +165,12 @@ impl Catalog {
             plugins: plugins.plugins,
             types: types.types.into_iter().map(|t| t.name).collect(),
             tables: Vec::new(),
+            columns: Vec::new(),
+            options: {
+                let file: OptionsFile =
+                    toml::from_str(OPERATOR_OPTIONS).expect("operator-options.toml");
+                file.options
+            },
         }
     }
 
@@ -137,6 +182,21 @@ impl Catalog {
         };
         let tables: TablesFile = toml::from_str(extra).expect("tables.toml");
         self.tables = tables.tables;
+        let mut columns = Vec::new();
+        match profile {
+            Profile::Core => {}
+            Profile::Sentinel => {
+                let s: ColumnsFile = toml::from_str(SENTINEL_COLUMNS).expect("sentinel columns");
+                let d: ColumnsFile = toml::from_str(DEFENDER_COLUMNS).expect("defender columns");
+                columns.extend(s.columns);
+                columns.extend(d.columns);
+            }
+            Profile::Defender => {
+                let d: ColumnsFile = toml::from_str(DEFENDER_COLUMNS).expect("defender columns");
+                columns.extend(d.columns);
+            }
+        }
+        self.columns = columns;
         self
     }
 
@@ -182,6 +242,46 @@ impl Catalog {
 
     pub fn function_names(&self) -> Vec<String> {
         self.functions.iter().map(|f| f.name.clone()).collect()
+    }
+
+    pub fn columns_for_table(&self, table: &str) -> Vec<&ColumnRow> {
+        self.columns
+            .iter()
+            .filter(|c| c.table.eq_ignore_ascii_case(table))
+            .collect()
+    }
+
+    pub fn resolve_column(&self, source: &str, name: &str) -> Option<&ColumnRow> {
+        let mentioned: Vec<&str> = self
+            .tables
+            .iter()
+            .filter(|t| contains_ident(source, &t.name))
+            .map(|t| t.name.as_str())
+            .collect();
+        if let Some(col) = mentioned.iter().find_map(|table| {
+            self.columns
+                .iter()
+                .find(|c| c.table.eq_ignore_ascii_case(table) && c.name == name)
+        }) {
+            return Some(col);
+        }
+        self.columns.iter().find(|c| c.name == name)
+    }
+
+    pub fn option_values(&self, operator: &str, option: &str) -> &[String] {
+        self.options
+            .iter()
+            .find(|o| {
+                o.operator.eq_ignore_ascii_case(operator) && o.name.eq_ignore_ascii_case(option)
+            })
+            .map(|o| o.values.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub fn is_join_kind(&self, name: &str) -> bool {
+        self.option_values("join", "kind")
+            .iter()
+            .any(|v| v.eq_ignore_ascii_case(name))
     }
 }
 
@@ -368,7 +468,7 @@ pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
     collect_function_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
     collect_table_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
 
-    let tokens = highlight_tree(&spec, source, tree.root_node()).unwrap_or_default();
+    let tokens = highlight_tree(&spec, source, tree.root_node(), catalog).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
         hir,
@@ -534,15 +634,15 @@ fn highlight_tree(
     spec: &HighlightSpec,
     source: &str,
     root: Node,
+    catalog: &Catalog,
 ) -> Result<Vec<HighlightToken>, opentide_highlight::HighlightError> {
-    let catalog = Catalog::core();
     match opentide_syntax::query_captures(
         LanguageId::Kql,
         source,
         opentide_highlight::KQL_HIGHLIGHTS_SCM,
     ) {
         Ok(mut owned) => {
-            overlay_catalog_captures(source, &mut owned, &catalog);
+            overlay_catalog_captures(source, &mut owned, catalog);
             let refs: Vec<(ByteSpan, &str)> = owned
                 .iter()
                 .map(|(span, cap)| (*span, cap.as_str()))
@@ -567,12 +667,17 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
             continue;
         }
         let text = &source[span.start..end];
-        if (catalog.function(text).is_some() || catalog.plugin(text).is_some())
+        if matches!(text, "dynamic" | "datatable" | "timespan" | "datetime")
+            && (*capture == "function" || *capture == "function.builtin" || *capture == "variable")
+        {
+            *capture = "type".into();
+        } else if (catalog.function(text).is_some() || catalog.plugin(text).is_some())
             && (*capture == "variable" || *capture == "function")
         {
             *capture = "function.builtin".into();
-        } else if catalog.operator(text).is_some()
-            && (*capture == "variable" || *capture == "error")
+        } else if (catalog.operator(text).is_some()
+            && (*capture == "variable" || *capture == "error"))
+            || (catalog.is_join_kind(text) && *capture == "variable")
         {
             *capture = "keyword".into();
         } else if catalog
@@ -582,6 +687,8 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
             && *capture == "variable"
         {
             *capture = "operator".into();
+        } else if catalog.resolve_column(source, text).is_some() && *capture == "variable" {
+            *capture = "property".into();
         }
     }
 }
@@ -768,63 +875,155 @@ fn contains_ident(haystack: &str, ident: &str) -> bool {
         .any(|t| t == ident)
 }
 
+fn complete_item(
+    label: impl Into<String>,
+    kind: &str,
+    detail: Option<String>,
+    docs: Option<String>,
+) -> CompletionItem {
+    let mut item = CompletionItem::new(label, kind);
+    if let Some(d) = detail {
+        item = item.with_detail(d);
+    }
+    if let Some(d) = docs {
+        item = item.with_docs(d);
+    }
+    item
+}
+
+fn last_operator(before: &str) -> Option<String> {
+    let chunk = before.rsplit('|').next()?.trim_start();
+    let op = chunk
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .next()?
+        .to_ascii_lowercase();
+    if op.is_empty() {
+        None
+    } else {
+        Some(op)
+    }
+}
+
+const COLUMN_OPERATORS: &[&str] = &[
+    "where",
+    "filter",
+    "project",
+    "project-away",
+    "project-keep",
+    "project-reorder",
+    "extend",
+    "summarize",
+    "distinct",
+    "sort",
+    "order",
+    "top",
+    "parse",
+];
+
 pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<CompletionItem> {
     let catalog = Catalog::core().with_profile(profile);
     let before = &source[..offset.min(source.len())];
     let trimmed = before.trim_end();
-    if trimmed.to_ascii_lowercase().ends_with("evaluate") && before.ends_with(' ')
-        || trimmed.to_ascii_lowercase().ends_with("| evaluate")
-    {
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.ends_with("evaluate") && before.ends_with(' ') || lower.ends_with("| evaluate") {
         return catalog
             .plugins
             .iter()
-            .map(|p| CompletionItem {
-                label: p.name.clone(),
-                detail: p.docs.clone(),
-                kind: "plugin".into(),
-            })
+            .map(|p| complete_item(p.name.clone(), "plugin", p.docs.clone(), p.docs.clone()))
             .collect();
+    }
+    if lower.ends_with("kind=") {
+        let op = last_operator(before).unwrap_or_else(|| "join".into());
+        let values = catalog.option_values(&op, "kind");
+        if !values.is_empty() {
+            return values
+                .iter()
+                .map(|v| complete_item(v.clone(), "keyword", Some(format!("{op} kind")), None))
+                .collect();
+        }
     }
     if before.trim_end().ends_with('|') || before.ends_with("| ") {
         return catalog
             .operators
             .iter()
-            .map(|o| CompletionItem {
-                label: o.name.clone(),
-                detail: o.docs.clone(),
-                kind: "operator".into(),
-            })
+            .map(|o| complete_item(o.name.clone(), "operator", o.docs.clone(), o.docs.clone()))
             .collect();
+    }
+    if let Some(op) = last_operator(before) {
+        if COLUMN_OPERATORS.iter().any(|n| *n == op) {
+            let mut seen = std::collections::BTreeSet::new();
+            let mut items = Vec::new();
+            let mentioned: Vec<&str> = catalog
+                .tables
+                .iter()
+                .filter(|t| contains_ident(source, &t.name))
+                .map(|t| t.name.as_str())
+                .collect();
+            let rows: Vec<&ColumnRow> = if mentioned.is_empty() {
+                catalog.columns.iter().collect()
+            } else {
+                catalog
+                    .columns
+                    .iter()
+                    .filter(|c| mentioned.iter().any(|t| c.table.eq_ignore_ascii_case(t)))
+                    .collect()
+            };
+            for col in rows {
+                if seen.insert(col.name.clone()) {
+                    let detail = format!(
+                        "{} ({})",
+                        col.table,
+                        col.type_name.as_deref().unwrap_or("column")
+                    );
+                    items.push(complete_item(
+                        col.name.clone(),
+                        "column",
+                        Some(detail),
+                        col.docs.clone(),
+                    ));
+                }
+            }
+            if !items.is_empty() {
+                return items;
+            }
+        }
     }
     let mut items: Vec<CompletionItem> = catalog
         .functions
         .iter()
-        .map(|f| CompletionItem {
-            label: f.name.clone(),
-            detail: f.docs.clone().or(f.signature.clone()),
-            kind: "function".into(),
+        .map(|f| {
+            complete_item(
+                f.name.clone(),
+                "function",
+                f.docs.clone().or(f.signature.clone()),
+                f.docs.clone(),
+            )
         })
         .collect();
-    items.extend(catalog.tables.iter().map(|t| CompletionItem {
-        label: t.name.clone(),
-        detail: t.docs.clone(),
-        kind: "table".into(),
-    }));
-    items.extend(catalog.scalar_operators.iter().map(|o| CompletionItem {
-        label: o.name.clone(),
-        detail: o.docs.clone(),
-        kind: "operator".into(),
-    }));
-    items.extend(catalog.plugins.iter().map(|p| CompletionItem {
-        label: p.name.clone(),
-        detail: p.docs.clone(),
-        kind: "plugin".into(),
-    }));
-    items.extend(catalog.types.iter().map(|t| CompletionItem {
-        label: t.clone(),
-        detail: Some("KQL scalar type".into()),
-        kind: "type".into(),
-    }));
+    items.extend(
+        catalog
+            .tables
+            .iter()
+            .map(|t| complete_item(t.name.clone(), "table", t.docs.clone(), t.docs.clone())),
+    );
+    items.extend(
+        catalog
+            .scalar_operators
+            .iter()
+            .map(|o| complete_item(o.name.clone(), "operator", o.docs.clone(), o.docs.clone())),
+    );
+    items.extend(
+        catalog
+            .plugins
+            .iter()
+            .map(|p| complete_item(p.name.clone(), "plugin", p.docs.clone(), p.docs.clone())),
+    );
+    items.extend(
+        catalog
+            .types
+            .iter()
+            .map(|t| complete_item(t.clone(), "type", Some("KQL scalar type".into()), None)),
+    );
     items
 }
 
@@ -871,11 +1070,30 @@ pub fn hover(source: &str, position: opentide_core::Position, profile: Profile) 
         return Some(md);
     }
     if let Some(t) = catalog.table(&word) {
-        return Some(format!(
+        let cols = catalog.columns_for_table(&t.name);
+        let mut md = format!(
             "**{}** table\n\n{}",
             t.name,
             t.docs.clone().unwrap_or_default()
-        ));
+        );
+        if !cols.is_empty() {
+            md.push_str("\n\n**Columns**\n");
+            for col in cols.iter().take(24) {
+                md.push_str(&format!(
+                    "\n- `{}` _{}_ — {}",
+                    col.name,
+                    col.type_name.as_deref().unwrap_or("column"),
+                    col.docs.as_deref().unwrap_or("")
+                ));
+            }
+            if cols.len() > 24 {
+                md.push_str(&format!("\n- … {} more", cols.len() - 24));
+            }
+        }
+        if let Some(c) = &t.citation {
+            md.push_str(&format!("\n\n[Microsoft Learn]({c})"));
+        }
+        return Some(md);
     }
     if let Some(p) = catalog.plugin(&word) {
         let mut md = format!(
@@ -894,7 +1112,154 @@ pub fn hover(source: &str, position: opentide_core::Position, profile: Profile) 
     if catalog.types.iter().any(|t| t.eq_ignore_ascii_case(&word)) {
         return Some(format!("**{word}** (KQL scalar type)"));
     }
+    if catalog.is_join_kind(&word) {
+        return Some(format!(
+            "**{word}** (`join kind=`)\n\nJoin flavor. See [join operator](https://learn.microsoft.com/kusto/query/join-operator)."
+        ));
+    }
+    if let Some(col) = catalog.resolve_column(source, &word) {
+        let mut md = format!(
+            "**{}** column on `{}` (`{}`)\n\n{}",
+            col.name,
+            col.table,
+            col.type_name.as_deref().unwrap_or("column"),
+            col.docs.clone().unwrap_or_default()
+        );
+        if let Some(c) = &col.citation {
+            md.push_str(&format!("\n\n[Microsoft Learn]({c})"));
+        }
+        return Some(md);
+    }
     None
+}
+
+pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<SignatureHelp> {
+    let catalog = Catalog::core().with_profile(profile);
+    let before = &source[..offset.min(source.len())];
+    let lower = before.to_ascii_lowercase();
+    if let Some(op) = last_operator(before) {
+        if op == "join" {
+            let kinds = catalog.option_values("join", "kind");
+            let params = vec![
+                ParameterInformation {
+                    label: "kind".into(),
+                    documentation: Some(format!("One of: {}", kinds.join(", "))),
+                },
+                ParameterInformation {
+                    label: "RightTable".into(),
+                    documentation: Some(
+                        "Table or tabular expression on the right of the join.".into(),
+                    ),
+                },
+                ParameterInformation {
+                    label: "on".into(),
+                    documentation: Some(
+                        "Join predicate (`on EventID` or `$left.a == $right.b`).".into(),
+                    ),
+                },
+            ];
+            let active = if lower.contains("kind=") && !lower.contains(" on ") {
+                0
+            } else if lower.contains(" on ") {
+                2
+            } else {
+                1
+            };
+            return Some(SignatureHelp {
+                signatures: vec![SignatureInformation {
+                    label: "join kind=Kind RightTable on Predicate".into(),
+                    documentation: Some(
+                        "Merge rows of two tables. Default kind is innerunique.".into(),
+                    ),
+                    parameters: params,
+                }],
+                active_signature: 0,
+                active_parameter: active,
+            });
+        }
+    }
+    let (name, active) = innermost_call(before)?;
+    if let Some(f) = catalog.function(&name) {
+        let sig = f.signature.clone().unwrap_or_else(|| format!("{name}(…)"));
+        let params = parameters_from_signature(&sig);
+        let active = active.min(params.len().saturating_sub(1) as u32);
+        return Some(SignatureHelp {
+            signatures: vec![SignatureInformation {
+                label: sig,
+                documentation: f.docs.clone(),
+                parameters: params,
+            }],
+            active_signature: 0,
+            active_parameter: active,
+        });
+    }
+    None
+}
+
+fn innermost_call(before: &str) -> Option<(String, u32)> {
+    let bytes = before.as_bytes();
+    let mut depth = 0i32;
+    let mut last_open = None;
+    for (i, b) in bytes.iter().enumerate().rev() {
+        match b {
+            b')' => depth += 1,
+            b'(' => {
+                if depth == 0 {
+                    last_open = Some(i);
+                    break;
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    let open = last_open?;
+    let name_end = open;
+    let mut i = name_end;
+    while i > 0 {
+        let c = bytes[i - 1];
+        if c.is_ascii_alphanumeric() || c == b'_' || c == b'-' {
+            i -= 1;
+        } else {
+            break;
+        }
+    }
+    if i >= name_end {
+        return None;
+    }
+    let name = before[i..name_end].to_string();
+    if name.is_empty() {
+        return None;
+    }
+    let inside = &before[open + 1..];
+    let mut commas = 0u32;
+    let mut nested = 0i32;
+    for b in inside.bytes() {
+        match b {
+            b'(' => nested += 1,
+            b')' => nested -= 1,
+            b',' if nested == 0 => commas += 1,
+            _ => {}
+        }
+    }
+    Some((name, commas))
+}
+
+fn parameters_from_signature(sig: &str) -> Vec<ParameterInformation> {
+    let start = sig.find('(').map(|i| i + 1).unwrap_or(0);
+    let end = sig.rfind(')').unwrap_or(sig.len());
+    if start >= end {
+        return Vec::new();
+    }
+    sig[start..end]
+        .split(',')
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty() && *p != "…")
+        .map(|p| ParameterInformation {
+            label: p.to_string(),
+            documentation: None,
+        })
+        .collect()
 }
 
 fn position_to_offset(source: &str, position: opentide_core::Position) -> usize {
@@ -960,11 +1325,10 @@ mod tests {
     #[test]
     fn control_command_is_unsupported() {
         let r = analyze(".show tables", Profile::Core);
-        assert!(
-            r.diagnostics
-                .iter()
-                .any(|d| d.code == codes::KQL_CONTROL_COMMAND_UNSUPPORTED)
-        );
+        assert!(r
+            .diagnostics
+            .iter()
+            .any(|d| d.code == codes::KQL_CONTROL_COMMAND_UNSUPPORTED));
     }
 
     #[test]
@@ -982,11 +1346,10 @@ mod tests {
     #[test]
     fn render_is_warning() {
         let r = analyze("SecurityEvent | render table", Profile::Core);
-        assert!(
-            r.diagnostics
-                .iter()
-                .any(|d| d.code == codes::KQL_RENDER_NOT_VALID)
-        );
+        assert!(r
+            .diagnostics
+            .iter()
+            .any(|d| d.code == codes::KQL_RENDER_NOT_VALID));
     }
 
     #[test]
@@ -1158,6 +1521,82 @@ mod tests {
             r.tokens
                 .iter()
                 .map(|t| (t.capture.as_str(), slice(t)))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn sentinel_columns_hover_and_complete() {
+        let src = "SecurityEvent | where EventID == 4688";
+        let h = hover(src, opentide_core::Position::new(0, 24), Profile::Sentinel)
+            .expect("EventID hover");
+        assert!(h.contains("EventID"), "{h}");
+        assert!(h.contains("SecurityEvent"), "{h}");
+        let table =
+            hover(src, opentide_core::Position::new(0, 0), Profile::Sentinel).expect("table hover");
+        assert!(
+            table.contains("EventID") || table.contains("Columns"),
+            "{table}"
+        );
+        let where_off = src.find("where ").unwrap() + 6;
+        let items = completions(src, where_off, Profile::Sentinel);
+        assert!(
+            items.iter().any(|i| i.label == "EventID"),
+            "{:?}",
+            items.iter().map(|i| &i.label).take(20).collect::<Vec<_>>()
+        );
+        assert!(items.iter().any(|i| i.label == "TimeGenerated"));
+        let r = analyze(src, Profile::Sentinel);
+        assert!(
+            r.tokens
+                .iter()
+                .any(|t| t.capture == "property" && &src[t.span.start..t.span.end] == "EventID"),
+            "{:?}",
+            r.tokens
+                .iter()
+                .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn join_kind_signature_and_highlight() {
+        let src = "SecurityEvent | join kind=inner SecurityAlert on EventID";
+        let r = analyze(src, Profile::Sentinel);
+        assert!(
+            r.tokens
+                .iter()
+                .any(|t| t.capture == "keyword" && &src[t.span.start..t.span.end] == "inner"),
+            "{:?}",
+            r.tokens
+                .iter()
+                .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+                .collect::<Vec<_>>()
+        );
+        let eq = src.find("kind=").unwrap() + 5;
+        let items = completions(src, eq, Profile::Sentinel);
+        assert!(items.iter().any(|i| i.label == "leftouter"), "{items:?}");
+        let help = signature_help(src, src.find("join ").unwrap() + 5, Profile::Sentinel)
+            .expect("signature");
+        assert!(help.signatures[0].label.contains("join kind="));
+        let ago = "SecurityEvent | where TimeGenerated > ago(1d)";
+        let help = signature_help(ago, ago.find("ago(").unwrap() + 4, Profile::Sentinel)
+            .expect("ago signature");
+        assert!(help.signatures[0].label.to_lowercase().contains("ago"));
+    }
+
+    #[test]
+    fn dynamic_is_type_constructor() {
+        let src = "let x = dynamic(\"[]\"); SecurityEvent | take 1";
+        let r = analyze(src, Profile::Core);
+        assert!(
+            r.tokens
+                .iter()
+                .any(|t| t.capture == "type" && &src[t.span.start..t.span.end] == "dynamic"),
+            "{:?}",
+            r.tokens
+                .iter()
+                .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
                 .collect::<Vec<_>>()
         );
     }

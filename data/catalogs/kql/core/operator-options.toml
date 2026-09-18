@@ -1,0 +1,73 @@
+# Tabular operator options (join kind=, union kind=, parse kind=, …).
+# Used for signature help and context completions.
+[[options]]
+operator = "join"
+name = "kind"
+kind = "enum"
+values = ["inner", "innerunique", "leftouter", "rightouter", "fullouter", "leftanti", "anti", "rightanti", "leftsemi", "rightsemi"]
+docs = "Join flavor. innerunique is the default (left row matches at most one right row)."
+citation = "https://learn.microsoft.com/kusto/query/join-operator"
+signature = "join kind=…"
+
+[[options]]
+operator = "join"
+name = "hint.strategy"
+kind = "enum"
+values = ["broadcast", "shuffle", "legacy"]
+docs = "Join strategy hint (not required in detections)."
+citation = "https://learn.microsoft.com/kusto/query/join-operator"
+signature = "join hint.strategy=…"
+
+[[options]]
+operator = "union"
+name = "kind"
+kind = "enum"
+values = ["inner", "outer"]
+docs = "inner = intersection of columns; outer = union of columns (default)."
+citation = "https://learn.microsoft.com/kusto/query/union-operator"
+signature = "union kind=…"
+
+[[options]]
+operator = "parse"
+name = "kind"
+kind = "enum"
+values = ["simple", "regex", "relaxed"]
+docs = "Parse pattern dialect."
+citation = "https://learn.microsoft.com/kusto/query/parse-operator"
+signature = "parse kind=…"
+
+[[options]]
+operator = "lookup"
+name = "kind"
+kind = "enum"
+values = ["leftouter", "inner"]
+docs = "Lookup join flavor."
+citation = "https://learn.microsoft.com/kusto/query/lookup-operator"
+signature = "lookup kind=…"
+
+[[options]]
+operator = "mv-expand"
+name = "bagexpansion"
+kind = "enum"
+values = ["bag", "array"]
+docs = "How dynamic bags expand."
+citation = "https://learn.microsoft.com/kusto/query/mv-expand-operator"
+signature = "mv-expand bagexpansion=…"
+
+[[options]]
+operator = "make-series"
+name = "kind"
+kind = "enum"
+values = ["nonempty", "empty"]
+docs = "Series emptiness."
+citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
+signature = "make-series kind=…"
+
+[[options]]
+operator = "summarize"
+name = "hint.strategy"
+kind = "enum"
+values = ["shuffle", "broadcast"]
+docs = "Aggregation shuffle hint."
+citation = "https://learn.microsoft.com/kusto/query/summarize-operator"
+signature = "summarize hint.strategy=…"

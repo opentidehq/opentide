@@ -2,7 +2,15 @@
 
 This directory inventories **Splunk Processing Language (SPL)** as used in Splunk Enterprise Security (ES) detections and OpenTide `configurations.splunk.query` (and legacy `configurations.splunk.search`) blocks.
 
-It is a **docs inventory**, not a grammar. The engine still owns parsing. Catalog entries live in [`catalogs/spl/commands.toml`](../../catalogs/spl/commands.toml) (`searchbnf`-informed; we still own the grammar).
+It is a **docs inventory**, not a grammar. The engine still owns parsing. Catalogs:
+
+- [`catalogs/spl/commands.toml`](../../catalogs/spl/commands.toml) — commands + eval/stats functions
+- [`catalogs/spl/fields.toml`](../../catalogs/spl/fields.toml) — default + CIM + raw Windows fields
+- [`catalogs/spl/datamodels.toml`](../../catalogs/spl/datamodels.toml) — `tstats from datamodel=`
+- [`catalogs/spl/macros.toml`](../../catalogs/spl/macros.toml) — ESCU / ES macros (never expanded)
+- [`catalogs/spl/command-options.toml`](../../catalogs/spl/command-options.toml) — `tstats` option schema
+
+Runtime model: [`DESIGN.md`](DESIGN.md).
 
 ## Authored text vs implicit `| search`
 

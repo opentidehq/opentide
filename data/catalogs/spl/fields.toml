@@ -1,0 +1,932 @@
+# Default Splunk + CIM + raw Windows/Sysmon + ES notable fields.
+# Used for hover, completions, and highlight overlay.
+[[fields]]
+name = "index"
+models = ["default"]
+kind = "default"
+docs = "Index name. Constrain detections (index=wineventlog or a CIM index macro)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "sourcetype"
+models = ["default"]
+kind = "default"
+docs = "Sourcetype (WinEventLog:Security, XmlWinEventLog:Security, sysmon:process)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "source"
+models = ["default"]
+kind = "default"
+docs = "Originating path / input."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "host"
+models = ["default"]
+kind = "default"
+docs = "Originating host (not always CIM dest)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "_time"
+models = ["default"]
+kind = "default"
+docs = "Event timestamp. min(_time)/max(_time) as firstTime/lastTime is an ES convention."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "_raw"
+models = ["default"]
+kind = "default"
+docs = "Raw event text. Keyword searches without field= scan _raw."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "_indextime"
+models = ["default"]
+kind = "default"
+docs = "Index time."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "splunk_server"
+models = ["default"]
+kind = "default"
+docs = "Search peer."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "linecount"
+models = ["default"]
+kind = "default"
+docs = "Lines in the event."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "punct"
+models = ["default"]
+kind = "default"
+docs = "Punctuation pattern."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "eventtype"
+models = ["default"]
+kind = "default"
+docs = "Event type matches."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "tag"
+models = ["default"]
+kind = "default"
+docs = "Tags (tag=authentication)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "date_hour"
+models = ["default"]
+kind = "default"
+docs = "Broken-out hour; do not use for range filters."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "date_mday"
+models = ["default"]
+kind = "default"
+docs = "Broken-out day."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "date_month"
+models = ["default"]
+kind = "default"
+docs = "Broken-out month."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "date_year"
+models = ["default"]
+kind = "default"
+docs = "Broken-out year."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "date_wday"
+models = ["default"]
+kind = "default"
+docs = "Broken-out weekday."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "date_zone"
+models = ["default"]
+kind = "default"
+docs = "Broken-out zone."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usedefaultfields"
+
+[[fields]]
+name = "user"
+models = ["Authentication", "Endpoint", "Change", "Web", "Malware", "Network_Traffic"]
+kind = "cim"
+docs = "Account involved. Normalize with lower(user) / coalesce(user, src_user)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "src_user"
+models = ["Authentication", "Change", "Email", "Data_Loss_Prevention"]
+kind = "cim"
+docs = "Initiating user (runas / email sender)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "user_id"
+models = ["Authentication", "Endpoint", "Data_Access"]
+kind = "cim"
+docs = "Directory user id."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "user_name"
+models = ["Authentication", "Endpoint"]
+kind = "cim"
+docs = "User name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "user_role"
+models = ["Authentication", "Endpoint"]
+kind = "cim"
+docs = "Role."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "user_type"
+models = ["Authentication", "Endpoint"]
+kind = "cim"
+docs = "User type."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "user_group"
+models = ["Authentication", "Endpoint"]
+kind = "cim"
+docs = "Group."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "src_nt_domain"
+models = ["Authentication", "Change", "Malware"]
+kind = "cim"
+docs = "Windows source domain."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "dest_nt_domain"
+models = ["Authentication", "Change", "Malware"]
+kind = "cim"
+docs = "Windows dest domain."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "src_bunit"
+models = ["Authentication", "Endpoint", "Network_Traffic"]
+kind = "cim"
+docs = "ES source business unit."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "dest_bunit"
+models = ["Authentication", "Endpoint", "Network_Traffic"]
+kind = "cim"
+docs = "ES dest business unit."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "user_bunit"
+models = ["Authentication", "Endpoint"]
+kind = "cim"
+docs = "ES user business unit."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "src_category"
+models = ["Authentication", "Endpoint", "Network_Traffic"]
+kind = "cim"
+docs = "Asset category (src)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "dest_category"
+models = ["Authentication", "Endpoint", "Network_Traffic"]
+kind = "cim"
+docs = "Asset category (dest)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "user_category"
+models = ["Authentication", "Endpoint"]
+kind = "cim"
+docs = "Identity category."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "src"
+models = ["Alerts", "Authentication", "Endpoint", "Intrusion_Detection", "Web", "Network_Traffic"]
+kind = "cim"
+docs = "Source host (name, IP, or alias of src_ip)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "dest"
+models = ["Alerts", "Authentication", "Endpoint", "Intrusion_Detection", "Web", "Network_Traffic", "Malware", "Change"]
+kind = "cim"
+docs = "Destination / victim host. ES notables key off dest."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "dvc"
+models = ["Change", "Data_Loss_Prevention", "Intrusion_Detection", "Network_Traffic"]
+kind = "cim"
+docs = "Observing device (sensor, firewall)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "src_ip"
+models = ["Network_Traffic", "Network_Sessions", "Inventory"]
+kind = "cim"
+docs = "Source IP."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "dest_ip"
+models = ["Network_Traffic", "Network_Sessions", "Inventory"]
+kind = "cim"
+docs = "Destination IP."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "src_port"
+models = ["Endpoint", "Intrusion_Detection", "Network_Traffic", "Web", "Network_Resolution"]
+kind = "cim"
+docs = "Source port."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "dest_port"
+models = ["Endpoint", "Intrusion_Detection", "Network_Traffic", "Web", "Network_Resolution"]
+kind = "cim"
+docs = "Destination port."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "src_mac"
+models = ["Network_Traffic", "Network_Sessions"]
+kind = "cim"
+docs = "Source MAC."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "dest_mac"
+models = ["Network_Traffic", "Network_Sessions"]
+kind = "cim"
+docs = "Dest MAC."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "transport"
+models = ["Certificates", "Endpoint", "Intrusion_Detection", "Network_Resolution", "Network_Traffic"]
+kind = "cim"
+docs = "tcp / udp / icmp."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "protocol"
+models = ["Change", "Email", "Network_Traffic"]
+kind = "cim"
+docs = "Application protocol."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "bytes"
+models = ["Network_Traffic", "Web"]
+kind = "cim"
+docs = "Total bytes."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "bytes_in"
+models = ["Network_Traffic", "Web"]
+kind = "cim"
+docs = "Bytes in."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "bytes_out"
+models = ["Network_Traffic", "Web"]
+kind = "cim"
+docs = "Bytes out."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "packets"
+models = ["Network_Traffic"]
+kind = "cim"
+docs = "Packets."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "packets_in"
+models = ["Network_Traffic"]
+kind = "cim"
+docs = "Packets in."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "packets_out"
+models = ["Network_Traffic"]
+kind = "cim"
+docs = "Packets out."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "rule"
+models = ["Network_Traffic"]
+kind = "cim"
+docs = "Firewall / IDS rule name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "action"
+models = ["Authentication", "Change", "Endpoint", "Intrusion_Detection", "Malware", "Network_Traffic", "Web"]
+kind = "cim"
+docs = "allowed / blocked / failure / success."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "vendor_product"
+models = ["Authentication", "Endpoint", "Malware", "Intrusion_Detection", "Network_Traffic"]
+kind = "cim"
+docs = "Product name (Sysmon, CrowdStrike, …)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "app"
+models = ["Alerts", "Authentication", "Network_Traffic", "Web"]
+kind = "cim"
+docs = "Application."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "duration"
+models = ["Authentication", "Network_Resolution", "Network_Traffic", "Web"]
+kind = "cim"
+docs = "Session / request duration."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "ttl"
+models = ["Network_Resolution", "Network_Traffic"]
+kind = "cim"
+docs = "Time-to-live."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "process"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Full command line or process path (CIM Endpoint)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "process_name"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Image name (cmd.exe). Sysmon EventCode 1 / Windows 4688."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "process_exec"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Executable file name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "process_path"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Full path to image."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "process_id"
+models = ["Endpoint"]
+kind = "cim"
+docs = "PID."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "process_guid"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Sysmon / CIM process GUID."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "process_hash"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Image hash."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "process_current_directory"
+models = ["Endpoint"]
+kind = "cim"
+docs = "CWD."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "process_integrity_level"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Windows integrity."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "parent_process"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Parent command line / path."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "parent_process_name"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Parent image name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "parent_process_path"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Parent path."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "parent_process_id"
+models = ["Endpoint"]
+kind = "cim"
+docs = "PPID."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "parent_process_guid"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Parent GUID."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "parent_process_exec"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Parent exec name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "original_file_name"
+models = ["Endpoint"]
+kind = "cim"
+docs = "PE OriginalFilename (lolbin detections)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "os"
+models = ["Endpoint", "Inventory"]
+kind = "cim"
+docs = "OS family."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "file_name"
+models = ["Email", "Endpoint", "Intrusion_Detection", "Malware"]
+kind = "cim"
+docs = "File name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "file_path"
+models = ["Endpoint", "Intrusion_Detection", "Malware"]
+kind = "cim"
+docs = "File path."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "file_hash"
+models = ["Email", "Endpoint", "Intrusion_Detection", "Malware"]
+kind = "cim"
+docs = "MD5/SHA1/SHA256."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "file_size"
+models = ["Email", "Endpoint"]
+kind = "cim"
+docs = "Size."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "file_create_time"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Create time."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "file_modify_time"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Modify time."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "url"
+models = ["Email", "Malware", "Web"]
+kind = "cim"
+docs = "Full URL."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "url_domain"
+models = ["Web"]
+kind = "cim"
+docs = "URL domain."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "uri_path"
+models = ["Web"]
+kind = "cim"
+docs = "URI path."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "uri_query"
+models = ["Web"]
+kind = "cim"
+docs = "URI query."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "http_method"
+models = ["Web"]
+kind = "cim"
+docs = "HTTP method."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "http_user_agent"
+models = ["Web"]
+kind = "cim"
+docs = "User-Agent."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "http_referrer"
+models = ["Web"]
+kind = "cim"
+docs = "Referrer."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "http_content_type"
+models = ["Web"]
+kind = "cim"
+docs = "Content-Type."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "query"
+models = ["Network_Resolution", "Databases"]
+kind = "cim"
+docs = "DNS question name (or DB query)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "query_type"
+models = ["Network_Resolution"]
+kind = "cim"
+docs = "DNS query type (A, AAAA, TXT)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "answer"
+models = ["Network_Resolution"]
+kind = "cim"
+docs = "DNS answer."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "reply_code"
+models = ["Network_Resolution"]
+kind = "cim"
+docs = "DNS reply code."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "record_type"
+models = ["Network_Resolution"]
+kind = "cim"
+docs = "DNS record type."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "message_type"
+models = ["Network_Resolution"]
+kind = "cim"
+docs = "query vs response."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "registry_hive"
+models = ["Endpoint"]
+kind = "cim"
+docs = "HKLM / HKCU / …"
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "registry_path"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Full key path."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "registry_key_name"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Key name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "registry_value_name"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Value name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "registry_value_data"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Value data."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "service_name"
+models = ["Endpoint"]
+kind = "cim"
+docs = "Windows / CIM service name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "signature"
+models = ["Intrusion_Detection", "Malware", "Alerts", "Endpoint"]
+kind = "cim"
+docs = "Human-readable event / signature name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "signature_id"
+models = ["Intrusion_Detection", "Malware", "Alerts"]
+kind = "cim"
+docs = "Numeric / vendor id (often EventCode aliased)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "severity"
+models = ["Alerts", "Intrusion_Detection", "Malware", "Data_Loss_Prevention"]
+kind = "cim"
+docs = "Normalized severity."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "ids_type"
+models = ["Intrusion_Detection"]
+kind = "cim"
+docs = "network / host / …"
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "object"
+models = ["Change", "Data_Access"]
+kind = "cim"
+docs = "Changed object."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "object_path"
+models = ["Change", "Data_Access"]
+kind = "cim"
+docs = "Object path."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "object_id"
+models = ["Change", "Data_Access"]
+kind = "cim"
+docs = "Object id."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "status"
+models = ["Change", "Web", "Endpoint", "Authentication"]
+kind = "cim"
+docs = "success / failure."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "reason"
+models = ["Authentication"]
+kind = "cim"
+docs = "Auth failure reason."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "src_translated_ip"
+models = ["Network_Traffic"]
+kind = "cim"
+docs = "NAT source IP."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "dest_translated_ip"
+models = ["Network_Traffic"]
+kind = "cim"
+docs = "NAT dest IP."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "CommandLine"
+models = ["windows"]
+kind = "raw"
+docs = "Raw Windows/Sysmon command line. Map to process / process_command_line."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "Process_Command_Line"
+models = ["windows"]
+kind = "raw"
+docs = "Windows TA XML 4688 command line."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "EventCode"
+models = ["windows"]
+kind = "raw"
+docs = "Classic WinEventLog field (4688, 4624, Sysmon 1). Not a CIM name."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "EventID"
+models = ["windows"]
+kind = "raw"
+docs = "Alias of EventCode in some TAs."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "event_id"
+models = ["windows"]
+kind = "raw"
+docs = "CIM / XML Windows TA equivalent of EventCode."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "Logon_Type"
+models = ["windows"]
+kind = "raw"
+docs = "Windows 4624/4625 logon type (not CIM)."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "TargetUserName"
+models = ["windows"]
+kind = "raw"
+docs = "Raw Windows target user; alias to user."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "SubjectUserName"
+models = ["windows"]
+kind = "raw"
+docs = "Raw Windows subject user; alias to src_user."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "Image"
+models = ["windows"]
+kind = "raw"
+docs = "Sysmon image path."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "ParentImage"
+models = ["windows"]
+kind = "raw"
+docs = "Sysmon parent image."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "TargetFilename"
+models = ["windows"]
+kind = "raw"
+docs = "Sysmon target file."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "ImageLoaded"
+models = ["windows"]
+kind = "raw"
+docs = "Sysmon image load."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "Hashes"
+models = ["windows"]
+kind = "raw"
+docs = "Sysmon hashes blob."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "QueryName"
+models = ["windows"]
+kind = "raw"
+docs = "Sysmon DNS query."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "Caller_User_Name"
+models = ["windows"]
+kind = "raw"
+docs = "Windows TA caller; alias to src_user."
+citation = "https://docs.splunk.com/Documentation/WindowsAddOn/latest/User/CIMModelandFieldMappingChanges"
+
+[[fields]]
+name = "firstTime"
+models = ["notable"]
+kind = "es"
+docs = "ES convention: min(_time) as firstTime."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "lastTime"
+models = ["notable"]
+kind = "es"
+docs = "ES convention: max(_time) as lastTime."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "count"
+models = ["notable"]
+kind = "es"
+docs = "Aggregation count (stats / tstats)."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "risk_score"
+models = ["notable"]
+kind = "es"
+docs = "ES risk score."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "risk_object"
+models = ["notable"]
+kind = "es"
+docs = "ES risk object."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "risk_object_type"
+models = ["notable"]
+kind = "es"
+docs = "user / system / …"
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "search_name"
+models = ["notable"]
+kind = "es"
+docs = "Correlation search / notable name."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[fields]]
+name = "normalized_risk_object"
+models = ["notable"]
+kind = "es"
+docs = "Normalized risk object."
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"

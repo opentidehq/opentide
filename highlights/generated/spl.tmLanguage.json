@@ -4,8 +4,13 @@
   "patterns": [
     {
       "comment": "capture:comment",
-      "match": "//.*$|```[^`]*```",
+      "match": "```[^`]*```",
       "name": "comment.line.opentide"
+    },
+    {
+      "comment": "capture:macro",
+      "match": "`[A-Za-z_][A-Za-z0-9_]*(?:\\([^)`]*\\))?`",
+      "name": "entity.name.function.macro.opentide"
     },
     {
       "comment": "capture:string",
@@ -18,8 +23,13 @@
       "name": "constant.numeric.opentide"
     },
     {
+      "comment": "capture:function.builtin",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:CASE|TERM)(?![A-Za-z0-9_])",
+      "name": "support.function.opentide"
+    },
+    {
       "comment": "capture:keyword",
-      "match": "(?i)(?<![A-Za-z0-9_])(?:AS|append|bin|by|chart|convert|dedup|eval|eventstats|extract|fields|fillnull|foreach|from|head|inputlookup|join|lookup|makemv|makeresults|map|metadata|mvexpand|outputlookup|rare|regex|rename|rest|reverse|rex|search|sort|spath|stats|strcat|streamstats|table|tail|timechart|top|transaction|tstats|union|where)(?![A-Za-z0-9_])",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:AS|append|bin|by|chart|convert|datamodel|dedup|eval|eventstats|extract|fields|fillnull|foreach|from|head|inputlookup|join|lookup|makemv|makeresults|map|metadata|mvexpand|outputlookup|prestats|rare|regex|rename|rest|reverse|rex|search|sort|spath|stats|strcat|streamstats|summariesonly|table|tail|timechart|top|transaction|tstats|union|where)(?![A-Za-z0-9_])",
       "name": "keyword.control.opentide"
     },
     {

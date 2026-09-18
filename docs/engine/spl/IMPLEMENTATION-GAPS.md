@@ -75,14 +75,13 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 | --- | --- |
 | `bare_search` | Present; must stay non-rewriting |
 | `catalog_command` / `unknown_command` | Present |
-| Comments `` ```…``` `` | `comment` token is wrong shape (` ``` ` + rest-of-line **or** single-backtick pair) |
-| Macros `` `macro` `` / `` `macro(args)` `` | Collides with `comment`; not a first-class node |
-| Subsearch `[ pipeline ]` | Only structured inside `join`; elsewhere `[` `]` are punctuation |
-| `append` / `appendcols` / `map` / `union` / `multisearch` subsearch bodies | Not parsed as nested `pipeline` |
-| `IN (...)` in **search** clauses | Not modeled in `bare_search` / `search_command` (only in eval comparisons) |
-| `TERM(...)` / `CASE(...)` | Not modeled |
-| `tstats` `from datamodel=...` | Partial (`from` + identifier); not full datamodel path grammar |
-| Macro expansion awareness | None (token-level only) |
+| Comments `` ```…``` `` | Triple-backtick comments only |
+| Macros `` `macro` `` / `` `macro(args)` `` | First-class `macro` node + HighlightSpec `macro` |
+| Subsearch `[ pipeline ]` | `subsearch` rule (join + argument_list + search_term) |
+| `IN (...)` in **search** clauses | `in_clause` |
+| `TERM(...)` / `CASE(...)` | `term_clause` / `case_clause` |
+| `tstats` `from datamodel=...` | `from datamodel=` + dotted identifiers |
+| Leading `\|` generating command | Optional leading pipe on `pipeline` |
 
 ---
 
@@ -95,8 +94,8 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 | `(unknown_command name: (identifier) @error)` | Present |
 | Explicit extra strings (`"timechart" @keyword`, …) | Redundant subset; not a coverage hole |
 | Function names | scm `@function`; engine remaps catalog hits to `function.builtin` |
-| Macro / comment distinctions | No clean captures (grammar overlap) |
-| `TERM` / `CASE` / search-clause `IN` | No captures |
+| Macro / comment distinctions | Dedicated `macro` vs `comment` (` ``` `) |
+| `TERM` / `CASE` / search-clause `IN` | Grammar + `@keyword` |
 | AST fallback `catalog_command_name` | **Handled** as `keyword` in `collect_highlights` |
 
 ---
@@ -105,13 +104,14 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 
 | API | Status |
 | --- | --- |
-| `completions` after `\|` | All 118 catalog commands |
+| `completions` after `\|` | All 150 catalog commands |
 | `completions` otherwise | All catalog functions |
 | `hover` on commands | Catalog docs + citation |
 | `hover` on functions | Catalog function docs + kind |
 | Context-aware eval vs aggregate filtering | Not implemented |
-| Field completions (CIM) | **None** |
-| Macro name completions | **None** |
+| Field completions (CIM) | `catalogs/spl/fields.toml` + datamodel-prefixed completions |
+| Macro name completions | `catalogs/spl/macros.toml` after `` ` `` / inside `tstats` |
+| Signature help | `tstats` / eval functions / macros |
 
 ---
 
@@ -119,7 +119,7 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 
 - App/add-on commands (`dbxquery`, ESCU custom commands, …)
 - Full rare/ML/UI command set in §A until product scope expands
-- CIM field names as catalog entities (documented in [cim-fields.md](cim-fields.md))
+- Exhaustive CIM field dump beyond detection-critical `fields.toml` (see [cim-fields.md](cim-fields.md))
 
 ---
 

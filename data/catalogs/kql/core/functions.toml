@@ -1652,7 +1652,7 @@ kind = "scalar"
 name = "hll_merge"
 signature = "hll_merge(hll1, …) scalar merge"
 citation = "https://learn.microsoft.com/kusto/query/hll-merge-function"
-kind = "scalar"
+kind = "aggregation"
 
 [[functions]]
 name = "percentile_tdigest"

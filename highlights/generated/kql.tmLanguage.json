@@ -4,7 +4,7 @@
   "patterns": [
     {
       "comment": "capture:comment",
-      "match": "//.*$|```[^`]*```",
+      "match": "//.*$|/\\*[\\s\\S]*?\\*/",
       "name": "comment.line.opentide"
     },
     {

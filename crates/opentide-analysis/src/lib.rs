@@ -1,8 +1,8 @@
 //! I/O-free analysis orchestrator. Filesystem lives behind [`WorkspaceHost`].
 
-use opentide_core::{CompletionItem, Diagnostic, LanguageId, Position};
+use opentide_core::{CompletionItem, Diagnostic, LanguageId, Position, SignatureHelp};
 use opentide_highlight::{
-    HighlightResult, HighlightSpec, HighlightToken, SemanticTokens, encode_lsp_semantic_tokens,
+    encode_lsp_semantic_tokens, HighlightResult, HighlightSpec, HighlightToken, SemanticTokens,
 };
 use opentide_kql::Profile;
 use opentide_tide::{IndexedObject, TideAnalyzeResult};
@@ -221,26 +221,17 @@ pub fn completions(
             let workspace = index_workspace(host);
             let mut items = Vec::new();
             for (name, uuid) in opentide_tide::completions_for(&workspace, "objective") {
-                items.push(CompletionItem {
-                    label: name,
-                    detail: Some(uuid),
-                    kind: "reference".into(),
-                });
+                items.push(CompletionItem::new(name, "reference").with_detail(uuid));
             }
             for (name, uuid) in opentide_tide::completions_for(&workspace, "threat") {
-                items.push(CompletionItem {
-                    label: name,
-                    detail: Some(uuid),
-                    kind: "reference".into(),
-                });
+                items.push(CompletionItem::new(name, "reference").with_detail(uuid));
             }
             for (field, vocab) in opentide_tide::bundled_vocabs() {
                 for key in vocab.keys {
-                    items.push(CompletionItem {
-                        label: key.name,
-                        detail: Some(format!("{field} vocabulary")),
-                        kind: "enum".into(),
-                    });
+                    items.push(
+                        CompletionItem::new(key.name, "enum")
+                            .with_detail(format!("{field} vocabulary")),
+                    );
                 }
             }
             items
@@ -255,6 +246,31 @@ pub fn compiled_kql(text: &str, tenant: &str) -> String {
 pub fn compiled_spl(text: &str) -> String {
     // Authored text is the compiled form; implicit `| search` is not rewritten.
     text.to_string()
+}
+
+pub fn signature_help(
+    _host: &dyn WorkspaceHost,
+    language: LanguageId,
+    text: &str,
+    position: Position,
+) -> Option<SignatureHelp> {
+    let offset = offset_at_position(text, position);
+    match language {
+        LanguageId::Kql => opentide_kql::signature_help(text, offset, Profile::Sentinel),
+        LanguageId::Spl => opentide_spl::signature_help(text, offset),
+        LanguageId::TideYaml => {
+            let (inj, inner) = opentide_tide::injection_at_offset(text, offset)?;
+            match inj.language {
+                LanguageId::Kql => opentide_kql::signature_help(
+                    &inj.inner,
+                    inner,
+                    defender_profile(&inj.field_path),
+                ),
+                LanguageId::Spl => opentide_spl::signature_help(&inj.inner, inner),
+                LanguageId::TideYaml => None,
+            }
+        }
+    }
 }
 
 #[cfg(test)]

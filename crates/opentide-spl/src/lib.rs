@@ -1,14 +1,19 @@
 //! I/O-free SPL engine. Catalogs compiled in; unknown commands are never silently eaten.
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, codes, span_to_range,
+    codes, span_to_range, ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation,
+    Range, SignatureHelp, SignatureInformation,
 };
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::{tokens_from_spans, HighlightSpec, HighlightToken};
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
 use tree_sitter::Node;
 
 const COMMANDS_TOML: &str = include_str!("../../../catalogs/spl/commands.toml");
+const FIELDS_TOML: &str = include_str!("../../../catalogs/spl/fields.toml");
+const DATAMODELS_TOML: &str = include_str!("../../../catalogs/spl/datamodels.toml");
+const MACROS_TOML: &str = include_str!("../../../catalogs/spl/macros.toml");
+const OPTIONS_TOML: &str = include_str!("../../../catalogs/spl/command-options.toml");
 
 #[derive(Debug, Clone, Deserialize)]
 struct CommandsFile {
@@ -32,18 +37,89 @@ pub struct FunctionRow {
     pub docs: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct FieldsFile {
+    fields: Vec<FieldRow>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FieldRow {
+    pub name: String,
+    #[serde(default)]
+    pub models: Vec<String>,
+    pub kind: Option<String>,
+    pub docs: Option<String>,
+    pub citation: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DatamodelsFile {
+    datamodels: Vec<DatamodelRow>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DatamodelRow {
+    pub name: String,
+    pub prefix: String,
+    pub model: Option<String>,
+    pub docs: Option<String>,
+    #[serde(default)]
+    pub fields: Vec<String>,
+    pub citation: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct MacrosFile {
+    macros: Vec<MacroRow>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MacroRow {
+    pub name: String,
+    pub signature: Option<String>,
+    pub docs: Option<String>,
+    pub citation: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct OptionsFile {
+    options: Vec<CommandOption>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CommandOption {
+    pub command: String,
+    pub name: String,
+    #[serde(default)]
+    pub values: Vec<String>,
+    pub docs: Option<String>,
+    pub citation: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Catalog {
     pub commands: Vec<CommandRow>,
     pub functions: Vec<FunctionRow>,
+    pub fields: Vec<FieldRow>,
+    pub datamodels: Vec<DatamodelRow>,
+    pub macros: Vec<MacroRow>,
+    pub options: Vec<CommandOption>,
 }
 
 impl Catalog {
     pub fn load() -> Self {
         let file: CommandsFile = toml::from_str(COMMANDS_TOML).expect("commands.toml");
+        let fields: FieldsFile = toml::from_str(FIELDS_TOML).expect("fields.toml");
+        let datamodels: DatamodelsFile = toml::from_str(DATAMODELS_TOML).expect("datamodels.toml");
+        let macros: MacrosFile = toml::from_str(MACROS_TOML).expect("macros.toml");
+        let options: OptionsFile = toml::from_str(OPTIONS_TOML).expect("command-options.toml");
         Self {
             commands: file.commands,
             functions: file.functions,
+            fields: fields.fields,
+            datamodels: datamodels.datamodels,
+            macros: macros.macros,
+            options: options.options,
         }
     }
 
@@ -69,6 +145,32 @@ impl Catalog {
             .filter(|(_, d)| *d <= 3)
             .min_by_key(|(_, d)| *d)
             .map(|(n, _)| n)
+    }
+
+    pub fn field(&self, name: &str) -> Option<&FieldRow> {
+        let bare = name.rsplit('.').next().unwrap_or(name);
+        self.fields
+            .iter()
+            .find(|f| f.name == name || f.name == bare)
+    }
+
+    pub fn datamodel(&self, name: &str) -> Option<&DatamodelRow> {
+        self.datamodels
+            .iter()
+            .find(|d| d.name.eq_ignore_ascii_case(name) || d.prefix.eq_ignore_ascii_case(name))
+    }
+
+    pub fn macro_named(&self, name: &str) -> Option<&MacroRow> {
+        let bare = name.trim_matches('`').split('(').next().unwrap_or(name);
+        self.macros
+            .iter()
+            .find(|m| m.name == bare || m.name == name)
+    }
+
+    pub fn active_datamodel(&self, source: &str) -> Option<&DatamodelRow> {
+        self.datamodels
+            .iter()
+            .find(|d| source.contains(&d.name) || source.contains(&format!("datamodel={}", d.name)))
     }
 }
 
@@ -184,11 +286,22 @@ fn highlight_tree(
                     && (*capture == "variable" || *capture == "function")
                 {
                     *capture = "function.builtin".into();
-                } else if (catalog.command(text).is_some()
-                    && (*capture == "variable" || *capture == "error"))
-                    || (matches!(text, "by" | "AS" | "as" | "from") && *capture == "variable")
+                } else if (matches!(
+                    text,
+                    "by" | "AS" | "as" | "from" | "datamodel" | "summariesonly"
+                ) && *capture == "variable")
+                    || (catalog.command(text).is_some()
+                        && (*capture == "variable" || *capture == "error"))
                 {
                     *capture = "keyword".into();
+                } else if looks_like_macro(text)
+                    || (*capture == "comment" && looks_like_macro(text))
+                {
+                    *capture = "macro".into();
+                } else if catalog.datamodel(text).is_some() && *capture == "variable" {
+                    *capture = "type".into();
+                } else if catalog.field(text).is_some() && *capture == "variable" {
+                    *capture = "property".into();
                 }
             }
             let refs: Vec<(ByteSpan, &str)> = owned
@@ -217,9 +330,12 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         "boolean" => Some("boolean"),
         "|" => Some("operator.pipe"),
         "catalog_command_name" => Some("keyword"),
+        "macro" => Some("macro"),
         "search" | "where" | "eval" | "stats" | "rex" | "table" | "rename" | "fields" | "dedup"
         | "sort" | "head" | "tail" | "join" | "lookup" | "makemv" | "mvexpand" | "tstats"
-        | "AS" | "by" | "from" => Some("keyword"),
+        | "AS" | "as" | "by" | "from" | "datamodel" | "summariesonly" | "TERM" | "CASE" | "IN" => {
+            Some("keyword")
+        }
         "identifier" => {
             if node.parent().map(|p| p.kind()) == Some("function_call") {
                 Some("function")
@@ -243,7 +359,7 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         _ => None,
     };
     if let Some(capture) = capture {
-        if node.child_count() == 0 || matches!(kind, "string" | "comment" | "number") {
+        if node.child_count() == 0 || matches!(kind, "string" | "comment" | "number" | "macro") {
             out.push((ByteSpan::new(node.start_byte(), node.end_byte()), capture));
         }
     }
@@ -253,29 +369,152 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
     }
 }
 
+fn looks_like_macro(text: &str) -> bool {
+    let t = text.trim();
+    t.starts_with('`') && t.ends_with('`') && !t.starts_with("```") && t.len() >= 3
+}
+
+fn complete_item(
+    label: impl Into<String>,
+    kind: &str,
+    detail: Option<String>,
+    docs: Option<String>,
+) -> CompletionItem {
+    let mut item = CompletionItem::new(label, kind);
+    if let Some(d) = detail {
+        item = item.with_detail(d);
+    }
+    if let Some(d) = docs {
+        item = item.with_docs(d);
+    }
+    item
+}
+
+fn last_command(before: &str) -> Option<String> {
+    let chunk = before
+        .rsplit('|')
+        .next()?
+        .trim_start()
+        .trim_start_matches('|')
+        .trim_start();
+    let op = chunk
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .next()?
+        .to_ascii_lowercase();
+    if op.is_empty() {
+        None
+    } else {
+        Some(op)
+    }
+}
+
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     let catalog = Catalog::load();
     let before = &source[..offset.min(source.len())];
+    let trimmed = before.trim_end();
+    if trimmed.ends_with('`') && !trimmed.ends_with("```") {
+        return catalog
+            .macros
+            .iter()
+            .map(|m| {
+                complete_item(
+                    format!("`{}`", m.name.trim_matches('`')),
+                    "macro",
+                    m.docs.clone(),
+                    m.docs.clone(),
+                )
+            })
+            .collect();
+    }
+    if trimmed.to_ascii_lowercase().ends_with("datamodel=") {
+        return catalog
+            .datamodels
+            .iter()
+            .map(|d| complete_item(d.name.clone(), "type", d.docs.clone(), d.docs.clone()))
+            .collect();
+    }
     if before.trim_end().ends_with('|') || before.ends_with("| ") {
         return catalog
             .commands
             .iter()
-            .map(|c| CompletionItem {
-                label: c.name.clone(),
-                detail: c.docs.clone(),
-                kind: "command".into(),
-            })
+            .map(|c| complete_item(c.name.clone(), "command", c.docs.clone(), c.docs.clone()))
             .collect();
+    }
+    if let Some(cmd) = last_command(before) {
+        if matches!(
+            cmd.as_str(),
+            "tstats" | "stats" | "where" | "table" | "fields" | "eval"
+        ) {
+            let mut items = Vec::new();
+            if let Some(dm) = catalog.active_datamodel(source) {
+                for f in &dm.fields {
+                    items.push(complete_item(
+                        format!("{}.{}", dm.prefix, f),
+                        "column",
+                        Some(format!("{} field", dm.name)),
+                        catalog.field(f).and_then(|row| row.docs.clone()),
+                    ));
+                    items.push(complete_item(
+                        f.clone(),
+                        "column",
+                        Some(format!("{} field", dm.name)),
+                        catalog.field(f).and_then(|row| row.docs.clone()),
+                    ));
+                }
+            }
+            for field in &catalog.fields {
+                items.push(complete_item(
+                    field.name.clone(),
+                    "column",
+                    Some(field.kind.clone().unwrap_or_else(|| "field".into())),
+                    field.docs.clone(),
+                ));
+            }
+            if cmd == "tstats" {
+                for m in &catalog.macros {
+                    items.push(complete_item(
+                        format!("`{}`", m.name.trim_matches('`')),
+                        "macro",
+                        m.docs.clone(),
+                        m.docs.clone(),
+                    ));
+                }
+            }
+            if !items.is_empty() {
+                return items;
+            }
+        }
     }
     catalog
         .functions
         .iter()
-        .map(|f| CompletionItem {
-            label: f.name.clone(),
-            detail: f.docs.clone(),
-            kind: "function".into(),
-        })
+        .map(|f| complete_item(f.name.clone(), "function", f.docs.clone(), f.docs.clone()))
         .collect()
+}
+
+fn spl_word_at(source: &str, offset: usize) -> Option<String> {
+    let bytes = source.as_bytes();
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut i = offset.min(bytes.len().saturating_sub(1));
+    while i > 0 && (bytes[i].is_ascii_alphanumeric() || matches!(bytes[i], b'_' | b'.' | b'`')) {
+        i -= 1;
+    }
+    if !(bytes[i].is_ascii_alphanumeric() || matches!(bytes[i], b'_' | b'`')) {
+        i += 1;
+    }
+    let mut j = offset.min(bytes.len());
+    while j < bytes.len()
+        && (bytes[j].is_ascii_alphanumeric() || matches!(bytes[j], b'_' | b'.' | b'`'))
+    {
+        j += 1;
+    }
+    if i >= j {
+        None
+    } else {
+        Some(source[i..j].to_string())
+    }
 }
 
 pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> {
@@ -298,27 +537,19 @@ pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> 
         }
         at
     };
-    let word = {
-        let bytes = source.as_bytes();
-        if bytes.is_empty() {
-            return None;
+    let word = spl_word_at(source, offset)?;
+    let macro_name = word.trim_matches('`');
+    if let Some(m) = catalog.macro_named(macro_name) {
+        let mut md = format!(
+            "**`{}`** (search macro)\n\n{}",
+            m.name,
+            m.docs.clone().unwrap_or_default()
+        );
+        if let Some(s) = &m.signature {
+            md.push_str(&format!("\n\n`{s}`"));
         }
-        let mut i = offset.min(bytes.len().saturating_sub(1));
-        while i > 0 && bytes[i].is_ascii_alphanumeric() {
-            i -= 1;
-        }
-        if !bytes[i].is_ascii_alphanumeric() {
-            i += 1;
-        }
-        let mut j = offset.min(bytes.len());
-        while j < bytes.len() && bytes[j].is_ascii_alphanumeric() {
-            j += 1;
-        }
-        if i >= j {
-            return None;
-        }
-        source[i..j].to_string()
-    };
+        return Some(md);
+    }
     if let Some(c) = catalog.command(&word) {
         let citation = c
             .citation
@@ -340,6 +571,129 @@ pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> 
             kind,
             f.docs.clone().unwrap_or_default()
         ));
+    }
+    if let Some(d) = catalog.datamodel(&word) {
+        return Some(format!(
+            "**{}** CIM data model (prefix `{}`)\n\n{}",
+            d.name,
+            d.prefix,
+            d.docs.clone().unwrap_or_default()
+        ));
+    }
+    if let Some(field) = catalog.field(&word) {
+        let models = field.models.join(", ");
+        let mut md = format!(
+            "**{}** field ({})\n\n{}",
+            field.name,
+            field.kind.as_deref().unwrap_or("cim"),
+            field.docs.clone().unwrap_or_default()
+        );
+        if !models.is_empty() {
+            md.push_str(&format!("\n\nModels: {models}"));
+        }
+        return Some(md);
+    }
+    None
+}
+
+pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
+    let catalog = Catalog::load();
+    let before = &source[..offset.min(source.len())];
+    if let Some(cmd) = last_command(before) {
+        if cmd == "tstats" {
+            return Some(SignatureHelp {
+                signatures: vec![SignatureInformation {
+                    label: "tstats [summariesonly=] <aggregates> [from datamodel=Model.Dataset] [where] [by]".into(),
+                    documentation: Some(
+                        "Statistical aggregation on indexed fields / accelerated datamodels."
+                            .into(),
+                    ),
+                    parameters: vec![
+                        ParameterInformation {
+                            label: "aggregates".into(),
+                            documentation: Some("count, min(_time) as firstTime, …".into()),
+                        },
+                        ParameterInformation {
+                            label: "from datamodel=".into(),
+                            documentation: Some("CIM path such as Endpoint.Processes.".into()),
+                        },
+                        ParameterInformation {
+                            label: "where".into(),
+                            documentation: Some("Predicate over prefixed CIM fields.".into()),
+                        },
+                        ParameterInformation {
+                            label: "by".into(),
+                            documentation: Some("Split-by fields (Processes.user, …).".into()),
+                        },
+                    ],
+                }],
+                active_signature: 0,
+                active_parameter: if before.to_ascii_lowercase().contains(" by ") {
+                    3
+                } else if before.to_ascii_lowercase().contains(" where ") {
+                    2
+                } else if before.to_ascii_lowercase().contains("datamodel=") {
+                    1
+                } else {
+                    0
+                },
+            });
+        }
+    }
+    let bytes = before.as_bytes();
+    let mut depth = 0i32;
+    let mut open = None;
+    for (i, b) in bytes.iter().enumerate().rev() {
+        match b {
+            b')' => depth += 1,
+            b'(' => {
+                if depth == 0 {
+                    open = Some(i);
+                    break;
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    let open = open?;
+    let mut i = open;
+    while i > 0 {
+        let c = bytes[i - 1];
+        if c.is_ascii_alphanumeric() || c == b'_' || c == b'`' {
+            i -= 1;
+        } else {
+            break;
+        }
+    }
+    let name = before[i..open].trim_matches('`').to_string();
+    if let Some(f) = catalog.function(&name) {
+        return Some(SignatureHelp {
+            signatures: vec![SignatureInformation {
+                label: format!("{}()", f.name),
+                documentation: f.docs.clone(),
+                parameters: vec![ParameterInformation {
+                    label: "args".into(),
+                    documentation: None,
+                }],
+            }],
+            active_signature: 0,
+            active_parameter: 0,
+        });
+    }
+    if let Some(m) = catalog.macro_named(&name) {
+        return Some(SignatureHelp {
+            signatures: vec![SignatureInformation {
+                label: m
+                    .signature
+                    .clone()
+                    .unwrap_or_else(|| format!("`{}`", m.name)),
+                documentation: m.docs.clone(),
+                parameters: Vec::new(),
+            }],
+            active_signature: 0,
+            active_parameter: 0,
+        });
     }
     None
 }
@@ -471,11 +825,10 @@ mod tests {
                 .map(|t| (t.capture.as_str(), slice(t)))
                 .collect::<Vec<_>>()
         );
-        assert!(
-            r.tokens
-                .iter()
-                .any(|t| t.capture == "keyword" && slice(t) == "head")
-        );
+        assert!(r
+            .tokens
+            .iter()
+            .any(|t| t.capture == "keyword" && slice(t) == "head"));
         assert!(r.tokens.iter().any(|t| t.capture == "operator.pipe"));
         assert!(
             r.tokens.iter().any(|t| {
@@ -487,5 +840,62 @@ mod tests {
                 .map(|t| (t.capture.as_str(), slice(t)))
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn macros_are_not_comments() {
+        let src = "| tstats `security_content_summariesonly` count from datamodel=Endpoint.Processes by Processes.user";
+        let r = analyze(src);
+        let pairs: Vec<(&str, &str)> = r
+            .tokens
+            .iter()
+            .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+            .collect();
+        assert!(
+            pairs
+                .iter()
+                .any(|(c, t)| *c == "macro" && t.contains("security_content_summariesonly")),
+            "{pairs:?}"
+        );
+        assert!(
+            !pairs
+                .iter()
+                .any(|(c, t)| *c == "comment" && t.contains("security_content_summariesonly")),
+            "macro must not highlight as comment: {pairs:?}"
+        );
+        assert!(
+            pairs
+                .iter()
+                .any(|(c, t)| *c == "property" && *t == "Processes.user")
+                || pairs
+                    .iter()
+                    .any(|(c, t)| *c == "variable" && t.contains("user")),
+            "{pairs:?}"
+        );
+        let h = hover(
+            src,
+            opentide_core::Position::new(0, (src.find("Processes.user").unwrap() + 11) as u32),
+        );
+        assert!(
+            h.as_deref().unwrap_or("").to_lowercase().contains("user"),
+            "{h:?}"
+        );
+        let items = completions(src, src.find("by ").unwrap() + 3);
+        assert!(
+            items
+                .iter()
+                .any(|i| i.label.contains("user") || i.label.contains("process_name")),
+            "{:?}",
+            items.iter().map(|i| &i.label).take(15).collect::<Vec<_>>()
+        );
+        let help = signature_help(src, src.find("tstats").unwrap() + 6).expect("tstats signature");
+        assert!(help.signatures[0].label.contains("tstats"));
+    }
+
+    #[test]
+    fn drop_dm_object_name_hover() {
+        let src = "index=main | `drop_dm_object_name(Processes)`";
+        let h = hover(src, opentide_core::Position::new(0, 16)).expect("macro hover");
+        assert!(h.contains("drop_dm_object_name"), "{h}");
     }
 }

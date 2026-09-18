@@ -5,7 +5,7 @@
 
 mod markdown;
 
-use opentide_core::{ByteSpan, LanguageId, Range, span_to_range};
+use opentide_core::{span_to_range, ByteSpan, LanguageId, Range};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -405,16 +405,25 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         .get("number")
         .map(|m| m.tm.as_str())
         .unwrap_or("constant.numeric");
-    let comment_match = if language == LanguageId::TideYaml {
-        "(?m)^\\s*#.*$"
-    } else {
-        "//.*$|```[^`]*```"
+    let comment_match = match language {
+        LanguageId::TideYaml => "(?m)^\\s*#.*$",
+        LanguageId::Kql => "//.*$|/\\*[\\s\\S]*?\\*/",
+        LanguageId::Spl => "```[^`]*```",
     };
     patterns.push(serde_json::json!({
         "name": comment_tm,
         "match": comment_match,
         "comment": "capture:comment",
     }));
+    if language == LanguageId::Spl {
+        if let Some(maps) = spec.captures.get("macro") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "`[A-Za-z_][A-Za-z0-9_]*(?:\\([^)`]*\\))?`",
+                "comment": "capture:macro",
+            }));
+        }
+    }
     patterns.push(serde_json::json!({
         "name": string_tm,
         "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
