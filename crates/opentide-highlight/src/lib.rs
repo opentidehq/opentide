@@ -5,7 +5,7 @@
 
 mod markdown;
 
-use opentide_core::{span_to_range, ByteSpan, LanguageId, Range};
+use opentide_core::{ByteSpan, LanguageId, Range, span_to_range};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};

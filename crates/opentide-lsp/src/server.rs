@@ -4,12 +4,12 @@
 use crate::jsonrpc::{self, Incoming};
 use anyhow::Result;
 use opentide_analysis::{
-    analyze, compiled_kql, compiled_spl, completions, hover, index_workspace, signature_help,
-    AnalyzeRequest, MemoryWorkspace, WorkspaceHost,
+    AnalyzeRequest, MemoryWorkspace, WorkspaceHost, analyze, compiled_kql, compiled_spl,
+    completions, hover, index_workspace, signature_help,
 };
-use opentide_core::{span_to_range, LanguageId, Position, Range};
+use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{BufReader, Write};
 use std::net::TcpListener;
@@ -530,17 +530,19 @@ fn handle_document_symbol(session: &Session, params: &Value) -> Value {
             text: text.clone(),
         },
     );
-    json!(response
-        .symbols
-        .iter()
-        .map(|s| json!({
-            "name": s.name,
-            "kind": 5,
-            "detail": s.detail,
-            "range": range_json(s.range),
-            "selectionRange": range_json(s.range)
-        }))
-        .collect::<Vec<_>>())
+    json!(
+        response
+            .symbols
+            .iter()
+            .map(|s| json!({
+                "name": s.name,
+                "kind": 5,
+                "detail": s.detail,
+                "range": range_json(s.range),
+                "selectionRange": range_json(s.range)
+            }))
+            .collect::<Vec<_>>()
+    )
 }
 
 fn handle_workspace_symbol(session: &Session, params: &Value) -> Value {
@@ -729,23 +731,25 @@ fn handle_selection_range(session: &Session, params: &Value) -> Value {
     };
     let last_line = text.lines().count().saturating_sub(1) as u32;
     let last_col = text.lines().last().map(|l| l.len() as u32).unwrap_or(0);
-    json!(positions
-        .iter()
-        .map(|p| {
-            json!({
-                "range": {
-                    "start": p,
-                    "end": p
-                },
-                "parent": {
+    json!(
+        positions
+            .iter()
+            .map(|p| {
+                json!({
                     "range": {
-                        "start": { "line": 0, "character": 0 },
-                        "end": { "line": last_line, "character": last_col }
+                        "start": p,
+                        "end": p
+                    },
+                    "parent": {
+                        "range": {
+                            "start": { "line": 0, "character": 0 },
+                            "end": { "line": last_line, "character": last_col }
+                        }
                     }
-                }
+                })
             })
-        })
-        .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    )
 }
 
 fn handle_custom_analyze(session: &Session, params: &Value) -> Value {

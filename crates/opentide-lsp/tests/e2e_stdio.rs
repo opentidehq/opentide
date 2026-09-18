@@ -1,6 +1,6 @@
 //! Protocol tests over stdio. The CLI never speaks JSON-RPC; `--stdio` does.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -216,11 +216,13 @@ fn initialize_and_analyze_kql() {
         "opentide/highlight",
         json!({ "language": "kql", "text": kql }),
     );
-    assert!(highlight["result"]["tokens"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|t| t["capture"] == "operator.pipe"));
+    assert!(
+        highlight["result"]["tokens"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["capture"] == "operator.pipe")
+    );
 
     lsp.request("shutdown", json!(null));
     lsp.notify("exit", json!({}));

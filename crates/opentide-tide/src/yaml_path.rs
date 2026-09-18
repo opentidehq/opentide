@@ -111,15 +111,15 @@ pub fn yaml_cursor(source: &str, offset: usize) -> YamlCursor {
             if is_block {
                 block_indent = Some(indent);
             }
+            let on_key = on_line && offset < key_end;
+            last = cursor_from_stack(
+                &stack,
+                Some(key.clone()),
+                on_key,
+                if on_key { None } else { Some(value.clone()) },
+                in_list,
+            );
             if on_line && found.is_none() {
-                let on_key = offset < key_end;
-                last = cursor_from_stack(
-                    &stack,
-                    Some(key.clone()),
-                    on_key,
-                    if on_key { None } else { Some(value.clone()) },
-                    in_list,
-                );
                 found = Some(last.clone());
             }
             if value.is_empty() || is_block {
@@ -252,5 +252,13 @@ configurations:
         assert_eq!(c.parent, "");
         assert_eq!(c.current_key.as_deref(), Some("description"));
         assert!(c.on_key);
+    }
+
+    #[test]
+    fn path_inside_description_block_keeps_current_key() {
+        let off = RULE.find("  hello").unwrap();
+        let c = yaml_cursor(RULE, off);
+        assert_eq!(c.current_key.as_deref(), Some("description"));
+        assert!(!c.on_key);
     }
 }

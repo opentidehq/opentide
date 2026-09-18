@@ -1,10 +1,10 @@
 //! I/O-free KQL engine. Catalogs are compiled in; no `std::fs`.
 
 use opentide_core::{
-    codes, span_to_range, ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation,
-    Range, SignatureHelp, SignatureInformation,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, SignatureHelp,
+    SignatureInformation, codes, span_to_range,
 };
-use opentide_highlight::{tokens_from_spans, HighlightSpec, HighlightToken};
+use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
 use tree_sitter::Node;
@@ -897,11 +897,7 @@ fn last_operator(before: &str) -> Option<String> {
         .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
         .next()?
         .to_ascii_lowercase();
-    if op.is_empty() {
-        None
-    } else {
-        Some(op)
-    }
+    if op.is_empty() { None } else { Some(op) }
 }
 
 const COLUMN_OPERATORS: &[&str] = &[
@@ -1325,10 +1321,11 @@ mod tests {
     #[test]
     fn control_command_is_unsupported() {
         let r = analyze(".show tables", Profile::Core);
-        assert!(r
-            .diagnostics
-            .iter()
-            .any(|d| d.code == codes::KQL_CONTROL_COMMAND_UNSUPPORTED));
+        assert!(
+            r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::KQL_CONTROL_COMMAND_UNSUPPORTED)
+        );
     }
 
     #[test]
@@ -1346,10 +1343,11 @@ mod tests {
     #[test]
     fn render_is_warning() {
         let r = analyze("SecurityEvent | render table", Profile::Core);
-        assert!(r
-            .diagnostics
-            .iter()
-            .any(|d| d.code == codes::KQL_RENDER_NOT_VALID));
+        assert!(
+            r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::KQL_RENDER_NOT_VALID)
+        );
     }
 
     #[test]

@@ -46,8 +46,14 @@
 "or" @operator
 "not" @operator
 "AS" @keyword
+"as" @keyword
 "by" @keyword
 "from" @keyword
+"where" @keyword
+"summariesonly" @keyword
+"prestats" @keyword
+"allow_old_summaries" @keyword
+"fillnull_value" @keyword
 "(" @punctuation.bracket
 ")" @punctuation.bracket
 "[" @punctuation.bracket

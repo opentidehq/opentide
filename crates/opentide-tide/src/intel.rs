@@ -1,10 +1,10 @@
 //! Path-aware Tide hover, completions, inlay hints, and completion resolve.
 
-use crate::vocabs::{bundled_vocabs, vocab_for_field};
-use crate::yaml_path::{object_schema_kind, yaml_cursor, YamlCursor};
 use crate::IndexedObject;
-use opentide_core::{offset_to_position, CompletionItem, Position};
-use opentide_highlight::{load_tide_fields, tide_field, TideField};
+use crate::vocabs::{bundled_vocabs, vocab_for_field};
+use crate::yaml_path::{YamlCursor, object_schema_kind, yaml_cursor};
+use opentide_core::{CompletionItem, Position, offset_to_position};
+use opentide_highlight::{TideField, load_tide_fields, tide_field};
 
 pub const STATUS_VALUES: &[&str] = &["STAGING", "DEVELOPMENT", "PRODUCTION", "DEPRECATED"];
 pub const SCHEMA_VALUES: &[&str] = &["rule::1.0", "objective::1.0", "threat::1.0"];
@@ -62,12 +62,26 @@ fn fields_for_parent(parent: &str, schema: &str) -> Vec<TideField> {
         .collect()
 }
 
+fn is_block_scalar_marker(value: &str) -> bool {
+    matches!(value, "|" | "|-" | "|+" | ">" | ">-" | ">+")
+        || value.starts_with('|')
+        || value.starts_with('>')
+}
+
+fn hover_markdown(field: &TideField, cursor: &YamlCursor) -> String {
+    let mut md = field_markdown(field);
+    if !cursor.path.is_empty() {
+        md.push_str(&format!("\n\nPath: `{}`", cursor.path.join(".")));
+    }
+    md
+}
+
 pub fn hover_tide(source: &str, offset: usize, workspace: &[IndexedObject]) -> Option<String> {
     let cursor = yaml_cursor(source, offset);
     if cursor.on_key {
         if let Some(name) = &cursor.current_key {
             if let Some(field) = tide_field(name) {
-                return Some(field_markdown(field));
+                return Some(hover_markdown(field, &cursor));
             }
         }
         return None;
@@ -76,7 +90,7 @@ pub fn hover_tide(source: &str, offset: usize, workspace: &[IndexedObject]) -> O
         .value
         .as_deref()
         .map(str::trim)
-        .filter(|v| !v.is_empty())
+        .filter(|v| !v.is_empty() && !is_block_scalar_marker(v))
     {
         if let Some(uuid) = extract_uuid(value) {
             if let Some(o) = workspace.iter().find(|o| o.uuid == uuid) {
@@ -102,6 +116,11 @@ pub fn hover_tide(source: &str, offset: usize, workspace: &[IndexedObject]) -> O
                     return Some(format!("**{value}** (Tide object schema)"));
                 }
             }
+        }
+    }
+    if let Some(name) = &cursor.current_key {
+        if let Some(field) = tide_field(name) {
+            return Some(hover_markdown(field, &cursor));
         }
     }
     None
@@ -357,5 +376,20 @@ detection_model: 00000000-0000-4000-8002-000000000001
         assert!(items.iter().any(|i| i.label == "amber"), "{items:?}");
         assert!(items.iter().all(|i| i.kind == "enum"), "{items:?}");
         assert!(!items.iter().any(|i| i.label == "High"));
+    }
+
+    #[test]
+    fn hover_on_key_includes_yaml_path() {
+        let off = RULE.find("description:").unwrap();
+        let md = hover_tide(RULE, off, &[]).expect("hover");
+        assert!(md.contains("Path: `description`"), "{md}");
+    }
+
+    #[test]
+    fn hover_inside_markdown_block_falls_back_to_field_docs() {
+        let off = RULE.find("  hello").unwrap();
+        let md = hover_tide(RULE, off, &[]).expect("block hover");
+        assert!(md.contains("Description"), "{md}");
+        assert!(md.contains("Path: `description`"), "{md}");
     }
 }

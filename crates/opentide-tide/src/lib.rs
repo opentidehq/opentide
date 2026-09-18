@@ -7,10 +7,10 @@ mod intel;
 mod vocabs;
 mod yaml_path;
 
-use opentide_core::{codes, span_to_range, ByteSpan, Diagnostic, LanguageId, Range};
+use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
 use opentide_highlight::{
-    highlight_markdown_line, tide_field_is_markdown, tide_key_capture, tokens_from_spans,
-    HighlightSpec, HighlightToken,
+    HighlightSpec, HighlightToken, highlight_markdown_line, tide_field_is_markdown,
+    tide_key_capture, tokens_from_spans,
 };
 use opentide_kql::Profile;
 use regex::Regex;
@@ -19,11 +19,11 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 pub use intel::{
-    completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion, TideInlay,
-    STATUS_VALUES,
+    STATUS_VALUES, TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints,
+    resolve_completion,
 };
-pub use vocabs::{bundled_vocabs, vocab_for_field, Vocab, VocabKey};
-pub use yaml_path::{object_schema_kind, uuid_span, yaml_cursor, YamlCursor};
+pub use vocabs::{Vocab, VocabKey, bundled_vocabs, vocab_for_field};
+pub use yaml_path::{YamlCursor, object_schema_kind, uuid_span, yaml_cursor};
 
 const RULE_SCHEMA: &str = include_str!("../../../catalogs/tide/schemas/rule.1.0.schema.json");
 const OBJECTIVE_SCHEMA: &str =
@@ -1366,10 +1366,11 @@ configurations:
         );
         let purpose_keys = token_text(src, &r.tokens, "tide.property");
         assert!(purpose_keys.contains(&"purpose"), "{purpose_keys:?}");
-        assert!(r
-            .diagnostics
-            .iter()
-            .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED));
+        assert!(
+            r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED)
+        );
     }
 
     #[test]
@@ -1428,10 +1429,11 @@ threat:
             source: src,
             workspace: &[],
         });
-        assert!(r
-            .diagnostics
-            .iter()
-            .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED));
+        assert!(
+            r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::CROWDSTRIKE_UNSUPPORTED)
+        );
     }
 
     #[test]
