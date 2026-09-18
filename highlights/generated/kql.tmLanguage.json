@@ -1,6 +1,6 @@
 {
   "name": "OpenTide kql",
-  "opentideHighlightSpec": "0.1.0",
+  "opentideHighlightSpec": "0.2.0",
   "patterns": [
     {
       "comment": "capture:comment",

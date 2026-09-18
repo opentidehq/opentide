@@ -32,6 +32,9 @@ editors / @opentide/lsp-client / WASM worker
 | `configurations.splunk.query` | SPL |
 | `configurations.splunk.search` (legacy) | SPL |
 | `configurations.crowdstrike.*` | unsupported (`None`) |
+| `description` / `procedure.analysis` / `recommendation` / other `markdown = true` fields | Markdown (HighlightSpec `markdown.*`) |
+
+YAML keys are captured from [`catalogs/tide/fields.toml`](../catalogs/tide/fields.toml) (pydantic-aligned). Capture rename in HighlightSpec is a **major**; adding `markdown.*` / `macro` is a minor (`0.2.0`).
 
 ## Diagnostics
 

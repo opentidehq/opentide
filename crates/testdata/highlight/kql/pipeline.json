@@ -185,6 +185,14 @@
     "tide.keyword",
     "tide.property",
     "tide.uuid",
-    "tide.schema"
+    "tide.schema",
+    "markdown.heading",
+    "markdown.emphasis",
+    "markdown.strong",
+    "markdown.code",
+    "markdown.link",
+    "markdown.list",
+    "markdown.quote",
+    "macro"
   ]
 }

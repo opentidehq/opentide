@@ -4,7 +4,10 @@
 //! with real source ranges. OpenTide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::{
+    HighlightSpec, HighlightToken, highlight_markdown_line, tide_field_is_markdown,
+    tide_key_capture, tokens_from_spans,
+};
 use opentide_kql::Profile;
 use regex::Regex;
 use serde::Deserialize;
@@ -842,14 +845,7 @@ fn push_span(
 }
 
 fn key_capture(key: &str) -> &'static str {
-    match key {
-        "name" | "metadata" | "description" | "status" | "severity" | "techniques"
-        | "detection_model" | "response" | "configurations" | "objective" | "threat"
-        | "composition" | "criticality" | "references" | "procedure" => "tide.keyword",
-        "uuid" | "schema" | "version" | "created" | "modified" | "tlp" | "author"
-        | "organisation" | "query" | "search" | "enabled" | "system" | "purpose" => "tide.property",
-        _ => "property",
-    }
+    tide_key_capture(key)
 }
 
 fn highlight_scalar(
@@ -907,13 +903,17 @@ fn highlight_scalar(
     push_span(spans, skip, start, end, capture);
 }
 
+fn is_yaml_key_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || matches!(c, '_' | '&' | '-')
+}
+
 fn line_key(line: &str) -> Option<(&str, &str, usize, usize)> {
     let body = line.trim_end_matches(['\n', '\r']);
     let indent = body.bytes().take_while(|b| *b == b' ').count();
     let rest = body.get(indent..)?;
     let colon = rest.find(':')?;
     let key = &rest[..colon];
-    if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+    if key.is_empty() || !key.chars().all(is_yaml_key_char) {
         return None;
     }
     Some((key, &rest[colon + 1..], indent, indent + key.len()))
@@ -938,6 +938,7 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
     let mut in_block = false;
     let mut block_indent = 0usize;
     let mut block_is_injected = false;
+    let mut block_is_markdown = false;
     let mut byte = 0usize;
     for line in source.split_inclusive('\n') {
         let indent = line.bytes().take_while(|b| *b == b' ').count();
@@ -945,12 +946,31 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
         if in_block && !trimmed.is_empty() && indent <= block_indent {
             in_block = false;
             block_is_injected = false;
+            block_is_markdown = false;
         }
 
         if !in_block && trimmed.starts_with('#') {
             if let Some(hash) = line.find('#') {
                 let end = byte + line.trim_end_matches(['\n', '\r']).len();
                 push_span(&mut spans, skip, byte + hash, end, "comment");
+            }
+            byte += line.len();
+            continue;
+        }
+
+        // Block-scalar bodies are literal text, never nested YAML keys.
+        if in_block {
+            if !block_is_injected && !trimmed.is_empty() {
+                let body = line.trim_end_matches(['\n', '\r']);
+                if block_is_markdown {
+                    for (span, cap) in highlight_markdown_line(byte, body) {
+                        push_span(&mut spans, skip, span.start, span.end, cap);
+                    }
+                } else {
+                    let content_start = byte + indent.min(line.len());
+                    let content_end = byte + body.len();
+                    push_span(&mut spans, skip, content_start, content_end, "string");
+                }
             }
             byte += line.len();
             continue;
@@ -964,6 +984,16 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
                 byte + key_end,
                 key_capture(key),
             );
+            let colon_at = byte + key_end;
+            if source.as_bytes().get(colon_at) == Some(&b':') {
+                push_span(
+                    &mut spans,
+                    skip,
+                    colon_at,
+                    colon_at + 1,
+                    "punctuation.delimiter",
+                );
+            }
             let rest_off = key_end + 1;
             let is_block = {
                 let t = rest_text.trim();
@@ -980,18 +1010,9 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
                 in_block = true;
                 block_indent = indent;
                 block_is_injected = matches!(key, "query" | "search");
+                block_is_markdown = !block_is_injected && tide_field_is_markdown(key);
             } else {
                 highlight_scalar(&mut spans, skip, byte + rest_off, rest_text, &vocab);
-            }
-            byte += line.len();
-            continue;
-        }
-
-        if in_block {
-            if !block_is_injected && !trimmed.is_empty() {
-                let content_start = byte + indent.min(line.len());
-                let content_end = byte + line.trim_end_matches(['\n', '\r']).len();
-                push_span(&mut spans, skip, content_start, content_end, "string");
             }
             byte += line.len();
             continue;
@@ -1001,7 +1022,7 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
             let dash = byte + indent;
             push_span(&mut spans, skip, dash, dash + 1, "punctuation");
             if let Some((key, rest)) = item.split_once(':') {
-                if !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                if !key.is_empty() && key.chars().all(is_yaml_key_char) {
                     let key_start = byte + indent + 2;
                     push_span(
                         &mut spans,
@@ -1009,6 +1030,14 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
                         key_start,
                         key_start + key.len(),
                         key_capture(key),
+                    );
+                    let colon_at = key_start + key.len();
+                    push_span(
+                        &mut spans,
+                        skip,
+                        colon_at,
+                        colon_at + 1,
+                        "punctuation.delimiter",
                     );
                     highlight_scalar(&mut spans, skip, key_start + key.len() + 1, rest, &vocab);
                 } else {
@@ -1418,6 +1447,89 @@ threat:
             workspace: &[],
         });
         assert!(r.diagnostics.iter().any(|d| d.code == codes::FILENAME_SLUG));
+    }
+
+    #[test]
+    fn markdown_description_uses_markdown_captures() {
+        let src = r#"
+name: Markdown Rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000099
+  schema: rule::1.0
+description: |-
+  #### MDR Technical Details
+  Aggregates `DeviceFileEvents` to flag hosts.
+  - Threshold: `PathThreshold = 15`
+  1. Review the sample paths
+response:
+  alert_severity: High
+  procedure:
+    analysis: |-
+      1. Review the sample paths
+configurations:
+  defender_for_endpoint:
+    enabled: true
+    alert:
+      title: Hello
+      recommendation: |-
+        Isolate the `host`
+    scheduling:
+      frequency: PT1H
+"#;
+        let r = analyze(AnalyzeInput {
+            path: "objects/rules/markdown-rule.yaml",
+            source: src,
+            workspace: &[],
+        });
+        let pairs: Vec<(&str, &str)> = r
+            .tokens
+            .iter()
+            .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+            .collect();
+        assert!(
+            pairs
+                .iter()
+                .any(|(c, t)| *c == "markdown.heading" && t.contains("####")),
+            "{pairs:?}"
+        );
+        assert!(
+            pairs
+                .iter()
+                .any(|(c, t)| *c == "markdown.code" && t.contains("DeviceFileEvents")),
+            "{pairs:?}"
+        );
+        assert!(
+            pairs.iter().any(|(c, _)| *c == "markdown.list"),
+            "{pairs:?}"
+        );
+        assert!(
+            pairs
+                .iter()
+                .any(|(c, t)| *c == "tide.property" && *t == "alert"),
+            "alert should be a Tide property, got {pairs:?}"
+        );
+        assert!(
+            pairs
+                .iter()
+                .any(|(c, t)| *c == "tide.keyword" && *t == "defender_for_endpoint"),
+            "{pairs:?}"
+        );
+        assert!(
+            pairs
+                .iter()
+                .any(|(c, t)| *c == "tide.property" && *t == "scheduling"),
+            "{pairs:?}"
+        );
+        assert!(
+            pairs
+                .iter()
+                .any(|(c, t)| *c == "tide.property" && *t == "recommendation"),
+            "{pairs:?}"
+        );
+        assert!(
+            !pairs.iter().any(|(c, t)| *c == "property" && *t == "alert"),
+            "alert must not fall through to generic property: {pairs:?}"
+        );
     }
 
     #[test]
