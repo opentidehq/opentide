@@ -6,10 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-18
+
+Minor on the public 0.1.8 beta. Upgrade if you generate templates or VS Code snippets — optional YAML now hugs `#` to each key, spacers stay blank, and rule `configurations` are commented platform stubs rather than `{}`.
+
 ### Changed
 
 - `opentide generate templates` walks Pydantic `FieldInfo` instead of the JSON Schema `gen_template` walker. Optional sections are commented YAML blocks (`#` hugs each key; nested optionals are not commented again; spacer blanks stay blank), placeholders are typed (no `null`), nested bodies come from nested models, and rule `configurations` are commented platform stubs rather than `{}` ([#223](https://github.com/OpenTideHQ/opentide/issues/223)).
 - VS Code snippet conversion treats commented nested keys as mapping children, so `configurations:` with only `#sentinel:` stubs is not turned into a tabstop.
+
+### Install
+
+```bash
+pip install opentide==0.2.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.1.8] — 2026-09-16
 
@@ -213,7 +225,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.0
 [0.1.8]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.8
 [0.1.7]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.7
 [0.1.6]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.6
