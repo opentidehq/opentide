@@ -106,6 +106,8 @@ def test_generate_core_templates_never_emit_yaml_null(tmp_path: Path) -> None:
         assert "created: YYYY-MM-DD" in text
         assert "#author:" in text
         assert "#author: null" not in text
+        assert re.search(r"(?m)^[ ]*#[ ]*$", text) is None, key
+        assert re.search(r"(?m)^[ ]*#[ ]+#", text) is None, key
 
 
 def test_generate_core_template_threat_nested_description_is_multiline(tmp_path: Path) -> None:

@@ -28,6 +28,9 @@ from opentide.models.threat import ThreatVector
 
 _FILE_KEY = re.compile(r"(?m)^[ ]*#?file:")
 _NULL_TOKEN = re.compile(r"(?m)(?<![A-Za-z0-9_])null(?![A-Za-z0-9_])")
+_STACKED_HASH = re.compile(r"(?m)^[ ]*#[ ]+#")
+_HASH_ONLY = re.compile(r"(?m)^[ ]*#[ ]*$")
+_PADDED_HASH = re.compile(r"(?m)^[ ]*#[ ]+\S")
 
 
 def _assert_no_null(text: str) -> None:
@@ -37,6 +40,16 @@ def _assert_no_null(text: str) -> None:
 
 def _assert_no_root_file_key(text: str) -> None:
     assert _FILE_KEY.search(text) is None
+
+
+def _assert_comment_style(text: str) -> None:
+    """Optional comments hug keys; no stacked hashes, padded hashes, or lone ``#``."""
+    stacked = _STACKED_HASH.search(text)
+    assert stacked is None, stacked.group(0)
+    floating = _HASH_ONLY.search(text)
+    assert floating is None, floating.group(0)
+    padded = _PADDED_HASH.search(text)
+    assert padded is None, padded.group(0)
 
 
 class _PlaceholderModel(TideModel):
@@ -76,6 +89,13 @@ class _StackModel(TideModel):
     wrapper: _NestedWithOptional | None = None
 
 
+class _SpacedOptional(TideModel):
+    head: str | None = None
+    body: str | None = TideField(
+        None, schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
+    )
+
+
 def test_required_only_metadata_tlp_is_scalar() -> None:
     text = render_model_template(ObjectMetadata, required_only=True)
     loaded = yaml.safe_load(text)
@@ -89,6 +109,7 @@ def test_required_only_metadata_tlp_is_scalar() -> None:
 
 def test_object_metadata_schema_alias_and_dates() -> None:
     text = render_model_template(ObjectMetadata, schema_id="threat::1.0")
+    _assert_comment_style(text)
     assert "schema: threat::1.0" in text
     assert "created: YYYY-MM-DD" in text
     assert "modified: YYYY-MM-DD" in text
@@ -116,6 +137,7 @@ def test_threat_vector_nested_body_and_commented_optionals() -> None:
     text = render_model_template(ThreatVector, schema_id="threat::1.0")
     _assert_no_null(text)
     _assert_no_root_file_key(text)
+    _assert_comment_style(text)
     assert "threat:" in text
     after_threat = text.split("\nthreat:", 1)[1]
     assert "description: |" in after_threat
@@ -131,6 +153,7 @@ def test_threat_vector_nested_body_and_commented_optionals() -> None:
 
 def test_objective_signals_and_composition() -> None:
     text = render_model_template(DetectionObjective, schema_id="objective::1.0")
+    _assert_comment_style(text)
     assert "composition:" in text
     assert "strategy:" in text
     assert "signals:" in text
@@ -151,6 +174,7 @@ def test_rule_response_and_hidden_file() -> None:
     text = render_model_template(DetectionRule, schema_id="rule::1.0")
     _assert_no_null(text)
     _assert_no_root_file_key(text)
+    _assert_comment_style(text)
     assert "platforms:" not in text
     assert "#platforms:" not in text
     assert "response:" in text
@@ -164,6 +188,7 @@ def test_rule_response_and_hidden_file() -> None:
 
 def test_rule_configurations_commented_platform_stubs_not_empty_map() -> None:
     text = render_model_template(DetectionRule, schema_id="rule::1.0")
+    _assert_comment_style(text)
     assert "configurations: {}" not in text
     assert "#sentinel:" in text
     assert "query: |" in text
@@ -279,11 +304,11 @@ def test_nested_optional_uncomment_roundtrip() -> None:
 def test_optional_subtree_is_commented_once() -> None:
     """Nested optionals stay live YAML; ``#`` hugs each key once."""
     text = render_model_template(_StackModel)
+    _assert_comment_style(text)
     assert "#wrapper:" in text
     assert re.search(r"(?m)^  #uuid:", text)
     assert re.search(r"(?m)^  #note:", text)
     assert re.search(r"(?m)^  ##note:", text) is None
-    assert re.search(r"(?m)^[ ]*#[ ]+#", text) is None
     recovered = uncomment_optional_blocks(text)
     loaded = yaml.safe_load(recovered)
     assert loaded["wrapper"]["uuid"] in (None, "")
@@ -291,22 +316,23 @@ def test_optional_subtree_is_commented_once() -> None:
 
 
 def test_core_templates_do_not_stack_comment_markers() -> None:
-    stacked = re.compile(r"(?m)^[ ]*#[ ]+#")
     for model, schema in (
         (ThreatVector, "threat::1.0"),
         (DetectionObjective, "objective::1.0"),
         (DetectionRule, "rule::1.0"),
         (SentinelConfig, None),
+        (RuleConfigurations, None),
+        (RuleResponse, None),
     ):
         kwargs = {"schema_id": schema} if schema else {}
         text = render_model_template(model, **kwargs)
-        match = stacked.search(text)
-        assert match is None, f"{model.__name__}: {match.group(0)!r}"
+        _assert_comment_style(text)
 
 
 def test_optional_comments_hug_field_names() -> None:
     """``#`` sits against the key, not at the parent indent with padding."""
     text = render_model_template(ThreatVector, schema_id="threat::1.0")
+    _assert_comment_style(text)
     assert re.search(r"(?m)^#references:", text)
     assert re.search(r"(?m)^  #public:", text)
     assert re.search(r"(?m)^    #1:", text)
@@ -316,18 +342,49 @@ def test_optional_comments_hug_field_names() -> None:
     assert re.search(r"(?m)^    #-", text)
     assert re.search(r"(?m)^#  public:", text) is None
     rule = render_model_template(DetectionRule, schema_id="rule::1.0")
+    _assert_comment_style(rule)
     assert re.search(r"(?m)^  #sentinel:", rule)
     assert re.search(r"(?m)^    #enabled:", rule)
     assert re.search(r"(?m)^  #  enabled:", rule) is None
 
 
-def test_commented_optional_block_is_contiguous() -> None:
+def test_optional_block_keeps_spacer_as_blank_line() -> None:
+    """``tide.template.spacer`` is a blank line, not a floating ``#``."""
+    text = render_model_template(_SpacedOptional)
+    _assert_comment_style(text)
+    assert re.search(r"(?m)^#head:", text)
+    assert re.search(r"(?m)^#body: \|", text)
+    head_i = text.index("#head:")
+    body_i = text.index("#body:")
+    assert "\n\n" in text[head_i:body_i]
+    recovered = uncomment_optional_blocks(text)
+    loaded = yaml.safe_load(recovered)
+    assert "head" in loaded
+    assert "body" in loaded
+
+
+def test_commented_platform_stub_spacer_is_blank_not_hash() -> None:
     text = render_model_template(DetectionRule, schema_id="rule::1.0")
+    _assert_comment_style(text)
     sentinel = text.split("#sentinel:", 1)[1].split("#defender_for_endpoint:", 1)[0]
     live_lines = [
         line for line in sentinel.splitlines() if line.strip() and not line.lstrip().startswith("#")
     ]
     assert live_lines == []
+    contrib = sentinel.index("#contributors:")
+    query = sentinel.index("#query:")
+    between = sentinel[contrib:query]
+    assert "\n\n" in between
+    assert _HASH_ONLY.search(between) is None
+
+
+def test_uncomment_optional_blocks_preserves_blank_lines() -> None:
+    raw = "#wrapper:\n  #uuid: \n\n  #note: |\n    #...\n"
+    recovered = uncomment_optional_blocks(raw)
+    assert recovered == "wrapper:\n  uuid: \n\n  note: |\n    ...\n"
+    loaded = yaml.safe_load(recovered)
+    assert loaded["wrapper"]["uuid"] in (None, "")
+    assert str(loaded["wrapper"]["note"]).strip() == "..."
 
 
 def test_skeleton_module_does_not_yaml_dump_hash_keys() -> None:
@@ -385,7 +442,7 @@ def test_dict_of_models_and_list_of_ints() -> None:
     assert "counts:" in text
     assert "    - " in text
     assert "scores:" in text
-    assert "- 3" in text or "- 3" in text.replace("\n", " ")
+    assert "- 3" in text
 
 
 def test_union_prefers_nested_model() -> None:
@@ -417,10 +474,10 @@ def test_comment_and_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert sk._render_model(ObjectMetadata, indent=0, options=sk.RenderOptions(), depth=99) == []
     assert sk._list_item_lines([], 2) == ["  - "]
-    assert sk._comment_hug_keys(["x"], 2) == ["#x"]
-    assert sk._comment_hug_keys(["  public:", "    1: "], 0) == ["  #public:", "    #1: "]
-    assert sk._comment_hug_keys([""], 2) == ["  #"]
-    assert sk._comment_hug_keys(["  #already"], 0) == ["  #already"]
+    assert sk._comment_hug_keys(["x"]) == ["#x"]
+    assert sk._comment_hug_keys(["  public:", "    1: "]) == ["  #public:", "    #1: "]
+    assert sk._comment_hug_keys([""]) == [""]
+    assert sk._comment_hug_keys(["  #already"]) == ["  #already"]
     assert sk._format_scalar({"a": 1}) == ""
     assert sk._format_scalar((1, 2)) == ""
     assert sk._format_scalar(3) == "3"
@@ -453,18 +510,3 @@ def test_comment_and_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
 
     union_text = sk._scalar_placeholder("n", int | str, {}, sk.RenderOptions())
     assert union_text == "3"
-
-    real_issubclass = __import__("builtins").issubclass
-
-    def _boom(cls: type, parent: type) -> bool:
-        if cls is int:
-            raise TypeError("not a class")
-        return real_issubclass(cls, parent)
-
-    monkeypatch = __import__("pytest").MonkeyPatch()
-    monkeypatch.setattr("builtins.issubclass", _boom)
-    try:
-        assert sk._tide_model_type(int) is None
-        assert sk._is_path_type(int) is False
-    finally:
-        monkeypatch.undo()

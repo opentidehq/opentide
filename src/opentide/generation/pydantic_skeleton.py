@@ -166,7 +166,7 @@ def _render_field(
         depth=depth,
     )
     if comment_now:
-        value_lines = _comment_hug_keys(value_lines, indent)
+        value_lines = _comment_hug_keys(value_lines)
     return value_lines
 
 
@@ -394,19 +394,17 @@ def _concrete_default(field: FieldInfo) -> Any:
     return default
 
 
-def _comment_hug_keys(lines: list[str], indent: int) -> list[str]:
+def _comment_hug_keys(lines: list[str]) -> list[str]:
     """Insert ``#`` immediately before the first non-space token on each line.
 
     Nested optionals must already be live YAML in *lines*; this is the only
-    ``#`` for the block. Blank spacer lines become a ``#`` at the field
-    indent so a commented optional block stays contiguous for editor
-    uncomment.
+    ``#`` for the block. Blank spacer lines stay blank — a lone ``#`` is not
+    a field and should not float in the template.
     """
     commented: list[str] = []
-    prefix = " " * indent
     for line in lines:
         if not line.strip():
-            commented.append(f"{prefix}#")
+            commented.append("")
             continue
         spaces = len(line) - len(line.lstrip(" "))
         rest = line[spaces:]

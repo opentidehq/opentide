@@ -78,7 +78,7 @@ YAML skeletons are rendered from Pydantic `FieldInfo` (`render_model_template`).
 | TP-09 | `VocabField` / `tide.vocab` → empty scalar (no enum dump) | `_scalar_placeholder` |
 | TP-10 | Non-null default is the placeholder (`STAGING`); still commented if optional | `_concrete_default` |
 | TP-11 | Boolean placeholder is `false` unless a default is set | `_scalar_placeholder` |
-| TP-12 | `tide.template.spacer` inserts a blank line before the field | `_wants_spacer` |
+| TP-12 | `tide.template.spacer` inserts a blank line before the field; that blank stays blank when the parent block is commented (no lone `#`) | `_wants_spacer` |
 | TP-13 | `serialization_alias` / `alias` is the YAML key (`att&ck`, `schema`) | `_yaml_key` |
 | TP-14 | Platform templates are emitted at indent 2 from `write_model_template` | `write_model_template` |
 | TP-15 | `run()` writes FieldInfo YAML for core objects and enabled platforms | `template_renderer.run` |

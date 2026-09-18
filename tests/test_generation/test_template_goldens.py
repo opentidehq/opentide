@@ -16,6 +16,18 @@ PLATFORM_GOLDENS = (
     ROOT / "src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates"
 )
 
+_STACKED_HASH = re.compile(r"(?m)^[ ]*#[ ]+#")
+_HASH_ONLY = re.compile(r"(?m)^[ ]*#[ ]*$")
+_PADDED_HASH = re.compile(r"(?m)^[ ]*#[ ]+\S")
+
+
+def _assert_comment_style(text: str) -> None:
+    assert "null" not in text
+    assert _STACKED_HASH.search(text) is None
+    assert _HASH_ONLY.search(text) is None
+    assert _PADDED_HASH.search(text) is None
+
+
 CORE_FILES = {
     "threat": "threat.1.0.template.yaml",
     "objective": "objective.1.0.template.yaml",
@@ -40,8 +52,7 @@ def test_core_template_goldens_match_renderer() -> None:
         rendered = render_model_template(model, schema_id=model.schema_identifier())
         expected = (CORE_GOLDENS / filename).read_text(encoding="utf-8")
         assert rendered == expected, filename
-        assert "null" not in rendered
-        assert re.search(r"(?m)^[ ]*#[ ]+#", rendered) is None
+        _assert_comment_style(rendered)
 
 
 def test_platform_template_goldens_match_renderer() -> None:
@@ -50,9 +61,8 @@ def test_platform_template_goldens_match_renderer() -> None:
         expected = (PLATFORM_GOLDENS / filename).read_text(encoding="utf-8")
         rendered = render_model_template(model, indent=2)
         assert rendered == expected, filename
-        assert "null" not in rendered
+        _assert_comment_style(rendered)
         assert "configurations: {}" not in rendered
-        assert re.search(r"(?m)^[ ]*#[ ]+#", rendered) is None
 
 
 def test_platform_models_cover_golden_files() -> None:

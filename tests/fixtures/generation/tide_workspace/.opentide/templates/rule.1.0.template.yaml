@@ -53,7 +53,7 @@ configurations:
       #- 
     #contributors:
       #- 
-  #
+
     #query: |
       #...
     #scheduling:
@@ -119,7 +119,7 @@ configurations:
       #- 
     #contributors:
       #- 
-  #
+
     #query: |
       #...
     #alert:
@@ -180,7 +180,7 @@ configurations:
       #- 
     #contributors:
       #- 
-  #
+
     #query: |
       #...
     #scheduling:
@@ -303,7 +303,7 @@ configurations:
       #lookback: 
       #start: 
       #end: 
-  #
+
     #query: |
       #...
     #rule_id_bundle:
@@ -364,7 +364,7 @@ configurations:
       #- 
     #contributors:
       #- 
-  #
+
     #query: |
       #...
     #organizations:
