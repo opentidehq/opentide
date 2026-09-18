@@ -14,5 +14,5 @@
   "tide:.opentide/schemas/visibility.1.0.schema.json": "fe98467b3b51256dbc14a22773a433766b5f5e8441a2e5e395bd8bafd6e53097",
   "tide:.opentide/templates/objective.1.0.template.yaml": "9ee27b932321d25d81e7d3867dedddfbcdad39fb1029f43284e1e65bb902fc82",
   "tide:.opentide/templates/rule.1.0.template.yaml": "0fe0a4ae3ebe8ea54602ec6a10d50c6629d744fcf81afbd45f669fd48b018407",
-  "tide:.opentide/templates/threat.1.0.template.yaml": "6d28521d5f4c76b18b97de905cddba736a57d2e52f1b6893dc109fe901e42efd"
+  "tide:.opentide/templates/threat.1.0.template.yaml": "c43f9779e90f14e85df0ad6f798092a9463bc72aebd7d42a054e5af91069ff1b"
 }

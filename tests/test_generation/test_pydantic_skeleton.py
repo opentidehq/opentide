@@ -146,6 +146,7 @@ def test_threat_vector_nested_body_and_commented_optionals() -> None:
     assert "#actors:" in after_threat
     assert "#killchain:" in after_threat
     assert "#chaining:" in after_threat
+    assert "#cve:" in after_threat
     loaded = yaml.safe_load(text)
     assert "actors" not in loaded["threat"]
     assert loaded["metadata"]["schema"] == "threat::1.0"
