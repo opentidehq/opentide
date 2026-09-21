@@ -217,6 +217,7 @@ class DocumentationCatalog:
                 chain = fw.chain_resolver(vector, chain)
             chain = fw.chain_resolver(threat_uuid, chain)
         except Exception:
+            # Best-effort: an incomplete chain is still useful for the diagram.
             pass
         for entry in self.chaining_entries(threat_uuid):
             relation = entry.relation or "related"
@@ -346,12 +347,14 @@ class DocumentationCatalog:
                 if fw.get_type(child_uuid, mute=True) == "rule":
                     downstream.add(child_uuid)
         except Exception:
+            # Best-effort: skip signals the framework cannot classify.
             pass
         try:
             relations = fw.relations_list(signal_uuid, mode="flat", direction="downstream")
             for rule_uuid in relations.get("rule", []):
                 downstream.add(rule_uuid)
         except Exception:
+            # Best-effort: skip signals with unreadable relation graphs.
             pass
         known = {record.uuid for record in self.rules}
         return sorted(uid for uid in downstream if uid in known) or sorted(downstream)

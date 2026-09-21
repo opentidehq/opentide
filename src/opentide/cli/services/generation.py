@@ -81,12 +81,14 @@ def run_generate_phase(phase: str) -> None:
         from opentide.indexing.inflight import run as generate_inflight
 
         emit_section("Inflight preview shard generation")
-        return generate_inflight()
+        generate_inflight()
+        return
     if phase == "inflight-prune":
         from opentide.indexing.inflight import run_prune as prune_inflight
 
         emit_section("Inflight preview shard prune")
-        return prune_inflight()
+        prune_inflight()
+        return
     if phase == "docs":
         from opentide.documentation.cli import run as run_docs
 

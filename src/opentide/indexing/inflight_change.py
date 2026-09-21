@@ -100,6 +100,7 @@ def collect_change_metadata(yaml_path: Path | str) -> dict[str, Any]:
                 data.setdefault("recorded_at", datetime.now(timezone.utc).isoformat())
                 return data
         except json.JSONDecodeError:
+            # Invalid override JSON; fall back to CI environment metadata.
             pass
 
     source_path = _normalise_source_path(yaml_path)

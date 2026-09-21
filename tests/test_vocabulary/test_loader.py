@@ -262,7 +262,7 @@ def test_field_from_vocab_path() -> None:
 
 def test_validate_field_matches_path() -> None:
     with pytest.raises(VocabularyLoadError, match="does not match filename"):
-        _ = validate_field_matches_path({"field": "wrong"}, Path("impact.vocab.toml"))
+        validate_field_matches_path({"field": "wrong"}, Path("impact.vocab.toml"))
 
 
 def test_strip_spurious_entry_id() -> None:

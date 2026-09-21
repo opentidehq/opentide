@@ -11,41 +11,59 @@ class MarkdownFormatter(Protocol):
 
     flavor: str
 
-    def heading(self, level: int, text: str) -> str: ...
+    def heading(self, level: int, text: str) -> str:
+        pass
 
-    def paragraph(self, text: str) -> str: ...
+    def paragraph(self, text: str) -> str:
+        pass
 
-    def code_block(self, language: str, body: str) -> str: ...
+    def code_block(self, language: str, body: str) -> str:
+        pass
 
-    def fold(self, summary: str, body: str) -> str: ...
+    def fold(self, summary: str, body: str) -> str:
+        pass
 
-    def link(self, text: str, target: str, title: str | None = None) -> str: ...
+    def link(self, text: str, target: str, title: str | None = None) -> str:
+        pass
 
-    def wiki_link(self, text: str, target: str) -> str: ...
+    def wiki_link(self, text: str, target: str) -> str:
+        pass
 
-    def table(self, headers: list[str], rows: list[list[str]]) -> str: ...
+    def table(self, headers: list[str], rows: list[list[str]]) -> str:
+        pass
 
-    def index_table(self, headers: list[str], rows: list[list[str]]) -> str: ...
+    def index_table(self, headers: list[str], rows: list[list[str]]) -> str:
+        pass
 
-    def strike(self, text: str) -> str: ...
+    def strike(self, text: str) -> str:
+        pass
 
-    def frontmatter(self, title: str, **meta: str) -> str: ...
+    def frontmatter(self, title: str, **meta: str) -> str:
+        pass
 
-    def mermaid_fence(self, diagram: str) -> str: ...
+    def mermaid_fence(self, diagram: str) -> str:
+        pass
 
-    def table_of_contents(self) -> str: ...
+    def table_of_contents(self) -> str:
+        pass
 
-    def page_filename(self, slug: str, uuid: str | None) -> str: ...
+    def page_filename(self, slug: str, uuid: str | None) -> str:
+        pass
 
-    def diagram_relations_type(self) -> Literal["mindmap", "flowchart", "graph"]: ...
+    def diagram_relations_type(self) -> Literal["mindmap", "flowchart", "graph"]:
+        pass
 
-    def diagram_chaining_type(self) -> Literal["flowchart", "graph"]: ...
+    def diagram_chaining_type(self) -> Literal["flowchart", "graph"]:
+        pass
 
-    def diagram_supports_subgraphs(self) -> bool: ...
+    def diagram_supports_subgraphs(self) -> bool:
+        pass
 
-    def diagram_flowchart(self, diagram: str) -> str: ...
+    def diagram_flowchart(self, diagram: str) -> str:
+        pass
 
-    def diagram_mindmap(self, diagram: str) -> str: ...
+    def diagram_mindmap(self, diagram: str) -> str:
+        pass
 
 
 @dataclass(frozen=True)
