@@ -7,6 +7,29 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.3.0 — 21 September 2026
+
+Minor maintenance on 0.2.1. **Upgrade for current runtime and toolchain floors (cryptography 50.x, typer 0.27) and a clean GitHub Code Quality pass.**
+
+**Install**
+
+```bash
+pip install opentide==0.3.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What this version changes**
+
+- Recreated stale Dependabot uv upgrades on current trunk ([#235](https://github.com/OpenTideHQ/opentide/pull/235)): cryptography 50.0.1 (CVE-2026-69247), dulwich 1.2.15, typer 0.27.2 (extra `all` removed; rich/shellingham/colorama are default deps), syrupy 5.5.3, ruff 0.16.8, ty 0.0.82 (dev extra only).
+- Cleared GitHub Code Quality findings from the CodeQL `python-code-quality` suite ([#236](https://github.com/OpenTideHQ/opentide/pull/236)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.3.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.3.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.2.1 — 18 September 2026
 
 Patch on 0.2.0. **Upgrade if you validate `threat.cve` identifiers or generate threat documentation that should link to CIRCL Vulnerability-Lookup.**

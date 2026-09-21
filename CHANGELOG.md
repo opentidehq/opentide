@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-21
+
+Minor maintenance release on the public 0.2.1 beta. Upgrade for current runtime and toolchain floors (cryptography 50.x, typer 0.27) and a clean GitHub Code Quality pass.
+
+### Changed
+
+- Recreated stale Dependabot uv upgrades on current trunk ([#235](https://github.com/OpenTideHQ/opentide/pull/235)): cryptography **50.0.1** (CVE-2026-69247), dulwich **1.2.15**, typer **0.27.2** (extra `all` was removed in 0.27; rich/shellingham/colorama are default deps), syrupy **5.5.3** (stay on 5.x), ruff **0.16.8**, ty **0.0.82** (dev extra only; `typing_extensions` stays a runtime dependency).
+- Cleared GitHub Code Quality findings from the CodeQL `python-code-quality` suite ([#236](https://github.com/OpenTideHQ/opentide/pull/236)).
+
+### Install
+
+```bash
+pip install opentide==0.3.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.2.1] — 2026-09-18
 
 Patch on the public 0.2.0 beta. Upgrade if you validate `threat.cve` identifiers or generate threat documentation that should link to CIRCL Vulnerability-Lookup.
@@ -246,7 +263,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.3.0
 [0.2.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.1
 [0.2.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.0
 [0.1.8]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.1.8
