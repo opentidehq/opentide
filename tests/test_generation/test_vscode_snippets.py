@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from opentide.generation.vscode_snippets import run, vs_code_snippet_generator
+from opentide.generation import vscode_snippets
 
 
 def _mock_opentide_for_snippets(
@@ -50,7 +50,7 @@ def _mock_opentide_for_snippets(
 def test_vs_code_snippet_generator_reads_template(tmp_path: Path) -> None:
     template = tmp_path / "rule.yaml"
     template.write_text("name: Example\n", encoding="utf-8")
-    snippet = vs_code_snippet_generator(template, "tide-rule")
+    snippet = vscode_snippets.vs_code_snippet_generator(template, "tide-rule")
     assert snippet["prefix"] == "tide-rule"
     assert snippet["scope"] == "yaml"
     assert snippet["description"] == "tide-rule"
@@ -63,7 +63,7 @@ def test_vs_code_snippet_generator_tabstops_empty_values(tmp_path: Path) -> None
         "name: \nmetadata:\n  uuid: \n  created: YYYY-MM-DD\n  #author: \n  description: |\n    ...\n",
         encoding="utf-8",
     )
-    snippet = vs_code_snippet_generator(
+    snippet = vscode_snippets.vs_code_snippet_generator(
         template, "tide-rule", description="Detection Rules Template"
     )
     assert snippet["description"] == "Detection Rules Template"
@@ -87,7 +87,7 @@ def test_vs_code_snippet_generator_keeps_commented_mapping_children(
         "configurations:\n  #sentinel:\n    #query: |\n      #...\n",
         encoding="utf-8",
     )
-    snippet = vs_code_snippet_generator(template, "tide-rule")
+    snippet = vscode_snippets.vs_code_snippet_generator(template, "tide-rule")
     body = "\n".join(snippet["body"])
     assert "configurations:" in body
     assert "configurations: ${" not in body
@@ -103,7 +103,7 @@ def test_vs_code_snippet_generator_blank_between_commented_children(
         "configurations:\n\n  #sentinel:\n    #query: |\n      #...\n",
         encoding="utf-8",
     )
-    snippet = vs_code_snippet_generator(template, "tide-rule")
+    snippet = vscode_snippets.vs_code_snippet_generator(template, "tide-rule")
     body = "\n".join(snippet["body"])
     assert "configurations:" in body
     assert "configurations: ${" not in body
@@ -112,7 +112,7 @@ def test_vs_code_snippet_generator_blank_between_commented_children(
 def test_vs_code_snippet_generator_prepends_blank_lines(tmp_path: Path) -> None:
     template = tmp_path / "objective.yaml"
     template.write_text("objective:\n", encoding="utf-8")
-    snippet = vs_code_snippet_generator(template, "tide-objective", blanks=2)
+    snippet = vscode_snippets.vs_code_snippet_generator(template, "tide-objective", blanks=2)
     assert snippet["body"][0] == ""
     assert snippet["body"][1] == ""
     assert "objective:" in snippet["body"][-1]
@@ -124,7 +124,7 @@ def test_run_uses_legacy_subschemas_when_platform_templates_missing(tmp_path: Pa
         core=SimpleNamespace(subschemas=str(tmp_path / "legacy-subschemas")),
     )
     with patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot):
-        run()
+        vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
     assert "Detection Rules Template" in payload
     entry = payload["Detection Rules Template"]
@@ -139,7 +139,7 @@ def test_run_uses_platform_templates_when_subschemas_missing(tmp_path: Path) -> 
         core=SimpleNamespace(platform_templates=str(tmp_path / "platform_templates")),
     )
     with patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot):
-        run()
+        vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
     assert "Detection Rules Template" in payload
     assert payload["Detection Rules Template"]["body"] == ["name: Example"]
@@ -160,7 +160,7 @@ def test_run_raises_when_enabled_platform_template_missing(tmp_path: Path) -> No
         patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot),
         pytest.raises(FileNotFoundError, match="platform sentinel"),
     ):
-        run()
+        vscode_snippets.run()
 
 
 def test_run_raises_when_core_template_missing(tmp_path: Path) -> None:
@@ -173,7 +173,7 @@ def test_run_raises_when_core_template_missing(tmp_path: Path) -> None:
         patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot),
         pytest.raises(FileNotFoundError, match="core rule"),
     ):
-        run()
+        vscode_snippets.run()
 
 
 def test_run_emits_enabled_platform_snippets(tmp_path: Path) -> None:
@@ -190,7 +190,7 @@ def test_run_emits_enabled_platform_snippets(tmp_path: Path) -> None:
         },
     )
     with patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot):
-        run()
+        vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
     key = "MDR Systems Deployment : Microsoft Sentinel Template"
     assert key in payload
@@ -206,12 +206,10 @@ def test_run_honors_snippets_path_override(tmp_path: Path) -> None:
         core=SimpleNamespace(platform_templates=str(tmp_path / "platform_templates")),
     )
     override = tmp_path / "custom" / "override.code-snippets"
-    import opentide.generation.vscode_snippets as vscode_snippets
-
     vscode_snippets.SNIPPETS_PATH = str(override)
     try:
         with patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot):
-            run()
+            vscode_snippets.run()
         assert override.is_file()
         payload = json.loads(override.read_text(encoding="utf-8"))
         assert "Detection Rules Template" in payload
@@ -226,10 +224,9 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
 
     from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
     from opentide.core.registry import OpenTide
-    from opentide.generation import vscode_snippets as vscode_snippets_mod
     from opentide.generation.pydantic_templates import generate_core_template
 
-    vscode_snippets_mod.SNIPPETS_PATH = None
+    vscode_snippets.SNIPPETS_PATH = None
     fresh = tmp_path / "fresh"
     run_repo_setup(RepoSetupOptions(path=fresh, name="Fresh", yes=True))
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(fresh))
@@ -245,7 +242,7 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
         yaml_text = path.read_text(encoding="utf-8")
         assert re.search(r"(?m)^[ ]*#[ ]*$", yaml_text) is None
         assert re.search(r"(?m)^[ ]*#[ ]+#", yaml_text) is None
-    run()
+    vscode_snippets.run()
     snippets = fresh / ".vscode" / "model-templates.code-snippets"
     assert snippets.is_file()
     payload = json.loads(snippets.read_text(encoding="utf-8"))

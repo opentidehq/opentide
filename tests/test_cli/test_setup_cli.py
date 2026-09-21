@@ -303,8 +303,6 @@ def test_setup_vscode_snippets_command_fails_without_templates(tmp_path) -> None
 
 def test_setup_ci_none_alone_is_not_noop(tmp_path, monkeypatch) -> None:
     """Only --ci none should not silently succeed with zero steps."""
-    import importlib
-
     setup_module = importlib.import_module("opentide.cli.setup_app")
     monkeypatch.setattr(
         setup_module,

@@ -48,7 +48,13 @@ class ManifestLoadResult:
     manifest_refreshed: bool
 
 
-_manifest_cache: tuple[float, ManifestLoadResult] | None = None
+class _ManifestTtlCache:
+    """In-process TTL cache for the live skills catalogue."""
+
+    item: tuple[float, ManifestLoadResult] | None = None
+
+
+_MANIFEST_CACHE = _ManifestTtlCache()
 
 
 def fetch_github_bytes(
@@ -68,8 +74,7 @@ def fetch_github_bytes(
 
 def clear_manifest_cache() -> None:
     """Clear the in-process manifest TTL cache (for tests)."""
-    global _manifest_cache
-    _manifest_cache = None
+    _MANIFEST_CACHE.item = None
 
 
 def _normalise_source(raw: object) -> str:
@@ -119,12 +124,12 @@ def _fetch_remote_manifest(*, ref: str = _DEFAULT_REF) -> tuple[str, str, list[S
 
 def load_manifest(*, refresh: bool = False) -> ManifestLoadResult:
     """Load the live skills catalogue. Never falls back to packaged skill trees."""
-    global _manifest_cache
     now = time.monotonic()
-    if not refresh and _manifest_cache is not None:
-        cached_at, cached = _manifest_cache
+    cached = _MANIFEST_CACHE.item
+    if not refresh and cached is not None:
+        cached_at, result = cached
         if now - cached_at < _CACHE_TTL_SECONDS:
-            return cached
+            return result
 
     remote = _fetch_remote_manifest()
     if remote is None:
@@ -143,7 +148,7 @@ def load_manifest(*, refresh: bool = False) -> ManifestLoadResult:
         manifest_source="remote",
         manifest_refreshed=refresh,
     )
-    _manifest_cache = (now, result)
+    _MANIFEST_CACHE.item = (now, result)
     return result
 
 

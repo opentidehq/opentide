@@ -124,12 +124,6 @@ def test_chaining_network_walks_inbound_index() -> None:
         "Cloud Discovery Follow-up",
         MagicMock(threat=MagicMock(killchain=["Impact"])),
     )
-    catalog = DocumentationCatalog(
-        rules=[],
-        objectives=[],
-        threats=[bundle.catalog.threats[0], follow],
-        signals=[],
-    )
     inbound = {"other-threat": {"succeeds": [bundle.threat.metadata.uuid]}}
     other = DocumentRecord(
         DocumentScope.threats,

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 from opentide.core.logging import get_logger
 from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
