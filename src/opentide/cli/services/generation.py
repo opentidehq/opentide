@@ -20,7 +20,8 @@ logger = structlog.get_logger("opentide.cli.services.generation")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
-# User-visible outputs first, then framework internals. Extract is opt-in only.
+# User-visible outputs first, then framework internals. Extract and explorer
+# JSON export are opt-in (`opentide generate explorer` / `opentide explorer build`).
 _PHASE_ORDER: tuple[str, ...] = (
     "docs",
     "exports",

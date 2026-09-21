@@ -96,6 +96,7 @@ def test_render_github_explorer_pages_jobs() -> None:
     assert "explorer:" in workflow
     assert "deploy-explorer:" in workflow
     assert "OPENTIDE_EXPLORER_PATH" in workflow
+    assert "opentide explorer build" in workflow
     assert "actions/deploy-pages@v4" in workflow
     assert "concurrency:" in workflow
     assert "HAS_GITHUB_APP" in workflow

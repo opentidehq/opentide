@@ -68,6 +68,18 @@ def test_run_generate_docs_phase(monkeypatch: pytest.MonkeyPatch) -> None:
     run_docs.assert_called_once()
 
 
+def test_run_generate_explorer_phase(monkeypatch: pytest.MonkeyPatch) -> None:
+    export = MagicMock()
+    monkeypatch.setattr("opentide.export.explorer_export.run", export)
+    generation.run_generate_phase(GeneratePhase.explorer)
+    export.assert_called_once()
+
+
+def test_explorer_is_not_in_default_pipeline() -> None:
+    assert "explorer" not in generation._PHASE_ORDER
+    assert GeneratePhase.explorer.value == "explorer"
+
+
 def test_run_generate_all_runs_every_phase(monkeypatch: pytest.MonkeyPatch) -> None:
     called: list[str] = []
 
