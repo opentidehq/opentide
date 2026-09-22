@@ -63,6 +63,11 @@ def _commit_and_push(*, message: str, empty_note: str, push: str, fetch: str) ->
     )
 
 
+#: The default branch commit the shards were copied from; kept in ``.git`` so
+#: it survives between CI steps and is never committed.
+_SHARDS_BASE = '"$(git rev-parse --git-path opentide-inflight-base)"'
+
+
 def _default_branch_shards(default_ref: str) -> list[str]:
     """Start from exactly the default branch's shards, not the PR head's copy.
 
@@ -71,12 +76,13 @@ def _default_branch_shards(default_ref: str) -> list[str]:
     """
     return [
         "rm -rf .opentide/inflight",
-        f'git checkout "{default_ref}" -- .opentide/inflight 2>/dev/null '
+        f'git rev-parse "{default_ref}" > {_SHARDS_BASE}',
+        f'git checkout "$(cat {_SHARDS_BASE})" -- .opentide/inflight 2>/dev/null '
         "|| mkdir -p .opentide/inflight",
     ]
 
 
-def _publish_on_default_branch(*, default_ref: str, push: str, fetch: str) -> str:
+def _publish_on_default_branch(*, push: str, fetch: str) -> str:
     """Commit the regenerated shards on top of the default branch, never on the PR.
 
     The job checks out the PR (or, on Azure, its merge commit) to see the
@@ -85,6 +91,11 @@ def _publish_on_default_branch(*, default_ref: str, push: str, fetch: str) -> st
     only ``.opentide/inflight/`` is carried into a worktree of the default
     branch and committed there.
 
+    The worktree starts from the commit the shards were copied from, not the
+    default branch's current tip: ``generate inflight`` fetches ``origin`` on a
+    staging plan, and a newer base would make the commit delete every shard
+    published in between. The push then rebases onto the latest tip.
+
     The ``EXIT`` trap removes that worktree on every path out of the script:
     nothing to publish, a failed rebase under ``set -e``, or the final push.
     """
@@ -92,7 +103,7 @@ def _publish_on_default_branch(*, default_ref: str, push: str, fetch: str) -> st
         [
             'shards_repo="$PWD"',
             'shards_base="$(mktemp -d)"',
-            f'git worktree add --detach "$shards_base" "{default_ref}"',
+            f'git worktree add --detach "$shards_base" "$(cat {_SHARDS_BASE})"',
             'trap \'cd "$shards_repo" && git worktree remove --force "$shards_base"\' EXIT',
             'rm -rf "$shards_base/.opentide/inflight"',
             'mkdir -p "$shards_base/.opentide"',
@@ -128,7 +139,6 @@ def github_inflight_job(
     ).lstrip()
     commit_push = textwrap.indent(
         _publish_on_default_branch(
-            default_ref=default_ref,
             push=f'git push origin "HEAD:{default_branch}"',
             fetch=f"git fetch origin {default_branch}",
         ),
@@ -234,7 +244,7 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
     default_ref = "origin/$CI_DEFAULT_BRANCH"
     checkout_inflight = "".join(f"    - {cmd}\n" for cmd in _default_branch_shards(default_ref))
     commit_push = textwrap.indent(
-        _publish_on_default_branch(default_ref=default_ref, push=GITLAB_PUSH, fetch=GITLAB_FETCH),
+        _publish_on_default_branch(push=GITLAB_PUSH, fetch=GITLAB_FETCH),
         " " * 6,
     ).lstrip()
     return (
@@ -322,7 +332,6 @@ def azure_inflight_job(*, python_version: str, opentide_version: str, default_br
             'git config user.email "azure-pipelines@opentide.local"',
             'git config user.name "azure-pipelines"',
             _publish_on_default_branch(
-                default_ref=default_ref,
                 push=f"git push origin HEAD:{default_branch}",
                 fetch=f"git fetch origin {default_branch}",
             ),

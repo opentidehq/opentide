@@ -373,6 +373,15 @@ def _main_tree(origin: Path) -> set[str]:
     return set(_git(origin, "ls-tree", "-r", "--name-only", "main").splitlines())
 
 
+def _published(origin: Path, base: str, branch: str = "main") -> list[str]:
+    """Paths *branch* changed since *base*.
+
+    Shards often share a body, so rename detection would report a deleted
+    shard plus a new one as a single rename and hide the deletion.
+    """
+    return _git(origin, "diff", "--no-renames", "--name-only", base, branch).splitlines()
+
+
 def _worktrees(work: Path) -> list[str]:
     porcelain = _git(work, "worktree", "list", "--porcelain")
     return [line for line in porcelain.splitlines() if line.startswith("worktree ")]
@@ -413,8 +422,7 @@ def test_pr_shard_job_publishes_only_shards_to_the_default_branch(
     _run_pr_job(ci, script, ci_git, "feature")
 
     assert _git(origin, "rev-parse", "main~1") == main_before, "main gained more than one commit"
-    changed = _git(origin, "diff", "--name-only", main_before, "main").splitlines()
-    assert changed == [_NEW_SHARD]
+    assert _published(origin, main_before) == [_NEW_SHARD]
     assert _PR_OBJECT not in _main_tree(origin)
     assert _git(origin, "rev-parse", "feature") != _git(origin, "rev-parse", "main")
 
@@ -493,11 +501,38 @@ def test_pr_shard_job_rebases_when_the_default_branch_moves(
     work, _ = _run_pr_job(ci, _pr_job_script(ci, parsed, generate=race), ci_git, "feature")
 
     assert _git(origin, "rev-parse", "main~1") == _git(dev, "rev-parse", "main")
-    assert _git(origin, "diff", "--name-only", "main~1", "main").splitlines() == [_NEW_SHARD]
+    assert _published(origin, "main~1") == [_NEW_SHARD]
     tree = _main_tree(origin)
     assert {_NEW_SHARD, other_shard} <= tree
     assert _PR_OBJECT not in tree
     assert len(_worktrees(work)) == 1, _worktrees(work)
+
+
+@pytest.mark.parametrize("ci", sorted(_PIPELINES))
+def test_pr_shard_job_keeps_shards_that_land_while_it_generates(
+    invoke_cli, tmp_path: Path, ci_git: dict[str, Any], ci: str
+) -> None:
+    """``generate inflight`` fetches ``origin`` on a staging plan, moving ``origin/main``.
+
+    The publish worktree was then built on the newer ``main`` but filled with
+    the shards copied before the fetch, so the push fast-forwarded and deleted
+    every shard another PR had published in between.
+    """
+    _, parsed = _render(invoke_cli, tmp_path, ci, _PIPELINES[ci])
+    dev, origin = ci_git["dev"], ci_git["origin"]
+    _seed_pr(ci_git)
+    other_shard = ".opentide/inflight/1111-other-pr.json"
+    _commit(dev, "ci: another PR's shards", {other_shard: "{}\n"})
+    generate = (
+        f"printf '{{}}\\n' > {_NEW_SHARD}"
+        f" && git -C {shlex.quote(str(dev))} push -q origin main"
+        " && git fetch -q origin"
+    )
+
+    _run_pr_job(ci, _pr_job_script(ci, parsed, generate=generate), ci_git, "feature")
+
+    assert _published(origin, "main~1") == [_NEW_SHARD]
+    assert {_NEW_SHARD, other_shard} <= _main_tree(origin)
 
 
 @pytest.mark.parametrize("ci", sorted(_PIPELINES))
@@ -558,5 +593,5 @@ def test_pipeline_targets_the_detected_default_branch(
     _run_pr_job(ci, _pr_job_script(ci, parsed), ci_git, "feature", target="development")
 
     assert _git(origin, "rev-parse", "development~1") == trunk_before
-    changed = _git(origin, "diff", "--name-only", trunk_before, "development").splitlines()
+    changed = _published(origin, trunk_before, "development")
     assert changed == [_NEW_SHARD]
