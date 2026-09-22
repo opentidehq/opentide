@@ -180,6 +180,9 @@ class _GitLayout:
     hooks_dir: Path
     #: Workspace path below ``top_level``; empty when the workspace is the root.
     relative: str
+    #: The hooks directory lies outside this repository, as with a user-wide
+    #: ``core.hooksPath``, so a hook there runs for other repositories too.
+    hooks_shared: bool = False
 
 
 def _git_layout(target: Path) -> _GitLayout | None:
@@ -190,7 +193,16 @@ def _git_layout(target: Path) -> _GitLayout | None:
     """
     try:
         probe = subprocess.run(
-            ["git", "-C", str(target), "rev-parse", "--show-toplevel", "--git-path", "hooks"],
+            [
+                "git",
+                "-C",
+                str(target),
+                "rev-parse",
+                "--show-toplevel",
+                "--git-path",
+                "hooks",
+                "--git-common-dir",
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -198,18 +210,31 @@ def _git_layout(target: Path) -> _GitLayout | None:
     except OSError:
         return None
     lines = probe.stdout.splitlines()
-    if probe.returncode != 0 or len(lines) != 2:
+    if probe.returncode != 0 or len(lines) != 3:
         return None
     top_level = Path(lines[0]).resolve()
     try:
         relative = target.resolve().relative_to(top_level).as_posix()
     except ValueError:
         return None
+    hooks_dir = (target / lines[1]).resolve()
+    common_dir = (target / lines[2]).resolve()
     return _GitLayout(
         top_level=top_level,
-        hooks_dir=(target / lines[1]).resolve(),
+        hooks_dir=hooks_dir,
         relative="" if relative == "." else relative,
+        hooks_shared=not (
+            hooks_dir.is_relative_to(top_level) or hooks_dir.is_relative_to(common_dir)
+        ),
     )
+
+
+def _shown(dest: Path, target: Path) -> str:
+    """*dest* relative to *target* when both are on one drive, else absolute."""
+    try:
+        return Path(os.path.relpath(dest, target)).as_posix()
+    except ValueError:
+        return dest.as_posix()
 
 
 #: Entries written before the hook pinned ``--repo``; refreshed in place so an
@@ -360,7 +385,7 @@ def _refresh_root_pre_commit_config(
             f"({layout.top_level}); copy the opentide-validate hook there to use pre-commit."
         )
         return None, False
-    shown = Path(os.path.relpath(dest, target)).as_posix()
+    shown = _shown(dest, target)
     refreshed, kept = _refresh_hook_entry(text, layout.relative, layout.top_level)
     warnings.extend(_kept_pin_warning(shown, pin, layout.relative) for pin in kept)
     if refreshed is None:
@@ -445,7 +470,14 @@ def _install_git_hook(
         warnings.append("Not a Git repository; wrote hook files without installing .git/hooks.")
         return None, False
     dest = layout.hooks_dir / "pre-commit"
-    shown = Path(os.path.relpath(dest, target)).as_posix()
+    shown = _shown(dest, target)
+    if layout.hooks_shared:
+        warnings.append(
+            f"core.hooksPath points outside this repository ({layout.hooks_dir.as_posix()}), "
+            "so a hook there would run for every repository that uses it; left unchanged. "
+            f"Call {VERSIONED_HOOK_PATH} from your shared hook, or use pre-commit."
+        )
+        return None, False
     existing = dest.read_text(encoding="utf-8") if dest.is_file() else None
     if existing is not None and not _is_managed_hook(existing):
         warnings.append(

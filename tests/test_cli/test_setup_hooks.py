@@ -551,3 +551,56 @@ def test_linked_worktree_installs_the_shared_hook(tmp_path: Path) -> None:
 
     assert result["installed"] is True, result
     assert HOOK_MARKER in (hooks_dir / "pre-commit").read_text(encoding="utf-8")
+
+
+def test_a_user_wide_hooks_path_is_left_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A global ``core.hooksPath`` serves every repository on the machine.
+
+    The hook fails where it finds no workspace, so installing it there broke
+    commits in every unrelated repository.
+    """
+    shared = tmp_path / "shared-hooks"
+    shared.mkdir()
+    gitconfig = tmp_path / "gitconfig"
+    gitconfig.write_text(f"[core]\n\thooksPath = {shared.as_posix()}\n", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(gitconfig))
+    repo = tmp_path / "repo"
+    _git_init(repo)
+
+    result = run_hooks_setup(HooksSetupOptions(path=repo, yes=True, install=True))
+
+    assert not list(shared.iterdir())
+    assert result["installed"] is False
+    assert any("core.hooksPath" in warning for warning in result["warnings"]), result
+    assert (repo / ".opentide" / "hooks" / "pre-commit").is_file()
+
+
+def test_a_hooks_path_inside_the_repository_still_gets_the_hook(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "config", "core.hooksPath", ".githooks"], check=True
+    )
+
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=True))
+
+    assert result["installed"] is True, result
+    assert HOOK_MARKER in (tmp_path / ".githooks" / "pre-commit").read_text(encoding="utf-8")
+
+
+def test_a_hooks_directory_on_another_drive_does_not_crash_setup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows ``os.path.relpath`` raises when the two paths are on different drives."""
+    _git_init(tmp_path)
+
+    def _cross_drive(path: str, start: str | None = None) -> str:
+        raise ValueError(f"path is on mount 'D:', start on mount 'C:': {path}")
+
+    monkeypatch.setattr(os.path, "relpath", _cross_drive)
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=True))
+
+    assert result["installed"] is True, result
+    hook = (tmp_path / ".git" / "hooks" / "pre-commit").resolve().as_posix()
+    assert hook in result["files"]
