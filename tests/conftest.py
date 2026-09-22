@@ -18,6 +18,8 @@ for path in (SRC, ROOT):
 
 os.environ.setdefault("TERM_PROGRAM", "vscode")
 
+pytest_plugins = ["tests.corpus_support"]
+
 _repo_patcher: patch | None = None
 _original_find_repo_root = None
 

@@ -5,6 +5,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from opentide.core.object_fields import (
+    as_body,
+    matches_actor,
+    matches_platform,
+    matches_technique,
+    object_techniques,
+)
 from opentide.core.registry import OpenTide
 
 _UUID_RE = re.compile(
@@ -40,12 +47,17 @@ def search_catalog(
     status: str = "",
     technique: str = "",
     actor: str = "",
-) -> list[dict[str, Any]] | dict[str, Any]:
-    """Search catalogue by UUID, keyword, or ATT&CK technique."""
+) -> list[dict[str, Any]]:
+    """Search catalogue by UUID, keyword, or ATT&CK technique.
+
+    Always returns a list of summary dicts; a UUID query yields at most one hit.
+    """
     ensure_initialised()
     if _UUID_RE.match(query.strip()):
         found = get_object(query.strip())
-        return found if found is not None else []
+        if found is None:
+            return []
+        return [object_summary(found["uuid"], found["type"], as_body(found["body"]))]
     query_lower = query.lower()
     results: list[dict[str, Any]] = []
     for bucket_type, bucket in [
@@ -55,22 +67,15 @@ def search_catalog(
     ]:
         if object_type and object_type != bucket_type:
             continue
-        for uuid, body in bucket.items():
-            if not isinstance(body, dict):
-                body = body.model_dump(by_alias=True) if hasattr(body, "model_dump") else {}
+        for uuid, entry in bucket.items():
+            body = as_body(entry)
             if status and body.get("status") != status:
                 continue
-            if technique:
-                tags = body.get("tags", {})
-                techniques = tags.get("techniques", []) if isinstance(tags, dict) else []
-                if technique not in techniques and technique not in body.get("techniques", []):
-                    continue
-            if actor:
-                tags = body.get("tags", {})
-                actors = tags.get("actors", []) if isinstance(tags, dict) else []
-                if actor.lower() not in {str(a).lower() for a in actors}:
-                    continue
-            if platform and platform not in str(body.get("configurations", {})).lower():
+            if not matches_technique(body, technique):
+                continue
+            if not matches_actor(body, actor):
+                continue
+            if not matches_platform(body, platform):
                 continue
             haystack = f"{uuid} {body.get('title', '')} {body.get('name', '')} {body.get('description', '')}".lower()
             if query_lower in haystack:
@@ -96,19 +101,15 @@ def get_chaining_graph(uuid: str) -> dict[str, Any]:
 def coverage_analysis(*, technique: str = "", tactic: str = "") -> dict[str, Any]:
     ensure_initialised()
     covered: dict[str, list[str]] = {}
-    for uuid, body in OpenTide.Models.rules.items():
-        if not isinstance(body, dict):
-            body = body.model_dump(by_alias=True) if hasattr(body, "model_dump") else {}
-        tags = body.get("tags", {})
-        techniques = (
-            tags.get("techniques", []) if isinstance(tags, dict) else body.get("techniques", [])
-        )
-        for tech in techniques or []:
-            covered.setdefault(str(tech), []).append(uuid)
+    for uuid, entry in OpenTide.Models.rules.items():
+        for tech in sorted(object_techniques(entry)):
+            covered.setdefault(tech, []).append(uuid)
     if technique:
+        needle = technique.strip()
+        matched = next((key for key in covered if key.lower() == needle.lower()), None)
         return {
-            "technique": technique,
-            "covered": technique in covered,
-            "rules": covered.get(technique, []),
+            "technique": needle,
+            "covered": matched is not None,
+            "rules": covered.get(matched, []) if matched else [],
         }
     return {"technique_count": len(covered), "matrix": covered, "tactic_filter": tactic or None}

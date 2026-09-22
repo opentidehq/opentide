@@ -64,8 +64,8 @@ unit_marker='not cli_e2e and not cli_smoke'
 if [[ "$mode" == "full" ]]; then
   uv run pytest tests/ -q -m "$unit_marker"
   uv run coverage report
-  echo "==> CLI E2E pytest"
-  uv run pytest tests/test_cli/e2e/ -m "cli_e2e or cli_smoke" -q --no-cov
+  echo "==> E2E pytest (CLI + MCP stdio)"
+  uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov
 else
   uv run pytest tests/ --no-cov -q -m "$unit_marker"
 fi

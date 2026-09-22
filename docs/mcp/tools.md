@@ -37,7 +37,20 @@ Search the catalogue by keyword, UUID, or ATT&CK technique. Use it first when yo
 ]
 ```
 
-On failure, returns an error dict: `{ "error": "…" }`.
+The return type is always a list of `{uuid, type, title, status}` summaries — a
+UUID query yields at most one summary, an unknown UUID yields `[]`. Read
+`opentide://rules/{uuid}` (or the matching `threats`/`objectives` resource) for
+a full body.
+
+Filter semantics:
+
+- `platform` matches a configuration **key** exactly, so `sentinel` never
+  returns `sentinel_one` rules.
+- `technique` unions every location content can use: top-level `techniques`,
+  `tags.techniques`, `tags.attack`, and `threat.att&ck`. Matching is
+  case-insensitive.
+- `actor` reads `threat.actors` (and `tags.actors`). Namespaced identifiers match
+  on either form, so `att&ck::G0006` and `G0006` both hit.
 
 ## get_chaining
 
@@ -77,6 +90,9 @@ ATT&CK coverage analysis with gap identification. Use it to answer "what do we d
 |-----------|------|---------|-------------|
 | `technique` | string | `""` | When set, return coverage for that technique only |
 | `tactic` | string | `""` | Echoed as `tactic_filter` when no technique is set; **does not filter** the matrix today |
+
+Coverage reads the same technique locations as `opentide info coverage --technique`:
+top-level `techniques`, `tags.techniques`, `tags.attack`, and `threat.att&ck`.
 
 ```json
 // call

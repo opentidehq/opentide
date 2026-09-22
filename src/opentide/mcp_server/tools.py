@@ -21,7 +21,7 @@ def tool_search(
     status: str = "",
     technique: str = "",
     actor: str = "",
-) -> list[dict[str, Any]] | dict[str, Any]:
+) -> list[dict[str, Any]]:
     return search_catalog(
         query, object_type=type, platform=platform, status=status, technique=technique, actor=actor
     )
