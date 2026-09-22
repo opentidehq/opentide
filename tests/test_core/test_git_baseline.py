@@ -75,11 +75,14 @@ def test_baseline_prefers_development_over_master(repo: Path) -> None:
     assert resolve_baseline(repo).ref == "development"
 
 
-def test_candidate_refs_skip_the_current_branch(repo: Path) -> None:
+@pytest.mark.parametrize("same_named_tag", [False, True], ids=["plain", "tag-named-main"])
+def test_candidate_refs_skip_the_current_branch(repo: Path, same_named_tag: bool) -> None:
     _git(repo, "init", "-q", "-b", "main", ".")
     (repo / "a.txt").write_text("a\n", encoding="utf-8")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "first")
+    if same_named_tag:
+        _git(repo, "tag", "main")
 
     assert "main" not in candidate_refs(repo)
 
@@ -189,6 +192,18 @@ def test_a_branch_that_tracks_itself_is_not_its_own_baseline(
     """After ``push -u`` the upstream is ``origin/feature``, which contains ``HEAD``."""
     repo, base = published
     assert candidate_refs(repo)[-1] == "origin/feature", "only after every default branch"
+    baseline = resolve_baseline(repo)
+    assert (baseline.ref, baseline.commit) == ("origin/main", base)
+    assert [c.relative.as_posix() for c in changed_paths(repo, baseline)] == ["b.txt"]
+
+
+def test_a_tag_named_like_the_branch_does_not_hide_its_changes(
+    published: tuple[Path, str],
+) -> None:
+    """``rev-parse --abbrev-ref HEAD`` prints ``heads/feature`` once tag ``feature`` exists."""
+    repo, base = published
+    _git(repo, "tag", "feature")
+
     baseline = resolve_baseline(repo)
     assert (baseline.ref, baseline.commit) == ("origin/main", base)
     assert [c.relative.as_posix() for c in changed_paths(repo, baseline)] == ["b.txt"]

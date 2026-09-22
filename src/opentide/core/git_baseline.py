@@ -93,6 +93,18 @@ def has_git_head(repo_root: Path) -> bool:
     return _git_stdout(repo_root, "rev-parse", "--verify", "HEAD") is not None
 
 
+def _current_branch(repo_root: Path) -> str | None:
+    """The checked-out branch name, or ``None`` on a detached ``HEAD``.
+
+    Not ``--short`` and not ``rev-parse --abbrev-ref HEAD``: both print
+    ``heads/feature`` when a tag named ``feature`` exists too.
+    """
+    ref = _git_stdout(repo_root, "symbolic-ref", "--quiet", "HEAD")
+    if ref and ref.startswith("refs/heads/"):
+        return ref.removeprefix("refs/heads/")
+    return None
+
+
 def _remote_default_branch(repo_root: Path) -> str | None:
     """The branch ``origin/HEAD`` points at, e.g. ``main``.
 
@@ -124,7 +136,7 @@ def _is_default_branch(branch: str, remote_default: str | None) -> bool:
 
 def candidate_refs(repo_root: Path) -> list[str]:
     """Baseline refs to try, most specific first."""
-    head_branch = _git_stdout(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
+    head_branch = _current_branch(repo_root)
     upstream = _git_stdout(
         repo_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
     )
