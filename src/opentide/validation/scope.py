@@ -35,6 +35,27 @@ def _path_variants(target: str, roots: tuple[Path, ...]) -> tuple[str, frozenset
     return as_path.name, frozenset(candidates)
 
 
+def workspace_roots() -> tuple[Path, ...]:
+    """Roots a repo-relative ``--file`` may be written against.
+
+    The workspace and the working directory are routinely different — CI
+    templates and MCP host configs export ``OPENTIDE_REPO_ROOT`` and the
+    pre-commit hook passes ``--repo``, so resolving against the cwd alone
+    would miss.
+    """
+    from opentide.registry.discovery import discover_workspace
+
+    roots: list[Path] = []
+    for candidate in (discover_workspace(), Path.cwd()):
+        try:
+            resolved = Path(candidate).resolve()
+        except OSError:  # pragma: no cover - unresolvable root
+            continue
+        if resolved not in roots:
+            roots.append(resolved)
+    return tuple(roots)
+
+
 @dataclass(frozen=True)
 class ValidationScope:
     """Defines which objects are validated (preflight always uses the full index)."""
@@ -66,15 +87,22 @@ class ValidationScope:
         files: frozenset[str] | None = None,
         uuids: frozenset[str] | None = None,
         types: frozenset[str] | None = None,
-        roots: tuple[Path, ...] = (),
+        roots: tuple[Path, ...] | None = None,
     ) -> ValidationScope:
+        """Scope to *files*, *uuids* and *types*.
+
+        Relative *files* are resolved against *roots*, which default to
+        :func:`workspace_roots`.
+        """
+        if files and roots is None:
+            roots = workspace_roots()
         targets: set[str] = set()
         file_names: set[str] = set()
         file_paths: set[str] = set()
         path_basenames: set[str] = set()
         for target in files or ():
             targets.add(target.strip())
-            name, resolved = _path_variants(target, roots)
+            name, resolved = _path_variants(target, roots or ())
             if resolved:
                 file_paths.update(resolved)
                 path_basenames.add(name)

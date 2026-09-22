@@ -26,6 +26,21 @@ def test_id_duplicate_in_scope_file_target() -> None:
     assert id_duplicate_in_scope(scope, row, original)
 
 
+def test_id_duplicate_in_scope_path_qualified_target(tmp_path: Path) -> None:
+    rule = tmp_path / "objects" / "rules" / "a.yaml"
+    rule.parent.mkdir(parents=True)
+    rule.write_text("name: x\n", encoding="utf-8")
+    row = IdScanRow(rule, "rule", "u1", "A")
+    original = IdScanRow(tmp_path / "objects" / "rules" / "b.yaml", "rule", "u1", "B")
+    for target in ("objects/rules/a.yaml", str(rule)):
+        scope = ValidationScope.narrow(files=frozenset({target}), roots=(tmp_path,))
+        assert id_duplicate_in_scope(scope, row, original), target
+    elsewhere = ValidationScope.narrow(
+        files=frozenset({"objects/threats/a.yaml"}), roots=(tmp_path,)
+    )
+    assert not id_duplicate_in_scope(elsewhere, row, original)
+
+
 def test_id_duplicate_in_scope_full_mode_always_reports() -> None:
     scope = ValidationScope.full()
     row = IdScanRow(Path("a.yaml"), "rule", "u1", "A")
