@@ -103,6 +103,19 @@ def test_load_engines_honours_the_only_filter() -> None:
     assert set(engines) == {"splunk"}
 
 
+def test_an_engine_without_declare_is_named_in_the_error() -> None:
+    loader = PlatformLoader()
+    mock_module = MagicMock()
+    mock_module.declare.side_effect = AttributeError("declare")
+    with (
+        patch.object(loader, "import_engine", return_value=mock_module),
+        patch("opentide.core.registry.OpenTide") as mock_tide,
+    ):
+        mock_tide.Configuration.Systems.Index = ["sentinel"]
+        with pytest.raises(Exception, match="PLATFORM ENGINE IMPORT ERROR: sentinel"):
+            loader.rule_deployers(only=["sentinel"])
+
+
 def test_query_validation_for_loads_one_platform() -> None:
     validator = MagicMock()
     with (
