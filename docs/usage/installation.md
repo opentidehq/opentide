@@ -40,7 +40,7 @@ uv pip install 'opentide==0.3.0'
 
 </Tabs>
 
-For agent/MCP hosts, remember the path to this environment's `opentide-mcp` binary — you point the host at it in [MCP configuration](../mcp/configuration.md).
+For agent/MCP hosts, install `'opentide[mcp]'` and remember the path to this environment's `opentide-mcp` binary — you point the host at it in [MCP configuration](../mcp/configuration.md).
 
 ## PyPI install
 
@@ -51,7 +51,15 @@ pip install opentide              # latest on PyPI
 pip install 'opentide==0.3.0'     # pin the current release
 ```
 
-That installs the **DetectionOps engine**: the `opentide` CLI, `opentide-mcp` MCP server, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+
+The MCP server needs one extra:
+
+```bash
+pip install 'opentide[mcp]'       # adds mcp + fastmcp for `opentide-mcp`
+```
+
+The `opentide-mcp` script is on `PATH` either way; without the extra it prints the install command and exits 1. See [MCP installation](../mcp/installation.md).
 
 ### Windows and PowerShell
 
