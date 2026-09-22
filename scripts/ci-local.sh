@@ -5,6 +5,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# CI runners export none of these. A shell that does changes what the CLI
+# prints, which hides output drift from the golden tests until CI runs them.
+unset NO_COLOR FORCE_COLOR PY_COLORS CLICOLOR_FORCE
+
 usage() {
   cat <<'EOF'
 Usage: scripts/ci-local.sh [OPTIONS]
