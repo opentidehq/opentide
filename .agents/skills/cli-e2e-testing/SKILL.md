@@ -26,24 +26,31 @@ Baseline is current `*::1.0` only — no tide_1 legacy slices.
 
 ```
 tests/
+  corpus_support.py        # tide_corpus fixtures (root conftest registers it as a plugin)
   fixtures/tide_corpus/
     manifest.toml          # slice lifecycle (current active, future reserved)
     current/               # canonical E2E workspace
     future/rule_1_1/       # reserved until rule::1.1 lands
   test_cli/
-    conftest.py            # cli_runner, tide_corpus_repo, invoke_cli, parse_cli_json
+    conftest.py            # cli_runner, invoke_cli, parse_cli_json
     e2e/                   # @pytest.mark.cli_e2e (and cli_smoke for subprocess)
                            # test_workflow_e2e.py = published first-user path (CliRunner)
                            # test_workflow_subprocess_e2e.py = same happy path via `opentide` binary
+  test_mcp/
+    e2e/                   # @pytest.mark.cli_smoke — `opentide-mcp` NDJSON JSON-RPC
   test_deployment/
     test_deploy_payloads.py  # per-platform API payload golden tests
 ```
 
+`tide_corpus_repo` and friends live in `tests/corpus_support.py`, registered from the
+root `conftest.py` via `pytest_plugins`. Any suite can request them — MCP and packaging
+tests use the same corpus, so registry contracts cannot be mocked into passing.
+
 ## Running tests
 
 ```bash
-# E2E only (development)
-uv run pytest tests/test_cli/e2e/ -m "cli_e2e or cli_smoke" --no-cov
+# E2E only (development) — selected by marker, not by path
+uv run pytest tests/ -m "cli_e2e or cli_smoke" --no-cov
 
 # Unit tests (excludes E2E markers — matches CI matrix)
 uv run pytest tests/ -m "not cli_e2e and not cli_smoke"
@@ -59,7 +66,8 @@ uv run pytest tests/test_deployment/test_deploy_payloads.py --snapshot-update
 ## CI
 
 - **Unit matrix** (Python 3.10–3.14): `-m "not cli_e2e and not cli_smoke"`
-- **`cli-e2e` job** (Python 3.14 only, `needs: [test]`): `-m "cli_e2e or cli_smoke"`
+- **`cli-e2e` job** (Python 3.14 only, `needs: [test]`): `tests/ -m "cli_e2e or cli_smoke"` — whole
+  tree, so a new E2E directory is picked up by its marker alone
 - **`cli-windows-smoke` job**: `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms
 
 E2E does not contribute to coverage metrics.
@@ -91,6 +99,11 @@ exit 0". Query and deploy stay in the CliRunner workflow test (HTTP mocked).
 | `parse_cli_json`     | Extract top-level JSON from stdout (after indexer)   |
 | `corpus_rule_uuids`  | Deterministic rule UUIDs per platform              |
 | `mock_query_validators` | No-op validators for validate query E2E          |
+
+Non-fixture helpers in `tests/corpus_support.py`: `materialise_corpus(dest)` and
+`corpus_env(repo)` build a corpus plus its env for subprocess tests, and
+`clear_runtime_caches()` resets the registry singletons *and* the schema-pipeline
+globals (a stale binding points generation at the previous test's repo root).
 
 ## tide_corpus extension
 

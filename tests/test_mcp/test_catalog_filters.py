@@ -1,73 +1,53 @@
-"""Additional MCP catalog filter coverage."""
+"""MCP catalog filter semantics against tide_corpus."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from pathlib import Path
 
-from opentide.mcp_server.catalog import coverage_analysis, get_chaining_graph, search_catalog
+import pytest
+from tests.corpus_support import CORPUS_RULE_UUIDS, CORPUS_TECHNIQUE, CORPUS_THREAT_UUID
 
-
-def test_search_catalog_technique_filter() -> None:
-    mock_models = MagicMock()
-    mock_models.rules = {
-        "r1": {"name": "Rule", "tags": {"techniques": ["T1059"]}},
-        "r2": {"name": "Other", "tags": {"techniques": ["T1003"]}},
-    }
-    mock_models.threats = {}
-    mock_models.objectives = {}
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models = mock_models
-        mock_ot.initialise = MagicMock()
-        results = search_catalog("rule", technique="T1059")
-    assert len(results) == 1
+from opentide.mcp_server.catalog import search_catalog
 
 
-def test_search_catalog_actor_filter() -> None:
-    mock_models = MagicMock()
-    mock_models.rules = {}
-    mock_models.threats = {
-        "t1": {"name": "Threat", "tags": {"actors": ["APT29"]}},
-    }
-    mock_models.objectives = {}
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models = mock_models
-        mock_ot.initialise = MagicMock()
-        results = search_catalog("threat", actor="apt29")
-    assert len(results) == 1
+def test_platform_filter_matches_configuration_keys(tide_corpus_repo: Path) -> None:
+    """#253: ``sentinel`` used to substring-match the ``sentinel_one`` key."""
+    hits = {hit["uuid"] for hit in search_catalog("Rule", platform="sentinel")}
+    assert CORPUS_RULE_UUIDS["sentinel"] in hits
+    assert CORPUS_RULE_UUIDS["sentinel_one"] not in hits
 
 
-def test_search_catalog_platform_filter() -> None:
-    mock_models = MagicMock()
-    mock_models.rules = {
-        "r1": {"name": "Sentinel Rule", "configurations": {"sentinel": {}}},
-    }
-    mock_models.threats = {}
-    mock_models.objectives = {}
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models = mock_models
-        mock_ot.initialise = MagicMock()
-        results = search_catalog("sentinel", platform="sentinel")
-    assert len(results) == 1
+def test_sentinel_one_filter_is_reachable(tide_corpus_repo: Path) -> None:
+    hits = {hit["uuid"] for hit in search_catalog("Rule", platform="sentinel_one")}
+    assert hits == {CORPUS_RULE_UUIDS["sentinel_one"]}
 
 
-def test_get_chaining_graph_found() -> None:
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models.chaining = {"u1": {"parents": []}}
-        mock_ot.initialise = MagicMock()
-        with patch(
-            "opentide.mcp_server.catalog.get_object",
-            return_value={"type": "threat", "uuid": "u1", "body": {}},
-        ):
-            graph = get_chaining_graph("u1")
-    assert graph["found"] is True
+@pytest.mark.parametrize("platform", sorted(CORPUS_RULE_UUIDS))
+def test_every_corpus_platform_filters_to_its_own_rule(
+    tide_corpus_repo: Path, platform: str
+) -> None:
+    hits = {hit["uuid"] for hit in search_catalog("", platform=platform)}
+    assert CORPUS_RULE_UUIDS[platform] in hits
 
 
-def test_coverage_analysis_matrix() -> None:
-    mock_models = MagicMock()
-    mock_models.rules = {"r1": {"tags": {"techniques": ["T1059", "T1003"]}}}
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models = mock_models
-        mock_ot.initialise = MagicMock()
-        result = coverage_analysis()
-    assert result["technique_count"] == 2
-    assert "T1059" in result["matrix"]
+def test_unknown_platform_returns_nothing(tide_corpus_repo: Path) -> None:
+    assert search_catalog("Rule", platform="nonexistent") == []
+
+
+def test_technique_filter_on_top_level_field(tide_corpus_repo: Path) -> None:
+    hits = {hit["uuid"] for hit in search_catalog("Rule", technique=CORPUS_TECHNIQUE)}
+    assert hits >= set(CORPUS_RULE_UUIDS.values())
+
+
+def test_technique_filter_reads_threat_attack_section(tide_corpus_repo: Path) -> None:
+    hits = {hit["uuid"] for hit in search_catalog("Simulated", technique=CORPUS_TECHNIQUE)}
+    assert CORPUS_THREAT_UUID in hits
+
+
+def test_unknown_technique_returns_nothing(tide_corpus_repo: Path) -> None:
+    assert search_catalog("Rule", technique="T9999") == []
+
+
+def test_filters_combine(tide_corpus_repo: Path) -> None:
+    hits = search_catalog("Rule", platform="splunk", technique=CORPUS_TECHNIQUE, status="STAGING")
+    assert [hit["uuid"] for hit in hits] == [CORPUS_RULE_UUIDS["splunk"]]

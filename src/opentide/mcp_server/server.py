@@ -31,8 +31,12 @@ def search(
     status: str = "",
     technique: str = "",
     actor: str = "",
-) -> list[dict] | dict:
-    """Search the catalogue by keyword, UUID, or ATT&CK technique."""
+) -> list[dict]:
+    """Search the catalogue by keyword, UUID, or ATT&CK technique.
+
+    Returns a list of ``{uuid, type, title, status}`` summaries; read
+    ``opentide://rules/{uuid}`` for a full body.
+    """
     return tool_search(
         query, type=type, platform=platform, status=status, technique=technique, actor=actor
     )

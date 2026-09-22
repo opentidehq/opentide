@@ -1,4 +1,8 @@
-"""Expanded MCP resource coverage."""
+"""Resource branches that do not need a registry.
+
+Schema-id resolution and vocabulary serialisation are covered unmocked in
+``test_resources_corpus.py``; mocking those indexes hid #254.
+"""
 
 from __future__ import annotations
 
@@ -6,16 +10,6 @@ import json
 from unittest.mock import patch
 
 from opentide.mcp_server import resources
-
-
-def test_resource_index() -> None:
-    with (
-        patch("opentide.mcp_server.resources.ensure_initialised"),
-        patch("opentide.mcp_server.resources.OpenTide") as mock_tide,
-    ):
-        mock_tide.Index = {"objects": {}}
-        payload = json.loads(resources.resource_index())
-    assert "objects" in payload
 
 
 def test_resource_rule_found() -> None:
@@ -33,37 +27,19 @@ def test_resource_rule_missing() -> None:
     assert "error" in payload
 
 
-def test_resource_schema_and_template() -> None:
-    with (
-        patch("opentide.mcp_server.resources.ensure_initialised"),
-        patch("opentide.mcp_server.resources.OpenTide") as mock_tide,
+def test_resource_threat_wrong_family() -> None:
+    with patch(
+        "opentide.mcp_server.resources.get_object",
+        return_value={"type": "rule", "body": {}},
     ):
-        mock_tide.JsonSchemas.Index = {"rule": {"type": "object"}}
-        mock_tide.Templates.Index = {"rule": {"template": True}}
-        schema = json.loads(resources.resource_schema("rule"))
-        template = json.loads(resources.resource_template("rule"))
-    assert schema["type"] == "object"
-    assert template["template"] is True
+        payload = json.loads(resources.resource_threat("uuid-1"))
+    assert "error" in payload
 
 
-def test_resource_vocabulary_lookup() -> None:
-    with (
-        patch("opentide.mcp_server.resources.ensure_initialised"),
-        patch("opentide.mcp_server.resources.OpenTide") as mock_tide,
+def test_resource_objective_wrong_family() -> None:
+    with patch(
+        "opentide.mcp_server.resources.get_object",
+        return_value={"type": "rule", "body": {}},
     ):
-        mock_tide.Vocabularies.Index = {"severity": {"entries": []}}
-        payload = json.loads(resources.resource_vocabulary("severity"))
-    assert "entries" in payload
-
-
-def test_resource_lists() -> None:
-    with (
-        patch("opentide.mcp_server.resources.ensure_initialised"),
-        patch("opentide.mcp_server.resources.OpenTide") as mock_tide,
-    ):
-        mock_tide.Models.rules = {"u1": {}}
-        mock_tide.Models.threats = {}
-        mock_tide.Models.objectives = {}
-        assert json.loads(resources.resource_rules()) == {"u1": {}}
-        assert json.loads(resources.resource_threats()) == {}
-        assert json.loads(resources.resource_objectives()) == {}
+        payload = json.loads(resources.resource_objective("uuid-1"))
+    assert "error" in payload
