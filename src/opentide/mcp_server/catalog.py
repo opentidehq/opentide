@@ -52,13 +52,27 @@ def search_catalog(
     """Search catalogue by UUID, keyword, or ATT&CK technique.
 
     Always returns a list of summary dicts; a UUID query yields at most one hit.
+    Filters apply to a UUID query as to a keyword one.
     """
     ensure_initialised()
+
+    def wanted(bucket_type: str, body: dict[str, Any]) -> bool:
+        return (
+            (not object_type or object_type == bucket_type)
+            and (not status or body.get("status") == status)
+            and matches_technique(body, technique)
+            and matches_actor(body, actor)
+            and matches_platform(body, platform)
+        )
+
     if _UUID_RE.match(query.strip()):
         found = get_object(query.strip())
         if found is None:
             return []
-        return [object_summary(found["uuid"], found["type"], as_body(found["body"]))]
+        body = as_body(found["body"])
+        if not wanted(found["type"], body):
+            return []
+        return [object_summary(found["uuid"], found["type"], body)]
     query_lower = query.lower()
     results: list[dict[str, Any]] = []
     for bucket_type, bucket in [
@@ -70,13 +84,7 @@ def search_catalog(
             continue
         for uuid, entry in bucket.items():
             body = as_body(entry)
-            if status and body.get("status") != status:
-                continue
-            if not matches_technique(body, technique):
-                continue
-            if not matches_actor(body, actor):
-                continue
-            if not matches_platform(body, platform):
+            if not wanted(bucket_type, body):
                 continue
             haystack = f"{uuid} {body.get('title', '')} {body.get('name', '')} {body.get('description', '')}".lower()
             if query_lower in haystack:
