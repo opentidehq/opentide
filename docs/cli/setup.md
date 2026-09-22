@@ -85,9 +85,18 @@ Generated pipelines set `OPENTIDE_REPO_ROOT` at workflow (GitHub), `variables` (
 opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --path . --yes
 opentide setup ci gitlab --no-staging
+opentide setup ci azure --default-branch development --yes
 ```
 
 Positional argument: `github`, `gitlab`, or `azure` (CI **provider**, not Sentinel/Splunk/etc.).
+
+`setup ci` accepts the CI flags from the [default callback](#default-callback-flags) (`--staging`, `--inflight`, `--promotion`, `--promotion-target`, `--python-version`, `--explorer-pages`, `--path`, `--yes`) plus:
+
+| Flag | Purpose |
+|------|---------|
+| `--default-branch` | Branch that triggers deploys and receives inflight shards. GitHub and Azure only; GitLab pipelines always use `$CI_DEFAULT_BRANCH` and warn that the flag is ignored |
+
+Without `--default-branch`, GitHub and Azure pipelines target the remote's default branch (`origin/HEAD`), then the `init.defaultBranch` Git setting, then `main`. The JSON result reports the branch used as `default_branch`. A name the pipelines cannot hold unquoted (spaces, shell characters, or a value YAML reads as a number or boolean such as `2024` or `on`) is rejected with exit code 2.
 
 ### setup env
 
@@ -102,7 +111,7 @@ Copy `.env.example` to `.env` and adjust the path if the working directory is no
 
 ### setup hooks
 
-Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is inside a Git repository, copies that script into the repository's hooks directory (`.git/hooks/pre-commit`, the shared directory for a linked worktree, or `core.hooksPath`) unless a third-party hook is already there.
+Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is inside a Git repository, copies that script into the repository's hooks directory (`.git/hooks/pre-commit`, the shared directory for a linked worktree, or a `core.hooksPath` inside the repository) unless a third-party hook is already there. A `core.hooksPath` outside the repository, such as a user-wide one, serves every repository on the machine, so setup leaves it alone and warns; call `.opentide/hooks/pre-commit` from that shared hook yourself.
 
 ```bash
 opentide setup hooks --yes
@@ -111,7 +120,11 @@ opentide setup hooks --path ./detection-repo --yes --no-install
 
 The hook runs `opentide --repo "$(git rev-parse --show-toplevel)" validate --strict`, so it always validates the worktree being committed. Pinning `--repo` matters because `OPENTIDE_REPO_ROOT` takes precedence over directory discovery: with that variable exported to another detection repository — which `.env.example` and the MCP/CI guides encourage — an unpinned hook validated the other tree and let broken YAML through.
 
-A workspace in a subdirectory of a larger repository (for example `security/detections/` in a monorepo) is pinned by its path below the Git root: `--repo "$(git rev-parse --show-toplevel)"/security/detections`. pre-commit only reads `.pre-commit-config.yaml` at the repository root, so setup warns and leaves copying the `opentide-validate` hook there to you.
+`validate --strict` passes on a directory with no `.opentide/`, so both the hook and the pre-commit entry first check that the pinned workspace still has one. After a workspace is moved or renamed they fail and ask you to re-run `opentide setup hooks` (or bypass with `OPENTIDE_SKIP_HOOKS=1`, or `SKIP=opentide-validate` under pre-commit) instead of passing every commit.
+
+A workspace in a subdirectory of a larger repository (for example `security/detections/` in a monorepo) is pinned by its path below the Git root: `--repo "$(git rev-parse --show-toplevel)"/security/detections`. pre-commit only reads `.pre-commit-config.yaml` at the repository root. When that file already has an `opentide-validate` hook pinned to the root (which holds no objects) or written by an older release, setup repoints it at the workspace and lists it under `files`; when it pins another workspace that still exists, setup leaves it alone and warns that pre-commit does not validate this one. When the root file has no such hook, setup warns and leaves copying it there to you.
+
+A repository has a single Git `pre-commit` hook, so running `setup hooks` for a second workspace in the same repository adds it to the installed hook rather than replacing the first. The hook lists its workspaces on `# opentide-workspace:` lines, validates every one of them even after a failure, and blocks the commit if any fails. Re-running setup drops, with a warning, a listed workspace that no longer has `.opentide/`. The versioned copy under each workspace's `.opentide/hooks/` validates that workspace only.
 
 Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the OpenTide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
 

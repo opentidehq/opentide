@@ -9,6 +9,7 @@ scripts and assert provider-correct variable syntax and commit control flow.
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ import pytest
 import yaml
 from tests.test_cli.conftest import assert_json_ok
 
+from opentide.ci.inflight import PUSH_ATTEMPTS
 from opentide.cli.enums import DetectionPlatform
 from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
 from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
@@ -27,24 +29,29 @@ pytestmark = pytest.mark.cli_e2e
 GITHUB_EXPRESSION = "${{"
 
 
-def _render(invoke_cli, tmp_path: Path, ci: str, relpath: str) -> tuple[str, Any]:
-    """Scaffold a repo, run ``setup ci``, and return the rendered pipeline."""
-    fresh = tmp_path / f"{ci}-detections"
+def _setup_ci(invoke_cli, repo: Path, ci: str, relpath: str) -> tuple[dict[str, Any], str, Any]:
+    """Scaffold *repo*, run ``setup ci``, and return its payload and the rendered pipeline."""
     run_repo_setup(
         RepoSetupOptions(
-            path=fresh,
+            path=repo,
             name="Fresh",
             yes=True,
             platforms=[DetectionPlatform.sentinel],
         )
     )
     run_platforms_setup(
-        PlatformsSetupOptions(path=fresh, platforms=[DetectionPlatform.sentinel], yes=True)
+        PlatformsSetupOptions(path=repo, platforms=[DetectionPlatform.sentinel], yes=True)
     )
-    result = invoke_cli("setup", "ci", ci, "--path", str(fresh), "--yes", repo=fresh)
-    assert_json_ok(result)
-    rendered = (fresh / relpath).read_text(encoding="utf-8")
-    return rendered, yaml.safe_load(rendered)
+    result = invoke_cli("setup", "ci", ci, "--path", str(repo), "--yes", repo=repo)
+    payload = assert_json_ok(result)
+    rendered = (repo / relpath).read_text(encoding="utf-8")
+    return payload, rendered, yaml.safe_load(rendered)
+
+
+def _render(invoke_cli, tmp_path: Path, ci: str, relpath: str) -> tuple[str, Any]:
+    """Scaffold a repo, run ``setup ci``, and return the rendered pipeline."""
+    _, rendered, parsed = _setup_ci(invoke_cli, tmp_path / f"{ci}-detections", ci, relpath)
+    return rendered, parsed
 
 
 def _script_lines(job_name: str, script: Any) -> list[str]:
@@ -272,8 +279,12 @@ def _commit(repo: Path, message: str, files: dict[str, str | None]) -> None:
     _git(repo, "commit", "-q", "-m", message)
 
 
-def _pr_job_script(ci: str, parsed: dict[str, Any]) -> str:
-    """The shell the PR-triggered shard job runs, minus the package install."""
+def _pr_job_script(ci: str, parsed: dict[str, Any], generate: str | None = None) -> str:
+    """The shell the PR-triggered shard job runs, minus the package install.
+
+    ``opentide generate inflight`` becomes *generate*, by default a command
+    writing one new shard.
+    """
     if ci == "github":
         steps = parsed["jobs"]["inflight_shards"]["steps"]
         runs = [str(step["run"]) for step in steps if "run" in step]
@@ -284,7 +295,7 @@ def _pr_job_script(ci: str, parsed: dict[str, Any]) -> str:
         steps = _azure_jobs(parsed)["inflight_shards"]["steps"]
         script = next(str(s["script"]) for s in steps if "git commit" in str(s.get("script", "")))
     assert _GENERATE in script, script
-    return script.replace(_GENERATE, f"printf '{{}}\\n' > {_NEW_SHARD}")
+    return script.replace(_GENERATE, generate or f"printf '{{}}\\n' > {_NEW_SHARD}")
 
 
 @pytest.fixture
@@ -315,8 +326,8 @@ def ci_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return {"origin": origin, "dev": dev, "tmp": tmp_path}
 
 
-def _run_pr_job(ci: str, script: str, ci_git: dict[str, Any], branch: str) -> None:
-    """Check out *branch* the way the provider does for a PR, then run the job."""
+def _pr_checkout(ci: str, ci_git: dict[str, Any], branch: str, target: str = "main") -> Path:
+    """Clone and check out *branch* the way the provider does for a PR into *target*."""
     work = ci_git["tmp"] / f"ci-{ci}"
     _git(ci_git["tmp"], "clone", "-q", str(ci_git["origin"]), str(work))
     if ci == "github":
@@ -325,8 +336,12 @@ def _run_pr_job(ci: str, script: str, ci_git: dict[str, Any], branch: str) -> No
         _git(work, "checkout", "-q", "--detach", f"origin/{branch}")
     else:
         # Azure builds a PR from the merge of the PR into its target.
-        _git(work, "checkout", "-q", "--detach", "origin/main")
+        _git(work, "checkout", "-q", "--detach", f"origin/{target}")
         _git(work, "merge", "-q", "--no-ff", "-m", "Merge PR", f"origin/{branch}")
+    return work
+
+
+def _run_job(script: str, work: Path) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ) | {
         "CI_DEFAULT_BRANCH": "main",
         "CI_PROJECT_DIR": str(work),
@@ -335,18 +350,53 @@ def _run_pr_job(ci: str, script: str, ci_git: dict[str, Any], branch: str) -> No
         "CI_PROJECT_PATH": "team/detections",
         "BUILD_SOURCESDIRECTORY": str(work),
     }
-    done = subprocess.run(
+    return subprocess.run(
         ["bash", "-eo", "pipefail", "-c", script],
         cwd=work,
         env=env,
         capture_output=True,
         text=True,
     )
+
+
+def _run_pr_job(
+    ci: str, script: str, ci_git: dict[str, Any], branch: str, target: str = "main"
+) -> tuple[Path, subprocess.CompletedProcess[str]]:
+    """Check out *branch* the way the provider does for a PR, then run the job."""
+    work = _pr_checkout(ci, ci_git, branch, target)
+    done = _run_job(script, work)
     assert done.returncode == 0, f"{ci} job failed\n{done.stdout}\n{done.stderr}"
+    return work, done
 
 
 def _main_tree(origin: Path) -> set[str]:
     return set(_git(origin, "ls-tree", "-r", "--name-only", "main").splitlines())
+
+
+def _published(origin: Path, base: str, branch: str = "main") -> list[str]:
+    """Paths *branch* changed since *base*.
+
+    Shards often share a body, so rename detection would report a deleted
+    shard plus a new one as a single rename and hide the deletion.
+    """
+    return _git(origin, "diff", "--no-renames", "--name-only", base, branch).splitlines()
+
+
+def _worktrees(work: Path) -> list[str]:
+    porcelain = _git(work, "worktree", "list", "--porcelain")
+    return [line for line in porcelain.splitlines() if line.startswith("worktree ")]
+
+
+def _seed_pr(ci_git: dict[str, Any]) -> str:
+    """``main`` with one shard, a ``feature`` PR adding a rule; returns ``main``'s commit."""
+    dev, origin = ci_git["dev"], ci_git["origin"]
+    _commit(dev, "seed", {"README.md": "detections\n", ".opentide/inflight/other.json": "{}\n"})
+    _git(dev, "push", "-q", "origin", "main")
+    _git(dev, "checkout", "-q", "-b", "feature")
+    _commit(dev, "add a rule", {_PR_OBJECT: "name: unreviewed\n"})
+    _git(dev, "push", "-q", "origin", "feature")
+    _git(dev, "checkout", "-q", "main")
+    return _git(origin, "rev-parse", "main")
 
 
 @pytest.mark.parametrize("ci", sorted(_PIPELINES))
@@ -372,8 +422,7 @@ def test_pr_shard_job_publishes_only_shards_to_the_default_branch(
     _run_pr_job(ci, script, ci_git, "feature")
 
     assert _git(origin, "rev-parse", "main~1") == main_before, "main gained more than one commit"
-    changed = _git(origin, "diff", "--name-only", main_before, "main").splitlines()
-    assert changed == [_NEW_SHARD]
+    assert _published(origin, main_before) == [_NEW_SHARD]
     assert _PR_OBJECT not in _main_tree(origin)
     assert _git(origin, "rev-parse", "feature") != _git(origin, "rev-parse", "main")
 
@@ -416,3 +465,133 @@ def test_github_inflight_commits_when_shards_change(
     steps = parsed["jobs"][job_name]["steps"]
     script = "\n".join(str(step["run"]) for step in steps if "run" in step)
     assert_commit_is_reachable(script, label=job_name)
+
+
+@pytest.mark.parametrize("ci", sorted(_PIPELINES))
+def test_pr_shard_job_without_shard_changes_publishes_nothing(
+    invoke_cli, tmp_path: Path, ci_git: dict[str, Any], ci: str
+) -> None:
+    """No new shards: no empty commit, a clean exit, and no leftover worktree."""
+    _, parsed = _render(invoke_cli, tmp_path, ci, _PIPELINES[ci])
+    main_before = _seed_pr(ci_git)
+
+    work, done = _run_pr_job(ci, _pr_job_script(ci, parsed, generate=":"), ci_git, "feature")
+
+    assert "No inflight shard changes" in done.stdout, done.stdout
+    assert _git(ci_git["origin"], "rev-parse", "main") == main_before
+    assert len(_worktrees(work)) == 1, _worktrees(work)
+
+
+@pytest.mark.parametrize("ci", sorted(_PIPELINES))
+def test_pr_shard_job_rebases_when_the_default_branch_moves(
+    invoke_cli, tmp_path: Path, ci_git: dict[str, Any], ci: str
+) -> None:
+    """Two PR jobs publishing at once: the later push was rejected and its job failed.
+
+    Here another job lands its shards on ``main`` after this one fetched
+    ``main`` and before it pushes.
+    """
+    _, parsed = _render(invoke_cli, tmp_path, ci, _PIPELINES[ci])
+    dev, origin = ci_git["dev"], ci_git["origin"]
+    _seed_pr(ci_git)
+    other_shard = ".opentide/inflight/1111-other-pr.json"
+    _commit(dev, "ci: another PR's shards", {other_shard: "{}\n"})
+    race = f"printf '{{}}\\n' > {_NEW_SHARD} && git -C {shlex.quote(str(dev))} push -q origin main"
+
+    work, _ = _run_pr_job(ci, _pr_job_script(ci, parsed, generate=race), ci_git, "feature")
+
+    assert _git(origin, "rev-parse", "main~1") == _git(dev, "rev-parse", "main")
+    assert _published(origin, "main~1") == [_NEW_SHARD]
+    tree = _main_tree(origin)
+    assert {_NEW_SHARD, other_shard} <= tree
+    assert _PR_OBJECT not in tree
+    assert len(_worktrees(work)) == 1, _worktrees(work)
+
+
+@pytest.mark.parametrize("ci", sorted(_PIPELINES))
+def test_pr_shard_job_keeps_shards_that_land_while_it_generates(
+    invoke_cli, tmp_path: Path, ci_git: dict[str, Any], ci: str
+) -> None:
+    """``generate inflight`` fetches ``origin`` on a staging plan, moving ``origin/main``.
+
+    The publish worktree was then built on the newer ``main`` but filled with
+    the shards copied before the fetch, so the push fast-forwarded and deleted
+    every shard another PR had published in between.
+    """
+    _, parsed = _render(invoke_cli, tmp_path, ci, _PIPELINES[ci])
+    dev, origin = ci_git["dev"], ci_git["origin"]
+    _seed_pr(ci_git)
+    other_shard = ".opentide/inflight/1111-other-pr.json"
+    _commit(dev, "ci: another PR's shards", {other_shard: "{}\n"})
+    generate = (
+        f"printf '{{}}\\n' > {_NEW_SHARD}"
+        f" && git -C {shlex.quote(str(dev))} push -q origin main"
+        " && git fetch -q origin"
+    )
+
+    _run_pr_job(ci, _pr_job_script(ci, parsed, generate=generate), ci_git, "feature")
+
+    assert _published(origin, "main~1") == [_NEW_SHARD]
+    assert {_NEW_SHARD, other_shard} <= _main_tree(origin)
+
+
+@pytest.mark.parametrize("ci", sorted(_PIPELINES))
+def test_pr_shard_job_fails_loudly_when_every_push_is_rejected(
+    invoke_cli, tmp_path: Path, ci_git: dict[str, Any], ci: str
+) -> None:
+    _, parsed = _render(invoke_cli, tmp_path, ci, _PIPELINES[ci])
+    main_before = _seed_pr(ci_git)
+    work = _pr_checkout(ci, ci_git, "feature")
+    attempts = tmp_path / "push-attempts.log"
+    pre_push = work / ".git" / "hooks" / "pre-push"
+    pre_push.write_text(
+        f"#!/bin/sh\necho rejected >> {shlex.quote(str(attempts))}\nexit 1\n", encoding="utf-8"
+    )
+    pre_push.chmod(0o755)
+
+    done = _run_job(_pr_job_script(ci, parsed), work)
+
+    assert done.returncode != 0, done.stdout + done.stderr
+    assert f"Push rejected {PUSH_ATTEMPTS} times" in done.stderr, done.stderr
+    assert len(attempts.read_text(encoding="utf-8").splitlines()) == PUSH_ATTEMPTS
+    assert _git(ci_git["origin"], "rev-parse", "main") == main_before
+    assert len(_worktrees(work)) == 1, _worktrees(work)
+
+
+@pytest.mark.parametrize("ci", ["azure", "github"])
+def test_pipeline_targets_the_detected_default_branch(
+    invoke_cli, ci_git: dict[str, Any], ci: str
+) -> None:
+    """``main`` was hard-coded, so on any other trunk the job died at ``git fetch origin main``.
+
+    ``setup ci`` runs in a clone of a remote whose default branch is
+    ``development`` and has no ``main``; the generated PR job has to publish
+    there.
+    """
+    dev, origin, tmp = ci_git["dev"], ci_git["origin"], ci_git["tmp"]
+    _git(dev, "checkout", "-q", "-b", "development")
+    _commit(dev, "seed", {"README.md": "detections\n", ".opentide/inflight/other.json": "{}\n"})
+    _git(dev, "push", "-q", "origin", "development")
+    _git(origin, "symbolic-ref", "HEAD", "refs/heads/development")
+    trunk_before = _git(origin, "rev-parse", "development")
+    _git(dev, "checkout", "-q", "-b", "feature")
+    _commit(dev, "add a rule", {_PR_OBJECT: "name: unreviewed\n"})
+    _git(dev, "push", "-q", "origin", "feature")
+    maintainer = tmp / "maintainer"
+    _git(tmp, "clone", "-q", str(origin), str(maintainer))
+
+    payload, rendered, parsed = _setup_ci(invoke_cli, maintainer, ci, _PIPELINES[ci])
+
+    assert payload["default_branch"] == "development"
+    if ci == "github":
+        triggers = parsed[True]["push"]["branches"]
+    else:
+        triggers = parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+    assert set(triggers) == {"development"}
+    assert "refs/heads/development" in rendered and "refs/heads/main" not in rendered
+
+    _run_pr_job(ci, _pr_job_script(ci, parsed), ci_git, "feature", target="development")
+
+    assert _git(origin, "rev-parse", "development~1") == trunk_before
+    changed = _published(origin, trunk_before, "development")
+    assert changed == [_NEW_SHARD]

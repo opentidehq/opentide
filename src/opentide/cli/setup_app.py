@@ -9,7 +9,7 @@ import typer
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
 from opentide.cli.output import emit, emit_deprecation, emit_error, emit_success
-from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
+from opentide.cli.services.setup.ci import CiSetupOptions, is_valid_branch_name, run_ci_setup
 from opentide.cli.services.setup.interactive import (
     InteractiveRequiredError,
     ask_confirm,
@@ -396,12 +396,24 @@ def setup_ci_cmd(
         "--explorer-pages/--no-explorer-pages",
         help="Include GitHub Pages explorer build and deploy jobs",
     ),
+    default_branch: str | None = typer.Option(
+        None,
+        "--default-branch",
+        help="Branch that deploys and receives inflight shards "
+        "(default: origin/HEAD, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
+    ),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
     cli = get_context(ctx)
     if ci_platform is CiPlatform.none:
         raise typer.BadParameter("Choose github, gitlab, or azure")
+    if default_branch is not None and not is_valid_branch_name(default_branch):
+        raise typer.BadParameter(
+            f"{default_branch!r} cannot be written into a pipeline; "
+            "use letters, digits, '.', '_', '/' and '-'",
+            param_hint="--default-branch",
+        )
     target = _option_path(ctx, cli, path)
     yes = _consented(ctx, yes)
     if not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
@@ -416,6 +428,7 @@ def setup_ci_cmd(
         promotion_target=promotion_target,
         python_version=python_version,
         explorer_pages=explorer_pages,
+        default_branch=default_branch,
         yes=yes,
     )
     cli.apply_environment()
