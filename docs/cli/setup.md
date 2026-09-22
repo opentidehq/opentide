@@ -102,7 +102,7 @@ Copy `.env.example` to `.env` and adjust the path if the working directory is no
 
 ### setup hooks
 
-Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is a Git repository, copies that script to `.git/hooks/pre-commit` unless a third-party hook is already there.
+Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is inside a Git repository, copies that script into the repository's hooks directory (`.git/hooks/pre-commit`, the shared directory for a linked worktree, or `core.hooksPath`) unless a third-party hook is already there.
 
 ```bash
 opentide setup hooks --yes
@@ -110,6 +110,8 @@ opentide setup hooks --path ./detection-repo --yes --no-install
 ```
 
 The hook runs `opentide --repo "$(git rev-parse --show-toplevel)" validate --strict`, so it always validates the worktree being committed. Pinning `--repo` matters because `OPENTIDE_REPO_ROOT` takes precedence over directory discovery: with that variable exported to another detection repository — which `.env.example` and the MCP/CI guides encourage — an unpinned hook validated the other tree and let broken YAML through.
+
+A workspace in a subdirectory of a larger repository (for example `security/detections/` in a monorepo) is pinned by its path below the Git root: `--repo "$(git rev-parse --show-toplevel)"/security/detections`. pre-commit only reads `.pre-commit-config.yaml` at the repository root, so setup warns and leaves copying the `opentide-validate` hook there to you.
 
 Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the OpenTide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
 
