@@ -46,7 +46,7 @@ opentide generate
 OK Full generation pipeline completed
 ```
 
-Phase headers go to stderr and the final status to stdout, so `opentide generate > log.txt` keeps the headers on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
+This is the output with `--no-color` or `NO_COLOR` set; otherwise each `== … ==` header is drawn as a horizontal rule. Phase headers go to stderr and the final status to stdout, so `opentide generate > log.txt` keeps the headers on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
 
 Your editor can now validate YAML under `objects/threats/`, `objects/objectives/`, and `objects/rules/` because `opentide setup vscode` maps each folder to its concrete JSON Schema (not the router glob, which the YAML language server cannot narrow).
 

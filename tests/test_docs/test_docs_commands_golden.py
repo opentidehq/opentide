@@ -17,6 +17,7 @@ Two gates here, in increasing cost:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from collections.abc import Iterator
 from pathlib import Path
@@ -256,6 +257,10 @@ _LEAKY_ENV = (
     "GITLAB_CI",
     "TF_BUILD",
     "DEBUG",
+    "NO_COLOR",
+    "FORCE_COLOR",
+    "PY_COLORS",
+    "CLICOLOR_FORCE",
 )
 
 
@@ -341,20 +346,37 @@ def test_at_least_one_page_of_samples_is_executed() -> None:
 # --------------------------------------------------------------------------
 
 
+_RULE = re.compile(r"─+ (?P<title>.+?) ─+")
+
+
+def _rules_as_headers(output: str) -> str:
+    """Each Rich rule `─── Title ───` as the `== Title ==` header `--no-color` prints."""
+    return "\n".join(
+        f"== {match['title']} ==" if (match := _RULE.fullmatch(line.strip())) else line
+        for line in output.splitlines()
+    )
+
+
 @pytest.mark.cli_e2e
+@pytest.mark.parametrize("colour", [False, True], ids=["no-color", "colour"])
 @pytest.mark.parametrize("page", ["docs/usage/tutorial.md", "docs/usage/quickstart.md"])
 def test_documented_generate_output_matches_the_live_pipeline(
-    page: str, documented_repo: Path
+    page: str, colour: bool, documented_repo: Path
 ) -> None:
-    """Issue #247: both pages printed a checkmark list the CLI never emitted."""
+    """Issue #247: both pages printed a checkmark list the CLI never emitted.
+
+    The pages show the `--no-color` headers and say a colour terminal draws
+    each one as a rule; both forms must carry the documented phases in order.
+    """
     blocks = fenced_blocks(ROOT / page, "text")
     sample = next(block for block in blocks if "generation" in block)
-    result = CliRunner().invoke(app, ["--repo", str(documented_repo), "generate"])
+    argv = ["--repo", str(documented_repo), "generate"]
+    result = CliRunner().invoke(app, argv if colour else ["--no-color", *argv])
     assert result.exit_code == 0, result.stdout + result.stderr
     # Phase headers go to stderr, the closing status to stdout; the page shows
     # the terminal view, which is both interleaved. `stdout + stderr` would put
     # the closing line first and fail the ordering check for the wrong reason.
-    live = result.output
+    live = _rules_as_headers(result.output) if colour else result.output
     missing = _lines_in_order(sample, live)
     assert not missing, (
         f"{page} documents lines `generate` does not print as whole lines in this order: "

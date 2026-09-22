@@ -44,7 +44,7 @@ This runs the full pipeline: docs → exports → vocabs → templates → schem
 OK Full generation pipeline completed
 ```
 
-Each phase announces itself on stderr; the closing status is the only line on stdout.
+Each phase announces itself on stderr; the closing status is the only line on stdout. This is the output with `--no-color` or `NO_COLOR` set; otherwise each `== … ==` header is drawn as a horizontal rule.
 
 Generation runs first because validation checks objects against these generated schemas — no schemas, nothing to validate against.
 
