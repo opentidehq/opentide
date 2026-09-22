@@ -54,6 +54,28 @@ credentials. Only the requested platform's engine is imported, so a Sentinel run
 never loads the CrowdStrike or HarfangLab modules. See
 [`validate`](../../cli/validate.md#query-validation).
 
+## The `query` field
+
+The five platforms that carry a query string — Sentinel, Defender for Endpoint, Splunk, CrowdStrike, and Carbon Black Cloud — all declare `query` **required and non-blank**. Templates show it uncommented for each of them.
+
+Splunk `splunk::2.x` objects used a flat layout: `search` for the search string, `cron_schedule` for the schedule, and top-level `throttling`, `threshold`, `notable`, `risk`, and `email`, with `frequency` / `lookback` directly under `scheduling`. All of these are still accepted. `opentide validate` and `opentide deploy` map them onto the v3 layout with the same function, so a 2.x rule validates exactly when it deploys. `search` and `cron_schedule` stay on the object so it round-trips unchanged. A `query` or `scheduling.schedule` set explicitly wins over the legacy key.
+
+A Splunk `scheduling.schedule` is deployed as a scheduled search whether or not `scheduling.type` is set; only `type: Real Time` opts out.
+
+### Upgrading to 0.4.0
+
+This is a **breaking change** for objects that previously passed validation:
+
+| Object | Before 0.4.0 | From 0.4.0 |
+|--------|--------------|------------|
+| Splunk or Carbon Black rule with no `query` (and, for Splunk, no `search`) | Validated; the deployer skipped it silently | `opentide validate` reports `query: Field required` |
+| Any platform with `query: ""` or whitespace only | Validated; the deployer skipped it silently | `opentide validate` reports `query must not be empty` |
+| splunk::2.x rule with `search` / `cron_schedule` | Loaded with no query and no schedule; skipped silently | Deploys the search on its schedule |
+| splunk::2.x rule with flat `throttling` / `notable` / `scheduling.frequency` | Deployed, but `opentide validate` rejected the keys | Validates and deploys |
+| Splunk schedule with no `scheduling.type` | Saved with `cron_schedule` but never scheduled | Scheduled |
+
+Every row that now fails was already a rule that never reached the platform. Run `opentide validate` after upgrading to find them.
+
 ## Platform configuration
 
 Per-platform settings live under `.opentide/configurations/platforms/`. Enable platforms with `opentide setup platforms` or the parent `opentide setup --platform` flags; the registry loads deployers and validators for enabled systems only.

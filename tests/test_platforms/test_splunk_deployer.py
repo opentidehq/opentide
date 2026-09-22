@@ -101,6 +101,7 @@ def test_should_enable_correlation_search_prefers_mdr_override(splunk_rule_paylo
     splunk_config = SplunkConfig(
         schema="splunk::3.0",
         status="STAGING",
+        query="index=main | head 1",
         correlation_search=True,
     )
     assert deployer._should_enable_correlation_search(tenant.setup, splunk_config)
@@ -232,3 +233,54 @@ def test_deploy_mdr_applies_modifiers_before_saved_search(
     first_update = created.update.call_args_list[0].kwargs
     assert first_update.get("dispatch.earliest_time")
     assert first_update.get("dispatch.latest_time") == "-5m@m"
+
+
+@pytest.mark.parametrize(
+    "scheduling",
+    [
+        {"schedule": {"cron": "0 * * * *"}},
+        {"type": "Scheduled", "schedule": {"cron": "0 * * * *"}},
+    ],
+    ids=["no-type", "explicit-type"],
+)
+@patch("opentide.platforms.splunk.deployer.techniques_resolver", return_value=[])
+def test_a_schedule_without_a_type_is_still_scheduled(
+    _mock_techniques: object, splunk_rule_payload: dict, scheduling: dict
+) -> None:
+    """Every migrated splunk::2.x rule has a cron and no ``type``.
+
+    ``cron_schedule`` without ``is_scheduled`` is stored by Splunk and never runs.
+    """
+    splunk_rule_payload["configurations"]["splunk"]["scheduling"] = scheduling
+    config = _deployer().config_mdr(load_rule_from_dict(splunk_rule_payload), _tenant().setup)
+    assert config["cron_schedule"] == "0 * * * *"
+    assert config["is_scheduled"] == 1
+
+
+@patch("opentide.platforms.splunk.deployer.techniques_resolver", return_value=[])
+def test_a_splunk_2x_rule_deploys_its_search_on_its_schedule(
+    _mock_techniques: object, splunk_rule_payload: dict
+) -> None:
+    splunk = splunk_rule_payload["configurations"]["splunk"]
+    for key in ("query", "scheduling"):
+        splunk.pop(key)
+    splunk.update(
+        {
+            "schema": "splunk::2.0",
+            "search": "index=legacy | head 1",
+            "cron_schedule": "*/15 * * * *",
+        }
+    )
+    config = _deployer().config_mdr(load_rule_from_dict(splunk_rule_payload), _tenant().setup)
+    assert config["cron_schedule"] == "*/15 * * * *"
+    assert config["is_scheduled"] == 1
+
+
+@patch("opentide.platforms.splunk.deployer.techniques_resolver", return_value=[])
+def test_real_time_scheduling_is_not_marked_scheduled(
+    _mock_techniques: object, splunk_rule_payload: dict
+) -> None:
+    splunk_rule_payload["configurations"]["splunk"]["scheduling"] = {"type": "Real Time"}
+    config = _deployer().config_mdr(load_rule_from_dict(splunk_rule_payload), _tenant().setup)
+    assert config["dispatch.earliest_time"] == "rt"
+    assert "is_scheduled" not in config
