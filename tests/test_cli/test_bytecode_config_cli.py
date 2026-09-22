@@ -7,7 +7,7 @@ import json
 import shutil
 from pathlib import Path
 
-from tests.test_cli.conftest import _clear_runtime_caches
+from tests.corpus_support import clear_runtime_caches
 from typer.testing import CliRunner
 
 from opentide.cli import app
@@ -37,7 +37,7 @@ def test_info_survives_compiled_bundled_data(
     """
     dest = _compiled_data_root(tmp_path)
     monkeypatch.setenv("OPENTIDE_DATA_ROOT", str(dest))
-    _clear_runtime_caches()
+    clear_runtime_caches()
     try:
         configs = resolve_configurations()
         assert "global" in configs or "paths" in configs
@@ -52,4 +52,4 @@ def test_info_survives_compiled_bundled_data(
         assert payload.get("ok") is True
         assert "counts" in payload
     finally:
-        _clear_runtime_caches()
+        clear_runtime_caches()

@@ -37,14 +37,42 @@ class GitBaseline:
     commit: str
 
 
+@dataclass(frozen=True)
+class ChangedPath:
+    """One path git reported as changed.
+
+    ``relative`` is relative to the git top level, which is what
+    ``git show <rev>:<path>`` expects; ``absolute`` is the on-disk location.
+    Keeping both means no caller has to re-derive one from the other against
+    the wrong root.
+    """
+
+    relative: Path
+    absolute: Path
+
+
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    """Run git, reporting "git is unusable here" the same way git reports failure.
+
+    ``subprocess.run`` raises ``FileNotFoundError`` when git is not on ``PATH``
+    and ``NotADirectoryError`` when ``cwd`` has been removed under us — both
+    ``OSError``. Callers already handle a non-zero return code, so collapse the
+    two failure modes into one rather than letting an ``OSError`` escape a
+    function documented to raise ``GitBaselineError``.
+    """
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        logger.debug("git_unavailable", args=args, error=str(exc))
+        return subprocess.CompletedProcess(
+            ["git", *args], returncode=127, stdout="", stderr=str(exc)
+        )
 
 
 def _git_stdout(repo_root: Path, *args: str) -> str | None:
@@ -109,3 +137,55 @@ def resolve_baseline(repo_root: Path) -> GitBaseline:
         logger.debug("git_baseline_head_only", commit=head)
         return GitBaseline(ref="HEAD", commit=head)
     raise GitBaselineError(NO_GIT_MESSAGE)
+
+
+def git_toplevel(repo_root: Path) -> Path:
+    """The git worktree root that ``git`` prints paths relative to.
+
+    Not always ``repo_root``: ``get_repo_root()`` and ``discover_workspace()``
+    can both land on a tide workspace nested inside the checkout, and joining a
+    ``git diff --name-only`` line onto that produces a path that does not exist.
+    """
+    top = _git_stdout(repo_root, "rev-parse", "--show-toplevel")
+    return Path(top) if top else repo_root
+
+
+def changed_paths(
+    repo_root: Path, baseline: GitBaseline, *, pathspec: str | None = None
+) -> list[ChangedPath]:
+    """Paths changed against ``baseline``, plus untracked files.
+
+    Untracked files are included because a brand new object has no diff against
+    the baseline but is exactly the thing a preview or a ``--changed`` docs run
+    needs to pick up. Deleted paths are kept — callers distinguish them by
+    testing ``absolute.exists()``.
+
+    ``pathspec`` is interpreted relative to the git top level, matching the
+    paths this returns.
+    """
+    # Both commands run from the top level: `git diff --name-only` prints
+    # top-level-relative paths but `git ls-files --others` prints cwd-relative
+    # ones, so running them from a nested workspace mixes two conventions in
+    # one result list.
+    top = git_toplevel(repo_root)
+    scope = ["--", pathspec] if pathspec else []
+    lines: list[str] = []
+    diff = _git(top, "diff", "--name-only", "--diff-filter=ACMRD", baseline.commit, *scope)
+    if diff.returncode == 0:
+        lines.extend(diff.stdout.splitlines())
+    untracked = _git(top, "ls-files", "--others", "--exclude-standard", "--full-name", *scope)
+    if untracked.returncode == 0:
+        lines.extend(untracked.stdout.splitlines())
+
+    seen: set[Path] = set()
+    results: list[ChangedPath] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        relative = Path(stripped)
+        if relative in seen:
+            continue
+        seen.add(relative)
+        results.append(ChangedPath(relative=relative, absolute=top / relative))
+    return results

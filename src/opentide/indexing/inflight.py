@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -70,7 +69,12 @@ def _local_git_changed_paths() -> list[Path]:
     feature branches behave like ``main`` (#251). Untracked object files count
     as changed so a brand new rule gets a preview shard.
     """
-    from opentide.core.git_baseline import GitBaselineError, resolve_baseline
+    from opentide.core.git_baseline import (
+        GitBaselineError,
+        changed_paths,
+        git_toplevel,
+        resolve_baseline,
+    )
 
     root = discover_workspace()
     try:
@@ -79,36 +83,24 @@ def _local_git_changed_paths() -> list[Path]:
         logger.warning("inflight_no_git_baseline", detail=str(exc))
         return []
 
-    lines: list[str] = []
-    diff = subprocess.run(
-        ["git", "diff", "--name-only", baseline.commit, "--", "objects/"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if diff.returncode == 0:
-        lines.extend(diff.stdout.splitlines())
-    untracked = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard", "--", "objects/"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if untracked.returncode == 0:
-        lines.extend(untracked.stdout.splitlines())
+    # `_OBJECT_YAML` matches `objects/<kind>/<file>` relative to the workspace,
+    # while git speaks in top-level-relative paths. The two differ whenever the
+    # workspace sits in a subdirectory of the checkout.
+    top = git_toplevel(root)
+    try:
+        prefix = root.resolve().relative_to(top.resolve())
+    except ValueError:  # pragma: no cover - workspace outside its own git root
+        prefix = Path()
+    pathspec = (prefix / "objects").as_posix() + "/"
 
-    seen: set[Path] = set()
     paths: list[Path] = []
-    for line in lines:
-        if not line.strip() or not _is_object_yaml(line.strip()):
+    for change in changed_paths(root, baseline, pathspec=pathspec):
+        try:
+            workspace_relative = change.relative.relative_to(prefix)
+        except ValueError:
             continue
-        candidate = root / line.strip()
-        if candidate in seen or not candidate.is_file():
-            continue
-        seen.add(candidate)
-        paths.append(candidate)
+        if _is_object_yaml(workspace_relative.as_posix()) and change.absolute.is_file():
+            paths.append(change.absolute)
     return paths
 
 

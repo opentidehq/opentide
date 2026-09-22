@@ -154,3 +154,37 @@ def test_untracked_object_yaml_counts_as_changed(
     assert docs.returncode == 0, docs.stdout + docs.stderr
     payload = json.loads(docs.stdout.strip())
     assert "objects/rules/second-rule.yaml" in payload["changed_paths"], payload
+
+
+def test_a_workspace_nested_in_the_checkout_still_sees_its_changes(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """Client repos often keep the tide workspace in a subdirectory.
+
+    git prints ``detections/objects/...`` there; joining that onto the workspace
+    root, or matching it against ``^objects/``, silently loses every change.
+    """
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    repo = checkout / "detections"
+    _scaffold(script_runner, repo)
+    _git(checkout, "init", "-q", "-b", "main", ".")
+    _git(checkout, "add", "-A")
+    _git(checkout, "commit", "-qm", "initial catalogue")
+    _git(checkout, "checkout", "-qb", "feature")
+
+    rule = repo / "objects" / "rules" / "sentinel-kql-rule.yaml"
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace("version: 1", "version: 2", 1), encoding="utf-8"
+    )
+
+    docs = _run(script_runner, repo, ["generate", "docs", "--changed"])
+    assert docs.returncode == 0, docs.stdout + docs.stderr
+    payload = json.loads(docs.stdout.strip())
+    assert payload["counts"]["rules"] >= 1, payload
+    assert [Path(p).name for p in payload["changed_paths"]] == ["sentinel-kql-rule.yaml"], payload
+
+    inflight = _run(script_runner, repo, ["generate", "inflight"])
+    assert inflight.returncode == 0, inflight.stdout + inflight.stderr
+    shards = sorted((repo / ".opentide" / "inflight").glob("*.json"))
+    assert shards, "a nested workspace must still produce an inflight shard"

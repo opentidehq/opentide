@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
@@ -38,7 +39,28 @@ def _build_scope(
         files=frozenset(files or []),
         uuids=frozenset(uuids or []),
         types=frozenset(object_types or []),
+        roots=_scope_roots(),
     )
+
+
+def _scope_roots() -> tuple[Path, ...]:
+    """Roots a repo-relative ``--file`` may be written against.
+
+    ``--repo`` and the working directory are routinely different — the CI
+    templates export ``OPENTIDE_REPO_ROOT`` and the pre-commit hook passes
+    ``--repo``, so resolving against the cwd alone would miss.
+    """
+    from opentide.registry.discovery import discover_workspace
+
+    roots: list[Path] = []
+    for candidate in (discover_workspace(), Path.cwd()):
+        try:
+            resolved = Path(candidate).resolve()
+        except OSError:  # pragma: no cover - unresolvable root
+            continue
+        if resolved not in roots:
+            roots.append(resolved)
+    return tuple(roots)
 
 
 def _checks_for(check: ValidateCheck | None) -> frozenset[ValidateCheck]:

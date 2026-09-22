@@ -20,6 +20,10 @@ def _commit_and_push(*, message: str, empty_note: str, push: str) -> str:
 
     ``git diff --staged --quiet`` exits 1 when there *are* staged changes, so
     chaining it with ``&&`` skips the commit in exactly the case that needs one.
+
+    Every caller emits this as a YAML block scalar. A commit message contains
+    ``": "``, which a plain ``- git commit -m "ci: ..."`` sequence item parses
+    as a mapping instead of a string, and GitLab then rejects the pipeline.
     """
     return "\n".join(
         [
@@ -160,6 +164,14 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
         'git checkout "origin/$CI_DEFAULT_BRANCH" -- .opentide/inflight 2>/dev/null '
         "|| mkdir -p .opentide/inflight"
     )
+    commit_push = textwrap.indent(
+        _commit_and_push(
+            message="ci: update inflight preview shards [skip ci]",
+            empty_note="No inflight shard changes",
+            push=GITLAB_PUSH,
+        ),
+        " " * 6,
+    ).lstrip()
     return (
         "inflight_shards:\n"
         "  stage: deploy\n"
@@ -178,14 +190,8 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
         f"    - {generate_cmd}\n"
         '    - git config user.email "gitlab-ci@opentide.local"\n'
         '    - git config user.name "gitlab-ci"\n'
-        "    - git add .opentide/inflight/\n"
         "    - |\n"
-        "      if git diff --staged --quiet; then\n"
-        '        echo "No inflight shard changes"\n'
-        "        exit 0\n"
-        "      fi\n"
-        '    - git commit -m "ci: update inflight preview shards [skip ci]"\n'
-        f"    - {GITLAB_PUSH}\n"
+        f"      {commit_push}\n"
         "  needs:\n"
         "    - generate"
     )
@@ -198,6 +204,14 @@ def gitlab_inflight_prune_job(*, python_version: str, opentide_version: str) -> 
         opentide_version=opentide_version,
     )
     prune_cmd = inflight_prune_steps(opts)[0]
+    commit_push = textwrap.indent(
+        _commit_and_push(
+            message="ci: prune inflight preview shards [skip ci]",
+            empty_note="No inflight prune changes",
+            push=GITLAB_PUSH,
+        ),
+        " " * 6,
+    ).lstrip()
     return (
         "inflight_prune:\n"
         "  stage: deploy\n"
@@ -213,14 +227,8 @@ def gitlab_inflight_prune_job(*, python_version: str, opentide_version: str) -> 
         f"    - {prune_cmd}\n"
         '    - git config user.email "gitlab-ci@opentide.local"\n'
         '    - git config user.name "gitlab-ci"\n'
-        "    - git add .opentide/inflight/\n"
         "    - |\n"
-        "      if git diff --staged --quiet; then\n"
-        '        echo "No inflight prune changes"\n'
-        "        exit 0\n"
-        "      fi\n"
-        '    - git commit -m "ci: prune inflight preview shards [skip ci]"\n'
-        f"    - {GITLAB_PUSH}\n"
+        f"      {commit_push}\n"
         "  needs:\n"
         "    - generate"
     )
