@@ -7,6 +7,7 @@ to assert the broken contracts from #252–#253 (dict-shaped UUID search,
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,8 @@ from tests.corpus_support import (
     CORPUS_THREAT_UUID,
 )
 
+from opentide.core.registry import OpenTide
+from opentide.mcp_server import resources
 from opentide.mcp_server.catalog import (
     coverage_analysis,
     get_chaining_graph,
@@ -48,6 +51,21 @@ def test_get_object_resolves_every_family(tide_corpus_repo: Path) -> None:
 
 def test_get_object_returns_none_when_missing(tide_corpus_repo: Path) -> None:
     assert get_object(MISSING_UUID) is None
+
+
+def test_uuid_lookups_ignore_case_and_padding(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The UUID pattern matched ``ABCDEF…`` but the lookup was exact-case."""
+    OpenTide.initialise()
+    uuid = "abcdef00-0000-4000-8000-0000000000ab"
+    body = OpenTide.Models.rules[CORPUS_RULE_UUIDS["sentinel"]]
+    monkeypatch.setitem(OpenTide.Models.rules, uuid, body)
+    for spelling in (uuid.upper(), f"  {uuid.upper()} "):
+        found = get_object(spelling)
+        assert found is not None and found["uuid"] == uuid, spelling
+        assert [hit["uuid"] for hit in search_catalog(spelling)] == [uuid], spelling
+    assert "error" not in json.loads(resources.resource_rule(uuid.upper()))
 
 
 def test_search_by_uuid_returns_a_summary_list(tide_corpus_repo: Path) -> None:
