@@ -70,24 +70,10 @@ def _git_stdout(repo_root: Path, *args: str) -> str:
 
 
 def _resolve_merge_base(repo_root: Path) -> str:
-    candidates: list[str] = []
-    try:
-        upstream = _git_stdout(repo_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
-    except subprocess.CalledProcessError:
-        upstream = ""
-    if upstream:
-        candidates.append(upstream)
-    candidates.extend(["origin/development", "origin/main", "origin/master"])
-    seen: set[str] = set()
-    for candidate in candidates:
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        try:
-            return _git_stdout(repo_root, "merge-base", "HEAD", candidate)
-        except subprocess.CalledProcessError:
-            continue
-    return _git_stdout(repo_root, "merge-base", "HEAD", "HEAD")
+    """Resolve the commit to diff against (raises ``GitBaselineError`` without git)."""
+    from opentide.core.git_baseline import resolve_baseline
+
+    return resolve_baseline(repo_root).commit
 
 
 def _git_changed_paths(repo_root: Path, merge_base: str) -> set[Path]:
@@ -280,11 +266,24 @@ def run(
         catalog = build_catalog()
         catalog_records = [*catalog.rules, *catalog.objectives, *catalog.threats]
         catalog_uuids = {record.uuid for record in catalog_records}
+        from opentide.core.git_baseline import GitBaselineError
         from opentide.core.root import get_repo_root
 
-        changed_paths, changed_uuids, target_uuids, deleted_objects = _resolve_changed_targets(
-            catalog_uuids, get_repo_root()
-        )
+        try:
+            changed_paths, changed_uuids, target_uuids, deleted_objects = _resolve_changed_targets(
+                catalog_uuids, get_repo_root()
+            )
+        except GitBaselineError as exc:
+            logger.warning("docs_changed_requires_git", detail=str(exc))
+            return {
+                "message": f"--changed requires a git repository: {exc}",
+                "status": "failed",
+                "changed_paths": [],
+                "changed_uuids": [],
+                "counts": {"rules": 0, "objectives": 0, "threats": 0},
+                "output": str(ctx.output_dir),
+                "_exit_code": 1,
+            }
         if not changed_paths:
             return {
                 "message": "No changed object documentation detected",
