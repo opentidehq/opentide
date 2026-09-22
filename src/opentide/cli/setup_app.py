@@ -8,7 +8,7 @@ import typer
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
-from opentide.cli.output import emit, emit_error, emit_success
+from opentide.cli.output import emit, emit_deprecation, emit_error, emit_success
 from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
 from opentide.cli.services.setup.interactive import (
     InteractiveRequiredError,
@@ -54,22 +54,37 @@ def _resolve_setup_path(cli: CliContext, path: str | Path) -> Path:
     return target
 
 
+def _given_on_command_line(ctx: typer.Context, name: str) -> bool:
+    # Compared by name: Typer vendors Click, so the ParameterSource enum lives in
+    # a private module whose path is not part of Typer's API.
+    source = ctx.get_parameter_source(name)
+    return source is not None and source.name == "COMMANDLINE"
+
+
 def _setup_path(
+    ctx: typer.Context,
     cli: CliContext,
     positional: str,
     option: str,
     *,
     deprecate_positional: bool = False,
 ) -> Path:
-    """Resolve a setup target from ``--path/-C`` or the legacy positional PATH."""
-    if option != ".":
-        if positional != ".":
-            raise typer.BadParameter(
-                "Pass the repository path once: use --path/-C or the positional PATH, not both."
-            )
+    """Resolve a setup target from ``--path/-C`` or the legacy positional PATH.
+
+    Explicitness comes from the parameter source, not from comparing against the
+    ``"."`` default: ``setup repo ./other --path .`` names two different
+    targets and must be rejected, not silently resolved to ``./other``.
+    """
+    flag_given = _given_on_command_line(ctx, "path_flag")
+    positional_given = _given_on_command_line(ctx, "path")
+    if flag_given and positional_given:
+        raise typer.BadParameter(
+            "Pass the repository path once: use --path/-C or the positional PATH, not both."
+        )
+    if flag_given:
         return _resolve_setup_path(cli, option)
-    if positional != "." and deprecate_positional:
-        get_console().print("[yellow]DEPRECATED[/] Positional PATH; use --path/-C instead.")
+    if positional_given and deprecate_positional:
+        emit_deprecation(f"positional PATH ({ctx.command_path} {positional})", "--path/-C")
     return _resolve_setup_path(cli, positional)
 
 
@@ -209,7 +224,7 @@ def setup_repo_cmd(
 ) -> None:
     """Scaffold a detection repository."""
     cli = get_context(ctx)
-    base = _setup_path(cli, path, path_flag)
+    base = _setup_path(ctx, cli, path, path_flag)
     if yes or _has_repo_flags(name, org, description, platform):
         if not _confirm_write(cli, base, "Create this repository scaffold?", yes=yes):
             emit_success(cli, {"message": "Repository setup cancelled", "status": "skipped"})
@@ -248,7 +263,7 @@ def setup_platforms_cmd(
 ) -> None:
     """Create and enable platform configuration files under ``.opentide/configurations/platforms/``."""
     cli = get_context(ctx)
-    base = _setup_path(cli, path, path_flag)
+    base = _setup_path(ctx, cli, path, path_flag)
     platforms: list[DetectionPlatform] = []
     if sentinel:
         platforms.append(DetectionPlatform.sentinel)
@@ -331,7 +346,7 @@ def setup_env_cmd(
     from opentide.cli.services.setup.env import EnvSetupOptions, run_env_setup
 
     cli = get_context(ctx)
-    base = _setup_path(cli, path, path_flag)
+    base = _setup_path(ctx, cli, path, path_flag)
     if not _confirm_write(cli, base, "Write .env.example with OPENTIDE_REPO_ROOT?", yes=yes):
         emit_success(cli, {"message": "Environment setup cancelled", "status": "skipped"})
         return
@@ -355,7 +370,7 @@ def setup_hooks_cmd(
     from opentide.cli.services.setup.hooks import HooksSetupOptions, run_hooks_setup
 
     cli = get_context(ctx)
-    base = _setup_path(cli, path, path_flag)
+    base = _setup_path(ctx, cli, path, path_flag)
     if not _confirm_write(cli, base, "Configure validate-on-commit hooks?", yes=yes):
         emit_success(cli, {"message": "Hook setup cancelled", "status": "skipped"})
         return
@@ -376,7 +391,7 @@ def setup_mcp_cmd(
 ) -> None:
     """Write OpenTide MCP configuration for editors and agents."""
     cli = get_context(ctx)
-    base = _setup_path(cli, path, path_flag)
+    base = _setup_path(ctx, cli, path, path_flag)
     hosts: list[McpHost] = []
     if vscode:
         hosts.append(McpHost.vscode)
@@ -489,7 +504,7 @@ def setup_skills_discover_cmd(
 ) -> None:
     """List skills from the OpenTideHQ/skills catalogue."""
     cli = get_context(ctx)
-    base = _setup_path(cli, path, path_flag, deprecate_positional=True)
+    base = _setup_path(ctx, cli, path, path_flag, deprecate_positional=True)
     try:
         payload = discover_skills(base, query=query, installed_only=installed, refresh=refresh)
     except SkillsManifestError as exc:
@@ -565,7 +580,7 @@ def setup_vscode_cmd(
     """Write VS Code yaml.schemas and snippets (deprecated). Default: both."""
     cli = get_context(ctx)
     cli.apply_environment()
-    target = _setup_path(cli, path, path_flag)
+    target = _setup_path(ctx, cli, path, path_flag)
     run_settings_flag = settings or not snippets
     run_snippets_flag = snippets or not settings
     result = run_vscode_setup(

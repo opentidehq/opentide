@@ -15,7 +15,13 @@ from opentide.cli.enums import (
     ValidateCheck,
     platform_label,
 )
-from opentide.cli.output import CommandResult, emit_error, emit_result, emit_success
+from opentide.cli.output import (
+    CommandResult,
+    emit_deprecation,
+    emit_error,
+    emit_result,
+    emit_success,
+)
 from opentide.cli.services.deploy import run_deploy
 from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
@@ -25,9 +31,9 @@ from opentide.cli.services.info import collect_info
 from opentide.cli.services.lint import run_lint
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
-from opentide.core.logging import LoggingConfig, init_logging, is_json_output
+from opentide.core.logging import LoggingConfig, init_logging
 from opentide.core.logging import print_banner as print_banner  # noqa: F401
-from opentide.core.logging.config import get_console, get_stdout_console
+from opentide.core.logging.config import get_stdout_console
 from opentide.core.root import get_repo_root
 
 logger = structlog.get_logger("opentide.cli.__init__")
@@ -39,11 +45,7 @@ app = typer.Typer(
 )
 
 
-def _deprecate(legacy: str, replacement: str) -> None:
-    if is_json_output():
-        logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
-        return
-    get_console().print(f"[yellow]DEPRECATED[/] {legacy}; use {replacement}.")
+_deprecate = emit_deprecation
 
 
 @app.callback()
@@ -404,9 +406,11 @@ def document_cmd(
     output: str | None = typer.Option(None, "--output"),
     flavor: str | None = typer.Option(None, "--flavor"),
 ) -> None:
-    _deprecate("opentide document", "opentide generate docs")
+    # Each `document <scope>` subcommand names its own replacement; warning here
+    # too would print two DEPRECATED lines for one invocation.
     if ctx.invoked_subcommand is not None:
         return
+    _deprecate("opentide document", "opentide generate docs")
     _emit_docs(ctx, output=output, flavor=flavor)
 
 
