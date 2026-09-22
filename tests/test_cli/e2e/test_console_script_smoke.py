@@ -116,6 +116,29 @@ def test_typer_help_in_a_pipe_honours_less_colour(
 
 
 @pytest.mark.parametrize(
+    ("argv", "returncode"),
+    [
+        pytest.param(["--help", "--no-color"], 0, id="flag-after-help"),
+        pytest.param(["--no-color", "--bogus"], 2, id="unknown-root-option"),
+        pytest.param(["--no-color", "--repo"], 2, id="root-option-missing-value"),
+    ],
+)
+def test_no_color_holds_wherever_the_root_parser_stops(
+    script_runner, tide_corpus_repo, argv: list[str], returncode: int
+) -> None:
+    """Click parses the root options, and exits on a bad one, before any callback.
+
+    The eager ``--no-color`` callback therefore missed a ``--help`` typed before
+    it and every root-level usage error, even with ``FORCE_COLOR=1`` overridden.
+    """
+    env = _terminal_env({"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1"})
+    result = script_runner.run(["opentide", *argv], env=env)
+    assert result.returncode == returncode, result.stderr
+    assert "\x1b[" not in result.stdout
+    assert "\x1b[" not in result.stderr
+
+
+@pytest.mark.parametrize(
     "colour_env",
     [
         pytest.param({"FORCE_COLOR": "1"}, id="FORCE_COLOR=1"),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 import structlog
 import typer
@@ -633,6 +634,12 @@ def info_cmd(
 
 def main() -> None:
     """Console script entry point."""
+    # Click parses root options, and exits on a bad one, before the eager
+    # callback runs, and handles eager options in argv order.
+    argv = sys.argv[1:]
+    options = argv[: argv.index("--")] if "--" in argv else argv
+    if "--no-color" in options:
+        sync_typer_rendering(no_color=True)
     app()
 
 
