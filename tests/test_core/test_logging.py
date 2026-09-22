@@ -67,6 +67,42 @@ def test_cli_context_honors_ambient_no_color() -> None:
     assert config.plain is True
 
 
+@pytest.mark.parametrize(
+    ("force_color", "config", "expected"),
+    [
+        pytest.param("0", LoggingConfig(plain=True), False, id="FORCE_COLOR=0"),
+        pytest.param("1", LoggingConfig(plain=True), False, id="plain-over-FORCE_COLOR=1"),
+        pytest.param("1", LoggingConfig(json_output=True), False, id="json-over-FORCE_COLOR=1"),
+        pytest.param("false", LoggingConfig(), False, id="FORCE_COLOR=false"),
+        pytest.param("", LoggingConfig(), False, id="FORCE_COLOR-empty"),
+        pytest.param("1", LoggingConfig(), True, id="FORCE_COLOR=1"),
+        pytest.param("3", LoggingConfig(), True, id="FORCE_COLOR=3"),
+    ],
+)
+def test_force_color_decides_the_terminal_not_rich(
+    monkeypatch: pytest.MonkeyPatch, force_color: str, config: LoggingConfig, expected: bool
+) -> None:
+    """Rich alone would force a terminal for every non-empty FORCE_COLOR."""
+    from opentide.core.logging.config import _make_console
+
+    monkeypatch.setenv("FORCE_COLOR", force_color)
+    monkeypatch.setattr("sys.stdout", StringIO())
+    assert _make_console(stderr=False, config=config).is_terminal is expected
+
+
+def test_plain_console_writes_no_escapes_under_force_color_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from opentide.core.logging.config import _make_console
+
+    monkeypatch.setenv("FORCE_COLOR", "0")
+    monkeypatch.setenv("TERM", "xterm-256color")
+    buffer = StringIO()
+    monkeypatch.setattr("sys.stdout", buffer)
+    _make_console(stderr=False, config=LoggingConfig.from_env()).print("[bold green]OK[/] done")
+    assert buffer.getvalue() == "OK done\n"
+
+
 def test_is_json_output() -> None:
     init_logging(LoggingConfig(json_output=True), force=True)
     assert is_json_output() is True

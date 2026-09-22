@@ -159,3 +159,77 @@ def test_changed_paths_narrow_to_a_pathspec(repo: Path) -> None:
     scoped = changed_paths(workspace, baseline, pathspec="detections/objects/")
 
     assert [change.relative.name for change in scoped] == ["new.yaml"]
+
+
+def _commit_file(repo: Path, name: str, message: str) -> str:
+    (repo / name).write_text(f"{name}\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", message)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+@pytest.fixture
+def published(tmp_path: Path, repo: Path) -> tuple[Path, str]:
+    """``main`` and a ``feature`` branch, both pushed with ``-u`` to a bare remote."""
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(repo, "init", "-q", "-b", "main", ".")
+    base = _commit_file(repo, "a.txt", "first")
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "-u", "origin", "main")
+    _git(repo, "checkout", "-qb", "feature")
+    _commit_file(repo, "b.txt", "second")
+    _git(repo, "push", "-q", "-u", "origin", "feature")
+    return repo, base
+
+
+def test_a_branch_that_tracks_itself_is_not_its_own_baseline(
+    published: tuple[Path, str],
+) -> None:
+    """After ``push -u`` the upstream is ``origin/feature``, which contains ``HEAD``."""
+    repo, base = published
+    assert "origin/feature" not in candidate_refs(repo)
+    baseline = resolve_baseline(repo)
+    assert (baseline.ref, baseline.commit) == ("origin/main", base)
+    assert [c.relative.as_posix() for c in changed_paths(repo, baseline)] == ["b.txt"]
+
+
+def test_a_branch_stacked_on_another_keeps_it_as_the_baseline(
+    published: tuple[Path, str],
+) -> None:
+    repo, _ = published
+    fork = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-qb", "feature-2", "--track", "feature")
+    _commit_file(repo, "c.txt", "third")
+
+    baseline = resolve_baseline(repo)
+    assert (baseline.ref, baseline.commit) == ("feature", fork)
+
+
+def test_the_remote_default_branch_is_found_by_any_name(tmp_path: Path, repo: Path) -> None:
+    """A clone records ``origin/HEAD``; ``trunk`` is not in the probed names."""
+    _git(repo, "init", "-q", "-b", "trunk", ".")
+    base = _commit_file(repo, "a.txt", "first")
+    clone = tmp_path / "clone"
+    _git(tmp_path, "clone", "-q", str(repo), str(clone))
+    _git(clone, "checkout", "-qb", "feature")
+    _commit_file(clone, "b.txt", "second")
+
+    baseline = resolve_baseline(clone)
+    assert (baseline.ref, baseline.commit) == ("origin/trunk", base)
+
+
+def test_non_ascii_paths_come_back_verbatim(repo: Path) -> None:
+    """Without ``-z`` git prints ``"d\\303\\251tection.yaml"``, a path that does not exist."""
+    _git(repo, "init", "-q", "-b", "main", ".")
+    _commit_file(repo, "règle.yaml", "first")
+    _git(repo, "checkout", "-qb", "feature")
+    (repo / "règle.yaml").write_text("changed\n", encoding="utf-8")
+    (repo / "détection nouvelle.yaml").write_text("new\n", encoding="utf-8")
+
+    changes = changed_paths(repo, resolve_baseline(repo))
+    assert sorted(c.relative.as_posix() for c in changes) == [
+        "détection nouvelle.yaml",
+        "règle.yaml",
+    ]
+    assert all(c.absolute.is_file() for c in changes)

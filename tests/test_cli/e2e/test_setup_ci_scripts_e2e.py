@@ -8,6 +8,8 @@ scripts and assert provider-correct variable syntax and commit control flow.
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -140,6 +142,25 @@ def test_gitlab_inflight_uses_gitlab_variable_syntax(invoke_cli, tmp_path: Path)
         assert "${CI_PROJECT_PATH}" in script, script
 
 
+def test_gitlab_jobs_that_run_git_install_it(invoke_cli, tmp_path: Path) -> None:
+    """``python:<ver>-slim`` has no git; the inflight jobs died on their first git step."""
+    _, parsed = _render(invoke_cli, tmp_path, "gitlab", ".gitlab-ci.yml")
+    git_jobs = []
+    for name, script in _gitlab_scripts(parsed).items():
+        if not any(line.lstrip().startswith("git ") for line in script.splitlines()):
+            continue
+        git_jobs.append(name)
+        job = parsed[name]
+        image = str(job.get("image") or parsed.get("default", {}).get("image", ""))
+        if "slim" not in image:
+            continue
+        setup = "\n".join(_script_lines(name, job.get("before_script", [])))
+        assert "apt-get install" in setup and " git" in setup, (
+            f"{name} runs git on {image}, which does not ship it:\n{setup}"
+        )
+    assert {"inflight_shards", "inflight_prune"} <= set(git_jobs), git_jobs
+
+
 @pytest.mark.parametrize("job_name", ["inflight_shards", "inflight_prune"])
 def test_gitlab_inflight_commits_when_shards_change(
     invoke_cli, tmp_path: Path, job_name: str
@@ -221,6 +242,169 @@ def test_github_keeps_its_own_expression_syntax(invoke_cli, tmp_path: Path) -> N
     rendered, parsed = _render(invoke_cli, tmp_path, "github", ".github/workflows/opentide.yml")
     assert GITHUB_EXPRESSION in rendered
     assert parsed["env"]["OPENTIDE_REPO_ROOT"] == "${{ github.workspace }}"
+
+
+_GENERATE = "opentide generate inflight"
+_NEW_SHARD = ".opentide/inflight/0000-pr.json"
+_PR_OBJECT = "objects/rules/pr-only.yaml"
+_GITLAB_REMOTE = "https://gitlab-ci-token:job-token@gitlab.example.test/team/detections.git"
+_PIPELINES = {
+    "github": ".github/workflows/opentide.yml",
+    "gitlab": ".gitlab-ci.yml",
+    "azure": "azure-pipelines.yml",
+}
+
+
+def _git(cwd: Path, *args: str) -> str:
+    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+    return done.stdout.strip()
+
+
+def _commit(repo: Path, message: str, files: dict[str, str | None]) -> None:
+    for relpath, content in files.items():
+        path = repo / relpath
+        if content is None:
+            path.unlink()
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+
+
+def _pr_job_script(ci: str, parsed: dict[str, Any]) -> str:
+    """The shell the PR-triggered shard job runs, minus the package install."""
+    if ci == "github":
+        steps = parsed["jobs"]["inflight_shards"]["steps"]
+        runs = [str(step["run"]) for step in steps if "run" in step]
+        script = "\n".join(run for run in runs if "pip install" not in run)
+    elif ci == "gitlab":
+        script = "\n".join(_script_lines("inflight_shards", parsed["inflight_shards"]["script"]))
+    else:
+        steps = _azure_jobs(parsed)["inflight_shards"]["steps"]
+        script = next(str(s["script"]) for s in steps if "git commit" in str(s.get("script", "")))
+    assert _GENERATE in script, script
+    return script.replace(_GENERATE, f"printf '{{}}\\n' > {_NEW_SHARD}")
+
+
+@pytest.fixture
+def ci_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """A bare ``origin`` with ``main``, isolated from the user's git configuration."""
+    home = tmp_path / "home"
+    home.mkdir()
+    origin = tmp_path / "origin.git"
+    for name in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(name)
+    env = {
+        "HOME": str(home),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_AUTHOR_NAME": "dev",
+        "GIT_AUTHOR_EMAIL": "dev@example.test",
+        "GIT_COMMITTER_NAME": "dev",
+        "GIT_COMMITTER_EMAIL": "dev@example.test",
+        # GitLab pushes to an https URL built from CI variables; point it here.
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": f"url.{origin}.insteadOf",
+        "GIT_CONFIG_VALUE_0": _GITLAB_REMOTE,
+    }
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    dev = tmp_path / "dev"
+    _git(tmp_path, "clone", "-q", str(origin), str(dev))
+    return {"origin": origin, "dev": dev, "tmp": tmp_path}
+
+
+def _run_pr_job(ci: str, script: str, ci_git: dict[str, Any], branch: str) -> None:
+    """Check out *branch* the way the provider does for a PR, then run the job."""
+    work = ci_git["tmp"] / f"ci-{ci}"
+    _git(ci_git["tmp"], "clone", "-q", str(ci_git["origin"]), str(work))
+    if ci == "github":
+        _git(work, "checkout", "-q", branch)
+    elif ci == "gitlab":
+        _git(work, "checkout", "-q", "--detach", f"origin/{branch}")
+    else:
+        # Azure builds a PR from the merge of the PR into its target.
+        _git(work, "checkout", "-q", "--detach", "origin/main")
+        _git(work, "merge", "-q", "--no-ff", "-m", "Merge PR", f"origin/{branch}")
+    env = dict(os.environ) | {
+        "CI_DEFAULT_BRANCH": "main",
+        "CI_PROJECT_DIR": str(work),
+        "CI_JOB_TOKEN": "job-token",
+        "CI_SERVER_HOST": "gitlab.example.test",
+        "CI_PROJECT_PATH": "team/detections",
+        "BUILD_SOURCESDIRECTORY": str(work),
+    }
+    done = subprocess.run(
+        ["bash", "-eo", "pipefail", "-c", script],
+        cwd=work,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert done.returncode == 0, f"{ci} job failed\n{done.stdout}\n{done.stderr}"
+
+
+def _main_tree(origin: Path) -> set[str]:
+    return set(_git(origin, "ls-tree", "-r", "--name-only", "main").splitlines())
+
+
+@pytest.mark.parametrize("ci", sorted(_PIPELINES))
+def test_pr_shard_job_publishes_only_shards_to_the_default_branch(
+    invoke_cli, tmp_path: Path, ci_git: dict[str, Any], ci: str
+) -> None:
+    """The PR job committed on the PR head, then pushed ``HEAD`` to ``main``.
+
+    For a PR that is up to date with ``main`` that push is a fast-forward, so
+    every PR run published its unreviewed changes to the default branch. Run
+    the generated job against a real remote and check what ``main`` gained.
+    """
+    _, parsed = _render(invoke_cli, tmp_path, ci, _PIPELINES[ci])
+    script = _pr_job_script(ci, parsed)
+    dev, origin = ci_git["dev"], ci_git["origin"]
+    _commit(dev, "seed", {"README.md": "detections\n", ".opentide/inflight/other.json": "{}\n"})
+    _git(dev, "push", "-q", "origin", "main")
+    main_before = _git(origin, "rev-parse", "main")
+    _git(dev, "checkout", "-q", "-b", "feature")
+    _commit(dev, "add a rule", {_PR_OBJECT: "name: unreviewed\n"})
+    _git(dev, "push", "-q", "origin", "feature")
+
+    _run_pr_job(ci, script, ci_git, "feature")
+
+    assert _git(origin, "rev-parse", "main~1") == main_before, "main gained more than one commit"
+    changed = _git(origin, "diff", "--name-only", main_before, "main").splitlines()
+    assert changed == [_NEW_SHARD]
+    assert _PR_OBJECT not in _main_tree(origin)
+    assert _git(origin, "rev-parse", "feature") != _git(origin, "rev-parse", "main")
+
+
+@pytest.mark.parametrize("ci", sorted(_PIPELINES))
+def test_pr_shard_job_starts_from_the_default_branch_shards(
+    invoke_cli, tmp_path: Path, ci_git: dict[str, Any], ci: str
+) -> None:
+    """A PR cut before a prune must neither fail to push nor resurrect the shard."""
+    _, parsed = _render(invoke_cli, tmp_path, ci, _PIPELINES[ci])
+    script = _pr_job_script(ci, parsed)
+    dev, origin = ci_git["dev"], ci_git["origin"]
+    _commit(dev, "seed", {"README.md": "detections\n", ".opentide/inflight/stale.json": "{}\n"})
+    _git(dev, "push", "-q", "origin", "main")
+    _git(dev, "checkout", "-q", "-b", "feature")
+    _commit(dev, "add a rule", {_PR_OBJECT: "name: unreviewed\n"})
+    _git(dev, "push", "-q", "origin", "feature")
+    _git(dev, "checkout", "-q", "main")
+    _commit(
+        dev,
+        "prune and another PR's shard",
+        {".opentide/inflight/stale.json": None, ".opentide/inflight/other.json": "{}\n"},
+    )
+    _git(dev, "push", "-q", "origin", "main")
+
+    _run_pr_job(ci, script, ci_git, "feature")
+
+    tree = _main_tree(origin)
+    assert {_NEW_SHARD, ".opentide/inflight/other.json", "README.md"} <= tree
+    assert ".opentide/inflight/stale.json" not in tree
+    assert _PR_OBJECT not in tree
 
 
 @pytest.mark.parametrize("job_name", ["inflight_shards", "inflight_prune"])
