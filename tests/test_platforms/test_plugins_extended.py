@@ -115,6 +115,27 @@ def test_query_validation_for_loads_one_platform() -> None:
     assert query_validators.call_args.kwargs["only"] == ["sentinel"]
 
 
+def test_mdr_for_loads_only_the_enabled_requested_platforms() -> None:
+    deployer = MagicMock()
+    with (
+        patch("opentide.deployment.enabled_systems", return_value=["sentinel", "splunk"]),
+        patch.object(
+            plugins.PlatformLoader, "rule_deployers", return_value={"sentinel": deployer}
+        ) as rule_deployers,
+    ):
+        assert DeployTide().mdr_for(["sentinel", "crowdstrike"]) == {"sentinel": deployer}
+    assert rule_deployers.call_args.kwargs["only"] == ["sentinel"]
+
+
+def test_mdr_for_builds_nothing_when_no_requested_platform_is_enabled() -> None:
+    with (
+        patch("opentide.deployment.enabled_systems", return_value=["splunk"]),
+        patch.object(plugins.PlatformLoader, "rule_deployers") as rule_deployers,
+    ):
+        assert DeployTide().mdr_for(["sentinel"]) == {}
+    rule_deployers.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ("platform", "enabled"),
     [("crowdstrike", ["crowdstrike"]), ("sentinel", ["splunk"])],

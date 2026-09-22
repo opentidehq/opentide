@@ -10,7 +10,7 @@ import importlib
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Iterator, cast
 import structlog
 
@@ -210,6 +210,14 @@ class DeployTide:
     def mdr(self) -> dict[str, RuleDeployer]:
         enabled = self._enabled_keys()
         return {k: v for k, v in Platforms.deployers().items() if k in enabled}
+
+    def mdr_for(self, platforms: Iterable[str]) -> dict[str, RuleDeployer]:
+        """Load only *platforms*' deployers, so one broken engine cannot block the rest."""
+        enabled = self._enabled_keys()
+        wanted = [platform for platform in platforms if platform in enabled]
+        if not wanted:
+            return {}
+        return PlatformLoader().rule_deployers(only=wanted)
 
     @property
     def query_validation(self) -> dict[str, QueryValidator]:

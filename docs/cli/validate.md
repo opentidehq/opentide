@@ -106,6 +106,15 @@ The check covers delimiter balance, string and comment termination, pipeline
 shape, and dangling operators. It is not a grammar: `status: passed` means the
 query parses, not that the fields exist or that it returns rows.
 
+Each language's own syntax is respected, so valid content is not rejected:
+
+| Language | Understood |
+|----------|------------|
+| KQL | `//` comments, `'`/`"` strings, verbatim `@"C:\dir\"`, multi-line ```` ``` ```` literals |
+| SPL | ```` ``` ```` comment blocks, generating commands that start with `\|` |
+| S1QL | `//` comments, `\|\|` as `OR`, a leading `\|` stage |
+| Lucene | backslash escapes (`iex\(`), mixed range ends (`[1 TO 5}`), `/regex/` terms, apostrophes as data |
+
 ### `--live`
 
 `--live` builds the platform client and submits the query, so it needs the

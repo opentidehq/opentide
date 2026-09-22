@@ -72,6 +72,29 @@ def test_search_keyword_and_uuid_share_one_shape(tide_corpus_repo: Path) -> None
     assert set(by_uuid[0]) == set(keyword[0])
 
 
+def test_search_by_uuid_honours_filters(tide_corpus_repo: Path) -> None:
+    """A UUID query returned its object whatever the filters said."""
+
+    def hits(uuid: str, **filters: str) -> list[str]:
+        return [hit["uuid"] for hit in search_catalog(uuid, **filters)]
+
+    sentinel = CORPUS_RULE_UUIDS["sentinel"]
+    status = search_catalog(sentinel)[0]["status"]
+    assert status
+
+    assert hits(sentinel, platform="sentinel") == [sentinel]
+    assert hits(sentinel, object_type="rule") == [sentinel]
+    assert hits(sentinel, status=status) == [sentinel]
+    assert hits(sentinel, technique=CORPUS_TECHNIQUE) == [sentinel]
+    assert hits(CORPUS_THREAT_UUID, actor=CORPUS_ACTOR) == [CORPUS_THREAT_UUID]
+
+    assert hits(sentinel, object_type="threat") == []
+    assert hits(sentinel, platform="splunk") == []
+    assert hits(sentinel, status="NO_SUCH_STATUS") == []
+    assert hits(sentinel, technique="T9999") == []
+    assert hits(CORPUS_THREAT_UUID, actor="G9999") == []
+
+
 def test_search_object_type_filter(tide_corpus_repo: Path) -> None:
     results = search_catalog("simulated", object_type="threat")
     assert results

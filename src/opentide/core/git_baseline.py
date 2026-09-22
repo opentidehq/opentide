@@ -65,7 +65,10 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
             ["git", *args],
             cwd=repo_root,
             capture_output=True,
-            text=True,
+            # Paths are bytes to git; decode them the way ``os.fsdecode`` would
+            # rather than by locale, which is ASCII in many CI images.
+            encoding="utf-8",
+            errors="surrogateescape",
             check=False,
         )
     except OSError as exc:
@@ -90,18 +93,42 @@ def has_git_head(repo_root: Path) -> bool:
     return _git_stdout(repo_root, "rev-parse", "--verify", "HEAD") is not None
 
 
-def candidate_refs(repo_root: Path) -> list[str]:
-    """Baseline refs to try, most specific first."""
-    candidates: list[str] = []
+def _upstream(repo_root: Path, head_branch: str | None) -> str | None:
+    """``@{upstream}``, unless it is the branch's own copy on its remote.
+
+    ``git push -u origin feature`` and ``actions/checkout`` (``checkout -B
+    feature refs/remotes/origin/feature``) both make a branch track itself.
+    ``merge-base HEAD origin/feature`` is then ``HEAD``, and every committed
+    change disappears from the diff. A branch that tracks another branch
+    (``origin/main``, or ``feature-1`` in a stack) is still a real base.
+    """
     upstream = _git_stdout(
         repo_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
     )
+    if not upstream or not head_branch:
+        return None
+    merge = _git_stdout(repo_root, "config", "--get", f"branch.{head_branch}.merge")
+    if merge == f"refs/heads/{head_branch}":
+        return None
+    return upstream
+
+
+def candidate_refs(repo_root: Path) -> list[str]:
+    """Baseline refs to try, most specific first."""
+    head_branch = _git_stdout(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
+    candidates: list[str] = []
+    upstream = _upstream(repo_root, head_branch)
     if upstream:
         candidates.append(upstream)
+    # A clone records the remote's default branch, whatever it is called.
+    remote_default = _git_stdout(
+        repo_root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"
+    )
+    if remote_default:
+        candidates.append(remote_default)
     candidates.extend(f"origin/{name}" for name in DEFAULT_BRANCH_NAMES)
     candidates.extend(DEFAULT_BRANCH_NAMES)
 
-    head_branch = _git_stdout(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
     ordered: list[str] = []
     seen: set[str] = set()
     for candidate in candidates:
@@ -169,21 +196,22 @@ def changed_paths(
     # one result list.
     top = git_toplevel(repo_root)
     scope = ["--", pathspec] if pathspec else []
+    # `-z` prints paths verbatim. Without it git C-quotes any non-ASCII name
+    # (`"objects/rules/d\303\251tection.yaml"`), which then reads as deleted.
     lines: list[str] = []
-    diff = _git(top, "diff", "--name-only", "--diff-filter=ACMRD", baseline.commit, *scope)
+    diff = _git(top, "diff", "--name-only", "-z", "--diff-filter=ACMRD", baseline.commit, *scope)
     if diff.returncode == 0:
-        lines.extend(diff.stdout.splitlines())
-    untracked = _git(top, "ls-files", "--others", "--exclude-standard", "--full-name", *scope)
+        lines.extend(diff.stdout.split("\0"))
+    untracked = _git(top, "ls-files", "-z", "--others", "--exclude-standard", "--full-name", *scope)
     if untracked.returncode == 0:
-        lines.extend(untracked.stdout.splitlines())
+        lines.extend(untracked.stdout.split("\0"))
 
     seen: set[Path] = set()
     results: list[ChangedPath] = []
     for line in lines:
-        stripped = line.strip()
-        if not stripped:
+        if not line:
             continue
-        relative = Path(stripped)
+        relative = Path(line)
         if relative in seen:
             continue
         seen.add(relative)
