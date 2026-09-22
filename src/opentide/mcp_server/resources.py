@@ -140,8 +140,26 @@ def resource_template(object_type: str) -> str:
 
 
 def resource_vocabularies() -> str:
+    """Index of vocabularies — metadata and a pointer, not the entries.
+
+    The bundled entries serialise to several megabytes (ATT&CK alone has over a
+    thousand actors), which no agent context should receive to learn which
+    vocabularies exist. Entries live at ``opentide://vocabularies/{name}``.
+    """
     ensure_initialised()
-    return _json_resource(OpenTide.Vocabularies.Index)
+    index: dict[str, Any] = {}
+    for name, vocabulary in OpenTide.Vocabularies.Index.items():
+        if isinstance(vocabulary, Mapping):
+            metadata, entries = vocabulary.get("metadata"), vocabulary.get("entries")
+        else:
+            metadata = getattr(vocabulary, "metadata", None)
+            entries = getattr(vocabulary, "entries", None)
+        index[str(name)] = {
+            "metadata": _json_ready(metadata) or {},
+            "entry_count": len(entries) if isinstance(entries, Mapping | list) else 0,
+            "uri": f"opentide://vocabularies/{name}",
+        }
+    return _json_resource(index)
 
 
 def resource_vocabulary(name: str) -> str:

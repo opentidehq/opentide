@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from tests.corpus_support import (
     CORPUS_ACTOR,
     CORPUS_OBJECTIVE_UUID,
@@ -111,6 +112,28 @@ def test_coverage_unknown_technique_is_not_covered(tide_corpus_repo: Path) -> No
     result = coverage_analysis(technique="T9999")
     assert result["covered"] is False
     assert result["rules"] == []
+    assert result["matched_techniques"] == []
+
+
+def test_coverage_for_a_parent_includes_sub_technique_rules(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rules tagged ``T1059.001`` answer "what do we detect for T1059?"."""
+    from opentide.core.registry import OpenTide
+    from opentide.mcp_server.catalog import ensure_initialised
+
+    ensure_initialised()
+    sub_uuid = "00000000-0000-4000-8003-0000000000aa"
+    monkeypatch.setitem(
+        OpenTide.Models.rules, sub_uuid, {"name": "PowerShell", "techniques": ["T1059.001"]}
+    )
+
+    parent = coverage_analysis(technique="T1059")
+    assert sub_uuid in parent["rules"]
+    assert set(parent["matched_techniques"]) >= {"T1059", "T1059.001"}
+
+    child = coverage_analysis(technique="T1059.001")
+    assert child["rules"] == [sub_uuid], "a sub-technique query must not widen to its parent"
 
 
 def test_search_actor_reads_threat_actors(tide_corpus_repo: Path) -> None:
