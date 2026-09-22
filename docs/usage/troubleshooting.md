@@ -137,9 +137,9 @@ Confirm `.opentide/templates/rule.1.0.template.yaml` has no `null`, `metadata.tl
 opentide setup ci github --yes
 ```
 
-### `deploy` or `validate query` crashes locally with `illegal_deployment_plan`
+### `deploy` or `validate query --live` crashes locally with `illegal_deployment_plan`
 
-`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly.
+`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly. Since **0.4.0** the default `validate query` is offline and never reads the plan, so only `--live` can reach this.
 
 ### Tutorial objects fail `validate --strict` or `lint --strict`
 
