@@ -2,10 +2,27 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
 from opentide.validation.issues import ValidationIssue
+
+
+def _path_variants(target: str) -> tuple[str, str | None]:
+    """Return ``(basename, resolved absolute path)`` for a ``--file`` target.
+
+    The resolved path is ``None`` for bare basenames, which stay basename-only
+    matches against the index (``files`` only stores file names).
+    """
+    raw = target.strip()
+    as_path = Path(raw)
+    if raw in {"", "."} or (as_path.name == raw and not as_path.is_absolute()):
+        return raw, None
+    try:
+        return as_path.name, str(as_path.resolve())
+    except OSError:  # pragma: no cover - unresolvable path on exotic filesystems
+        return as_path.name, str(as_path)
 
 
 @dataclass(frozen=True)
@@ -15,6 +32,10 @@ class ValidationScope:
     mode: Literal["full", "narrow"]
     targets: frozenset[str] = frozenset()
     object_types: frozenset[str] = frozenset()
+    # Derived from ``--file`` targets so repo-relative and absolute paths match
+    # the basename-only index (issue #240).
+    file_names: frozenset[str] = field(default_factory=frozenset)
+    file_paths: frozenset[str] = field(default_factory=frozenset)
 
     @classmethod
     def full(cls) -> ValidationScope:
@@ -29,15 +50,41 @@ class ValidationScope:
         types: frozenset[str] | None = None,
     ) -> ValidationScope:
         targets: set[str] = set()
-        if files:
-            targets.update(files)
+        file_names: set[str] = set()
+        file_paths: set[str] = set()
+        for target in files or ():
+            targets.add(target)
+            name, resolved = _path_variants(target)
+            file_names.add(name)
+            if resolved:
+                file_paths.add(resolved)
         if uuids:
             targets.update(uuids)
         return cls(
             mode="narrow",
             targets=frozenset(targets),
             object_types=frozenset(types or ()),
+            file_names=frozenset(file_names),
+            file_paths=frozenset(file_paths),
         )
+
+    def matches_file(self, file_name: str | None, file_path: Path | str | None = None) -> bool:
+        """Match a ``--file`` target by basename, repo-relative path, or absolute path."""
+        if file_path is not None and self.file_paths:
+            try:
+                resolved = str(Path(file_path).resolve())
+            except OSError:  # pragma: no cover - unresolvable path
+                resolved = str(file_path)
+            if resolved in self.file_paths:
+                return True
+        if not file_name:
+            return False
+        if file_name in self.targets:
+            return True
+        # A path target still matches by basename when the object's own path is
+        # unknown, or when the target was given relative to another working
+        # directory than the one the index was built from.
+        return file_name in self.file_names
 
     def includes_object(
         self,
@@ -45,6 +92,7 @@ class ValidationScope:
         object_type: str,
         *,
         file_name: str | None = None,
+        file_path: Path | str | None = None,
     ) -> bool:
         if self.mode == "full":
             return True
@@ -54,7 +102,7 @@ class ValidationScope:
             return bool(self.object_types)
         if uuid in self.targets:
             return True
-        return bool(file_name and file_name in self.targets)
+        return self.matches_file(file_name, file_path)
 
 
 def has_narrow_filter(scope: ValidationScope) -> bool:

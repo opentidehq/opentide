@@ -23,7 +23,7 @@ opentide validate --check schema
 | Flag | Purpose |
 |------|---------|
 | `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `cve` |
-| `--file` | Validate one YAML file |
+| `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`) |
@@ -31,6 +31,10 @@ opentide validate --check schema
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Validation failures in `--json` mode include the complete report before the process exits.
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
+
+### Unparseable object files
+
+An object file that is not valid YAML is reported as a `yaml_parse` issue against that path (exit `1`, and a complete report in `--json` mode) instead of raising a parser traceback. The file is not indexed, so no other check can see it — the issue is emitted regardless of `--check`.
 
 ### CVE check
 

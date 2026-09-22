@@ -83,7 +83,7 @@ def run_validation(
     metaschemas = index.get("metaschemas", {})
     files_index = index.get("files", {})
 
-    work_items = _collect_work_items(objects, scope, files_index)
+    work_items = _collect_work_items(objects, scope, files_index, graph)
     object_workers = resolve_worker_count(len(work_items), workers=workers)
     id_paths = _id_scan_paths() if ValidateCheck.id_uniqueness in checks else []
     id_workers = resolve_worker_count(len(id_paths), workers=workers)
@@ -98,11 +98,14 @@ def run_validation(
         "id_workers": id_workers,
     }
 
+    parse_issues = _yaml_parse_issues(index.get("parse_errors", []), scope)
+    issues.extend(parse_issues)
+
     object_checks = checks & {
         ValidateCheck.uuid_format,
         ValidateCheck.schema,
     }
-    if _scope_has_narrow_filter(scope) and object_checks and not work_items:
+    if _scope_has_narrow_filter(scope) and object_checks and not work_items and not parse_issues:
         issues.append(_scope_no_match_issue(scope))
 
     if ValidateCheck.id_uniqueness in checks:
@@ -158,6 +161,7 @@ def _collect_work_items(
     objects: dict[str, dict[str, dict[str, Any]]],
     scope: ValidationScope,
     files_index: dict[str, str],
+    graph: PreflightGraph | None = None,
 ) -> list[ObjectWorkItem]:
     items: list[ObjectWorkItem] = []
     for object_type, registry in objects.items():
@@ -165,7 +169,13 @@ def _collect_work_items(
             continue
         for uuid, body in registry.items():
             file_name = files_index.get(uuid)
-            if not scope.includes_object(uuid, object_type, file_name=file_name):
+            ref = graph.resolve(str(uuid)) if graph is not None else None
+            if not scope.includes_object(
+                uuid,
+                object_type,
+                file_name=file_name,
+                file_path=ref.file_path if ref else None,
+            ):
                 continue
             items.append(
                 ObjectWorkItem(
@@ -176,6 +186,37 @@ def _collect_work_items(
                 )
             )
     return items
+
+
+def _yaml_parse_issues(
+    parse_errors: list[dict[str, str]],
+    scope: ValidationScope,
+) -> list[ValidationIssue]:
+    """Report object files the indexer could not parse as validation issues.
+
+    Unparseable files never reach the registry, so no other check can see them.
+    Without this they were silently dropped and later crashed the ID scan with a
+    raw ``yaml`` traceback (issue #250).
+    """
+    issues: list[ValidationIssue] = []
+    for entry in parse_errors:
+        raw_path = entry.get("path", "")
+        path = Path(raw_path) if raw_path else None
+        if scope.mode == "narrow":
+            if scope.object_types and entry.get("object_type") not in scope.object_types:
+                continue
+            if scope.targets and not scope.matches_file(path.name if path else None, path):
+                continue
+        issues.append(
+            ValidationIssue(
+                code="yaml_parse",
+                severity="error",
+                object_type=entry.get("object_type"),
+                file_path=path,
+                message=f"Could not parse object YAML: {entry.get('error', 'unknown error')}",
+            )
+        )
+    return issues
 
 
 def _validate_work_item(
@@ -349,10 +390,16 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
 
 
 def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | None:
+    import yaml
+
     from opentide.core.io import load_yaml
 
     model_file, meta_name = path_row
-    model_body = load_yaml(model_file)
+    try:
+        model_body = load_yaml(model_file)
+    except (yaml.YAMLError, OSError, UnicodeDecodeError):
+        # Reported as a yaml_parse issue from the index parse errors.
+        return None
     if not isinstance(model_body, dict):
         return None
     uuid = model_body.get("metadata", {}).get("uuid")

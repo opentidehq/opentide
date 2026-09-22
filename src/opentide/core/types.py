@@ -21,3 +21,4 @@ class IndexSnapshot(TypedDict, total=False):
     platforms: dict[str, Any]
     files: dict[str, str]
     paths: dict[str, Any]
+    parse_errors: list[dict[str, str]]
