@@ -267,8 +267,17 @@ def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
     cli = get_context(ctx)
     try:
         result = run_extract(cli, import_target=target)
-    except (FileNotFoundError, RuntimeError, OSError, KeyError, ValueError) as exc:
-        message = str(exc).strip() or f"{type(exc).__name__} while importing {target.value}"
+    except Exception as exc:  # noqa: BLE001 - one JSON document is the contract
+        # Enumerating exception types is how #242 escaped: the importers reach
+        # vendor SDKs and half-typed config, so anything they raise has to come
+        # back as a result document rather than a Rich traceback. `str(exc)` is
+        # empty for a bare KeyError and unhelpful for its key alone.
+        detail = str(exc).strip()
+        message = (
+            f"{type(exc).__name__}: {detail}"
+            if detail and not isinstance(exc, RuntimeError | FileNotFoundError)
+            else detail or f"{type(exc).__name__} while importing {target.value}"
+        )
         emit_error(cli, message)
         return
     emit_success(cli, result)

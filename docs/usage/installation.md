@@ -56,7 +56,7 @@ That installs the **DetectionOps engine**: the `opentide` CLI, validation, gener
 The MCP server needs one extra:
 
 ```bash
-pip install 'opentide[mcp]'       # adds mcp + fastmcp for `opentide-mcp`
+pip install 'opentide[mcp]'       # adds mcp (>=1.28.1,<2) for `opentide-mcp`
 ```
 
 The `opentide-mcp` script is on `PATH` either way; without the extra it prints the install command and exits 1. See [MCP installation](../mcp/installation.md).
