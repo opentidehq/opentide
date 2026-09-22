@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import subprocess
 from dataclasses import dataclass
@@ -42,13 +43,38 @@ def _workspace_word(relative: str) -> str:
 
 
 def hook_entry(relative: str = "") -> str:
-    """The pre-commit ``entry`` command for a workspace *relative* to the Git root."""
-    return "sh -c " + shlex.quote(f"opentide --repo {_workspace_word(relative)} validate --strict")
+    """The pre-commit ``entry`` command for a workspace *relative* to the Git root.
+
+    ``validate --strict`` passes on a directory without ``.opentide/``, so a
+    pin left behind by a moved or renamed workspace would pass every commit.
+    """
+    script = (
+        f"repo={_workspace_word(relative)}; "
+        f'if [ ! -d "$repo/{OPENTIDE_DIR}" ]; then '
+        f'echo "No OpenTide workspace at $repo (missing {OPENTIDE_DIR}/). '
+        f'Re-run opentide setup hooks, or set SKIP={HOOK_ID} to bypass." >&2; exit 1; fi; '
+        'exec opentide --repo "$repo" validate --strict'
+    )
+    return "sh -c " + shlex.quote(script)
 
 
 def _yaml_value(value: str) -> str:
-    """*value* as a YAML scalar; ``": "`` or ``" #"`` would end a plain one early."""
-    return json.dumps(value) if ": " in value or " #" in value else value
+    """*value* as a YAML scalar that reads back unchanged.
+
+    A plain scalar ends early at ``": "``, ``" #"`` or a tab before ``#``,
+    breaks at a newline, and changes meaning after a leading indicator such
+    as ``&`` or ``-``. JSON is a valid double-quoted YAML scalar.
+    """
+    candidates = [json.dumps(value, ensure_ascii=False), json.dumps(value)]
+    if not any(char in value for char in "\t\r\n"):
+        candidates.insert(0, value)
+    for candidate in candidates:
+        try:
+            if yaml.safe_load(f"entry: {candidate}") == {"entry": value}:
+                return candidate
+        except yaml.YAMLError:
+            continue
+    return json.dumps(value)
 
 
 HOOK_ENTRY = hook_entry()
@@ -74,6 +100,14 @@ def local_hook_block(relative: str = "") -> str:
 """
 
 
+#: ``validate --strict`` passes on a missing or empty directory; a hook still
+#: pinned to a moved workspace has to fail instead of passing every commit.
+_MISSING_WORKSPACE = (
+    f"No OpenTide workspace at $OPENTIDE_HOOK_REPO (missing {OPENTIDE_DIR}/). "
+    "Re-run 'opentide setup hooks' or set OPENTIDE_SKIP_HOOKS=1 to bypass."
+)
+
+
 def pre_commit_script(relative: str = "") -> str:
     nested = (
         f'OPENTIDE_HOOK_REPO="$OPENTIDE_HOOK_REPO"/{shlex.quote(relative)}\n' if relative else ""
@@ -92,7 +126,11 @@ if ! command -v opentide >/dev/null 2>&1; then
 fi
 # Validate the worktree being committed, not whatever OPENTIDE_REPO_ROOT names.
 OPENTIDE_HOOK_REPO={_TOP_LEVEL}
-{nested}exec opentide --repo "$OPENTIDE_HOOK_REPO" validate --strict
+{nested}if [ ! -d "$OPENTIDE_HOOK_REPO/{OPENTIDE_DIR}" ]; then
+  echo "{_MISSING_WORKSPACE}" >&2
+  exit 1
+fi
+exec opentide --repo "$OPENTIDE_HOOK_REPO" validate --strict
 """
 
 
@@ -152,25 +190,68 @@ def _git_layout(target: Path) -> _GitLayout | None:
 
 #: Entries written before the hook pinned ``--repo``; refreshed in place so an
 #: upgrade actually fixes the tree the hook validates.
-LEGACY_HOOK_ENTRIES = ("entry: opentide validate --strict",)
+LEGACY_HOOK_ENTRIES = ("opentide validate --strict",)
+
+_ENTRY_LINE = re.compile(r"^(?P<lead>\s*(?:-\s+)?entry:[ \t]*)(?P<value>.*?)[ \t]*$")
 
 
 def _config_has_hook(text: str) -> bool:
     return f"id: {HOOK_ID}" in text
 
 
-def _refresh_hook_entry(text: str, relative: str = "") -> str | None:
-    """Rewrite a stale ``entry:`` line, or ``None`` when nothing needs changing.
+def _entry_pin(entry: str) -> str | None:
+    """The workspace an OpenTide ``entry`` pins: ``""`` for the Git root, ``None`` if not ours."""
+    try:
+        outer = shlex.split(entry)
+        if len(outer) != 3 or outer[:2] != ["sh", "-c"]:
+            return None
+        lexer = shlex.shlex(outer[2], posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        words = list(lexer)
+    except ValueError:
+        return None
+    if not {"opentide", "validate", "--strict"} <= set(words):
+        return None
+    for word in words:
+        pin = word.removeprefix("repo=")
+        if pin == _TOP_LEVEL:
+            return ""
+        if pin.startswith(f"{_TOP_LEVEL}/"):
+            return pin[len(_TOP_LEVEL) + 1 :]
+    return None
 
-    A nested workspace also replaces the root-pinned entry, which named the
+
+def _entry_value(raw: str) -> str | None:
+    try:
+        value = yaml.safe_load(raw)
+    except yaml.YAMLError:
+        return None
+    return value if isinstance(value, str) else None
+
+
+def _refresh_hook_entry(text: str, relative: str = "") -> str | None:
+    """Rewrite stale OpenTide ``entry:`` lines, or ``None`` when nothing needs changing.
+
+    Stale means unpinned, pinned to this workspace in an older form (without
+    the missing-workspace guard), or, for a nested workspace, pinned to the
     Git root rather than the workspace.
     """
-    current = f"entry: {_yaml_value(hook_entry(relative))}"
-    stale = [*LEGACY_HOOK_ENTRIES, f"entry: {HOOK_ENTRY}"] if relative else LEGACY_HOOK_ENTRIES
-    for legacy in stale:
-        if legacy in text:
-            return text.replace(legacy, current)
-    return None
+    current = hook_entry(relative)
+    lines = text.splitlines(keepends=True)
+    changed = False
+    for index, line in enumerate(lines):
+        body = line.rstrip("\r\n")
+        match = _ENTRY_LINE.match(body)
+        value = _entry_value(match["value"]) if match else None
+        if match is None or value is None or value == current:
+            continue
+        if value not in LEGACY_HOOK_ENTRIES:
+            pin = _entry_pin(value)
+            if pin is None or pin not in {relative, ""}:
+                continue
+        lines[index] = f"{match['lead']}{_yaml_value(current)}{line[len(body) :]}"
+        changed = True
+    return "".join(lines) if changed else None
 
 
 def _write_executable(path: Path, content: str) -> None:

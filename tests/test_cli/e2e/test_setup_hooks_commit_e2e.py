@@ -229,6 +229,24 @@ def test_versioned_hook_validates_the_nested_workspace_not_the_git_root(
     assert "Could not parse object YAML" in output, output
 
 
+def test_hook_fails_when_the_pinned_workspace_was_moved(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """``validate --strict`` on the old, now missing path passed every later commit."""
+    mono = tmp_path / "mono"
+    workspace = mono / "detections"
+    _scaffold_nested(script_runner, mono, workspace)
+    assert _commit(mono, "baseline", _clean_env()).returncode == 0
+
+    workspace.rename(mono / "renamed")
+    result = _commit(mono, "move the workspace", _clean_env())
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, f"a hook pinned to a moved workspace passed\n{output}"
+    assert "No OpenTide workspace at" in output, output
+    assert "opentide setup hooks" in output, output
+
+
 def test_pre_commit_entry_pins_the_nested_workspace(
     script_runner: ScriptRunner, tmp_path: Path
 ) -> None:

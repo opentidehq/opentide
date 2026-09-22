@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
+import pytest
+import yaml
 from typer.testing import CliRunner
 
 from opentide.cli import app
@@ -13,6 +16,9 @@ from opentide.cli.services.setup.hooks import (
     HOOK_ENTRY,
     HOOK_MARKER,
     HooksSetupOptions,
+    _yaml_value,
+    hook_entry,
+    pre_commit_script,
     run_hooks_setup,
 )
 
@@ -161,7 +167,7 @@ def test_nested_workspace_installs_into_the_enclosing_repository(tmp_path: Path)
     )
     assert 'OPENTIDE_HOOK_REPO="$OPENTIDE_HOOK_REPO"/security/detections' in installed
     config = (workspace / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-    assert '"$(git rev-parse --show-toplevel)"/security/detections validate' in config
+    assert 'repo="$(git rev-parse --show-toplevel)"/security/detections;' in config
     assert any("repository root" in warning for warning in result["warnings"])
 
 
@@ -179,9 +185,159 @@ def test_nested_workspace_replaces_a_root_pinned_entry(tmp_path: Path) -> None:
     result = run_hooks_setup(HooksSetupOptions(path=workspace, yes=True, install=False))
 
     assert ".pre-commit-config.yaml" in result["files"]
-    text = config.read_text(encoding="utf-8")
-    assert HOOK_ENTRY not in text
-    assert "/detections validate --strict" in text
+    assert HOOK_ENTRY not in config.read_text(encoding="utf-8")
+    assert _entry(config) == hook_entry("detections")
+
+
+def _stub_opentide(tmp_path: Path) -> dict[str, str]:
+    """An ``opentide`` that passes and records its ``--repo``, like ``validate`` on an empty tree."""
+    bin_dir = tmp_path / "stub-bin"
+    bin_dir.mkdir(exist_ok=True)
+    stub = bin_dir / "opentide"
+    stub.write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$2" >> {shlex.quote(str(tmp_path / "validated.log"))}\n'
+        'echo "OK Validation passed"\n',
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("OPENTIDE_", "GIT_"))}
+    return env | {"PATH": f"{bin_dir}{os.pathsep}{env['PATH']}"}
+
+
+def _validated(tmp_path: Path) -> list[str]:
+    log = tmp_path / "validated.log"
+    return log.read_text(encoding="utf-8").splitlines() if log.is_file() else []
+
+
+def _entry(config: Path) -> str:
+    parsed = yaml.safe_load(config.read_text(encoding="utf-8"))
+    return next(
+        hook["entry"]
+        for repo in parsed["repos"]
+        for hook in repo["hooks"]
+        if hook["id"] == "opentide-validate"
+    )
+
+
+@pytest.mark.parametrize("relative", ["", "renamed"])
+def test_hook_script_fails_when_the_pinned_workspace_is_gone(tmp_path: Path, relative: str) -> None:
+    """``validate --strict`` passes on a missing directory; the hook must not."""
+    repo = tmp_path / "repo"
+    _git_init(repo)
+    hook = tmp_path / "pre-commit"
+    hook.write_text(pre_commit_script(relative), encoding="utf-8")
+
+    done = subprocess.run(
+        ["sh", str(hook)], cwd=repo, env=_stub_opentide(tmp_path), capture_output=True, text=True
+    )
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "No OpenTide workspace at" in done.stderr
+    assert "opentide setup hooks" in done.stderr
+    assert "OPENTIDE_SKIP_HOOKS=1" in done.stderr
+    assert _validated(tmp_path) == []
+
+
+@pytest.mark.parametrize("relative", ["", "renamed"])
+def test_pre_commit_entry_fails_when_the_pinned_workspace_is_gone(
+    tmp_path: Path, relative: str
+) -> None:
+    repo = tmp_path / "repo"
+    _git_init(repo)
+
+    done = subprocess.run(
+        shlex.split(hook_entry(relative)),
+        cwd=repo,
+        env=_stub_opentide(tmp_path),
+        capture_output=True,
+        text=True,
+    )
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "No OpenTide workspace at" in done.stderr
+    assert "opentide setup hooks" in done.stderr
+    assert _validated(tmp_path) == []
+
+
+@pytest.mark.parametrize("relative", ["", "security/detections"])
+def test_pre_commit_entry_validates_an_existing_workspace(tmp_path: Path, relative: str) -> None:
+    repo = tmp_path / "repo"
+    _git_init(repo)
+    (repo / relative / ".opentide").mkdir(parents=True)
+
+    done = subprocess.run(
+        shlex.split(hook_entry(relative)),
+        cwd=repo,
+        env=_stub_opentide(tmp_path),
+        capture_output=True,
+        text=True,
+    )
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _validated(tmp_path) == [str((repo / relative).resolve())]
+
+
+@pytest.mark.parametrize("relative", ["", "detections"])
+def test_setup_refreshes_an_entry_without_the_workspace_guard(
+    tmp_path: Path, relative: str
+) -> None:
+    """The previous entry pinned the workspace but passed when it was gone."""
+    _git_init(tmp_path)
+    workspace = tmp_path / relative
+    workspace.mkdir(exist_ok=True)
+    pin = '"$(git rev-parse --show-toplevel)"' + (f"/{relative}" if relative else "")
+    unguarded = "sh -c " + shlex.quote(f"opentide --repo {pin} validate --strict")
+    config = workspace / ".pre-commit-config.yaml"
+    config.write_text(
+        "repos:\n  - repo: local\n    hooks:\n      - id: opentide-validate\n"
+        f"        entry: {unguarded}\n        language: system\n",
+        encoding="utf-8",
+    )
+
+    result = run_hooks_setup(HooksSetupOptions(path=workspace, yes=True, install=False))
+
+    assert ".pre-commit-config.yaml" in result["files"]
+    assert _entry(config) == hook_entry(relative)
+    assert "language: system" in config.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "a: b",
+        "a #b",
+        "a\t#b",
+        "a\nb",
+        "a\tb",
+        "&anchor",
+        "*alias",
+        "- item",
+        "!tag",
+        "%directive",
+        "@at",
+        "`tick",
+        "'quoted",
+        '"quoted',
+        "{flow}",
+        "[flow]",
+        "|block",
+        ">folded",
+        "? key",
+        "trailing:",
+        "true",
+        "1",
+    ],
+)
+def test_yaml_value_round_trips(value: str) -> None:
+    """Tab before ``#`` and newlines produced invalid or truncated YAML."""
+    rendered = _yaml_value(value)
+    assert rendered != value
+    assert yaml.safe_load(f"hooks:\n  - entry: {rendered}\n") == {"hooks": [{"entry": value}]}
+
+
+def test_yaml_value_keeps_plain_commands_plain() -> None:
+    assert _yaml_value("opentide validate --strict") == "opentide validate --strict"
+    assert _yaml_value(HOOK_ENTRY) == HOOK_ENTRY
 
 
 def test_linked_worktree_installs_the_shared_hook(tmp_path: Path) -> None:
