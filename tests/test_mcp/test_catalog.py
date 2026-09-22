@@ -131,6 +131,33 @@ def test_get_chaining_graph_found(tide_corpus_repo: Path) -> None:
     assert graph["type"] == "threat"
 
 
+CHAINED_THREAT_UUID = "0000abcd-0000-4000-8001-00000000000f"
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [CHAINED_THREAT_UUID, CHAINED_THREAT_UUID.upper(), f"  {CHAINED_THREAT_UUID} "],
+    ids=["canonical", "uppercase", "padded"],
+)
+def test_get_chaining_graph_returns_the_links_for_every_spelling(
+    tide_corpus_repo: Path, spelling: str
+) -> None:
+    """A lookup ``get_object`` resolves must not come back ``found`` with an empty graph."""
+    threats = tide_corpus_repo / "Objects" / "Threat Vectors"
+    source = (threats / "threat-0001-simulated-actor.yaml").read_text(encoding="utf-8")
+    (threats / "threat-chained.yaml").write_text(
+        source.replace(CORPUS_THREAT_UUID, CHAINED_THREAT_UUID).replace(
+            "name: Simulated Actor", "name: Chained Actor"
+        )
+        + f"  chaining:\n    - vector: {CORPUS_THREAT_UUID}\n      relation: preceeds\n",
+        encoding="utf-8",
+    )
+    graph = get_chaining_graph(spelling)
+    assert graph["found"] is True
+    assert graph["uuid"] == CHAINED_THREAT_UUID
+    assert graph["graph"] == {"preceeds": [CORPUS_THREAT_UUID]}
+
+
 def test_get_chaining_graph_not_found(tide_corpus_repo: Path) -> None:
     assert get_chaining_graph(MISSING_UUID)["found"] is False
 
