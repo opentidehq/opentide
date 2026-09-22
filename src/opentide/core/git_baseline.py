@@ -93,41 +93,64 @@ def has_git_head(repo_root: Path) -> bool:
     return _git_stdout(repo_root, "rev-parse", "--verify", "HEAD") is not None
 
 
-def _upstream(repo_root: Path, head_branch: str | None) -> str | None:
-    """``@{upstream}``, unless it is the branch's own copy on its remote.
+def _remote_default_branch(repo_root: Path) -> str | None:
+    """The branch ``origin/HEAD`` points at, e.g. ``main``.
+
+    A clone records it, whatever the default branch is called. ``git init`` +
+    ``remote add`` + ``push``, and a fetch before git 2.48, leave it unset.
+    """
+    prefix = "refs/remotes/origin/"
+    ref = _git_stdout(repo_root, "symbolic-ref", "--quiet", f"{prefix}HEAD")
+    if ref and ref.startswith(prefix):
+        return ref.removeprefix(prefix)
+    return None
+
+
+def _tracks_itself(repo_root: Path, branch: str) -> bool:
+    """Whether ``branch``'s upstream is its own copy on a remote.
 
     ``git push -u origin feature`` and ``actions/checkout`` (``checkout -B
-    feature refs/remotes/origin/feature``) both make a branch track itself.
-    ``merge-base HEAD origin/feature`` is then ``HEAD``, and every committed
-    change disappears from the diff. A branch that tracks another branch
-    (``origin/main``, or ``feature-1`` in a stack) is still a real base.
+    feature refs/remotes/origin/feature``) both set this up.
     """
-    upstream = _git_stdout(
-        repo_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
-    )
-    if not upstream or not head_branch:
-        return None
-    merge = _git_stdout(repo_root, "config", "--get", f"branch.{head_branch}.merge")
-    if merge == f"refs/heads/{head_branch}":
-        return None
-    return upstream
+    merge = _git_stdout(repo_root, "config", "--get", f"branch.{branch}.merge")
+    return merge == f"refs/heads/{branch}"
+
+
+def _is_default_branch(branch: str, remote_default: str | None) -> bool:
+    if remote_default:
+        return branch == remote_default
+    return branch in DEFAULT_BRANCH_NAMES
 
 
 def candidate_refs(repo_root: Path) -> list[str]:
     """Baseline refs to try, most specific first."""
     head_branch = _git_stdout(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
-    candidates: list[str] = []
-    upstream = _upstream(repo_root, head_branch)
-    if upstream:
-        candidates.append(upstream)
-    # A clone records the remote's default branch, whatever it is called.
-    remote_default = _git_stdout(
-        repo_root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"
+    upstream = _git_stdout(
+        repo_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
     )
+    remote_default = _remote_default_branch(repo_root)
+    candidates: list[str] = []
+    last_resort: str | None = None
+    if upstream and head_branch and _tracks_itself(repo_root, head_branch):
+        # merge-base with the branch's own remote copy is `HEAD` once it is
+        # pushed. On the default branch that is the point: the diff is the work
+        # not pushed yet. On a feature branch it hides every committed change,
+        # so try the default branches first and keep it only for a trunk none
+        # of them name.
+        if _is_default_branch(head_branch, remote_default):
+            candidates.append(upstream)
+        else:
+            last_resort = upstream
+    elif upstream:
+        # Tracking another branch (`origin/release-1.2`, or `feature-1` in a
+        # stack) names the real base.
+        candidates.append(upstream)
     if remote_default:
-        candidates.append(remote_default)
+        candidates.append(f"origin/{remote_default}")
     candidates.extend(f"origin/{name}" for name in DEFAULT_BRANCH_NAMES)
     candidates.extend(DEFAULT_BRANCH_NAMES)
+    if last_resort:
+        candidates.append(last_resort)
 
     ordered: list[str] = []
     seen: set[str] = set()
