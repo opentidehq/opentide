@@ -30,13 +30,20 @@ def object_summary(uuid: str, object_type: str, body: dict[str, Any]) -> dict[st
 
 
 def get_object(uuid: str) -> dict[str, Any] | None:
+    """Look an object up by UUID; UUIDs compare case-insensitively (RFC 9562)."""
     ensure_initialised()
-    if uuid in OpenTide.Models.rules:
-        return {"type": "rule", "uuid": uuid, "body": OpenTide.Models.rules[uuid]}
-    if uuid in OpenTide.Models.threats:
-        return {"type": "threat", "uuid": uuid, "body": OpenTide.Models.threats[uuid]}
-    if uuid in OpenTide.Models.objectives:
-        return {"type": "objective", "uuid": uuid, "body": OpenTide.Models.objectives[uuid]}
+    needle = uuid.strip()
+    folded = needle.lower()
+    for object_type, bucket in (
+        ("rule", OpenTide.Models.rules),
+        ("threat", OpenTide.Models.threats),
+        ("objective", OpenTide.Models.objectives),
+    ):
+        if needle in bucket:
+            return {"type": object_type, "uuid": needle, "body": bucket[needle]}
+        key = next((key for key in bucket if key.lower() == folded), None)
+        if key is not None:
+            return {"type": object_type, "uuid": key, "body": bucket[key]}
     return None
 
 
@@ -66,7 +73,7 @@ def search_catalog(
         )
 
     if _UUID_RE.match(query.strip()):
-        found = get_object(query.strip())
+        found = get_object(query)
         if found is None:
             return []
         body = as_body(found["body"])

@@ -137,7 +137,8 @@ def _resolve_template_key(templates: Mapping[str, Any], requested: str) -> str |
     family, version = _split_schema_id(requested)
     if version is None or family not in templates:
         return None
-    if _resolve_family_key(OpenTide.MetaSchemas.Index, f"{family}::{version}") is None:
+    current = _resolve_family_key(OpenTide.MetaSchemas.Index, family)
+    if current is None or _split_schema_id(current)[1] != version:
         return None
     return family
 
