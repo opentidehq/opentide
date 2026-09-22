@@ -62,7 +62,7 @@ _STRING_DELIMITERS: dict[str, tuple[str, ...]] = {
 #: escape a quote by doubling it.
 _VERBATIM_PREFIX_LANGUAGES = frozenset({KQL})
 #: KQL multi-line literals: no escapes, and quotes or brackets inside are data.
-_MULTILINE_STRINGS: dict[str, str] = {KQL: "```"}
+_MULTILINE_STRINGS: dict[str, tuple[str, ...]] = {KQL: ("```", "~~~")}
 #: Lucene escapes any special character with a backslash outside a phrase, so
 #: ``process_cmdline:*iex\(*`` holds no bracket and ``*\"http*`` no string.
 _BARE_ESCAPE_LANGUAGES = frozenset({LUCENE})
@@ -223,28 +223,29 @@ def _mask(query: str, language: str) -> tuple[str, list[SyntaxFinding]]:
     block_comment = _BLOCK_COMMENTS.get(language)
     delimiters = _STRING_DELIMITERS[language]
     verbatim_prefix = language in _VERBATIM_PREFIX_LANGUAGES
-    multiline = _MULTILINE_STRINGS.get(language)
+    multiline = _MULTILINE_STRINGS.get(language, ())
     bare_escapes = language in _BARE_ESCAPE_LANGUAGES
     regex_delimiter = _REGEX_DELIMITERS.get(language)
     index = 0
     length = len(query)
     while index < length:
-        if multiline is not None and query.startswith(multiline, index):
-            end = query.find(multiline, index + len(multiline))
+        fence = next((fence for fence in multiline if query.startswith(fence, index)), None)
+        if fence is not None:
+            end = query.find(fence, index + len(fence))
             if end == -1:
                 findings.append(
                     _finding(
                         "unterminated_string",
-                        f"Unterminated {multiline} multi-line string literal",
+                        f"Unterminated {fence} multi-line string literal",
                         query,
                         index,
                     )
                 )
                 masked.append(_blank(query[index:]))
                 break
-            body_start = index + len(multiline)
-            stop = end + len(multiline)
-            masked.append(multiline + _blank(query[body_start:end], _STRING_FILLER) + multiline)
+            body_start = index + len(fence)
+            stop = end + len(fence)
+            masked.append(fence + _blank(query[body_start:end], _STRING_FILLER) + fence)
             index = stop
             continue
         if bare_escapes and query[index] == "\\":
@@ -394,6 +395,28 @@ def _check_pipeline(masked: str, language: str) -> list[SyntaxFinding]:
     return findings
 
 
+def _check_or_operands(masked: str) -> list[SyntaxFinding]:
+    """An S1QL ``||`` needs an operand on each side within its stage.
+
+    A ``||`` at the very end is left to ``_check_dangling_operator``.
+    """
+    findings: list[SyntaxFinding] = []
+    index = masked.find("||")
+    while index != -1:
+        before = masked[:index].rstrip()
+        after = masked[index + 2 :].lstrip()
+        if not before or before[-1] in "(|":
+            findings.append(
+                _finding("dangling_operator", "'||' has no operand on its left", masked, index)
+            )
+        elif after and after[0] in ")|":
+            findings.append(
+                _finding("dangling_operator", "'||' has no operand on its right", masked, index)
+            )
+        index = masked.find("||", index + 2)
+    return findings
+
+
 def _check_dangling_operator(masked: str) -> list[SyntaxFinding]:
     trimmed = masked.rstrip()
     if not trimmed:
@@ -417,6 +440,8 @@ def check_query(query: str, language: str) -> list[SyntaxFinding]:
     findings.extend(_check_delimiters(masked, language))
     if language in _PIPELINE_LANGUAGES:
         findings.extend(_check_pipeline(masked, language))
+    if language in _DOUBLE_PIPE_OR_LANGUAGES:
+        findings.extend(_check_or_operands(masked))
     findings.extend(_check_dangling_operator(masked))
     return findings
 
