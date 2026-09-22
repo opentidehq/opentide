@@ -471,6 +471,72 @@ def test_shared_hook_quotes_hostile_workspace_names(tmp_path: Path) -> None:
     assert not list(tmp_path.rglob("pwned"))
 
 
+_UNGUARDED_ROOT_ENTRY = "sh -c " + shlex.quote(
+    'opentide --repo "$(git rev-parse --show-toplevel)" validate --strict'
+)
+
+
+def _local_hook_config(entry: str) -> str:
+    return (
+        "repos:\n  - repo: local\n    hooks:\n      - id: opentide-validate\n"
+        f"        entry: {_yaml_value(entry)}\n        language: system\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "stale",
+    [HOOK_ENTRY, "opentide validate --strict", _UNGUARDED_ROOT_ENTRY],
+    ids=["root-pinned", "legacy", "unguarded-root-pinned"],
+)
+def test_nested_workspace_repoints_the_root_pre_commit_config(tmp_path: Path, stale: str) -> None:
+    """pre-commit reads only the root config, whose root pin validated a tree with no objects."""
+    _git_init(tmp_path)
+    root_config = tmp_path / ".pre-commit-config.yaml"
+    root_config.write_text(_local_hook_config(stale), encoding="utf-8")
+    workspace = tmp_path / "security" / "detections"
+
+    result = run_hooks_setup(HooksSetupOptions(path=workspace, yes=True, install=False))
+
+    assert "../../.pre-commit-config.yaml" in result["files"]
+    assert _entry(root_config) == hook_entry("security/detections")
+    assert "language: system" in root_config.read_text(encoding="utf-8")
+    assert not any("copy the opentide-validate hook" in w for w in result.get("warnings", []))
+    again = run_hooks_setup(HooksSetupOptions(path=workspace, yes=True, install=False))
+    assert "../../.pre-commit-config.yaml" in again["skipped"]
+
+
+@pytest.mark.parametrize("owner", ["teamA", ""])
+def test_nested_workspace_keeps_a_root_config_that_serves_another_workspace(
+    tmp_path: Path, owner: str
+) -> None:
+    _git_init(tmp_path)
+    (tmp_path / owner / ".opentide").mkdir(parents=True)
+    root_config = tmp_path / ".pre-commit-config.yaml"
+    text = _local_hook_config(hook_entry(owner))
+    root_config.write_text(text, encoding="utf-8")
+
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path / "teamB", yes=True, install=False))
+
+    assert root_config.read_text(encoding="utf-8") == text
+    assert "../.pre-commit-config.yaml" in result["skipped"]
+    label = owner or "the repository root"
+    assert any(
+        f"runs opentide-validate for {label}" in w and "does not validate teamB" in w
+        for w in result["warnings"]
+    ), result["warnings"]
+
+
+def test_nested_workspace_repoints_a_root_config_whose_workspace_is_gone(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    root_config = tmp_path / ".pre-commit-config.yaml"
+    root_config.write_text(_local_hook_config(hook_entry("moved-away")), encoding="utf-8")
+
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path / "teamB", yes=True, install=False))
+
+    assert "../.pre-commit-config.yaml" in result["files"]
+    assert _entry(root_config) == hook_entry("teamB")
+
+
 def test_linked_worktree_installs_the_shared_hook(tmp_path: Path) -> None:
     """A linked worktree has a ``.git`` *file*; its hooks live in the common directory."""
     main = tmp_path / "main"

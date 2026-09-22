@@ -42,6 +42,10 @@ def _workspace_word(relative: str) -> str:
     return top if not relative else f"{top}/{shlex.quote(relative)}"
 
 
+def _workspace_label(relative: str) -> str:
+    return relative or "the repository root"
+
+
 def hook_entry(relative: str = "") -> str:
     """The pre-commit ``entry`` command for a workspace *relative* to the Git root.
 
@@ -249,29 +253,51 @@ def _entry_value(raw: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _refresh_hook_entry(text: str, relative: str = "") -> str | None:
-    """Rewrite stale OpenTide ``entry:`` lines, or ``None`` when nothing needs changing.
+def _refresh_hook_entry(
+    text: str, relative: str = "", top_level: Path | None = None
+) -> tuple[str | None, list[str]]:
+    """Point stale OpenTide ``entry:`` lines at *relative*.
 
-    Stale means unpinned, pinned to this workspace in an older form (without
-    the missing-workspace guard), or, for a nested workspace, pinned to the
-    Git root rather than the workspace.
+    Returns the new text (``None`` when nothing changed) and the other
+    workspaces that entries were left pinned to.
+
+    Stale means unpinned, or pinned to *relative* in an older form without
+    the missing-workspace guard. In a nested workspace's own config (no
+    *top_level*) a Git-root pin is stale too: it named the root, not the
+    workspace. In the config pre-commit reads (*top_level* given) a pin to
+    another workspace belongs to that workspace and is kept, unless it no
+    longer exists.
     """
     current = hook_entry(relative)
     lines = text.splitlines(keepends=True)
     changed = False
+    kept: list[str] = []
     for index, line in enumerate(lines):
         body = line.rstrip("\r\n")
         match = _ENTRY_LINE.match(body)
         value = _entry_value(match["value"]) if match else None
         if match is None or value is None or value == current:
             continue
-        if value not in LEGACY_HOOK_ENTRIES:
-            pin = _entry_pin(value)
-            if pin is None or pin not in {relative, ""}:
+        pin = relative if value in LEGACY_HOOK_ENTRIES else _entry_pin(value)
+        if pin is None:
+            continue
+        if pin != relative:
+            if top_level is None:
+                if pin:
+                    continue
+            elif is_opentide_workspace(top_level / pin):
+                kept.append(pin)
                 continue
         lines[index] = f"{match['lead']}{_yaml_value(current)}{line[len(body) :]}"
         changed = True
-    return "".join(lines) if changed else None
+    return ("".join(lines) if changed else None), kept
+
+
+def _kept_pin_warning(shown: str, pin: str, relative: str) -> str:
+    return (
+        f"{shown} runs {HOOK_ID} for {_workspace_label(pin)}; left unchanged, "
+        f"so pre-commit does not validate {_workspace_label(relative)}."
+    )
 
 
 def _write_executable(path: Path, content: str) -> None:
@@ -289,7 +315,8 @@ def _ensure_pre_commit_config(
         return PRE_COMMIT_CONFIG_PATH, True
     text = dest.read_text(encoding="utf-8")
     if _config_has_hook(text):
-        refreshed = _refresh_hook_entry(text, relative)
+        refreshed, kept = _refresh_hook_entry(text, relative, None if relative else target)
+        warnings.extend(_kept_pin_warning(PRE_COMMIT_CONFIG_PATH, pin, relative) for pin in kept)
         if refreshed is None:
             return PRE_COMMIT_CONFIG_PATH, False
         dest.write_text(refreshed, encoding="utf-8")
@@ -315,6 +342,31 @@ def _ensure_pre_commit_config(
     suffix = "" if text.endswith("\n") else "\n"
     dest.write_text(text + suffix + local_hook_block(relative), encoding="utf-8")
     return PRE_COMMIT_CONFIG_PATH, True
+
+
+def _refresh_root_pre_commit_config(
+    target: Path, layout: _GitLayout, warnings: list[str]
+) -> tuple[str | None, bool]:
+    """Point the repository root's OpenTide hook at a nested workspace.
+
+    pre-commit reads only the root config, so a stale entry there validated
+    the root, which has no objects, while the workspace's own entry was never run.
+    """
+    dest = layout.top_level / PRE_COMMIT_CONFIG_PATH
+    text = dest.read_text(encoding="utf-8") if dest.is_file() else ""
+    if not _config_has_hook(text):
+        warnings.append(
+            f"pre-commit only reads .pre-commit-config.yaml at the repository root "
+            f"({layout.top_level}); copy the opentide-validate hook there to use pre-commit."
+        )
+        return None, False
+    shown = Path(os.path.relpath(dest, target)).as_posix()
+    refreshed, kept = _refresh_hook_entry(text, layout.relative, layout.top_level)
+    warnings.extend(_kept_pin_warning(shown, pin, layout.relative) for pin in kept)
+    if refreshed is None:
+        return shown, False
+    dest.write_text(refreshed, encoding="utf-8")
+    return shown, True
 
 
 def _ensure_versioned_hook(target: Path, relative: str = "") -> tuple[str, bool]:
@@ -360,10 +412,6 @@ def _hook_workspaces(script: str) -> list[str]:
             except ValueError:
                 return []
     return [""] if "validate --strict" in script else []
-
-
-def _workspace_label(relative: str) -> str:
-    return relative or "the repository root"
 
 
 def _hook_workspaces_after_setup(
@@ -430,10 +478,9 @@ def run_hooks_setup(options: HooksSetupOptions) -> dict[str, object]:
         else:
             skipped.append(path)
     if layout is not None and relative:
-        warnings.append(
-            f"pre-commit only reads .pre-commit-config.yaml at the repository root "
-            f"({layout.top_level}); copy the opentide-validate hook there to use pre-commit."
-        )
+        root_config, changed = _refresh_root_pre_commit_config(target, layout, warnings)
+        if root_config:
+            (written if changed else skipped).append(root_config)
     installed = False
     if options.install:
         path, changed = _install_git_hook(target, layout, warnings)
