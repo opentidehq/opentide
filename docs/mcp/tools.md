@@ -149,14 +149,36 @@ Prefer this tool for agent workflows — returns `model_dump_json_ready()` issue
 
 ## validate_query
 
-Validate query syntax for supported platforms.
-
-> **Current status:** Stub implementation — returns `valid: true` without parsing. Use CLI `opentide validate query --platform …` for real validation.
+Offline syntax check, the same engine as `opentide validate query`.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `query` | string | Query text |
 | `platform` | string | Platform key |
+
+Structural only — delimiter balance, string and comment termination, pipeline
+shape, dangling operators. `valid: true` means the query parses; it does not
+mean the fields exist or that the query returns rows. Nothing is sent to a
+tenant.
+
+```json
+{
+  "valid": false,
+  "supported": true,
+  "mode": "offline-syntax",
+  "language": "kql",
+  "errors": [
+    {
+      "code": "unterminated_string",
+      "message": "Unterminated \" string literal",
+      "line": 1,
+      "column": 31
+    }
+  ],
+  "message": "KQL syntax check failed with 1 problem(s)",
+  "query_preview": "SecurityEvent | where Account == \"oops"
+}
+```
 
 **Unsupported platforms** return:
 
@@ -164,6 +186,7 @@ Validate query syntax for supported platforms.
 {
   "valid": null,
   "supported": false,
+  "mode": "unsupported",
   "message": "query validation not supported for …",
   "errors": []
 }
@@ -173,9 +196,9 @@ Supported: `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbo
 
 ## run_query
 
-Execute a read-only platform query.
-
-> **Current status:** Stub implementation — returns empty results with a dry-run message. Does not call live platform APIs yet.
+> **Not implemented.** The tool never contacts a tenant and never returns rows.
+> It exists so an agent that reaches for query execution gets an explicit
+> refusal instead of a plausible empty result set.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -183,7 +206,20 @@ Execute a read-only platform query.
 | `platform` | string | required | Platform key |
 | `tenant` | string | `""` | Optional tenant scope |
 
-Results capped at **100 rows** (`MAX_QUERY_ROWS`).
+```json
+{
+  "supported": true,
+  "stub": true,
+  "rows": null,
+  "platform": "sentinel",
+  "tenant": null,
+  "message": "Read-only query execution is not implemented; no query was sent to sentinel. The live path would cap results at 100 rows."
+}
+```
+
+`rows: null` and `stub: true` are the contract: there is no `results` key to
+mistake for data. The live path, when it lands, will cap at **100 rows**
+(`MAX_QUERY_ROWS`).
 
 ## deploy_rule
 
@@ -273,11 +309,11 @@ get_chaining(uuid=<rule>)                 → inspect related objects in chainin
 1. Call `validation_report` before suggesting YAML edits.
 2. Use `search` before `get_chaining` when the UUID is unknown.
 3. Default to `dry_run=true` for `deploy_rule`; require explicit human approval for a real deploy.
-4. Never claim query validation for unsupported platforms, and remember `validate_query`/`run_query` are stubs — use the CLI for real syntax checks.
+4. Never claim query validation for unsupported platforms. `validate_query` is a real offline syntax check but proves nothing about results; `run_query` is not implemented at all.
 5. Do not assume `coverage(tactic=…)` filters results — pass `technique` for a filtered answer.
 
 ## Troubleshooting
 
 - **Empty results everywhere** — the server likely started with the wrong `OPENTIDE_REPO_ROOT`, or schemas were never generated. See [Configuration](./configuration.md) and run `opentide generate` in the repo.
-- **`validate_query` always passes** — it is a stub; use `opentide validate query` (CLI).
+- **`validate_query` passes on a query the platform rejects** — the check is structural. Field names, operators, and table names are not resolved; run the query in the tenant to prove it works.
 - **A resource returns `{"error": "… not found"}`** — the UUID is wrong or the object type does not match; confirm with `search`.

@@ -6,6 +6,9 @@ from enum import Enum
 
 from opentide.documentation.types import DocumentScope
 from opentide.validation.checks.kinds import ValidateCheck
+from opentide.validation.query_syntax import (
+    QUERY_VALIDATION_PLATFORMS as _QUERY_VALIDATION_PLATFORMS,
+)
 
 
 class DetectionPlatform(str, Enum):
@@ -20,15 +23,8 @@ class DetectionPlatform(str, Enum):
     harfanglab = "harfanglab"
 
 
-QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
-    {
-        DetectionPlatform.sentinel.value,
-        DetectionPlatform.defender.value,
-        DetectionPlatform.splunk.value,
-        DetectionPlatform.sentinel_one.value,
-        DetectionPlatform.carbon_black.value,
-    }
-)
+#: Re-exported so CLI callers keep a stable import path.
+QUERY_VALIDATION_PLATFORMS = _QUERY_VALIDATION_PLATFORMS
 
 
 class ExportTarget(str, Enum):

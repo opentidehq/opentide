@@ -332,9 +332,19 @@ See [Exit codes](../cli/exit-codes.md).
 
 CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and OpenTide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
 
-### MCP `validate_query` always returns valid
+### MCP `validate_query` passes a query the platform rejects
 
-The MCP `validate_query` and `run_query` tools are **stubs** — they do not parse queries yet. Use the CLI (`opentide validate query --platform …`) for real syntax checks, or the MCP `validation_report` tool for structured object validation. See [Agentic setup](./workflows/agentic-setup.md).
+`validate_query` is a **structural** check: delimiters, string termination,
+pipeline shape, dangling operators. It does not resolve table or field names, so
+a well-formed query against a table that does not exist still reports
+`valid: true`. Only the tenant can prove a query runs. `run_query` cannot help —
+it is not implemented and returns `stub: true` with `rows: null`. See
+[Agentic setup](./workflows/agentic-setup.md).
+
+### `opentide validate query` fails with a missing SDK
+
+Only `--live` needs vendor SDKs. Drop the flag for the offline syntax check, or
+install the extra the error names (for example `pip install 'opentide[sentinel]'`).
 
 ## Platforms and deployment
 

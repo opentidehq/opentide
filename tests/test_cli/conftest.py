@@ -152,7 +152,11 @@ def invoke_cli(cli_runner: CliRunner, tide_corpus_repo: Path) -> Callable[..., R
 
 @pytest.fixture
 def mock_query_validators(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Avoid live API calls during validate query E2E tests."""
+    """Stand in for the vendor SDK on the ``--live`` path only.
+
+    The default ``validate query`` path is offline and must never be mocked:
+    doing so is what let #245 and #261 pass a broken query as valid.
+    """
 
     class _NoOpValidator:
         def validate(self, **kwargs: object) -> None:
@@ -173,6 +177,9 @@ def mock_query_validators(monkeypatch: pytest.MonkeyPatch) -> None:
         @property
         def query_validation(self) -> dict[str, _NoOpValidator]:
             return validators
+
+        def query_validation_for(self, platform: str) -> dict[str, _NoOpValidator]:
+            return {platform: validators[platform]} if platform in validators else {}
 
     monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
 

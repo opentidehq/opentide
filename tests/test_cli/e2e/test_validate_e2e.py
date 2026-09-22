@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -39,10 +40,10 @@ def test_validate_scoped_by_uuid(invoke_cli, corpus_rule_uuids) -> None:
 )
 def test_validate_query_platform_matrix(
     invoke_cli,
-    mock_query_validators,
     platform: str,
     expects_supported: bool,
 ) -> None:
+    """No validator mock: the default path must pass on a stock install (#239, #261)."""
     result = invoke_cli(
         "validate",
         "query",
@@ -55,7 +56,9 @@ def test_validate_query_platform_matrix(
     if expects_supported:
         payload = assert_json_ok(result)
         assert payload.get("supported") is True
+        assert payload.get("mode") == "offline-syntax"
         assert payload.get("status") == "passed"
+        assert payload.get("checked", 0) >= 1
     else:
         assert result.exit_code != 0
         if "{" in result.stdout:
@@ -63,7 +66,7 @@ def test_validate_query_platform_matrix(
             assert body.get("supported") is False
 
 
-def test_validate_query_without_plan_or_wide(invoke_cli, mock_query_validators) -> None:
+def test_validate_query_without_plan_or_wide(invoke_cli) -> None:
     """Unset DEPLOYMENT_PLAN must not traceback on validate query (issue #164)."""
     result = invoke_cli(
         "validate",
@@ -75,6 +78,81 @@ def test_validate_query_without_plan_or_wide(invoke_cli, mock_query_validators) 
     payload = assert_json_ok(result)
     assert payload.get("supported") is True
     assert payload.get("status") == "passed"
+
+
+def _break_sentinel_query(repo: Path) -> None:
+    path = repo / "Objects" / "Detection Rules" / "rule-0001-sentinel-kql.yaml"
+    text = path.read_text(encoding="utf-8")
+    path.write_text(
+        text.replace("| where EventID == 4688", '| where Account == "unterminated'),
+        encoding="utf-8",
+    )
+
+
+def test_validate_query_fails_on_broken_syntax(invoke_cli, tide_corpus_repo: Path) -> None:
+    """A malformed query must fail the command, not be waved through (#245, #261)."""
+    _break_sentinel_query(tide_corpus_repo)
+    result = invoke_cli("validate", "query", "--platform", "sentinel")
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["status"] == "failed"
+    assert payload["mode"] == "offline-syntax"
+    (finding,) = payload["findings"]
+    assert finding["code"] == "unterminated_string"
+    assert finding["field"] == "configurations.sentinel.query"
+    assert finding["uuid"] == "00000000-0000-4000-8003-000000000001"
+
+
+def _azure_importable() -> bool:
+    try:
+        importlib.import_module("azure.monitor.query")
+    except ImportError:
+        return False
+    return True
+
+
+def test_validate_query_offline_needs_no_vendor_sdk(invoke_cli) -> None:
+    """Issue #239: the stock install has no azure package and must still work."""
+    if _azure_importable():
+        pytest.skip("azure SDK installed; the no-extras path cannot be observed here")
+    payload = assert_json_ok(invoke_cli("validate", "query", "--platform", "sentinel"))
+    assert payload["mode"] == "offline-syntax"
+    assert payload["language"] == "kql"
+
+
+def test_validate_query_live_without_sdk_reports_the_extra(invoke_cli) -> None:
+    """--live is allowed to fail, but with advice instead of a traceback (#239)."""
+    result = invoke_cli("validate", "query", "--platform", "sentinel", "--live", "--wide")
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["mode"] == "live"
+    assert payload["status"] == "failed"
+    assert "opentide[sentinel]" in payload["advice"]
+
+
+def test_validate_query_live_uses_the_platform_engine(invoke_cli, mock_query_validators) -> None:
+    result = invoke_cli("validate", "query", "--platform", "sentinel", "--live", "--wide")
+    payload = assert_json_ok(result)
+    assert payload["mode"] == "live"
+    assert payload["status"] == "passed"
+
+
+def test_validate_query_loads_only_the_requested_engine(
+    invoke_cli, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue #246: a sentinel-only run must not import every vendor engine."""
+    from opentide.platforms import plugins
+
+    imported: list[str] = []
+    original = plugins.PlatformLoader.import_engine
+
+    def _record(module_path: str):
+        imported.append(module_path)
+        return original(module_path)
+
+    monkeypatch.setattr(plugins.PlatformLoader, "import_engine", staticmethod(_record))
+    invoke_cli("validate", "query", "--platform", "sentinel", "--live", "--wide")
+    assert not [path for path in imported if "crowdstrike" in path or "harfanglab" in path]
 
 
 def _write_threat_cves(repo: Path, identifiers: list[str]) -> None:

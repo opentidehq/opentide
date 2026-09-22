@@ -47,6 +47,13 @@ Only platforms with `can_validate=True` run syntax validation. For CrowdStrike a
 opentide validate query --platform crowdstrike   # reports unsupported
 ```
 
+For the five that can, validation is **offline by default**: a structural check
+of the query language that needs no vendor SDK and no tenant. Pass `--live` to
+submit the query to the platform instead, which requires the matching extra and
+credentials. Only the requested platform's engine is imported, so a Sentinel run
+never loads the CrowdStrike or HarfangLab modules. See
+[`validate`](../../cli/validate.md#query-validation).
+
 ## Platform configuration
 
 Per-platform settings live under `.opentide/configurations/platforms/`. Enable platforms with `opentide setup platforms` or the parent `opentide setup --platform` flags; the registry loads deployers and validators for enabled systems only.
