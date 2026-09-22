@@ -21,6 +21,10 @@ opentide validate --strict
 
 Then regenerate CI and hooks: `opentide setup ci <github|gitlab|azure> --yes` and `opentide setup hooks --yes`.
 
+**Security: regenerate GitHub CI**
+
+The inflight job from `opentide setup ci github` in 0.3.0 pushed the pull request head to the default branch, so an up-to-date pull request landed there unreviewed. Inflight jobs now commit only `.opentide/inflight/` shards from a worktree of the default branch ([#244](https://github.com/OpenTideHQ/opentide/issues/244)).
+
 **What changes for scripts**
 
 - `validate query` is an offline syntax check by default and needs no SDK. Use `--live` for the tenant round-trip ([#239](https://github.com/OpenTideHQ/opentide/issues/239)).
@@ -32,9 +36,10 @@ Then regenerate CI and hooks: `opentide setup ci <github|gitlab|azure> --yes` an
 
 **What this version fixes**
 
-- CLI: nested `deploy metadata` / `generate inflight prune` ran the parent command ([#243](https://github.com/OpenTideHQ/opentide/issues/243)); `info coverage --technique` failed to parse ([#257](https://github.com/OpenTideHQ/opentide/issues/257)); `generate docs --changed` crashed without a git HEAD and missed changes off non-`main` trunks ([#241](https://github.com/OpenTideHQ/opentide/issues/241), [#251](https://github.com/OpenTideHQ/opentide/issues/251)); `generate extract` failed at import ([#242](https://github.com/OpenTideHQ/opentide/issues/242)); `generate explorer` was not registered ([#202](https://github.com/OpenTideHQ/opentide/issues/202)); Sentinel-only runs loaded every engine ([#246](https://github.com/OpenTideHQ/opentide/issues/246)).
+- CLI: nested `deploy metadata` / `generate inflight prune` ran the parent command ([#243](https://github.com/OpenTideHQ/opentide/issues/243)); `info coverage --technique` failed to parse ([#257](https://github.com/OpenTideHQ/opentide/issues/257)); `generate docs --changed` crashed without a git HEAD and missed changes off non-`main` trunks, on pushed feature branches, and in non-ASCII file names ([#241](https://github.com/OpenTideHQ/opentide/issues/241), [#251](https://github.com/OpenTideHQ/opentide/issues/251)); `generate extract` failed at import ([#242](https://github.com/OpenTideHQ/opentide/issues/242)); `generate explorer` was not registered ([#202](https://github.com/OpenTideHQ/opentide/issues/202)); Sentinel-only runs loaded every engine ([#246](https://github.com/OpenTideHQ/opentide/issues/246)).
 - Validation: `validate --file` ignored the directory ([#240](https://github.com/OpenTideHQ/opentide/issues/240)); unparseable YAML raised a traceback ([#250](https://github.com/OpenTideHQ/opentide/issues/250)).
-- Setup: GitLab and Azure inflight jobs never pushed ([#244](https://github.com/OpenTideHQ/opentide/issues/244)); the pre-commit hook validated `OPENTIDE_REPO_ROOT` instead of the commit ([#249](https://github.com/OpenTideHQ/opentide/issues/249)).
+- Setup: GitLab and Azure inflight jobs never pushed ([#244](https://github.com/OpenTideHQ/opentide/issues/244)); the pre-commit hook validated `OPENTIDE_REPO_ROOT` instead of the commit, and missed nested or additional workspaces ([#249](https://github.com/OpenTideHQ/opentide/issues/249)); `setup --path DIR --yes <subcommand>` ignored both flags ([#248](https://github.com/OpenTideHQ/opentide/issues/248)).
+- Output: `--no-color` and `FORCE_COLOR=0` still let ANSI escapes through on CI runners ([#282](https://github.com/OpenTideHQ/opentide/pull/282)).
 - MCP: `coverage` and actor search ignored `rule.techniques` / `threat.actors` ([#252](https://github.com/OpenTideHQ/opentide/issues/252)); schemas resolved to `{}` ([#254](https://github.com/OpenTideHQ/opentide/issues/254)); `validate_query` accepted garbage ([#245](https://github.com/OpenTideHQ/opentide/issues/245)); `opentide-mcp` tracebacked without the extra ([#256](https://github.com/OpenTideHQ/opentide/issues/256)).
 - Docs: tutorial and CLI samples now match live output, and every documented command is checked against the CLI in CI ([#247](https://github.com/OpenTideHQ/opentide/issues/247), [#270](https://github.com/OpenTideHQ/opentide/issues/270)).
 
