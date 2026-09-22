@@ -46,8 +46,10 @@ EXPECTED_TOOLS = {
 
 
 def _console_script() -> str:
+    # The script beside this interpreter runs the code under test; another one
+    # earlier on PATH may belong to an older install.
     candidate = Path(sys.executable).with_name("opentide-mcp")
-    resolved = shutil.which("opentide-mcp") or (str(candidate) if candidate.exists() else None)
+    resolved = str(candidate) if candidate.exists() else shutil.which("opentide-mcp")
     if resolved is None:
         pytest.skip("opentide-mcp console script is not installed")
     return resolved

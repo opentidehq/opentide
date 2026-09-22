@@ -76,6 +76,11 @@ def test_query_language_is_none_for_platforms_without_one() -> None:
         ("process_cmdline:/.*[^)]+/", "lucene"),
         (r'process_name:/cmd\.(exe|bat)/ AND process_cmdline:/"[a-z\//', "lucene"),
         ("process_name:/usr/bin/bash", "lucene"),
+        # An unescaped path is not a regex that runs on into the next term.
+        ('process_name:/usr/bin/curl AND process_cmdline:"http://evil"', "lucene"),
+        ('process_name:/usr/bin/bash AND process_cmdline:"/bin/sh -c"', "lucene"),
+        ("process_name:/usr/bin/curl AND (process_cmdline:x OR process_name:/tmp/y)", "lucene"),
+        ("(process_name:/tmp/) AND -/bad.*/^2", "lucene"),
         # KQL multi-line literal: quotes and brackets inside are data.
         (
             "let script = ```\nIEX \"(New-Object Net.WebClient)\nit's [open\n```;\n"
@@ -110,6 +115,8 @@ def test_well_formed_queries_produce_no_findings(query: str, language: str) -> N
         ("process_pid:(1000 TO 2000]", "lucene", "bracket_mismatch"),
         ("process_pid:[1000 TO 2000", "lucene", "unclosed_bracket"),
         ("process_name:/cmd/ AND (parent_name:x", "lucene", "unclosed_bracket"),
+        # A regex is only closed where its term ends, so it cannot swallow a bracket.
+        ("process_name:/usr/bin (parent_name:/tmp/ OR x", "lucene", "unclosed_bracket"),
     ],
 )
 def test_broken_queries_report_the_expected_code(query: str, language: str, expected: str) -> None:
