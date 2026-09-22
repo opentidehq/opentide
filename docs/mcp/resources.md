@@ -94,6 +94,12 @@ When nothing matches, the resource returns a diagnostic rather than an empty obj
 
 Resources reflect the runtime index after `OpenTide.initialise()` — run `opentide generate schemas` in the client repo if schemas are empty.
 
+`opentide://templates/{object_type}` accepts the same forms. Templates are
+rendered from the current model, so a versioned id resolves only when it names
+the current schema version: `rule::1.0` returns the rule template, `rule::9.9`
+returns an `error` with the `available` templates. Run
+`opentide generate templates` if the template list is empty.
+
 ## Vocabulary resources
 
 Vocabularies are `model_dump()`-ed to JSON objects, not `repr()` strings:
