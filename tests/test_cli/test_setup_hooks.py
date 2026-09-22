@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -165,7 +166,7 @@ def test_nested_workspace_installs_into_the_enclosing_repository(tmp_path: Path)
     assert installed == (workspace / ".opentide" / "hooks" / "pre-commit").read_text(
         encoding="utf-8"
     )
-    assert 'OPENTIDE_HOOK_REPO="$OPENTIDE_HOOK_REPO"/security/detections' in installed
+    assert '# opentide-workspace: "security/detections"' in installed
     config = (workspace / ".pre-commit-config.yaml").read_text(encoding="utf-8")
     assert 'repo="$(git rev-parse --show-toplevel)"/security/detections;' in config
     assert any("repository root" in warning for warning in result["warnings"])
@@ -189,14 +190,19 @@ def test_nested_workspace_replaces_a_root_pinned_entry(tmp_path: Path) -> None:
     assert _entry(config) == hook_entry("detections")
 
 
-def _stub_opentide(tmp_path: Path) -> dict[str, str]:
-    """An ``opentide`` that passes and records its ``--repo``, like ``validate`` on an empty tree."""
+def _stub_opentide(tmp_path: Path, fail: str | None = None) -> dict[str, str]:
+    """An ``opentide`` that records its ``--repo`` and passes, like ``validate`` on an empty tree.
+
+    It fails for a ``--repo`` ending in *fail*.
+    """
     bin_dir = tmp_path / "stub-bin"
     bin_dir.mkdir(exist_ok=True)
     stub = bin_dir / "opentide"
+    failing = f'case "$2" in *{shlex.quote(fail)}) echo "ERROR broken" >&2; exit 1;; esac\n'
     stub.write_text(
         f'#!/bin/sh\nprintf "%s\\n" "$2" >> {shlex.quote(str(tmp_path / "validated.log"))}\n'
-        'echo "OK Validation passed"\n',
+        + (failing if fail else "")
+        + 'echo "OK Validation passed"\n',
         encoding="utf-8",
     )
     stub.chmod(0o755)
@@ -338,6 +344,131 @@ def test_yaml_value_round_trips(value: str) -> None:
 def test_yaml_value_keeps_plain_commands_plain() -> None:
     assert _yaml_value("opentide validate --strict") == "opentide validate --strict"
     assert _yaml_value(HOOK_ENTRY) == HOOK_ENTRY
+
+
+def _run_git_hook(repo: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    return subprocess.run(["sh", str(hook)], cwd=repo, env=env, capture_output=True, text=True)
+
+
+def _setup(workspace: Path) -> dict[str, object]:
+    return run_hooks_setup(HooksSetupOptions(path=workspace, yes=True, install=True))
+
+
+def test_shared_hook_validates_every_workspace_set_up_in_the_repository(tmp_path: Path) -> None:
+    """Setting up teamB repointed the repository's only hook, and teamA went unvalidated."""
+    _git_init(tmp_path)
+    _setup(tmp_path / "teamA")
+    result = _setup(tmp_path / "teamB")
+
+    assert "../.git/hooks/pre-commit" in result["files"]
+    done = _run_git_hook(tmp_path, _stub_opentide(tmp_path))
+    assert done.returncode == 0, done.stdout + done.stderr
+    top = tmp_path.resolve()
+    assert _validated(tmp_path) == [str(top / "teamA"), str(top / "teamB")]
+
+
+def test_shared_hook_is_byte_identical_when_setup_is_repeated(tmp_path: Path) -> None:
+    hooks_dir = _git_init(tmp_path)
+    _setup(tmp_path / "teamA")
+    _setup(tmp_path / "teamB")
+    installed = hooks_dir / "pre-commit"
+    before = installed.read_bytes()
+
+    for name in ("teamB", "teamA"):
+        again = _setup(tmp_path / name)
+        assert "../.git/hooks/pre-commit" in again["skipped"], again
+        assert installed.read_bytes() == before
+
+
+def test_shared_hook_validates_every_workspace_and_reports_every_failure(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    for name in ("teamA", "teamB", "teamC"):
+        _setup(tmp_path / name)
+    shutil.rmtree(tmp_path / "teamB" / ".opentide")
+
+    done = _run_git_hook(tmp_path, _stub_opentide(tmp_path, fail="teamA"))
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "ERROR broken" in done.stderr
+    assert f"No OpenTide workspace at {tmp_path.resolve() / 'teamB'}" in done.stderr
+    top = tmp_path.resolve()
+    assert _validated(tmp_path) == [str(top / "teamA"), str(top / "teamC")]
+
+
+def test_setup_drops_a_pinned_workspace_that_was_moved(tmp_path: Path) -> None:
+    """The hook fails on a moved workspace; re-running setup is how the user clears it."""
+    hooks_dir = _git_init(tmp_path)
+    _setup(tmp_path / "teamA")
+    _setup(tmp_path / "teamB")
+    (tmp_path / "teamA").rename(tmp_path / "moved")
+    assert _run_git_hook(tmp_path, _stub_opentide(tmp_path)).returncode == 1
+
+    result = _setup(tmp_path / "teamB")
+
+    assert "../.git/hooks/pre-commit" in result["files"]
+    assert any("no longer validates teamA" in warning for warning in result["warnings"])
+    assert "teamA" not in (hooks_dir / "pre-commit").read_text(encoding="utf-8")
+    (tmp_path / "validated.log").unlink()
+    done = _run_git_hook(tmp_path, _stub_opentide(tmp_path))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _validated(tmp_path) == [str(tmp_path.resolve() / "teamB")]
+
+
+_PREVIOUS_HOOK = """\
+#!/bin/sh
+# opentide-setup-hooks: validate detection objects before commit.
+# Generated by OpenTide. Re-run `opentide setup hooks` to refresh.
+set -e
+if [ -n "${{OPENTIDE_SKIP_HOOKS:-}}" ]; then
+  exit 0
+fi
+# Validate the worktree being committed, not whatever OPENTIDE_REPO_ROOT names.
+OPENTIDE_HOOK_REPO=$(git rev-parse --show-toplevel)
+{nested}exec opentide --repo "$OPENTIDE_HOOK_REPO" validate --strict
+"""
+
+
+@pytest.mark.parametrize("previous", ["", "team A's"])
+def test_shared_hook_keeps_the_workspace_a_previous_hook_pinned(
+    tmp_path: Path, previous: str
+) -> None:
+    hooks_dir = _git_init(tmp_path)
+    (tmp_path / previous / ".opentide").mkdir(parents=True)
+    nested = (
+        f'OPENTIDE_HOOK_REPO="$OPENTIDE_HOOK_REPO"/{shlex.quote(previous)}\n' if previous else ""
+    )
+    (hooks_dir / "pre-commit").write_text(_PREVIOUS_HOOK.format(nested=nested), encoding="utf-8")
+
+    _setup(tmp_path / "teamB")
+
+    done = _run_git_hook(tmp_path, _stub_opentide(tmp_path))
+    assert done.returncode == 0, done.stdout + done.stderr
+    top = tmp_path.resolve()
+    assert _validated(tmp_path) == [str(top / previous), str(top / "teamB")]
+
+
+def test_shared_hook_quotes_hostile_workspace_names(tmp_path: Path) -> None:
+    _git_init(tmp_path)
+    hostile = 'we\'re $(touch pwned) ; & "x" `touch pwned`'
+    _setup(tmp_path / hostile)
+    _setup(tmp_path / "plain")
+    env = _stub_opentide(tmp_path)
+
+    done = _run_git_hook(tmp_path, env)
+    assert done.returncode == 0, done.stdout + done.stderr
+    entry = subprocess.run(
+        shlex.split(_entry(tmp_path / hostile / ".pre-commit-config.yaml")),
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert entry.returncode == 0, entry.stdout + entry.stderr
+
+    top = tmp_path.resolve()
+    assert _validated(tmp_path) == [str(top / hostile), str(top / "plain"), str(top / hostile)]
+    assert not list(tmp_path.rglob("pwned"))
 
 
 def test_linked_worktree_installs_the_shared_hook(tmp_path: Path) -> None:

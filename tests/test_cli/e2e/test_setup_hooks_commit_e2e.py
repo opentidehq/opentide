@@ -159,6 +159,11 @@ def _scaffold_nested(script_runner: ScriptRunner, mono: Path, workspace: Path) -
     _git(mono, "config", "user.email", "e2e@opentide.local")
     _git(mono, "config", "user.name", "OpenTide E2E")
     (mono / "README.md").write_text("monorepo\n", encoding="utf-8")
+    return _add_workspace(script_runner, workspace)
+
+
+def _add_workspace(script_runner: ScriptRunner, workspace: Path) -> RunResult:
+    """Scaffold *workspace*, set up its hooks, and give it valid objects."""
     setup: RunResult = script_runner.run(
         [
             "opentide",
@@ -226,6 +231,24 @@ def test_versioned_hook_validates_the_nested_workspace_not_the_git_root(
     result = _commit(mono, "commit broken yaml", _clean_env())
     output = result.stdout + result.stderr
     assert result.returncode != 0, f"the hook validated the monorepo root\n{output}"
+    assert "Could not parse object YAML" in output, output
+
+
+def test_hook_keeps_validating_every_nested_workspace(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """A repository has one hook; setting up team-b used to repoint it away from team-a."""
+    mono = tmp_path / "mono"
+    team_a = mono / "team-a"
+    _scaffold_nested(script_runner, mono, team_a)
+    _add_workspace(script_runner, mono / "team-b")
+    assert _commit(mono, "baseline", _clean_env()).returncode == 0
+
+    (team_a / BROKEN_RELPATH).write_text(BROKEN_YAML, encoding="utf-8")
+    result = _commit(mono, "commit broken yaml in team-a", _clean_env())
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, f"broken YAML in the first workspace was committed\n{output}"
     assert "Could not parse object YAML" in output, output
 
 
