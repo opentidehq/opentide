@@ -46,7 +46,7 @@ Interactive mode prints a Rich table:
 
 ## JSON payload shape
 
-`info` uses `emit()` (not `emit_success`), so JSON output has **no** `"ok"` wrapper:
+`info` emits the same envelope as every other command, so the payload carries the `ok` / `status` / `message` keys alongside its own fields:
 
 ```json
 {
@@ -55,9 +55,14 @@ Interactive mode prints a Rich table:
   "counts": { "rules": 0, "threats": 0, "objectives": 0 },
   "platforms": [
     { "name": "sentinel", "enabled": true, "can_deploy": true, "can_validate": true }
-  ]
+  ],
+  "ok": true,
+  "status": "completed",
+  "message": "Repository information"
 }
 ```
+
+Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
 
 With coverage:
 

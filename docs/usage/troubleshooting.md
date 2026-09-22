@@ -302,7 +302,7 @@ opentide validate --strict
 
 ```bash
 pip install 'opentide==0.3.0'
-opentide validate --json
+opentide --json validate
 ```
 
 ### `unknown schema identifier` / object won't load

@@ -37,12 +37,16 @@ opentide generate
 ```
 
 ```text
-✓ vocabularies loaded
-✓ templates written        .opentide/templates/
-✓ schemas written          .opentide/schemas/
-✓ IDE router               .opentide/schemas/opentide.schema.json
-generate: complete
+== Documentation generation ==
+== Export generation ==
+== Object vocabulary generation ==
+== Template generation ==
+== JSON schema generation ==
+== VS Code snippet generation ==
+OK Full generation pipeline completed
 ```
+
+This is the output with `--no-color` or `NO_COLOR` set; otherwise each `== … ==` header is drawn as a horizontal rule. Phase headers go to stderr and the final status to stdout, so `opentide generate > log.txt` keeps the headers on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
 
 Your editor can now validate YAML under `objects/threats/`, `objects/objectives/`, and `objects/rules/` because `opentide setup vscode` maps each folder to its concrete JSON Schema (not the router glob, which the YAML language server cannot narrow).
 
@@ -226,24 +230,32 @@ opentide info
 opentide --json info --technique T1059 coverage
 ```
 
-`info` shows your objects and how they chain; the coverage query shows that T1059 is now covered by one objective and one rule. See [`info`](../cli/info.md).
+`info` reports the package version, your object counts, and each platform's deploy/validate capabilities; the coverage query shows that T1059 is now covered by one objective and one rule. To see the chain itself, use the Mermaid diagram in [`generate docs`](../cli/generate.md) output or the MCP `get_chaining` tool. See [`info`](../cli/info.md).
 
 ## 9. Validate the query and dry-run the deploy
 
-Sentinel supports query validation, so check the KQL before deploying:
+Sentinel supports query validation, so check the KQL before deploying. `validate query` parses the query offline by default — no Azure SDK and no credentials:
 
 ```bash
 opentide validate query --platform sentinel
+```
+
+```text
+OK Offline KQL syntax validation passed for sentinel (1 query across 1 rule)
+```
+
+Add `--live` to send the query to Azure Monitor for a real round-trip; that needs `opentide[sentinel]` and credentials. Then dry-run the deploy:
+
+```bash
 opentide deploy --platform sentinel --dry-run
 ```
 
 ```text
-deploy (dry-run): sentinel
-  Sentinel KQL Rule  STAGING  → would create/update
-deploy: 1 rule planned, 0 applied (dry-run)
+== MDR Deployment ==
+OK Deployment completed
 ```
 
-`--dry-run` shows exactly what a real deploy would change without touching the platform. A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
+`--dry-run` plans the deploy without touching the platform; per-rule detail is logged to stderr, and `opentide --json deploy --platform sentinel --dry-run` returns it as a structured payload. A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
 
 ## 10. Generate documentation
 
