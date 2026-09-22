@@ -26,6 +26,8 @@ opentide --debug --no-color generate
 
 When `--repo` is omitted, OpenTide walks up from the current directory to find the repository root (objects, configurations markers). Explicit `--repo` or `OPENTIDE_REPO_ROOT` always wins.
 
+A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_WORKSPACE`. That variable is read before the repository root when locating detection objects, so without this precedence `--repo` resolved the root while the workspace — and therefore the objects actually validated — stayed on the exported path.
+
 Setup commands honour `--repo` when `--path` is `.` (default).
 
 ## Environment propagation
@@ -39,6 +41,8 @@ Interactive terminals receive Rich colours. Redirected or captured streams autom
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 
 With `--json`, stdout is one machine-readable JSON document. Diagnostics and debug logs use stderr.
+
+`--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits non-zero with a JSON error naming the flags to pass instead — `--yes` plus the explicit selections. Without `--json` the same commands open the wizard as before.
 
 ## Deployment plan
 

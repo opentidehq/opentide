@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from opentide.cli import app
 from opentide.cli.services.setup.hooks import (
+    HOOK_ENTRY,
     HOOK_MARKER,
     HooksSetupOptions,
     run_hooks_setup,
@@ -24,11 +25,13 @@ def test_run_hooks_setup_writes_config_and_versioned_hook(tmp_path: Path) -> Non
     assert config.is_file()
     text = config.read_text(encoding="utf-8")
     assert "id: opentide-validate" in text
-    assert "opentide validate --strict" in text
+    assert f"entry: {HOOK_ENTRY}" in text
     assert hook.is_file()
     script = hook.read_text(encoding="utf-8")
     assert HOOK_MARKER in script
-    assert "opentide validate --strict" in script
+    # #249: the hook must pin the worktree, not inherit OPENTIDE_REPO_ROOT.
+    assert 'opentide --repo "$OPENTIDE_HOOK_REPO" validate --strict' in script
+    assert "git rev-parse --show-toplevel" in script
     assert os.access(hook, os.X_OK)
     assert result["installed"] is False
     assert "Not a Git repository" in result["warnings"][0]
@@ -69,7 +72,7 @@ def test_run_hooks_setup_refreshes_managed_git_hook(tmp_path: Path) -> None:
     )
     result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=True))
     text = (tmp_path / ".git" / "hooks" / "pre-commit").read_text(encoding="utf-8")
-    assert "opentide validate --strict" in text
+    assert 'opentide --repo "$OPENTIDE_HOOK_REPO" validate --strict' in text
     assert "echo stale" not in text
     assert result["installed"] is True
 

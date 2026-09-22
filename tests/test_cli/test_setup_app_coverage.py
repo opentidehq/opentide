@@ -6,6 +6,7 @@ import importlib
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 import opentide.cli.services.setup as setup_package
@@ -125,8 +126,9 @@ def test_setup_repo_interactive(tmp_path: Path, monkeypatch) -> None:
         "run_interactive_repo_setup",
         lambda cli, base: {"message": "repo-wizard", "path": str(base)},
     )
-    result = runner.invoke(app, ["--json", "setup", "repo", str(tmp_path)])
-    assert result.exit_code == 0
+    # No --json: the wizard and a JSON-only stdout are mutually exclusive (#255).
+    result = runner.invoke(app, ["setup", "repo", str(tmp_path)])
+    assert result.exit_code == 0, result.stdout
     assert "repo-wizard" in result.stdout
 
 
@@ -177,8 +179,8 @@ def test_setup_mcp_interactive(tmp_path: Path, monkeypatch) -> None:
         "run_interactive_mcp_setup",
         lambda base: {"message": "mcp-wizard", "files": []},
     )
-    result = runner.invoke(app, ["--json", "setup", "mcp", str(tmp_path)])
-    assert result.exit_code == 0
+    result = runner.invoke(app, ["setup", "mcp", str(tmp_path)])
+    assert result.exit_code == 0, result.stdout
     assert "mcp-wizard" in result.stdout
 
 
@@ -217,8 +219,8 @@ def test_setup_skills_interactive(tmp_path: Path, monkeypatch) -> None:
         "run_interactive_skills_setup",
         lambda base: {"message": "skills-wizard", "files": []},
     )
-    result = runner.invoke(app, ["--json", "setup", "skills", "--path", str(tmp_path)])
-    assert result.exit_code == 0
+    result = runner.invoke(app, ["setup", "skills", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.stdout
     assert "skills-wizard" in result.stdout
 
 
@@ -269,3 +271,55 @@ def test_setup_subcommand_skips_default_callback(tmp_path: Path) -> None:
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload.get("message") == "Repository scaffold created"
+
+
+#: Each wizard entry point, with whichever path form the subcommand accepts.
+JSON_WIZARD_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("setup", ("setup", "--path")),
+    ("setup repo", ("setup", "repo")),
+    ("setup mcp", ("setup", "mcp")),
+    ("setup skills", ("setup", "skills", "--path")),
+)
+
+
+@pytest.mark.parametrize(("label", "command"), JSON_WIZARD_COMMANDS, ids=lambda v: v)
+def test_json_refuses_the_interactive_wizard(
+    tmp_path: Path, monkeypatch, label: str, command: tuple[str, ...]
+) -> None:
+    """#255: --json used to print Rich prompts and then a JSON document.
+
+    The wizards are stubbed to fail loudly: reaching one at all is the bug.
+    """
+
+    def _unreachable(*args: object, **kwargs: object) -> dict[str, object]:
+        raise AssertionError("--json must not reach the interactive wizard")
+
+    for name in (
+        "run_interactive_setup",
+        "run_interactive_repo_setup",
+        "run_interactive_mcp_setup",
+        "run_interactive_skills_setup",
+    ):
+        monkeypatch.setattr(setup_app_module, name, _unreachable)
+
+    result = runner.invoke(app, ["--json", *command, str(tmp_path)])
+
+    assert result.exit_code == 1, f"{label}: {result.stdout}"
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert "--json" in payload["message"]
+    assert "--yes" in payload["message"]
+
+
+def test_json_refuses_to_prompt_before_writing(tmp_path: Path) -> None:
+    """A scripted --json run without --yes must not open a confirmation prompt."""
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "--platform", "sentinel", "--path", str(tmp_path)],
+    )
+
+    assert result.exit_code == 1, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert "--yes" in payload["message"]
+    assert not (tmp_path / "objects").exists()

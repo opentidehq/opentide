@@ -84,7 +84,8 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 - Markers: `cli_e2e` (in-process), `cli_smoke` (console-script subprocess); separate `cli-e2e` CI job on Python 3.14 after unit matrix
 - Deploy dry-run returns `plan` + `payloads` (unit golden tests in `tests/test_deployment/test_deploy_payloads.py`)
 - Skill: [`.agents/skills/cli-e2e-testing/SKILL.md`](../../.agents/skills/cli-e2e-testing/SKILL.md)
-- Interactive `setup`: construct real Questionary prompts and mock only `.ask()` (`test_setup_interactive.py`). Full TTY wizard e2e is still out of scope.
+- Interactive `setup`: construct real Questionary prompts and mock only `.ask()` (`test_setup_interactive.py`), which keeps catching prompt-kwarg regressions such as #177.
+- Full TTY wizard: `test_setup_tty_e2e.py` spawns the console script on a real PTY through `pexpect` (`tests/test_cli/e2e/pty_driver.py`) and walks the wizard end to end — apply and cancel — plus every `--json` guard. `CliRunner` never presents a TTY, so this is the only path that reaches `run_interactive_setup`. Do not stub `.ask()` there.
 - YAML shape guard: `tests/test_cli/test_simulation_yaml_shape.py` fails if tutorial/corpus quote metadata dates
 
 ### Phase 7 ([#68](https://github.com/OpenTideHQ/CoreTide/issues/68))

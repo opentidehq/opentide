@@ -28,12 +28,33 @@ def _python_setup(options: CiRenderOptions) -> str:
 
 
 def _bash_script(commands: list[str]) -> str:
-    joined = " && ".join(commands)
-    return f"- script: |\n    {joined}"
+    """One multi-line bash step.
+
+    Joining with ``&&`` made control flow impossible: an ``exit 0`` guard
+    swallowed every later command, and a deliberate non-zero test aborted the
+    rest of the chain. ``set -e`` keeps the fail-fast behaviour that the
+    ``&&`` join was there for.
+    """
+    body = "\n".join(["set -e", *commands])
+    return "- script: |\n" + indent(body, 4)
 
 
-def _job_steps(options: CiRenderOptions, commands: list[str]) -> str:
-    return _python_setup(options) + "\n" + _bash_script(commands)
+def _checkout_step(*, persist_credentials: bool) -> str:
+    """Azure clones with throwaway credentials unless asked otherwise."""
+    if not persist_credentials:
+        return ""
+    return "- checkout: self\n  persistCredentials: true\n  fetchDepth: 0\n"
+
+
+def _job_steps(
+    options: CiRenderOptions, commands: list[str], *, persist_credentials: bool = False
+) -> str:
+    return (
+        _checkout_step(persist_credentials=persist_credentials)
+        + _python_setup(options)
+        + "\n"
+        + _bash_script(commands)
+    )
 
 
 def _azure_job(
@@ -41,12 +62,15 @@ def _azure_job(
     *,
     display_name: str,
     steps: str,
-    depends_on: str | None = None,
     condition: str | None = None,
 ) -> str:
+    """Render one job.
+
+    Deliberately no ``dependsOn``: Azure resolves job dependencies inside a
+    single stage, and every caller here wanted a job from an earlier stage.
+    The stage-level ``dependsOn`` already expresses that ordering.
+    """
     lines = [f"- job: {job_id}", f"  displayName: {display_name}"]
-    if depends_on:
-        lines.append(f"  dependsOn: {depends_on}")
     if condition:
         lines.append(f"  condition: {condition}")
     lines.append("  steps:")
@@ -91,7 +115,6 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 "deploy_staging",
                 display_name="Deploy Staging",
-                depends_on="generate",
                 condition="eq(variables['Build.Reason'], 'PullRequest')",
                 steps=_job_steps(options, staging_deploy_steps(options)),
             )
@@ -115,7 +138,6 @@ def render_azure(options: CiRenderOptions) -> str:
         _azure_job(
             "deploy_production",
             display_name="Deploy Production",
-            depends_on="generate",
             condition=f"eq(variables['Build.SourceBranch'], 'refs/heads/{branch}')",
             steps=_job_steps(options, production_deploy_steps(options)),
         )

@@ -76,10 +76,28 @@ def _should_run_repo(
     return yes and ci is None and not vscode_setup
 
 
+def _require_scripted_for_json(cli: CliContext, command: str, flags: str) -> None:
+    """Refuse to open a Rich/Questionary wizard while stdout is promised as JSON.
+
+    ``--json`` lives on the root callback, so ``opentide --json setup`` used to
+    print a setup panel, a prompt sequence, and *then* a JSON document, which no
+    caller can parse.
+    """
+    if not cli.json_output:
+        return
+    emit_error(
+        cli,
+        f"--json cannot drive the interactive wizard. Run '{command}' with --yes "
+        f"and explicit flags ({flags}), or drop --json to use the wizard.",
+    )
+
+
 def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) -> bool:
     """Confirm a scripted write unless explicit non-interactive consent was given."""
     if yes:
         return True
+    if cli.json_output:
+        emit_error(cli, f"--json cannot prompt for confirmation. Add --yes to write to {target}.")
     try:
         require_interactive()
     except InteractiveRequiredError as exc:
@@ -162,6 +180,7 @@ def setup_cmd(
         cli.apply_environment()
         result = run_setup(options)
     else:
+        _require_scripted_for_json(cli, "opentide setup", "--platform, --ci")
         try:
             result = run_interactive_setup(cli, base)
         except (InteractiveRequiredError, RuntimeError) as exc:
@@ -201,6 +220,7 @@ def setup_repo_cmd(
         cli.apply_environment()
         result = run_repo_setup(options)
     else:
+        _require_scripted_for_json(cli, "opentide setup repo", "--name, --platform")
         try:
             result = run_interactive_repo_setup(cli, base)
         except InteractiveRequiredError as exc:
@@ -374,6 +394,7 @@ def setup_mcp_cmd(
         cli.apply_environment()
         result = run_mcp_setup(options)
     else:
+        _require_scripted_for_json(cli, "opentide setup mcp", "--vscode, --cursor, --claude-code")
         try:
             result = run_interactive_mcp_setup(base)
         except InteractiveRequiredError as exc:
@@ -452,6 +473,7 @@ def setup_skills_install_cmd(
         except (SkillsDownloadError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     else:
+        _require_scripted_for_json(cli, "opentide setup skills", "--skill, --all")
         try:
             result = run_interactive_skills_setup(base)
         except (InteractiveRequiredError, RuntimeError, SkillsManifestError) as exc:

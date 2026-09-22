@@ -26,6 +26,30 @@ def test_cli_context_apply_environment(tmp_path, monkeypatch: pytest.MonkeyPatch
     assert os.environ["NO_COLOR"] == "1"
 
 
+def test_apply_environment_keeps_an_inherited_workspace(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without ``--repo`` the exported workspace stays authoritative."""
+    other = tmp_path / "other"
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(other))
+    CliContext(repo=tmp_path).apply_environment()
+    assert os.environ["OPENTIDE_TIDE_WORKSPACE"] == str(other)
+
+
+def test_explicit_repo_overrides_an_exported_workspace(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#249: a stale ``OPENTIDE_TIDE_WORKSPACE`` silently beat ``--repo``.
+
+    ``discover_workspace`` reads that variable before it consults the repo root,
+    so ``opentide --repo X validate`` validated Y and reported success.
+    """
+    other = tmp_path / "other"
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(other))
+    CliContext(repo=tmp_path, repo_explicit=True).apply_environment()
+    assert os.environ["OPENTIDE_TIDE_WORKSPACE"] == str(tmp_path)
+
+
 def test_cli_context_set_deployment_plan() -> None:
     ctx = CliContext()
     ctx.set_deployment_plan("staging")

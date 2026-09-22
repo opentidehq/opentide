@@ -39,6 +39,17 @@ app = typer.Typer(
 )
 
 
+def _came_from_command_line(ctx: typer.Context, name: str) -> bool:
+    """Whether *name* was typed as a flag rather than read from its envvar.
+
+    Compared by name, not by enum identity: Typer bundles its own Click copy,
+    so ``typer._click.core.ParameterSource`` is a different class from
+    ``click.core.ParameterSource`` and ``==`` is always False.
+    """
+    source = ctx.get_parameter_source(name)
+    return getattr(source, "name", "") == "COMMANDLINE"
+
+
 def _deprecate(legacy: str, replacement: str) -> None:
     if is_json_output():
         logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
@@ -67,6 +78,7 @@ def main_callback(
         json_output=json_output,
         debug=debug,
         no_color=no_color,
+        repo_explicit=_came_from_command_line(ctx, "repo"),
     )
     ctx.obj = cli_ctx
     cli_ctx.activate()
