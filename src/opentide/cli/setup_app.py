@@ -61,6 +61,57 @@ def _given_on_command_line(ctx: typer.Context, name: str) -> bool:
     return source is not None and source.name == "COMMANDLINE"
 
 
+# `ctx.meta` is one dict shared by a group's context and its subcommand's.
+_GROUP_PATH = "opentide.setup.path"
+_GROUP_YES = "opentide.setup.yes"
+_HANDED_DOWN = frozenset({"path", "yes"})
+
+
+def _one_path(*given: str | None) -> str | None:
+    """The single target named by a group and its subcommand, if any."""
+    named = [path for path in given if path is not None]
+    if len({Path(path).resolve() for path in named}) > 1:
+        raise typer.BadParameter(
+            f"Pass the repository path once: {' and '.join(named)} name different targets."
+        )
+    return named[-1] if named else None
+
+
+def _hand_down(ctx: typer.Context) -> None:
+    """Give the subcommand this group's ``--path`` and ``--yes``; refuse the rest.
+
+    The group callback returned as soon as a subcommand was named, so
+    ``setup --path ./repo hooks`` configured the current directory, and
+    ``setup --ci github env`` dropped ``--ci`` without a word.
+    """
+    ignored = [
+        "/".join([*param.opts, *param.secondary_opts])
+        for param in ctx.command.params
+        if param.name and param.name not in _HANDED_DOWN and _given_on_command_line(ctx, param.name)
+    ]
+    if ignored:
+        verb = "configures" if len(ignored) == 1 else "configure"
+        raise typer.BadParameter(
+            f"{', '.join(ignored)} {verb} `{ctx.command_path}` itself and would be "
+            f"ignored by `{ctx.command_path} {ctx.invoked_subcommand}`."
+        )
+    if _given_on_command_line(ctx, "path"):
+        ctx.meta[_GROUP_PATH] = _one_path(ctx.meta.get(_GROUP_PATH), ctx.params["path"])
+    if ctx.params.get("yes"):
+        ctx.meta[_GROUP_YES] = True
+
+
+def _consented(ctx: typer.Context, yes: bool) -> bool:
+    return yes or bool(ctx.meta.get(_GROUP_YES))
+
+
+def _option_path(ctx: typer.Context, cli: CliContext, option: str) -> Path:
+    """Resolve a ``--path``-only command's target, inheriting the group's."""
+    own = option if _given_on_command_line(ctx, "path") else None
+    chosen = _one_path(ctx.meta.get(_GROUP_PATH), own)
+    return _resolve_setup_path(cli, "." if chosen is None else chosen)
+
+
 def _setup_path(
     ctx: typer.Context,
     cli: CliContext,
@@ -81,11 +132,11 @@ def _setup_path(
         raise typer.BadParameter(
             "Pass the repository path once: use --path/-C or the positional PATH, not both."
         )
-    if flag_given:
-        return _resolve_setup_path(cli, option)
     if positional_given and deprecate_positional:
         emit_deprecation(f"positional PATH ({ctx.command_path} {positional})", "--path/-C")
-    return _resolve_setup_path(cli, positional)
+    own = option if flag_given else positional if positional_given else None
+    chosen = _one_path(ctx.meta.get(_GROUP_PATH), own)
+    return _resolve_setup_path(cli, "." if chosen is None else chosen)
 
 
 PATH_OPTION = typer.Option(".", "--path", "-C", help="Repository path")
@@ -178,6 +229,7 @@ def setup_cmd(
 ) -> None:
     """Interactive or scripted detection repository onboarding."""
     if ctx.invoked_subcommand is not None:
+        _hand_down(ctx)
         return
 
     cli = get_context(ctx)
@@ -244,6 +296,7 @@ def setup_repo_cmd(
     """Scaffold a detection repository."""
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     if yes or _has_repo_flags(name, org, description, platform):
         if not _confirm_write(cli, base, "Create this repository scaffold?", yes=yes):
             emit_success(cli, {"message": "Repository setup cancelled", "status": "skipped"})
@@ -284,6 +337,7 @@ def setup_platforms_cmd(
     """Create and enable platform configuration files under ``.opentide/configurations/platforms/``."""
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     platforms: list[DetectionPlatform] = []
     if sentinel:
         platforms.append(DetectionPlatform.sentinel)
@@ -336,7 +390,8 @@ def setup_ci_cmd(
     cli = get_context(ctx)
     if ci_platform is CiPlatform.none:
         raise typer.BadParameter("Choose github, gitlab, or azure")
-    target = _resolve_setup_path(cli, path)
+    target = _option_path(ctx, cli, path)
+    yes = _consented(ctx, yes)
     if not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
         emit_success(cli, {"message": "CI/CD setup cancelled", "status": "skipped"})
         return
@@ -367,6 +422,7 @@ def setup_env_cmd(
 
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     if not _confirm_write(cli, base, "Write .env.example with OPENTIDE_REPO_ROOT?", yes=yes):
         emit_success(cli, {"message": "Environment setup cancelled", "status": "skipped"})
         return
@@ -391,6 +447,7 @@ def setup_hooks_cmd(
 
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     if not _confirm_write(cli, base, "Configure validate-on-commit hooks?", yes=yes):
         emit_success(cli, {"message": "Hook setup cancelled", "status": "skipped"})
         return
@@ -412,6 +469,7 @@ def setup_mcp_cmd(
     """Write OpenTide MCP configuration for editors and agents."""
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     hosts: list[McpHost] = []
     if vscode:
         hosts.append(McpHost.vscode)
@@ -466,9 +524,11 @@ def setup_skills_install_cmd(
     ``discover`` / ``show`` as that argument and skip those subcommands.
     """
     if ctx.invoked_subcommand is not None:
+        _hand_down(ctx)
         return
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _option_path(ctx, cli, path)
+    yes = _consented(ctx, yes)
     targets: list[SkillTarget] = []
     if cursor:
         targets.append(SkillTarget.cursor)
@@ -559,7 +619,7 @@ def setup_skills_show_cmd(
 ) -> None:
     """Show details for one skill from the catalogue."""
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _option_path(ctx, cli, path)
     try:
         payload = show_skill(base, name, refresh=refresh)
     except SkillsManifestError as exc:
