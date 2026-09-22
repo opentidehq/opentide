@@ -128,6 +128,8 @@ generate_app.add_typer(inflight_app, name="inflight")
 @inflight_app.callback(invoke_without_command=True)
 def generate_inflight_cmd(ctx: typer.Context) -> None:
     """Write per-UUID preview shards under ``.opentide/inflight/`` for changed objects."""
+    if ctx.invoked_subcommand is not None:
+        return
     cli = get_context(ctx)
     emit_success(cli, run_generate(cli, phase="inflight"))
 
@@ -358,6 +360,8 @@ def deploy_cmd(
     skip_promotion: bool = typer.Option(False, "--skip-promotion"),
 ) -> None:
     """Deploy detection rules to configured platforms."""
+    if ctx.invoked_subcommand is not None:
+        return
     cli = get_context(ctx)
     result = run_deploy(
         cli,
@@ -523,11 +527,10 @@ def migrate_objects_cmd(
     emit_success(cli, run_migrate_objects(cli.repo, apply=apply, copy=copy))
 
 
-info_app = typer.Typer(help="System information")
-app.add_typer(info_app, name="info")
-
-
-@info_app.callback(invoke_without_command=True)
+# ``info`` has no subcommands: registering it as a plain command keeps Click from
+# treating options typed after the section (``info coverage --technique T1059``)
+# as a subcommand name.
+@app.command("info")
 def info_cmd(
     ctx: typer.Context,
     platform: DetectionPlatform | None = typer.Option(None, "--platform"),

@@ -37,6 +37,8 @@ The interactive wizard uses arrow-key menus and checkboxes for platforms, CI, MC
 
 Use subcommands for MCP and skills — parent `--mcp` / `--skills` enums were removed.
 
+`--path` / `-C` and `--yes` / `-y` work on **every** `setup` subcommand (`repo`, `platforms`, `ci`, `env`, `hooks`, `mcp`, `skills`, `vscode`). A positional `PATH` is still accepted as a hidden alias on the subcommands that historically required it; passing both forms in one invocation is a usage error. `setup vscode` accepts `--yes` for symmetry — it writes editor-local files and never prompts.
+
 `--yes` never chooses a platform, MCP host, or skill target. Commands that require one fail with an actionable error when its flag is omitted.
 
 ## Subcommands
@@ -89,7 +91,7 @@ Write `.env.example` with `OPENTIDE_REPO_ROOT` (same variable as `--repo`) and a
 
 ```bash
 opentide setup env --yes
-opentide setup env ./detection-repo --yes
+opentide setup env --path ./detection-repo --yes
 ```
 
 Copy `.env.example` to `.env` and adjust the path if the working directory is not the detection repository. OpenTide does not load `.env` automatically — export the variables or pass `--repo`.
@@ -100,7 +102,7 @@ Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `o
 
 ```bash
 opentide setup hooks --yes
-opentide setup hooks ./detection-repo --yes --no-install
+opentide setup hooks --path ./detection-repo --yes --no-install
 ```
 
 The hook runs `opentide validate --strict`. Set `OPENTIDE_SKIP_HOOKS=1` to bypass it for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the OpenTide hook is appended when missing.

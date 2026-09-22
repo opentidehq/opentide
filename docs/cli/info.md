@@ -25,9 +25,10 @@ opentide --json info --technique T1059 coverage
 
 ### Coverage lookup
 
-Both `--technique` and the `coverage` positional are required:
+Both `--technique` and the `coverage` positional are required. Option order does not matter:
 
 ```bash
+opentide --json info coverage --technique T1059
 opentide --json info --technique T1059 coverage
 ```
 
