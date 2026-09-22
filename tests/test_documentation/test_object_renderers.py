@@ -35,8 +35,8 @@ def test_threat_renderer_includes_diagram_sections(metadata: dict[str, Any]) -> 
             "threat": {
                 "description": "Steals credentials",
                 "severity": "High",
-                "impact": "Data Breach",
-                "leverage": "High",
+                "impact": ["Data Breach"],
+                "leverage": ["High"],
                 "viability": "High",
                 "terrain": "Endpoint workstations and user devices.",
                 "surface": ["Windows::Desktop"],

@@ -67,7 +67,7 @@ obj.objective.threats           # ["…8001…"]  (threat UUIDs)
 | `name` | `str` | Display name |
 | `criticality` | `str` | Criticality vocabulary |
 | `metadata` | `ObjectMetadata` | Shared metadata |
-| `threat` | `ThreatBody` | Body: `severity`, `impact`, `terrain`, `surface`, `att&ck`, `actors` (`list[ThreatActor]`), optional `cve` (`list[str]`, Vulnerability-Lookup IDs), … |
+| `threat` | `ThreatBody` | Body: `severity`, `impact` and `leverage` (non-empty `list[str]` of vocabulary names), `terrain`, `surface`, `att&ck`, `actors` (`list[ThreatActor]`), optional `cve` (`list[str]`, Vulnerability-Lookup IDs), … |
 
 ```python
 threat = OpenTide.Threats["00000000-0000-4000-8001-000000000001"]

@@ -18,8 +18,10 @@ threat:
   description: |
     ...
   severity: 
-  impact: 
-  leverage: 
+  impact:
+    - 
+  leverage:
+    - 
   viability: 
   terrain: 
   surface:

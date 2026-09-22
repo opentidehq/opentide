@@ -309,6 +309,27 @@ opentide --json validate
 
 `metadata.schema` must be a registered identifier such as `rule::1.0`. A typo (`rule:1.0`, `rule::1`, `rules::1.0`) means no model matches. Fix the value; the valid identifiers are `threat::1.0`, `objective::1.0`, `rule::1.0`. See [Schema revision](./concepts/schema-revision.md).
 
+### Threat `impact` / `leverage`: `Input should be a valid string`, `must be a YAML list`, or `packs several vocabulary names`
+
+`threat::1.0` makes `threat.impact` and `threat.leverage` non-empty lists of vocabulary names. Up to **0.4.0** the engine typed them as single strings, so a threat written to the spec failed with `Input should be a valid string`. **0.5.0** follows the spec: a single string fails with `must be a YAML list of … vocabulary names` (plus `list each name in '…' as its own item` when it joins several with `;`), and a list item that joins several names fails with `packs several vocabulary names into one string`. Give every name its own list item, and keep all of them — do not shorten a packed value to its first name:
+
+```yaml
+threat:
+  impact:
+    - Data Breach
+    - Identity Theft
+  leverage:
+    - Elevation of privilege
+    - Repudiation
+```
+
+If your CI patches the installed `opentide` model to accept lists, drop that step once you upgrade:
+
+```bash
+pip install 'opentide==0.5.0'
+opentide validate --strict
+```
+
 ### `duplicate UUID`
 
 Two objects share a `metadata.uuid`. UUIDs must be unique across the repo — you almost certainly copy-pasted an object. Generate a fresh one:
