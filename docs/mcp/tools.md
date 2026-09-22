@@ -81,7 +81,7 @@ Return chaining data for a UUID from `OpenTide.Models.chaining`. Use it to under
 }
 ```
 
-When the UUID is missing: `{ "uuid": "…", "found": false, "graph": {} }`. The registry chaining index is `{threat_uuid: {relation: [vector_uuid, …]}}` — not a top-level `nodes`/`edges` graph. Non-threat UUIDs return `found: true` with an empty `graph` when they are not keys in that index.
+The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository. When the UUID is missing: `{ "uuid": "…", "found": false, "graph": {} }`. The registry chaining index is `{threat_uuid: {relation: [vector_uuid, …]}}` — not a top-level `nodes`/`edges` graph. Non-threat UUIDs return `found: true` with an empty `graph` when they are not keys in that index.
 
 ## coverage
 
