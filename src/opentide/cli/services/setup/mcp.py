@@ -70,6 +70,24 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
             "Copy opentide.mcp.json into your editor MCP settings or run "
             "opentide setup mcp with a specific host flag."
         )
+    # Every config points at `opentide-mcp`. Say so now rather than leaving the
+    # user to debug a server their editor silently fails to start.
+    from opentide.mcp_server.launcher import MCP_EXTRA, missing_requirements
+
+    missing = missing_requirements()
+    if missing:
+        result["mcp_extra_installed"] = False
+        result["warnings"] = [
+            f"These configs launch opentide-mcp, which needs {MCP_EXTRA} "
+            f"(missing: {', '.join(missing)}). Install it with: pip install '{MCP_EXTRA}'"
+        ]
+        logger.warning(
+            "mcp_extra_not_installed",
+            detail=", ".join(missing),
+            advice=f"pip install '{MCP_EXTRA}'",
+        )
+    else:
+        result["mcp_extra_installed"] = True
     return result
 
 

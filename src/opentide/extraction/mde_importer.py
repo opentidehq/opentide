@@ -1,8 +1,19 @@
 
+"""Import Defender for Endpoint custom detection rules into OpenTide YAML.
 
+Run through ``opentide generate extract defender``. Importing this module has no
+side effects: it used to build a Tenant with an empty ``deployment`` at module
+scope, which raised ``KeyError: ''`` before the CLI could report anything.
+"""
 
-from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService 
-from opentide.models.system_config import ConfigurationModels
+from pathlib import Path
+
+from opentide.core.logging import get_logger
+from opentide.core.registry import OpenTide
+from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService
+
+logger = get_logger(__name__)
+
 
 class DefenderForEndpointImporter(DefenderForEndpointService):
     
@@ -10,21 +21,6 @@ class DefenderForEndpointImporter(DefenderForEndpointService):
         response = self.session.get(self.DETECTION_RULES_ENDPOINT)
         return response.json()
 
-
-#TODO - Iterate over available tenants. For import exercises - update those values manually for now
-setup = ConfigurationModels.Systems.DefenderForEndpoint.Tenant.Setup(proxy=False,
-                                                             ssl=True,
-                                                             tenant_id="",
-                                                             client_id="",
-                                                             client_secret="",)
-
-tenant = ConfigurationModels.Systems.DefenderForEndpoint.Tenant(name="",
-                                                        description="",
-                                                        deployment="",
-                                                        setup=setup)
-
-service = DefenderForEndpointImporter(tenant) #type:ignore
-rules = service.list_rules()
 
 template = """
 name: "{name}"
@@ -158,7 +154,8 @@ def fix_multiline(string:str, indentation:int):
             fixed_lines.append(" " * indentation + line.strip())
     return "\n".join(fixed_lines)
 
-for rule in rules["value"]:
+def _render_rule(rule) -> tuple[str, str]:
+    """Return the file name and YAML body for one Defender custom detection."""
     rule_name = rule["displayName"]
     rule_id = rule["id"]
     rule_uuid = rule["detectorId"]
@@ -171,7 +168,7 @@ for rule in rules["value"]:
     rule_category = add_space_before_uppercase(rule["detectionAction"].get("alertTemplate", {}).get("category"))
     rule_query = rule["queryCondition"].get("queryText")
     rule_status = "PRODUCTION" if rule.get("isEnabled") else "DISABLED"
-    
+
     #Contributors resolution
     if rule["lastModifiedBy"] != rule_author:
         contributors = contributors_template.format(contributor=rule["lastModifiedBy"]).strip()
@@ -182,16 +179,14 @@ for rule in rules["value"]:
     techniques = ""
     if t:=rule["detectionAction"].get("alertTemplate", {}).get("mitreTechniques"):
       techniques_list = "- " + "\n        - ".join(t)
-      print(techniques_list)
       techniques = techniques_template.format(techniques_list=techniques_list).rstrip()
-    
+
     #Recommended actions, if added
     if not rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions"):
         alert_recommendation = no_recommendation_template.strip()
     else:
         rule_description += "\n\n---\n" + "Recommended Actions : " + rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions")
         alert_recommendation = recommendation_template.format(recommendation=fix_multiline(rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions"), 8)).strip()
-    
 
     #Impacted Assets
     impacted_device = "#device:"
@@ -207,8 +202,7 @@ for rule in rules["value"]:
             impacted_user = f"user: {identifier[0].upper() + identifier[1:]}"
             impacted_entities_flag = ""
 
-    with open(f"Imported/{sanitize_filename(rule_name)}.yaml", "w+", encoding="utf-8") as f:
-        f.write(template.format(name=rule_name,
+    body = template.format(name=rule_name,
                                 uuid=rule_uuid,
                                 rule_id=rule_id,
                                 created=rule_created,
@@ -225,4 +219,33 @@ for rule in rules["value"]:
                                 category=rule_category,
                                 techniques=techniques,
                                 query=fix_multiline(rule_query, 6),
-                                status=rule_status).strip())
+                                status=rule_status).strip()
+    return sanitize_filename(rule_name), body
+
+
+def _import_defender_rules() -> None:
+    tenants = OpenTide.Configurations.Systems.DefenderForEndpoint.tenants
+    if not tenants:
+        logger.critical(
+            "defender_tenants_not_configured",
+            detail="You must first have Defender for Endpoint tenants configured to initiate the import",
+            advice="run 'opentide setup platforms --defender'",
+        )
+        raise RuntimeError("No Defender for Endpoint tenants are configured")
+    destination = Path("Imported")
+    destination.mkdir(exist_ok=True)
+    for tenant in tenants:
+        service = DefenderForEndpointImporter(tenant)  # type: ignore[arg-type]
+        for rule in service.list_rules()["value"]:
+            filename, body = _render_rule(rule)
+            (destination / f"{filename}.yaml").write_text(body, encoding="utf-8")
+            logger.info("imported_defender_rule", detail=filename, arg0=tenant.name)
+
+
+def run() -> None:
+    """Entry point used by ``opentide generate extract defender``."""
+    _import_defender_rules()
+
+
+if __name__ == "__main__":
+    run()

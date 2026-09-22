@@ -2,7 +2,22 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
+
+
+def sdk_installed(module: str) -> bool:
+    """Whether *module* can actually be imported.
+
+    ``importlib.util.find_spec`` raises when a parent package is absent, which
+    is the common case here: these tests exist to prove the no-extras path.
+    """
+    try:
+        importlib.import_module(module)
+    except ImportError:
+        return False
+    return True
+
 
 ROOT = Path(__file__).resolve().parents[3]
 TUTORIAL = ROOT / "docs" / "usage" / "tutorial.md"

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
+from tests.test_cli.e2e.helpers import sdk_installed
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -103,17 +103,9 @@ def test_validate_query_fails_on_broken_syntax(invoke_cli, tide_corpus_repo: Pat
     assert finding["uuid"] == "00000000-0000-4000-8003-000000000001"
 
 
-def _azure_importable() -> bool:
-    try:
-        importlib.import_module("azure.monitor.query")
-    except ImportError:
-        return False
-    return True
-
-
 def test_validate_query_offline_needs_no_vendor_sdk(invoke_cli) -> None:
     """Issue #239: the stock install has no azure package and must still work."""
-    if _azure_importable():
+    if sdk_installed("azure.monitor.query"):  # pragma: no cover
         pytest.skip("azure SDK installed; the no-extras path cannot be observed here")
     payload = assert_json_ok(invoke_cli("validate", "query", "--platform", "sentinel"))
     assert payload["mode"] == "offline-syntax"

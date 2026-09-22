@@ -1,8 +1,15 @@
-"""Platform import extraction services."""
+"""Platform import extraction services.
+
+Importers talk to a vendor API, so they need that vendor's SDK. The CLI has to
+tell the two failure modes apart: a genuinely missing extraction module is a
+packaging bug, while a missing SDK is one `pip install` away. Collapsing both
+into "Extraction module not found" sent users looking for a file that was
+there all along (#242).
+"""
 
 from __future__ import annotations
 
-import runpy
+import importlib
 from contextlib import redirect_stdout
 from io import StringIO
 from typing import TYPE_CHECKING
@@ -17,18 +24,41 @@ _IMPORT_MODULES: dict[ExtractImport, str] = {
     ExtractImport.defender: "opentide.extraction.mde_importer",
 }
 
+#: Extra that provides the vendor SDK each importer needs, keyed by target.
+_IMPORT_EXTRAS: dict[ExtractImport, str] = {
+    ExtractImport.sentinel: "opentide[sentinel]",
+}
 
-def _run_engine_module(module_name: str) -> None:
-    """Execute a packaged extraction module via runpy (preserves script-style side effects)."""
+
+class ExtractionDependencyError(RuntimeError):
+    """An importer is installed but the SDK it imports is not."""
+
+
+def _root_package(exc: ModuleNotFoundError) -> str:
+    return (exc.name or "").split(".", 1)[0]
+
+
+def _run_engine_module(module_name: str, target: ExtractImport) -> None:
+    """Import the packaged extraction module and run it."""
     try:
-        runpy.run_module(module_name, run_name="__main__")
+        module = importlib.import_module(module_name)
     except ModuleNotFoundError as exc:
-        raise FileNotFoundError(f"Extraction module not found: {module_name}") from exc
+        if _root_package(exc) == module_name.split(".", 1)[0]:
+            raise FileNotFoundError(f"Extraction module not found: {module_name}") from exc
+        extra = _IMPORT_EXTRAS.get(target)
+        advice = f"install {extra}" if extra else f"install the {_root_package(exc)} package"
+        raise ExtractionDependencyError(
+            f"{target.value} import needs a vendor SDK that is not installed ({exc.name}); {advice}"
+        ) from exc
+    runner = getattr(module, "run", None)
+    if runner is None:
+        raise FileNotFoundError(f"Extraction module has no run(): {module_name}")
+    runner()
 
 
 def run_extract_import(target: ExtractImport) -> None:
     """Run a platform import module from the installed package."""
-    _run_engine_module(_IMPORT_MODULES[target])
+    _run_engine_module(_IMPORT_MODULES[target], target)
 
 
 def run_extract(

@@ -41,7 +41,7 @@ See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 | Surface | Entry | Ships with |
 |---------|-------|------------|
 | CLI | `opentide` | `pip install opentide` |
-| MCP server | `opentide-mcp` | `pip install opentide` |
+| MCP server | `opentide-mcp` | `pip install 'opentide[mcp]'` |
 | Python SDK | `from opentide import OpenTide` | `pip install opentide` |
 | Platform adapters | entry points under `opentide.platforms` | `pip install opentide` |
 

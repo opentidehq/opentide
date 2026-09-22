@@ -383,5 +383,10 @@ def _import_sentinel_rules() -> None:
                 f.write(mdr)
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """Entry point used by ``opentide generate extract sentinel``."""
     _import_sentinel_rules()
+
+
+if __name__ == "__main__":
+    run()

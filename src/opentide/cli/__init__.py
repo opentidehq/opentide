@@ -121,6 +121,13 @@ def generate_snippets_cmd(ctx: typer.Context) -> None:
     emit_success(cli, run_generate(cli, phase="snippets"))
 
 
+@generate_app.command("explorer")
+def generate_explorer_cmd(ctx: typer.Context) -> None:
+    """Write explorer.bundle.json and explorer.search.json under .opentide/exports/."""
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="explorer"))
+
+
 inflight_app = typer.Typer(help="Inflight preview shard generation and prune")
 generate_app.add_typer(inflight_app, name="inflight")
 
@@ -255,24 +262,28 @@ def generate_exports_revisions(ctx: typer.Context) -> None:
     emit_success(cli, run_export(cli, target=ExportTarget.revisions))
 
 
-@extract_app.command("sentinel")
-def generate_extract_sentinel(ctx: typer.Context) -> None:
+def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
+    """Run one importer, turning every failure into a single result document."""
     cli = get_context(ctx)
     try:
-        result = run_extract(cli, import_target=ExtractImport.sentinel)
-    except (FileNotFoundError, RuntimeError) as exc:
-        emit_error(cli, str(exc))
+        result = run_extract(cli, import_target=target)
+    except (FileNotFoundError, RuntimeError, OSError, KeyError, ValueError) as exc:
+        message = str(exc).strip() or f"{type(exc).__name__} while importing {target.value}"
+        emit_error(cli, message)
+        return
     emit_success(cli, result)
+
+
+@extract_app.command("sentinel")
+def generate_extract_sentinel(ctx: typer.Context) -> None:
+    """Import Sentinel analytics rules (needs opentide[sentinel] and tenant credentials)."""
+    _run_extract_command(ctx, ExtractImport.sentinel)
 
 
 @extract_app.command("defender")
 def generate_extract_defender(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    try:
-        result = run_extract(cli, import_target=ExtractImport.defender)
-    except (FileNotFoundError, RuntimeError) as exc:
-        emit_error(cli, str(exc))
-    emit_success(cli, result)
+    """Import Defender custom detections (needs tenant credentials)."""
+    _run_extract_command(ctx, ExtractImport.defender)
 
 
 validate_app = typer.Typer(help="Object and query validation")
