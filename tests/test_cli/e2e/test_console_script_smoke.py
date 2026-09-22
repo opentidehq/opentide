@@ -91,6 +91,7 @@ def test_opentide_console_script_redirect_has_no_ansi(
     ("argv", "colour_env"),
     [
         pytest.param(["--help"], {"FORCE_COLOR": "0"}, id="FORCE_COLOR=0"),
+        pytest.param(["--help"], {"PY_COLORS": "0", "GITHUB_ACTIONS": "true"}, id="PY_COLORS=0"),
         pytest.param(["--no-color", "--help"], {"GITHUB_ACTIONS": "true"}, id="root-help"),
         pytest.param(
             ["--no-color", "setup", "--help"], {"GITHUB_ACTIONS": "true"}, id="subcommand-help"

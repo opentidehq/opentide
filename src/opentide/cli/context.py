@@ -78,7 +78,9 @@ def sync_typer_rendering(*, no_color: bool) -> None:
         return
     rich_utils.COLOR_SYSTEM = "auto"
     forced = forced_terminal()
-    if forced is None and (os.getenv("GITHUB_ACTIONS") or os.getenv("PY_COLORS")):
+    if forced is None:
+        forced = forced_terminal("PY_COLORS")
+    if forced is None and os.getenv("GITHUB_ACTIONS"):
         forced = True
     if os.getenv("_TYPER_FORCE_DISABLE_TERMINAL"):
         forced = False
