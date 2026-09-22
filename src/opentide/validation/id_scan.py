@@ -29,13 +29,7 @@ def id_duplicate_in_scope(
         return True
     if scope.targets & {row.uuid, original.uuid}:
         return True
-    paths = {
-        row.model_file.name,
-        str(row.model_file),
-        original.model_file.name,
-        str(original.model_file),
-    }
-    return bool(scope.targets & paths)
+    return any(scope.matches_file(r.model_file.name, r.model_file) for r in (row, original))
 
 
 def merge_id_duplicates(

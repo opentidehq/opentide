@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from opentide.validation.scope import ValidationScope
 from opentide.validation.session import _IdScanParseError, _scan_id_file, _yaml_parse_issues
 
@@ -33,6 +35,29 @@ def test_scope_matches_a_repo_relative_target_from_another_directory(tmp_path: P
     rule.write_text("name: x\n", encoding="utf-8")
 
     scope = ValidationScope.narrow(files=frozenset({"objects/rules/rule.yaml"}), roots=(tmp_path,))
+    assert scope.includes_object("uuid-1", "rule", file_name="rule.yaml", file_path=rule)
+
+
+def test_scope_resolves_a_repo_relative_target_against_the_workspace_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Callers that pass no roots, like the MCP ``validation_report`` tool, still get the repo."""
+    from opentide.core.root import get_repo_root
+
+    repo = tmp_path / "repo"
+    rule = repo / "objects" / "rules" / "rule.yaml"
+    rule.parent.mkdir(parents=True)
+    rule.write_text("name: x\n", encoding="utf-8")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(repo))
+    get_repo_root.cache_clear()
+    try:
+        scope = ValidationScope.narrow(files=frozenset({"objects/rules/rule.yaml"}))
+    finally:
+        get_repo_root.cache_clear()
     assert scope.includes_object("uuid-1", "rule", file_name="rule.yaml", file_path=rule)
 
 

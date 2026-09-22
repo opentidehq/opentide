@@ -106,10 +106,10 @@ def get_chaining_graph(uuid: str) -> dict[str, Any]:
     if node is None:
         return {"uuid": uuid, "found": False, "graph": {}}
     return {
-        "uuid": uuid,
+        "uuid": node["uuid"],
         "found": True,
         "type": node["type"],
-        "graph": chains.get(uuid, {}),
+        "graph": chains.get(node["uuid"], {}),
         "chaining_index": chains,
     }
 
