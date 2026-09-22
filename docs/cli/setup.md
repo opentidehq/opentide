@@ -18,6 +18,8 @@ opentide setup hooks --yes
 
 The interactive wizard uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
 
+The wizard needs a terminal and a stdout it can draw on, so it is incompatible with `--json`. Combining the two exits non-zero with a JSON error listing the flags to script instead; see [global options](global-options.md).
+
 ## Default callback flags
 
 | Flag | Purpose |
@@ -105,7 +107,9 @@ opentide setup hooks --yes
 opentide setup hooks --path ./detection-repo --yes --no-install
 ```
 
-The hook runs `opentide validate --strict`. Set `OPENTIDE_SKIP_HOOKS=1` to bypass it for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the OpenTide hook is appended when missing.
+The hook runs `opentide --repo "$(git rev-parse --show-toplevel)" validate --strict`, so it always validates the worktree being committed. Pinning `--repo` matters because `OPENTIDE_REPO_ROOT` takes precedence over directory discovery: with that variable exported to another detection repository — which `.env.example` and the MCP/CI guides encourage — an unpinned hook validated the other tree and let broken YAML through.
+
+Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the OpenTide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
 
 ### setup mcp
 

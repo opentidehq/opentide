@@ -311,9 +311,9 @@ def test_setup_ci_none_alone_is_not_noop(tmp_path, monkeypatch) -> None:
     )
     result = runner.invoke(
         app,
-        ["--json", "setup", "--path", str(tmp_path), "--ci", "none"],
+        ["setup", "--path", str(tmp_path), "--ci", "none"],
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.stdout
     assert "interactive" in result.stdout
 
 

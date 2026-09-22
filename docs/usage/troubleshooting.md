@@ -137,6 +137,34 @@ Confirm `.opentide/templates/rule.1.0.template.yaml` has no `null`, `metadata.tl
 opentide setup ci github --yes
 ```
 
+### GitLab inflight job pushes to a host called `${{CI_SERVER_HOST}}`
+
+Through `0.3.0` the GitLab inflight jobs wrote the push URL with GitHub Actions expression syntax (`${{CI_JOB_TOKEN}}`). GitLab only expands `$VAR` / `${VAR}`, so the job tried to reach a literal host. Fixed in **0.4.0** — re-run:
+
+```bash
+opentide setup ci gitlab --yes
+```
+
+### Azure inflight job says nothing changed and never commits
+
+Through `0.3.0` the Azure job scripts were joined with `&&`. `git diff --staged --quiet` exits 1 when there *are* staged changes, so the chain stopped before `git commit`; when there were none, `exit 0` swallowed every later command. **0.4.0** emits a multi-line `set -e` script with an explicit `if … fi` guard, and checks out with `persistCredentials: true` so the push can authenticate. Azure jobs also no longer declare `dependsOn` on a job from another stage, which Azure cannot resolve. Re-run `opentide setup ci azure --yes`.
+
+### The pre-commit hook reports `OK Validation passed` and commits broken YAML
+
+Through `0.3.0` the generated hook ran `opentide validate --strict` with no `--repo`. `OPENTIDE_REPO_ROOT` (and `OPENTIDE_TIDE_WORKSPACE`) take precedence over directory discovery, so with either exported to another detection repository — as `.env.example` suggests — the hook validated that tree and passed. **0.4.0** pins the committed worktree, and `--repo` now overrides an exported workspace. Re-run:
+
+```bash
+opentide setup hooks --yes
+```
+
+### `opentide --json setup` prints a wizard before the JSON
+
+Through `0.3.0` `--json` only changed the final document: on a terminal the setup wizard still drew its panel and prompts on stdout first, so `json.loads(stdout)` failed. **0.4.0** refuses the combination and exits non-zero with a JSON error. Script it instead:
+
+```bash
+opentide --json setup --yes --platform sentinel --ci github
+```
+
 ### `deploy` or `validate query` crashes locally with `illegal_deployment_plan`
 
 `0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly.

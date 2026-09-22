@@ -24,11 +24,15 @@ class CliContext:
     debug: bool = False
     no_color: bool = False
     show_banner: bool = True
+    #: True when ``--repo`` was typed on the command line rather than inherited
+    #: from ``OPENTIDE_REPO_ROOT``. An explicit path has to win over a stale
+    #: ``OPENTIDE_TIDE_WORKSPACE`` export, or ``--repo`` silently does nothing.
+    repo_explicit: bool = False
 
     def apply_environment(self) -> None:
         """Push context flags into process environment for engine modules."""
         os.environ["OPENTIDE_REPO_ROOT"] = str(self.repo)
-        if "OPENTIDE_TIDE_WORKSPACE" not in os.environ:
+        if self.repo_explicit or "OPENTIDE_TIDE_WORKSPACE" not in os.environ:
             os.environ["OPENTIDE_TIDE_WORKSPACE"] = str(self.repo)
         get_repo_root.cache_clear()
         from opentide.core.index_manager import IndexManager

@@ -60,6 +60,9 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-console-scripts>=1.4",
+    # Drives the setup wizard on a real PTY; CliRunner never presents a TTY, so
+    # the interactive path had no e2e coverage (#260).
+    "pexpect>=4.9",
     "syrupy>=5.5.3,<6",
     "ruff>=0.16.1",
     "ty>=0.0.65",
@@ -76,6 +79,9 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-console-scripts>=1.4",
+    # Drives the setup wizard on a real PTY; CliRunner never presents a TTY, so
+    # the interactive path had no e2e coverage (#260).
+    "pexpect>=4.9",
     "syrupy>=5.5.3,<6",
     "ruff>=0.16.1",
     "ty>=0.0.65",
