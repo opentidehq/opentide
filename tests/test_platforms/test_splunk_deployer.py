@@ -101,6 +101,7 @@ def test_should_enable_correlation_search_prefers_mdr_override(splunk_rule_paylo
     splunk_config = SplunkConfig(
         schema="splunk::3.0",
         status="STAGING",
+        query="index=main | head 1",
         correlation_search=True,
     )
     assert deployer._should_enable_correlation_search(tenant.setup, splunk_config)

@@ -54,6 +54,14 @@ credentials. Only the requested platform's engine is imported, so a Sentinel run
 never loads the CrowdStrike or HarfangLab modules. See
 [`validate`](../../cli/validate.md#query-validation).
 
+## The `query` field
+
+The five platforms that carry a query string — Sentinel, Defender for Endpoint, Splunk, CrowdStrike, and Carbon Black Cloud — all declare `query` **required**. Templates show it uncommented for each of them.
+
+Splunk `splunk::2.x` objects spelled the search string `search` and the schedule `cron_schedule`. Both are still accepted and preserved on the object; they are mapped onto `query` and `scheduling.schedule.cron` when loaded, so a 2.x rule deploys and validates the same way a 3.x one does. A `query` or `scheduling` block set explicitly wins over the legacy key.
+
+Before **0.4.0** the mapping did not happen: a 2.x rule loaded with `query = None`, which the Splunk deployer and live validator both read as "nothing to do" and skipped without reporting anything.
+
 ## Platform configuration
 
 Per-platform settings live under `.opentide/configurations/platforms/`. Enable platforms with `opentide setup platforms` or the parent `opentide setup --platform` flags; the registry loads deployers and validators for enabled systems only.

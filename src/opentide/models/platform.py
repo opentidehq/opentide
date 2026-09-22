@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Literal, cast
 
+from pydantic import model_validator
+
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
     CrowdstrikeDetails,
@@ -77,8 +79,13 @@ class DefenderConfig(PlatformConfigBase):
 
 class SplunkConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::splunk::1.0"
-    query: str | None = TideField(
-        None, schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
+    # Required, like every other platform's query and like the JSON Schema
+    # extras already said. Optional here meant the FieldInfo template renderer
+    # emitted `#query: |` commented out for Splunk alone, and the deployer
+    # silently skipped rules whose query never loaded (#233). splunk::2.x
+    # `search` is mapped onto this field by the loader.
+    query: str = TideField(
+        schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
     scheduling: SplunkScheduling | None = None
     trigger: SplunkTrigger | None = None
@@ -88,6 +95,26 @@ class SplunkConfig(PlatformConfigBase):
     # Legacy flat v2.x fields retained for backward-compatible loading
     search: str | None = TideField(None, schema_extra={"tide.template.hide": True})
     cron_schedule: str | None = TideField(None, schema_extra={"tide.template.hide": True})
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_legacy_v2_spellings(cls, data: Any) -> Any:
+        """Map the splunk::2.x field names onto their v3 equivalents.
+
+        These lived on the model unread: a 2.x rule loaded with ``query=None``
+        and ``scheduling=None``, so the deployer and the live validator both
+        skipped it in silence (#233). The mapping has to run before field
+        validation because schema validation calls ``model_validate`` on the
+        raw YAML and never goes through ``load_splunk_config``.
+        """
+        if not isinstance(data, dict):
+            return data
+        patched = dict(data)
+        if not patched.get("query") and isinstance(patched.get("search"), str):
+            patched["query"] = patched["search"]
+        if not patched.get("scheduling") and isinstance(patched.get("cron_schedule"), str):
+            patched["scheduling"] = {"schedule": {"cron": patched["cron_schedule"]}}
+        return patched
 
 
 class SentinelOneConfig(PlatformConfigBase):
@@ -121,8 +148,8 @@ class HarfangLabConfig(PlatformConfigBase):
 
 class CarbonBlackConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::carbon_black_cloud::1.0"
-    query: str | None = TideField(
-        None, schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
+    query: str = TideField(
+        schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
     organizations: list[str] | None = None
     watchlist: str | None = None
