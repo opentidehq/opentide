@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import importlib
+import sys
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from importlib.machinery import ModuleSpec
 from pathlib import Path
+from types import ModuleType
 
 
 def sdk_installed(module: str) -> bool:
@@ -17,6 +22,53 @@ def sdk_installed(module: str) -> bool:
     except ImportError:
         return False
     return True
+
+
+class _Blocker:
+    """A meta-path finder that refuses a set of package prefixes."""
+
+    def __init__(self, prefixes: Sequence[str]) -> None:
+        self._prefixes = tuple(prefixes)
+
+    def _blocks(self, name: str) -> bool:
+        return any(name == p or name.startswith(f"{p}.") for p in self._prefixes)
+
+    def find_spec(self, fullname: str, path: object = None, target: object = None) -> ModuleSpec:
+        if self._blocks(fullname):
+            raise ModuleNotFoundError(f"No module named {fullname!r}", name=fullname)
+        return None  # type: ignore[return-value]
+
+
+@contextmanager
+def hidden_modules(*prefixes: str, purge: Sequence[str] = ()) -> Iterator[None]:
+    """Make *prefixes* unimportable for the duration of the block.
+
+    Tests for the no-extras path used to skip themselves when the SDK happened
+    to be installed, so the branch they exist to cover ran only on machines
+    that lacked the extra. Blocking the import instead makes the path
+    deterministic wherever the suite runs.
+
+    ``purge`` drops modules from the cache without blocking them, so a module
+    that binds a hidden SDK at import time is re-imported under the block
+    rather than served from an earlier, successful import.
+    """
+    blocker = _Blocker(prefixes)
+    purge_all = _Blocker(purge)
+    saved: dict[str, ModuleType] = {
+        name: module
+        for name, module in sys.modules.items()
+        if blocker._blocks(name) or purge_all._blocks(name)
+    }
+    for name in saved:
+        del sys.modules[name]
+    sys.meta_path.insert(0, blocker)  # type: ignore[arg-type]
+    try:
+        yield
+    finally:
+        sys.meta_path.remove(blocker)  # type: ignore[arg-type]
+        for name in [n for n in sys.modules if purge_all._blocks(n)]:
+            del sys.modules[name]
+        sys.modules.update(saved)
 
 
 ROOT = Path(__file__).resolve().parents[3]

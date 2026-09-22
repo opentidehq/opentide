@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
-from tests.test_cli.e2e.helpers import sdk_installed
+from tests.test_cli.e2e.helpers import hidden_modules
 
 from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
 
@@ -49,10 +49,10 @@ def test_generate_extract_emits_one_json_document(invoke_cli, tmp_path: Path, ta
 
 def test_generate_extract_sentinel_names_the_missing_extra(invoke_cli, tmp_path: Path) -> None:
     """A missing vendor SDK is not a missing module (#242)."""
-    if sdk_installed("azure.monitor.query"):  # pragma: no cover
-        pytest.skip("azure SDK installed; the missing-extra path cannot be observed here")
     repo = _fresh_repo(tmp_path, "extract-extra")
-    result = invoke_cli("generate", "extract", "sentinel", repo=repo)
+    purge = ("opentide.extraction.sentinel_importer", "opentide.platforms.sentinel")
+    with hidden_modules("azure", purge=purge):
+        result = invoke_cli("generate", "extract", "sentinel", repo=repo)
     message = parse_cli_json(result)["error"]
     assert "opentide[sentinel]" in message
     assert "Extraction module not found" not in message
