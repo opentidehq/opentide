@@ -11,6 +11,7 @@ string at all because nothing mapped its legacy `search` field.
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from opentide.generation.pydantic_skeleton import render_model_template
 from opentide.loading.platform_loader import load_splunk_config
@@ -58,6 +59,18 @@ def test_templates_offer_query_uncommented(key: str) -> None:
 def test_a_configuration_without_a_query_is_rejected(model: type) -> None:
     with pytest.raises(ValueError, match="query"):
         model(schema=f"{model.__name__}::3.0", status="STAGING")
+
+
+@pytest.mark.parametrize("key", QUERY_PLATFORMS)
+@pytest.mark.parametrize("blank", ["", "   ", "\n\t"])
+def test_a_blank_query_is_rejected(key: str, blank: str) -> None:
+    """Deployers skip a falsy query exactly as they skipped a missing one."""
+    model = PLATFORM_CONFIG_MODELS[key]
+    with pytest.raises(ValidationError) as caught:
+        model.model_validate({"schema": f"{key}::1.0", "status": "STAGING", "query": blank})
+    query_errors = [error for error in caught.value.errors() if error["loc"] == ("query",)]
+    assert query_errors, f"{key} accepted a blank query"
+    assert "query must not be empty" in query_errors[0]["msg"]
 
 
 #: Fields the JSON Schema extras call required while the model leaves them
@@ -136,3 +149,38 @@ def test_schema_validation_maps_legacy_fields_too() -> None:
     config = SplunkConfig.model_validate(LEGACY_SPLUNK)
     assert config.query == "index=main | head 1"
     assert config.scheduling is not None
+
+
+#: Every flat splunk::2.x spelling the loader has always understood.
+LEGACY_SPLUNK_FLAT = {
+    **LEGACY_SPLUNK,
+    "cron_schedule": None,
+    "scheduling": {"frequency": "1h", "lookback": "2h"},
+    "throttling": {"fields": ["host"], "duration": "1h"},
+    "threshold": 3,
+    "notable": {"security_domain": "threat"},
+}
+
+
+def test_validation_accepts_every_flat_legacy_key_the_loader_does() -> None:
+    """``validate`` and ``deploy`` must agree on which 2.x rules are valid.
+
+    The loader normalised these, ``model_validate`` rejected them as unknown
+    keys — so a rule that deployed fine failed ``opentide validate``.
+    """
+    validated = SplunkConfig.model_validate(dict(LEGACY_SPLUNK_FLAT))
+    loaded = load_splunk_config(dict(LEGACY_SPLUNK_FLAT))
+    assert validated.model_dump() == loaded.model_dump()
+    assert validated.scheduling is not None and validated.scheduling.schedule is not None
+    assert validated.scheduling.schedule.frequency == "1h"
+    assert validated.scheduling.timerange is not None
+    assert validated.scheduling.timerange.lookback == "2h"
+    assert validated.trigger is not None and validated.trigger.threshold == 3
+    assert validated.actions is not None and validated.actions.notable is not None
+
+
+def test_cron_schedule_joins_a_scheduling_block_that_has_no_schedule() -> None:
+    config = SplunkConfig.model_validate({**LEGACY_SPLUNK, "scheduling": {"lookback": "2h"}})
+    assert config.scheduling is not None and config.scheduling.schedule is not None
+    assert config.scheduling.schedule.cron == "0 * * * *"
+    assert config.scheduling.timerange is not None

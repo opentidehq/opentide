@@ -67,12 +67,14 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
 
         if splunk_config.scheduling:
             sched = splunk_config.scheduling
-            if sched.type:
-                if sched.type.lower() == "real time":
-                    config["dispatch.earliest_time"] = "rt"
-                    config["dispatch.latest_time"] = "rt"
-                else:
-                    config["is_scheduled"] = 1
+            if sched.type and sched.type.lower() == "real time":
+                config["dispatch.earliest_time"] = "rt"
+                config["dispatch.latest_time"] = "rt"
+            elif sched.type or sched.schedule:
+                # A schedule with no `type` (every migrated splunk::2.x rule,
+                # and any v3 rule that omits it) still has to run: without
+                # is_scheduled Splunk stores cron_schedule and never fires.
+                config["is_scheduled"] = 1
             if sched.expires:
                 config["alert.expires"] = sched.expires
             if sched.schedule:

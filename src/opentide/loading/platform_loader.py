@@ -56,6 +56,7 @@ from opentide.models.platform_configs import (
     SplunkTimerange,
     SplunkTrigger,
 )
+from opentide.models.splunk_legacy import normalize_splunk_v2
 
 
 def _base_configuration(mdr_config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -297,61 +298,6 @@ def load_harfanglab_config(mdr_config: dict[str, Any]) -> HarfangLabConfig:
     )
 
 
-def _normalize_splunk_v2(config: dict[str, Any]) -> dict[str, Any]:
-    """Normalise flat splunk::2.x layout into nested v3/v4 structure."""
-    normalized = deepcopy(config)
-
-    scheduling_data = normalized.pop("scheduling", None)
-    if scheduling_data:
-        if "schedule" not in scheduling_data and (
-            "frequency" in scheduling_data
-            or "cron" in scheduling_data
-            or "custom_time" in scheduling_data
-        ):
-            schedule_dict: dict[str, Any] = {}
-            for key in ("frequency", "cron", "custom_time"):
-                value = scheduling_data.pop(key, None)
-                if value is not None:
-                    schedule_dict[key] = value
-            if schedule_dict:
-                scheduling_data["schedule"] = schedule_dict
-        if "timerange" not in scheduling_data and "lookback" in scheduling_data:
-            scheduling_data["timerange"] = {"lookback": scheduling_data.pop("lookback")}
-
-    trigger_data = normalized.pop("trigger", None)
-    if trigger_data is None:
-        throttling_data = normalized.pop("throttling", None)
-        threshold_val = normalized.pop("threshold", None)
-        if throttling_data or threshold_val is not None:
-            trigger_data = {}
-            if throttling_data:
-                trigger_data["throttling"] = throttling_data
-            if threshold_val is not None:
-                trigger_data["threshold"] = threshold_val
-
-    actions_data = normalized.pop("actions", None)
-    if actions_data is None:
-        notable_data = normalized.pop("notable", None)
-        risk_data = normalized.pop("risk", None)
-        email_data = normalized.pop("email", None)
-        if notable_data or risk_data or email_data:
-            actions_data = {}
-            if notable_data:
-                actions_data["notable"] = notable_data
-            if risk_data:
-                actions_data["risk"] = risk_data
-            if email_data:
-                actions_data["email"] = email_data
-
-    if scheduling_data:
-        normalized["scheduling"] = scheduling_data
-    if trigger_data:
-        normalized["trigger"] = trigger_data
-    if actions_data:
-        normalized["actions"] = actions_data
-    return normalized
-
-
 def _parse_splunk_scheduling(scheduling_data: dict[str, Any] | None) -> SplunkScheduling | None:
     if not scheduling_data:
         return None
@@ -407,7 +353,7 @@ def _parse_splunk_actions(actions_data: dict[str, Any] | None) -> SplunkActions 
 
 
 def load_splunk_config(mdr_config: dict[str, Any]) -> SplunkConfig:
-    remaining, base = _base_configuration(_normalize_splunk_v2(mdr_config))
+    remaining, base = _base_configuration(normalize_splunk_v2(mdr_config))
     query = remaining.pop("query", None)
     correlation_search = remaining.pop("correlation_search", None)
     advanced = remaining.pop("advanced", None)
