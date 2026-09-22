@@ -98,11 +98,29 @@ def object_platforms(body: Any) -> set[str]:
     return platforms
 
 
+def technique_covers(requested: str, candidate: str) -> bool:
+    """Whether *candidate* answers a query for *requested*.
+
+    Case-insensitive, and a parent technique covers its sub-techniques:
+    ``T1059`` matches ``T1059.001``, but ``T1059.001`` does not match ``T1059``
+    and ``T105`` matches nothing. Asking "what do we detect for T1059?" and
+    getting nothing because every rule is tagged at sub-technique level is the
+    answer nobody wants.
+    """
+    needle = requested.strip().lower()
+    value = candidate.strip().lower()
+    return bool(needle) and (value == needle or value.startswith(f"{needle}."))
+
+
+def matched_techniques(body: Any, technique: str) -> set[str]:
+    """The technique identifiers on *body* that satisfy a query for *technique*."""
+    return {item for item in object_techniques(body) if technique_covers(technique, item)}
+
+
 def matches_technique(body: Any, technique: str) -> bool:
-    needle = technique.strip().lower()
-    if not needle:
+    if not technique.strip():
         return True
-    return needle in {item.lower() for item in object_techniques(body)}
+    return bool(matched_techniques(body, technique))
 
 
 def matches_actor(body: Any, actor: str) -> bool:
