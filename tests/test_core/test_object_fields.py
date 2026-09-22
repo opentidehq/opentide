@@ -9,12 +9,14 @@ from pydantic import BaseModel
 
 from opentide.core.object_fields import (
     as_body,
+    matched_techniques,
     matches_actor,
     matches_platform,
     matches_technique,
     object_actors,
     object_platforms,
     object_techniques,
+    technique_covers,
 )
 
 
@@ -70,6 +72,32 @@ def test_matches_technique_is_case_insensitive() -> None:
 
 def test_empty_technique_matches_everything() -> None:
     assert matches_technique({}, "")
+
+
+@pytest.mark.parametrize(
+    ("requested", "candidate", "expected"),
+    [
+        ("T1059", "T1059", True),
+        ("T1059", "T1059.001", True),
+        ("t1059", "T1059.001", True),
+        ("T1059.001", "T1059", False),
+        ("T1059.001", "T1059.003", False),
+        ("T105", "T1059", False),
+        ("T105", "T1059.001", False),
+        ("", "T1059", False),
+    ],
+)
+def test_technique_covers_parent_to_sub_technique_only(
+    requested: str, candidate: str, expected: bool
+) -> None:
+    assert technique_covers(requested, candidate) is expected
+
+
+def test_matched_techniques_reports_the_sub_techniques_that_answered() -> None:
+    body = {"techniques": ["T1059.001", "T1059.003", "T1003"]}
+    assert matched_techniques(body, "T1059") == {"T1059.001", "T1059.003"}
+    assert matches_technique(body, "T1059")
+    assert not matches_technique({"techniques": ["T1059"]}, "T1059.001")
 
 
 def test_object_actors_expands_namespaced_names() -> None:

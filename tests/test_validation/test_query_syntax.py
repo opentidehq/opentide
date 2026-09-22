@@ -49,6 +49,19 @@ def test_query_language_is_none_for_platforms_without_one() -> None:
         ('EventType = "Process Create"', "s1ql"),
         ("process_name:cmd.exe AND parent_name:explorer.exe", "lucene"),
         ("DeviceProcessEvents | where FileName in~ ('cmd.exe')", "kql"),
+        # A generating SPL command has to start with the pipe.
+        ("| tstats count from datamodel=Endpoint.Processes by _time", "spl"),
+        ("| inputlookup known_hosts.csv", "spl"),
+        ("| makeresults | eval marker=1", "spl"),
+        # S1QL accepts a leading stage too.
+        ("| group count() by endpoint.name", "s1ql"),
+        # KQL verbatim literal: the backslash is data, and a Windows path that
+        # ends in one must not swallow the closing quote.
+        (r'DeviceProcessEvents | where FolderPath has @"C:\Windows\System32\"', "kql"),
+        (r"DeviceProcessEvents | where FolderPath has @'C:\Temp\'", "kql"),
+        # Lucene has no single-quoted string, so an apostrophe is just a byte.
+        ("process_cmdline:*don't*", "lucene"),
+        ("observer_hostname:o'brien-laptop", "lucene"),
     ],
 )
 def test_well_formed_queries_produce_no_findings(query: str, language: str) -> None:
@@ -69,6 +82,9 @@ def test_well_formed_queries_produce_no_findings(query: str, language: str) -> N
         ("SecurityEvent || take 1", "spl", "empty_pipeline_stage"),
         ("SecurityEvent | where EventID == 1 and", "kql", "dangling_operator"),
         ("search x=1 ``` unfinished", "spl", "unterminated_comment"),
+        # Verbatim handling must not become a blanket amnesty for KQL strings.
+        (r'DeviceProcessEvents | where FolderPath has @"C:\Windows', "kql", "unterminated_string"),
+        ('process_name:"cmd.exe', "lucene", "unterminated_string"),
     ],
 )
 def test_broken_queries_report_the_expected_code(query: str, language: str, expected: str) -> None:
@@ -90,6 +106,34 @@ def test_masking_does_not_cascade_into_meaningless_findings() -> None:
 
 def test_lucene_is_not_treated_as_a_pipeline_language() -> None:
     assert codes("process_name:cmd.exe | parent:explorer.exe", "lucene") == []
+
+
+def test_only_kql_rejects_a_leading_pipe() -> None:
+    """A false positive here fails CI on correct content, so scope it tightly."""
+    assert codes("| where EventID == 1", "kql") == ["leading_pipe"]
+    for language in ("spl", "s1ql"):
+        assert codes("| stats count by host", language) == [], language
+
+
+def test_a_trailing_pipe_is_still_wrong_in_every_pipeline_language() -> None:
+    """Relaxing the leading pipe must not relax the rest of the stage check."""
+    for language in ("kql", "spl", "s1ql"):
+        assert "trailing_pipe" in codes("index=main | stats count |", language), language
+
+
+def test_only_kql_reads_an_at_prefixed_literal_as_verbatim() -> None:
+    """``@`` is not a string prefix elsewhere, so the backslash still escapes."""
+    assert codes(r'search path="C:\Temp\"', "spl") == ["unterminated_string"]
+    assert codes(r'DeviceProcessEvents | where FolderPath has @"C:\Temp\"', "kql") == []
+
+
+def test_a_doubled_quote_escapes_inside_a_verbatim_literal() -> None:
+    assert codes(r'DeviceProcessEvents | where Cmd has @"say ""hi"" now"', "kql") == []
+
+
+def test_only_lucene_ignores_the_apostrophe() -> None:
+    assert codes("field:o'brien", "lucene") == []
+    assert codes("SecurityEvent | where Account has 'o", "kql") == ["unterminated_string"]
 
 
 def test_an_escaped_quote_does_not_end_a_string() -> None:

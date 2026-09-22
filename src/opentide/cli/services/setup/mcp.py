@@ -77,10 +77,12 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
     missing = missing_requirements()
     if missing:
         result["mcp_extra_installed"] = False
-        result["warnings"] = [
+        warnings = list(result.get("warnings") or [])
+        warnings.append(
             f"These configs launch opentide-mcp, which needs {MCP_EXTRA} "
             f"(missing: {', '.join(missing)}). Install it with: pip install '{MCP_EXTRA}'"
-        ]
+        )
+        result["warnings"] = warnings
         logger.warning(
             "mcp_extra_not_installed",
             detail=", ".join(missing),

@@ -16,11 +16,14 @@ pip install 'opentide[mcp]==0.3.0'
 Console script: **`opentide-mcp`** → `opentide.mcp_server.launcher:main`
 
 <Callout>
-The `opentide-mcp` script is installed by the base package, but `mcp` and
-`fastmcp` are not: they pull a web-server stack (`starlette`, `httpx`,
-`sse-starlette`, `uvicorn`) that a CI pipeline running `opentide validate` has
-no use for. Run `opentide-mcp` without the extra and it tells you exactly that,
-then exits 1 — it never raises `ModuleNotFoundError`.
+The `opentide-mcp` script is installed by the base package, but `mcp` is not:
+it pulls a web-server stack (`starlette`, `httpx`, `sse-starlette`, `uvicorn`)
+that a CI pipeline running `opentide validate` has no use for. Run
+`opentide-mcp` without the extra and it tells you exactly that, then exits 1 —
+it never raises `ModuleNotFoundError`.
+
+The extra pins `mcp>=1.28.1,<2`. `mcp` 2.x replaced `mcp.server.fastmcp` with
+`MCPServer`; OpenTide has not migrated yet.
 </Callout>
 
 All seven platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
@@ -36,7 +39,7 @@ opentide-mcp   # blocks on stdio — expected for MCP hosts
 If the extra is missing you get this instead of a traceback:
 
 ```text
-opentide-mcp needs the MCP extra, which is not installed (missing: mcp, fastmcp).
+opentide-mcp needs the MCP extra, which is not installed (missing: mcp.server.fastmcp).
 Install it with:  pip install 'opentide[mcp]'
 Everything else in the opentide CLI works without it.
 ```

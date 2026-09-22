@@ -20,7 +20,7 @@ Read-only JSON resources registered on the OpenTide MCP server.
 | `opentide://objectives/{uuid}` | Single objective body |
 | `opentide://schemas/{object_type}` | JSON Schema for `rule`, `threat`, or `objective` |
 | `opentide://templates/{object_type}` | Template metadata for object type |
-| `opentide://vocabularies` | Vocabulary index (`{name: {metadata, entries}}`) |
+| `opentide://vocabularies` | Vocabulary index: `{name: {metadata, entry_count, uri}}` — entries are **not** inlined |
 | `opentide://vocabularies/{name}` | Named vocabulary: `{metadata, entries}` |
 | `opentide://platforms` | Platform capability list |
 
@@ -35,6 +35,8 @@ Read-only JSON resources registered on the OpenTide MCP server.
 | Decide if a platform can validate queries | `opentide://platforms` |
 
 Prefer a **single-object** URI (`.../rules/{uuid}`) over the collection URI when you only need one — the collection resources return every object and can be large.
+
+`opentide://vocabularies` lists which vocabularies exist and how many entries each has; follow its `uri` to read the entries of the one you need. The bundled entries together are several megabytes, so the index deliberately leaves them out.
 
 ## Response format
 

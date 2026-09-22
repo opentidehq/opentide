@@ -173,12 +173,18 @@ def test_setup_skills_discover_positional_path_is_deprecated(tmp_path, monkeypat
     from tests.test_cli.conftest import stub_remote_skills_manifest
 
     stub_remote_skills_manifest(monkeypatch)
-    result = runner.invoke(
+    human = runner.invoke(app, ["setup", "skills", "discover", str(tmp_path)])
+    assert human.exit_code == 0, human.stdout + human.stderr
+    assert "DEPRECATED" in human.output
+    assert "--path/-C" in human.output
+
+    machine = runner.invoke(
         app,
         ["--json", "setup", "skills", "discover", str(tmp_path)],
     )
-    assert result.exit_code == 0, result.stdout + result.stderr
-    assert "DEPRECATED" in result.output
+    assert machine.exit_code == 0, machine.stdout + machine.stderr
+    assert "DEPRECATED" not in machine.output
+    assert "cli_command_deprecated" in machine.stderr
 
 
 def test_setup_skills_show_is_subcommand(tmp_path, monkeypatch) -> None:

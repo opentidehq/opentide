@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -19,6 +20,8 @@ from pytest_console_scripts import ScriptRunner
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
 
 pytestmark = pytest.mark.cli_e2e
+
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 # --- info: option before and after the section argument (#257) ---------------
@@ -179,6 +182,62 @@ def test_setup_rejects_both_path_forms(cli_runner, tmp_path: Path) -> None:
     assert "not both" in (result.stdout + result.stderr)
 
 
+def test_setup_rejects_an_explicit_dot_alongside_a_positional(cli_runner, tmp_path: Path) -> None:
+    """``--path .`` is explicit even though it equals the default.
+
+    Comparing against ``"."`` treated it as absent and silently wrote to the
+    positional target instead of reporting two conflicting paths.
+    """
+    from opentide.cli import app
+
+    other = tmp_path / "other"
+    other.mkdir()
+    result = cli_runner.invoke(
+        app,
+        ["setup", "env", str(other), "--path", ".", "--yes"],
+    )
+    assert result.exit_code == 2, result.stdout + result.stderr
+    assert "not both" in (result.stdout + result.stderr)
+    assert not list(other.iterdir()), "the conflicting positional target was written anyway"
+
+
+def test_document_subcommand_warns_once(cli_runner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The ``document`` group callback must not add its own warning to a subcommand's."""
+    from opentide import cli as cli_module
+
+    monkeypatch.setattr(cli_module, "_emit_docs", lambda *_args, **_kwargs: None)
+    result = cli_runner.invoke(cli_module.app, ["document", "rules"])
+    assert result.exit_code == 0, result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    assert output.count("DEPRECATED") == 1, output
+    assert "generate docs rules" in output
+
+
+def test_setup_positional_deprecation_keeps_json_parseable(
+    cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--json`` gets a structured log event, never a Rich ``DEPRECATED`` line."""
+    import importlib
+
+    from opentide import cli as cli_module
+
+    # `opentide.cli.setup_app` the attribute is the Typer app; this is the module.
+    setup_module = importlib.import_module("opentide.cli.setup_app")
+    monkeypatch.setattr(
+        setup_module,
+        "discover_skills",
+        lambda *_args, **_kwargs: {"message": "0 skills", "skills": []},
+    )
+    result = cli_runner.invoke(
+        cli_module.app,
+        ["--json", "setup", "skills", "discover", str(tmp_path)],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    parse_cli_json(result)
+    assert "DEPRECATED" not in result.stdout + result.stderr
+    assert "cli_command_deprecated" in result.stderr
+
+
 @pytest.mark.parametrize(
     "subcommand",
     ["env", "hooks", "mcp", "platforms", "vscode", "repo", "skills"],
@@ -188,6 +247,8 @@ def test_setup_subcommands_expose_path_and_yes(cli_runner, subcommand: str) -> N
 
     result = cli_runner.invoke(app, ["setup", subcommand, "--help"])
     assert result.exit_code == 0
-    help_text = result.stdout
+    # Rich styles option names (`-` and `-path` can land in separate SGR runs)
+    # whenever TERM/FORCE_COLOR say colour is fine, so compare the plain text.
+    help_text = ANSI_ESCAPE.sub("", result.stdout)
     assert "--path" in help_text, f"setup {subcommand} has no --path"
     assert "--yes" in help_text, f"setup {subcommand} has no --yes"

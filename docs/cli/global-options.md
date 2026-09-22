@@ -49,7 +49,9 @@ With `--json`, stdout is one machine-readable JSON document. Diagnostics and deb
 Some subcommands read `DEPLOYMENT_PLAN` from the environment or `--plan`:
 
 - `opentide deploy --plan STAGING`
-- `opentide validate query --platform sentinel --plan STAGING`
+- `opentide validate query --platform sentinel --live --plan STAGING`
+
+`--plan` is a no-op for the default offline `validate query`, which checks the query text of every rule regardless of what the plan would deploy.
 
 ## Related
 

@@ -5,10 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, NoReturn
 
+import structlog
+
 from opentide.cli.context import CliContext
 from opentide.core.io import dump_json_text
-from opentide.core.logging.config import get_console, get_stdout_console
+from opentide.core.logging.config import get_console, get_stdout_console, is_json_output
 from opentide.core.logging.console import emit_fatal
+
+logger = structlog.get_logger("opentide.cli.output")
 
 
 @dataclass(frozen=True)
@@ -99,3 +103,11 @@ def emit_error(ctx: CliContext, message: str, *, exit_code: int = 1) -> NoReturn
 def emit_success(ctx: CliContext, payload: dict[str, Any]) -> None:
     """Emit a success payload."""
     emit_result(ctx, CommandResult.from_payload(payload))
+
+
+def emit_deprecation(legacy: str, replacement: str) -> None:
+    """Warn about a deprecated spelling without corrupting ``--json`` output."""
+    if is_json_output():
+        logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
+        return
+    get_console().print(f"[yellow]DEPRECATED[/] {legacy}; use {replacement}.")

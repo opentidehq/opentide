@@ -10,6 +10,8 @@ import pytest
 from opentide.core.git_baseline import (
     GitBaselineError,
     candidate_refs,
+    changed_paths,
+    git_toplevel,
     has_git_head,
     resolve_baseline,
 )
@@ -92,3 +94,68 @@ def test_single_branch_repo_falls_back_to_head(repo: Path) -> None:
     baseline = resolve_baseline(repo)
     assert baseline.ref == "HEAD"
     assert baseline.commit == _git(repo, "rev-parse", "HEAD")
+
+
+def test_a_missing_git_binary_raises_the_documented_error(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``GitBaselineError``, not the ``FileNotFoundError`` subprocess raises."""
+    _git(repo, "init", "-q", "-b", "main", ".")
+    (repo / "a.txt").write_text("a\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "first")
+
+    def explode(*_args: object, **_kwargs: object) -> None:
+        raise FileNotFoundError(2, "No such file or directory: 'git'")
+
+    monkeypatch.setattr("opentide.core.git_baseline.subprocess.run", explode)
+
+    assert has_git_head(repo) is False
+    with pytest.raises(GitBaselineError):
+        resolve_baseline(repo)
+
+
+def _nested_workspace_repo(repo: Path) -> Path:
+    """A tide workspace in a subdirectory of the checkout, as client repos have."""
+    _git(repo, "init", "-q", "-b", "main", ".")
+    workspace = repo / "detections"
+    (workspace / "objects" / "rules").mkdir(parents=True)
+    (workspace / "objects" / "rules" / "tracked.yaml").write_text("uuid: a\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "first")
+    return workspace
+
+
+def test_git_toplevel_climbs_out_of_a_nested_workspace(repo: Path) -> None:
+    workspace = _nested_workspace_repo(repo)
+
+    assert git_toplevel(workspace).resolve() == repo.resolve()
+
+
+def test_changed_paths_are_absolute_against_the_git_top_level(repo: Path) -> None:
+    """Joining a ``git diff`` line onto a nested workspace produces a missing path."""
+    workspace = _nested_workspace_repo(repo)
+    (workspace / "objects" / "rules" / "tracked.yaml").write_text("uuid: b\n", encoding="utf-8")
+    (workspace / "objects" / "rules" / "new.yaml").write_text("uuid: c\n", encoding="utf-8")
+
+    baseline = resolve_baseline(workspace)
+    changes = changed_paths(workspace, baseline)
+    by_name = {change.relative.name: change for change in changes}
+
+    assert set(by_name) == {"tracked.yaml", "new.yaml"}, "untracked objects must be included"
+    for change in changes:
+        assert change.relative.as_posix().startswith("detections/"), (
+            "relative paths are git-top-level relative, which is what `git show` needs"
+        )
+        assert change.absolute.is_file(), f"{change.absolute} does not exist"
+
+
+def test_changed_paths_narrow_to_a_pathspec(repo: Path) -> None:
+    workspace = _nested_workspace_repo(repo)
+    (workspace / "objects" / "rules" / "new.yaml").write_text("uuid: c\n", encoding="utf-8")
+    (repo / "README.md").write_text("hi\n", encoding="utf-8")
+
+    baseline = resolve_baseline(workspace)
+    scoped = changed_paths(workspace, baseline, pathspec="detections/objects/")
+
+    assert [change.relative.name for change in scoped] == ["new.yaml"]
