@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -70,5 +71,5 @@ def test_setup_ci_rejects_a_default_branch_it_cannot_render(
         "setup", "ci", "github", "--path", str(fresh), "--default-branch", branch, "--yes"
     )
     assert result.exit_code == 2, result.stdout + result.stderr
-    assert "--default-branch" in result.stderr
+    assert "--default-branch" in re.sub(r"\x1b\[[0-9;]*m", "", result.stderr)
     assert not (fresh / ".github" / "workflows" / "opentide.yml").exists()
