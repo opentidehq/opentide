@@ -45,15 +45,31 @@ def _render(invoke_cli, tmp_path: Path, ci: str, relpath: str) -> tuple[str, Any
     return rendered, yaml.safe_load(rendered)
 
 
+def _script_lines(job_name: str, script: Any) -> list[str]:
+    """Every ``script`` entry has to survive YAML round-tripping as a string.
+
+    ``- git commit -m "ci: update ..."`` contains ``": "``, so YAML reads the
+    sequence item as a mapping and GitLab rejects the pipeline with "script
+    config should be a string or a nested array of strings". Coercing with
+    ``str()`` here would hide exactly that, so assert the type instead.
+    """
+    lines = script if isinstance(script, list) else [script]
+    for index, line in enumerate(lines):
+        assert isinstance(line, str), (
+            f"{job_name}: script[{index}] parsed as {type(line).__name__}, not a string: "
+            f"{line!r}. A `: ` inside an unquoted sequence item makes YAML read it "
+            "as a mapping."
+        )
+    return lines
+
+
 def _gitlab_scripts(parsed: dict[str, Any]) -> dict[str, str]:
     """Job name to its flattened ``script`` body."""
     scripts: dict[str, str] = {}
     for name, job in parsed.items():
         if not isinstance(job, dict) or "script" not in job:
             continue
-        script = job["script"]
-        lines = script if isinstance(script, list) else [script]
-        scripts[name] = "\n".join(str(line) for line in lines)
+        scripts[name] = "\n".join(_script_lines(name, job["script"]))
     return scripts
 
 
@@ -84,13 +100,28 @@ def assert_commit_is_reachable(script: str, *, label: str) -> None:
     assert "if git diff --staged --quiet; then" in script, (
         f"{label}: emptiness check is not a guard block\n{script}"
     )
-    guard_end = script.index("fi")
+    # Anchor on the guard's own closing `fi`, at the start of a line. A bare
+    # `script.index("fi")` matches inside `git config user.email ...`, which
+    # precedes the guard in every job and makes the ordering check vacuous.
+    guard_start = script.index("if git diff --staged --quiet; then")
+    guard_end = script.index("\nfi", guard_start)
     assert script.index("git commit") > guard_end, (
         f"{label}: commit runs inside the emptiness guard\n{script}"
     )
     for line in script.splitlines():
         if "exit 0" in line:
             assert "&&" not in line, f"{label}: `exit 0` in an && chain\n{line}"
+
+
+def test_gitlab_script_items_are_all_strings(invoke_cli, tmp_path: Path) -> None:
+    """GitLab rejects a job whose ``script`` holds anything but strings.
+
+    The inflight jobs used to emit ``- git commit -m "ci: update ..."``, which
+    YAML reads as ``{'git commit -m "ci': 'update ...'}``.
+    """
+    _, parsed = _render(invoke_cli, tmp_path, "gitlab", ".gitlab-ci.yml")
+    jobs = _gitlab_scripts(parsed)
+    assert "inflight_shards" in jobs and "inflight_prune" in jobs, sorted(jobs)
 
 
 def test_gitlab_inflight_uses_gitlab_variable_syntax(invoke_cli, tmp_path: Path) -> None:
@@ -161,14 +192,28 @@ def test_azure_pushing_jobs_keep_their_credentials(invoke_cli, tmp_path: Path) -
 
 
 def test_azure_scripts_fail_fast(invoke_cli, tmp_path: Path) -> None:
-    """Dropping the ``&&`` join must not drop the fail-fast it provided."""
+    """Dropping the ``&&`` join must not drop the fail-fast it provided.
+
+    Skipping scripts that lack ``set -e`` would skip the only case worth
+    testing, so every multi-command script has to opt in explicitly.
+    """
     _, parsed = _render(invoke_cli, tmp_path, "azure", "azure-pipelines.yml")
+    checked = 0
     for name, job in _azure_jobs(parsed).items():
         for step in job["steps"]:
-            script = str(step.get("script", ""))
-            if not script.startswith("set -e"):
+            if "script" not in step:
                 continue
-            assert script.splitlines()[0] == "set -e", f"{name}: {script}"
+            script = step["script"]
+            assert isinstance(script, str), f"{name}: script is {type(script).__name__}"
+            lines = [line for line in script.splitlines() if line.strip()]
+            if len(lines) < 2:
+                continue
+            assert lines[0] == "set -e", (
+                f"{name}: multi-command script does not fail fast; "
+                f"first line is {lines[0]!r}\n{script}"
+            )
+            checked += 1
+    assert checked, "no multi-command Azure script was checked"
 
 
 def test_github_keeps_its_own_expression_syntax(invoke_cli, tmp_path: Path) -> None:
