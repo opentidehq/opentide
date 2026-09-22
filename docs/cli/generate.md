@@ -157,6 +157,8 @@ opentide generate inflight
 opentide generate inflight prune
 ```
 
+The pipelines from `opentide setup ci` run this on every pull request and commit only `.opentide/inflight/` to the default branch, from a worktree of that branch, never the pull request itself.
+
 ## generate extract
 
 Import detection rules from external platforms (credential-heavy, experimental for Defender):
