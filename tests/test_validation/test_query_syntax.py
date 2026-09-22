@@ -72,6 +72,10 @@ def test_query_language_is_none_for_platforms_without_one() -> None:
         # Lucene ranges mix inclusive and exclusive ends.
         ("process_pid:[1000 TO 2000}", "lucene"),
         ("netconn_port:{1024 TO 65535]", "lucene"),
+        # A Lucene regex is pattern, not syntax; a lone slash is just a path.
+        ("process_cmdline:/.*[^)]+/", "lucene"),
+        (r'process_name:/cmd\.(exe|bat)/ AND process_cmdline:/"[a-z\//', "lucene"),
+        ("process_name:/usr/bin/bash", "lucene"),
         # KQL multi-line literal: quotes and brackets inside are data.
         (
             "let script = ```\nIEX \"(New-Object Net.WebClient)\nit's [open\n```;\n"
@@ -105,6 +109,7 @@ def test_well_formed_queries_produce_no_findings(query: str, language: str) -> N
         ('EventType = "Process Creation" ||', "s1ql", "dangling_operator"),
         ("process_pid:(1000 TO 2000]", "lucene", "bracket_mismatch"),
         ("process_pid:[1000 TO 2000", "lucene", "unclosed_bracket"),
+        ("process_name:/cmd/ AND (parent_name:x", "lucene", "unclosed_bracket"),
     ],
 )
 def test_broken_queries_report_the_expected_code(query: str, language: str, expected: str) -> None:
@@ -168,6 +173,8 @@ def test_each_relaxation_stays_in_its_own_language() -> None:
     assert codes('```\nsay "hi\n```', "s1ql") == ["unterminated_string"]
     # Only Lucene escapes outside a phrase.
     assert codes(r"SecurityEvent | where Cmd has \(", "kql") == ["unclosed_bracket"]
+    # Only Lucene reads /.../ as a regex.
+    assert codes("index=main | where x=/(/", "spl") == ["unclosed_bracket"]
 
 
 def test_a_trailing_lucene_escape_does_not_crash_the_scan() -> None:

@@ -66,6 +66,9 @@ _MULTILINE_STRINGS: dict[str, str] = {KQL: "```"}
 #: Lucene escapes any special character with a backslash outside a phrase, so
 #: ``process_cmdline:*iex\(*`` holds no bracket and ``*\"http*`` no string.
 _BARE_ESCAPE_LANGUAGES = frozenset({LUCENE})
+#: A terminated Lucene ``/regex/`` holds brackets and quotes as pattern. An
+#: unterminated ``/`` is left as data, so ``process_name:/usr/bin/bash`` passes.
+_REGEX_DELIMITERS: dict[str, str] = {LUCENE: "/"}
 #: S1QL accepts ``||`` for ``OR``; it is not an empty stage between two pipes.
 _DOUBLE_PIPE_OR_LANGUAGES = frozenset({S1QL})
 #: Lucene ranges mix inclusive and exclusive ends: ``[1 TO 5}``, ``{1 TO 5]``.
@@ -198,6 +201,7 @@ def _mask(query: str, language: str) -> tuple[str, list[SyntaxFinding]]:
     verbatim_prefix = language in _VERBATIM_PREFIX_LANGUAGES
     multiline = _MULTILINE_STRINGS.get(language)
     bare_escapes = language in _BARE_ESCAPE_LANGUAGES
+    regex_delimiter = _REGEX_DELIMITERS.get(language)
     index = 0
     length = len(query)
     while index < length:
@@ -223,6 +227,13 @@ def _mask(query: str, language: str) -> tuple[str, list[SyntaxFinding]]:
             masked.append(_blank(query[index : index + 2], _STRING_FILLER))
             index += 2
             continue
+        if regex_delimiter is not None and query[index] == regex_delimiter:
+            end = _scan_string(query, index)
+            if end is not None:
+                body = _blank(query[index + 1 : end], _STRING_FILLER)
+                masked.append(regex_delimiter + body + regex_delimiter)
+                index = end + 1
+                continue
         if block_comment is not None and query.startswith(block_comment[0], index):
             opening, closing = block_comment
             end = query.find(closing, index + len(opening))
