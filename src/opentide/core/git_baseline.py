@@ -61,21 +61,21 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     function documented to raise ``GitBaselineError``.
     """
     try:
-        return subprocess.run(
-            ["git", *args],
-            cwd=repo_root,
-            capture_output=True,
-            # Paths are bytes to git; decode them the way ``os.fsdecode`` would
-            # rather than by locale, which is ASCII in many CI images.
-            encoding="utf-8",
-            errors="surrogateescape",
-            check=False,
-        )
+        result = subprocess.run(["git", *args], cwd=repo_root, capture_output=True, check=False)
     except OSError as exc:
         logger.debug("git_unavailable", args=args, error=str(exc))
         return subprocess.CompletedProcess(
             ["git", *args], returncode=127, stdout="", stderr=str(exc)
         )
+    # Paths are bytes to git; decode them the way ``os.fsdecode`` would rather
+    # than by locale, which is ASCII in many CI images. Not in text mode: its
+    # newline translation turns a ``\r`` inside a file name into ``\n``.
+    return subprocess.CompletedProcess(
+        result.args,
+        result.returncode,
+        stdout=result.stdout.decode("utf-8", "surrogateescape"),
+        stderr=result.stderr.decode("utf-8", "replace"),
+    )
 
 
 def _git_stdout(repo_root: Path, *args: str) -> str | None:
@@ -212,6 +212,14 @@ def git_toplevel(repo_root: Path) -> Path:
     return Path(top) if top else repo_root
 
 
+def _is_utf8(decoded: str) -> bool:
+    try:
+        decoded.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def changed_paths(
     repo_root: Path, baseline: GitBaseline, *, pathspec: str | None = None
 ) -> list[ChangedPath]:
@@ -220,7 +228,8 @@ def changed_paths(
     Untracked files are included because a brand new object has no diff against
     the baseline but is exactly the thing a preview or a ``--changed`` docs run
     needs to pick up. Deleted paths are kept — callers distinguish them by
-    testing ``absolute.exists()``.
+    testing ``absolute.exists()``. Paths that are not valid UTF-8 are skipped
+    with a ``git_path_not_utf8`` warning.
 
     ``pathspec`` is interpreted relative to the git top level, matching the
     paths this returns.
@@ -245,6 +254,11 @@ def changed_paths(
     results: list[ChangedPath] = []
     for line in lines:
         if not line:
+            continue
+        if not _is_utf8(line):
+            # Callers emit these paths as JSON, which cannot carry the lone
+            # surrogates a non-UTF-8 name decodes to.
+            logger.warning("git_path_not_utf8", path=repr(line.encode("utf-8", "surrogateescape")))
             continue
         relative = Path(line)
         if relative in seen:

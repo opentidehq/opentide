@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
+from structlog.testing import capture_logs
 
 from opentide.core.git_baseline import (
     GitBaselineError,
@@ -307,3 +309,41 @@ def test_non_ascii_paths_come_back_verbatim(repo: Path) -> None:
         "règle.yaml",
     ]
     assert all(c.absolute.is_file() for c in changes)
+
+
+def test_a_carriage_return_in_a_file_name_survives(repo: Path) -> None:
+    """Text-mode decoding translates ``\\r`` to ``\\n``: a missing path that reads as deleted."""
+    _git(repo, "init", "-q", "-b", "main", ".")
+    _commit_file(repo, "a.txt", "first")
+    _git(repo, "checkout", "-qb", "feature")
+    name = "odd\rname.yaml"
+    try:
+        _commit_file(repo, name, "carriage return")
+    except OSError:
+        pytest.skip("filesystem rejects a carriage return in a file name")
+    (repo / "new\r.yaml").write_text("new\n", encoding="utf-8")
+
+    changes = changed_paths(repo, resolve_baseline(repo))
+    assert sorted(c.relative.as_posix() for c in changes) == ["new\r.yaml", name]
+    assert all(c.absolute.is_file() for c in changes)
+
+
+def test_a_non_utf8_file_name_is_skipped_with_a_warning(repo: Path) -> None:
+    """It would decode to lone surrogates, which JSON output cannot encode."""
+    _git(repo, "init", "-q", "-b", "main", ".")
+    _commit_file(repo, "a.txt", "first")
+    _git(repo, "checkout", "-qb", "feature")
+    try:
+        (repo / os.fsdecode(b"r\xe8gle.yaml")).write_bytes(b"latin-1\n")
+    except OSError:
+        pytest.skip("filesystem refuses a file name that is not valid UTF-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "latin-1 name")
+    (repo / "ok.yaml").write_text("ok\n", encoding="utf-8")
+
+    with capture_logs() as logs:
+        changes = changed_paths(repo, resolve_baseline(repo))
+    assert [c.relative.as_posix() for c in changes] == ["ok.yaml"]
+    assert [(e["event"], e["path"]) for e in logs if e["log_level"] == "warning"] == [
+        ("git_path_not_utf8", repr(b"r\xe8gle.yaml"))
+    ]
