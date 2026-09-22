@@ -106,6 +106,9 @@ Search the repo for the old pin (`opentide==0.1.3` or whatever the previous vers
 | `docs/usage/why-opentide.md` | Latest-patch mention |
 | `docs/usage/troubleshooting.md` | Pins **and** mention the new patch in the relevant bug sections |
 | `docs/usage/workflows/agentic-setup.md` | |
+| `docs/usage/workflows/ci-cd.md` | Hand-written pipeline examples and the callout above them |
+| `docs/usage/migration/index.md` | |
+| `docs/usage/migration/prompt.md` | |
 | `docs/cli/index.md` | |
 | `docs/mcp/index.md` | |
 | `docs/mcp/installation.md` | |
