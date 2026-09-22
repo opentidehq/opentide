@@ -46,7 +46,6 @@ app = typer.Typer(
     rich_markup_mode="rich",
     no_args_is_help=True,
 )
-sync_typer_rendering(no_color=bool(os.getenv("NO_COLOR")))
 
 
 def _no_color_before_help(value: bool) -> bool:
@@ -634,12 +633,12 @@ def info_cmd(
 
 def main() -> None:
     """Console script entry point."""
-    # Click parses root options, and exits on a bad one, before the eager
-    # callback runs, and handles eager options in argv order.
+    # Here rather than at import: opentide.ci imports this package, and a host
+    # Typer app must keep its own rendering settings. Click parses root
+    # options, and exits on a bad one, before the eager callback runs.
     argv = sys.argv[1:]
     options = argv[: argv.index("--")] if "--" in argv else argv
-    if "--no-color" in options:
-        sync_typer_rendering(no_color=True)
+    sync_typer_rendering(no_color="--no-color" in options or bool(os.getenv("NO_COLOR")))
     app()
 
 
