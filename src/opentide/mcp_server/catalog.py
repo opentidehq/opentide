@@ -11,6 +11,7 @@ from opentide.core.object_fields import (
     matches_platform,
     matches_technique,
     object_techniques,
+    technique_covers,
 )
 from opentide.core.registry import OpenTide
 
@@ -106,10 +107,12 @@ def coverage_analysis(*, technique: str = "", tactic: str = "") -> dict[str, Any
             covered.setdefault(tech, []).append(uuid)
     if technique:
         needle = technique.strip()
-        matched = next((key for key in covered if key.lower() == needle.lower()), None)
+        matched = sorted(key for key in covered if technique_covers(needle, key))
+        rules = sorted({uuid for key in matched for uuid in covered[key]})
         return {
             "technique": needle,
-            "covered": matched is not None,
-            "rules": covered.get(matched, []) if matched else [],
+            "covered": bool(rules),
+            "matched_techniques": matched,
+            "rules": rules,
         }
     return {"technique_count": len(covered), "matrix": covered, "tactic_filter": tactic or None}

@@ -69,9 +69,18 @@ def test_resource_vocabularies_are_json_objects(tide_corpus_repo: Path) -> None:
     assert payload, "expected bundled vocabularies"
     for name, entry in payload.items():
         assert isinstance(entry, dict), f"{name} serialised as {type(entry).__name__}"
-        assert "metadata" in entry
         assert isinstance(entry["metadata"], dict)
-        assert isinstance(entry.get("entries"), dict)
+        assert entry["uri"] == f"opentide://vocabularies/{name}"
+        assert "entries" not in entry, "the index must point at entries, not inline them"
+
+
+def test_resource_vocabularies_index_fits_an_agent_context(tide_corpus_repo: Path) -> None:
+    """Inlining every entry made this resource several megabytes."""
+    text = resources.resource_vocabularies()
+    assert len(text) < 256_000, f"vocabularies index is {len(text):,} bytes"
+    payload = json.loads(text)
+    full = json.loads(resources.resource_vocabulary("actors"))
+    assert payload["actors"]["entry_count"] == len(full["entries"])
 
 
 def test_resource_vocabulary_single_entry_is_json(tide_corpus_repo: Path) -> None:

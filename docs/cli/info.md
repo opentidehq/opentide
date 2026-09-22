@@ -33,6 +33,8 @@ opentide --json info --technique T1059 coverage
 
 `opentide info --technique T1059` alone does **not** include coverage data.
 
+A parent technique also matches its sub-techniques (`T1059` finds rules tagged `T1059.001`); a sub-technique does not match its parent. Matching is case-insensitive.
+
 ## Default output
 
 Interactive mode prints a Rich table:

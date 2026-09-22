@@ -94,6 +94,12 @@ ATT&CK coverage analysis with gap identification. Use it to answer "what do we d
 Coverage reads the same technique locations as `opentide info coverage --technique`:
 top-level `techniques`, `tags.techniques`, `tags.attack`, and `threat.att&ck`.
 
+Matching is case-insensitive, and a parent technique covers its sub-techniques:
+`T1059` returns rules tagged `T1059` **and** `T1059.001`, `T1059.003`, … . A
+sub-technique query does not widen to its parent — `T1059.001` does not return
+a rule tagged only `T1059`. `matched_techniques` lists the identifiers that
+answered, so you can tell parent-level from sub-technique-level coverage.
+
 ```json
 // call
 { "technique": "T1059" }
@@ -102,6 +108,7 @@ top-level `techniques`, `tags.techniques`, `tags.attack`, and `threat.att&ck`.
 {
   "technique": "T1059",
   "covered": true,
+  "matched_techniques": ["T1059", "T1059.001"],
   "rules": ["00000000-0000-4000-8003-000000000001"]
 }
 ```
