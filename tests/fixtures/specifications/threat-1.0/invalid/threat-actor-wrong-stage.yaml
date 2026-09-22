@@ -1,0 +1,26 @@
+name: Threat Actor Wrong Stage
+criticality: High
+
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000022
+  schema: threat::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+
+threat:
+  description: att&ck group ids MUST use the att&ck stage, not misp
+  severity: Significant incident
+  impact:
+    - Data Breach
+  leverage:
+    - Elevation of privilege
+  viability: Likely
+  terrain: Endpoint workstations and user devices.
+  surface:
+    - Windows::Desktop
+  att&ck:
+    - T1059
+  actors:
+    - name: misp::G0007
