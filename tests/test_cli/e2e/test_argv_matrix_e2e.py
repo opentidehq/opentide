@@ -201,6 +201,124 @@ def test_setup_rejects_an_explicit_dot_alongside_a_positional(cli_runner, tmp_pa
     assert not list(other.iterdir()), "the conflicting positional target was written anyway"
 
 
+# --- setup: the group's --path/--yes reach the subcommand ----------------------
+
+GROUP_PATH_COMMANDS = (*SETUP_PATH_COMMANDS, ("ci", ("github",)))
+
+
+def _error_text(result) -> str:
+    """The usage error with Rich's panel borders and line wrapping removed."""
+    text = ANSI_ESCAPE.sub("", result.stdout + result.stderr)
+    return " ".join(text.replace("│", " ").split())
+
+
+def _elsewhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """A working directory and a separate target, so a dropped --path is visible."""
+    cwd = tmp_path / "cwd"
+    target = tmp_path / "target"
+    cwd.mkdir()
+    target.mkdir()
+    monkeypatch.chdir(cwd)
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(cwd))
+    return cwd, target
+
+
+@pytest.mark.parametrize(("subcommand", "flags"), GROUP_PATH_COMMANDS)
+@pytest.mark.parametrize("consent", ["subcommand-yes", "group-yes"])
+def test_setup_group_path_and_yes_reach_the_subcommand(
+    cli_runner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    subcommand: str,
+    flags: tuple[str, ...],
+    consent: str,
+) -> None:
+    """``setup --path T hooks`` returned from the group and configured the cwd.
+
+    ``setup --yes env`` likewise dropped the consent and then failed with
+    "Add --yes to confirm this write".
+    """
+    from opentide.cli import app
+
+    cwd, target = _elsewhere(tmp_path, monkeypatch)
+    group = ["--path", str(target)]
+    tail = [*flags]
+    if consent == "group-yes":
+        group.append("--yes")
+    else:
+        tail.append("--yes")
+    result = cli_runner.invoke(app, ["--json", "setup", *group, subcommand, *tail])
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert list(target.iterdir()), f"setup {subcommand} ignored the group's --path"
+    assert not list(cwd.iterdir()), f"setup {subcommand} wrote into the working directory"
+
+
+def test_setup_group_path_reaches_nested_skills_commands(
+    cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib
+
+    from opentide.cli import app
+
+    _, target = _elsewhere(tmp_path, monkeypatch)
+    setup_module = importlib.import_module("opentide.cli.setup_app")
+    seen: list[Path] = []
+
+    def _discover(base: Path, **_kwargs):
+        seen.append(base)
+        return {"message": "0 skills", "skills": [], "source": "test", "count": 0}
+
+    monkeypatch.setattr(setup_module, "discover_skills", _discover)
+    for argv in (
+        ["setup", "--path", str(target), "skills", "discover"],
+        ["setup", "skills", "--path", str(target), "discover"],
+    ):
+        result = cli_runner.invoke(app, ["--json", *argv])
+        assert result.exit_code == 0, result.stdout + result.stderr
+    assert [path.resolve() for path in seen] == [target.resolve()] * 2
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["setup", "--ci", "github", "env", "--yes"],
+        ["setup", "--name", "Ignored", "--no-staging", "hooks", "--yes"],
+        ["setup", "skills", "--cursor", "discover"],
+    ],
+    ids=["ci", "name-and-negated-flag", "skills-target"],
+)
+def test_setup_group_options_a_subcommand_would_ignore_are_refused(
+    cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str]
+) -> None:
+    from opentide.cli import app
+
+    cwd, _ = _elsewhere(tmp_path, monkeypatch)
+    result = cli_runner.invoke(app, argv)
+    assert result.exit_code == 2, result.stdout + result.stderr
+    assert "would be ignored" in _error_text(result)
+    assert not list(cwd.iterdir()), "a refused command still wrote files"
+
+
+def test_setup_group_and_subcommand_paths_must_agree(
+    cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.cli import app
+
+    cwd, target = _elsewhere(tmp_path, monkeypatch)
+    conflict = cli_runner.invoke(
+        app, ["setup", "--path", str(target), "env", "--path", str(cwd), "--yes"]
+    )
+    assert conflict.exit_code == 2, conflict.stdout + conflict.stderr
+    assert "different targets" in _error_text(conflict)
+    assert not list(cwd.iterdir()) and not list(target.iterdir())
+
+    same = cli_runner.invoke(
+        app, ["setup", "--path", str(target), "env", str(target / "."), "--yes"]
+    )
+    assert same.exit_code == 0, same.stdout + same.stderr
+    assert (target / ".env.example").is_file()
+
+
 def test_document_subcommand_warns_once(cli_runner, monkeypatch: pytest.MonkeyPatch) -> None:
     """The ``document`` group callback must not add its own warning to a subcommand's."""
     from opentide import cli as cli_module

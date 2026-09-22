@@ -39,6 +39,8 @@ Use subcommands for MCP and skills — parent `--mcp` / `--skills` enums were re
 
 `--path` / `-C` and `--yes` / `-y` work on **every** `setup` subcommand (`repo`, `platforms`, `ci`, `env`, `hooks`, `mcp`, `skills`, `vscode`). A positional `PATH` is still accepted as a hidden alias on the subcommands that historically required it; passing both forms in one invocation is a usage error. `setup vscode` accepts `--yes` for symmetry — it writes editor-local files and never prompts.
 
+Given before the subcommand, `--path` and `--yes` still apply to it: `opentide setup --path ./detection-repo --yes hooks` is the same as `opentide setup hooks --path ./detection-repo --yes`. Naming two different paths (`setup --path a env --path b`) is a usage error. Any other `setup` option placed before a subcommand (`opentide setup --ci github env`) is also a usage error, because the subcommand would ignore it.
+
 `--yes` never chooses a platform, MCP host, or skill target. Commands that require one fail with an actionable error when its flag is omitted.
 
 ## Subcommands
