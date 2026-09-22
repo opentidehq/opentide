@@ -38,7 +38,8 @@ Search the catalogue by keyword, UUID, or ATT&CK technique. Use it first when yo
 ```
 
 The return type is always a list of `{uuid, type, title, status}` summaries — a
-UUID query yields at most one summary, an unknown UUID yields `[]`. Read
+UUID query yields at most one summary, an unknown UUID yields `[]`. Filters
+apply to a UUID query too: `search(<rule uuid>, type="threat")` returns `[]`. Read
 `opentide://rules/{uuid}` (or the matching `threats`/`objectives` resource) for
 a full body.
 

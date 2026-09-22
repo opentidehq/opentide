@@ -64,6 +64,36 @@ def test_resource_schema_without_generated_schemas_explains_itself(
     assert "generate schemas" in payload["hint"]
 
 
+@pytest.fixture
+def corpus_with_templates(tide_corpus_repo: Path) -> Path:
+    """Corpus repo with generated object templates on disk."""
+    run_generate_phase("templates")
+    clear_runtime_caches()
+    return tide_corpus_repo
+
+
+@pytest.mark.parametrize("family", ["rule", "threat", "objective"])
+def test_resource_template_accepts_the_schema_id_the_schema_resource_accepts(
+    corpus_with_templates: Path, family: str
+) -> None:
+    """``schemas/rule::1.0`` resolved while ``templates/rule::1.0`` did not."""
+    OpenTide.initialise()
+    schema_id = next(key for key in OpenTide.MetaSchemas.Index if key.startswith(f"{family}::"))
+    bare = json.loads(resources.resource_template(family))
+    for requested in (schema_id, schema_id.replace("::", "."), f"{family}s"):
+        payload = json.loads(resources.resource_template(requested))
+        assert payload == bare, requested
+    assert "error" not in bare
+
+
+def test_resource_template_rejects_a_version_that_is_not_current(
+    corpus_with_templates: Path,
+) -> None:
+    payload = json.loads(resources.resource_template("rule::9.9"))
+    assert "error" in payload
+    assert "rule" in payload["available"]
+
+
 def test_resource_vocabularies_are_json_objects(tide_corpus_repo: Path) -> None:
     payload = json.loads(resources.resource_vocabularies())
     assert payload, "expected bundled vocabularies"

@@ -125,10 +125,27 @@ def resource_schema(object_type: str) -> str:
     return _json_resource(schemas[key])
 
 
+def _resolve_template_key(templates: Mapping[str, Any], requested: str) -> str | None:
+    """Resolve ``rule`` or ``rule::1.0`` onto a template key.
+
+    Templates are keyed by bare family and rendered from the current model, so a
+    versioned request matches only when it names the current metaschema version.
+    """
+    key = _resolve_family_key(templates, requested)
+    if key is not None:
+        return key
+    family, version = _split_schema_id(requested)
+    if version is None or family not in templates:
+        return None
+    if _resolve_family_key(OpenTide.MetaSchemas.Index, f"{family}::{version}") is None:
+        return None
+    return family
+
+
 def resource_template(object_type: str) -> str:
     ensure_initialised()
     templates = OpenTide.Templates.Index
-    key = _resolve_family_key(templates, object_type)
+    key = _resolve_template_key(templates, object_type)
     if key is None:
         return _json_resource(
             {
