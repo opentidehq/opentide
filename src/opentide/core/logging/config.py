@@ -82,6 +82,8 @@ def get_stdout_console() -> Console:
     return _stdout_console
 
 
+#: ``""`` stays off: Rich, and so Typer's help panels, read an empty
+#: ``FORCE_COLOR`` as "not a terminal", and log lines should agree with them.
 _FORCE_COLOR_OFF = frozenset({"", "0", "false", "no", "off"})
 
 
