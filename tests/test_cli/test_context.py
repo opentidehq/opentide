@@ -26,6 +26,56 @@ def test_cli_context_apply_environment(tmp_path, monkeypatch: pytest.MonkeyPatch
     assert os.environ["NO_COLOR"] == "1"
 
 
+def test_no_color_does_not_export_force_color(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rich reads any non-empty FORCE_COLOR, ``"0"`` included, as "force a terminal"."""
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    CliContext(repo=tmp_path, no_color=True).apply_environment()
+    assert os.environ["NO_COLOR"] == "1"
+    assert "FORCE_COLOR" not in os.environ
+
+
+_TYPER_COLOUR_ENV = ("FORCE_COLOR", "NO_COLOR", "GITHUB_ACTIONS", "PY_COLORS")
+
+
+@pytest.mark.parametrize(
+    ("no_color", "env", "colour_system", "force_terminal"),
+    [
+        pytest.param(True, {"GITHUB_ACTIONS": "true"}, None, False, id="no-color-in-ci"),
+        pytest.param(False, {"FORCE_COLOR": "0"}, "auto", False, id="FORCE_COLOR=0"),
+        pytest.param(False, {"FORCE_COLOR": "1"}, "auto", True, id="FORCE_COLOR=1"),
+        pytest.param(False, {"GITHUB_ACTIONS": "true"}, "auto", True, id="ci-default"),
+        pytest.param(
+            False,
+            {"GITHUB_ACTIONS": "true", "FORCE_COLOR": "0"},
+            "auto",
+            False,
+            id="ci-FORCE_COLOR=0",
+        ),
+        pytest.param(False, {}, "auto", None, id="detect"),
+    ],
+)
+def test_sync_typer_rendering(
+    monkeypatch: pytest.MonkeyPatch,
+    no_color: bool,
+    env: dict[str, str],
+    colour_system: str | None,
+    force_terminal: bool | None,
+) -> None:
+    """Typer's import-time ``FORCE_TERMINAL`` treats ``FORCE_COLOR=0`` as "force"."""
+    from typer import rich_utils
+
+    from opentide.cli.context import sync_typer_rendering
+
+    for name in _TYPER_COLOUR_ENV:
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    sync_typer_rendering(no_color=no_color)
+    rendering = (rich_utils.COLOR_SYSTEM, rich_utils.FORCE_TERMINAL)
+    assert rendering == (colour_system, force_terminal)
+
+
 def test_apply_environment_keeps_an_inherited_workspace(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

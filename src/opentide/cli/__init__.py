@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
+
 import structlog
 import typer
 
-from opentide.cli.context import CliContext, get_context
+from opentide.cli.context import CliContext, get_context, sync_typer_rendering
 from opentide.cli.enums import (
     DetectionPlatform,
     DocumentScope,
@@ -43,6 +45,14 @@ app = typer.Typer(
     rich_markup_mode="rich",
     no_args_is_help=True,
 )
+sync_typer_rendering(no_color=bool(os.getenv("NO_COLOR")))
+
+
+def _no_color_before_help(value: bool) -> bool:
+    """Eager, so ``opentide --no-color --help`` is plain: help exits before callbacks."""
+    if value:
+        sync_typer_rendering(no_color=True)
+    return value
 
 
 def _came_from_command_line(ctx: typer.Context, name: str) -> bool:
@@ -69,7 +79,13 @@ def main_callback(
         None, "--data", envvar="OPENTIDE_DATA_ROOT", help="Bundled data root"
     ),
     debug: bool = typer.Option(False, "--debug", envvar="DEBUG", help="Enable debug logging"),
-    no_color: bool = typer.Option(False, "--no-color", help="Disable Rich colour output"),
+    no_color: bool = typer.Option(
+        False,
+        "--no-color",
+        is_eager=True,
+        callback=_no_color_before_help,
+        help="Disable Rich colour output",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Machine-readable JSON output"),
 ) -> None:
     from pathlib import Path
