@@ -52,7 +52,7 @@ opentide validate            # errors fail; warnings are reported but exit 0
 For finer control:
 
 ```bash
-if opentide validate --json > result.json; then
+if opentide --json validate > result.json; then
   echo "validation passed"
 else
   code=$?

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
-from opentide.cli.output import emit, emit_error
+from opentide.cli.output import emit_error
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 from opentide.validation.errors import format_issues_for_console
@@ -319,10 +319,17 @@ def validate_query_platform(
     if plan is not None:
         ctx.set_deployment_plan(plan)
     if platform not in QUERY_VALIDATION_PLATFORMS:
-        message = f"query validation not supported for {platform}"
-        if ctx.json_output:
-            emit(ctx, {"valid": None, "supported": False, "message": message}, exit_code=1)
-        emit_error(ctx, message, exit_code=1)
+        # Returned rather than emitted directly: a raw `emit` skips the
+        # ok/status envelope every other command promises, so a caller parsing
+        # `--json` got a differently-shaped document for this one branch.
+        return {
+            "platform": platform,
+            "valid": None,
+            "supported": False,
+            "status": "failed",
+            "message": f"query validation not supported for {platform}",
+            "_exit_code": 1,
+        }
     if not live:
         return _offline_query_result(platform)
     from opentide.core.registry import OpenTide as LegacyOpenTide

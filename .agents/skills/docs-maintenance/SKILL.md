@@ -83,6 +83,29 @@ scripts/validate-docs.sh
 
 Fixes: missing frontmatter, broken internal links, orphan pages not listed in meta.json.
 
+### Golden command runner
+
+`scripts/validate-docs.sh` is structural. Command accuracy is enforced by
+`tests/test_docs/test_docs_commands_golden.py`, which reads every `opentide …`
+invocation out of the `bash` / `sh` / `shell` / `console` fences in `docs/`:
+
+```bash
+uv run pytest tests/test_docs/test_docs_commands_golden.py -q
+```
+
+| Gate | What fails |
+|------|------------|
+| Resolution | A documented subcommand, flag, or positional count the live Typer tree does not have |
+| Execution | A read-only sample (`validate`, `lint`, `info`, `generate`) that raises or does not emit one JSON envelope |
+| Output samples | A `text`/`json` fence whose lines the command no longer prints |
+
+Failures name the page and line, so fix the page — or the CLI — rather than
+loosening the test. Extraction lives in `tests/docs_commands.py`; add a page
+and it is picked up automatically.
+
+Writing a sample means committing to it. Prefer showing real output captured
+from a scaffolded repo over illustrative text.
+
 ## Platform capability rule
 
 Seven platforms deploy; five validate queries. CrowdStrike and HarfangLab: **`supported: false`** for query validation — document this consistently in Usage, CLI, MCP, and SDK pages.

@@ -181,7 +181,7 @@ steps:
 Every command accepts `--json` and writes exactly one JSON document to stdout — successes carry `"ok": true`, failures carry `"ok": false` plus `status`, `message`, and the full report. Diagnostics go to stderr. Gate on the process exit code, the `ok`/`status` fields, or both.
 
 ```bash
-opentide validate --strict --json
+opentide --json validate --strict
 ```
 
 See [CLI → JSON output](../../cli/index.md) and [exit codes](../../cli/exit-codes.md).

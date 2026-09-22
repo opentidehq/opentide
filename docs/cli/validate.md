@@ -125,7 +125,22 @@ Query validation works on **five platforms** only:
 - `sentinel_one` (S1QL)
 - `carbon_black_cloud` (Lucene)
 
-CrowdStrike and HarfangLab return unsupported — never fake validation.
+CrowdStrike and HarfangLab return unsupported — never fake validation. The
+result is a normal failure envelope, so `--json` shape does not change between
+supported and unsupported platforms:
+
+```json
+{
+  "platform": "crowdstrike",
+  "valid": null,
+  "supported": false,
+  "ok": false,
+  "status": "failed",
+  "message": "query validation not supported for crowdstrike"
+}
+```
+
+The process exits `1`.
 
 ## SDK equivalent
 
