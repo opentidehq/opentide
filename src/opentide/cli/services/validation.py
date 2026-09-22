@@ -217,10 +217,103 @@ def run_validate(
     return result
 
 
-def validate_query_platform(
-    ctx: CliContext, platform: str, *, plan: str | None = None, wide: bool = False
+#: Vendor SDKs each live query validator imports, and the extra that installs them.
+QUERY_VALIDATION_EXTRAS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "sentinel": ("opentide[sentinel]", ("azure-identity", "azure-monitor-query")),
+    "splunk": ("opentide[splunk]", ("splunk-sdk",)),
+    "carbon_black_cloud": ("opentide[carbon-black]", ("carbon-black-cloud-sdk",)),
+}
+
+
+def _missing_sdk_result(platform: str, exc: ModuleNotFoundError) -> dict[str, object]:
+    """Structured result for a live check whose vendor SDK is not installed."""
+    extra, packages = QUERY_VALIDATION_EXTRAS.get(platform, (f"opentide[{platform}]", ()))
+    advice = f"install {extra}"
+    if packages:
+        advice += f" (provides {', '.join(packages)})"
+    return {
+        "platform": platform,
+        "mode": "live",
+        "supported": True,
+        "status": "failed",
+        "message": f"Live query validation for {platform} needs a vendor SDK: {exc}",
+        "advice": advice,
+        "_exit_code": 1,
+    }
+
+
+def _offline_query_result(
+    platform: str, *, uuids: frozenset[str] | None = None
 ) -> dict[str, object]:
-    """Validate queries for a deployment plan on a single platform."""
+    """Language-aware syntax check that needs no SDK, credentials, or network."""
+    from opentide.core.registry import OpenTide
+    from opentide.platforms.enabled import enabled_systems
+    from opentide.validation.query_syntax import language_label, validate_platform_queries
+
+    OpenTide.reload()
+    report = validate_platform_queries(platform, OpenTide.Models.rules, uuids=uuids)
+    label = language_label(report.language)
+    result: dict[str, object] = {
+        "platform": platform,
+        "mode": "offline-syntax",
+        "language": report.language,
+        "supported": True,
+        "rules": report.rules,
+        "checked": report.checked,
+        "findings": report.findings,
+    }
+    warnings: list[str] = []
+    if platform not in set(enabled_systems()):
+        result["platform_enabled"] = False
+        warnings.append(
+            f"Platform {platform} is disabled in configurations; "
+            "checked query syntax only, nothing would deploy"
+        )
+    if report.checked == 0:
+        result["status"] = "skipped"
+        result["message"] = f"No {platform} queries found to validate"
+        if warnings:
+            result["warnings"] = warnings
+        return result
+    scope = (
+        f"{report.checked} quer{'y' if report.checked == 1 else 'ies'} across "
+        f"{report.rules} rule{'' if report.rules == 1 else 's'}"
+    )
+    if report.ok:
+        result["status"] = "passed"
+        result["message"] = f"Offline {label} syntax validation passed for {platform} ({scope})"
+    else:
+        result["status"] = "failed"
+        result["message"] = (
+            f"Offline {label} syntax validation found {len(report.findings)} "
+            f"problem(s) for {platform} ({scope})"
+        )
+        result["_exit_code"] = 1
+        for finding in report.findings:
+            logger.error(
+                "query_syntax_error",
+                detail=f"{finding['rule']} ({finding['uuid']})",
+                context=f"{finding['field']}:{finding['line']}:{finding['column']}",
+                advice=finding["message"],
+            )
+    if warnings:
+        result["warnings"] = warnings
+    return result
+
+
+def validate_query_platform(
+    ctx: CliContext,
+    platform: str,
+    *,
+    plan: str | None = None,
+    wide: bool = False,
+    live: bool = False,
+) -> dict[str, object]:
+    """Validate queries for a single platform.
+
+    Offline by default: the tutorial and generated CI pipelines must not require
+    tenant credentials. ``live=True`` runs the platform engine against the tenant.
+    """
     ctx.apply_environment()
     if plan is not None:
         ctx.set_deployment_plan(plan)
@@ -229,6 +322,8 @@ def validate_query_platform(
         if ctx.json_output:
             emit(ctx, {"valid": None, "supported": False, "message": message}, exit_code=1)
         emit_error(ctx, message, exit_code=1)
+    if not live:
+        return _offline_query_result(platform)
     from opentide.core.registry import OpenTide as LegacyOpenTide
     from opentide.deployment import DeploymentStrategy, make_deploy_plan
     from opentide.platforms.plugins import DeployTide
@@ -239,6 +334,7 @@ def validate_query_platform(
     except ValueError as exc:
         return {
             "platform": platform,
+            "mode": "live",
             "status": "failed",
             "supported": True,
             "message": str(exc),
@@ -250,21 +346,38 @@ def validate_query_platform(
         message = str(exc).strip() or (f"{type(exc).__name__} while compiling the deployment plan")
         return {
             "platform": platform,
+            "mode": "live",
             "status": "failed",
             "supported": True,
             "message": message,
             "_exit_code": 1,
         }
     if platform not in deployment_list:
+        from opentide.platforms.enabled import enabled_systems
+
+        if platform not in set(enabled_systems()):
+            return {
+                "platform": platform,
+                "mode": "live",
+                "status": "skipped",
+                "platform_enabled": False,
+                "message": (
+                    f"Platform {platform} is disabled in configurations, so the "
+                    "deployment plan contains no rules for it"
+                ),
+                "advice": f"enable it with 'opentide setup platforms --{platform}'",
+            }
         return {
             "platform": platform,
+            "mode": "live",
             "status": "skipped",
             "message": "No rules to validate for this platform in the current plan",
         }
-    query_validators = cast(dict[str, Any], DeployTide().query_validation)
+    query_validators = cast(dict[str, Any], DeployTide().query_validation_for(platform))
     if platform not in query_validators:
         return {
             "platform": platform,
+            "mode": "live",
             "status": "skipped",
             "message": f"No query validation engine for {platform}",
         }
@@ -275,12 +388,15 @@ def validate_query_platform(
     emit_section(f"Query Validation - {system_name}")
     validator = cast(Any, query_validators[platform])
     try:
-        validator.validate(
-            mdr_deployment=deployment_list[platform], deployment_plan=deployment_plan
-        )
-    except TypeError:
-        logger.warning("trying_mdrv3_style_method")
-        validator.validate(deployment=deployment_list[platform])
+        try:
+            validator.validate(
+                mdr_deployment=deployment_list[platform], deployment_plan=deployment_plan
+            )
+        except TypeError:
+            logger.warning("trying_mdrv3_style_method")
+            validator.validate(deployment=deployment_list[platform])
+    except ModuleNotFoundError as exc:
+        return _missing_sdk_result(platform, exc)
     if os.environ.get("VALIDATION_ERROR_RAISED"):
         emit_error(ctx, f"Query validation failed for {platform}", exit_code=1)
     from opentide.cli.exit_codes import validation_outcome
@@ -288,6 +404,7 @@ def validate_query_platform(
     outcome = validation_outcome()
     result: dict[str, object] = {
         "platform": platform,
+        "mode": "live",
         "status": "failed" if outcome.failed else "passed",
         "supported": True,
         "message": (

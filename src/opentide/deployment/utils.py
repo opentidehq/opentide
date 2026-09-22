@@ -86,10 +86,13 @@ def make_deploy_plan(
             platform_status = conf_data[system]["status"]
 
             if system not in systems_deployment:
-                logger.error(
+                # Not a failure: a catalogue may carry rules for platforms this
+                # repository has not enabled. Errors here made skips look fatal.
+                logger.warning(
                     "system_disabled_for_deploy",
                     system=system.upper(),
                     rule=name,
+                    advice=f"enable it with 'opentide setup platforms --{system}'",
                 )
                 continue
 

@@ -69,12 +69,18 @@ OpenTide does not ship or generate `opentide.bat`. Inspect any bat wrapper repor
 
 OpenTide ships platform logic in the wheel. **Third-party SDKs** are only required for live API deploy to some vendors — install them separately in the same environment if you use live deploy (not for validate, generate, or dry-run):
 
-| Live deploy target | Additional `pip install` |
-|--------------------|---------------------------|
-| Splunk | `splunk-sdk` `pandas` |
-| Carbon Black Cloud | `carbon-black-cloud-sdk` |
+| Live target | Extra | Packages |
+|-------------|-------|----------|
+| Microsoft Sentinel | `opentide[sentinel]` | `azure-identity` `azure-monitor-query` `azure-mgmt-securityinsight` |
+| Splunk | `opentide[splunk]` | `splunk-sdk` `pandas` |
+| Carbon Black Cloud | `opentide[carbon-black]` | `carbon-black-cloud-sdk` |
 
-Sentinel, Defender, CrowdStrike, SentinelOne, and HarfangLab use HTTP clients bundled with opentide.
+Defender, CrowdStrike, SentinelOne, and HarfangLab use HTTP clients bundled with opentide.
+
+Extras are only needed for live API calls — live deploy, and `opentide validate
+query --live`. The default `opentide validate query` is offline and works on a
+stock install, as do `generate`, `validate`, and dry-run deploy. If you hit a
+missing SDK, the command names the extra to install.
 
 ### Platform identifiers
 

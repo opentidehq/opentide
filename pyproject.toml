@@ -43,7 +43,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-sentinel = []
+# Live query validation and deployment against Azure Monitor / Sentinel.
+# Offline `validate query` needs none of these.
+sentinel = [
+    "azure-identity>=1.17",
+    "azure-monitor-query>=1.4",
+    # 2.0 is pre-release only; 1.0 is the newest stable line.
+    "azure-mgmt-securityinsight>=1.0",
+]
 splunk = ["splunk-sdk>=2.0", "pandas>=2.0"]
 crowdstrike = []
 carbon-black = ["carbon-black-cloud-sdk>=1.0"]

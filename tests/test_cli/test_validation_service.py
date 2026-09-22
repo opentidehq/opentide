@@ -191,7 +191,7 @@ def test_validate_query_platform_skips_when_no_rules(monkeypatch) -> None:
             "opentide.deployment.DeploymentStrategy.load_from_environment",
         ),
     ):
-        result = validation_service.validate_query_platform(ctx, "sentinel")
+        result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     assert result["status"] == "skipped"
 
 
@@ -212,13 +212,55 @@ def test_validate_query_platform_runs_validator(monkeypatch) -> None:
         patch("opentide.core.registry.OpenTide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=CLEAN_OUTCOME),
     ):
-        mock_tide.return_value.query_validation = {"sentinel": validator}
+        mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
         mock_ot.Configurations.Systems.Index = {
             "sentinel": {"tide": {"name": "Sentinel"}},
         }
-        result = validation_service.validate_query_platform(ctx, "sentinel")
+        result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     validator.validate.assert_called_once()
     assert result["status"] == "passed"
+    assert result["mode"] == "live"
+
+
+def test_validate_query_platform_is_offline_by_default(monkeypatch) -> None:
+    """Issue #239: the default path must not touch the deployment plan at all."""
+    ctx = CliContext(json_output=True)
+
+    def _explode(*args: object, **kwargs: object) -> None:
+        raise AssertionError("offline validation must not build a deployment plan")
+
+    with (
+        patch("opentide.deployment.make_deploy_plan", side_effect=_explode),
+        patch.object(
+            validation_service,
+            "_offline_query_result",
+            return_value={"status": "passed", "mode": "offline-syntax"},
+        ) as offline,
+    ):
+        result = validation_service.validate_query_platform(ctx, "sentinel")
+    offline.assert_called_once_with("sentinel")
+    assert result["mode"] == "offline-syntax"
+
+
+def test_validate_query_live_without_the_sdk_names_the_extra() -> None:
+    ctx = CliContext(json_output=True)
+    validator = MagicMock()
+    validator.validate.side_effect = ModuleNotFoundError("No module named 'azure'")
+    with (
+        patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
+        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.registry.OpenTide") as mock_ot,
+    ):
+        mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
+        mock_ot.Configurations.Systems.Index = {"sentinel": {"tide": {"name": "Sentinel"}}}
+        result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+    assert (
+        result["advice"]
+        == "install opentide[sentinel] (provides azure-identity, azure-monitor-query)"
+    )
 
 
 def test_run_validate_emits_console_issues_when_not_json() -> None:
@@ -250,11 +292,11 @@ def test_validate_query_platform_legacy_validator_signature() -> None:
         patch("opentide.core.registry.OpenTide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=CLEAN_OUTCOME),
     ):
-        mock_tide.return_value.query_validation = {"sentinel": validator}
+        mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
         mock_ot.Configurations.Systems.Index = {
             "sentinel": {"platform": {"name": "Sentinel"}},
         }
-        result = validation_service.validate_query_platform(ctx, "sentinel")
+        result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     assert result["status"] == "passed"
     assert validator.validate.call_count == 2
 
@@ -273,11 +315,11 @@ def test_validate_query_platform_warnings_are_not_fatal() -> None:
         patch("opentide.core.registry.OpenTide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=warned),
     ):
-        mock_tide.return_value.query_validation = {"sentinel": validator}
+        mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
         mock_ot.Configurations.Systems.Index = {
             "sentinel": {"tide": {"name": "Sentinel"}},
         }
-        result = validation_service.validate_query_platform(ctx, "sentinel")
+        result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     assert result["status"] == "passed"
     assert result["_exit_code"] == 0
     assert result["warnings"]
@@ -289,7 +331,7 @@ def test_validate_query_empty_exception_does_not_advise_full_plan() -> None:
         patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.deployment.make_deploy_plan", side_effect=KeyError()),
     ):
-        result = validation_service.validate_query_platform(ctx, "sentinel")
+        result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     assert result["status"] == "failed"
     assert "FULL" not in str(result["message"])
     assert "KeyError" in str(result["message"])

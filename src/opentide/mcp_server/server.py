@@ -19,7 +19,12 @@ from opentide.mcp_server.tools import (
 
 mcp = FastMCP(
     "OpenTide",
-    instructions="Detection engineering assistant. Search and analyse detection content, validate rules and queries, test queries against live platforms, and deploy detection rules.",
+    instructions=(
+        "Detection engineering assistant. Search and analyse detection content, "
+        "validate rules against their schema, check platform query syntax offline, "
+        "and dry-run rule deployment. Query execution against live platforms is not "
+        "implemented: run_query never contacts a tenant and never returns rows."
+    ),
 )
 
 
@@ -76,13 +81,21 @@ def validation_report(
 
 @mcp.tool()
 def validate_query(query: str, platform: str) -> dict:
-    """Validate query syntax for supported platforms (5 of 7)."""
+    """Offline query syntax check for the 5 query-capable platforms.
+
+    Structural only (delimiters, string termination, pipeline shape). It does not
+    check field names or run the query, so ``valid: true`` means "parses", not
+    "returns results". Unsupported platforms return ``valid: null``.
+    """
     return tool_validate_query(query, platform)
 
 
 @mcp.tool()
 def run_query(query: str, platform: str, tenant: str = "") -> dict:
-    """Execute a read-only platform query (capped at 100 rows)."""
+    """Not implemented — returns ``stub: true`` and never contacts a tenant.
+
+    Use ``validate_query`` for offline syntax checking.
+    """
     return tool_run_query(query, platform, tenant=tenant)
 
 

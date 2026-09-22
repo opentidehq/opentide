@@ -59,13 +59,57 @@ CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI 
 ```bash
 opentide validate query --platform sentinel
 opentide validate query --platform splunk --plan STAGING --wide
+opentide validate query --platform sentinel --live
 ```
 
 | Flag | Purpose |
 |------|---------|
 | `--platform` | **Required.** Platform enum value |
-| `--plan` | Deployment plan (`DEPLOYMENT_PLAN` env) |
-| `--wide` | Wide output format |
+| `--live` | Validate against the tenant instead of offline (needs SDKs + credentials) |
+| `--plan` | Deployment plan (`DEPLOYMENT_PLAN` env) — `--live` only |
+| `--wide` | Wide output format — `--live` only |
+
+### Offline is the default
+
+Without `--live` the command reads every query out of the rules it can see and
+runs a **language-aware structural check** in-process: no vendor SDK, no
+credentials, no network. The JSON payload reports `"mode": "offline-syntax"`
+and a `findings` list:
+
+```json
+{
+  "platform": "sentinel",
+  "mode": "offline-syntax",
+  "language": "kql",
+  "rules": 2,
+  "checked": 2,
+  "status": "failed",
+  "findings": [
+    {
+      "uuid": "…",
+      "rule": "Suspicious parent process",
+      "field": "configurations.sentinel.query",
+      "code": "unterminated_string",
+      "message": "Unterminated \" string literal",
+      "line": 2,
+      "column": 20
+    }
+  ]
+}
+```
+
+The check covers delimiter balance, string and comment termination, pipeline
+shape, and dangling operators. It is not a grammar: `status: passed` means the
+query parses, not that the fields exist or that it returns rows.
+
+### `--live`
+
+`--live` builds the platform client and submits the query, so it needs the
+matching extra (`pip install 'opentide[sentinel]'`) and tenant credentials. When
+the SDK is absent the command fails with the extra to install rather than a
+`ModuleNotFoundError` traceback. Only the requested platform's engine is
+loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
+modules.
 
 ### Supported platforms
 
