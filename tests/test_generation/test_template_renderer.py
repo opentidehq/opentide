@@ -12,7 +12,7 @@ from opentide.package.paths import recomposition_platforms_root
 def test_template_renderer_run_writes_core_and_enabled_platform(
     tmp_path: Path, monkeypatch
 ) -> None:
-    from tests.test_cli.conftest import _clear_runtime_caches
+    from tests.corpus_support import clear_runtime_caches
 
     from opentide.core.registry import OpenTide
     from opentide.generation.template_renderer import run as template_renderer_run
@@ -29,7 +29,7 @@ def test_template_renderer_run_writes_core_and_enabled_platform(
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(target))
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(target))
     monkeypatch.delenv("OPENTIDE_DATA_ROOT", raising=False)
-    _clear_runtime_caches()
+    clear_runtime_caches()
     OpenTide.initialise()
     template_renderer_run()
     rule = (target / ".opentide" / "templates" / "rule.1.0.template.yaml").read_text(
@@ -51,4 +51,4 @@ def test_template_renderer_run_writes_core_and_enabled_platform(
     platform_text = sentinel.read_text(encoding="utf-8")
     assert "query: |" in platform_text
     assert "schema: platform::sentinel::1.0" in platform_text
-    _clear_runtime_caches()
+    clear_runtime_caches()

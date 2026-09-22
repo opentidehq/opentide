@@ -25,10 +25,6 @@ from opentide.cli.services.setup.skills_registry import SkillEntry
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Legacy private aliases: many CLI tests import these names directly.
-_clear_runtime_caches = clear_runtime_caches
-_migrate_tide_corpus_layout = migrate_tide_corpus_layout
-
 __all__ = [
     "TIDE_CORPUS_MANIFEST",
     "TIDE_CORPUS_ROOT",
