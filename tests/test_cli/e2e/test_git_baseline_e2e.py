@@ -188,3 +188,102 @@ def test_a_workspace_nested_in_the_checkout_still_sees_its_changes(
     assert inflight.returncode == 0, inflight.stdout + inflight.stderr
     shards = sorted((repo / ".opentide" / "inflight").glob("*.json"))
     assert shards, "a nested workspace must still produce an inflight shard"
+
+
+def _bump_rule(repo: Path) -> None:
+    rule = repo / "objects" / "rules" / "sentinel-kql-rule.yaml"
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace("version: 1", "version: 2", 1), encoding="utf-8"
+    )
+
+
+def _published_feature_branch(script_runner: ScriptRunner, tmp_path: Path) -> tuple[Path, Path]:
+    """A repo whose ``feature`` branch is pushed with ``-u``, so it tracks itself."""
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    repo = tmp_path / "pushed"
+    _scaffold(script_runner, repo)
+    _git(repo, "init", "-q", "-b", "main", ".")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "initial catalogue")
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "-u", "origin", "main")
+    _git(repo, "checkout", "-qb", "feature")
+    _bump_rule(repo)
+    _git(repo, "commit", "-qam", "bump rule version")
+    _git(repo, "push", "-q", "-u", "origin", "feature")
+    return origin, repo
+
+
+def test_a_pushed_feature_branch_still_compares_against_the_default_branch(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """``@{upstream}`` was tried first; after ``push -u`` that is the branch itself.
+
+    ``merge-base HEAD origin/feature`` is ``HEAD``, so every committed change
+    vanished and ``generate inflight`` wrote nothing for a pushed branch.
+    """
+    _, repo = _published_feature_branch(script_runner, tmp_path)
+
+    docs = _run(script_runner, repo, ["generate", "docs", "--changed"])
+    assert docs.returncode == 0, docs.stdout + docs.stderr
+    payload = json.loads(docs.stdout.strip())
+    assert payload["changed_paths"] == ["objects/rules/sentinel-kql-rule.yaml"], payload
+
+    inflight = _run(script_runner, repo, ["generate", "inflight"])
+    assert inflight.returncode == 0, inflight.stdout + inflight.stderr
+    assert sorted((repo / ".opentide" / "inflight").glob("*.json")), "no shard for a pushed branch"
+
+
+def test_a_ci_checkout_of_the_pr_branch_finds_its_changes(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """``actions/checkout`` runs ``checkout -B <branch> refs/remotes/origin/<branch>``.
+
+    That sets the branch's upstream to its own remote copy, which is how the
+    generated inflight job came to find no changes on every pull request.
+    """
+    origin, _ = _published_feature_branch(script_runner, tmp_path)
+    ci = tmp_path / "ci"
+    ci.mkdir()
+    _git(ci, "init", "-q", ".")
+    _git(ci, "remote", "add", "origin", str(origin))
+    _git(ci, "fetch", "-q", "origin", "+refs/heads/*:refs/remotes/origin/*")
+    _git(ci, "checkout", "-q", "--force", "-B", "feature", "refs/remotes/origin/feature")
+
+    inflight = _run(script_runner, ci, ["generate", "inflight"])
+    assert inflight.returncode == 0, inflight.stdout + inflight.stderr
+    assert sorted((ci / ".opentide" / "inflight").glob("*.json")), "the PR job found no changes"
+
+
+def test_non_ascii_object_filenames_are_not_dropped(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """git C-quotes non-ASCII paths (``"d\\303\\251tection.yaml"``) unless asked not to."""
+    repo = tmp_path / "unicode-repo"
+    _scaffold(script_runner, repo)
+    _git(repo, "init", "-q", "-b", "main", ".")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "initial catalogue")
+    _git(repo, "checkout", "-qb", "feature")
+
+    source = repo / "objects" / "rules" / "sentinel-kql-rule.yaml"
+    renamed = repo / "objects" / "rules" / "détection-règle.yaml"
+    renamed.write_text(
+        source.read_text(encoding="utf-8")
+        .replace("00000000-0000-4000-8003-000000000001", "00000000-0000-4000-8003-000000000077")
+        .replace("Sentinel KQL Rule", "Règle Sentinel"),
+        encoding="utf-8",
+    )
+
+    docs = _run(script_runner, repo, ["generate", "docs", "--changed"])
+    assert docs.returncode == 0, docs.stdout + docs.stderr
+    payload = json.loads(docs.stdout.strip())
+    assert payload["changed_paths"] == ["objects/rules/détection-règle.yaml"], payload
+
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "add a rule with a French name")
+    inflight = _run(script_runner, repo, ["generate", "inflight"])
+    assert inflight.returncode == 0, inflight.stdout + inflight.stderr
+    shard = repo / ".opentide" / "inflight" / "00000000-0000-4000-8003-000000000077.json"
+    assert shard.is_file(), sorted(p.name for p in (repo / ".opentide" / "inflight").glob("*"))
