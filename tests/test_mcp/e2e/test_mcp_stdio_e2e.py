@@ -46,13 +46,11 @@ EXPECTED_TOOLS = {
 
 
 def _console_script() -> str:
-    resolved = shutil.which("opentide-mcp")
-    if resolved:
-        return resolved
     candidate = Path(sys.executable).with_name("opentide-mcp")
-    if candidate.exists():
-        return str(candidate)
-    pytest.skip("opentide-mcp console script is not installed")
+    resolved = shutil.which("opentide-mcp") or (str(candidate) if candidate.exists() else None)
+    if resolved is None:
+        pytest.skip("opentide-mcp console script is not installed")
+    return resolved
 
 
 class StdioClient:
