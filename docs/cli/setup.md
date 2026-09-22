@@ -41,6 +41,8 @@ Use subcommands for MCP and skills — parent `--mcp` / `--skills` enums were re
 
 `--path` / `-C` and `--yes` / `-y` work on **every** `setup` subcommand (`repo`, `platforms`, `ci`, `env`, `hooks`, `mcp`, `skills`, `vscode`). A positional `PATH` is still accepted as a hidden alias on the subcommands that historically required it; passing both forms in one invocation is a usage error. `setup vscode` accepts `--yes` for symmetry — it writes editor-local files and never prompts.
 
+Given before the subcommand, `--path` and `--yes` still apply to it: `opentide setup --path ./detection-repo --yes hooks` is the same as `opentide setup hooks --path ./detection-repo --yes`. Naming two different paths (`setup --path a env --path b`) is a usage error. Any other `setup` option placed before a subcommand (`opentide setup --ci github env`) is also a usage error, because the subcommand would ignore it.
+
 `--yes` never chooses a platform, MCP host, or skill target. Commands that require one fail with an actionable error when its flag is omitted.
 
 ## Subcommands
@@ -100,7 +102,7 @@ Copy `.env.example` to `.env` and adjust the path if the working directory is no
 
 ### setup hooks
 
-Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is a Git repository, copies that script to `.git/hooks/pre-commit` unless a third-party hook is already there.
+Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is inside a Git repository, copies that script into the repository's hooks directory (`.git/hooks/pre-commit`, the shared directory for a linked worktree, or `core.hooksPath`) unless a third-party hook is already there.
 
 ```bash
 opentide setup hooks --yes
@@ -108,6 +110,8 @@ opentide setup hooks --path ./detection-repo --yes --no-install
 ```
 
 The hook runs `opentide --repo "$(git rev-parse --show-toplevel)" validate --strict`, so it always validates the worktree being committed. Pinning `--repo` matters because `OPENTIDE_REPO_ROOT` takes precedence over directory discovery: with that variable exported to another detection repository — which `.env.example` and the MCP/CI guides encourage — an unpinned hook validated the other tree and let broken YAML through.
+
+A workspace in a subdirectory of a larger repository (for example `security/detections/` in a monorepo) is pinned by its path below the Git root: `--repo "$(git rev-parse --show-toplevel)"/security/detections`. pre-commit only reads `.pre-commit-config.yaml` at the repository root, so setup warns and leaves copying the `opentide-validate` hook there to you.
 
 Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the OpenTide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
 

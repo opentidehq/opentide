@@ -152,6 +152,96 @@ def test_hook_still_honours_the_documented_bypass(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def _scaffold_nested(script_runner: ScriptRunner, mono: Path, workspace: Path) -> RunResult:
+    """A detection workspace in a subdirectory of a larger Git repository."""
+    mono.mkdir(parents=True, exist_ok=True)
+    assert _git(mono, "init", "-b", "main").returncode == 0
+    _git(mono, "config", "user.email", "e2e@opentide.local")
+    _git(mono, "config", "user.name", "OpenTide E2E")
+    (mono / "README.md").write_text("monorepo\n", encoding="utf-8")
+    setup: RunResult = script_runner.run(
+        [
+            "opentide",
+            "--json",
+            "setup",
+            "--yes",
+            "--platform",
+            "sentinel",
+            "--path",
+            str(workspace),
+        ],
+        env=_clean_env(),
+        print_result=False,
+    )
+    assert setup.returncode == 0, setup.stdout + setup.stderr
+    hooks: RunResult = script_runner.run(
+        ["opentide", "--json", "setup", "hooks", str(workspace), "--yes"],
+        env=_clean_env(),
+        print_result=False,
+    )
+    assert hooks.returncode == 0, hooks.stdout + hooks.stderr
+    write_tutorial_objects(workspace)
+    return hooks
+
+
+def test_hook_is_installed_for_a_workspace_nested_in_the_repo(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """A workspace below the Git root has no ``.git`` of its own.
+
+    Setup looked only for ``<workspace>/.git``, reported "Not a Git
+    repository", and installed nothing, so every commit went unvalidated.
+    """
+    mono = tmp_path / "mono"
+    workspace = mono / "security" / "detections"
+    hooks = _scaffold_nested(script_runner, mono, workspace)
+    assert (mono / ".git" / "hooks" / "pre-commit").is_file(), hooks.stdout
+    assert "Not a Git repository" not in hooks.stdout, hooks.stdout
+    assert _commit(mono, "baseline", _clean_env()).returncode == 0
+
+    (workspace / BROKEN_RELPATH).write_text(BROKEN_YAML, encoding="utf-8")
+    result = _commit(mono, "commit broken yaml", _clean_env())
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, f"broken YAML in a nested workspace was committed\n{output}"
+    assert "Could not parse object YAML" in output, output
+
+
+def test_versioned_hook_validates_the_nested_workspace_not_the_git_root(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """Pinning ``--repo`` to ``git rev-parse --show-toplevel`` named the monorepo root.
+
+    That tree has no detection objects, so ``validate --strict`` passed with
+    nothing checked, whichever way the versioned hook was wired in.
+    """
+    mono = tmp_path / "mono"
+    workspace = mono / "detections"
+    _scaffold_nested(script_runner, mono, workspace)
+    installed = mono / ".git" / "hooks" / "pre-commit"
+    installed.unlink(missing_ok=True)
+    assert _git(mono, "config", "core.hooksPath", "detections/.opentide/hooks").returncode == 0
+    assert _commit(mono, "baseline", _clean_env()).returncode == 0
+
+    (workspace / BROKEN_RELPATH).write_text(BROKEN_YAML, encoding="utf-8")
+    result = _commit(mono, "commit broken yaml", _clean_env())
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, f"the hook validated the monorepo root\n{output}"
+    assert "Could not parse object YAML" in output, output
+
+
+def test_pre_commit_entry_pins_the_nested_workspace(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """pre-commit runs every entry from the Git root, so the entry must name the subdirectory."""
+    mono = tmp_path / "mono"
+    workspace = mono / "detections"
+    hooks = _scaffold_nested(script_runner, mono, workspace)
+    config = (workspace / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    entry = next(line for line in config.splitlines() if "entry:" in line)
+    assert "/detections" in entry, entry
+    assert "repository root" in hooks.stdout, hooks.stdout
+
+
 def test_pre_commit_entry_pins_the_worktree(script_runner: ScriptRunner, tmp_path: Path) -> None:
     """The pre-commit framework path must pin the repo the same way the shim does."""
     repo = tmp_path / "detections"
