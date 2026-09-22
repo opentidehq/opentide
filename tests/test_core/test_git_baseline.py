@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
+from structlog.testing import capture_logs
 
 from opentide.core.git_baseline import (
     GitBaselineError,
@@ -75,11 +77,14 @@ def test_baseline_prefers_development_over_master(repo: Path) -> None:
     assert resolve_baseline(repo).ref == "development"
 
 
-def test_candidate_refs_skip_the_current_branch(repo: Path) -> None:
+@pytest.mark.parametrize("same_named_tag", [False, True], ids=["plain", "tag-named-main"])
+def test_candidate_refs_skip_the_current_branch(repo: Path, same_named_tag: bool) -> None:
     _git(repo, "init", "-q", "-b", "main", ".")
     (repo / "a.txt").write_text("a\n", encoding="utf-8")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "first")
+    if same_named_tag:
+        _git(repo, "tag", "main")
 
     assert "main" not in candidate_refs(repo)
 
@@ -188,7 +193,19 @@ def test_a_branch_that_tracks_itself_is_not_its_own_baseline(
 ) -> None:
     """After ``push -u`` the upstream is ``origin/feature``, which contains ``HEAD``."""
     repo, base = published
-    assert "origin/feature" not in candidate_refs(repo)
+    assert candidate_refs(repo)[-1] == "origin/feature", "only after every default branch"
+    baseline = resolve_baseline(repo)
+    assert (baseline.ref, baseline.commit) == ("origin/main", base)
+    assert [c.relative.as_posix() for c in changed_paths(repo, baseline)] == ["b.txt"]
+
+
+def test_a_tag_named_like_the_branch_does_not_hide_its_changes(
+    published: tuple[Path, str],
+) -> None:
+    """``rev-parse --abbrev-ref HEAD`` prints ``heads/feature`` once tag ``feature`` exists."""
+    repo, base = published
+    _git(repo, "tag", "feature")
+
     baseline = resolve_baseline(repo)
     assert (baseline.ref, baseline.commit) == ("origin/main", base)
     assert [c.relative.as_posix() for c in changed_paths(repo, baseline)] == ["b.txt"]
@@ -204,6 +221,65 @@ def test_a_branch_stacked_on_another_keeps_it_as_the_baseline(
 
     baseline = resolve_baseline(repo)
     assert (baseline.ref, baseline.commit) == ("feature", fork)
+
+
+def _pushed_trunk(tmp_path: Path, repo: Path, trunk: str) -> str:
+    """``trunk`` pushed with ``-u``, as ``git init`` + ``remote add`` + ``push`` leaves it.
+
+    That never records ``origin/HEAD``. Returns the pushed commit.
+    """
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", trunk, str(origin))
+    _git(repo, "init", "-q", "-b", trunk, ".")
+    _commit_file(repo, "a.txt", "first")
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "-u", "origin", trunk)
+    _git(repo, "remote", "set-head", "origin", "--delete")
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def test_the_default_branch_diffs_its_unpushed_work_against_its_own_upstream(
+    tmp_path: Path, repo: Path
+) -> None:
+    """``main`` tracks ``origin/main``; the remote also has ``development``.
+
+    Skipping that upstream compared ``main`` against ``origin/development`` and
+    reported every hotfix already pushed to ``main`` as changed.
+    """
+    _pushed_trunk(tmp_path, repo, "main")
+    _git(repo, "push", "-q", "origin", "main:development")
+    hotfix = _commit_file(repo, "hotfix.txt", "hotfix")
+    _git(repo, "push", "-q")
+    _commit_file(repo, "unpushed.txt", "local work")
+
+    baseline = resolve_baseline(repo)
+    assert (baseline.ref, baseline.commit) == ("origin/main", hotfix)
+    assert [c.relative.as_posix() for c in changed_paths(repo, baseline)] == ["unpushed.txt"]
+
+
+def test_a_trunk_with_an_unprobed_name_diffs_against_its_own_upstream(
+    tmp_path: Path, repo: Path
+) -> None:
+    """No ``origin/HEAD`` and no default-branch name: the upstream beats ``HEAD``."""
+    pushed = _pushed_trunk(tmp_path, repo, "trunk")
+    _commit_file(repo, "unpushed.txt", "local work")
+
+    baseline = resolve_baseline(repo)
+    assert (baseline.ref, baseline.commit) == ("origin/trunk", pushed)
+    assert [c.relative.as_posix() for c in changed_paths(repo, baseline)] == ["unpushed.txt"]
+
+
+def test_origin_head_decides_which_branch_is_the_default(tmp_path: Path, repo: Path) -> None:
+    """``main`` is a probed name, but here the remote says ``development`` is the default."""
+    fork = _pushed_trunk(tmp_path, repo, "main")
+    _git(repo, "push", "-q", "origin", "main:development")
+    _git(repo, "remote", "set-head", "origin", "development")
+    _commit_file(repo, "hotfix.txt", "hotfix")
+    _git(repo, "push", "-q")
+
+    baseline = resolve_baseline(repo)
+    assert (baseline.ref, baseline.commit) == ("origin/development", fork)
+    assert [c.relative.as_posix() for c in changed_paths(repo, baseline)] == ["hotfix.txt"]
 
 
 def test_the_remote_default_branch_is_found_by_any_name(tmp_path: Path, repo: Path) -> None:
@@ -233,3 +309,41 @@ def test_non_ascii_paths_come_back_verbatim(repo: Path) -> None:
         "règle.yaml",
     ]
     assert all(c.absolute.is_file() for c in changes)
+
+
+def test_a_carriage_return_in_a_file_name_survives(repo: Path) -> None:
+    """Text-mode decoding translates ``\\r`` to ``\\n``: a missing path that reads as deleted."""
+    _git(repo, "init", "-q", "-b", "main", ".")
+    _commit_file(repo, "a.txt", "first")
+    _git(repo, "checkout", "-qb", "feature")
+    name = "odd\rname.yaml"
+    try:
+        _commit_file(repo, name, "carriage return")
+    except OSError:
+        pytest.skip("filesystem rejects a carriage return in a file name")
+    (repo / "new\r.yaml").write_text("new\n", encoding="utf-8")
+
+    changes = changed_paths(repo, resolve_baseline(repo))
+    assert sorted(c.relative.as_posix() for c in changes) == ["new\r.yaml", name]
+    assert all(c.absolute.is_file() for c in changes)
+
+
+def test_a_non_utf8_file_name_is_skipped_with_a_warning(repo: Path) -> None:
+    """It would decode to lone surrogates, which JSON output cannot encode."""
+    _git(repo, "init", "-q", "-b", "main", ".")
+    _commit_file(repo, "a.txt", "first")
+    _git(repo, "checkout", "-qb", "feature")
+    try:
+        (repo / os.fsdecode(b"r\xe8gle.yaml")).write_bytes(b"latin-1\n")
+    except OSError:
+        pytest.skip("filesystem refuses a file name that is not valid UTF-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "latin-1 name")
+    (repo / "ok.yaml").write_text("ok\n", encoding="utf-8")
+
+    with capture_logs() as logs:
+        changes = changed_paths(repo, resolve_baseline(repo))
+    assert [c.relative.as_posix() for c in changes] == ["ok.yaml"]
+    assert [(e["event"], e["path"]) for e in logs if e["log_level"] == "warning"] == [
+        ("git_path_not_utf8", repr(b"r\xe8gle.yaml"))
+    ]

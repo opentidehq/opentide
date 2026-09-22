@@ -287,3 +287,35 @@ def test_non_ascii_object_filenames_are_not_dropped(
     assert inflight.returncode == 0, inflight.stdout + inflight.stderr
     shard = repo / ".opentide" / "inflight" / "00000000-0000-4000-8003-000000000077.json"
     assert shard.is_file(), sorted(p.name for p in (repo / ".opentide" / "inflight").glob("*"))
+
+
+def test_a_non_utf8_object_filename_does_not_break_json_output(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """A Latin-1 name decodes to lone surrogates, which the JSON encoder rejects."""
+    repo = tmp_path / "latin1-repo"
+    _scaffold(script_runner, repo)
+    _git(repo, "init", "-q", "-b", "main", ".")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "initial catalogue")
+    _git(repo, "checkout", "-qb", "feature")
+
+    source = repo / "objects" / "rules" / "sentinel-kql-rule.yaml"
+    latin1 = repo / "objects" / "rules" / os.fsdecode(b"r\xe8gle.yaml")
+    try:
+        latin1.write_text(
+            source.read_text(encoding="utf-8").replace(
+                "00000000-0000-4000-8003-000000000001", "00000000-0000-4000-8003-000000000066"
+            ),
+            encoding="utf-8",
+        )
+    except OSError:
+        pytest.skip("filesystem refuses a file name that is not valid UTF-8")
+    _bump_rule(repo)
+
+    docs = _run(script_runner, repo, ["generate", "docs", "--changed"])
+    assert docs.returncode == 0, docs.stdout + docs.stderr
+    assert "Traceback" not in docs.stderr
+    payload = json.loads(docs.stdout.strip())
+    assert payload["changed_paths"] == ["objects/rules/sentinel-kql-rule.yaml"], payload
+    assert "git_path_not_utf8" in docs.stderr
