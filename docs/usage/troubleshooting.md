@@ -137,9 +137,46 @@ Confirm `.opentide/templates/rule.1.0.template.yaml` has no `null`, `metadata.tl
 opentide setup ci github --yes
 ```
 
-### `deploy` or `validate query` crashes locally with `illegal_deployment_plan`
+### GitLab inflight job pushes to a host called `${{CI_SERVER_HOST}}`
 
-`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly.
+Through `0.3.0` the GitLab inflight jobs wrote the push URL with GitHub Actions expression syntax (`${{CI_JOB_TOKEN}}`). GitLab only expands `$VAR` / `${VAR}`, so the job tried to reach a literal host. Fixed in **0.4.0** — re-run:
+
+```bash
+opentide setup ci gitlab --yes
+```
+
+### Azure inflight job says nothing changed and never commits
+
+Through `0.3.0` the Azure job scripts were joined with `&&`. `git diff --staged --quiet` exits 1 when there *are* staged changes, so the chain stopped before `git commit`; when there were none, `exit 0` swallowed every later command. **0.4.0** emits a multi-line `set -e` script with an explicit `if … fi` guard, and checks out with `persistCredentials: true` so the push can authenticate. Azure jobs also no longer declare `dependsOn` on a job from another stage, which Azure cannot resolve. Re-run `opentide setup ci azure --yes`.
+
+### The inflight job pushed pull-request changes to the default branch
+
+Pipelines generated before **0.4.0** committed the refreshed shards on top of the pull request checkout and then ran `git push origin HEAD:<default branch>`. Whenever the pull request was up to date with the default branch that push was a fast-forward, so the unreviewed pull request landed on the default branch; on Azure, which builds the merge commit, the pull request was effectively merged. **0.4.0** copies only `.opentide/inflight/` into a worktree of the default branch and commits there, starting from the default branch's own shards so pruned ones stay pruned. The GitLab jobs also install `git`, which `python:<version>-slim` does not ship. Regenerate every pipeline, then review the default branch's first-parent history: a fast-forwarded pull request shows up as its own commits directly below a `ci: update inflight preview shards` commit, with no merge commit.
+
+```bash
+opentide setup ci github --yes   # or gitlab / azure
+git log --first-parent --format='%h %s' origin/main
+```
+
+### The pre-commit hook reports `OK Validation passed` and commits broken YAML
+
+Through `0.3.0` the generated hook ran `opentide validate --strict` with no `--repo`. `OPENTIDE_REPO_ROOT` (and `OPENTIDE_TIDE_WORKSPACE`) take precedence over directory discovery, so with either exported to another detection repository — as `.env.example` suggests — the hook validated that tree and passed. **0.4.0** pins the committed worktree, and `--repo` now overrides an exported workspace. A workspace in a subdirectory of a larger repository is pinned by its path below the Git root; before, setup reported "Not a Git repository" and installed nothing, and a hook wired in by hand validated the root, which holds no objects. Re-run:
+
+```bash
+opentide setup hooks --yes
+```
+
+### `opentide --json setup` prints a wizard before the JSON
+
+Through `0.3.0` `--json` only changed the final document: on a terminal the setup wizard still drew its panel and prompts on stdout first, so `json.loads(stdout)` failed. **0.4.0** refuses the combination and exits non-zero with a JSON error. Script it instead:
+
+```bash
+opentide --json setup --yes --platform sentinel --ci github
+```
+
+### `deploy` or `validate query --live` crashes locally with `illegal_deployment_plan`
+
+`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly. Since **0.4.0** the default `validate query` is offline and never reads the plan, so only `--live` can reach this.
 
 ### Tutorial objects fail `validate --strict` or `lint --strict`
 
@@ -304,9 +341,19 @@ See [Exit codes](../cli/exit-codes.md).
 
 CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and OpenTide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
 
-### MCP `validate_query` always returns valid
+### MCP `validate_query` passes a query the platform rejects
 
-The MCP `validate_query` and `run_query` tools are **stubs** — they do not parse queries yet. Use the CLI (`opentide validate query --platform …`) for real syntax checks, or the MCP `validation_report` tool for structured object validation. See [Agentic setup](./workflows/agentic-setup.md).
+`validate_query` is a **structural** check: delimiters, string termination,
+pipeline shape, dangling operators. It does not resolve table or field names, so
+a well-formed query against a table that does not exist still reports
+`valid: true`. Only the tenant can prove a query runs. `run_query` cannot help —
+it is not implemented and returns `stub: true` with `rows: null`. See
+[Agentic setup](./workflows/agentic-setup.md).
+
+### `opentide validate query` fails with a missing SDK
+
+Only `--live` needs vendor SDKs. Drop the flag for the offline syntax check, or
+install the extra the error names (for example `pip install 'opentide[sentinel]'`).
 
 ## Platforms and deployment
 

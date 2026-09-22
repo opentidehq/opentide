@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from unittest.mock import MagicMock
 
 import pytest
 from tests.test_cli.conftest import assert_json_ok
 
 pytestmark = pytest.mark.cli_e2e
+
+
+def _mock_deployer(monkeypatch: pytest.MonkeyPatch, platform: str) -> MagicMock:
+    """Stand in for *platform*'s engine; only the scoped loader is offered."""
+    deployer = MagicMock()
+
+    class _MockDeployTide:
+        def mdr_for(self, platforms: Iterable[str]) -> dict[str, MagicMock]:
+            return {platform: deployer} if platform in set(platforms) else {}
+
+    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    return deployer
 
 
 @pytest.mark.parametrize("platform", ["sentinel", "defender_for_endpoint", "splunk"])
@@ -17,14 +30,7 @@ def test_deploy_dry_run_returns_plan_and_payloads(
     platform: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    deployer = MagicMock()
-
-    class _MockDeployTide:
-        @property
-        def mdr(self) -> dict[str, MagicMock]:
-            return {platform: deployer}
-
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    deployer = _mock_deployer(monkeypatch, platform)
     result = invoke_cli(
         "deploy",
         "--dry-run",
@@ -54,14 +60,7 @@ def test_deploy_dry_run_without_plan_or_wide(
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.delenv("TF_BUILD", raising=False)
-    deployer = MagicMock()
-
-    class _MockDeployTide:
-        @property
-        def mdr(self) -> dict[str, MagicMock]:
-            return {"sentinel": deployer}
-
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    deployer = _mock_deployer(monkeypatch, "sentinel")
     result = invoke_cli(
         "deploy",
         "--dry-run",
@@ -85,14 +84,7 @@ def test_deploy_dry_run_staging_without_wide_does_not_traceback(
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.delenv("TF_BUILD", raising=False)
-    deployer = MagicMock()
-
-    class _MockDeployTide:
-        @property
-        def mdr(self) -> dict[str, MagicMock]:
-            return {"sentinel": deployer}
-
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    deployer = _mock_deployer(monkeypatch, "sentinel")
     result = invoke_cli(
         "deploy",
         "--dry-run",
@@ -115,14 +107,7 @@ def test_deploy_dry_run_sentinel_payload_contains_query(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     platform = "sentinel"
-    deployer = MagicMock()
-
-    class _MockDeployTide:
-        @property
-        def mdr(self) -> dict[str, MagicMock]:
-            return {platform: deployer}
-
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    _mock_deployer(monkeypatch, platform)
     result = invoke_cli(
         "deploy",
         "--dry-run",
@@ -141,3 +126,43 @@ def test_deploy_dry_run_sentinel_payload_contains_query(
     query_text = api_request.get("query") or api_request.get("properties", {}).get("query", "")
     assert "SecurityEvent" in str(query_text)
     assert preview["uuid"] == corpus_rule_uuids[platform]
+
+
+def test_deploy_loads_only_the_requested_engine(
+    invoke_cli, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No DeployTide mock: the real loader must not build every platform's engine.
+
+    Loading all seven deployers (and all five validators) meant one engine that
+    failed to declare blocked a deploy to any other platform.
+    """
+    from opentide.platforms import plugins
+
+    imported: list[str] = []
+    original = plugins.PlatformLoader.import_engine
+
+    class _BrokenEngine:
+        @staticmethod
+        def declare():
+            raise RuntimeError("crowdstrike engine is misconfigured")
+
+    def _record(module_path: str):
+        imported.append(module_path)
+        if "crowdstrike" in module_path:
+            return _BrokenEngine
+        return original(module_path)
+
+    monkeypatch.setattr(plugins.PlatformLoader, "import_engine", staticmethod(_record))
+    result = invoke_cli(
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "sentinel",
+        "--plan",
+        "FULL",
+        "--wide",
+        "--skip-promotion",
+    )
+    payload = assert_json_ok(result)
+    assert payload["deployed"] == ["sentinel"]
+    assert imported == ["opentide.platforms.sentinel.deployer"]

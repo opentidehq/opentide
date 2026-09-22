@@ -25,13 +25,16 @@ opentide --json info --technique T1059 coverage
 
 ### Coverage lookup
 
-Both `--technique` and the `coverage` positional are required:
+Both `--technique` and the `coverage` positional are required. Option order does not matter:
 
 ```bash
+opentide --json info coverage --technique T1059
 opentide --json info --technique T1059 coverage
 ```
 
 `opentide info --technique T1059` alone does **not** include coverage data.
+
+A parent technique also matches its sub-techniques (`T1059` finds rules tagged `T1059.001`); a sub-technique does not match its parent. Matching is case-insensitive.
 
 ## Default output
 

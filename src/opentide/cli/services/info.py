@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from opentide.cli.enums import DetectionPlatform
+from opentide.core.object_fields import matches_technique
 from opentide.core.registry import OpenTide
 from opentide.platforms.enabled import enabled_systems
 
@@ -64,17 +65,8 @@ def _package_version() -> str:
 
 def _technique_coverage(technique: str) -> dict[str, Any]:
     """Return rules referencing an ATT&CK technique."""
-    matching: list[str] = []
     needle = technique.strip()
-    for uuid, rule in OpenTide.Models.rules.items():
-        body = rule if isinstance(rule, dict) else rule.model_dump(by_alias=True)
-        if not isinstance(body, dict):
-            continue
-        tags = body.get("tags") if isinstance(body.get("tags"), dict) else {}
-        techniques: list[Any] = []
-        techniques.extend(body.get("techniques") or [])
-        techniques.extend(tags.get("techniques") or [])
-        techniques.extend(tags.get("attack") or [])
-        if needle in {str(item) for item in techniques}:
-            matching.append(uuid)
+    matching = [
+        uuid for uuid, rule in OpenTide.Models.rules.items() if matches_technique(rule, needle)
+    ]
     return {"technique": needle, "rules": matching, "count": len(matching)}

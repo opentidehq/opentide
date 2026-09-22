@@ -1,9 +1,26 @@
-"""MCP catalog search and analysis."""
+"""MCP catalog search and analysis against the real tide_corpus registry.
+
+These tests deliberately avoid patching ``OpenTide``: the mocked variants used
+to assert the broken contracts from #252–#253 (dict-shaped UUID search,
+``tags``-only technique lookup, substring platform matching).
+"""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import json
+from pathlib import Path
 
+import pytest
+from tests.corpus_support import (
+    CORPUS_ACTOR,
+    CORPUS_OBJECTIVE_UUID,
+    CORPUS_RULE_UUIDS,
+    CORPUS_TECHNIQUE,
+    CORPUS_THREAT_UUID,
+)
+
+from opentide.core.registry import OpenTide
+from opentide.mcp_server import resources
 from opentide.mcp_server.catalog import (
     coverage_analysis,
     get_chaining_graph,
@@ -11,6 +28,9 @@ from opentide.mcp_server.catalog import (
     object_summary,
     search_catalog,
 )
+
+MISSING_UUID = "00000000-0000-4000-8fff-0000000000ff"
+SUMMARY_KEYS = {"uuid", "type", "title", "status"}
 
 
 def test_object_summary_uses_name_or_title() -> None:
@@ -20,64 +40,173 @@ def test_object_summary_uses_name_or_title() -> None:
     assert summary["uuid"] == "uuid-1"
 
 
-def test_get_object_returns_none_when_missing(monkeypatch) -> None:
-    mock_models = MagicMock()
-    mock_models.rules = {}
-    mock_models.threats = {}
-    mock_models.objectives = {}
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models = mock_models
-        mock_ot.initialise = MagicMock()
-        assert get_object("missing-uuid") is None
+def test_get_object_resolves_every_family(tide_corpus_repo: Path) -> None:
+    rule = get_object(CORPUS_RULE_UUIDS["sentinel"])
+    threat = get_object(CORPUS_THREAT_UUID)
+    objective = get_object(CORPUS_OBJECTIVE_UUID)
+    assert rule is not None and rule["type"] == "rule"
+    assert threat is not None and threat["type"] == "threat"
+    assert objective is not None and objective["type"] == "objective"
 
 
-def test_search_catalog_by_uuid(monkeypatch) -> None:
-    rule_uuid = "00000000-0000-4000-8000-000000000099"
-    mock_models = MagicMock()
-    mock_models.rules = {rule_uuid: {"name": "Found Rule", "status": "STAGING"}}
-    mock_models.threats = {}
-    mock_models.objectives = {}
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models = mock_models
-        mock_ot.initialise = MagicMock()
-        result = search_catalog(rule_uuid)
-    assert isinstance(result, dict)
-    assert result["uuid"] == rule_uuid
+def test_get_object_returns_none_when_missing(tide_corpus_repo: Path) -> None:
+    assert get_object(MISSING_UUID) is None
 
 
-def test_search_catalog_keyword_filter(monkeypatch) -> None:
-    mock_models = MagicMock()
-    mock_models.rules = {
-        "uuid-a": {"name": "Alpha Rule", "description": "detects alpha"},
-        "uuid-b": {"name": "Beta Rule", "description": "detects beta"},
-    }
-    mock_models.threats = {}
-    mock_models.objectives = {}
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models = mock_models
-        mock_ot.initialise = MagicMock()
-        results = search_catalog("alpha")
-    assert len(results) == 1
-    assert results[0]["title"] == "Alpha Rule"
+def test_uuid_lookups_ignore_case_and_padding(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The UUID pattern matched ``ABCDEF…`` but the lookup was exact-case."""
+    OpenTide.initialise()
+    uuid = "abcdef00-0000-4000-8000-0000000000ab"
+    body = OpenTide.Models.rules[CORPUS_RULE_UUIDS["sentinel"]]
+    monkeypatch.setitem(OpenTide.Models.rules, uuid, body)
+    for spelling in (uuid.upper(), f"  {uuid.upper()} "):
+        found = get_object(spelling)
+        assert found is not None and found["uuid"] == uuid, spelling
+        assert [hit["uuid"] for hit in search_catalog(spelling)] == [uuid], spelling
+    assert "error" not in json.loads(resources.resource_rule(uuid.upper()))
 
 
-def test_get_chaining_graph_not_found(monkeypatch) -> None:
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models.chaining = {}
-        mock_ot.initialise = MagicMock()
-        with patch("opentide.mcp_server.catalog.get_object", return_value=None):
-            graph = get_chaining_graph("missing")
-    assert graph["found"] is False
+def test_search_by_uuid_returns_a_summary_list(tide_corpus_repo: Path) -> None:
+    """#253: UUID search used to return a single dict with a full ``body``."""
+    result = search_catalog(CORPUS_RULE_UUIDS["sentinel"])
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert set(result[0]) == SUMMARY_KEYS
+    assert result[0]["uuid"] == CORPUS_RULE_UUIDS["sentinel"]
+    assert "body" not in result[0]
 
 
-def test_coverage_analysis_by_technique(monkeypatch) -> None:
-    mock_models = MagicMock()
-    mock_models.rules = {
-        "rule-1": {"tags": {"techniques": ["T1059"]}},
-    }
-    with patch("opentide.mcp_server.catalog.OpenTide") as mock_ot:
-        mock_ot.Models = mock_models
-        mock_ot.initialise = MagicMock()
-        result = coverage_analysis(technique="T1059")
+def test_search_by_unknown_uuid_returns_empty_list(tide_corpus_repo: Path) -> None:
+    assert search_catalog(MISSING_UUID) == []
+
+
+def test_search_keyword_and_uuid_share_one_shape(tide_corpus_repo: Path) -> None:
+    keyword = search_catalog("Sentinel KQL")
+    by_uuid = search_catalog(CORPUS_RULE_UUIDS["sentinel"])
+    assert [set(hit) for hit in keyword] == [SUMMARY_KEYS for _ in keyword]
+    assert {hit["uuid"] for hit in keyword} >= {CORPUS_RULE_UUIDS["sentinel"]}
+    assert set(by_uuid[0]) == set(keyword[0])
+
+
+def test_search_by_uuid_honours_filters(tide_corpus_repo: Path) -> None:
+    """A UUID query returned its object whatever the filters said."""
+
+    def hits(uuid: str, **filters: str) -> list[str]:
+        return [hit["uuid"] for hit in search_catalog(uuid, **filters)]
+
+    sentinel = CORPUS_RULE_UUIDS["sentinel"]
+    status = search_catalog(sentinel)[0]["status"]
+    assert status
+
+    assert hits(sentinel, platform="sentinel") == [sentinel]
+    assert hits(sentinel, object_type="rule") == [sentinel]
+    assert hits(sentinel, status=status) == [sentinel]
+    assert hits(sentinel, technique=CORPUS_TECHNIQUE) == [sentinel]
+    assert hits(CORPUS_THREAT_UUID, actor=CORPUS_ACTOR) == [CORPUS_THREAT_UUID]
+
+    assert hits(sentinel, object_type="threat") == []
+    assert hits(sentinel, platform="splunk") == []
+    assert hits(sentinel, status="NO_SUCH_STATUS") == []
+    assert hits(sentinel, technique="T9999") == []
+    assert hits(CORPUS_THREAT_UUID, actor="G9999") == []
+
+
+def test_search_object_type_filter(tide_corpus_repo: Path) -> None:
+    results = search_catalog("simulated", object_type="threat")
+    assert results
+    assert {hit["type"] for hit in results} == {"threat"}
+
+
+def test_search_status_filter(tide_corpus_repo: Path) -> None:
+    results = search_catalog("rule", status="STAGING")
+    assert results
+    assert {hit["status"] for hit in results} == {"STAGING"}
+
+
+def test_get_chaining_graph_found(tide_corpus_repo: Path) -> None:
+    graph = get_chaining_graph(CORPUS_THREAT_UUID)
+    assert graph["found"] is True
+    assert graph["type"] == "threat"
+
+
+CHAINED_THREAT_UUID = "0000abcd-0000-4000-8001-00000000000f"
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [CHAINED_THREAT_UUID, CHAINED_THREAT_UUID.upper(), f"  {CHAINED_THREAT_UUID} "],
+    ids=["canonical", "uppercase", "padded"],
+)
+def test_get_chaining_graph_returns_the_links_for_every_spelling(
+    tide_corpus_repo: Path, spelling: str
+) -> None:
+    """A lookup ``get_object`` resolves must not come back ``found`` with an empty graph."""
+    threats = tide_corpus_repo / "Objects" / "Threat Vectors"
+    source = (threats / "threat-0001-simulated-actor.yaml").read_text(encoding="utf-8")
+    (threats / "threat-chained.yaml").write_text(
+        source.replace(CORPUS_THREAT_UUID, CHAINED_THREAT_UUID).replace(
+            "name: Simulated Actor", "name: Chained Actor"
+        )
+        + f"  chaining:\n    - vector: {CORPUS_THREAT_UUID}\n      relation: preceeds\n",
+        encoding="utf-8",
+    )
+    graph = get_chaining_graph(spelling)
+    assert graph["found"] is True
+    assert graph["uuid"] == CHAINED_THREAT_UUID
+    assert graph["graph"] == {"preceeds": [CORPUS_THREAT_UUID]}
+
+
+def test_get_chaining_graph_not_found(tide_corpus_repo: Path) -> None:
+    assert get_chaining_graph(MISSING_UUID)["found"] is False
+
+
+def test_coverage_reads_top_level_techniques(tide_corpus_repo: Path) -> None:
+    """#252: corpus rules store ``techniques`` at top level, not under ``tags``."""
+    result = coverage_analysis(technique=CORPUS_TECHNIQUE)
     assert result["covered"] is True
-    assert "rule-1" in result["rules"]
+    assert set(result["rules"]) >= set(CORPUS_RULE_UUIDS.values())
+
+
+def test_coverage_matrix_lists_corpus_techniques(tide_corpus_repo: Path) -> None:
+    result = coverage_analysis()
+    assert CORPUS_TECHNIQUE in result["matrix"]
+    assert result["technique_count"] == len(result["matrix"])
+    assert result["tactic_filter"] is None
+
+
+def test_coverage_unknown_technique_is_not_covered(tide_corpus_repo: Path) -> None:
+    result = coverage_analysis(technique="T9999")
+    assert result["covered"] is False
+    assert result["rules"] == []
+    assert result["matched_techniques"] == []
+
+
+def test_coverage_for_a_parent_includes_sub_technique_rules(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rules tagged ``T1059.001`` answer "what do we detect for T1059?"."""
+    from opentide.core.registry import OpenTide
+    from opentide.mcp_server.catalog import ensure_initialised
+
+    ensure_initialised()
+    sub_uuid = "00000000-0000-4000-8003-0000000000aa"
+    monkeypatch.setitem(
+        OpenTide.Models.rules, sub_uuid, {"name": "PowerShell", "techniques": ["T1059.001"]}
+    )
+
+    parent = coverage_analysis(technique="T1059")
+    assert sub_uuid in parent["rules"]
+    assert set(parent["matched_techniques"]) >= {"T1059", "T1059.001"}
+
+    child = coverage_analysis(technique="T1059.001")
+    assert child["rules"] == [sub_uuid], "a sub-technique query must not widen to its parent"
+
+
+def test_search_actor_reads_threat_actors(tide_corpus_repo: Path) -> None:
+    """#252: the actor filter only ever read ``tags.actors``."""
+    namespaced = search_catalog("Simulated", actor=CORPUS_ACTOR)
+    bare = search_catalog("Simulated", actor="G0006")
+    assert [hit["uuid"] for hit in namespaced] == [CORPUS_THREAT_UUID]
+    assert [hit["uuid"] for hit in bare] == [CORPUS_THREAT_UUID]

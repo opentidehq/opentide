@@ -188,8 +188,11 @@ def _import_sentinel_rules() -> None:
         logger.critical(
             "sentinel_tenants_not_configured",
             detail="You must first have Sentinel tenants configured to initiate the import",
+            advice="run 'opentide setup platforms --sentinel'",
         )
-        raise Exception
+        # A bare ``raise Exception`` escapes the CLI's error handler and prints a
+        # Rich traceback instead of the JSON document --json promised (#242).
+        raise RuntimeError("No Sentinel tenants are configured")
     for tenant in OpenTide.Configurations.Systems.Sentinel.tenants:  # type: ignore
         service = SentinelService(tenant).connect()  # type: ignore
         rules = service.alert_rules.list(
@@ -383,5 +386,10 @@ def _import_sentinel_rules() -> None:
                 f.write(mdr)
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """Entry point used by ``opentide generate extract sentinel``."""
     _import_sentinel_rules()
+
+
+if __name__ == "__main__":
+    run()

@@ -62,6 +62,21 @@ class _IdScanRow:
     name: str
 
 
+@dataclass(frozen=True)
+class _IdScanParseError:
+    """A file the ID scan could not read.
+
+    The scan and the indexer do not walk the same set — ``RegistryBuilder``
+    skips ``*.debug.yaml`` while ``_id_scan_paths`` includes it — so "the index
+    already reported this" was not true for every file and the parse error was
+    silently dropped (#250).
+    """
+
+    model_file: Path
+    meta_name: str
+    error: str
+
+
 def run_validation(
     scope: ValidationScope | None = None,
     checks: frozenset[ValidateCheck] | None = None,
@@ -83,7 +98,7 @@ def run_validation(
     metaschemas = index.get("metaschemas", {})
     files_index = index.get("files", {})
 
-    work_items = _collect_work_items(objects, scope, files_index)
+    work_items = _collect_work_items(objects, scope, files_index, graph)
     object_workers = resolve_worker_count(len(work_items), workers=workers)
     id_paths = _id_scan_paths() if ValidateCheck.id_uniqueness in checks else []
     id_workers = resolve_worker_count(len(id_paths), workers=workers)
@@ -98,15 +113,29 @@ def run_validation(
         "id_workers": id_workers,
     }
 
+    parse_errors = index.get("parse_errors", [])
+    parse_issues = _yaml_parse_issues(parse_errors, scope)
+    issues.extend(parse_issues)
+    indexed_parse_failures = frozenset(
+        _resolved_str(entry["path"]) for entry in parse_errors if entry.get("path")
+    )
+
     object_checks = checks & {
         ValidateCheck.uuid_format,
         ValidateCheck.schema,
     }
-    if _scope_has_narrow_filter(scope) and object_checks and not work_items:
+    if _scope_has_narrow_filter(scope) and object_checks and not work_items and not parse_issues:
         issues.append(_scope_no_match_issue(scope))
 
     if ValidateCheck.id_uniqueness in checks:
-        issues.extend(_check_id_uniqueness(id_paths, scope=scope, workers=id_workers))
+        issues.extend(
+            _check_id_uniqueness(
+                id_paths,
+                scope=scope,
+                workers=id_workers,
+                already_reported=indexed_parse_failures,
+            )
+        )
 
     if ValidateCheck.cve in checks:
         from opentide.validation.cve_check import check_cve_issues
@@ -158,6 +187,7 @@ def _collect_work_items(
     objects: dict[str, dict[str, dict[str, Any]]],
     scope: ValidationScope,
     files_index: dict[str, str],
+    graph: PreflightGraph | None = None,
 ) -> list[ObjectWorkItem]:
     items: list[ObjectWorkItem] = []
     for object_type, registry in objects.items():
@@ -165,7 +195,13 @@ def _collect_work_items(
             continue
         for uuid, body in registry.items():
             file_name = files_index.get(uuid)
-            if not scope.includes_object(uuid, object_type, file_name=file_name):
+            ref = graph.resolve(str(uuid)) if graph is not None else None
+            if not scope.includes_object(
+                uuid,
+                object_type,
+                file_name=file_name,
+                file_path=ref.file_path if ref else None,
+            ):
                 continue
             items.append(
                 ObjectWorkItem(
@@ -176,6 +212,44 @@ def _collect_work_items(
                 )
             )
     return items
+
+
+def _resolved_str(path: Path | str) -> str:
+    try:
+        return str(Path(path).resolve())
+    except OSError:  # pragma: no cover - unresolvable path
+        return str(path)
+
+
+def _yaml_parse_issues(
+    parse_errors: list[dict[str, str]],
+    scope: ValidationScope,
+) -> list[ValidationIssue]:
+    """Report object files the indexer could not parse as validation issues.
+
+    Unparseable files never reach the registry, so no other check can see them.
+    Without this they were silently dropped and later crashed the ID scan with a
+    raw ``yaml`` traceback (issue #250).
+    """
+    issues: list[ValidationIssue] = []
+    for entry in parse_errors:
+        raw_path = entry.get("path", "")
+        path = Path(raw_path) if raw_path else None
+        if scope.mode == "narrow":
+            if scope.object_types and entry.get("object_type") not in scope.object_types:
+                continue
+            if scope.targets and not scope.matches_file(path.name if path else None, path):
+                continue
+        issues.append(
+            ValidationIssue(
+                code="yaml_parse",
+                severity="error",
+                object_type=entry.get("object_type"),
+                file_path=path,
+                message=f"Could not parse object YAML: {entry.get('error', 'unknown error')}",
+            )
+        )
+    return issues
 
 
 def _validate_work_item(
@@ -298,13 +372,7 @@ def _id_duplicate_in_scope(
         return True
     if scope.targets & {row.uuid, original.uuid}:
         return True
-    paths = {
-        row.model_file.name,
-        str(row.model_file),
-        original.model_file.name,
-        str(original.model_file),
-    }
-    return bool(scope.targets & paths)
+    return any(scope.matches_file(r.model_file.name, r.model_file) for r in (row, original))
 
 
 def _check_id_uniqueness(
@@ -312,6 +380,7 @@ def _check_id_uniqueness(
     *,
     scope: ValidationScope,
     workers: int,
+    already_reported: frozenset[str] = frozenset(),
 ) -> list[ValidationIssue]:
     from concurrent.futures import ThreadPoolExecutor
 
@@ -320,11 +389,48 @@ def _check_id_uniqueness(
 
     if workers > 0:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            scans = [row for row in pool.map(_scan_id_file, paths) if row is not None]
+            results = [row for row in pool.map(_scan_id_file, paths) if row is not None]
     else:
-        scans = [row for path_row in paths if (row := _scan_id_file(path_row)) is not None]
+        results = [row for path_row in paths if (row := _scan_id_file(path_row)) is not None]
 
-    return _merge_id_duplicates(scans, scope)
+    scans = [row for row in results if isinstance(row, _IdScanRow)]
+    failures = [row for row in results if isinstance(row, _IdScanParseError)]
+    issues = _id_scan_parse_issues(failures, scope=scope, already_reported=already_reported)
+    issues.extend(_merge_id_duplicates(scans, scope))
+    return issues
+
+
+def _id_scan_parse_issues(
+    failures: list[_IdScanParseError],
+    *,
+    scope: ValidationScope,
+    already_reported: frozenset[str],
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for failure in failures:
+        try:
+            resolved = str(failure.model_file.resolve())
+        except OSError:  # pragma: no cover - unresolvable path
+            resolved = str(failure.model_file)
+        if resolved in already_reported:
+            continue
+        if scope.mode == "narrow":
+            if scope.object_types and failure.meta_name not in scope.object_types:
+                continue
+            if scope.targets and not scope.matches_file(
+                failure.model_file.name, failure.model_file
+            ):
+                continue
+        issues.append(
+            ValidationIssue(
+                code="yaml_parse",
+                severity="error",
+                object_type=failure.meta_name,
+                file_path=failure.model_file,
+                message=f"Could not parse object YAML: {failure.error}",
+            )
+        )
+    return issues
 
 
 def _id_scan_paths() -> list[tuple[Path, str]]:
@@ -348,11 +454,20 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
     return scan_paths
 
 
-def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | None:
+def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | _IdScanParseError | None:
+    import yaml
+
     from opentide.core.io import load_yaml
 
     model_file, meta_name = path_row
-    model_body = load_yaml(model_file)
+    try:
+        model_body = load_yaml(model_file)
+    except (yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
+        return _IdScanParseError(
+            model_file=model_file,
+            meta_name=meta_name,
+            error=str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__,
+        )
     if not isinstance(model_body, dict):
         return None
     uuid = model_body.get("metadata", {}).get("uuid")

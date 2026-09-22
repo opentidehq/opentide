@@ -211,6 +211,105 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     assert "KeyError" not in dry_run.stdout + dry_run.stderr
 
 
+def _build_wheel(uv: str, dist: Path) -> Path:
+    build = _run([uv, "build", "--wheel", "--out-dir", str(dist)], cwd=str(ROOT), timeout=300)
+    assert build.returncode == 0, build.stdout + build.stderr
+    wheels = list(dist.glob("opentide-*.whl"))
+    assert len(wheels) == 1, f"expected one wheel in {dist}: {wheels}"
+    return wheels[0]
+
+
+def _install(uv: str, env_dir: Path, spec: str) -> Path:
+    venv = _run([uv, "venv", str(env_dir)], timeout=60)
+    assert venv.returncode == 0, venv.stdout + venv.stderr
+    python = _venv_bin(env_dir, "python")
+    install = _run([uv, "pip", "install", "--python", str(python), spec], timeout=300)
+    assert install.returncode == 0, install.stdout + install.stderr
+    return python
+
+
+def test_bare_wheel_opentide_mcp_reports_the_missing_extra(tmp_path: Path) -> None:
+    """Issue #256: `pip install opentide` ships the script; it must explain itself.
+
+    Issue #262: the wheel gate never executed `opentide-mcp`, so a console script
+    that died with `ModuleNotFoundError: mcp` shipped twice.
+    """
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is required to build and install the wheel")
+
+    wheel = _build_wheel(uv, tmp_path / "dist")
+    python = _install(uv, tmp_path / "bare-venv", str(wheel))
+
+    mcp_script = _venv_bin(tmp_path / "bare-venv", "opentide-mcp")
+    assert mcp_script.is_file(), "the base wheel is expected to install opentide-mcp"
+
+    imported = _run([str(python), "-c", "import mcp"], timeout=60)
+    if imported.returncode == 0:  # pragma: no cover
+        pytest.skip("mcp resolved from the ambient environment; cannot observe a bare install")
+
+    result = _run([str(mcp_script)], timeout=120)
+    combined = result.stdout + result.stderr
+    assert result.returncode == 1, combined
+    assert "ModuleNotFoundError" not in combined
+    assert "Traceback" not in combined
+    assert "opentide[mcp]" in combined
+
+    # The rest of the CLI must not depend on the extra either.
+    cli = _run([str(_venv_bin(tmp_path / "bare-venv", "opentide")), "--help"], timeout=60)
+    assert cli.returncode == 0, cli.stdout + cli.stderr
+
+
+def test_wheel_with_mcp_extra_answers_a_stdio_initialize(
+    tmp_path: Path, tide_corpus_repo: Path
+) -> None:
+    """Issue #262: prove the advertised extra actually starts the server."""
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is required to build and install the wheel")
+
+    wheel = _build_wheel(uv, tmp_path / "dist")
+    env_dir = tmp_path / "mcp-venv"
+    _install(uv, env_dir, f"{wheel}[mcp]")
+
+    mcp_script = _venv_bin(env_dir, "opentide-mcp")
+    assert mcp_script.is_file()
+
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "wheel-regression", "version": "0"},
+        },
+    }
+    result = _run(
+        [str(mcp_script)],
+        input=json.dumps(request) + "\n",
+        env={
+            **os.environ,
+            "OPENTIDE_REPO_ROOT": str(tide_corpus_repo),
+            "OPENTIDE_TIDE_WORKSPACE": str(tide_corpus_repo),
+            "CI": "true",
+        },
+        timeout=120,
+    )
+    combined = result.stdout + result.stderr
+    assert "ModuleNotFoundError" not in combined, combined
+    response = next(
+        (
+            payload
+            for line in result.stdout.splitlines()
+            if line.strip().startswith("{") and (payload := json.loads(line)).get("id") == 1
+        ),
+        None,
+    )
+    assert response is not None, f"no JSON-RPC response for initialize:\n{combined}"
+    assert response["result"]["serverInfo"]["name"] == "OpenTide"
+
+
 def _assert_json_ok(result: subprocess.CompletedProcess[str]) -> None:
     combined = result.stdout + result.stderr
     assert "UnicodeDecodeError" not in combined

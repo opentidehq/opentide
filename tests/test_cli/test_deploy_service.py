@@ -95,7 +95,7 @@ def test_run_deploy_dry_run_collects_payloads() -> None:
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=preview),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
-        mock_tide.return_value.mdr = {"sentinel": deployer}
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": deployer}
         result = deploy_service.run_deploy(ctx, dry_run=True)
     assert result["status"] == "completed"
     assert result["dry_run"] is True
@@ -117,12 +117,37 @@ def test_run_deploy_invokes_deployer() -> None:
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
-        mock_tide.return_value.mdr = {"sentinel": deployer}
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": deployer}
         result = deploy_service.run_deploy(ctx)
+    (requested,) = mock_tide.return_value.mdr_for.call_args.args
+    assert list(requested) == ["sentinel"]
     deployer.deploy.assert_called_once()
     assert result["deployed"] == ["sentinel"]
     assert result["status"] == "completed"
     assert "warnings" not in result
+
+
+def test_run_deploy_reports_an_engine_that_fails_to_load() -> None:
+    """A broken engine in the plan was an uncaught exception and a traceback."""
+    ctx = CliContext(json_output=True)
+    with (
+        patch("opentide.core.registry.OpenTide.reload"),
+        patch(
+            "opentide.deployment.DeploymentStrategy.load_from_environment",
+            return_value=MagicMock(),
+        ),
+        patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+    ):
+        mock_tide.return_value.mdr_for.side_effect = Exception(
+            "PLATFORM ENGINE IMPORT ERROR: sentinel"
+        )
+        result = deploy_service.run_deploy(ctx)
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+    assert "sentinel" in str(result["message"])
+    assert result["deployed"] == []
 
 
 def test_run_deploy_warning_marks_result_with_warnings() -> None:
@@ -139,7 +164,7 @@ def test_run_deploy_warning_marks_result_with_warnings() -> None:
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
     ):
-        mock_tide.return_value.mdr = {"sentinel": MagicMock()}
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
         result = deploy_service.run_deploy(ctx)
     assert result["status"] == "completed"
     assert result["_exit_code"] == 0
@@ -160,7 +185,7 @@ def test_run_deploy_error_marks_result_failed() -> None:
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=errored),
     ):
-        mock_tide.return_value.mdr = {"sentinel": MagicMock()}
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
         result = deploy_service.run_deploy(ctx)
     assert result["status"] == "failed"
     assert result["_exit_code"] == 1
@@ -194,7 +219,7 @@ def test_run_deploy_dry_run_skips_production_promotion() -> None:
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
-        mock_tide.return_value.mdr = {"sentinel": MagicMock()}
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
         result = deploy_service.run_deploy(ctx, dry_run=True)
     mock_modified.assert_not_called()
     mock_promote.assert_not_called()
@@ -225,7 +250,7 @@ def test_run_deploy_local_debug_skips_production_promotion(
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
-        mock_tide.return_value.mdr = {"sentinel": MagicMock()}
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
         result = deploy_service.run_deploy(ctx, dry_run=False)
     mock_modified.assert_not_called()
     mock_promote.assert_not_called()

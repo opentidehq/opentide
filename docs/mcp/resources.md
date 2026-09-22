@@ -20,8 +20,8 @@ Read-only JSON resources registered on the OpenTide MCP server.
 | `opentide://objectives/{uuid}` | Single objective body |
 | `opentide://schemas/{object_type}` | JSON Schema for `rule`, `threat`, or `objective` |
 | `opentide://templates/{object_type}` | Template metadata for object type |
-| `opentide://vocabularies` | Vocabulary index |
-| `opentide://vocabularies/{name}` | Named vocabulary entries |
+| `opentide://vocabularies` | Vocabulary index: `{name: {metadata, entry_count, uri}}` — entries are **not** inlined |
+| `opentide://vocabularies/{name}` | Named vocabulary: `{metadata, entries}` |
 | `opentide://platforms` | Platform capability list |
 
 ## When to read which
@@ -35,6 +35,8 @@ Read-only JSON resources registered on the OpenTide MCP server.
 | Decide if a platform can validate queries | `opentide://platforms` |
 
 Prefer a **single-object** URI (`.../rules/{uuid}`) over the collection URI when you only need one — the collection resources return every object and can be large.
+
+`opentide://vocabularies` lists which vocabularies exist and how many entries each has; follow its `uri` to read the entries of the one you need. The bundled entries together are several megabytes, so the index deliberately leaves them out.
 
 ## Response format
 
@@ -69,9 +71,49 @@ Use this resource to decide whether `validate_query` is applicable before callin
 
 ## Schema and template resources
 
-`object_type` accepts `rule`, `threat`, `objective` (aliases normalised internally).
+The registry keys generated schemas by **schema id** (`rule::1.0`, `threat::1.0`,
+`objective::1.0`, `visibility::1.0`). The resource accepts any of these forms and
+resolves them to the highest matching version:
+
+| Requested | Resolves to |
+|-----------|-------------|
+| `rule` | `rule::1.0` |
+| `rules` | `rule::1.0` |
+| `rule.1.0` | `rule::1.0` |
+| `rule::1.0` | `rule::1.0` |
+
+When nothing matches, the resource returns a diagnostic rather than an empty object:
+
+```json
+{
+  "error": "No JSON Schema generated for 'rule'",
+  "available": [],
+  "hint": "run 'opentide generate schemas'"
+}
+```
 
 Resources reflect the runtime index after `OpenTide.initialise()` — run `opentide generate schemas` in the client repo if schemas are empty.
+
+`opentide://templates/{object_type}` accepts the same forms. Templates are
+rendered from the current model, so a versioned id resolves only when it names
+the current schema version: `rule::1.0` returns the rule template, `rule::9.9`
+returns an `error` with the `available` templates. Run
+`opentide generate templates` if the template list is empty.
+
+## Vocabulary resources
+
+Vocabularies are `model_dump()`-ed to JSON objects, not `repr()` strings:
+
+```json
+{
+  "actors": {
+    "metadata": { "name": "Threat Actors", "field": "actors", "…": "…" },
+    "entries": { "att&ck::G0006": { "…": "…" } }
+  }
+}
+```
+
+An unknown name returns `{ "error": "Unknown vocabulary '…'", "available": [...] }`.
 
 ## SDK equivalent
 

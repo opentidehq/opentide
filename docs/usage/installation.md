@@ -40,7 +40,7 @@ uv pip install 'opentide==0.3.0'
 
 </Tabs>
 
-For agent/MCP hosts, remember the path to this environment's `opentide-mcp` binary — you point the host at it in [MCP configuration](../mcp/configuration.md).
+For agent/MCP hosts, install `'opentide[mcp]'` and remember the path to this environment's `opentide-mcp` binary — you point the host at it in [MCP configuration](../mcp/configuration.md).
 
 ## PyPI install
 
@@ -51,7 +51,15 @@ pip install opentide              # latest on PyPI
 pip install 'opentide==0.3.0'     # pin the current release
 ```
 
-That installs the **DetectionOps engine**: the `opentide` CLI, `opentide-mcp` MCP server, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+
+The MCP server needs one extra:
+
+```bash
+pip install 'opentide[mcp]'       # adds mcp (>=1.28.1,<2) for `opentide-mcp`
+```
+
+The `opentide-mcp` script is on `PATH` either way; without the extra it prints the install command and exits 1. See [MCP installation](../mcp/installation.md).
 
 ### Windows and PowerShell
 
@@ -69,12 +77,18 @@ OpenTide does not ship or generate `opentide.bat`. Inspect any bat wrapper repor
 
 OpenTide ships platform logic in the wheel. **Third-party SDKs** are only required for live API deploy to some vendors — install them separately in the same environment if you use live deploy (not for validate, generate, or dry-run):
 
-| Live deploy target | Additional `pip install` |
-|--------------------|---------------------------|
-| Splunk | `splunk-sdk` `pandas` |
-| Carbon Black Cloud | `carbon-black-cloud-sdk` |
+| Live target | Extra | Packages |
+|-------------|-------|----------|
+| Microsoft Sentinel | `opentide[sentinel]` | `azure-identity` `azure-monitor-query` `azure-mgmt-securityinsight` |
+| Splunk | `opentide[splunk]` | `splunk-sdk` `pandas` |
+| Carbon Black Cloud | `opentide[carbon-black]` | `carbon-black-cloud-sdk` |
 
-Sentinel, Defender, CrowdStrike, SentinelOne, and HarfangLab use HTTP clients bundled with opentide.
+Defender, CrowdStrike, SentinelOne, and HarfangLab use HTTP clients bundled with opentide.
+
+Extras are only needed for live API calls — live deploy, and `opentide validate
+query --live`. The default `opentide validate query` is offline and works on a
+stock install, as do `generate`, `validate`, and dry-run deploy. If you hit a
+missing SDK, the command names the extra to install.
 
 ### Platform identifiers
 
@@ -109,7 +123,7 @@ uv run pre-commit install --install-hooks
 |----------|---------|
 | `OPENTIDE_REPO_ROOT` | Root of the detection content repository (objects, configurations) |
 | `OPENTIDE_DATA_ROOT` | Override bundled package data (advanced; defaults to wheel contents) |
-| `DEPLOYMENT_PLAN` | Default deployment plan for `deploy` and `validate query` |
+| `DEPLOYMENT_PLAN` | Default deployment plan for `deploy` and `validate query --live` |
 | `DEBUG` | Enable debug logging when set |
 
 Set the repo root before every command, or pass `--repo`. `opentide setup env --yes` writes `.env.example` with `OPENTIDE_REPO_ROOT` (copy to `.env`; OpenTide does not load dotenv automatically):

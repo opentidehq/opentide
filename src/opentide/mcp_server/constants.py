@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
-    {"sentinel", "defender_for_endpoint", "splunk", "sentinel_one", "carbon_black_cloud"}
-)
+from opentide.validation.query_syntax import QUERY_VALIDATION_PLATFORMS
+
 MAX_QUERY_ROWS = 100
+
+__all__ = ["MAX_QUERY_ROWS", "QUERY_VALIDATION_PLATFORMS"]

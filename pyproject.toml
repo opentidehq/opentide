@@ -43,23 +43,35 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-sentinel = []
+# Live query validation and deployment against Azure Monitor / Sentinel.
+# Offline `validate query` needs none of these.
+sentinel = [
+    "azure-identity>=1.17",
+    "azure-monitor-query>=1.4",
+    # 2.0 is pre-release only; 1.0 is the newest stable line.
+    "azure-mgmt-securityinsight>=1.0",
+]
 splunk = ["splunk-sdk>=2.0", "pandas>=2.0"]
 crowdstrike = []
 carbon-black = ["carbon-black-cloud-sdk>=1.0"]
 # Kept for backwards compatibility with `pip install opentide[cli]`.
 cli = []
 mcp = [
-    "mcp>=1.28.1",
-    "fastmcp>=2.0",
+    # The server imports `mcp.server.fastmcp`, which mcp 2.x removed in favour
+    # of MCPServer. Standalone `fastmcp` is a different package and unused.
+    "mcp>=1.28.1,<2",
 ]
 dev = [
-    "mcp>=1.28.1",
-    "fastmcp>=2.0",
+    # The server imports `mcp.server.fastmcp`, which mcp 2.x removed in favour
+    # of MCPServer. Standalone `fastmcp` is a different package and unused.
+    "mcp>=1.28.1,<2",
     "tomli>=2.0",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-console-scripts>=1.4",
+    # Drives the setup wizard on a real PTY; CliRunner never presents a TTY, so
+    # the interactive path had no e2e coverage (#260).
+    "pexpect>=4.9",
     "syrupy>=5.5.3,<6",
     "ruff>=0.16.1",
     "ty>=0.0.65",
@@ -70,12 +82,16 @@ dev = [
 
 [dependency-groups]
 dev = [
-    "mcp>=1.28.1",
-    "fastmcp>=2.0",
+    # The server imports `mcp.server.fastmcp`, which mcp 2.x removed in favour
+    # of MCPServer. Standalone `fastmcp` is a different package and unused.
+    "mcp>=1.28.1,<2",
     "tomli>=2.0",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-console-scripts>=1.4",
+    # Drives the setup wizard on a real PTY; CliRunner never presents a TTY, so
+    # the interactive path had no e2e coverage (#260).
+    "pexpect>=4.9",
     "syrupy>=5.5.3,<6",
     "ruff>=0.16.1",
     "ty>=0.0.65",
@@ -94,7 +110,9 @@ Issues = "https://github.com/OpenTideHQ/opentide/issues"
 
 [project.scripts]
 opentide = "opentide.cli:main"
-opentide-mcp = "opentide.mcp_server.server:main"
+# The launcher, not the server: it reports the missing extra instead of a
+# ModuleNotFoundError when `mcp`/`fastmcp` are absent.
+opentide-mcp = "opentide.mcp_server.launcher:main"
 
 [project.entry-points."opentide.platforms"]
 sentinel = "opentide.platforms.sentinel:declare"

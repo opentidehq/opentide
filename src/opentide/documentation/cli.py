@@ -69,36 +69,6 @@ def _git_stdout(repo_root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _resolve_merge_base(repo_root: Path) -> str:
-    candidates: list[str] = []
-    try:
-        upstream = _git_stdout(repo_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
-    except subprocess.CalledProcessError:
-        upstream = ""
-    if upstream:
-        candidates.append(upstream)
-    candidates.extend(["origin/development", "origin/main", "origin/master"])
-    seen: set[str] = set()
-    for candidate in candidates:
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        try:
-            return _git_stdout(repo_root, "merge-base", "HEAD", candidate)
-        except subprocess.CalledProcessError:
-            continue
-    return _git_stdout(repo_root, "merge-base", "HEAD", "HEAD")
-
-
-def _git_changed_paths(repo_root: Path, merge_base: str) -> set[Path]:
-    changed = _git_stdout(repo_root, "diff", "--name-only", "--diff-filter=ACMRD", merge_base)
-    untracked = _git_stdout(repo_root, "ls-files", "--others", "--exclude-standard")
-    lines = [line for line in changed.splitlines() if line] + [
-        line for line in untracked.splitlines() if line
-    ]
-    return {Path(line) for line in lines}
-
-
 def _object_uuid_and_name(body: object) -> tuple[str | None, str | None]:
     if not isinstance(body, dict):
         return None, None
@@ -124,7 +94,9 @@ def _load_object_body(
             return None
     try:
         raw = _git_stdout(repo_root, "show", f"{merge_base}:{relative_path.as_posix()}")
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
+        # OSError covers git missing from PATH; the object simply has no
+        # baseline revision to read, which is the same outcome as a failed show.
         return None
     try:
         return parse_yaml(raw)
@@ -136,9 +108,11 @@ def _changed_object_paths_and_uuids(
     repo_root: Path,
 ) -> tuple[set[Path], set[str], list[tuple[str, str, str]]]:
     """Return changed paths, live UUIDs, and deleted (kind, uuid, name) tuples."""
+    from opentide.core.git_baseline import changed_paths, resolve_baseline
     from opentide.core.registry import OpenTide
 
-    merge_base = _resolve_merge_base(repo_root)
+    baseline = resolve_baseline(repo_root)
+    merge_base = baseline.commit
     paths_cfg = OpenTide.Index["paths"]
     object_roots = {
         kind: Path(paths_cfg[kind]).resolve()
@@ -148,8 +122,9 @@ def _changed_object_paths_and_uuids(
     changed_object_paths: set[Path] = set()
     changed_uuids: set[str] = set()
     deleted_objects: list[tuple[str, str, str]] = []
-    for relative_path in _git_changed_paths(repo_root, merge_base):
-        absolute_path = (repo_root / relative_path).resolve()
+    for change in changed_paths(repo_root, baseline):
+        relative_path = change.relative
+        absolute_path = change.absolute.resolve()
         if absolute_path.suffix.lower() != ".yaml":
             continue
         kind = next(
@@ -280,11 +255,24 @@ def run(
         catalog = build_catalog()
         catalog_records = [*catalog.rules, *catalog.objectives, *catalog.threats]
         catalog_uuids = {record.uuid for record in catalog_records}
+        from opentide.core.git_baseline import GitBaselineError
         from opentide.core.root import get_repo_root
 
-        changed_paths, changed_uuids, target_uuids, deleted_objects = _resolve_changed_targets(
-            catalog_uuids, get_repo_root()
-        )
+        try:
+            changed_paths, changed_uuids, target_uuids, deleted_objects = _resolve_changed_targets(
+                catalog_uuids, get_repo_root()
+            )
+        except GitBaselineError as exc:
+            logger.warning("docs_changed_requires_git", detail=str(exc))
+            return {
+                "message": f"--changed requires a git repository: {exc}",
+                "status": "failed",
+                "changed_paths": [],
+                "changed_uuids": [],
+                "counts": {"rules": 0, "objectives": 0, "threats": 0},
+                "output": str(ctx.output_dir),
+                "_exit_code": 1,
+            }
         if not changed_paths:
             return {
                 "message": "No changed object documentation detected",

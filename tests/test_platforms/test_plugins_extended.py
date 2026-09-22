@@ -72,6 +72,99 @@ def test_platform_loader_load_engines_validation_tier() -> None:
     assert "splunk" in engines
 
 
+def test_load_engines_skips_platforms_with_no_query_validator() -> None:
+    """Issue #246: importing crowdstrike/harfanglab validators only logs noise."""
+    loader = PlatformLoader()
+    mock_module = MagicMock()
+    mock_module.declare.return_value = MagicMock()
+    with (
+        patch.object(loader, "import_engine", return_value=mock_module) as import_engine,
+        patch("opentide.core.registry.OpenTide") as mock_tide,
+    ):
+        mock_tide.Configuration.Systems.Index = ["sentinel", "crowdstrike", "harfanglab"]
+        engines = loader._load_engines(tier=plugins.ValidationEngine(), identifier="_query")
+    assert set(engines) == {"sentinel"}
+    attempted = [call.args[0] for call in import_engine.call_args_list]
+    assert not [path for path in attempted if "crowdstrike" in path or "harfanglab" in path]
+
+
+def test_load_engines_honours_the_only_filter() -> None:
+    loader = PlatformLoader()
+    mock_module = MagicMock()
+    mock_module.declare.return_value = MagicMock()
+    with (
+        patch.object(loader, "import_engine", return_value=mock_module),
+        patch("opentide.core.registry.OpenTide") as mock_tide,
+    ):
+        mock_tide.Configuration.Systems.Index = ["sentinel", "splunk"]
+        engines = loader._load_engines(
+            tier=plugins.PlatformEngine(), identifier="", only=["splunk"]
+        )
+    assert set(engines) == {"splunk"}
+
+
+def test_an_engine_without_declare_is_named_in_the_error() -> None:
+    loader = PlatformLoader()
+    mock_module = MagicMock()
+    mock_module.declare.side_effect = AttributeError("declare")
+    with (
+        patch.object(loader, "import_engine", return_value=mock_module),
+        patch("opentide.core.registry.OpenTide") as mock_tide,
+    ):
+        mock_tide.Configuration.Systems.Index = ["sentinel"]
+        with pytest.raises(Exception, match="PLATFORM ENGINE IMPORT ERROR: sentinel"):
+            loader.rule_deployers(only=["sentinel"])
+
+
+def test_query_validation_for_loads_one_platform() -> None:
+    validator = MagicMock()
+    with (
+        patch("opentide.deployment.enabled_systems", return_value=["sentinel", "splunk"]),
+        patch.object(
+            plugins.PlatformLoader, "query_validators", return_value={"sentinel": validator}
+        ) as query_validators,
+    ):
+        assert DeployTide().query_validation_for("sentinel") == {"sentinel": validator}
+    assert query_validators.call_args.kwargs["only"] == ["sentinel"]
+
+
+def test_mdr_for_loads_only_the_enabled_requested_platforms() -> None:
+    deployer = MagicMock()
+    with (
+        patch("opentide.deployment.enabled_systems", return_value=["sentinel", "splunk"]),
+        patch.object(
+            plugins.PlatformLoader, "rule_deployers", return_value={"sentinel": deployer}
+        ) as rule_deployers,
+    ):
+        assert DeployTide().mdr_for(["sentinel", "crowdstrike"]) == {"sentinel": deployer}
+    assert rule_deployers.call_args.kwargs["only"] == ["sentinel"]
+
+
+def test_mdr_for_builds_nothing_when_no_requested_platform_is_enabled() -> None:
+    with (
+        patch("opentide.deployment.enabled_systems", return_value=["splunk"]),
+        patch.object(plugins.PlatformLoader, "rule_deployers") as rule_deployers,
+    ):
+        assert DeployTide().mdr_for(["sentinel"]) == {}
+    rule_deployers.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("platform", "enabled"),
+    [("crowdstrike", ["crowdstrike"]), ("sentinel", ["splunk"])],
+)
+def test_query_validation_for_returns_nothing_when_it_cannot_validate(
+    platform: str, enabled: list[str]
+) -> None:
+    """No validator module, or platform disabled: never build a client anyway."""
+    with (
+        patch("opentide.deployment.enabled_systems", return_value=enabled),
+        patch.object(plugins.PlatformLoader, "query_validators") as query_validators,
+    ):
+        assert DeployTide().query_validation_for(platform) == {}
+    query_validators.assert_not_called()
+
+
 def test_platforms_accessor_getitem_and_enabled() -> None:
     accessor = plugins.Platforms
     accessor._deployers = None

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
+import sys
+
 import structlog
 import typer
 
-from opentide.cli.context import CliContext, get_context
+from opentide.cli.context import CliContext, get_context, sync_typer_rendering
 from opentide.cli.enums import (
     DetectionPlatform,
     DocumentScope,
@@ -15,7 +18,13 @@ from opentide.cli.enums import (
     ValidateCheck,
     platform_label,
 )
-from opentide.cli.output import CommandResult, emit_error, emit_result, emit_success
+from opentide.cli.output import (
+    CommandResult,
+    emit_deprecation,
+    emit_error,
+    emit_result,
+    emit_success,
+)
 from opentide.cli.services.deploy import run_deploy
 from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
@@ -25,9 +34,9 @@ from opentide.cli.services.info import collect_info
 from opentide.cli.services.lint import run_lint
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
-from opentide.core.logging import LoggingConfig, init_logging, is_json_output
+from opentide.core.logging import LoggingConfig, init_logging
 from opentide.core.logging import print_banner as print_banner  # noqa: F401
-from opentide.core.logging.config import get_console, get_stdout_console
+from opentide.core.logging.config import get_stdout_console
 from opentide.core.root import get_repo_root
 
 logger = structlog.get_logger("opentide.cli.__init__")
@@ -39,11 +48,25 @@ app = typer.Typer(
 )
 
 
-def _deprecate(legacy: str, replacement: str) -> None:
-    if is_json_output():
-        logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
-        return
-    get_console().print(f"[yellow]DEPRECATED[/] {legacy}; use {replacement}.")
+def _no_color_before_help(value: bool) -> bool:
+    """Eager, so ``opentide --no-color --help`` is plain: help exits before callbacks."""
+    if value:
+        sync_typer_rendering(no_color=True)
+    return value
+
+
+def _came_from_command_line(ctx: typer.Context, name: str) -> bool:
+    """Whether *name* was typed as a flag rather than read from its envvar.
+
+    Compared by name, not by enum identity: Typer bundles its own Click copy,
+    so ``typer._click.core.ParameterSource`` is a different class from
+    ``click.core.ParameterSource`` and ``==`` is always False.
+    """
+    source = ctx.get_parameter_source(name)
+    return getattr(source, "name", "") == "COMMANDLINE"
+
+
+_deprecate = emit_deprecation
 
 
 @app.callback()
@@ -56,7 +79,13 @@ def main_callback(
         None, "--data", envvar="OPENTIDE_DATA_ROOT", help="Bundled data root"
     ),
     debug: bool = typer.Option(False, "--debug", envvar="DEBUG", help="Enable debug logging"),
-    no_color: bool = typer.Option(False, "--no-color", help="Disable Rich colour output"),
+    no_color: bool = typer.Option(
+        False,
+        "--no-color",
+        is_eager=True,
+        callback=_no_color_before_help,
+        help="Disable Rich colour output",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Machine-readable JSON output"),
 ) -> None:
     from pathlib import Path
@@ -67,6 +96,7 @@ def main_callback(
         json_output=json_output,
         debug=debug,
         no_color=no_color,
+        repo_explicit=_came_from_command_line(ctx, "repo"),
     )
     ctx.obj = cli_ctx
     cli_ctx.activate()
@@ -121,6 +151,13 @@ def generate_snippets_cmd(ctx: typer.Context) -> None:
     emit_success(cli, run_generate(cli, phase="snippets"))
 
 
+@generate_app.command("explorer")
+def generate_explorer_cmd(ctx: typer.Context) -> None:
+    """Write explorer.bundle.json and explorer.search.json under .opentide/exports/."""
+    cli = get_context(ctx)
+    emit_success(cli, run_generate(cli, phase="explorer"))
+
+
 inflight_app = typer.Typer(help="Inflight preview shard generation and prune")
 generate_app.add_typer(inflight_app, name="inflight")
 
@@ -128,6 +165,8 @@ generate_app.add_typer(inflight_app, name="inflight")
 @inflight_app.callback(invoke_without_command=True)
 def generate_inflight_cmd(ctx: typer.Context) -> None:
     """Write per-UUID preview shards under ``.opentide/inflight/`` for changed objects."""
+    if ctx.invoked_subcommand is not None:
+        return
     cli = get_context(ctx)
     emit_success(cli, run_generate(cli, phase="inflight"))
 
@@ -255,24 +294,37 @@ def generate_exports_revisions(ctx: typer.Context) -> None:
     emit_success(cli, run_export(cli, target=ExportTarget.revisions))
 
 
-@extract_app.command("sentinel")
-def generate_extract_sentinel(ctx: typer.Context) -> None:
+def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
+    """Run one importer, turning every failure into a single result document."""
     cli = get_context(ctx)
     try:
-        result = run_extract(cli, import_target=ExtractImport.sentinel)
-    except (FileNotFoundError, RuntimeError) as exc:
-        emit_error(cli, str(exc))
+        result = run_extract(cli, import_target=target)
+    except Exception as exc:  # noqa: BLE001 - one JSON document is the contract
+        # Enumerating exception types is how #242 escaped: the importers reach
+        # vendor SDKs and half-typed config, so anything they raise has to come
+        # back as a result document rather than a Rich traceback. `str(exc)` is
+        # empty for a bare KeyError and unhelpful for its key alone.
+        detail = str(exc).strip()
+        message = (
+            f"{type(exc).__name__}: {detail}"
+            if detail and not isinstance(exc, RuntimeError | FileNotFoundError)
+            else detail or f"{type(exc).__name__} while importing {target.value}"
+        )
+        emit_error(cli, message)
+        return
     emit_success(cli, result)
+
+
+@extract_app.command("sentinel")
+def generate_extract_sentinel(ctx: typer.Context) -> None:
+    """Import Sentinel analytics rules (needs opentide[sentinel] and tenant credentials)."""
+    _run_extract_command(ctx, ExtractImport.sentinel)
 
 
 @extract_app.command("defender")
 def generate_extract_defender(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    try:
-        result = run_extract(cli, import_target=ExtractImport.defender)
-    except (FileNotFoundError, RuntimeError) as exc:
-        emit_error(cli, str(exc))
-    emit_success(cli, result)
+    """Import Defender custom detections (needs tenant credentials)."""
+    _run_extract_command(ctx, ExtractImport.defender)
 
 
 validate_app = typer.Typer(help="Object and query validation")
@@ -336,10 +388,15 @@ def validate_query_cmd(
     platform: DetectionPlatform = typer.Option(..., "--platform"),
     plan: str | None = typer.Option(None, "--plan", envvar="DEPLOYMENT_PLAN"),
     wide: bool = typer.Option(False, "--wide"),
+    live: bool = typer.Option(
+        False,
+        "--live",
+        help="Run the query against the tenant (needs platform SDKs and credentials)",
+    ),
 ) -> None:
-    """Validate platform query syntax (5 supported platforms)."""
+    """Offline query syntax validation (5 supported platforms); --live hits the tenant."""
     cli = get_context(ctx)
-    result = validate_query_platform(cli, platform.value, plan=plan, wide=wide)
+    result = validate_query_platform(cli, platform.value, plan=plan, wide=wide, live=live)
     emit_success(cli, result)
 
 
@@ -358,6 +415,8 @@ def deploy_cmd(
     skip_promotion: bool = typer.Option(False, "--skip-promotion"),
 ) -> None:
     """Deploy detection rules to configured platforms."""
+    if ctx.invoked_subcommand is not None:
+        return
     cli = get_context(ctx)
     result = run_deploy(
         cli,
@@ -400,9 +459,11 @@ def document_cmd(
     output: str | None = typer.Option(None, "--output"),
     flavor: str | None = typer.Option(None, "--flavor"),
 ) -> None:
-    _deprecate("opentide document", "opentide generate docs")
+    # Each `document <scope>` subcommand names its own replacement; warning here
+    # too would print two DEPRECATED lines for one invocation.
     if ctx.invoked_subcommand is not None:
         return
+    _deprecate("opentide document", "opentide generate docs")
     _emit_docs(ctx, output=output, flavor=flavor)
 
 
@@ -523,11 +584,10 @@ def migrate_objects_cmd(
     emit_success(cli, run_migrate_objects(cli.repo, apply=apply, copy=copy))
 
 
-info_app = typer.Typer(help="System information")
-app.add_typer(info_app, name="info")
-
-
-@info_app.callback(invoke_without_command=True)
+# ``info`` has no subcommands: registering it as a plain command keeps Click from
+# treating options typed after the section (``info coverage --technique T1059``)
+# as a subcommand name.
+@app.command("info")
 def info_cmd(
     ctx: typer.Context,
     platform: DetectionPlatform | None = typer.Option(None, "--platform"),
@@ -573,6 +633,12 @@ def info_cmd(
 
 def main() -> None:
     """Console script entry point."""
+    # Here rather than at import: opentide.ci imports this package, and a host
+    # Typer app must keep its own rendering settings. Click parses root
+    # options, and exits on a bad one, before the eager callback runs.
+    argv = sys.argv[1:]
+    options = argv[: argv.index("--")] if "--" in argv else argv
+    sync_typer_rendering(no_color="--no-color" in options or bool(os.getenv("NO_COLOR")))
     app()
 
 

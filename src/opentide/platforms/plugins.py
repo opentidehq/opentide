@@ -10,12 +10,14 @@ import importlib
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Iterator, cast
 import structlog
 
 from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.models.rule import DetectionRule
+# CrowdStrike and HarfangLab ship no validator module: `can_validate is False`.
+from opentide.validation.query_syntax import QUERY_VALIDATION_PLATFORMS
 
 logger = structlog.get_logger('opentide.platforms.plugins')
 
@@ -62,11 +64,20 @@ class PlatformLoader:
     def import_engine(module_path: str) -> EngineModule:
         return importlib.import_module(module_path)
 
-    def _load_engines(self, tier: PlatformEngineBase, identifier: str) -> dict[str, type]:
+    def _load_engines(self, tier: PlatformEngineBase, identifier: str, only: Sequence[str] | None=None) -> dict[str, type]:
         logger.info('initiating_platform_engine_loading')
         engines: dict[str, type] = {}
         from opentide.core.registry import OpenTide
+        requested = set(only) if only is not None else None
+        validation_tier = isinstance(tier, ValidationEngine)
         for system in OpenTide.Configuration.Systems.Index:
+            if requested is not None and system not in requested:
+                continue
+            if validation_tier and system not in QUERY_VALIDATION_PLATFORMS:
+                # crowdstrike and harfanglab ship no validator module; requesting
+                # one only produces a misleading import warning.
+                logger.debug('platform_has_no_query_validator', arg0=system)
+                continue
             module_name = system + identifier
             pkg = _platform_pkg(system)
             module = None
@@ -86,15 +97,15 @@ class PlatformLoader:
                     engines[system] = module.declare()
                 except Exception as exc:
                     logger.critical('engine_module_missing_declare', arg0=module_name, advice=repr(exc))
-                    raise Exception('PLATFORM ENGINE IMPORT ERROR') from exc
+                    raise Exception(f'PLATFORM ENGINE IMPORT ERROR: {module_name} does not declare an engine') from exc
                 logger.info('loaded_platform_engine', arg0=module_name)
         return engines
 
-    def rule_deployers(self) -> dict[str, RuleDeployer]:
-        return cast(dict[str, RuleDeployer], self._load_engines(identifier='', tier=PlatformEngine()))
+    def rule_deployers(self, only: Sequence[str] | None=None) -> dict[str, RuleDeployer]:
+        return cast(dict[str, RuleDeployer], self._load_engines(identifier='', tier=PlatformEngine(), only=only))
 
-    def query_validators(self) -> dict[str, QueryValidator]:
-        return cast(dict[str, QueryValidator], self._load_engines(identifier='_query', tier=ValidationEngine()))
+    def query_validators(self, only: Sequence[str] | None=None) -> dict[str, QueryValidator]:
+        return cast(dict[str, QueryValidator], self._load_engines(identifier='_query', tier=ValidationEngine(), only=only))
 
 @dataclass
 class Platform:
@@ -200,10 +211,26 @@ class DeployTide:
         enabled = self._enabled_keys()
         return {k: v for k, v in Platforms.deployers().items() if k in enabled}
 
+    def mdr_for(self, platforms: Iterable[str]) -> dict[str, RuleDeployer]:
+        """Load only *platforms*' deployers, so one broken engine cannot block the rest."""
+        enabled = self._enabled_keys()
+        wanted = [platform for platform in platforms if platform in enabled]
+        if not wanted:
+            return {}
+        return PlatformLoader().rule_deployers(only=wanted)
+
     @property
     def query_validation(self) -> dict[str, QueryValidator]:
         enabled = self._enabled_keys()
         return {k: v for k, v in Platforms.validators().items() if k in enabled}
+
+    def query_validation_for(self, platform: str) -> dict[str, QueryValidator]:
+        """Load only *platform*'s validator, so one target cannot build every client."""
+        if platform not in self._enabled_keys():
+            return {}
+        if platform not in QUERY_VALIDATION_PLATFORMS:
+            return {}
+        return cast(dict[str, QueryValidator], PlatformLoader().query_validators(only=[platform]))
 PlatformsRegistry = DeployTide
 _PLATFORM_PKG: dict[str, str] = {'carbon_black_cloud': 'carbon_black', 'defender_for_endpoint': 'defender_for_endpoint', 'sentinel_one': 'sentinel_one', 'crowdstrike': 'crowdstrike', 'harfanglab': 'harfanglab', 'sentinel': 'sentinel', 'splunk': 'splunk'}
 

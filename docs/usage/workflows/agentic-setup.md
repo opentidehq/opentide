@@ -10,7 +10,7 @@ OpenTide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## What agents can and cannot do today
 
 <Callout type="warn">
-The MCP `validate_query` and `run_query` tools are **stubs** — they return success without parsing queries or contacting platforms. For real query-syntax checks, agents (or you) must use the CLI: `opentide validate query --platform …`. Use `validation_report` for structured object validation an agent can act on.
+`validate_query` runs a real offline syntax check, but a structural one: it will not catch a misspelled table or field, so a `valid: true` is not proof the query runs. `run_query` is **not implemented** — it returns `stub: true` with `rows: null` and never contacts a platform. Use `validation_report` for structured object validation an agent can act on.
 </Callout>
 
 | Capability | Status |
@@ -18,8 +18,8 @@ The MCP `validate_query` and `run_query` tools are **stubs** — they return suc
 | Search catalogue, read objects, inspect chaining | Supported |
 | Validate objects (`validate_rule`, `validation_report`) | Supported |
 | Dry-run deploy (`deploy_rule`, `dry_run=true`) | Supported |
-| Query syntax validation via MCP | Stub — use CLI |
-| Live query execution via MCP | Stub — not available |
+| Offline query syntax check via MCP (`validate_query`) | Supported — structure only |
+| Live query execution via MCP (`run_query`) | Not implemented |
 
 ## Install and configure the server
 
@@ -121,7 +121,7 @@ flowchart LR
 - Real (non-dry-run) deploys to production.
 - Bulk promotion of rules to `PRODUCTION` without an explicit human status change and review.
 - Editing `.opentide/configurations/` credentials or deployment plans.
-- Trusting an MCP `validate_query` "pass" as real syntax validation (it is a stub).
+- Trusting an MCP `validate_query` "pass" as proof a query runs — it only proves the query parses.
 - Regenerating or hand-editing UUIDs to resolve a conflict.
 
 ## Recommended guardrails in AGENTS.md
@@ -130,8 +130,8 @@ Add rules like these to the generated `AGENTS.md` so the agent respects them:
 
 ```md
 - Always run `validation_report` before proposing a rule as done.
-- Query validation for Sentinel/Defender/Splunk/SentinelOne/Carbon Black MUST use
-  the CLI `opentide validate query`; the MCP tool is a stub.
+- `validate_query` checks structure only. Never report a rule as platform-ready
+  on its result alone; `run_query` is not implemented.
 - Never claim query validation for CrowdStrike or HarfangLab — they are deploy-only.
 - Deploys are `dry_run=true` unless a human explicitly approves a real deploy.
 ```

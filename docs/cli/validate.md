@@ -23,7 +23,7 @@ opentide validate --check schema
 | Flag | Purpose |
 |------|---------|
 | `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `cve` |
-| `--file` | Validate one YAML file |
+| `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`) |
@@ -31,6 +31,10 @@ opentide validate --check schema
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Validation failures in `--json` mode include the complete report before the process exits.
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
+
+### Unparseable object files
+
+An object file that is not valid YAML is reported as a `yaml_parse` issue against that path (exit `1`, and a complete report in `--json` mode) instead of raising a parser traceback. The file is not indexed, so no other check can see it — the issue is emitted regardless of `--check`.
 
 ### CVE check
 
@@ -59,13 +63,66 @@ CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI 
 ```bash
 opentide validate query --platform sentinel
 opentide validate query --platform splunk --plan STAGING --wide
+opentide validate query --platform sentinel --live
 ```
 
 | Flag | Purpose |
 |------|---------|
 | `--platform` | **Required.** Platform enum value |
-| `--plan` | Deployment plan (`DEPLOYMENT_PLAN` env) |
-| `--wide` | Wide output format |
+| `--live` | Validate against the tenant instead of offline (needs SDKs + credentials) |
+| `--plan` | Deployment plan (`DEPLOYMENT_PLAN` env) — `--live` only |
+| `--wide` | Wide output format — `--live` only |
+
+### Offline is the default
+
+Without `--live` the command reads every query out of the rules it can see and
+runs a **language-aware structural check** in-process: no vendor SDK, no
+credentials, no network. The JSON payload reports `"mode": "offline-syntax"`
+and a `findings` list:
+
+```json
+{
+  "platform": "sentinel",
+  "mode": "offline-syntax",
+  "language": "kql",
+  "rules": 2,
+  "checked": 2,
+  "status": "failed",
+  "findings": [
+    {
+      "uuid": "…",
+      "rule": "Suspicious parent process",
+      "field": "configurations.sentinel.query",
+      "code": "unterminated_string",
+      "message": "Unterminated \" string literal",
+      "line": 2,
+      "column": 20
+    }
+  ]
+}
+```
+
+The check covers delimiter balance, string and comment termination, pipeline
+shape, and dangling operators. It is not a grammar: `status: passed` means the
+query parses, not that the fields exist or that it returns rows.
+
+Each language's own syntax is respected, so valid content is not rejected:
+
+| Language | Understood |
+|----------|------------|
+| KQL | `//` comments, `'`/`"` strings, verbatim `@"C:\dir\"`, multi-line ```` ``` ```` and `~~~` literals |
+| SPL | ```` ``` ```` comment blocks, generating commands that start with `\|` |
+| S1QL | `//` comments, `\|\|` as `OR` (with an operand on each side), a leading `\|` stage |
+| Lucene | backslash escapes (`iex\(`), mixed range ends (`[1 TO 5}`), whole-term `/regex/` (an unescaped path such as `/usr/bin/curl` stays data), apostrophes as data |
+
+### `--live`
+
+`--live` builds the platform client and submits the query, so it needs the
+matching extra (`pip install 'opentide[sentinel]'`) and tenant credentials. When
+the SDK is absent the command fails with the extra to install rather than a
+`ModuleNotFoundError` traceback. Only the requested platform's engine is
+loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
+modules.
 
 ### Supported platforms
 

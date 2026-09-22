@@ -135,7 +135,7 @@ There is no separate promote command. Edit a rule's `status` in YAML for deliber
 
 ## Deployment plan
 
-The `DEPLOYMENT_PLAN` environment variable selects which plan `deploy` and `validate query` operate under, letting you keep separate plans (e.g. per environment) without editing config:
+The `DEPLOYMENT_PLAN` environment variable selects which plan `deploy` and `validate query --live` operate under, letting you keep separate plans (e.g. per environment) without editing config. The default offline `validate query` grades every rule's query text and ignores the plan:
 
 ```bash
 export DEPLOYMENT_PLAN=production

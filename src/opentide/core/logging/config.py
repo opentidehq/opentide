@@ -82,15 +82,34 @@ def get_stdout_console() -> Console:
     return _stdout_console
 
 
+#: ``""`` stays off: Rich, and so Typer's help panels, read an empty
+#: ``FORCE_COLOR`` as "not a terminal", and log lines should agree with them.
+_FORCE_COLOR_OFF = frozenset({"", "0", "false", "no", "off"})
+
+
+def forced_terminal(variable: str = "FORCE_COLOR") -> bool | None:
+    """Whether *variable* forces a terminal; ``None`` leaves it to detection.
+
+    Rich and Typer force a terminal for any non-empty ``FORCE_COLOR``, ``"0"``
+    included, and Typer does the same for ``PY_COLORS``, which writes escapes
+    into redirected output for a user who asked for less colour. Callers pass
+    this as ``force_terminal`` whenever it is set.
+    """
+    force_color = os.getenv(variable)
+    if force_color is None:
+        return None
+    return force_color.strip().lower() not in _FORCE_COLOR_OFF
+
+
 def _make_console(*, stderr: bool, config: LoggingConfig) -> Console:
     """Create a stream-aware console without forcing ANSI into redirects."""
-    force_color = os.getenv("FORCE_COLOR", "").lower() in {"1", "true", "yes"}
-    force_terminal = True if force_color and not config.plain and not config.json_output else None
+    plain = config.plain or config.json_output
+    forced = forced_terminal()
     return Console(
         stderr=stderr,
         highlight=False,
-        no_color=config.plain or config.json_output,
-        force_terminal=force_terminal,
+        no_color=plain,
+        force_terminal=None if forced is None else forced and not plain,
     )
 
 

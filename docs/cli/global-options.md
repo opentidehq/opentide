@@ -26,6 +26,8 @@ opentide --debug --no-color generate
 
 When `--repo` is omitted, OpenTide walks up from the current directory to find the repository root (objects, configurations markers). Explicit `--repo` or `OPENTIDE_REPO_ROOT` always wins.
 
+A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_WORKSPACE`. That variable is read before the repository root when locating detection objects, so without this precedence `--repo` resolved the root while the workspace — and therefore the objects actually validated — stayed on the exported path.
+
 Setup commands honour `--repo` when `--path` is `.` (default).
 
 ## Environment propagation
@@ -40,12 +42,16 @@ Routine commands do not print an ASCII banner. The interactive setup wizard uses
 
 With `--json`, stdout is one machine-readable JSON document. Diagnostics and debug logs use stderr.
 
+`--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits non-zero with a JSON error naming the flags to pass instead — `--yes` plus the explicit selections. Without `--json` the same commands open the wizard as before.
+
 ## Deployment plan
 
 Some subcommands read `DEPLOYMENT_PLAN` from the environment or `--plan`:
 
 - `opentide deploy --plan STAGING`
-- `opentide validate query --platform sentinel --plan STAGING`
+- `opentide validate query --platform sentinel --live --plan STAGING`
+
+`--plan` is a no-op for the default offline `validate query`, which checks the query text of every rule regardless of what the plan would deploy.
 
 ## Related
 

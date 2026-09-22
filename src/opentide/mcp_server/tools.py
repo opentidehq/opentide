@@ -21,7 +21,7 @@ def tool_search(
     status: str = "",
     technique: str = "",
     actor: str = "",
-) -> list[dict[str, Any]] | dict[str, Any]:
+) -> list[dict[str, Any]]:
     return search_catalog(
         query, object_type=type, platform=platform, status=status, technique=technique, actor=actor
     )
@@ -76,31 +76,57 @@ def tool_validation_report(
 
 
 def tool_validate_query(query: str, platform: str) -> dict[str, Any]:
+    """Offline syntax check — the same engine as ``opentide validate query``."""
+    from opentide.validation.query_syntax import check_query, language_label, query_language
+
     if platform not in QUERY_VALIDATION_PLATFORMS:
         return {
             "valid": None,
             "supported": False,
+            "mode": "unsupported",
             "message": f"query validation not supported for {platform}",
             "errors": [],
         }
+    language = query_language(platform) or ""
+    findings = check_query(query, language)
+    label = language_label(language)
     return {
-        "valid": True,
+        "valid": not findings,
         "supported": True,
-        "errors": [],
-        "message": "Query syntax validation available for this platform",
+        "mode": "offline-syntax",
+        "language": language,
+        "errors": [finding.to_dict() for finding in findings],
+        "message": (
+            f"{label} syntax check failed with {len(findings)} problem(s)"
+            if findings
+            else f"{label} syntax check passed (structure only, not executed)"
+        ),
         "query_preview": query[:200],
     }
 
 
 def tool_run_query(query: str, platform: str, tenant: str = "") -> dict[str, Any]:
+    """Not implemented. Never returns a row payload that looks like a real run."""
+    if platform not in QUERY_VALIDATION_PLATFORMS:
+        return {
+            "supported": False,
+            "stub": True,
+            "rows": None,
+            "platform": platform,
+            "tenant": tenant or None,
+            "message": f"query execution not supported for {platform}",
+            "query_preview": query[:200],
+        }
     return {
-        "rows": 0,
-        "columns": [],
-        "results": [],
-        "truncated": False,
-        "tenant": tenant or None,
+        "supported": True,
+        "stub": True,
+        "rows": None,
         "platform": platform,
-        "message": f"Read-only query execution capped at {MAX_QUERY_ROWS} rows (dry stub)",
+        "tenant": tenant or None,
+        "message": (
+            "Read-only query execution is not implemented; no query was sent to "
+            f"{platform}. The live path would cap results at {MAX_QUERY_ROWS} rows."
+        ),
         "query_preview": query[:200],
     }
 

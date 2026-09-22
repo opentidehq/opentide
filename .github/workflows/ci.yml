@@ -163,7 +163,7 @@ jobs:
           retention-days: 14
 
   cli-e2e:
-    name: CLI E2E (3.14)
+    name: E2E (3.14)
     runs-on: ubuntu-latest
     needs: [test]
     steps:
@@ -181,8 +181,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      - name: CLI E2E pytest
-        run: uv run pytest tests/test_cli/e2e/ -m "cli_e2e or cli_smoke" -q --no-cov
+      - name: E2E pytest (CLI + MCP stdio)
+        run: uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov
 
   cli-windows-smoke:
     name: CLI Windows smoke

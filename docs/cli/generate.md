@@ -69,6 +69,12 @@ opentide generate docs index
 
 `--changed` is only supported on full `opentide generate docs` runs and cannot be combined with `--rules`, `--threats`, or `--objectives`.
 
+### Changed-object baseline
+
+`--changed` and `generate inflight` resolve the same baseline, in order: the current branch's upstream, then `origin/development`, `origin/main`, `origin/master`, then the local `development`, `main`, `master`. The current branch is never its own baseline. A single-branch repository with no upstream falls back to `HEAD`, so uncommitted and untracked object files still count as changed.
+
+Without a git worktree or without a first commit, `generate docs --changed` fails with a structured result (`status: failed`, exit `1`) instead of raising a `CalledProcessError`; `generate inflight` logs a warning and writes no shards.
+
 Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--output` and `--flavor` flags.
 
 ### Rendered sections by object type
@@ -156,6 +162,8 @@ Write preview shards for changed objects, or remove shards superseded by committ
 opentide generate inflight
 opentide generate inflight prune
 ```
+
+The pipelines from `opentide setup ci` run this on every pull request and commit only `.opentide/inflight/` to the default branch, from a worktree of that branch, never the pull request itself.
 
 ## generate extract
 

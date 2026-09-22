@@ -100,14 +100,24 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
             - name: Install opentide
               run: pip install -e ./opentide
 
-            - name: Build explorer static site
-              run: |
-                opentide explorer build \
-                  --output ./out/explorer \
-                  --base-path /${{{{ github.event.repository.name }}}}
+            - name: Export explorer bundle
+              run: opentide --json generate explorer
               env:
                 OPENTIDE_REPO_ROOT: ${{{{ github.workspace }}}}
-                OPENTIDE_EXPLORER_PATH: ${{{{ github.workspace }}}}/explorer
+
+            - name: Build explorer static site
+              working-directory: explorer
+              run: |
+                npm ci
+                npm run build
+              env:
+                OPENTIDE_BUNDLE: ${{{{ github.workspace }}}}/.opentide/exports/explorer.bundle.json
+                NEXT_PUBLIC_BASE_PATH: /${{{{ github.event.repository.name }}}}
+
+            - name: Collect static site
+              run: |
+                mkdir -p ./out
+                mv explorer/out ./out/explorer
 
             - name: Upload Pages artifact
               uses: actions/upload-pages-artifact@v3

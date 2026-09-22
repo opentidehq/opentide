@@ -60,6 +60,11 @@ class RegistryBuilder:
 
     SKIPS = frozenset({"ram", "mdrv2"})
 
+    def __init__(self) -> None:
+        # Files the loader could not parse. Kept on the index so validation can
+        # report them instead of silently dropping the object.
+        self.parse_errors: list[dict[str, str]] = []
+
     def build(self) -> dict[str, Any]:
         configs = resolve_configurations()
         paths_cfg = configs.get("paths") or configs["global"]
@@ -89,6 +94,7 @@ class RegistryBuilder:
         )
 
         objects_index, files_index = self._load_objects(paths, metaschemas)
+        index["parse_errors"] = self.parse_errors
         from opentide.indexing.inflight import apply_inflight_overlay
 
         apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
@@ -326,6 +332,13 @@ class RegistryBuilder:
             _, body, error = _parse_yaml_file(path_str)
             if error or body is None:
                 logger.error("failed_to_parse_yaml", path=path_str, error=error or "")
+                self.parse_errors.append(
+                    {
+                        "path": path_str,
+                        "object_type": meta_name,
+                        "error": error or "YAML root must be a mapping",
+                    }
+                )
                 continue
             self._ingest_object(meta_name, Path(path_str), body, objects_index, files_index)
 

@@ -8,8 +8,8 @@ import typer
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
-from opentide.cli.output import emit, emit_error, emit_success
-from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
+from opentide.cli.output import emit, emit_deprecation, emit_error, emit_success
+from opentide.cli.services.setup.ci import CiSetupOptions, is_valid_branch_name, run_ci_setup
 from opentide.cli.services.setup.interactive import (
     InteractiveRequiredError,
     ask_confirm,
@@ -54,6 +54,107 @@ def _resolve_setup_path(cli: CliContext, path: str | Path) -> Path:
     return target
 
 
+def _given_on_command_line(ctx: typer.Context, name: str) -> bool:
+    # Compared by name: Typer vendors Click, so the ParameterSource enum lives in
+    # a private module whose path is not part of Typer's API.
+    source = ctx.get_parameter_source(name)
+    return source is not None and source.name == "COMMANDLINE"
+
+
+# `ctx.meta` is one dict shared by a group's context and its subcommand's.
+_GROUP_PATHS = "opentide.setup.paths"
+_GROUP_YES = "opentide.setup.yes"
+_GROUP_REFUSAL = "opentide.setup.refusal"
+_HANDED_DOWN = frozenset({"path", "yes"})
+
+
+def _one_path(cli: CliContext, *given: str | None) -> str | None:
+    """The single target named by a group and its subcommand, if any."""
+    named = [path for path in given if path is not None]
+    if len({_resolve_setup_path(cli, path).resolve() for path in named}) > 1:
+        raise typer.BadParameter(
+            f"Pass the repository path once: {' and '.join(named)} name different targets."
+        )
+    return named[-1] if named else None
+
+
+def _hand_down(ctx: typer.Context) -> None:
+    """Give the subcommand this group's ``--path`` and ``--yes``; refuse the rest.
+
+    The group callback returned as soon as a subcommand was named, so
+    ``setup --path ./repo hooks`` configured the current directory, and
+    ``setup --ci github env`` dropped ``--ci`` without a word.
+
+    The refusal waits for the subcommand to resolve its target: Click runs this
+    callback before the subcommand parses its own ``--help``.
+    """
+    ignored = [
+        "/".join([*param.opts, *param.secondary_opts])
+        for param in ctx.command.params
+        if param.name and param.name not in _HANDED_DOWN and _given_on_command_line(ctx, param.name)
+    ]
+    if ignored and _GROUP_REFUSAL not in ctx.meta:
+        verb = "configures" if len(ignored) == 1 else "configure"
+        ctx.meta[_GROUP_REFUSAL] = (
+            f"{', '.join(ignored)} {verb} `{ctx.command_path}` itself and would be "
+            f"ignored by `{ctx.command_path} {ctx.invoked_subcommand}`."
+        )
+    if _given_on_command_line(ctx, "path"):
+        ctx.meta[_GROUP_PATHS] = (*ctx.meta.get(_GROUP_PATHS, ()), ctx.params["path"])
+    if ctx.params.get("yes"):
+        ctx.meta[_GROUP_YES] = True
+
+
+def _group_path(ctx: typer.Context, cli: CliContext, own: str | None) -> str | None:
+    """The target the enclosing groups and the subcommand agree on, if any."""
+    refusal = ctx.meta.get(_GROUP_REFUSAL)
+    if refusal:
+        raise typer.BadParameter(refusal)
+    return _one_path(cli, *ctx.meta.get(_GROUP_PATHS, ()), own)
+
+
+def _consented(ctx: typer.Context, yes: bool) -> bool:
+    return yes or bool(ctx.meta.get(_GROUP_YES))
+
+
+def _option_path(ctx: typer.Context, cli: CliContext, option: str) -> Path:
+    """Resolve a ``--path``-only command's target, inheriting the group's."""
+    own = option if _given_on_command_line(ctx, "path") else None
+    chosen = _group_path(ctx, cli, own)
+    return _resolve_setup_path(cli, "." if chosen is None else chosen)
+
+
+def _setup_path(
+    ctx: typer.Context,
+    cli: CliContext,
+    positional: str,
+    option: str,
+    *,
+    deprecate_positional: bool = False,
+) -> Path:
+    """Resolve a setup target from ``--path/-C`` or the legacy positional PATH.
+
+    Explicitness comes from the parameter source, not from comparing against the
+    ``"."`` default: ``setup repo ./other --path .`` names two different
+    targets and must be rejected, not silently resolved to ``./other``.
+    """
+    flag_given = _given_on_command_line(ctx, "path_flag")
+    positional_given = _given_on_command_line(ctx, "path")
+    if flag_given and positional_given:
+        raise typer.BadParameter(
+            "Pass the repository path once: use --path/-C or the positional PATH, not both."
+        )
+    if positional_given and deprecate_positional:
+        emit_deprecation(f"positional PATH ({ctx.command_path} {positional})", "--path/-C")
+    own = option if flag_given else positional if positional_given else None
+    chosen = _group_path(ctx, cli, own)
+    return _resolve_setup_path(cli, "." if chosen is None else chosen)
+
+
+PATH_OPTION = typer.Option(".", "--path", "-C", help="Repository path")
+PATH_ARGUMENT = typer.Argument(".", help="Repository path (alias for --path)", hidden=True)
+
+
 def _has_repo_flags(
     name: str | None,
     org: str | None,
@@ -76,10 +177,28 @@ def _should_run_repo(
     return yes and ci is None and not vscode_setup
 
 
+def _require_scripted_for_json(cli: CliContext, command: str, flags: str) -> None:
+    """Refuse to open a Rich/Questionary wizard while stdout is promised as JSON.
+
+    ``--json`` lives on the root callback, so ``opentide --json setup`` used to
+    print a setup panel, a prompt sequence, and *then* a JSON document, which no
+    caller can parse.
+    """
+    if not cli.json_output:
+        return
+    emit_error(
+        cli,
+        f"--json cannot drive the interactive wizard. Run '{command}' with --yes "
+        f"and explicit flags ({flags}), or drop --json to use the wizard.",
+    )
+
+
 def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) -> bool:
     """Confirm a scripted write unless explicit non-interactive consent was given."""
     if yes:
         return True
+    if cli.json_output:
+        emit_error(cli, f"--json cannot prompt for confirmation. Add --yes to write to {target}.")
     try:
         require_interactive()
     except InteractiveRequiredError as exc:
@@ -122,6 +241,7 @@ def setup_cmd(
 ) -> None:
     """Interactive or scripted detection repository onboarding."""
     if ctx.invoked_subcommand is not None:
+        _hand_down(ctx)
         return
 
     cli = get_context(ctx)
@@ -162,6 +282,7 @@ def setup_cmd(
         cli.apply_environment()
         result = run_setup(options)
     else:
+        _require_scripted_for_json(cli, "opentide setup", "--platform, --ci")
         try:
             result = run_interactive_setup(cli, base)
         except (InteractiveRequiredError, RuntimeError) as exc:
@@ -172,7 +293,8 @@ def setup_cmd(
 @setup_app.command("repo")
 def setup_repo_cmd(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
+    path: str = PATH_ARGUMENT,
+    path_flag: str = PATH_OPTION,
     name: str | None = typer.Option(None, "--name"),
     org: str | None = typer.Option(None, "--org"),
     description: str | None = typer.Option(None, "--description"),
@@ -185,7 +307,8 @@ def setup_repo_cmd(
 ) -> None:
     """Scaffold a detection repository."""
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     if yes or _has_repo_flags(name, org, description, platform):
         if not _confirm_write(cli, base, "Create this repository scaffold?", yes=yes):
             emit_success(cli, {"message": "Repository setup cancelled", "status": "skipped"})
@@ -201,6 +324,7 @@ def setup_repo_cmd(
         cli.apply_environment()
         result = run_repo_setup(options)
     else:
+        _require_scripted_for_json(cli, "opentide setup repo", "--name, --platform")
         try:
             result = run_interactive_repo_setup(cli, base)
         except InteractiveRequiredError as exc:
@@ -211,7 +335,8 @@ def setup_repo_cmd(
 @setup_app.command("platforms")
 def setup_platforms_cmd(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
+    path: str = PATH_ARGUMENT,
+    path_flag: str = PATH_OPTION,
     sentinel: bool = typer.Option(False, "--sentinel"),
     splunk: bool = typer.Option(False, "--splunk"),
     crowdstrike: bool = typer.Option(False, "--crowdstrike"),
@@ -223,7 +348,8 @@ def setup_platforms_cmd(
 ) -> None:
     """Create and enable platform configuration files under ``.opentide/configurations/platforms/``."""
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     platforms: list[DetectionPlatform] = []
     if sentinel:
         platforms.append(DetectionPlatform.sentinel)
@@ -255,7 +381,7 @@ def setup_platforms_cmd(
 def setup_ci_cmd(
     ctx: typer.Context,
     ci_platform: CiPlatform = typer.Argument(..., help="github, gitlab, or azure"),
-    path: str = typer.Option(".", "--path", "-C", help="Repository path"),
+    path: str = PATH_OPTION,
     staging: bool = typer.Option(True, "--staging/--no-staging"),
     inflight: bool = typer.Option(
         True,
@@ -270,13 +396,26 @@ def setup_ci_cmd(
         "--explorer-pages/--no-explorer-pages",
         help="Include GitHub Pages explorer build and deploy jobs",
     ),
+    default_branch: str | None = typer.Option(
+        None,
+        "--default-branch",
+        help="Branch that deploys and receives inflight shards "
+        "(default: origin/HEAD, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
+    ),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
     cli = get_context(ctx)
     if ci_platform is CiPlatform.none:
         raise typer.BadParameter("Choose github, gitlab, or azure")
-    target = _resolve_setup_path(cli, path)
+    if default_branch is not None and not is_valid_branch_name(default_branch):
+        raise typer.BadParameter(
+            f"{default_branch!r} cannot be written into a pipeline; "
+            "use letters, digits, '.', '_', '/' and '-'",
+            param_hint="--default-branch",
+        )
+    target = _option_path(ctx, cli, path)
+    yes = _consented(ctx, yes)
     if not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
         emit_success(cli, {"message": "CI/CD setup cancelled", "status": "skipped"})
         return
@@ -289,6 +428,7 @@ def setup_ci_cmd(
         promotion_target=promotion_target,
         python_version=python_version,
         explorer_pages=explorer_pages,
+        default_branch=default_branch,
         yes=yes,
     )
     cli.apply_environment()
@@ -298,14 +438,16 @@ def setup_ci_cmd(
 @setup_app.command("env")
 def setup_env_cmd(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
+    path: str = PATH_ARGUMENT,
+    path_flag: str = PATH_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Write ``.env.example`` with ``OPENTIDE_REPO_ROOT`` and ignore ``.env``."""
     from opentide.cli.services.setup.env import EnvSetupOptions, run_env_setup
 
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     if not _confirm_write(cli, base, "Write .env.example with OPENTIDE_REPO_ROOT?", yes=yes):
         emit_success(cli, {"message": "Environment setup cancelled", "status": "skipped"})
         return
@@ -316,7 +458,8 @@ def setup_env_cmd(
 @setup_app.command("hooks")
 def setup_hooks_cmd(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
+    path: str = PATH_ARGUMENT,
+    path_flag: str = PATH_OPTION,
     install: bool = typer.Option(
         True,
         "--install/--no-install",
@@ -328,7 +471,8 @@ def setup_hooks_cmd(
     from opentide.cli.services.setup.hooks import HooksSetupOptions, run_hooks_setup
 
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     if not _confirm_write(cli, base, "Configure validate-on-commit hooks?", yes=yes):
         emit_success(cli, {"message": "Hook setup cancelled", "status": "skipped"})
         return
@@ -339,7 +483,8 @@ def setup_hooks_cmd(
 @setup_app.command("mcp")
 def setup_mcp_cmd(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
+    path: str = PATH_ARGUMENT,
+    path_flag: str = PATH_OPTION,
     vscode: bool = typer.Option(False, "--vscode"),
     cursor: bool = typer.Option(False, "--cursor"),
     claude_code: bool = typer.Option(False, "--claude-code"),
@@ -348,7 +493,8 @@ def setup_mcp_cmd(
 ) -> None:
     """Write OpenTide MCP configuration for editors and agents."""
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _setup_path(ctx, cli, path, path_flag)
+    yes = _consented(ctx, yes)
     hosts: list[McpHost] = []
     if vscode:
         hosts.append(McpHost.vscode)
@@ -374,20 +520,12 @@ def setup_mcp_cmd(
         cli.apply_environment()
         result = run_mcp_setup(options)
     else:
+        _require_scripted_for_json(cli, "opentide setup mcp", "--vscode, --cursor, --claude-code")
         try:
             result = run_interactive_mcp_setup(base)
         except InteractiveRequiredError as exc:
             emit_error(cli, str(exc))
     emit_success(cli, result)
-
-
-def _coalesce_setup_path(cli: CliContext, positional: str, option: str) -> Path:
-    """Prefer ``--path`` when set; otherwise use the positional path."""
-    if option != ".":
-        return _resolve_setup_path(cli, option)
-    if positional != ".":
-        get_console().print("[yellow]DEPRECATED[/] Positional skills PATH; use --path/-C instead.")
-    return _resolve_setup_path(cli, positional)
 
 
 @skills_app.callback(invoke_without_command=True)
@@ -411,9 +549,11 @@ def setup_skills_install_cmd(
     ``discover`` / ``show`` as that argument and skip those subcommands.
     """
     if ctx.invoked_subcommand is not None:
+        _hand_down(ctx)
         return
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _option_path(ctx, cli, path)
+    yes = _consented(ctx, yes)
     targets: list[SkillTarget] = []
     if cursor:
         targets.append(SkillTarget.cursor)
@@ -452,6 +592,7 @@ def setup_skills_install_cmd(
         except (SkillsDownloadError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     else:
+        _require_scripted_for_json(cli, "opentide setup skills", "--skill, --all")
         try:
             result = run_interactive_skills_setup(base)
         except (InteractiveRequiredError, RuntimeError, SkillsManifestError) as exc:
@@ -462,15 +603,15 @@ def setup_skills_install_cmd(
 @skills_app.command("discover")
 def setup_skills_discover_cmd(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
-    path_flag: str = typer.Option(".", "--path", "-C", help="Repository path"),
+    path: str = PATH_ARGUMENT,
+    path_flag: str = PATH_OPTION,
     query: str | None = typer.Option(None, "--query", "-q"),
     installed: bool = typer.Option(False, "--installed"),
     refresh: bool = typer.Option(False, "--refresh"),
 ) -> None:
     """List skills from the OpenTideHQ/skills catalogue."""
     cli = get_context(ctx)
-    base = _coalesce_setup_path(cli, path, path_flag)
+    base = _setup_path(ctx, cli, path, path_flag, deprecate_positional=True)
     try:
         payload = discover_skills(base, query=query, installed_only=installed, refresh=refresh)
     except SkillsManifestError as exc:
@@ -503,7 +644,7 @@ def setup_skills_show_cmd(
 ) -> None:
     """Show details for one skill from the catalogue."""
     cli = get_context(ctx)
-    base = _resolve_setup_path(cli, path)
+    base = _option_path(ctx, cli, path)
     try:
         payload = show_skill(base, name, refresh=refresh)
     except SkillsManifestError as exc:
@@ -527,7 +668,8 @@ def setup_skills_show_cmd(
 @setup_app.command("vscode")
 def setup_vscode_cmd(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Repository path"),
+    path: str = PATH_ARGUMENT,
+    path_flag: str = PATH_OPTION,
     settings: bool = typer.Option(False, "--settings"),
     snippets: bool = typer.Option(False, "--snippets"),
     no_merge: bool = typer.Option(False, "--no-merge"),
@@ -535,11 +677,17 @@ def setup_vscode_cmd(
     mcp: bool = typer.Option(
         False, "--mcp", help="Also write .vscode/mcp.json (same as setup mcp --vscode)"
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Accepted for symmetry with other setup subcommands; this command never prompts",
+    ),
 ) -> None:
     """Write VS Code yaml.schemas and snippets (deprecated). Default: both."""
     cli = get_context(ctx)
     cli.apply_environment()
-    target = _resolve_setup_path(cli, path)
+    target = _setup_path(ctx, cli, path, path_flag)
     run_settings_flag = settings or not snippets
     run_snippets_flag = snippets or not settings
     result = run_vscode_setup(
