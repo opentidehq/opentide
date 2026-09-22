@@ -6,6 +6,65 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-22
+
+Minor on the public 0.3.0 beta. Upgrade if a first-run command crashed, printed a traceback, or quietly did nothing: this release fixes the first-user bugs filed against 0.3.0 ([#239](https://github.com/OpenTideHQ/opentide/issues/239)–[#258](https://github.com/OpenTideHQ/opentide/issues/258), [#202](https://github.com/OpenTideHQ/opentide/issues/202), [#233](https://github.com/OpenTideHQ/opentide/issues/233)) and the test-harness gaps that let them ship ([#259](https://github.com/OpenTideHQ/opentide/issues/259)). It is a minor rather than a patch because several fixes change output that scripts can depend on — read **Changed** before upgrading a pipeline. If you generated GitHub CI with `opentide setup ci`, regenerate it — see **Security**.
+
+### Security
+
+- The inflight job written by `opentide setup ci github` checked out the pull request head and ran `git push origin HEAD:<default branch>`. Whenever the pull request was up to date with the default branch, that push fast-forwarded the default branch to the pull request, landing its unreviewed changes. Generated GitHub, GitLab, and Azure inflight jobs now commit only `.opentide/inflight/` shards, on a separate worktree of the default branch, and push that. Regenerate existing pipelines with `opentide setup ci <github|gitlab|azure> --yes` ([#244](https://github.com/OpenTideHQ/opentide/issues/244)).
+
+### Changed
+
+- `opentide validate query` is an offline syntax check (KQL, SPL, S1QL, Lucene) by default and needs no platform SDK, credentials, or network. It follows each dialect's quoting and escaping: KQL multi-line strings (```` ``` ```` and `~~~`), S1QL `||` (with an operand on each side), and Lucene backslash escapes, mixed range ends, and `/regex/` terms. The previous tenant round-trip is `validate query --live`, which names the extra to install when the SDK is missing. JSON output reports `mode: offline-syntax` or `mode: live` ([#239](https://github.com/OpenTideHQ/opentide/issues/239)).
+- `validate query` for CrowdStrike and HarfangLab returns the normal `ok` / `status` envelope with `supported: false` instead of a bare payload ([#247](https://github.com/OpenTideHQ/opentide/issues/247)).
+- `query` is required and must not be blank on Splunk and Carbon Black configurations, as on the other query platforms. A rule with `query: ""` now fails validation instead of deploying nothing ([#233](https://github.com/OpenTideHQ/opentide/issues/233)). See [Upgrading to 0.4.0](https://opentide.org/docs/usage/concepts/platforms/#upgrading-to-040).
+- `opentide --json setup` without `--yes` refuses to start the interactive wizard and exits non-zero with one JSON error ([#255](https://github.com/OpenTideHQ/opentide/issues/255)).
+- MCP `search` always returns a list (a UUID lookup included, which also honours the other filters and ignores case; `get_chaining` resolves UUIDs the same way and returns the graph for them), `platform=` matches the configuration key exactly, and `coverage` for a parent technique includes sub-technique rules and reports `matched_techniques` ([#252](https://github.com/OpenTideHQ/opentide/issues/252), [#253](https://github.com/OpenTideHQ/opentide/issues/253)).
+- MCP `opentide://vocabularies` returns an index (`metadata`, `entry_count`, `uri`) instead of every entry; read `opentide://vocabularies/{name}` for entries ([#254](https://github.com/OpenTideHQ/opentide/issues/254)).
+- MCP `run_query` is an explicit stub (`stub: true`, `rows: null`, no `results` key) rather than a successful empty result ([#258](https://github.com/OpenTideHQ/opentide/issues/258)).
+- `mcp` is pinned `<2` and the unused `fastmcp` dependency is gone. `opentide[sentinel]` declares the Azure packages the Sentinel validator and deployer import ([#256](https://github.com/OpenTideHQ/opentide/issues/256), [#239](https://github.com/OpenTideHQ/opentide/issues/239)).
+- The positional `PATH` on `setup` subcommands is deprecated in favour of `--path` / `-C`. Giving both is a usage error ([#248](https://github.com/OpenTideHQ/opentide/issues/248)).
+
+### Fixed
+
+- `deploy metadata` and `generate inflight prune` no longer run their parent command first — a live deploy, or a second JSON document on stdout ([#243](https://github.com/OpenTideHQ/opentide/issues/243)).
+- `opentide info coverage --technique T1059` works in either argument order ([#257](https://github.com/OpenTideHQ/opentide/issues/257)).
+- Every `setup` subcommand accepts `--path` / `-C` and `--yes` / `-y`. Given before the subcommand (`opentide setup --path DIR --yes env`) they apply to it; other `setup` options in that position are refused instead of silently ignored, and a subcommand's `--help` after them still shows its help ([#248](https://github.com/OpenTideHQ/opentide/issues/248)).
+- `validate --file objects/rules/x.yaml` honours the directory; a path target no longer matches a same-named file elsewhere. The ID-uniqueness check and the MCP `validation_report` tool resolve the same targets against the workspace, so a duplicate UUID is reported and an MCP server started outside the repository still finds the file ([#240](https://github.com/OpenTideHQ/opentide/issues/240)).
+- Unparseable object YAML is reported as a `yaml_parse` validation issue instead of a traceback, including files the indexer skips ([#250](https://github.com/OpenTideHQ/opentide/issues/250)).
+- `generate docs --changed` reports a structured failure in a repository without commits instead of a traceback. `generate docs --changed` and `generate inflight` find the baseline on `development`, `main`, or `master` (upstream, remote, or local), or whatever `origin/HEAD` names, count untracked object YAML, keep non-ASCII file names, and work when the workspace is nested inside the checkout. A pushed feature branch (`git push -u`, or an `actions/checkout` job) is compared with the default branch rather than its own remote copy, which hid every committed change ([#241](https://github.com/OpenTideHQ/opentide/issues/241), [#251](https://github.com/OpenTideHQ/opentide/issues/251)).
+- `generate extract sentinel|defender` fail with a reportable error that names the missing extra, tenant, or key instead of `ModuleNotFoundError` / `KeyError` at import ([#242](https://github.com/OpenTideHQ/opentide/issues/242)).
+- `opentide generate explorer` is registered and writes `explorer.bundle.json` / `explorer.search.json`; the GitHub CI template calls it instead of the nonexistent `opentide explorer build` ([#202](https://github.com/OpenTideHQ/opentide/issues/202)).
+- A Sentinel-only `validate query` or deploy loads only the Sentinel engine: no missing-validator warnings for other vendors and no `ERROR` for platforms the repository disabled. An engine that fails to load is reported instead of a traceback ([#246](https://github.com/OpenTideHQ/opentide/issues/246)).
+- `setup ci gitlab` inflight jobs use `${CI_JOB_TOKEN}` / `${CI_SERVER_HOST}` and a commit message GitLab can parse; `setup ci azure` inflight jobs actually commit and push (`set -e` script, `persistCredentials: true`, no cross-stage `dependsOn`); GitLab jobs that run `git` install it on the `python:*-slim` image. GitHub and Azure jobs target the repository's default branch (`setup ci --default-branch`, else `origin/HEAD`) instead of assuming `main`, and inflight jobs retry when another job publishes first and keep the shards other pull requests publish while they run ([#244](https://github.com/OpenTideHQ/opentide/issues/244)).
+- The pre-commit hook validates the worktree being committed rather than an exported `OPENTIDE_REPO_ROOT`, and `--repo` overrides an exported workspace ([#249](https://github.com/OpenTideHQ/opentide/issues/249)). A workspace nested below the Git root is validated at its own path, several workspaces in one repository share the hook instead of the last `setup hooks` run replacing the others, and a hook whose workspace was moved or deleted fails instead of passing every commit. Setup no longer installs into a user-wide `core.hooksPath`, where the hook would fail commits in every other repository, and no longer crashes on Windows when the hooks directory is on another drive.
+- `--no-color`, `NO_COLOR`, `FORCE_COLOR=0`, and `PY_COLORS=0` keep every line free of ANSI escapes, including Typer help and usage errors on CI runners that force colour. Importing `opentide.ci` no longer changes a host application's Typer colour settings ([#282](https://github.com/OpenTideHQ/opentide/pull/282)).
+- MCP `coverage` and actor search read `rule.techniques` and `threat.actors`, not only `tags.*` ([#252](https://github.com/OpenTideHQ/opentide/issues/252)).
+- MCP `opentide://schemas/{object_type}` resolves `rule` / `rule::1.0` instead of returning `{}`, `opentide://templates/{object_type}` accepts the same forms for the current schema version, and vocabularies are JSON rather than Pydantic `repr()` strings ([#254](https://github.com/OpenTideHQ/opentide/issues/254)).
+- MCP `validate_query` returns real findings instead of `valid: true` for any string ([#245](https://github.com/OpenTideHQ/opentide/issues/245)).
+- `opentide-mcp` from a plain `pip install opentide` prints the install line for the `mcp` extra instead of a traceback, and `opentide setup mcp` warns when the extra is missing ([#256](https://github.com/OpenTideHQ/opentide/issues/256)).
+- `splunk::2.x` rules map `search`, `cron_schedule`, and flat throttling / notable / risk / email fields the same way in `validate` and `deploy`, and a migrated `cron_schedule` deploys as a scheduled search ([#233](https://github.com/OpenTideHQ/opentide/issues/233)).
+- Tutorial, quickstart, and CLI reference samples match live output ([#247](https://github.com/OpenTideHQ/opentide/issues/247)).
+
+### Tests
+
+The CI harness now exercises the paths a first user takes, so these bugs fail CI if they return ([#259](https://github.com/OpenTideHQ/opentide/issues/259)): interactive setup on a real PTY ([#260](https://github.com/OpenTideHQ/opentide/issues/260)); `validate query` against the real validators ([#261](https://github.com/OpenTideHQ/opentide/issues/261)); the wheel job runs `opentide-mcp` with and without the extra ([#262](https://github.com/OpenTideHQ/opentide/issues/262)); a Typer argv matrix ([#263](https://github.com/OpenTideHQ/opentide/issues/263)); unmocked MCP tests plus a stdio JSON-RPC client ([#264](https://github.com/OpenTideHQ/opentide/issues/264)); hook tests that run `git commit` ([#265](https://github.com/OpenTideHQ/opentide/issues/265)); unmocked `generate extract` / `generate explorer` ([#266](https://github.com/OpenTideHQ/opentide/issues/266)); repo-relative `validate --file` ([#267](https://github.com/OpenTideHQ/opentide/issues/267)); git-baseline e2e for HEAD-less and non-`main` repositories ([#268](https://github.com/OpenTideHQ/opentide/issues/268)); assertions on GitLab and Azure job scripts ([#269](https://github.com/OpenTideHQ/opentide/issues/269)); and every documented `opentide` command resolved against the live CLI, with read-only samples executed as golden tests ([#270](https://github.com/OpenTideHQ/opentide/issues/270)).
+
+### Not in this release
+
+- [#189](https://github.com/OpenTideHQ/opentide/issues/189) (`ThreatBody.impact` / `leverage` as `list[str]`) waits on [OpenTideHQ/specifications#12](https://github.com/OpenTideHQ/specifications/issues/12).
+
+### Install
+
+```bash
+pip install opentide==0.4.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+Regenerate generated CI and hooks to pick up the fixed templates: `opentide setup ci <github|gitlab|azure> --yes` and `opentide setup hooks --yes`.
+
 ## [0.3.0] — 2026-09-21
 
 Minor maintenance release on the public 0.2.1 beta. Upgrade for current runtime and toolchain floors (cryptography 50.x, typer 0.27) and a clean GitHub Code Quality pass.
@@ -263,7 +322,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.4.0
 [0.3.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.3.0
 [0.2.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.1
 [0.2.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.0
