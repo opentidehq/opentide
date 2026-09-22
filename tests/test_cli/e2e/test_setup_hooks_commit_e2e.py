@@ -13,12 +13,17 @@ environment) and then pointed at a different detection repository.
 from __future__ import annotations
 
 import os
+import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 from pytest_console_scripts import RunResult, ScriptRunner
 from tests.test_cli.e2e.helpers import write_tutorial_objects
+
+from opentide.cli.services.setup.hooks import HOOK_ID, PRE_COMMIT_CONFIG, hook_entry
 
 pytestmark = [
     pytest.mark.cli_smoke,
@@ -159,6 +164,11 @@ def _scaffold_nested(script_runner: ScriptRunner, mono: Path, workspace: Path) -
     _git(mono, "config", "user.email", "e2e@opentide.local")
     _git(mono, "config", "user.name", "OpenTide E2E")
     (mono / "README.md").write_text("monorepo\n", encoding="utf-8")
+    return _add_workspace(script_runner, workspace)
+
+
+def _add_workspace(script_runner: ScriptRunner, workspace: Path) -> RunResult:
+    """Scaffold *workspace*, set up its hooks, and give it valid objects."""
     setup: RunResult = script_runner.run(
         [
             "opentide",
@@ -226,6 +236,98 @@ def test_versioned_hook_validates_the_nested_workspace_not_the_git_root(
     result = _commit(mono, "commit broken yaml", _clean_env())
     output = result.stdout + result.stderr
     assert result.returncode != 0, f"the hook validated the monorepo root\n{output}"
+    assert "Could not parse object YAML" in output, output
+
+
+def test_hook_keeps_validating_every_nested_workspace(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """A repository has one hook; setting up team-b used to repoint it away from team-a."""
+    mono = tmp_path / "mono"
+    team_a = mono / "team-a"
+    _scaffold_nested(script_runner, mono, team_a)
+    _add_workspace(script_runner, mono / "team-b")
+    assert _commit(mono, "baseline", _clean_env()).returncode == 0
+
+    (team_a / BROKEN_RELPATH).write_text(BROKEN_YAML, encoding="utf-8")
+    result = _commit(mono, "commit broken yaml in team-a", _clean_env())
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, f"broken YAML in the first workspace was committed\n{output}"
+    assert "Could not parse object YAML" in output, output
+
+
+def test_hook_fails_when_the_pinned_workspace_was_moved(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """``validate --strict`` on the old, now missing path passed every later commit."""
+    mono = tmp_path / "mono"
+    workspace = mono / "detections"
+    _scaffold_nested(script_runner, mono, workspace)
+    assert _commit(mono, "baseline", _clean_env()).returncode == 0
+
+    workspace.rename(mono / "renamed")
+    result = _commit(mono, "move the workspace", _clean_env())
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, f"a hook pinned to a moved workspace passed\n{output}"
+    assert "No OpenTide workspace at" in output, output
+    assert "opentide setup hooks" in output, output
+
+
+def _opentide_entry(config: Path) -> str:
+    parsed = yaml.safe_load(config.read_text(encoding="utf-8"))
+    return next(
+        hook["entry"] for repo in parsed["repos"] for hook in repo["hooks"] if hook["id"] == HOOK_ID
+    )
+
+
+def _scaffold_nested_under_a_root_pinned_config(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> tuple[Path, Path]:
+    """A monorepo whose root config already runs opentide-validate against the root."""
+    mono = tmp_path / "mono"
+    workspace = mono / "detections"
+    mono.mkdir()
+    (mono / ".pre-commit-config.yaml").write_text(PRE_COMMIT_CONFIG, encoding="utf-8")
+    hooks = _scaffold_nested(script_runner, mono, workspace)
+    assert "../.pre-commit-config.yaml" in hooks.stdout, hooks.stdout
+    assert "copy the opentide-validate hook" not in hooks.stdout, hooks.stdout
+    (workspace / BROKEN_RELPATH).write_text(BROKEN_YAML, encoding="utf-8")
+    return mono, workspace
+
+
+def test_nested_setup_repoints_the_root_pre_commit_entry(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """pre-commit reads only the root config; its root pin passed broken nested YAML."""
+    mono, _ = _scaffold_nested_under_a_root_pinned_config(script_runner, tmp_path)
+    entry = _opentide_entry(mono / ".pre-commit-config.yaml")
+    assert entry == hook_entry("detections"), entry
+
+    result = subprocess.run(
+        shlex.split(entry), cwd=mono, env=_clean_env(), capture_output=True, text=True
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, f"the root entry passed broken nested YAML\n{output}"
+    assert "Could not parse object YAML" in output, output
+
+
+@pytest.mark.skipif(shutil.which("pre-commit") is None, reason="pre-commit is not installed")
+def test_pre_commit_framework_validates_the_nested_workspace(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    mono, _ = _scaffold_nested_under_a_root_pinned_config(script_runner, tmp_path)
+
+    result = subprocess.run(
+        ["pre-commit", "run", HOOK_ID, "--all-files"],
+        cwd=mono,
+        env=_clean_env(PRE_COMMIT_HOME=str(tmp_path / "pre-commit-home")),
+        capture_output=True,
+        text=True,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, f"pre-commit passed broken nested YAML\n{output}"
     assert "Could not parse object YAML" in output, output
 
 

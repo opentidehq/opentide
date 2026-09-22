@@ -76,12 +76,19 @@ def test_query_language_is_none_for_platforms_without_one() -> None:
         ("process_cmdline:/.*[^)]+/", "lucene"),
         (r'process_name:/cmd\.(exe|bat)/ AND process_cmdline:/"[a-z\//', "lucene"),
         ("process_name:/usr/bin/bash", "lucene"),
+        # An unescaped path is not a regex that runs on into the next term.
+        ('process_name:/usr/bin/curl AND process_cmdline:"http://evil"', "lucene"),
+        ('process_name:/usr/bin/bash AND process_cmdline:"/bin/sh -c"', "lucene"),
+        ("process_name:/usr/bin/curl AND (process_cmdline:x OR process_name:/tmp/y)", "lucene"),
+        ("(process_name:/tmp/) AND -/bad.*/^2", "lucene"),
         # KQL multi-line literal: quotes and brackets inside are data.
         (
             "let script = ```\nIEX \"(New-Object Net.WebClient)\nit's [open\n```;\n"
             "DeviceProcessEvents | where ProcessCommandLine has script",
             "kql",
         ),
+        ('let s = ~~~\n"(\n~~~;\nDeviceProcessEvents | take 1', "kql"),
+        ('(EventType = "a" || EventType = "b") | group count()', "s1ql"),
     ],
 )
 def test_well_formed_queries_produce_no_findings(query: str, language: str) -> None:
@@ -106,10 +113,18 @@ def test_well_formed_queries_produce_no_findings(query: str, language: str) -> N
         (r'DeviceProcessEvents | where FolderPath has @"C:\Windows', "kql", "unterminated_string"),
         ('process_name:"cmd.exe', "lucene", "unterminated_string"),
         ("let s = ```\nnever closed", "kql", "unterminated_string"),
+        ("let s = ~~~\nnever closed", "kql", "unterminated_string"),
         ('EventType = "Process Creation" ||', "s1ql", "dangling_operator"),
+        # `||` is OR, so it needs an operand on each side within its stage.
+        ("|| a = 'b'", "s1ql", "dangling_operator"),
+        ("a = 'b' ||| columns x", "s1ql", "dangling_operator"),
+        ("(|| a = 'b')", "s1ql", "dangling_operator"),
+        ("(a = 'b' ||) | columns x", "s1ql", "dangling_operator"),
         ("process_pid:(1000 TO 2000]", "lucene", "bracket_mismatch"),
         ("process_pid:[1000 TO 2000", "lucene", "unclosed_bracket"),
         ("process_name:/cmd/ AND (parent_name:x", "lucene", "unclosed_bracket"),
+        # A regex is only closed where its term ends, so it cannot swallow a bracket.
+        ("process_name:/usr/bin (parent_name:/tmp/ OR x", "lucene", "unclosed_bracket"),
     ],
 )
 def test_broken_queries_report_the_expected_code(query: str, language: str, expected: str) -> None:
@@ -171,6 +186,7 @@ def test_each_relaxation_stays_in_its_own_language() -> None:
     # Only KQL reads triple backticks as a string; in SPL they are a comment.
     assert codes("search x=1 ``` it's a note ``` | head 1", "spl") == []
     assert codes('```\nsay "hi\n```', "s1ql") == ["unterminated_string"]
+    assert codes('~~~\nsay "hi\n~~~', "s1ql") == ["unterminated_string"]
     # Only Lucene escapes outside a phrase.
     assert codes(r"SecurityEvent | where Cmd has \(", "kql") == ["unclosed_bracket"]
     # Only Lucene reads /.../ as a regex.

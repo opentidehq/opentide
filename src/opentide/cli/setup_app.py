@@ -9,7 +9,7 @@ import typer
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
 from opentide.cli.output import emit, emit_deprecation, emit_error, emit_success
-from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
+from opentide.cli.services.setup.ci import CiSetupOptions, is_valid_branch_name, run_ci_setup
 from opentide.cli.services.setup.interactive import (
     InteractiveRequiredError,
     ask_confirm,
@@ -62,15 +62,16 @@ def _given_on_command_line(ctx: typer.Context, name: str) -> bool:
 
 
 # `ctx.meta` is one dict shared by a group's context and its subcommand's.
-_GROUP_PATH = "opentide.setup.path"
+_GROUP_PATHS = "opentide.setup.paths"
 _GROUP_YES = "opentide.setup.yes"
+_GROUP_REFUSAL = "opentide.setup.refusal"
 _HANDED_DOWN = frozenset({"path", "yes"})
 
 
-def _one_path(*given: str | None) -> str | None:
+def _one_path(cli: CliContext, *given: str | None) -> str | None:
     """The single target named by a group and its subcommand, if any."""
     named = [path for path in given if path is not None]
-    if len({Path(path).resolve() for path in named}) > 1:
+    if len({_resolve_setup_path(cli, path).resolve() for path in named}) > 1:
         raise typer.BadParameter(
             f"Pass the repository path once: {' and '.join(named)} name different targets."
         )
@@ -83,22 +84,33 @@ def _hand_down(ctx: typer.Context) -> None:
     The group callback returned as soon as a subcommand was named, so
     ``setup --path ./repo hooks`` configured the current directory, and
     ``setup --ci github env`` dropped ``--ci`` without a word.
+
+    The refusal waits for the subcommand to resolve its target: Click runs this
+    callback before the subcommand parses its own ``--help``.
     """
     ignored = [
         "/".join([*param.opts, *param.secondary_opts])
         for param in ctx.command.params
         if param.name and param.name not in _HANDED_DOWN and _given_on_command_line(ctx, param.name)
     ]
-    if ignored:
+    if ignored and _GROUP_REFUSAL not in ctx.meta:
         verb = "configures" if len(ignored) == 1 else "configure"
-        raise typer.BadParameter(
+        ctx.meta[_GROUP_REFUSAL] = (
             f"{', '.join(ignored)} {verb} `{ctx.command_path}` itself and would be "
             f"ignored by `{ctx.command_path} {ctx.invoked_subcommand}`."
         )
     if _given_on_command_line(ctx, "path"):
-        ctx.meta[_GROUP_PATH] = _one_path(ctx.meta.get(_GROUP_PATH), ctx.params["path"])
+        ctx.meta[_GROUP_PATHS] = (*ctx.meta.get(_GROUP_PATHS, ()), ctx.params["path"])
     if ctx.params.get("yes"):
         ctx.meta[_GROUP_YES] = True
+
+
+def _group_path(ctx: typer.Context, cli: CliContext, own: str | None) -> str | None:
+    """The target the enclosing groups and the subcommand agree on, if any."""
+    refusal = ctx.meta.get(_GROUP_REFUSAL)
+    if refusal:
+        raise typer.BadParameter(refusal)
+    return _one_path(cli, *ctx.meta.get(_GROUP_PATHS, ()), own)
 
 
 def _consented(ctx: typer.Context, yes: bool) -> bool:
@@ -108,7 +120,7 @@ def _consented(ctx: typer.Context, yes: bool) -> bool:
 def _option_path(ctx: typer.Context, cli: CliContext, option: str) -> Path:
     """Resolve a ``--path``-only command's target, inheriting the group's."""
     own = option if _given_on_command_line(ctx, "path") else None
-    chosen = _one_path(ctx.meta.get(_GROUP_PATH), own)
+    chosen = _group_path(ctx, cli, own)
     return _resolve_setup_path(cli, "." if chosen is None else chosen)
 
 
@@ -135,7 +147,7 @@ def _setup_path(
     if positional_given and deprecate_positional:
         emit_deprecation(f"positional PATH ({ctx.command_path} {positional})", "--path/-C")
     own = option if flag_given else positional if positional_given else None
-    chosen = _one_path(ctx.meta.get(_GROUP_PATH), own)
+    chosen = _group_path(ctx, cli, own)
     return _resolve_setup_path(cli, "." if chosen is None else chosen)
 
 
@@ -384,12 +396,24 @@ def setup_ci_cmd(
         "--explorer-pages/--no-explorer-pages",
         help="Include GitHub Pages explorer build and deploy jobs",
     ),
+    default_branch: str | None = typer.Option(
+        None,
+        "--default-branch",
+        help="Branch that deploys and receives inflight shards "
+        "(default: origin/HEAD, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
+    ),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
     cli = get_context(ctx)
     if ci_platform is CiPlatform.none:
         raise typer.BadParameter("Choose github, gitlab, or azure")
+    if default_branch is not None and not is_valid_branch_name(default_branch):
+        raise typer.BadParameter(
+            f"{default_branch!r} cannot be written into a pipeline; "
+            "use letters, digits, '.', '_', '/' and '-'",
+            param_hint="--default-branch",
+        )
     target = _option_path(ctx, cli, path)
     yes = _consented(ctx, yes)
     if not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
@@ -404,6 +428,7 @@ def setup_ci_cmd(
         promotion_target=promotion_target,
         python_version=python_version,
         explorer_pages=explorer_pages,
+        default_branch=default_branch,
         yes=yes,
     )
     cli.apply_environment()

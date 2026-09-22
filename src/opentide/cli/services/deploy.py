@@ -88,11 +88,15 @@ def run_deploy(
             "deployed": [],
         }
     IndexManager.reload()
-    mdr_deployers = cast(dict[str, Any], DeployTide().mdr_for(deployment_list))
     deployed: list[str] = []
     plan_payload: dict[str, list[str]] = {
         system: list(uuids) for system, uuids in deployment_list.items()
     }
+    try:
+        mdr_deployers = cast(dict[str, Any], DeployTide().mdr_for(deployment_list))
+    except Exception as exc:
+        message = str(exc).strip() or f"{type(exc).__name__} while loading deployment engines"
+        return {"status": "failed", "message": message, "deployed": deployed, "_exit_code": 1}
     payloads: dict[str, list[dict[str, object]]] = {}
     for system, uuids in deployment_list.items():
         if system not in mdr_deployers:

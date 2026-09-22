@@ -61,21 +61,21 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     function documented to raise ``GitBaselineError``.
     """
     try:
-        return subprocess.run(
-            ["git", *args],
-            cwd=repo_root,
-            capture_output=True,
-            # Paths are bytes to git; decode them the way ``os.fsdecode`` would
-            # rather than by locale, which is ASCII in many CI images.
-            encoding="utf-8",
-            errors="surrogateescape",
-            check=False,
-        )
+        result = subprocess.run(["git", *args], cwd=repo_root, capture_output=True, check=False)
     except OSError as exc:
         logger.debug("git_unavailable", args=args, error=str(exc))
         return subprocess.CompletedProcess(
             ["git", *args], returncode=127, stdout="", stderr=str(exc)
         )
+    # Paths are bytes to git; decode them the way ``os.fsdecode`` would rather
+    # than by locale, which is ASCII in many CI images. Not in text mode: its
+    # newline translation turns a ``\r`` inside a file name into ``\n``.
+    return subprocess.CompletedProcess(
+        result.args,
+        result.returncode,
+        stdout=result.stdout.decode("utf-8", "surrogateescape"),
+        stderr=result.stderr.decode("utf-8", "replace"),
+    )
 
 
 def _git_stdout(repo_root: Path, *args: str) -> str | None:
@@ -93,41 +93,76 @@ def has_git_head(repo_root: Path) -> bool:
     return _git_stdout(repo_root, "rev-parse", "--verify", "HEAD") is not None
 
 
-def _upstream(repo_root: Path, head_branch: str | None) -> str | None:
-    """``@{upstream}``, unless it is the branch's own copy on its remote.
+def _current_branch(repo_root: Path) -> str | None:
+    """The checked-out branch name, or ``None`` on a detached ``HEAD``.
+
+    Not ``--short`` and not ``rev-parse --abbrev-ref HEAD``: both print
+    ``heads/feature`` when a tag named ``feature`` exists too.
+    """
+    ref = _git_stdout(repo_root, "symbolic-ref", "--quiet", "HEAD")
+    if ref and ref.startswith("refs/heads/"):
+        return ref.removeprefix("refs/heads/")
+    return None
+
+
+def _remote_default_branch(repo_root: Path) -> str | None:
+    """The branch ``origin/HEAD`` points at, e.g. ``main``.
+
+    A clone records it, whatever the default branch is called. ``git init`` +
+    ``remote add`` + ``push``, and a fetch before git 2.48, leave it unset.
+    """
+    prefix = "refs/remotes/origin/"
+    ref = _git_stdout(repo_root, "symbolic-ref", "--quiet", f"{prefix}HEAD")
+    if ref and ref.startswith(prefix):
+        return ref.removeprefix(prefix)
+    return None
+
+
+def _tracks_itself(repo_root: Path, branch: str) -> bool:
+    """Whether ``branch``'s upstream is its own copy on a remote.
 
     ``git push -u origin feature`` and ``actions/checkout`` (``checkout -B
-    feature refs/remotes/origin/feature``) both make a branch track itself.
-    ``merge-base HEAD origin/feature`` is then ``HEAD``, and every committed
-    change disappears from the diff. A branch that tracks another branch
-    (``origin/main``, or ``feature-1`` in a stack) is still a real base.
+    feature refs/remotes/origin/feature``) both set this up.
     """
-    upstream = _git_stdout(
-        repo_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
-    )
-    if not upstream or not head_branch:
-        return None
-    merge = _git_stdout(repo_root, "config", "--get", f"branch.{head_branch}.merge")
-    if merge == f"refs/heads/{head_branch}":
-        return None
-    return upstream
+    merge = _git_stdout(repo_root, "config", "--get", f"branch.{branch}.merge")
+    return merge == f"refs/heads/{branch}"
+
+
+def _is_default_branch(branch: str, remote_default: str | None) -> bool:
+    if remote_default:
+        return branch == remote_default
+    return branch in DEFAULT_BRANCH_NAMES
 
 
 def candidate_refs(repo_root: Path) -> list[str]:
     """Baseline refs to try, most specific first."""
-    head_branch = _git_stdout(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
-    candidates: list[str] = []
-    upstream = _upstream(repo_root, head_branch)
-    if upstream:
-        candidates.append(upstream)
-    # A clone records the remote's default branch, whatever it is called.
-    remote_default = _git_stdout(
-        repo_root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"
+    head_branch = _current_branch(repo_root)
+    upstream = _git_stdout(
+        repo_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
     )
+    remote_default = _remote_default_branch(repo_root)
+    candidates: list[str] = []
+    last_resort: str | None = None
+    if upstream and head_branch and _tracks_itself(repo_root, head_branch):
+        # merge-base with the branch's own remote copy is `HEAD` once it is
+        # pushed. On the default branch that is the point: the diff is the work
+        # not pushed yet. On a feature branch it hides every committed change,
+        # so try the default branches first and keep it only for a trunk none
+        # of them name.
+        if _is_default_branch(head_branch, remote_default):
+            candidates.append(upstream)
+        else:
+            last_resort = upstream
+    elif upstream:
+        # Tracking another branch (`origin/release-1.2`, or `feature-1` in a
+        # stack) names the real base.
+        candidates.append(upstream)
     if remote_default:
-        candidates.append(remote_default)
+        candidates.append(f"origin/{remote_default}")
     candidates.extend(f"origin/{name}" for name in DEFAULT_BRANCH_NAMES)
     candidates.extend(DEFAULT_BRANCH_NAMES)
+    if last_resort:
+        candidates.append(last_resort)
 
     ordered: list[str] = []
     seen: set[str] = set()
@@ -177,6 +212,14 @@ def git_toplevel(repo_root: Path) -> Path:
     return Path(top) if top else repo_root
 
 
+def _is_utf8(decoded: str) -> bool:
+    try:
+        decoded.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def changed_paths(
     repo_root: Path, baseline: GitBaseline, *, pathspec: str | None = None
 ) -> list[ChangedPath]:
@@ -185,7 +228,8 @@ def changed_paths(
     Untracked files are included because a brand new object has no diff against
     the baseline but is exactly the thing a preview or a ``--changed`` docs run
     needs to pick up. Deleted paths are kept — callers distinguish them by
-    testing ``absolute.exists()``.
+    testing ``absolute.exists()``. Paths that are not valid UTF-8 are skipped
+    with a ``git_path_not_utf8`` warning.
 
     ``pathspec`` is interpreted relative to the git top level, matching the
     paths this returns.
@@ -210,6 +254,11 @@ def changed_paths(
     results: list[ChangedPath] = []
     for line in lines:
         if not line:
+            continue
+        if not _is_utf8(line):
+            # Callers emit these paths as JSON, which cannot carry the lone
+            # surrogates a non-UTF-8 name decodes to.
+            logger.warning("git_path_not_utf8", path=repr(line.encode("utf-8", "surrogateescape")))
             continue
         relative = Path(line)
         if relative in seen:
