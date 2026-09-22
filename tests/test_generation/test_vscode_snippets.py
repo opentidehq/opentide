@@ -220,7 +220,7 @@ def test_run_honors_snippets_path_override(tmp_path: Path) -> None:
 
 def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
     """Reproduce issue #153: snippets must not crash on a scaffolded empty repo."""
-    from tests.test_cli.conftest import _clear_runtime_caches
+    from tests.corpus_support import clear_runtime_caches
 
     from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
     from opentide.core.registry import OpenTide
@@ -232,7 +232,7 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(fresh))
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(fresh))
     monkeypatch.delenv("OPENTIDE_DATA_ROOT", raising=False)
-    _clear_runtime_caches()
+    clear_runtime_caches()
     OpenTide.initialise()
     templates_dir = fresh / ".opentide" / "templates"
     templates_dir.mkdir(parents=True, exist_ok=True)
@@ -259,4 +259,4 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
         for line in payload["Detection Rules Template"]["body"]
         if line.lstrip().startswith("#")
     )
-    _clear_runtime_caches()
+    clear_runtime_caches()
