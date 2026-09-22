@@ -95,7 +95,11 @@ def test_render_github_explorer_pages_jobs() -> None:
     assert "pages: write" in workflow
     assert "explorer:" in workflow
     assert "deploy-explorer:" in workflow
-    assert "OPENTIDE_EXPLORER_PATH" in workflow
+    # The bundle is exported by `opentide generate explorer` and handed to the
+    # checked-out explorer repo; there is no `opentide explorer build` (#202).
+    assert "opentide --json generate explorer" in workflow
+    assert "OPENTIDE_BUNDLE" in workflow
+    assert "opentide explorer build" not in workflow
     assert "actions/deploy-pages@v4" in workflow
     assert "concurrency:" in workflow
     assert "HAS_GITHUB_APP" in workflow

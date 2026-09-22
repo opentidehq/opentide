@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
-from tests.test_cli.e2e.helpers import sdk_installed
+from tests.test_cli.e2e.helpers import hidden_modules
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -105,16 +105,16 @@ def test_validate_query_fails_on_broken_syntax(invoke_cli, tide_corpus_repo: Pat
 
 def test_validate_query_offline_needs_no_vendor_sdk(invoke_cli) -> None:
     """Issue #239: the stock install has no azure package and must still work."""
-    if sdk_installed("azure.monitor.query"):  # pragma: no cover
-        pytest.skip("azure SDK installed; the no-extras path cannot be observed here")
-    payload = assert_json_ok(invoke_cli("validate", "query", "--platform", "sentinel"))
+    with hidden_modules("azure"):
+        payload = assert_json_ok(invoke_cli("validate", "query", "--platform", "sentinel"))
     assert payload["mode"] == "offline-syntax"
     assert payload["language"] == "kql"
 
 
 def test_validate_query_live_without_sdk_reports_the_extra(invoke_cli) -> None:
     """--live is allowed to fail, but with advice instead of a traceback (#239)."""
-    result = invoke_cli("validate", "query", "--platform", "sentinel", "--live", "--wide")
+    with hidden_modules("azure", purge=("opentide.platforms.sentinel",)):
+        result = invoke_cli("validate", "query", "--platform", "sentinel", "--live", "--wide")
     assert result.exit_code == 1, result.stdout + result.stderr
     payload = parse_cli_json(result)
     assert payload["mode"] == "live"
