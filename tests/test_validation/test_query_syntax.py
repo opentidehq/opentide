@@ -87,6 +87,8 @@ def test_query_language_is_none_for_platforms_without_one() -> None:
             "DeviceProcessEvents | where ProcessCommandLine has script",
             "kql",
         ),
+        ('let s = ~~~\n"(\n~~~;\nDeviceProcessEvents | take 1', "kql"),
+        ('(EventType = "a" || EventType = "b") | group count()', "s1ql"),
     ],
 )
 def test_well_formed_queries_produce_no_findings(query: str, language: str) -> None:
@@ -111,7 +113,13 @@ def test_well_formed_queries_produce_no_findings(query: str, language: str) -> N
         (r'DeviceProcessEvents | where FolderPath has @"C:\Windows', "kql", "unterminated_string"),
         ('process_name:"cmd.exe', "lucene", "unterminated_string"),
         ("let s = ```\nnever closed", "kql", "unterminated_string"),
+        ("let s = ~~~\nnever closed", "kql", "unterminated_string"),
         ('EventType = "Process Creation" ||', "s1ql", "dangling_operator"),
+        # `||` is OR, so it needs an operand on each side within its stage.
+        ("|| a = 'b'", "s1ql", "dangling_operator"),
+        ("a = 'b' ||| columns x", "s1ql", "dangling_operator"),
+        ("(|| a = 'b')", "s1ql", "dangling_operator"),
+        ("(a = 'b' ||) | columns x", "s1ql", "dangling_operator"),
         ("process_pid:(1000 TO 2000]", "lucene", "bracket_mismatch"),
         ("process_pid:[1000 TO 2000", "lucene", "unclosed_bracket"),
         ("process_name:/cmd/ AND (parent_name:x", "lucene", "unclosed_bracket"),
@@ -178,6 +186,7 @@ def test_each_relaxation_stays_in_its_own_language() -> None:
     # Only KQL reads triple backticks as a string; in SPL they are a comment.
     assert codes("search x=1 ``` it's a note ``` | head 1", "spl") == []
     assert codes('```\nsay "hi\n```', "s1ql") == ["unterminated_string"]
+    assert codes('~~~\nsay "hi\n~~~', "s1ql") == ["unterminated_string"]
     # Only Lucene escapes outside a phrase.
     assert codes(r"SecurityEvent | where Cmd has \(", "kql") == ["unclosed_bracket"]
     # Only Lucene reads /.../ as a regex.

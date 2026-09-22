@@ -106,9 +106,9 @@ Each language's own syntax is respected, so valid content is not rejected:
 
 | Language | Understood |
 |----------|------------|
-| KQL | `//` comments, `'`/`"` strings, verbatim `@"C:\dir\"`, multi-line ```` ``` ```` literals |
+| KQL | `//` comments, `'`/`"` strings, verbatim `@"C:\dir\"`, multi-line ```` ``` ```` and `~~~` literals |
 | SPL | ```` ``` ```` comment blocks, generating commands that start with `\|` |
-| S1QL | `//` comments, `\|\|` as `OR`, a leading `\|` stage |
+| S1QL | `//` comments, `\|\|` as `OR` (with an operand on each side), a leading `\|` stage |
 | Lucene | backslash escapes (`iex\(`), mixed range ends (`[1 TO 5}`), whole-term `/regex/` (an unescaped path such as `/usr/bin/curl` stays data), apostrophes as data |
 
 ### `--live`
