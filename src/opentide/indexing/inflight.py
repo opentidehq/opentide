@@ -64,27 +64,52 @@ def _paths_from_env() -> list[Path]:
 
 
 def _local_git_changed_paths() -> list[Path]:
+    """Object YAML changed against the repository's default branch.
+
+    Uses the shared baseline resolver so ``master`` / ``development`` trunks and
+    feature branches behave like ``main`` (#251). Untracked object files count
+    as changed so a brand new rule gets a preview shard.
+    """
+    from opentide.core.git_baseline import GitBaselineError, resolve_baseline
+
     root = discover_workspace()
-    for ref in ("origin/main", "main"):
-        result = subprocess.run(
-            ["git", "rev-parse", "--verify", ref],
-            cwd=root,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
+    try:
+        baseline = resolve_baseline(root)
+    except GitBaselineError as exc:
+        logger.warning("inflight_no_git_baseline", detail=str(exc))
+        return []
+
+    lines: list[str] = []
+    diff = subprocess.run(
+        ["git", "diff", "--name-only", baseline.commit, "--", "objects/"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if diff.returncode == 0:
+        lines.extend(diff.stdout.splitlines())
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard", "--", "objects/"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if untracked.returncode == 0:
+        lines.extend(untracked.stdout.splitlines())
+
+    seen: set[Path] = set()
+    paths: list[Path] = []
+    for line in lines:
+        if not line.strip() or not _is_object_yaml(line.strip()):
             continue
-        diff = subprocess.run(
-            ["git", "diff", "--name-only", f"{ref}...HEAD", "--", "objects/"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-        )
-        if diff.returncode != 0:
+        candidate = root / line.strip()
+        if candidate in seen or not candidate.is_file():
             continue
-        paths = [root / line for line in diff.stdout.splitlines() if line.strip()]
-        return [p for p in paths if p.is_file()]
-    return []
+        seen.add(candidate)
+        paths.append(candidate)
+    return paths
 
 
 def changed_object_yaml_paths(
@@ -109,7 +134,13 @@ def changed_object_yaml_paths(
         logger.warning("inflight_no_local_git_diff_found")
         return []
 
-    scope = diff_calculation(plan)
+    try:
+        scope = diff_calculation(plan)
+    except Exception as exc:
+        # A CI runner without a usable git checkout must not traceback out of
+        # `opentide generate inflight`; fall back to the local git baseline.
+        logger.warning("inflight_ci_diff_failed", detail=f"{type(exc).__name__}: {exc}")
+        return _local_git_changed_paths()
     root = discover_workspace()
     return [root / p for p in scope if _is_object_yaml(p)]
 
