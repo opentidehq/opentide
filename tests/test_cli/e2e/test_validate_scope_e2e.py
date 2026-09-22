@@ -63,6 +63,33 @@ def test_validate_file_unknown_path_does_not_silently_pass(invoke_cli) -> None:
     assert "scope_no_match" in _issue_codes(payload)
 
 
+def test_validate_file_honours_the_directory_component(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A right-basename, wrong-directory target must not validate the object.
+
+    Falling back to the basename for every target made the directory
+    decorative: a typo picked whichever object shared the file name and
+    reported a clean run.
+    """
+    monkeypatch.chdir(tide_corpus_repo)
+    result = invoke_cli("validate", "--file", f"objects/threats/{CORPUS_RULE}")
+    assert result.exit_code != 0
+    payload = parse_cli_json(result)
+    assert "scope_no_match" in _issue_codes(payload)
+    report = payload["report"]
+    assert isinstance(report, dict)
+    assert report["stats"]["objects_checked"] == 0
+
+
+def test_validate_file_rejects_an_absolute_target_outside_the_repo(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    result = invoke_cli("validate", "--file", f"/nowhere/at/all/{CORPUS_RULE}")
+    assert result.exit_code != 0
+    assert "scope_no_match" in _issue_codes(parse_cli_json(result))
+
+
 def test_validate_file_scopes_out_other_objects(
     invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -83,6 +110,22 @@ def test_unparseable_object_yaml_is_a_validation_issue(invoke_cli, tide_corpus_r
     assert "yaml_parse" in _issue_codes(payload)
     assert "Traceback" not in (result.stdout + result.stderr)
     assert payload["checks"]["schema"]["status"] == "failed"
+
+
+def test_unparseable_debug_yaml_is_still_reported(invoke_cli, tide_corpus_repo: Path) -> None:
+    """The indexer and the ID scan do not walk the same files.
+
+    ``RegistryBuilder`` skips ``*.debug.yaml`` while the ID scan reads it, so
+    "the index already reported this" was false and the parse error was
+    swallowed entirely — a clean run where the base crashed.
+    """
+    broken = tide_corpus_repo / "Objects" / "Detection Rules" / "broken.debug.yaml"
+    broken.write_text("name: [\n", encoding="utf-8")
+    result = invoke_cli("validate", "--strict")
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert "yaml_parse" in _issue_codes(payload)
+    assert "Traceback" not in (result.stdout + result.stderr)
 
 
 def test_unparseable_object_yaml_scoped_by_file(invoke_cli, tide_corpus_repo: Path) -> None:
