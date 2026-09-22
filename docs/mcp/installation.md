@@ -10,7 +10,7 @@ description: Install opentide-mcp with the mcp extra and verify stdio transport.
 The server needs the **`mcp` extra**:
 
 ```bash
-pip install 'opentide[mcp]==0.3.0'
+pip install 'opentide[mcp]==0.4.0'
 ```
 
 Console script: **`opentide-mcp`** → `opentide.mcp_server.launcher:main`
