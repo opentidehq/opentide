@@ -67,10 +67,10 @@ _GROUP_YES = "opentide.setup.yes"
 _HANDED_DOWN = frozenset({"path", "yes"})
 
 
-def _one_path(*given: str | None) -> str | None:
+def _one_path(cli: CliContext, *given: str | None) -> str | None:
     """The single target named by a group and its subcommand, if any."""
     named = [path for path in given if path is not None]
-    if len({Path(path).resolve() for path in named}) > 1:
+    if len({_resolve_setup_path(cli, path).resolve() for path in named}) > 1:
         raise typer.BadParameter(
             f"Pass the repository path once: {' and '.join(named)} name different targets."
         )
@@ -96,7 +96,9 @@ def _hand_down(ctx: typer.Context) -> None:
             f"ignored by `{ctx.command_path} {ctx.invoked_subcommand}`."
         )
     if _given_on_command_line(ctx, "path"):
-        ctx.meta[_GROUP_PATH] = _one_path(ctx.meta.get(_GROUP_PATH), ctx.params["path"])
+        ctx.meta[_GROUP_PATH] = _one_path(
+            get_context(ctx), ctx.meta.get(_GROUP_PATH), ctx.params["path"]
+        )
     if ctx.params.get("yes"):
         ctx.meta[_GROUP_YES] = True
 
@@ -108,7 +110,7 @@ def _consented(ctx: typer.Context, yes: bool) -> bool:
 def _option_path(ctx: typer.Context, cli: CliContext, option: str) -> Path:
     """Resolve a ``--path``-only command's target, inheriting the group's."""
     own = option if _given_on_command_line(ctx, "path") else None
-    chosen = _one_path(ctx.meta.get(_GROUP_PATH), own)
+    chosen = _one_path(cli, ctx.meta.get(_GROUP_PATH), own)
     return _resolve_setup_path(cli, "." if chosen is None else chosen)
 
 
@@ -135,7 +137,7 @@ def _setup_path(
     if positional_given and deprecate_positional:
         emit_deprecation(f"positional PATH ({ctx.command_path} {positional})", "--path/-C")
     own = option if flag_given else positional if positional_given else None
-    chosen = _one_path(ctx.meta.get(_GROUP_PATH), own)
+    chosen = _one_path(cli, ctx.meta.get(_GROUP_PATH), own)
     return _resolve_setup_path(cli, "." if chosen is None else chosen)
 
 
