@@ -80,15 +80,37 @@ result = rule.validate_query("sentinel")   # ValidationResult
 print(result.ok, result.errors)
 ```
 
-`rule.validate_query(platform)` delegates to the platform's registered validator. It works for the five platforms that ship validators — `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud` — and reports **unsupported** (not a fake pass) for `crowdstrike` and `harfanglab`. Check capability first:
+`rule.validate_query(platform)` delegates to the platform's registered **live** validator, which needs the vendor SDK and tenant credentials. It works for the five platforms that ship validators — `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud` — and reports **unsupported** (not a fake pass) for `crowdstrike` and `harfanglab`. Check capability first:
 
 ```python
 if OpenTide.Platforms["sentinel"].can_validate:
     result = rule.validate_query("sentinel")
 ```
 
+### Offline syntax validation
+
+`opentide.validation.query_syntax` parses a query structurally — delimiter balance, string termination, pipeline shape, dangling operators — with no SDK and no tenant:
+
+```python
+from opentide.validation.query_syntax import check_query, query_language
+
+language = query_language("sentinel")            # "kql"
+findings = check_query('SecurityEvent | where Account == "oops', language)
+print([finding.code for finding in findings])    # ['unterminated_string']
+```
+
+It is deliberately not a full grammar: an empty finding list means the query *parses*, never that it *runs*.
+
 <Callout type="info">
-The **CLI** `opentide validate query` uses this same path and is the recommended entry point for CI. The **MCP** `validate_query` tool is a stub and does not parse queries — do not rely on it (see [MCP tools](../mcp/tools.md)). The SDK/CLI path is the real one.
+Three entry points, three behaviours — pick deliberately:
+
+| Entry point | Behaviour |
+|---|---|
+| `rule.validate_query(platform)` | Live vendor call. Needs the extra and a tenant. |
+| `opentide validate query` | Offline syntax by default (`mode: offline-syntax`); `--live` for the vendor call. |
+| MCP `validate_query` | Offline syntax, same engine as the CLI default. |
+
+The MCP tool used to return `valid: true` unconditionally; since 0.4.0 it returns a real verdict. See [MCP tools](../mcp/tools.md).
 </Callout>
 
 A failed query validation may raise `Errors.TideQueryValidationError` for exceptional cases; expected pass/fail is returned in the `ValidationResult`. See [Models → errors](./models.md#errors).

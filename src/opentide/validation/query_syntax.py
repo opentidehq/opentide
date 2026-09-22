@@ -41,11 +41,26 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(PLATFORM_QUERY_LANGUAGES)
 LANGUAGE_LABELS = {KQL: "KQL", SPL: "SPL", S1QL: "S1QL", LUCENE: "Lucene"}
 
 _PIPELINE_LANGUAGES = frozenset({KQL, SPL, S1QL})
+#: Only KQL forbids a leading ``|``. SPL generating commands (``| tstats``,
+#: ``| inputlookup``, ``| makeresults``, ``| from``) *must* start with one, and
+#: S1QL accepts a leading stage too, so flagging those is a false positive on
+#: correct content — and the offline check is the default path for CI.
+_LEADING_PIPE_LANGUAGES = frozenset({KQL})
 _BRACKET_PAIRS = {"(": ")", "[": "]", "{": "}"}
 _CLOSING_BRACKETS = {value: key for key, value in _BRACKET_PAIRS.items()}
 _LINE_COMMENTS: dict[str, tuple[str, ...]] = {KQL: ("//",), S1QL: ("//",)}
 _BLOCK_COMMENTS: dict[str, tuple[str, str]] = {SPL: ("```", "```")}
-_STRING_DELIMITERS = ('"', "'")
+#: Lucene's standard parser only knows the double-quoted phrase, so an
+#: apostrophe inside a Carbon Black value is data, not an unterminated literal.
+_STRING_DELIMITERS: dict[str, tuple[str, ...]] = {
+    KQL: ('"', "'"),
+    SPL: ('"', "'"),
+    S1QL: ('"', "'"),
+    LUCENE: ('"',),
+}
+#: KQL verbatim literals (``@"C:\dir\"``) take the backslash literally and
+#: escape a quote by doubling it.
+_VERBATIM_PREFIX_LANGUAGES = frozenset({KQL})
 # Stands in for a string body: keeps the literal one token, carries no syntax.
 _STRING_FILLER = "0"
 
@@ -136,12 +151,25 @@ def _blank(text: str, filler: str = " ") -> str:
     return "".join("\n" if char == "\n" else filler for char in text)
 
 
-def _scan_string(text: str, start: int) -> int | None:
-    """Index of the quote closing the string opened at *start*, if any."""
+def _scan_string(text: str, start: int, *, verbatim: bool = False) -> int | None:
+    """Index of the quote closing the string opened at *start*, if any.
+
+    In a verbatim literal the backslash is an ordinary character and the only
+    escape is a doubled delimiter, so ``@"C:\\Windows\\"`` terminates where it
+    looks like it does rather than swallowing the rest of the query.
+    """
     delimiter = text[start]
     index = start + 1
     while index < len(text):
         char = text[index]
+        if verbatim:
+            if char == delimiter:
+                if text.startswith(delimiter * 2, index):
+                    index += 2
+                    continue
+                return index
+            index += 1
+            continue
         if char == "\\":
             index += 2
             continue
@@ -157,6 +185,8 @@ def _mask(query: str, language: str) -> tuple[str, list[SyntaxFinding]]:
     masked: list[str] = []
     line_comments = _LINE_COMMENTS.get(language, ())
     block_comment = _BLOCK_COMMENTS.get(language)
+    delimiters = _STRING_DELIMITERS[language]
+    verbatim_prefix = language in _VERBATIM_PREFIX_LANGUAGES
     index = 0
     length = len(query)
     while index < length:
@@ -182,8 +212,13 @@ def _mask(query: str, language: str) -> tuple[str, list[SyntaxFinding]]:
             index = end
             continue
         char = query[index]
-        if char in _STRING_DELIMITERS:
-            end = _scan_string(query, index)
+        verbatim = verbatim_prefix and char == "@" and query[index + 1 : index + 2] in delimiters
+        if verbatim:
+            masked.append("@")
+            index += 1
+            char = query[index]
+        if char in delimiters:
+            end = _scan_string(query, index, verbatim=verbatim)
             if end is None:
                 findings.append(
                     _finding(
@@ -261,9 +296,10 @@ def _check_pipeline(masked: str, language: str) -> list[SyntaxFinding]:
         if segment.strip():
             continue
         if position == 0:
-            findings.append(
-                _finding("leading_pipe", f"{label} query starts with '|'", masked, start)
-            )
+            if language in _LEADING_PIPE_LANGUAGES:
+                findings.append(
+                    _finding("leading_pipe", f"{label} query starts with '|'", masked, start)
+                )
         elif position == last:
             findings.append(
                 _finding("trailing_pipe", f"{label} query ends with '|'", masked, start)

@@ -123,7 +123,7 @@ uv run pre-commit install --install-hooks
 |----------|---------|
 | `OPENTIDE_REPO_ROOT` | Root of the detection content repository (objects, configurations) |
 | `OPENTIDE_DATA_ROOT` | Override bundled package data (advanced; defaults to wheel contents) |
-| `DEPLOYMENT_PLAN` | Default deployment plan for `deploy` and `validate query` |
+| `DEPLOYMENT_PLAN` | Default deployment plan for `deploy` and `validate query --live` |
 | `DEBUG` | Enable debug logging when set |
 
 Set the repo root before every command, or pass `--repo`. `opentide setup env --yes` writes `.env.example` with `OPENTIDE_REPO_ROOT` (copy to `.env`; OpenTide does not load dotenv automatically):
