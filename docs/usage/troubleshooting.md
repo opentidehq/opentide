@@ -149,9 +149,18 @@ opentide setup ci gitlab --yes
 
 Through `0.3.0` the Azure job scripts were joined with `&&`. `git diff --staged --quiet` exits 1 when there *are* staged changes, so the chain stopped before `git commit`; when there were none, `exit 0` swallowed every later command. **0.4.0** emits a multi-line `set -e` script with an explicit `if … fi` guard, and checks out with `persistCredentials: true` so the push can authenticate. Azure jobs also no longer declare `dependsOn` on a job from another stage, which Azure cannot resolve. Re-run `opentide setup ci azure --yes`.
 
+### The inflight job pushed pull-request changes to the default branch
+
+Pipelines generated before **0.4.0** committed the refreshed shards on top of the pull request checkout and then ran `git push origin HEAD:<default branch>`. Whenever the pull request was up to date with the default branch that push was a fast-forward, so the unreviewed pull request landed on the default branch; on Azure, which builds the merge commit, the pull request was effectively merged. **0.4.0** copies only `.opentide/inflight/` into a worktree of the default branch and commits there, starting from the default branch's own shards so pruned ones stay pruned. The GitLab jobs also install `git`, which `python:<version>-slim` does not ship. Regenerate every pipeline, then review the default branch's first-parent history: a fast-forwarded pull request shows up as its own commits directly below a `ci: update inflight preview shards` commit, with no merge commit.
+
+```bash
+opentide setup ci github --yes   # or gitlab / azure
+git log --first-parent --format='%h %s' origin/main
+```
+
 ### The pre-commit hook reports `OK Validation passed` and commits broken YAML
 
-Through `0.3.0` the generated hook ran `opentide validate --strict` with no `--repo`. `OPENTIDE_REPO_ROOT` (and `OPENTIDE_TIDE_WORKSPACE`) take precedence over directory discovery, so with either exported to another detection repository — as `.env.example` suggests — the hook validated that tree and passed. **0.4.0** pins the committed worktree, and `--repo` now overrides an exported workspace. Re-run:
+Through `0.3.0` the generated hook ran `opentide validate --strict` with no `--repo`. `OPENTIDE_REPO_ROOT` (and `OPENTIDE_TIDE_WORKSPACE`) take precedence over directory discovery, so with either exported to another detection repository — as `.env.example` suggests — the hook validated that tree and passed. **0.4.0** pins the committed worktree, and `--repo` now overrides an exported workspace. A workspace in a subdirectory of a larger repository is pinned by its path below the Git root; before, setup reported "Not a Git repository" and installed nothing, and a hook wired in by hand validated the root, which holds no objects. Re-run:
 
 ```bash
 opentide setup hooks --yes
