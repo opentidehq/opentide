@@ -56,6 +56,31 @@ def test_validate_file_accepts_every_documented_path_form(
     assert report["stats"]["objects_checked"] == 1, report["stats"]
 
 
+def test_validate_file_resolves_against_the_repo_from_another_directory(
+    invoke_cli, tide_corpus_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--repo`` and the working directory differ in CI and in the pre-commit hook."""
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    payload = assert_json_ok(invoke_cli("validate", "--file", CORPUS_RULE_RELATIVE))
+    assert payload["report"]["stats"]["objects_checked"] == 1, payload["report"]
+
+
+def test_mcp_validation_report_resolves_against_the_repo_from_another_directory(
+    tide_corpus_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MCP hosts export ``OPENTIDE_REPO_ROOT`` and start the server wherever they like."""
+    from opentide.mcp_server.tools import tool_validation_report
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    report = tool_validation_report(file=CORPUS_RULE_RELATIVE)
+    assert report["ok"] is True, report["issues"]
+    assert report["stats"]["objects_checked"] == 1, report["stats"]
+
+
 def test_validate_file_unknown_path_does_not_silently_pass(invoke_cli) -> None:
     result = invoke_cli("validate", "--file", "objects/rules/does-not-exist.yaml")
     assert result.exit_code != 0
