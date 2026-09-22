@@ -299,6 +299,31 @@ def test_setup_group_options_a_subcommand_would_ignore_are_refused(
     assert not list(cwd.iterdir()), "a refused command still wrote files"
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["setup", "--ci", "github", "env", "--help"],
+        ["setup", "skills", "--cursor", "discover", "--help"],
+        ["setup", "--path", "a", "skills", "--path", "b", "discover", "--help"],
+    ],
+    ids=["ignored-option", "nested-group", "paths-disagree"],
+)
+def test_subcommand_help_wins_over_a_refused_group_option(
+    cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str]
+) -> None:
+    """Click runs the group callback before the subcommand parses its ``--help``.
+
+    Refusing there turned ``setup --ci github env --help`` into a usage error.
+    """
+    from opentide.cli import app
+
+    cwd, _ = _elsewhere(tmp_path, monkeypatch)
+    result = cli_runner.invoke(app, argv)
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert "Usage" in result.stdout
+    assert not list(cwd.iterdir())
+
+
 def test_setup_group_and_subcommand_paths_must_agree(
     cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -317,6 +342,24 @@ def test_setup_group_and_subcommand_paths_must_agree(
     )
     assert same.exit_code == 0, same.stdout + same.stderr
     assert (target / ".env.example").is_file()
+
+
+def test_setup_path_agreement_reads_dot_as_the_repo(
+    cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``.`` means ``--repo`` for setup, so it was compared against the wrong directory."""
+    from opentide.cli import app
+
+    cwd, target = _elsewhere(tmp_path, monkeypatch)
+    repo = ["--repo", str(target), "setup", "--path", "."]
+    same = cli_runner.invoke(app, [*repo, "env", "--path", str(target), "--yes"])
+    assert same.exit_code == 0, same.stdout + same.stderr
+    assert (target / ".env.example").is_file()
+    assert not list(cwd.iterdir())
+
+    conflict = cli_runner.invoke(app, [*repo, "env", "--path", str(cwd), "--yes"])
+    assert conflict.exit_code == 2, conflict.stdout + conflict.stderr
+    assert "different targets" in _error_text(conflict)
 
 
 def test_document_subcommand_warns_once(cli_runner, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from contextvars import Token
 
 import pytest
@@ -53,6 +55,18 @@ _TYPER_COLOUR_ENV = ("FORCE_COLOR", "NO_COLOR", "GITHUB_ACTIONS", "PY_COLORS")
             id="ci-FORCE_COLOR=0",
         ),
         pytest.param(False, {}, "auto", None, id="detect"),
+        pytest.param(False, {"PY_COLORS": "1"}, "auto", True, id="PY_COLORS=1"),
+        pytest.param(False, {"PY_COLORS": "0"}, "auto", False, id="PY_COLORS=0"),
+        pytest.param(
+            False,
+            {"GITHUB_ACTIONS": "true", "PY_COLORS": "0"},
+            "auto",
+            False,
+            id="ci-PY_COLORS=0",
+        ),
+        pytest.param(
+            False, {"FORCE_COLOR": "1", "PY_COLORS": "0"}, "auto", True, id="FORCE_COLOR-wins"
+        ),
     ],
 )
 def test_sync_typer_rendering(
@@ -74,6 +88,30 @@ def test_sync_typer_rendering(
     sync_typer_rendering(no_color=no_color)
     rendering = (rich_utils.COLOR_SYSTEM, rich_utils.FORCE_TERMINAL)
     assert rendering == (colour_system, force_terminal)
+
+
+def test_importing_the_cli_leaves_a_host_apps_typer_rendering_alone() -> None:
+    """``opentide.ci.*`` imports ``opentide.cli``; a library import must not restyle a host app.
+
+    A fresh interpreter, because this process imported ``opentide.cli`` long ago.
+    """
+    script = (
+        "from typer import rich_utils\n"
+        "rich_utils.COLOR_SYSTEM = None\n"
+        "rich_utils.FORCE_TERMINAL = False\n"
+        "import opentide.ci.gitlab\n"
+        "import opentide.cli\n"
+        "print(rich_utils.COLOR_SYSTEM, rich_utils.FORCE_TERMINAL)\n"
+    )
+    env = {k: v for k, v in os.environ.items() if k not in _TYPER_COLOUR_ENV}
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        env=env | {"GITHUB_ACTIONS": "true"},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.split() == ["None", "False"]
 
 
 def test_apply_environment_keeps_an_inherited_workspace(

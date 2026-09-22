@@ -82,17 +82,20 @@ def get_stdout_console() -> Console:
     return _stdout_console
 
 
+#: ``""`` stays off: Rich, and so Typer's help panels, read an empty
+#: ``FORCE_COLOR`` as "not a terminal", and log lines should agree with them.
 _FORCE_COLOR_OFF = frozenset({"", "0", "false", "no", "off"})
 
 
-def forced_terminal() -> bool | None:
-    """Whether ``FORCE_COLOR`` forces a terminal; ``None`` leaves it to detection.
+def forced_terminal(variable: str = "FORCE_COLOR") -> bool | None:
+    """Whether *variable* forces a terminal; ``None`` leaves it to detection.
 
     Rich and Typer force a terminal for any non-empty ``FORCE_COLOR``, ``"0"``
-    included, which writes escapes into redirected output for a user who asked
-    for less colour. Callers pass this as ``force_terminal`` whenever it is set.
+    included, and Typer does the same for ``PY_COLORS``, which writes escapes
+    into redirected output for a user who asked for less colour. Callers pass
+    this as ``force_terminal`` whenever it is set.
     """
-    force_color = os.getenv("FORCE_COLOR")
+    force_color = os.getenv(variable)
     if force_color is None:
         return None
     return force_color.strip().lower() not in _FORCE_COLOR_OFF

@@ -91,6 +91,7 @@ def test_opentide_console_script_redirect_has_no_ansi(
     ("argv", "colour_env"),
     [
         pytest.param(["--help"], {"FORCE_COLOR": "0"}, id="FORCE_COLOR=0"),
+        pytest.param(["--help"], {"PY_COLORS": "0", "GITHUB_ACTIONS": "true"}, id="PY_COLORS=0"),
         pytest.param(["--no-color", "--help"], {"GITHUB_ACTIONS": "true"}, id="root-help"),
         pytest.param(
             ["--no-color", "setup", "--help"], {"GITHUB_ACTIONS": "true"}, id="subcommand-help"
@@ -113,6 +114,29 @@ def test_typer_help_in_a_pipe_honours_less_colour(
     assert result.returncode == 0, result.stderr
     assert "Usage" in result.stdout
     assert "\x1b[" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("argv", "returncode"),
+    [
+        pytest.param(["--help", "--no-color"], 0, id="flag-after-help"),
+        pytest.param(["--no-color", "--bogus"], 2, id="unknown-root-option"),
+        pytest.param(["--no-color", "--repo"], 2, id="root-option-missing-value"),
+    ],
+)
+def test_no_color_holds_wherever_the_root_parser_stops(
+    script_runner, tide_corpus_repo, argv: list[str], returncode: int
+) -> None:
+    """Click parses the root options, and exits on a bad one, before any callback.
+
+    The eager ``--no-color`` callback therefore missed a ``--help`` typed before
+    it and every root-level usage error, even with ``FORCE_COLOR=1`` overridden.
+    """
+    env = _terminal_env({"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1"})
+    result = script_runner.run(["opentide", *argv], env=env)
+    assert result.returncode == returncode, result.stderr
+    assert "\x1b[" not in result.stdout
+    assert "\x1b[" not in result.stderr
 
 
 @pytest.mark.parametrize(
