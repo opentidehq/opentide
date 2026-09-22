@@ -97,7 +97,7 @@ class PlatformLoader:
                     engines[system] = module.declare()
                 except Exception as exc:
                     logger.critical('engine_module_missing_declare', arg0=module_name, advice=repr(exc))
-                    raise Exception('PLATFORM ENGINE IMPORT ERROR') from exc
+                    raise Exception(f'PLATFORM ENGINE IMPORT ERROR: {module_name} does not declare an engine') from exc
                 logger.info('loaded_platform_engine', arg0=module_name)
         return engines
 
