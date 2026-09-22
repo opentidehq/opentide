@@ -13,6 +13,7 @@ GITLAB_PUSH = (
     'git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/'
     '${CI_PROJECT_PATH}.git" "HEAD:$CI_DEFAULT_BRANCH"'
 )
+GITLAB_FETCH = 'git fetch origin "$CI_DEFAULT_BRANCH"'
 
 #: ``python:<ver>-slim`` ships without git, so every git step failed with
 #: "command not found" before it could fetch, commit, or push.
@@ -21,11 +22,20 @@ GITLAB_INSTALL_GIT = (
 )
 
 
-def _commit_and_push(*, message: str, empty_note: str, push: str) -> str:
-    """Stage, then commit only when something changed.
+#: Pull request jobs and the prune job race each other to the default branch.
+PUSH_ATTEMPTS = 5
+
+
+def _commit_and_push(*, message: str, empty_note: str, push: str, fetch: str) -> str:
+    """Stage, commit only when something changed, and push onto the latest default branch.
 
     ``git diff --staged --quiet`` exits 1 when there *are* staged changes, so
     chaining it with ``&&`` skips the commit in exactly the case that needs one.
+
+    A push rejected because another job moved the branch first is retried on
+    top of the new tip (*fetch*, then rebase). The commit touches only shard
+    files, so the rebase normally applies; after :data:`PUSH_ATTEMPTS` the
+    job fails.
 
     Every caller emits this as a YAML block scalar. A commit message contains
     ``": "``, which a plain ``- git commit -m "ci: ..."`` sequence item parses
@@ -39,7 +49,16 @@ def _commit_and_push(*, message: str, empty_note: str, push: str) -> str:
             "  exit 0",
             "fi",
             f'git commit -m "{message}"',
-            push,
+            "push_attempt=1",
+            f"until {push}; do",
+            f'  if [ "$push_attempt" -ge {PUSH_ATTEMPTS} ]; then',
+            '    echo "Push rejected $push_attempt times; giving up." >&2',
+            "    exit 1",
+            "  fi",
+            "  push_attempt=$((push_attempt + 1))",
+            f"  {fetch}",
+            "  git rebase FETCH_HEAD",
+            "done",
         ]
     )
 
@@ -57,7 +76,7 @@ def _default_branch_shards(default_ref: str) -> list[str]:
     ]
 
 
-def _publish_on_default_branch(*, default_ref: str, push: str) -> str:
+def _publish_on_default_branch(*, default_ref: str, push: str, fetch: str) -> str:
     """Commit the regenerated shards on top of the default branch, never on the PR.
 
     The job checks out the PR (or, on Azure, its merge commit) to see the
@@ -65,11 +84,16 @@ def _publish_on_default_branch(*, default_ref: str, push: str) -> str:
     branch published the unreviewed PR whenever the push fast-forwarded, so
     only ``.opentide/inflight/`` is carried into a worktree of the default
     branch and committed there.
+
+    The ``EXIT`` trap removes that worktree on every path out of the script:
+    nothing to publish, a failed rebase under ``set -e``, or the final push.
     """
     return "\n".join(
         [
+            'shards_repo="$PWD"',
             'shards_base="$(mktemp -d)"',
             f'git worktree add --detach "$shards_base" "{default_ref}"',
+            'trap \'cd "$shards_repo" && git worktree remove --force "$shards_base"\' EXIT',
             'rm -rf "$shards_base/.opentide/inflight"',
             'mkdir -p "$shards_base/.opentide"',
             'cp -R .opentide/inflight "$shards_base/.opentide/inflight"',
@@ -78,6 +102,7 @@ def _publish_on_default_branch(*, default_ref: str, push: str) -> str:
                 message="ci: update inflight preview shards [skip ci]",
                 empty_note="No inflight shard changes",
                 push=push,
+                fetch=fetch,
             ),
         ]
     )
@@ -105,6 +130,7 @@ def github_inflight_job(
         _publish_on_default_branch(
             default_ref=default_ref,
             push=f'git push origin "HEAD:{default_branch}"',
+            fetch=f"git fetch origin {default_branch}",
         ),
         " " * 16,
     ).lstrip()
@@ -164,6 +190,7 @@ def github_inflight_prune_job(
             message="ci: prune inflight preview shards [skip ci]",
             empty_note="No inflight prune changes",
             push=f"git push origin HEAD:{default_branch}",
+            fetch=f"git fetch origin {default_branch}",
         ),
         " " * 16,
     ).lstrip()
@@ -207,7 +234,7 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
     default_ref = "origin/$CI_DEFAULT_BRANCH"
     checkout_inflight = "".join(f"    - {cmd}\n" for cmd in _default_branch_shards(default_ref))
     commit_push = textwrap.indent(
-        _publish_on_default_branch(default_ref=default_ref, push=GITLAB_PUSH),
+        _publish_on_default_branch(default_ref=default_ref, push=GITLAB_PUSH, fetch=GITLAB_FETCH),
         " " * 6,
     ).lstrip()
     return (
@@ -248,6 +275,7 @@ def gitlab_inflight_prune_job(*, python_version: str, opentide_version: str) -> 
             message="ci: prune inflight preview shards [skip ci]",
             empty_note="No inflight prune changes",
             push=GITLAB_PUSH,
+            fetch=GITLAB_FETCH,
         ),
         " " * 6,
     ).lstrip()
@@ -296,6 +324,7 @@ def azure_inflight_job(*, python_version: str, opentide_version: str, default_br
             _publish_on_default_branch(
                 default_ref=default_ref,
                 push=f"git push origin HEAD:{default_branch}",
+                fetch=f"git fetch origin {default_branch}",
             ),
         ]
     )
@@ -328,6 +357,7 @@ def azure_inflight_prune_job(
                 message="ci: prune inflight preview shards [skip ci]",
                 empty_note="No inflight prune changes",
                 push=f"git push origin HEAD:{default_branch}",
+                fetch=f"git fetch origin {default_branch}",
             ),
         ]
     )
