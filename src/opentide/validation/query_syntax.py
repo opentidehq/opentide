@@ -61,6 +61,15 @@ _STRING_DELIMITERS: dict[str, tuple[str, ...]] = {
 #: KQL verbatim literals (``@"C:\dir\"``) take the backslash literally and
 #: escape a quote by doubling it.
 _VERBATIM_PREFIX_LANGUAGES = frozenset({KQL})
+#: KQL multi-line literals: no escapes, and quotes or brackets inside are data.
+_MULTILINE_STRINGS: dict[str, str] = {KQL: "```"}
+#: Lucene escapes any special character with a backslash outside a phrase, so
+#: ``process_cmdline:*iex\(*`` holds no bracket and ``*\"http*`` no string.
+_BARE_ESCAPE_LANGUAGES = frozenset({LUCENE})
+#: S1QL accepts ``||`` for ``OR``; it is not an empty stage between two pipes.
+_DOUBLE_PIPE_OR_LANGUAGES = frozenset({S1QL})
+#: Lucene ranges mix inclusive and exclusive ends: ``[1 TO 5}``, ``{1 TO 5]``.
+_RANGE_OPENERS: dict[str, frozenset[str]] = {LUCENE: frozenset("[{")}
 # Stands in for a string body: keeps the literal one token, carries no syntax.
 _STRING_FILLER = "0"
 
@@ -187,9 +196,33 @@ def _mask(query: str, language: str) -> tuple[str, list[SyntaxFinding]]:
     block_comment = _BLOCK_COMMENTS.get(language)
     delimiters = _STRING_DELIMITERS[language]
     verbatim_prefix = language in _VERBATIM_PREFIX_LANGUAGES
+    multiline = _MULTILINE_STRINGS.get(language)
+    bare_escapes = language in _BARE_ESCAPE_LANGUAGES
     index = 0
     length = len(query)
     while index < length:
+        if multiline is not None and query.startswith(multiline, index):
+            end = query.find(multiline, index + len(multiline))
+            if end == -1:
+                findings.append(
+                    _finding(
+                        "unterminated_string",
+                        f"Unterminated {multiline} multi-line string literal",
+                        query,
+                        index,
+                    )
+                )
+                masked.append(_blank(query[index:]))
+                break
+            body_start = index + len(multiline)
+            stop = end + len(multiline)
+            masked.append(multiline + _blank(query[body_start:end], _STRING_FILLER) + multiline)
+            index = stop
+            continue
+        if bare_escapes and query[index] == "\\":
+            masked.append(_blank(query[index : index + 2], _STRING_FILLER))
+            index += 2
+            continue
         if block_comment is not None and query.startswith(block_comment[0], index):
             opening, closing = block_comment
             end = query.find(closing, index + len(opening))
@@ -240,7 +273,14 @@ def _mask(query: str, language: str) -> tuple[str, list[SyntaxFinding]]:
     return "".join(masked), findings
 
 
-def _check_delimiters(masked: str) -> list[SyntaxFinding]:
+def _closes(opening: str, closing: str, language: str) -> bool:
+    range_openers = _RANGE_OPENERS.get(language, frozenset())
+    if opening in range_openers:
+        return closing in {_BRACKET_PAIRS[other] for other in range_openers}
+    return _BRACKET_PAIRS[opening] == closing
+
+
+def _check_delimiters(masked: str, language: str) -> list[SyntaxFinding]:
     findings: list[SyntaxFinding] = []
     stack: list[tuple[str, int]] = []
     for index, char in enumerate(masked):
@@ -260,7 +300,7 @@ def _check_delimiters(masked: str) -> list[SyntaxFinding]:
             )
             continue
         opening, opening_index = stack.pop()
-        if _BRACKET_PAIRS[opening] != char:
+        if not _closes(opening, char, language):
             findings.append(
                 _finding(
                     "bracket_mismatch",
@@ -276,17 +316,25 @@ def _check_delimiters(masked: str) -> list[SyntaxFinding]:
     return findings
 
 
-def _pipeline_segments(masked: str) -> Iterator[tuple[int, str]]:
+def _pipeline_segments(masked: str, language: str) -> Iterator[tuple[int, str]]:
+    double_pipe_is_or = language in _DOUBLE_PIPE_OR_LANGUAGES
     start = 0
-    for index, char in enumerate(masked):
-        if char == "|":
-            yield start, masked[start:index]
-            start = index + 1
+    index = 0
+    while index < len(masked):
+        if masked[index] != "|":
+            index += 1
+            continue
+        if double_pipe_is_or and masked.startswith("||", index):
+            index += 2
+            continue
+        yield start, masked[start:index]
+        start = index + 1
+        index += 1
     yield start, masked[start:]
 
 
 def _check_pipeline(masked: str, language: str) -> list[SyntaxFinding]:
-    segments = list(_pipeline_segments(masked))
+    segments = list(_pipeline_segments(masked, language))
     if len(segments) == 1:
         return []
     findings: list[SyntaxFinding] = []
@@ -331,7 +379,7 @@ def check_query(query: str, language: str) -> list[SyntaxFinding]:
         # Masking blanks everything after an unterminated literal, so structural
         # checks on the remainder would report positions that mean nothing.
         return list(findings)
-    findings.extend(_check_delimiters(masked))
+    findings.extend(_check_delimiters(masked, language))
     if language in _PIPELINE_LANGUAGES:
         findings.extend(_check_pipeline(masked, language))
     findings.extend(_check_dangling_operator(masked))

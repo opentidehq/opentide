@@ -62,6 +62,22 @@ def test_query_language_is_none_for_platforms_without_one() -> None:
         # Lucene has no single-quoted string, so an apostrophe is just a byte.
         ("process_cmdline:*don't*", "lucene"),
         ("observer_hostname:o'brien-laptop", "lucene"),
+        # S1QL spells OR as `||`; it is not an empty stage between two pipes.
+        ('EventType = "Process Creation" || EventType = "Process Termination"', "s1ql"),
+        ('src.process.name = "cmd.exe" || tgt.file.path = "x" | group count()', "s1ql"),
+        # Lucene escapes special characters outside a phrase.
+        (r"process_cmdline:*iex\(*", "lucene"),
+        (r"process_cmdline:*\"http*", "lucene"),
+        (r"process_name:C\:\\Windows\\System32\\cmd.exe", "lucene"),
+        # Lucene ranges mix inclusive and exclusive ends.
+        ("process_pid:[1000 TO 2000}", "lucene"),
+        ("netconn_port:{1024 TO 65535]", "lucene"),
+        # KQL multi-line literal: quotes and brackets inside are data.
+        (
+            "let script = ```\nIEX \"(New-Object Net.WebClient)\nit's [open\n```;\n"
+            "DeviceProcessEvents | where ProcessCommandLine has script",
+            "kql",
+        ),
     ],
 )
 def test_well_formed_queries_produce_no_findings(query: str, language: str) -> None:
@@ -85,6 +101,10 @@ def test_well_formed_queries_produce_no_findings(query: str, language: str) -> N
         # Verbatim handling must not become a blanket amnesty for KQL strings.
         (r'DeviceProcessEvents | where FolderPath has @"C:\Windows', "kql", "unterminated_string"),
         ('process_name:"cmd.exe', "lucene", "unterminated_string"),
+        ("let s = ```\nnever closed", "kql", "unterminated_string"),
+        ('EventType = "Process Creation" ||', "s1ql", "dangling_operator"),
+        ("process_pid:(1000 TO 2000]", "lucene", "bracket_mismatch"),
+        ("process_pid:[1000 TO 2000", "lucene", "unclosed_bracket"),
     ],
 )
 def test_broken_queries_report_the_expected_code(query: str, language: str, expected: str) -> None:
@@ -134,6 +154,24 @@ def test_a_doubled_quote_escapes_inside_a_verbatim_literal() -> None:
 def test_only_lucene_ignores_the_apostrophe() -> None:
     assert codes("field:o'brien", "lucene") == []
     assert codes("SecurityEvent | where Account has 'o", "kql") == ["unterminated_string"]
+
+
+def test_each_relaxation_stays_in_its_own_language() -> None:
+    """A false negative elsewhere is the price of a blanket rule, so scope them."""
+    # `||` is only OR in S1QL; KQL and SPL have no such operator.
+    for language in ("kql", "spl"):
+        assert "empty_pipeline_stage" in codes("T | where a == 1 || b == 2", language), language
+    # Only Lucene ranges may mix bracket kinds.
+    assert codes("T | where x in [1, 2}", "kql") == ["bracket_mismatch"]
+    # Only KQL reads triple backticks as a string; in SPL they are a comment.
+    assert codes("search x=1 ``` it's a note ``` | head 1", "spl") == []
+    assert codes('```\nsay "hi\n```', "s1ql") == ["unterminated_string"]
+    # Only Lucene escapes outside a phrase.
+    assert codes(r"SecurityEvent | where Cmd has \(", "kql") == ["unclosed_bracket"]
+
+
+def test_a_trailing_lucene_escape_does_not_crash_the_scan() -> None:
+    assert codes("process_name:cmd\\", "lucene") == []
 
 
 def test_an_escaped_quote_does_not_end_a_string() -> None:
