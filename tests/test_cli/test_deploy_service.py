@@ -127,6 +127,29 @@ def test_run_deploy_invokes_deployer() -> None:
     assert "warnings" not in result
 
 
+def test_run_deploy_reports_an_engine_that_fails_to_load() -> None:
+    """A broken engine in the plan was an uncaught exception and a traceback."""
+    ctx = CliContext(json_output=True)
+    with (
+        patch("opentide.core.registry.OpenTide.reload"),
+        patch(
+            "opentide.deployment.DeploymentStrategy.load_from_environment",
+            return_value=MagicMock(),
+        ),
+        patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+    ):
+        mock_tide.return_value.mdr_for.side_effect = Exception(
+            "PLATFORM ENGINE IMPORT ERROR: sentinel"
+        )
+        result = deploy_service.run_deploy(ctx)
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+    assert "sentinel" in str(result["message"])
+    assert result["deployed"] == []
+
+
 def test_run_deploy_warning_marks_result_with_warnings() -> None:
     ctx = CliContext(json_output=True)
     warned = CiOutcome(exit_code=0, failed=False, warned=True)
