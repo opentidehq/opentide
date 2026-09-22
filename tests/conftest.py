@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -75,6 +76,31 @@ def rule_payload(metadata: dict[str, Any]) -> dict[str, Any]:
         "techniques": ["T1059"],
         "platforms": {},
     }
+
+
+@pytest.fixture(autouse=True)
+def _restore_process_environment() -> Iterator[None]:
+    """Undo ``os.environ`` writes a test makes outside ``monkeypatch``.
+
+    In-process CLI calls push ``--repo`` / ``--no-color`` / ``--plan`` into the
+    environment for engine modules and never take them back; without this every
+    later test in the worker inherits them and output checks depend on order.
+    """
+    saved = dict(os.environ)
+    yield
+    if dict(os.environ) != saved:
+        os.environ.clear()
+        os.environ.update(saved)
+
+
+@pytest.fixture(autouse=True)
+def _restore_typer_rendering() -> Iterator[None]:
+    """``--no-color`` switches Typer's module-level styling off for the process."""
+    from typer import rich_utils
+
+    saved = (rich_utils.COLOR_SYSTEM, rich_utils.FORCE_TERMINAL)
+    yield
+    rich_utils.COLOR_SYSTEM, rich_utils.FORCE_TERMINAL = saved
 
 
 @pytest.fixture(autouse=True)

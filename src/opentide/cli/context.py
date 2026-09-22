@@ -47,7 +47,10 @@ class CliContext:
             os.environ["DEBUG_ENABLED"] = "1"
         if self.no_color:
             os.environ["NO_COLOR"] = "1"
-            os.environ["FORCE_COLOR"] = "0"
+            # Rich reads any non-empty FORCE_COLOR, "0" included, as "force a
+            # terminal", which writes bold/italic escapes into redirected output.
+            os.environ.pop("FORCE_COLOR", None)
+        sync_typer_rendering(no_color=bool(os.getenv("NO_COLOR")))
 
     def activate(self) -> None:
         """Register this context for nested Typer subcommand resolution."""
@@ -56,6 +59,30 @@ class CliContext:
     def set_deployment_plan(self, plan: str | None) -> None:
         if plan is not None:
             os.environ["DEPLOYMENT_PLAN"] = plan.upper()
+
+
+def sync_typer_rendering(*, no_color: bool) -> None:
+    """Apply colour preferences to Typer's help and error panels.
+
+    Typer decides ``FORCE_TERMINAL`` once at import, forcing a terminal for any
+    non-empty ``FORCE_COLOR`` (``"0"`` included) or under ``GITHUB_ACTIONS``, so
+    ``--help`` wrote escapes into pipes even with ``--no-color``.
+    """
+    from typer import rich_utils
+
+    from opentide.core.logging.config import forced_terminal
+
+    if no_color:
+        rich_utils.COLOR_SYSTEM = None
+        rich_utils.FORCE_TERMINAL = False
+        return
+    rich_utils.COLOR_SYSTEM = "auto"
+    forced = forced_terminal()
+    if forced is None and (os.getenv("GITHUB_ACTIONS") or os.getenv("PY_COLORS")):
+        forced = True
+    if os.getenv("_TYPER_FORCE_DISABLE_TERMINAL"):
+        forced = False
+    rich_utils.FORCE_TERMINAL = forced
 
 
 def get_context(ctx: object | None = None) -> CliContext:

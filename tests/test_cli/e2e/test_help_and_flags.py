@@ -35,12 +35,15 @@ def test_json_suppresses_banner(cli_runner, tide_corpus_repo) -> None:
     assert "OpenTide" not in result.stdout
 
 
-def test_no_color_info_renders_plain_text(cli_runner, tide_corpus_repo) -> None:
+def test_no_color_info_renders_plain_text(cli_runner, tide_corpus_repo, monkeypatch) -> None:
     from opentide.cli import app
 
+    # `TERM=dumb` would suppress the escapes this guards against on its own.
+    monkeypatch.setenv("TERM", "xterm-256color")
     result = cli_runner.invoke(
         app,
         ["--no-color", "--repo", str(tide_corpus_repo), "info"],
     )
     assert result.exit_code == 0
     assert "enabled" in result.stdout.lower()
+    assert "\x1b[" not in result.stdout

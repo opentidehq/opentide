@@ -82,15 +82,31 @@ def get_stdout_console() -> Console:
     return _stdout_console
 
 
+_FORCE_COLOR_OFF = frozenset({"", "0", "false", "no", "off"})
+
+
+def forced_terminal() -> bool | None:
+    """Whether ``FORCE_COLOR`` forces a terminal; ``None`` leaves it to detection.
+
+    Rich and Typer force a terminal for any non-empty ``FORCE_COLOR``, ``"0"``
+    included, which writes escapes into redirected output for a user who asked
+    for less colour. Callers pass this as ``force_terminal`` whenever it is set.
+    """
+    force_color = os.getenv("FORCE_COLOR")
+    if force_color is None:
+        return None
+    return force_color.strip().lower() not in _FORCE_COLOR_OFF
+
+
 def _make_console(*, stderr: bool, config: LoggingConfig) -> Console:
     """Create a stream-aware console without forcing ANSI into redirects."""
-    force_color = os.getenv("FORCE_COLOR", "").lower() in {"1", "true", "yes"}
-    force_terminal = True if force_color and not config.plain and not config.json_output else None
+    plain = config.plain or config.json_output
+    forced = forced_terminal()
     return Console(
         stderr=stderr,
         highlight=False,
-        no_color=config.plain or config.json_output,
-        force_terminal=force_terminal,
+        no_color=plain,
+        force_terminal=None if forced is None else forced and not plain,
     )
 
 
