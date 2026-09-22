@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 
 import pytest
 
@@ -120,6 +121,11 @@ def test_typer_help_in_a_pipe_honours_less_colour(
         pytest.param({"FORCE_COLOR": "1"}, id="FORCE_COLOR=1"),
         pytest.param({"GITHUB_ACTIONS": "true"}, id="GITHUB_ACTIONS"),
     ],
+)
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Rich treats a piped Windows stdout as a legacy console and styles it "
+    "through win32 calls, so forced colour never shows up as ANSI escapes",
 )
 def test_typer_help_still_colours_when_asked(
     script_runner, tide_corpus_repo, colour_env: dict[str, str]
