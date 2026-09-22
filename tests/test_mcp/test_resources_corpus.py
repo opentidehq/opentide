@@ -94,6 +94,27 @@ def test_resource_template_rejects_a_version_that_is_not_current(
     assert "rule" in payload["available"]
 
 
+def test_resource_template_rejects_a_registered_version_that_is_superseded(
+    corpus_with_templates: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Templates render the newest model, so an older registered id must not match."""
+    OpenTide.initialise()
+    current = next(key for key in OpenTide.MetaSchemas.Index if key.startswith("rule::"))
+    family, _, version = current.partition("::")
+    newer = f"{family}::{int(version.split('.')[0]) + 1}.0"
+    accessor = type(OpenTide.MetaSchemas)
+    registered = accessor.Index.fget
+    assert registered is not None
+
+    def with_newer(self: object) -> dict[str, object]:
+        index = registered(self)
+        return {**index, newer: index[current]}
+
+    monkeypatch.setattr(accessor, "Index", property(with_newer))
+    assert "error" in json.loads(resources.resource_template(current))
+    assert "error" not in json.loads(resources.resource_template(newer))
+
+
 def test_resource_vocabularies_are_json_objects(tide_corpus_repo: Path) -> None:
     payload = json.loads(resources.resource_vocabularies())
     assert payload, "expected bundled vocabularies"
