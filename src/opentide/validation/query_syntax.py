@@ -69,6 +69,12 @@ _BARE_ESCAPE_LANGUAGES = frozenset({LUCENE})
 #: A terminated Lucene ``/regex/`` holds brackets and quotes as pattern. An
 #: unterminated ``/`` is left as data, so ``process_name:/usr/bin/bash`` passes.
 _REGEX_DELIMITERS: dict[str, str] = {LUCENE: "/"}
+#: Unescaped paths put ``/`` mid-term too, so a regex only opens where a term
+#: starts and only closes where one ends. Otherwise ``/usr/bin/curl AND
+#: cmdline:"http://x"`` pairs a path slash with one inside the phrase and
+#: swallows its opening quote.
+_REGEX_OPENS_AFTER = frozenset(":(+-! \t\r\n")
+_REGEX_CLOSES_BEFORE = frozenset(")^ \t\r\n")
 #: S1QL accepts ``||`` for ``OR``; it is not an empty stage between two pipes.
 _DOUBLE_PIPE_OR_LANGUAGES = frozenset({S1QL})
 #: Lucene ranges mix inclusive and exclusive ends: ``[1 TO 5}``, ``{1 TO 5]``.
@@ -191,6 +197,24 @@ def _scan_string(text: str, start: int, *, verbatim: bool = False) -> int | None
     return None
 
 
+def _scan_regex(text: str, start: int) -> int | None:
+    """Index of the ``/`` closing a Lucene regex term opened at *start*, if any."""
+    if start > 0 and text[start - 1] not in _REGEX_OPENS_AFTER:
+        return None
+    index = start + 1
+    while index < len(text):
+        char = text[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char.isspace():
+            return None
+        if char == "/" and (index + 1 == len(text) or text[index + 1] in _REGEX_CLOSES_BEFORE):
+            return index
+        index += 1
+    return None
+
+
 def _mask(query: str, language: str) -> tuple[str, list[SyntaxFinding]]:
     """Blank comments and string bodies so structural checks see only syntax."""
     findings: list[SyntaxFinding] = []
@@ -228,7 +252,7 @@ def _mask(query: str, language: str) -> tuple[str, list[SyntaxFinding]]:
             index += 2
             continue
         if regex_delimiter is not None and query[index] == regex_delimiter:
-            end = _scan_string(query, index)
+            end = _scan_regex(query, index)
             if end is not None:
                 body = _blank(query[index + 1 : end], _STRING_FILLER)
                 masked.append(regex_delimiter + body + regex_delimiter)
