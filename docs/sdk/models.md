@@ -74,6 +74,7 @@ threat = OpenTide.Threats["00000000-0000-4000-8001-000000000001"]
 threat.threat.att_ck            # ["T1059"]  (YAML `att&ck`, aliased att_ck)
 threat.threat.terrain           # free-form prose
 threat.threat.surface           # vocabulary list, e.g. ["Windows::Desktop"]
+threat.threat.impact            # vocabulary list, e.g. ["Data Breach", "Identity Theft"]
 threat.threat.cve               # ["CVE-2024-3094"] — CIRCL Vulnerability-Lookup (CVE, GHSA, GCVE)
 threat.threat.actors            # list[ThreatActor] | None; name is scoped (att&ck::G0006)
 ```
