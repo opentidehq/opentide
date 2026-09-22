@@ -319,6 +319,24 @@ def test_setup_group_and_subcommand_paths_must_agree(
     assert (target / ".env.example").is_file()
 
 
+def test_setup_path_agreement_reads_dot_as_the_repo(
+    cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``.`` means ``--repo`` for setup, so it was compared against the wrong directory."""
+    from opentide.cli import app
+
+    cwd, target = _elsewhere(tmp_path, monkeypatch)
+    repo = ["--repo", str(target), "setup", "--path", "."]
+    same = cli_runner.invoke(app, [*repo, "env", "--path", str(target), "--yes"])
+    assert same.exit_code == 0, same.stdout + same.stderr
+    assert (target / ".env.example").is_file()
+    assert not list(cwd.iterdir())
+
+    conflict = cli_runner.invoke(app, [*repo, "env", "--path", str(cwd), "--yes"])
+    assert conflict.exit_code == 2, conflict.stdout + conflict.stderr
+    assert "different targets" in _error_text(conflict)
+
+
 def test_document_subcommand_warns_once(cli_runner, monkeypatch: pytest.MonkeyPatch) -> None:
     """The ``document`` group callback must not add its own warning to a subcommand's."""
     from opentide import cli as cli_module
