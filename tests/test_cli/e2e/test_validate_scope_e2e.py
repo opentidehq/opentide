@@ -81,6 +81,27 @@ def test_mcp_validation_report_resolves_against_the_repo_from_another_directory(
     assert report["stats"]["objects_checked"] == 1, report["stats"]
 
 
+@pytest.mark.parametrize("target_style", ["basename", "repo-relative", "absolute"])
+def test_validate_file_reports_a_duplicate_id_in_the_target(
+    invoke_cli, tide_corpus_repo: Path, target_style: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every ``--file`` form has to reach the ID check, not just the schema check."""
+    rules = tide_corpus_repo / "Objects" / "Detection Rules"
+    copy = rules / "duplicate-of-rule-0001.yaml"
+    copy.write_text((rules / CORPUS_RULE).read_text(encoding="utf-8"), encoding="utf-8")
+    target = {
+        "basename": copy.name,
+        "repo-relative": f"objects/rules/{copy.name}",
+        "absolute": str(copy),
+    }[target_style]
+    monkeypatch.chdir(tide_corpus_repo)
+    result = invoke_cli("validate", "--file", target)
+    assert result.exit_code != 0, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert "duplicate_id" in _issue_codes(payload)
+    assert payload["checks"]["id-uniqueness"]["status"] == "failed"
+
+
 def test_validate_file_unknown_path_does_not_silently_pass(invoke_cli) -> None:
     result = invoke_cli("validate", "--file", "objects/rules/does-not-exist.yaml")
     assert result.exit_code != 0
