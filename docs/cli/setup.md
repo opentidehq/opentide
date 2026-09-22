@@ -81,9 +81,18 @@ Generated pipelines set `OPENTIDE_REPO_ROOT` at workflow (GitHub), `variables` (
 opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --path . --yes
 opentide setup ci gitlab --no-staging
+opentide setup ci azure --default-branch development --yes
 ```
 
 Positional argument: `github`, `gitlab`, or `azure` (CI **provider**, not Sentinel/Splunk/etc.).
+
+`setup ci` accepts the CI flags from the [default callback](#default-callback-flags) (`--staging`, `--inflight`, `--promotion`, `--promotion-target`, `--python-version`, `--explorer-pages`, `--path`, `--yes`) plus:
+
+| Flag | Purpose |
+|------|---------|
+| `--default-branch` | Branch that triggers deploys and receives inflight shards. GitHub and Azure only; GitLab pipelines always use `$CI_DEFAULT_BRANCH` and warn that the flag is ignored |
+
+Without `--default-branch`, GitHub and Azure pipelines target the remote's default branch (`origin/HEAD`), then the `init.defaultBranch` Git setting, then `main`. The JSON result reports the branch used as `default_branch`. A name the pipelines cannot hold unquoted (spaces, shell characters, or a value YAML reads as a number or boolean such as `2024` or `on`) is rejected with exit code 2.
 
 ### setup env
 

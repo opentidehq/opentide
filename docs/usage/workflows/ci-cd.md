@@ -38,6 +38,7 @@ Hand-written examples below use `pip install 'opentide==0.1.0'` so a first-time 
 | `--promotion` / `--no-promotion` | promotion on | Include the promotion stage |
 | `--promotion-target` | `PRODUCTION` | Target status for promotion |
 | `--python-version` | `3.12` | CI Python version |
+| `--default-branch` | `origin/HEAD`, then `init.defaultBranch`, then `main` | Branch that deploys and receives inflight shards (GitHub, Azure; GitLab uses `$CI_DEFAULT_BRANCH`) |
 
 ## Stage 1 — validate every PR
 

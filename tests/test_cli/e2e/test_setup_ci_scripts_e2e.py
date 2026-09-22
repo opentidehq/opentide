@@ -29,24 +29,29 @@ pytestmark = pytest.mark.cli_e2e
 GITHUB_EXPRESSION = "${{"
 
 
-def _render(invoke_cli, tmp_path: Path, ci: str, relpath: str) -> tuple[str, Any]:
-    """Scaffold a repo, run ``setup ci``, and return the rendered pipeline."""
-    fresh = tmp_path / f"{ci}-detections"
+def _setup_ci(invoke_cli, repo: Path, ci: str, relpath: str) -> tuple[dict[str, Any], str, Any]:
+    """Scaffold *repo*, run ``setup ci``, and return its payload and the rendered pipeline."""
     run_repo_setup(
         RepoSetupOptions(
-            path=fresh,
+            path=repo,
             name="Fresh",
             yes=True,
             platforms=[DetectionPlatform.sentinel],
         )
     )
     run_platforms_setup(
-        PlatformsSetupOptions(path=fresh, platforms=[DetectionPlatform.sentinel], yes=True)
+        PlatformsSetupOptions(path=repo, platforms=[DetectionPlatform.sentinel], yes=True)
     )
-    result = invoke_cli("setup", "ci", ci, "--path", str(fresh), "--yes", repo=fresh)
-    assert_json_ok(result)
-    rendered = (fresh / relpath).read_text(encoding="utf-8")
-    return rendered, yaml.safe_load(rendered)
+    result = invoke_cli("setup", "ci", ci, "--path", str(repo), "--yes", repo=repo)
+    payload = assert_json_ok(result)
+    rendered = (repo / relpath).read_text(encoding="utf-8")
+    return payload, rendered, yaml.safe_load(rendered)
+
+
+def _render(invoke_cli, tmp_path: Path, ci: str, relpath: str) -> tuple[str, Any]:
+    """Scaffold a repo, run ``setup ci``, and return the rendered pipeline."""
+    _, rendered, parsed = _setup_ci(invoke_cli, tmp_path / f"{ci}-detections", ci, relpath)
+    return rendered, parsed
 
 
 def _script_lines(job_name: str, script: Any) -> list[str]:
@@ -321,8 +326,8 @@ def ci_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return {"origin": origin, "dev": dev, "tmp": tmp_path}
 
 
-def _pr_checkout(ci: str, ci_git: dict[str, Any], branch: str) -> Path:
-    """Clone and check out *branch* the way the provider does for a PR."""
+def _pr_checkout(ci: str, ci_git: dict[str, Any], branch: str, target: str = "main") -> Path:
+    """Clone and check out *branch* the way the provider does for a PR into *target*."""
     work = ci_git["tmp"] / f"ci-{ci}"
     _git(ci_git["tmp"], "clone", "-q", str(ci_git["origin"]), str(work))
     if ci == "github":
@@ -331,7 +336,7 @@ def _pr_checkout(ci: str, ci_git: dict[str, Any], branch: str) -> Path:
         _git(work, "checkout", "-q", "--detach", f"origin/{branch}")
     else:
         # Azure builds a PR from the merge of the PR into its target.
-        _git(work, "checkout", "-q", "--detach", "origin/main")
+        _git(work, "checkout", "-q", "--detach", f"origin/{target}")
         _git(work, "merge", "-q", "--no-ff", "-m", "Merge PR", f"origin/{branch}")
     return work
 
@@ -355,10 +360,10 @@ def _run_job(script: str, work: Path) -> subprocess.CompletedProcess[str]:
 
 
 def _run_pr_job(
-    ci: str, script: str, ci_git: dict[str, Any], branch: str
+    ci: str, script: str, ci_git: dict[str, Any], branch: str, target: str = "main"
 ) -> tuple[Path, subprocess.CompletedProcess[str]]:
     """Check out *branch* the way the provider does for a PR, then run the job."""
-    work = _pr_checkout(ci, ci_git, branch)
+    work = _pr_checkout(ci, ci_git, branch, target)
     done = _run_job(script, work)
     assert done.returncode == 0, f"{ci} job failed\n{done.stdout}\n{done.stderr}"
     return work, done
@@ -516,3 +521,42 @@ def test_pr_shard_job_fails_loudly_when_every_push_is_rejected(
     assert len(attempts.read_text(encoding="utf-8").splitlines()) == PUSH_ATTEMPTS
     assert _git(ci_git["origin"], "rev-parse", "main") == main_before
     assert len(_worktrees(work)) == 1, _worktrees(work)
+
+
+@pytest.mark.parametrize("ci", ["azure", "github"])
+def test_pipeline_targets_the_detected_default_branch(
+    invoke_cli, ci_git: dict[str, Any], ci: str
+) -> None:
+    """``main`` was hard-coded, so on any other trunk the job died at ``git fetch origin main``.
+
+    ``setup ci`` runs in a clone of a remote whose default branch is
+    ``development`` and has no ``main``; the generated PR job has to publish
+    there.
+    """
+    dev, origin, tmp = ci_git["dev"], ci_git["origin"], ci_git["tmp"]
+    _git(dev, "checkout", "-q", "-b", "development")
+    _commit(dev, "seed", {"README.md": "detections\n", ".opentide/inflight/other.json": "{}\n"})
+    _git(dev, "push", "-q", "origin", "development")
+    _git(origin, "symbolic-ref", "HEAD", "refs/heads/development")
+    trunk_before = _git(origin, "rev-parse", "development")
+    _git(dev, "checkout", "-q", "-b", "feature")
+    _commit(dev, "add a rule", {_PR_OBJECT: "name: unreviewed\n"})
+    _git(dev, "push", "-q", "origin", "feature")
+    maintainer = tmp / "maintainer"
+    _git(tmp, "clone", "-q", str(origin), str(maintainer))
+
+    payload, rendered, parsed = _setup_ci(invoke_cli, maintainer, ci, _PIPELINES[ci])
+
+    assert payload["default_branch"] == "development"
+    if ci == "github":
+        triggers = parsed[True]["push"]["branches"]
+    else:
+        triggers = parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+    assert set(triggers) == {"development"}
+    assert "refs/heads/development" in rendered and "refs/heads/main" not in rendered
+
+    _run_pr_job(ci, _pr_job_script(ci, parsed), ci_git, "feature", target="development")
+
+    assert _git(origin, "rev-parse", "development~1") == trunk_before
+    changed = _git(origin, "diff", "--name-only", trunk_before, "development").splitlines()
+    assert changed == [_NEW_SHARD]

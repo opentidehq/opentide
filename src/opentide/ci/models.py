@@ -66,7 +66,7 @@ class CiRenderOptions:
             opentide_version=__version__,
             explorer_pages=repo.explorer_pages,
             inflight=repo.inflight,
-            default_branch=repo.default_branch,
+            default_branch=repo.default_branch or "main",
         )
 
     @classmethod
