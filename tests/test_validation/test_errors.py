@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
+from opentide.models.threat import ThreatVector
 from opentide.validation.errors import (
     attach_yaml_lines,
     format_issues_for_console,
+    is_vocab_shape_duplicate,
     issues_from_pydantic,
+    vocab_shape_rejections,
 )
 from opentide.validation.issues import ValidationIssue
 
@@ -92,15 +96,95 @@ def test_issues_from_pydantic_threat_impact_is_not_invalid_ref() -> None:
         "ThreatVector",
         [
             {
-                "type": "string_type",
+                "type": "too_short",
                 "loc": ("threat", "impact"),
-                "msg": "Input should be a valid string",
-                "input": ["Data Breach"],
+                "msg": "List should have at least 1 item after validation, not 0",
+                "input": [],
+                "ctx": {"field_type": "List", "min_length": 1, "actual_length": 0},
             }
         ],
     )
     issues = issues_from_pydantic(exc, object_type="threat", graph=graph)
     assert issues[0].code == "schema_validation"
+
+
+def _threat_error(metadata: dict[str, Any], **threat: Any) -> ValidationError:
+    body = {
+        "description": "d",
+        "severity": "Significant incident",
+        "impact": ["Data Breach"],
+        "leverage": ["Repudiation"],
+        "viability": "Likely",
+        "terrain": "Endpoint workstations.",
+        "surface": ["Windows::Desktop"],
+        "att&ck": ["T1059"],
+    }
+    payload = {
+        "name": "Threat",
+        "criticality": "High",
+        "metadata": {**metadata, "schema": "threat::1.0"},
+        "threat": {**body, **threat},
+    }
+    with pytest.raises(ValidationError) as excinfo:
+        ThreatVector.from_yaml_dict(payload)
+    return excinfo.value
+
+
+_PACKED = "Elevation of privilege; Repudiation"
+
+
+@pytest.mark.parametrize(
+    ("leverage", "field_path"),
+    [
+        (_PACKED, ("threat", "leverage")),
+        (["Tampering", _PACKED], ("threat", "leverage", "1")),
+        ("Repudiation", ("threat", "leverage")),
+    ],
+    ids=["packed-string", "packed-item", "single-string"],
+)
+def test_issues_from_pydantic_vocab_shape_errors_get_no_vocab_suggestion(
+    metadata: dict[str, Any], leverage: Any, field_path: tuple[str, ...]
+) -> None:
+    graph = MagicMock()
+    graph.enum_resolver.suggest.return_value = "Elevation of privilege"
+    exc = _threat_error(metadata, leverage=leverage)
+    issues = issues_from_pydantic(exc, object_type="threat", graph=graph)
+    assert [(i.code, i.field_path, i.suggestion) for i in issues] == [
+        ("schema_validation", field_path, None)
+    ]
+    graph.enum_resolver.suggest.assert_not_called()
+
+
+def test_vocab_shape_rejections_key_rejected_values_by_field(metadata: dict[str, Any]) -> None:
+    exc = _threat_error(
+        metadata, impact="Data Breach; Identity Theft", leverage=["Spoofing", _PACKED]
+    )
+    assert vocab_shape_rejections(exc) == {
+        (("threat", "impact"), "Data Breach; Identity Theft"),
+        (("threat", "leverage"), _PACKED),
+    }
+
+
+def test_vocab_shape_rejections_ignore_other_schema_errors(metadata: dict[str, Any]) -> None:
+    assert vocab_shape_rejections(_threat_error(metadata, impact=[])) == frozenset()
+
+
+def test_is_vocab_shape_duplicate_matches_only_the_rejected_value(
+    metadata: dict[str, Any],
+) -> None:
+    rejections = vocab_shape_rejections(_threat_error(metadata, leverage=["High", _PACKED]))
+
+    def vocab_issue(value: str | None) -> ValidationIssue:
+        return ValidationIssue(
+            code="vocab_unknown",
+            field_path=("threat", "leverage"),
+            message="not a valid vocabulary entry",
+            context={} if value is None else {"vocab": "leverage::1.0", "value": value},
+        )
+
+    assert is_vocab_shape_duplicate(vocab_issue(_PACKED), rejections)
+    assert not is_vocab_shape_duplicate(vocab_issue("High"), rejections)
+    assert not is_vocab_shape_duplicate(vocab_issue(None), rejections)
 
 
 def test_issues_from_pydantic_objective_threats_index_is_invalid_ref() -> None:

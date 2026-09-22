@@ -22,7 +22,12 @@ from opentide.validation.checks.cross_object import (
     check_references_for_object,
 )
 from opentide.validation.checks.kinds import ValidateCheck
-from opentide.validation.errors import attach_yaml_lines, issues_from_pydantic
+from opentide.validation.errors import (
+    attach_yaml_lines,
+    is_vocab_shape_duplicate,
+    issues_from_pydantic,
+    vocab_shape_rejections,
+)
 from opentide.validation.field_vocab import validate_object_vocab_from_metaschema
 from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.parallel import resolve_worker_count, sort_issues
@@ -270,9 +275,11 @@ def _validate_work_item(
     if ValidateCheck.schema in checks:
         from opentide.loading.object_loader import load_object_for_validation
 
+        shape_rejections: frozenset[tuple[tuple[str, ...], str]] = frozenset()
         try:
             load_object_for_validation(item.body, item.object_type, file=file_path)
         except ValidationError as exc:
+            shape_rejections = vocab_shape_rejections(exc)
             bucket = issues_from_pydantic(
                 exc,
                 object_uuid=item.uuid,
@@ -301,6 +308,8 @@ def _validate_work_item(
             object_uuid=item.uuid,
         )
         for issue in vocab_issues:
+            if is_vocab_shape_duplicate(issue, shape_rejections):
+                continue
             issues.append(issue.model_copy(update={"file_path": file_path}))
 
         from opentide.validation.deprecated_fields import validate_deprecated_fields_from_metaschema

@@ -18,6 +18,11 @@ _REF_LEAF_TO_TYPE: dict[str, str] = {
     "vector": "threat",
 }
 
+# Errors about how vocabulary names are laid out (scalar instead of list, several
+# names packed into one string). Suggesting a single vocabulary name for these
+# would recommend dropping the other names.
+_VOCAB_SHAPE_ERRORS = frozenset({"vocab_list_type", "vocab_packed_names"})
+
 
 def _leaf_field_name(field_path: tuple[str, ...]) -> str | None:
     """Return the last path segment that is not a list index."""
@@ -25,6 +30,27 @@ def _leaf_field_name(field_path: tuple[str, ...]) -> str | None:
         if not part.isdigit():
             return part
     return None
+
+
+def _without_indexes(field_path: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(part for part in field_path if not part.isdigit())
+
+
+def vocab_shape_rejections(exc: ValidationError) -> frozenset[tuple[tuple[str, ...], str]]:
+    """``(field path, value)`` for each string rejected for its vocabulary layout."""
+    return frozenset(
+        (_without_indexes(tuple(str(part) for part in err.get("loc", ()))), err["input"])
+        for err in exc.errors()
+        if err.get("type") in _VOCAB_SHAPE_ERRORS and isinstance(err.get("input"), str)
+    )
+
+
+def is_vocab_shape_duplicate(
+    issue: ValidationIssue, rejections: frozenset[tuple[tuple[str, ...], str]]
+) -> bool:
+    """Whether *issue* is a vocabulary finding on a value the schema check already rejected."""
+    value = issue.context.get("value")
+    return isinstance(value, str) and (_without_indexes(issue.field_path), value) in rejections
 
 
 def _cross_object_ref_type(field_path: tuple[str, ...]) -> str | None:
@@ -57,7 +83,7 @@ def issues_from_pydantic(
                 if ref_type is not None:
                     suggestion = graph.suggest_ref(ref_type, str(err["input"]))
                     code = "invalid_ref"
-                if suggestion is None and graph:
+                if suggestion is None and err.get("type") not in _VOCAB_SHAPE_ERRORS:
                     suggestion = graph.enum_resolver.suggest(str(err["input"]), last)
                     if suggestion:
                         code = "vocab_unknown"
