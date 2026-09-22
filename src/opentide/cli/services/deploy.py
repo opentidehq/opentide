@@ -88,7 +88,7 @@ def run_deploy(
             "deployed": [],
         }
     IndexManager.reload()
-    mdr_deployers = cast(dict[str, Any], DeployTide().mdr)
+    mdr_deployers = cast(dict[str, Any], DeployTide().mdr_for(deployment_list))
     deployed: list[str] = []
     plan_payload: dict[str, list[str]] = {
         system: list(uuids) for system, uuids in deployment_list.items()

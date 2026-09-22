@@ -149,9 +149,8 @@ def test_first_user_cli_workflow(
     deployer = MagicMock()
 
     class _MockDeployTide:
-        @property
-        def mdr(self) -> dict[str, MagicMock]:
-            return {"sentinel": deployer}
+        def mdr_for(self, platforms) -> dict[str, MagicMock]:
+            return {"sentinel": deployer} if "sentinel" in set(platforms) else {}
 
     monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
     deploy = invoke_cli(
