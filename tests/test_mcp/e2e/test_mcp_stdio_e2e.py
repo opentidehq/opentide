@@ -225,6 +225,8 @@ def test_resource_vocabularies_over_stdio_is_json(mcp_stdio: StdioClient) -> Non
     payload = mcp_stdio.read_resource("opentide://vocabularies")
     assert isinstance(payload, dict) and payload
     assert all(isinstance(entry, dict) for entry in payload.values())
+    detail = mcp_stdio.read_resource(payload["actors"]["uri"])
+    assert len(detail["entries"]) == payload["actors"]["entry_count"]
 
 
 def test_resource_rule_body_over_stdio(mcp_stdio: StdioClient) -> None:

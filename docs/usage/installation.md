@@ -56,7 +56,7 @@ That installs the **DetectionOps engine**: the `opentide` CLI, validation, gener
 The MCP server needs one extra:
 
 ```bash
-pip install 'opentide[mcp]'       # adds mcp + fastmcp for `opentide-mcp`
+pip install 'opentide[mcp]'       # adds mcp (>=1.28.1,<2) for `opentide-mcp`
 ```
 
 The `opentide-mcp` script is on `PATH` either way; without the extra it prints the install command and exits 1. See [MCP installation](../mcp/installation.md).
@@ -123,7 +123,7 @@ uv run pre-commit install --install-hooks
 |----------|---------|
 | `OPENTIDE_REPO_ROOT` | Root of the detection content repository (objects, configurations) |
 | `OPENTIDE_DATA_ROOT` | Override bundled package data (advanced; defaults to wheel contents) |
-| `DEPLOYMENT_PLAN` | Default deployment plan for `deploy` and `validate query` |
+| `DEPLOYMENT_PLAN` | Default deployment plan for `deploy` and `validate query --live` |
 | `DEBUG` | Enable debug logging when set |
 
 Set the repo root before every command, or pass `--repo`. `opentide setup env --yes` writes `.env.example` with `OPENTIDE_REPO_ROOT` (copy to `.env`; OpenTide does not load dotenv automatically):
