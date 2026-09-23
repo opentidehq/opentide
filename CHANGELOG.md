@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Fixed
 
 - `validate --file` with a repo-relative or absolute path validates only that file when object folders have subfolders. The index kept only each object's file name, so `--file objects/rules/x.yaml` also validated `objects/rules/other/x.yaml` and reported its issues against `objects/rules/x.yaml`, while `--file objects/rules/other/x.yaml` matched nothing. A path no longer falls back to its file name, a bare file name still matches that name in every subfolder, and every issue names the file of the object it concerns — in the CLI, MCP `validation_report`, and `--check cve` ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
+- The duplicate-ID check reads object files in subfolders, as indexing does. A UUID duplicated in a file under `objects/rules/<subfolder>/` passed a full `validate` ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
 
 ## [0.5.0] — 2026-09-23
 

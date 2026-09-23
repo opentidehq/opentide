@@ -87,6 +87,53 @@ def test_run_validation_uuid_scope_still_finds_duplicate_ids(
     assert_issues_point_at_their_objects(report)
 
 
+@pytest.mark.parametrize(
+    "files",
+    [None, frozenset({"team-a/emea/b.yaml"}), frozenset({"b.yaml"})],
+    ids=["full", "nested-path", "basename"],
+)
+def test_run_validation_finds_duplicate_ids_in_nested_folders(
+    tmp_path: Path,
+    validation_session_mocks: MagicMock,
+    files: frozenset[str] | None,
+) -> None:
+    """The ID scan walked only the top of each folder, unlike the indexer."""
+    del validation_session_mocks
+    rules_dir = tmp_path / "rules"
+    nested = rules_dir / "team-a" / "emea"
+    nested.mkdir(parents=True)
+    uuid = "00000000-0000-4000-8000-000000000001"
+    (rules_dir / "a.yaml").write_text(f"name: A\nmetadata:\n  uuid: {uuid}\n", encoding="utf-8")
+    (nested / "b.yaml").write_text(f"name: B\nmetadata:\n  uuid: {uuid}\n", encoding="utf-8")
+    index = {
+        "objects": {"rule": {}, "objective": {}, "threat": {}},
+        "metaschemas": {"rule": {}},
+        "files": {},
+        "vocabs": {},
+    }
+    scope = (
+        ValidationScope.full()
+        if files is None
+        else ValidationScope.narrow(files=files, roots=(rules_dir,))
+    )
+    with (
+        patch("opentide.validation.session.resolve_paths", return_value={"rule": rules_dir}),
+        patch(
+            "opentide.validation.session.resolve_configurations",
+            return_value={"global": {"metaschemas": {"rule": {}}}},
+        ),
+    ):
+        report = run_validation(
+            scope=scope,
+            checks=frozenset({ValidateCheck.id_uniqueness}),
+            index=index,
+            workers=0,
+        )
+    duplicates = [issue for issue in report.issues if issue.code == "duplicate_id"]
+    assert [issue.file_path for issue in duplicates] == [nested / "b.yaml"]
+    assert_issues_point_at_their_objects(report)
+
+
 _TWIN_LAYOUT = {
     "objects/rules/twin.yaml": ("rule", "00000000-0000-4000-8003-0000000000b1"),
     "objects/rules/team-a/twin.yaml": ("rule", "00000000-0000-4000-8003-0000000000b2"),

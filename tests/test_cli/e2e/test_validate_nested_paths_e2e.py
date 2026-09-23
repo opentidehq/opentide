@@ -146,6 +146,23 @@ def test_a_full_run_blames_the_decoy_on_its_own_file(invoke_cli, tutorial_with_d
     assert_issues_point_at_their_objects(report)
 
 
+@pytest.mark.parametrize("args", [(), ("--file", "objects/rules/other/copy-of-rule.yaml")])
+def test_a_duplicate_uuid_in_a_subfolder_fails_validation(
+    invoke_cli, tutorial_with_decoy: Path, args: tuple[str, ...]
+) -> None:
+    """The ID scan only read the top of each folder, so this passed a full run."""
+    repo = tutorial_with_decoy
+    (repo / DECOY_RULE).unlink()
+    copy = repo / "objects" / "rules" / "other" / "copy-of-rule.yaml"
+    copy.write_text((repo / TUTORIAL_RULE).read_text(encoding="utf-8"), encoding="utf-8")
+    code, report = _validate(invoke_cli, repo, *args)
+    assert code == 1
+    duplicates = [issue for issue in report["issues"] if issue["code"] == "duplicate_id"]
+    assert duplicates, report["issues"]
+    assert {issue["object_uuid"] for issue in duplicates} == {TUTORIAL_RULE_UUID}
+    assert_issues_point_at_their_objects(report)
+
+
 def test_mcp_validation_report_selects_the_nested_file(tutorial_with_decoy: Path) -> None:
     from opentide.mcp_server.tools import tool_validation_report
 
