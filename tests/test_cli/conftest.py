@@ -166,6 +166,36 @@ def invoke_cli(cli_runner: CliRunner, tide_corpus_repo: Path) -> Callable[..., R
     return _invoke
 
 
+#: Set by CI runners and the corpus fixtures but not by a user's shell. Removing
+#: them selects the local-debug deploy path a first user runs.
+LOCAL_SHELL_UNSET = (
+    "OPENTIDE_REPO_ROOT",
+    "OPENTIDE_TIDE_WORKSPACE",
+    "DEPLOYMENT_PLAN",
+    "CI",
+    "GITHUB_ACTIONS",
+    "TF_BUILD",
+)
+
+
+@pytest.fixture
+def refuse_deployment_engines(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Fail loudly if a platform engine loads, recording the attempt.
+
+    Loading an engine precedes every platform API call, so an empty list
+    afterwards proves a command never reached the network.
+    """
+    loaded: list[str] = []
+
+    class _NoEngines:
+        def __init__(self) -> None:
+            loaded.append("DeployTide")
+            raise AssertionError("a command with no rules loaded a platform engine")
+
+    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _NoEngines)
+    return loaded
+
+
 @pytest.fixture
 def mock_query_validators(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stand in for the vendor SDK on the ``--live`` path only.

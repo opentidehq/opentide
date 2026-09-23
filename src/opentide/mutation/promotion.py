@@ -8,17 +8,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import re
 
-from opentide.core.files import resolve_configurations, resolve_paths
+from opentide.core.files import resolve_configurations
 from opentide.core.logging import get_logger
 from opentide.core.logging.console import emit_section
-from opentide.core.root import get_repo_root
+from opentide.deployment.git_repo import local_rule_files
 
 logger = get_logger(__name__)
 
-ROOT = get_repo_root()
-
 CONFIGURATIONS = resolve_configurations()
-PATHS = resolve_paths()
 
 DEPLOYMENT_CONFIG = CONFIGURATIONS["deployment"]
 
@@ -167,8 +164,7 @@ class PromoteMDR:
                 sys.exit(1)
 
             if DEBUG:
-                MDR_FOLDER = ROOT / PATHS["rule"]
-                deployment = [MDR_FOLDER / mdr for mdr in sorted(os.listdir(MDR_FOLDER))]
+                deployment = local_rule_files()
 
             else:
                 # Fetch MDR in the deployment diff calculation

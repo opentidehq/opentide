@@ -271,3 +271,75 @@ def test_run_deploy_empty_exception_does_not_advise_full_plan() -> None:
     assert result["status"] == "failed"
     assert "FULL" not in str(result["message"])
     assert "KeyError" in str(result["message"])
+
+
+SUBFOLDER_WARNING = "1 rule file(s) in subfolders of objects/rules are not deployed"
+DEPLOY_WARNING = "Some rules reported deployment warnings"
+
+
+@pytest.mark.parametrize(
+    ("plan", "platform", "engine_error", "status", "warnings"),
+    [
+        pytest.param({}, None, None, "skipped", [SUBFOLDER_WARNING], id="nothing-matched"),
+        pytest.param(
+            {"sentinel": ["u1"]},
+            DetectionPlatform.splunk,
+            None,
+            "skipped",
+            [SUBFOLDER_WARNING],
+            id="platform-not-planned",
+        ),
+        pytest.param(KeyError("plan"), None, None, "failed", [SUBFOLDER_WARNING], id="plan-failed"),
+        pytest.param(
+            {"sentinel": ["u1"]},
+            None,
+            RuntimeError("engine"),
+            "failed",
+            [SUBFOLDER_WARNING],
+            id="engine-failed",
+        ),
+        pytest.param(
+            {"sentinel": ["u1"]},
+            None,
+            None,
+            "completed",
+            [SUBFOLDER_WARNING, DEPLOY_WARNING],
+            id="completed",
+        ),
+    ],
+)
+def test_run_deploy_reports_plan_warnings_in_every_result(
+    plan: dict[str, list[str]] | Exception,
+    platform: DetectionPlatform | None,
+    engine_error: Exception | None,
+    status: str,
+    warnings: list[str],
+) -> None:
+    """#312: a warning raised while planning must reach whichever result follows."""
+    ctx = CliContext(json_output=True)
+    warned = CiOutcome(exit_code=0, failed=False, warned=True)
+
+    def _plan(*args: object, warnings: list[str], **kwargs: object) -> dict[str, list[str]]:
+        warnings.append(SUBFOLDER_WARNING)
+        if isinstance(plan, Exception):
+            raise plan
+        return plan
+
+    with (
+        patch("opentide.core.registry.OpenTide.reload"),
+        patch(
+            "opentide.deployment.DeploymentStrategy.load_from_environment",
+            return_value=MagicMock(),
+        ),
+        patch("opentide.deployment.make_deploy_plan", side_effect=_plan) as mock_plan,
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+        patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
+    ):
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
+        if engine_error is not None:
+            mock_tide.return_value.mdr_for.side_effect = engine_error
+        result = deploy_service.run_deploy(ctx, platform=platform)
+    mock_plan.assert_called_once()
+    assert result["status"] == status
+    assert result["warnings"] == warnings

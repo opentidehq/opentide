@@ -69,7 +69,9 @@ opentide deploy metadata --platform splunk
 
 - **Authentication error** — credentials missing/wrong; see [Troubleshooting](../usage/troubleshooting.md#deploy-fails-with-an-authentication-error).
 - **A rule did not deploy** — check its `status` strategy; `INERT` statuses never deploy. See [Configuration → deployment statuses](../usage/configuration.md#deployment-statuses-and-strategies).
+- **`WARNING … rule file(s) in subfolders of objects/rules are not deployed`** — deploy reads only the files directly in `objects/rules/`. Rules in subfolders are validated and indexed, but not deployed yet ([#312](https://github.com/OpenTideHQ/opentide/issues/312)). Move a rule up into `objects/rules/` to deploy it. In CI, the warning names only the subfolder files the change touched.
 - **Platform not found** — it is not enabled in your workspace config.
+- **`skipped` with no rules in a new repository** — git does not keep empty folders, so a fresh clone has no `objects/rules/` until the first rule is committed. Deploy treats the missing folder as an empty catalogue: it reports `skipped` with exit `0`, an empty `plan`, and the `dry_run` flag, and contacts no platform.
 
 ## Per-rule deployment via SDK or MCP
 
