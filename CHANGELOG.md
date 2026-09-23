@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-09-23
+
+Minor on 0.5.0. Upgrade if a command checked the wrong directory, hid what `--json` already showed, or crashed on a repository that was not finished yet. A few JSON fields and exit results change, so read **Changed** before upgrading a pipeline.
+
 ### Changed
 
 - SDK: the registry index has a `file_paths` map from UUID to the file each object was read from; `files` still holds bare file names. `ValidationScope.matches_file()` matches a path target only through the object's own path, and the `ValidationScope.path_basenames` field is removed ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
@@ -32,6 +36,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - The `deploy` reference, troubleshooting, and tutorial pages match the commands they document: a dry-run prints `== MDR Deployment ==` and `OK Deployment completed` (the plan and payloads only with `--json`). The tutorial scaffold leaves `[[tenants]]` commented out, so that dry-run's JSON leaves `deployed` empty and warns that a real deploy would stop. `deploy metadata` exits `2` with `FATAL: Metadata deployment is not implemented for splunk` rather than logging intent, and the tutorial's T1059 coverage query lists the rule alone, not an objective ([#299](https://github.com/OpenTideHQ/opentide/issues/299)).
 - `deploy` and `validate query --live` no longer crash with a bare `Exception` when an enabled platform has rules but no `[[tenants]]` entry. Both exit `1` with the platform and the file to edit, before any engine loads. `deploy --dry-run` still previews payloads, leaves that platform out of `deployed`, and warns that a real deploy would stop ([#314](https://github.com/OpenTideHQ/opentide/issues/314)).
 - `opentide setup`, `setup --ci <provider>` and `setup ci <provider>` now apply `--no-promotion` and `--promotion-target <STATUS>`. Both flags were accepted and ignored: no generated pipeline has a promotion job, and `opentide deploy` promotes as the merged `deployment.toml` says, so `--promotion-target STAGING` still promoted rules to `PRODUCTION`. Setup now writes those values to the `[promotion]` table of `.opentide/configurations/deployment.toml`, keeping the rest of an existing file, and lists the file in its result. Omitting the flags keeps the repository's setting. A target that is not a status of the repository, or an explicit flag that disagrees with an existing `[promotion]` table, exits with code 2 before anything is written. An explicit value equal to the bundled default writes nothing when the repository has no `[promotion]` table. The never-rendered promotion jobs are removed from the GitHub, GitLab and Azure renderers; generated pipelines are unchanged ([#307](https://github.com/OpenTideHQ/opentide/issues/307)).
+- `vocab-upstream.yml` no longer puts `secrets` in a step `if`, which GitHub's workflow parser rejected, so the vocabulary drift gate never ran ([#287](https://github.com/OpenTideHQ/opentide/issues/287)).
+- `publish-pypi.yml` can be retried after a PyPI 5xx: an upload that already succeeded is skipped, and the job checks that the release files are on PyPI before it finishes ([#289](https://github.com/OpenTideHQ/opentide/issues/289)).
 
 ### Tests
 
@@ -42,6 +48,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - A sample of a failure the finished tutorial does not produce names the repository edit it needs, `state=dangling-reference` or `state=unterminated-string`, so the `exit-codes` failure envelope and the `validate` offline-syntax finding are checked like any other sample ([#299](https://github.com/OpenTideHQ/opentide/issues/299)).
 - Pairing is no longer opt-in for CLI output. A `text`, `json`, or unlabelled fence under `docs/cli/` or `docs/usage/` that holds an `"ok"` / `"status"` key, or a line starting `OK `, `SKIPPED `, `WARNING `, `DEPRECATED `, `FATAL`, or `== … ==`, fails the golden test unless it carries `output-of=` or is marked `illustrative` ([#299](https://github.com/OpenTideHQ/opentide/issues/299)).
 - Every platform is deployed and live-query-validated from a `setup repo` scaffold whose tenant example is still commented out. A real deploy must fail before an engine import; a dry run must not list the platform as deployed ([#314](https://github.com/OpenTideHQ/opentide/issues/314)).
+
+### Install
+
+```bash
+pip install opentide==0.6.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+If you generated CI with `opentide setup ci`, regenerate it so `--default-branch` matches the branch you deploy from: `opentide setup ci <github|gitlab|azure> --yes`.
 
 ## [0.5.0] — 2026-09-23
 
@@ -386,7 +402,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.0
 [0.5.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.5.0
 [0.4.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.4.0
 [0.3.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.3.0
