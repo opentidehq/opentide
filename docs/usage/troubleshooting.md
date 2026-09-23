@@ -402,9 +402,19 @@ Verify with `opentide info --platform sentinel`. See [Configuration → enabling
 
 Credentials are missing or wrong. OpenTide reads them from your platform TOML, typically via environment variables. Confirm the variables are set in your shell (or CI secrets) and match the keys the platform expects (`opentide info --platform <name>`). Never commit secrets — see [Configuration → credentials](./configuration.md#credentials).
 
-### `deploy metadata` seems to do nothing
+### `deploy metadata` fails with "not implemented"
 
-`opentide deploy metadata` (Splunk lookup tables) currently signals intent in logs — full metadata deployment is pending. See [`deploy`](../cli/deploy.md).
+`opentide deploy metadata` is reserved for pushing Splunk lookup tables and is not implemented. It deploys nothing and exits `2`, so a CI step that runs it fails:
+
+```bash
+opentide deploy metadata --platform splunk
+```
+
+```text output-of="opentide deploy metadata --platform splunk" exit=2
+FATAL: Metadata deployment is not implemented for splunk
+```
+
+With `--json` it prints one document with `"ok": false` and the same message. Remove the step from your pipeline; lookup tables are not deployed by OpenTide yet. See [`deploy metadata`](../cli/deploy.md#deploy-metadata).
 
 ## Still stuck?
 

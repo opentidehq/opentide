@@ -40,7 +40,7 @@ Run from anywhere inside the detection workspace: the CLI walks up to it (see [R
 
 An empty catalogue is not an error. A full run that checked no objects still passes with exit `0`, `--strict` included, but says where it looked:
 
-```text
+```text illustrative
 OK Validation passed, but no detection objects were found under /home/you/monorepo
 ```
 
@@ -106,27 +106,36 @@ opentide validate query --platform sentinel --live
 Without `--live` the command reads every query out of the rules it can see and
 runs a **language-aware structural check** in-process: no vendor SDK, no
 credentials, no network. The JSON payload reports `"mode": "offline-syntax"`
-and a `findings` list:
+and a `findings` list. If the [tutorial](../usage/tutorial.md) rule's query
+opens a string it never closes (`| where EventID == "4688`), the command
+exits `1` and names the rule, line, and column:
 
-```json
+```bash
+opentide --json validate query --platform sentinel
+```
+
+```json output-of="opentide --json validate query --platform sentinel" exit=1 state=unterminated-string
 {
   "platform": "sentinel",
   "mode": "offline-syntax",
   "language": "kql",
-  "rules": 2,
-  "checked": 2,
-  "status": "failed",
+  "supported": true,
+  "rules": 1,
+  "checked": 1,
   "findings": [
     {
-      "uuid": "…",
-      "rule": "Suspicious parent process",
+      "uuid": "00000000-0000-4000-8003-000000000001",
+      "rule": "Sentinel KQL Rule",
       "field": "configurations.sentinel.query",
       "code": "unterminated_string",
       "message": "Unterminated \" string literal",
       "line": 2,
       "column": 20
     }
-  ]
+  ],
+  "ok": false,
+  "status": "failed",
+  "message": "Offline KQL syntax validation found 1 problem(s) for sentinel (1 query across 1 rule)"
 }
 ```
 
@@ -168,7 +177,11 @@ CrowdStrike and HarfangLab return unsupported — never fake validation. The
 result is a normal failure envelope, so `--json` shape does not change between
 supported and unsupported platforms:
 
-```json
+```bash
+opentide --json validate query --platform crowdstrike
+```
+
+```json output-of="opentide --json validate query --platform crowdstrike" exit=1
 {
   "platform": "crowdstrike",
   "valid": null,

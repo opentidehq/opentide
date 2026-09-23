@@ -36,7 +36,7 @@ Before validation can work, the schemas and templates must exist:
 opentide generate
 ```
 
-```text
+```text output-of="opentide generate"
 == Documentation generation ==
 == Export generation ==
 == Object vocabulary generation ==
@@ -188,15 +188,20 @@ On success the CLI logs that all content passed validation (exit `0`). Filenames
 opentide --json validate
 ```
 
-```json
+```json output-of="opentide --json validate"
 {
   "checks": {
     "id-uniqueness": { "check": "id-uniqueness", "status": "passed" },
     "uuid-format": { "check": "uuid-format", "status": "passed" },
     "schema": { "check": "schema", "status": "passed" }
   },
-  "report": { "ok": true, "issues": [], "warnings": [], "stats": {} },
-  "workspace": "/home/you/tutorial-detections",
+  "report": {
+    "ok": true,
+    "issues": [],
+    "warnings": [],
+    "stats": { "objects_checked": 3, "wall_ms": "..." }
+  },
+  "workspace": "...",
   "ok": true,
   "status": "passed",
   "message": "Validation passed"
@@ -235,7 +240,19 @@ opentide info
 opentide --json info --technique T1059 coverage
 ```
 
-`info` reports the package version, your object counts, and each platform's deploy/validate capabilities; the coverage query shows that T1059 is now covered by one objective and one rule. To see the chain itself, use the Mermaid diagram in [`generate docs`](../cli/generate.md) output or the MCP `get_chaining` tool. See [`info`](../cli/info.md).
+`info` reports the package version, your object counts, and each platform's deploy/validate capabilities. The coverage query returns the same payload plus a `coverage` object listing the rules whose `techniques` include T1059, trimmed here to that key:
+
+```json output-of="opentide --json info --technique T1059 coverage"
+{
+  "coverage": {
+    "technique": "T1059",
+    "rules": ["00000000-0000-4000-8003-000000000001"],
+    "count": 1
+  }
+}
+```
+
+Coverage counts rules only; the objective and threat your rule links to are not listed. To see the chain itself, use the Mermaid diagram in [`generate docs`](../cli/generate.md) output or the MCP `get_chaining` tool. See [`info`](../cli/info.md).
 
 ## 9. Validate the query and dry-run the deploy
 
@@ -245,7 +262,7 @@ Sentinel supports query validation, so check the KQL before deploying. `validate
 opentide validate query --platform sentinel
 ```
 
-```text
+```text output-of="opentide validate query --platform sentinel"
 OK Offline KQL syntax validation passed for sentinel (1 query across 1 rule)
 ```
 
@@ -255,12 +272,12 @@ Add `--live` to send the query to Azure Monitor for a real round-trip; that need
 opentide deploy --platform sentinel --dry-run
 ```
 
-```text
+```text output-of="opentide deploy --platform sentinel --dry-run"
 == MDR Deployment ==
 OK Deployment completed
 ```
 
-`--dry-run` plans the deploy without touching the platform; per-rule detail is logged to stderr, and `opentide --json deploy --platform sentinel --dry-run` returns it as a structured payload. A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
+`--dry-run` plans the deploy without touching the platform. The human output does not list rules: `DEBUG=1` logs each selected rule to stderr, and `opentide --json deploy --platform sentinel --dry-run` returns the plan and a payload preview for each rule (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
 
 ## 10. Generate documentation
 

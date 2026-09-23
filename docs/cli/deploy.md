@@ -41,13 +41,44 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 
 ## Output
 
-```text
-deploy (dry-run): sentinel
-  Sentinel KQL Rule  STAGING  → would create/update
-deploy: 1 rule planned, 0 applied (dry-run)
+A dry-run in the [tutorial](../usage/tutorial.md) repository prints the section header on stderr and the result on stdout:
+
+```bash
+opentide deploy --platform sentinel --dry-run
 ```
 
-A real deploy reports created/updated/skipped counts. With `--json`, the payload includes `"ok"`, status, and plan details. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
+```text output-of="opentide deploy --platform sentinel --dry-run"
+== MDR Deployment ==
+OK Deployment completed
+```
+
+A colour terminal draws the header as a rule. Human output does not list the rules; `DEBUG=1` logs each selected rule to stderr, and `--json` returns the plan:
+
+```bash
+opentide --json deploy --platform sentinel --dry-run
+```
+
+```json output-of="opentide --json deploy --platform sentinel --dry-run"
+{
+  "deployed": ["sentinel"],
+  "dry_run": true,
+  "plan": { "sentinel": ["00000000-0000-4000-8003-000000000001"] },
+  "payloads": {
+    "sentinel": [
+      {
+        "uuid": "00000000-0000-4000-8003-000000000001",
+        "name": "Sentinel KQL Rule",
+        "api_request": "..."
+      }
+    ]
+  },
+  "ok": true,
+  "status": "completed",
+  "message": "Deployment completed"
+}
+```
+
+`plan` lists the rule UUIDs selected for each platform. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request the Sentinel deployer compiles when the `sentinel` extra is installed, and otherwise the rule's platform configuration block. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 
 When no rules match the selected plan, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 
@@ -55,10 +86,24 @@ When no rules match the selected plan, the command reports `skipped` with exit `
 
 ### deploy metadata
 
-Reserved stub. Hidden from `--help` and exits non-zero with “not implemented”.
+Reserved stub. Hidden from `--help`; it deploys nothing and exits `2` with “not implemented”:
 
 ```bash
 opentide deploy metadata --platform splunk
+opentide --json deploy metadata --platform splunk
+```
+
+```text output-of="opentide deploy metadata --platform splunk" exit=2
+FATAL: Metadata deployment is not implemented for splunk
+```
+
+```json output-of="opentide --json deploy metadata --platform splunk" exit=2
+{
+  "error": "Metadata deployment is not implemented for splunk",
+  "ok": false,
+  "status": "failed",
+  "message": "Metadata deployment is not implemented for splunk"
+}
 ```
 
 <Callout type="warn">

@@ -56,27 +56,27 @@ An empty section prints `No rules found` (or threats, objectives).
 
 ## JSON payload shape
 
-`info` emits the same envelope as every other command, so the payload carries the `ok` / `status` / `message` keys alongside its own fields:
+`info` emits the same envelope as every other command, so the payload carries the `ok` / `status` / `message` keys alongside its own fields. In the [tutorial](../usage/tutorial.md) repository, with the platform list filtered to Sentinel:
 
-```json
+```json output-of="opentide --json info --platform sentinel"
 {
-  "version": "0.x.x",
-  "repo": "/path/to/repo",
-  "counts": { "rules": 0, "threats": 0, "objectives": 0 },
+  "version": "...",
+  "repo": "...",
+  "counts": { "rules": 1, "threats": 1, "objectives": 1 },
   "platforms": [
     { "name": "sentinel", "enabled": true, "can_deploy": true, "can_validate": true }
   ],
   "ok": true,
   "status": "completed",
-  "message": "Repository information"
+  "message": "Completed successfully"
 }
 ```
 
 Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
 
-With coverage:
+With coverage, the payload adds a `coverage` object:
 
-```json
+```json output-of="opentide --json info --technique T1059 coverage"
 {
   "coverage": { "technique": "T1059", "rules": ["..."], "count": 1 }
 }

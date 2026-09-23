@@ -11,6 +11,12 @@ Resolution here mirrors Click's own parse order rather than shelling out:
 options bind to the command whose token span they appear in, so
 ``opentide --json validate`` and ``opentide validate --json`` are different
 questions and only the first one has an answer.
+
+Output samples had the same gap: a ``text`` block under a command was never
+compared with what the command prints, so the deploy dry-run sample went on
+showing lines 0.5.0 never emits (#299). A sample opts in by naming its
+command, ``output-of="opentide …"``, in the fence's info string; one that reads
+like CLI output and does not opt in has to say it is ``illustrative``.
 """
 
 from __future__ import annotations
@@ -34,6 +40,8 @@ DOCS = ROOT / "docs"
 
 #: Fence languages that hold shell transcripts rather than output samples.
 SHELL_LANGUAGES = frozenset({"bash", "sh", "shell", "console"})
+#: Fence languages that hold what a command prints.
+OUTPUT_LANGUAGES = frozenset({"text", "json"})
 
 #: Tokens that end the invocation being parsed; whatever follows is a separate
 #: command or a redirect target, neither of which the CLI has to recognise.
@@ -68,8 +76,21 @@ class DocCommand:
         return f"{self.page}:{self.line}: {self.source}"
 
 
-def _iter_fenced(text: str) -> Iterator[tuple[str, int, str]]:
-    """Yield ``(language, line_number, raw_line)`` for every line inside a fence.
+@dataclass(frozen=True)
+class CodeFence:
+    """One fenced block: its info string, the line it opens on, and its body."""
+
+    info: str
+    line: int
+    body: tuple[str, ...]
+
+    @property
+    def language(self) -> str:
+        return self.info.split()[0].lower() if self.info else ""
+
+
+def iter_fences(text: str) -> Iterator[CodeFence]:
+    """Yield every fenced block in *text*, in document order.
 
     Follows CommonMark closely enough for documentation: a fence closes only on
     the same character repeated at least as many times with no info string, so
@@ -77,14 +98,14 @@ def _iter_fenced(text: str) -> Iterator[tuple[str, int, str]]:
     three-backtick one cannot flip the in/out state for the rest of the page.
     """
     marker: str | None = None
-    language = ""
+    info = ""
+    opened = 0
+    body: list[str] = []
     for number, raw in enumerate(text.splitlines(), start=1):
         fence = _FENCE.match(raw.strip())
         if marker is None:
             if fence is not None:
-                marker = fence.group("marker")
-                info = fence.group("info").strip()
-                language = info.split()[0].lower() if info else ""
+                marker, info, opened, body = fence["marker"], fence["info"].strip(), number, []
             continue
         if (
             fence is not None
@@ -92,9 +113,19 @@ def _iter_fenced(text: str) -> Iterator[tuple[str, int, str]]:
             and len(fence.group("marker")) >= len(marker)
             and not fence.group("info").strip()
         ):
+            yield CodeFence(info, opened, tuple(body))
             marker = None
             continue
-        yield language, number, raw
+        body.append(raw)
+    if marker is not None:
+        yield CodeFence(info, opened, tuple(body))
+
+
+def _iter_fenced(text: str) -> Iterator[tuple[str, int, str]]:
+    """Yield ``(language, line_number, raw_line)`` for every line inside a fence."""
+    for fence in iter_fences(text):
+        for offset, raw in enumerate(fence.body, start=1):
+            yield fence.language, fence.line + offset, raw
 
 
 def iter_shell_lines(text: str) -> Iterator[tuple[int, str]]:
@@ -215,6 +246,143 @@ def documented_commands(paths: list[Path] | None = None) -> list[DocCommand]:
                     continue
                 found.append(DocCommand(relative, number, line, tokens))
     return found
+
+
+#: ``output-of="opentide …"`` on a ``text`` / ``json`` fence names the command
+#: whose output it shows, ``exit=N`` the code that command returns (``0`` when
+#: absent), and ``state=NAME`` an edit the harness makes to the repository
+#: first. Fumadocs reads only ``title``, ``tab``, ``noCopy`` and
+#: ``lineNumbers`` from fence meta, and GitHub only the language, so none of
+#: them renders.
+_OUTPUT_OF = re.compile(r'(?:^|\s)output-of="(?P<command>[^"]*)"')
+_EXIT = re.compile(r"(?:^|\s)exit=(?P<code>\d+)(?=\s|$)")
+_STATE = re.compile(r"(?:^|\s)state=(?P<name>[\w-]+)(?=\s|$)")
+_HEADING = re.compile(r"^#{1,6}\s")
+_STATED_EXIT = re.compile(r"\bexit(?:s| code)?\s+`(?P<code>\d+)`")
+
+
+@dataclass(frozen=True)
+class DocOutput:
+    """An output sample paired with the ``opentide`` command that prints it."""
+
+    page: str
+    line: int
+    language: str
+    command: str
+    #: ``None`` when ``command`` is not exactly one ``opentide`` invocation.
+    argv: tuple[str, ...] | None
+    exit_code: int
+    sample: str
+    #: Prose of the section holding the sample, fences left out.
+    prose: str
+    #: The repository edit the sample needs, ``None`` for the tutorial as written.
+    state: str | None = None
+
+    def __str__(self) -> str:
+        return f"{self.page}:{self.line}: {self.command}"
+
+
+def _fenced_lines(text: str) -> set[int]:
+    """Line numbers a fence occupies, its opening and closing markers included."""
+    return {
+        fence.line + offset for fence in iter_fences(text) for offset in range(len(fence.body) + 2)
+    }
+
+
+def section_prose(text: str, line: int) -> str:
+    """The prose of the section holding *line*: its heading up to the next one, fences dropped."""
+    lines = text.splitlines()
+    fenced = _fenced_lines(text)
+    headings = [
+        n for n, raw in enumerate(lines, start=1) if n not in fenced and _HEADING.match(raw)
+    ]
+    start = max((n for n in headings if n <= line), default=1)
+    end = min((n for n in headings if n > line), default=len(lines) + 1)
+    return "\n".join(lines[n - 1] for n in range(start, end) if n not in fenced)
+
+
+def heading_line(text: str, fragment: str) -> int:
+    """The line of the first heading, outside any fence, that contains *fragment*."""
+    fenced = _fenced_lines(text)
+    for number, raw in enumerate(text.splitlines(), start=1):
+        if number not in fenced and _HEADING.match(raw) and fragment in raw:
+            return number
+    raise LookupError(f"no heading contains {fragment!r}")
+
+
+def stated_exit_codes(prose: str) -> set[int]:
+    """Exit codes *prose* promises, written as ``exits `2```."""
+    return {int(match["code"]) for match in _STATED_EXIT.finditer(prose)}
+
+
+def outputs_in(text: str, page: str) -> list[DocOutput]:
+    """Every output fence in *text* that carries an ``output-of`` attribute."""
+    found: list[DocOutput] = []
+    for fence in iter_fences(text):
+        paired = _OUTPUT_OF.search(fence.info)
+        if fence.language not in OUTPUT_LANGUAGES or paired is None:
+            continue
+        command = paired["command"]
+        invocations = [
+            argv for argv in map(normalise, split_invocations(command)) if argv is not None
+        ]
+        exit_code = _EXIT.search(fence.info)
+        state = _STATE.search(fence.info)
+        found.append(
+            DocOutput(
+                page=page,
+                line=fence.line,
+                language=fence.language,
+                command=command,
+                argv=invocations[0] if len(invocations) == 1 else None,
+                exit_code=int(exit_code["code"]) if exit_code else 0,
+                sample="\n".join(fence.body),
+                prose=section_prose(text, fence.line),
+                state=state["name"] if state else None,
+            )
+        )
+    return found
+
+
+def documented_outputs(paths: list[Path] | None = None) -> list[DocOutput]:
+    """Every paired output sample in the documentation tree."""
+    pages = sorted(paths if paths is not None else DOCS.rglob("*.md"))
+    found: list[DocOutput] = []
+    for page in pages:
+        relative = page.relative_to(ROOT).as_posix()
+        found.extend(outputs_in(page.read_text(encoding="utf-8"), relative))
+    return found
+
+
+#: Pairing is opt-in, so the guard below reads every fence a sample could sit
+#: in: the two languages ``output-of`` accepts, and none at all.
+GUARDED_LANGUAGES = OUTPUT_LANGUAGES | {""}
+#: Lines only OpenTide's renderer starts: ``emit_result``'s status words and
+#: ``emit_deprecation``'s, the ``--no-color`` FATAL line, and a phase header.
+_CLI_LINE = re.compile(r"^\s*(?:(?:OK|SKIPPED|WARNING|DEPRECATED)\s|FATAL\b|==\s.*\s==\s*$)")
+#: A key of the result envelope every ``--json`` command writes.
+_ENVELOPE_KEY = re.compile(r'"(?:ok|status)"\s*:')
+#: A sample that shows output no command in the golden repository can print.
+_ILLUSTRATIVE = re.compile(r"(?:^|\s)illustrative(?=\s|$)")
+
+
+def looks_like_cli_output(body: tuple[str, ...] | list[str]) -> bool:
+    """Whether *body* reads like something ``opentide`` printed."""
+    if _ENVELOPE_KEY.search("\n".join(body)):
+        return True
+    return any(_CLI_LINE.match(line) for line in body)
+
+
+def unchecked_output_fences(text: str) -> list[CodeFence]:
+    """Fences in *text* that read like CLI output but name no command and are not illustrative."""
+    return [
+        fence
+        for fence in iter_fences(text)
+        if fence.language in GUARDED_LANGUAGES
+        and looks_like_cli_output(fence.body)
+        and not (fence.language in OUTPUT_LANGUAGES and _OUTPUT_OF.search(fence.info))
+        and not _ILLUSTRATIVE.search(fence.info)
+    ]
 
 
 def _is_group(command: click.Command) -> bool:
