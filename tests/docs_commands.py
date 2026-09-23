@@ -248,12 +248,14 @@ def documented_commands(paths: list[Path] | None = None) -> list[DocCommand]:
 
 
 #: ``output-of="opentide …"`` on a ``text`` / ``json`` fence names the command
-#: whose output it shows, and ``exit=N`` the code that command returns (``0``
-#: when absent). Fumadocs reads only ``title``, ``tab``, ``noCopy`` and
-#: ``lineNumbers`` from fence meta, and GitHub only the language, so neither
-#: attribute renders.
+#: whose output it shows, ``exit=N`` the code that command returns (``0`` when
+#: absent), and ``state=NAME`` an edit the harness makes to the repository
+#: first. Fumadocs reads only ``title``, ``tab``, ``noCopy`` and
+#: ``lineNumbers`` from fence meta, and GitHub only the language, so none of
+#: them renders.
 _OUTPUT_OF = re.compile(r'(?:^|\s)output-of="(?P<command>[^"]*)"')
 _EXIT = re.compile(r"(?:^|\s)exit=(?P<code>\d+)(?=\s|$)")
+_STATE = re.compile(r"(?:^|\s)state=(?P<name>[\w-]+)(?=\s|$)")
 _HEADING = re.compile(r"^#{1,6}\s")
 _STATED_EXIT = re.compile(r"\bexit(?:s| code)?\s+`(?P<code>\d+)`")
 
@@ -272,6 +274,8 @@ class DocOutput:
     sample: str
     #: Prose of the section holding the sample, fences left out.
     prose: str
+    #: The repository edit the sample needs, ``None`` for the tutorial as written.
+    state: str | None = None
 
     def __str__(self) -> str:
         return f"{self.page}:{self.line}: {self.command}"
@@ -322,6 +326,7 @@ def outputs_in(text: str, page: str) -> list[DocOutput]:
             argv for argv in map(normalise, split_invocations(command)) if argv is not None
         ]
         exit_code = _EXIT.search(fence.info)
+        state = _STATE.search(fence.info)
         found.append(
             DocOutput(
                 page=page,
@@ -332,6 +337,7 @@ def outputs_in(text: str, page: str) -> list[DocOutput]:
                 exit_code=int(exit_code["code"]) if exit_code else 0,
                 sample="\n".join(fence.body),
                 prose=section_prose(text, fence.line),
+                state=state["name"] if state else None,
             )
         )
     return found

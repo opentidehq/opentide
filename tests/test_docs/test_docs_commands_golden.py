@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -84,6 +84,34 @@ DOC_OUTPUTS = documented_outputs()
 #: An output sample may also pair with `deploy`: its tests stub the vendor
 #: boundary, so a sample cannot reach a platform API.
 SAMPLE_ROOTS = EXECUTABLE_ROOTS | {"deploy"}
+
+_TUTORIAL_RULE = Path("objects", "rules", "sentinel-kql-rule.yaml")
+
+
+def _edit_tutorial_rule(old: str, new: str) -> Callable[[Path], None]:
+    def edit(repo: Path) -> None:
+        rule = repo / _TUTORIAL_RULE
+        text = rule.read_text(encoding="utf-8")
+        assert old in text, f"{_TUTORIAL_RULE} no longer contains {old!r}; update REPO_STATES"
+        rule.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    return edit
+
+
+#: What `state=NAME` on a sample does to its copy of the tutorial repository
+#: before the command runs, so a sample can show a failure the finished
+#: tutorial does not produce.
+REPO_STATES: dict[str, Callable[[Path], None]] = {
+    # Tutorial step 7: the rule's objective does not exist.
+    "dangling-reference": _edit_tutorial_rule(
+        "detection_model: 00000000-0000-4000-8002-000000000001",
+        "detection_model: 00000000-0000-4000-8002-DEADBEEF0000",
+    ),
+    # The query's second line opens a string literal it never closes.
+    "unterminated-string": _edit_tutorial_rule(
+        "| where EventID == 4688", '| where EventID == "4688'
+    ),
+}
 
 
 def _identify(command: DocCommand) -> str:
@@ -234,7 +262,13 @@ def test_output_samples_are_paired_through_the_fence_info_string() -> None:
 
 def test_a_sample_without_an_exit_attribute_documents_success() -> None:
     (output,) = outputs_in('```json output-of="opentide --json info"\n{}\n```', "docs/x.md")
-    assert (output.argv, output.exit_code) == (("--json", "info"), 0)
+    assert (output.argv, output.exit_code, output.state) == (("--json", "info"), 0, None)
+
+
+def test_a_sample_names_the_repository_state_it_needs() -> None:
+    text = '```json output-of="opentide --json validate" exit=1 state=dangling-reference\n{}\n```'
+    (output,) = outputs_in(text, "docs/x.md")
+    assert (output.exit_code, output.state) == (1, "dangling-reference")
 
 
 def test_a_sample_naming_no_single_opentide_command_has_no_argv() -> None:
@@ -279,8 +313,17 @@ def test_every_output_sample_pairs_with_a_command_its_page_prints(output: DocOut
     printed = {command.argv for command in DOC_COMMANDS if command.page == output.page}
     assert output.argv in printed, f"{output}: no shell fence on the page runs this command"
     assert _is_executable(output.argv, SAMPLE_ROOTS), f"{output}: the harness cannot run it"
+    assert output.state is None or output.state in REPO_STATES, (
+        f"{output}: state={output.state} is not one of {sorted(REPO_STATES)}"
+    )
     if output.language == "json":
         json.loads(output.sample)
+
+
+def test_every_repo_state_is_named_by_a_sample() -> None:
+    """A state no sample names is an edit no page describes."""
+    named = {output.state for output in DOC_OUTPUTS if output.state}
+    assert not set(REPO_STATES) - named, f"unused: {sorted(set(REPO_STATES) - named)}"
 
 
 @pytest.mark.parametrize("output", [o for o in DOC_OUTPUTS if o.exit_code], ids=_where)
@@ -618,6 +661,8 @@ def stub_deployers(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
 
 def _run_sample(output: DocOutput, repo: Path, *, colour: bool) -> Result:
     assert output.argv is not None, output
+    if output.state is not None:
+        REPO_STATES[output.state](repo)
     root = ["--repo", str(repo)] if colour else ["--repo", str(repo), "--no-color"]
     return CliRunner().invoke(app, [*root, *output.argv])
 

@@ -30,10 +30,11 @@ There is no soft-failure exit code. Warnings are listed under `warnings` in JSON
 | `DEPLOYMENT_ERROR_RAISED` | Any deployment error | Exit `1`, `status: failed` |
 | `DEPLOYMENT_WARNING_RAISED` | Any deployment warning | Exit `0` with warnings |
 
-With `--json`, failures still write one complete object to stdout before exiting:
+With `--json`, failures still write one complete object to stdout before exiting. In the [tutorial](../usage/tutorial.md) repository with the dangling `detection_model` from [step 7](../usage/tutorial.md#7-break-it-on-purpose), `opentide --json validate` exits `1` and prints the whole report, trimmed here to its outcome:
 
-```json
+```json output-of="opentide --json validate" exit=1 state=dangling-reference
 {
+  "report": { "ok": false, "issues": ["..."] },
   "ok": false,
   "status": "failed",
   "message": "Validation failed"

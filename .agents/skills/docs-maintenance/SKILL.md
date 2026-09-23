@@ -108,6 +108,9 @@ repo and tag the fence with the command that printed it, e.g.
 `` ```text output-of="opentide deploy metadata --platform splunk" exit=2 ``.
 The command must also appear in a shell fence on the page; see
 [`docs/README.md`](../../../docs/README.md#output-samples) for the matching rules.
+A failure the finished tutorial cannot produce names the repository edit it
+needs, e.g. `state=dangling-reference`; the edits are `REPO_STATES` in the
+golden test — add one there rather than leave the sample unchecked.
 
 ## Platform capability rule
 

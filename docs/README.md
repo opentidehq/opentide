@@ -89,7 +89,16 @@ FATAL: Metadata deployment is not implemented for splunk
 - a `text` line is not printed whole and in order, reading stdout and stderr interleaved as a terminal shows them. Write the `--no-color` view; a colour run must carry the same lines, with its rules and FATAL panel read back as `== Title ==` and `FATAL: …`;
 - a `json` value differs from the document returned. Objects may return keys the sample leaves out, and `"..."` stands for any value.
 
-Neither attribute renders: Fumadocs reads only `title`, `tab`, `noCopy` and `lineNumbers` from fence meta, and GitHub reads only the language.
+A sample of a failure the finished tutorial does not produce names the edit it needs with `state=NAME`, and the harness makes that edit to its copy of the repository before running the command:
+
+| `state=` | Edit to `objects/rules/sentinel-kql-rule.yaml` |
+|----------|------------------------------------------------|
+| `dangling-reference` | `detection_model` names an objective that does not exist, as in tutorial step 7 |
+| `unterminated-string` | The query's second line opens a string it never closes: `\| where EventID == "4688` |
+
+The edits live in `REPO_STATES` in the golden test. Add one there instead of leaving a failure sample unchecked.
+
+None of these attributes renders: Fumadocs reads only `title`, `tab`, `noCopy` and `lineNumbers` from fence meta, and GitHub reads only the language.
 
 ## Agent maintenance
 
