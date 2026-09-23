@@ -25,6 +25,11 @@ class ObjectMetadata(TideModel):
     contributors: list[str] | None = None
     organisation: Organisation | None = None
 
+    @property
+    def schema(self) -> str:
+        """The identifier under its YAML key, which would otherwise be ``BaseModel.schema``."""
+        return self.schema_id
+
     @field_validator("schema_id")
     @classmethod
     def _validate_schema_identifier(cls, value: str) -> str:

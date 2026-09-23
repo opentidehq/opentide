@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- In the SDK, `rule.metadata.schema` returns the schema identifier (`"rule::1.0"`), as `docs/sdk/models.md` shows. It returned Pydantic's deprecated `BaseModel.schema` method, so the documented line printed a bound method; the same held for `.schema` on platform blocks (`rule.configurations.sentinel.schema`). `schema_id` / `platform_schema` stay the canonical fields, and validation, `model_dump(by_alias=True)` and generated JSON Schemas still use the `schema` key ([#298](https://github.com/OpenTideHQ/opentide/issues/298)).
+
 ## [0.5.0] — 2026-09-23
 
 Minor on 0.4.0. Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names: 0.4.0 rejected every such threat with `Input should be a valid string` ([#189](https://github.com/OpenTideHQ/opentide/issues/189)). It is a minor rather than a patch because a threat written the way 0.4.0 required (`impact: Data Breach`) now fails validation until it becomes a one-item list — read **Changed** before upgrading a pipeline.
