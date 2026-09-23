@@ -306,6 +306,69 @@ def test_ci_diff_plan_names_only_the_changed_subfolder_files(
     assert len(_skipped_subfolder_logs(plan_log)) == 1
 
 
+@pytest.mark.parametrize(
+    "plan", [DeploymentStrategy.STAGING, DeploymentStrategy.PRODUCTION], ids=lambda p: p.name
+)
+def test_ci_diff_plan_includes_changed_top_level_rules(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, plan: DeploymentStrategy
+) -> None:
+    """#318: the CI pattern was built from the absolute rules folder, so a changed
+    ``objects/rules/*.yaml`` never matched a repo-relative git path."""
+    from opentide.deployment import git_repo
+
+    rules = workspace / "objects" / "rules"
+    (rules / "team-a").mkdir(parents=True)
+    (rules / "added.yaml").write_text("name: Added\n", encoding="utf-8")
+    (rules / "team-a" / "skipped.yaml").write_text("", encoding="utf-8")
+    for name in CI_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CI", "true")
+    diff = [
+        "objects/rules/added.yaml",
+        "objects/rules/team-a/skipped.yaml",
+        "README.md",
+    ]
+    monkeypatch.setattr(git_repo, "diff_calculation", lambda requested: diff)
+
+    scope = git_repo.modified_rule_scope(plan)
+
+    assert scope.files == (rules / "added.yaml",)
+    assert scope.nested == ("objects/rules/team-a/skipped.yaml",)
+
+
+def test_ci_rule_selection_keeps_top_level_files_out_of_the_subfolder_list(
+    workspace: Path,
+) -> None:
+    """Every changed rule file is either planned from the rules folder or named as nested."""
+    from opentide.deployment.git_repo import split_changed_rule_paths
+
+    changed = [
+        "objects/rules/added.yaml",
+        "objects/rules/also.yml",
+        "/repo/objects/rules/absolute.yaml",
+        "objects/rules/team-a/nested.yaml",
+        "objects/rules/team-a/deep/nested.yml",
+        "objects/rules-archive/team-a/old.yaml",
+        "objects/threats/team-a/threat.yaml",
+        "docs/rules/team-a/page.yaml",
+        "objects/rules/notes.md",
+        "README.md",
+    ]
+
+    top, nested = split_changed_rule_paths(changed)
+
+    assert top == [
+        "objects/rules/added.yaml",
+        "objects/rules/also.yml",
+        "/repo/objects/rules/absolute.yaml",
+    ]
+    assert nested == [
+        "objects/rules/team-a/deep/nested.yml",
+        "objects/rules/team-a/nested.yaml",
+    ]
+    assert set(top).isdisjoint(nested)
+
+
 @pytest.mark.parametrize("catalogue", ["plain", "symlinked"], indirect=True)
 def test_full_plan_accounts_for_every_indexed_rule(catalogue: Path) -> None:
     """#312 guard: an indexed rule is planned, excluded by status, or named in a warning."""
