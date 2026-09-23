@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import importlib
 import sys
-from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
-from importlib.metadata import entry_points
-from typing import Any, Protocol, cast
+from collections.abc import Callable, Iterator, Sequence
+from functools import partial
+from importlib.metadata import EntryPoint, entry_points
+from typing import Any, Generic, Protocol, TypeVar, cast
 
+from opentide.core.logging import get_logger
 from opentide.core.root import get_repo_root
 from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.models.rule import DetectionRule
 from opentide.platforms.config import build_system_config
 from opentide.platforms.enabled import enabled_systems
+
+logger = get_logger(__name__)
 
 _VALIDATOR_MODULES = {
     "sentinel": "sentinel_query",
@@ -46,23 +49,93 @@ class QueryValidator(Protocol):
         pass
 
 
-@dataclass
-class Platform:
-    """A detection platform's configuration and operational capabilities."""
+T = TypeVar("T")
 
-    name: str
-    enabled: bool = False
-    config: Any | None = None
-    deployer: RuleDeployer | None = None
-    validator: QueryValidator | None = None
+
+class _Deferred(Generic[T]):
+    """A value built by *factory* the first time it is read."""
+
+    def __init__(self, value: T | None = None, factory: Callable[[], T] | None = None) -> None:
+        self._value = value
+        self._factory = factory
+
+    @property
+    def available(self) -> bool:
+        return self._value is not None or self._factory is not None
+
+    def get(self, *, platform: str, part: str) -> T | None:
+        if self._factory is not None:
+            factory, self._factory = self._factory, None
+            try:
+                self._value = factory()
+            except Exception as exc:
+                logger.debug(
+                    "platform_part_unavailable", platform=platform, part=part, detail=repr(exc)
+                )
+        return self._value
+
+
+class Platform:
+    """A detection platform's configuration and operational capabilities.
+
+    ``config``, ``deployer`` and ``validator`` are built on first access, so
+    listing platforms never reads the tenant configuration of a platform that
+    is not used: building a client resolves its secrets and checks its setup,
+    which logs for every platform that is disabled or not configured.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        enabled: bool = False,
+        config: Any | None = None,
+        deployer: RuleDeployer | None = None,
+        validator: QueryValidator | None = None,
+        *,
+        config_factory: Callable[[], Any] | None = None,
+        deployer_factory: Callable[[], RuleDeployer] | None = None,
+        validator_factory: Callable[[], QueryValidator] | None = None,
+    ) -> None:
+        self.name = name
+        self.enabled = enabled
+        self._config = _Deferred(config, config_factory)
+        self._deployer = _Deferred(deployer, deployer_factory)
+        self._validator = _Deferred(validator, validator_factory)
+
+    def __repr__(self) -> str:
+        return f"Platform(name={self.name!r}, enabled={self.enabled!r})"
+
+    @property
+    def config(self) -> Any | None:
+        return self._config.get(platform=self.name, part="config")
+
+    @config.setter
+    def config(self, value: Any | None) -> None:
+        self._config = _Deferred(value)
+
+    @property
+    def deployer(self) -> RuleDeployer | None:
+        return self._deployer.get(platform=self.name, part="deployer")
+
+    @deployer.setter
+    def deployer(self, value: RuleDeployer | None) -> None:
+        self._deployer = _Deferred(value)
+
+    @property
+    def validator(self) -> QueryValidator | None:
+        return self._validator.get(platform=self.name, part="validator")
+
+    @validator.setter
+    def validator(self, value: QueryValidator | None) -> None:
+        self._validator = _Deferred(value)
 
     @property
     def can_deploy(self) -> bool:
-        return self.deployer is not None
+        return self._deployer.available
 
     @property
     def can_validate(self) -> bool:
-        return self.validator is not None
+        return self._validator.available
 
 
 def _class_name(system_key: str) -> str:
@@ -75,12 +148,18 @@ def _ensure_repo_on_path() -> None:
         sys.path.append(root)
 
 
+def _deployer_factory(ep: EntryPoint) -> Callable[[], RuleDeployer] | None:
+    try:
+        return cast(Callable[[], RuleDeployer], ep.load())
+    except Exception:
+        # Entry point may be missing or fail to load for optional platforms.
+        return None
+
+
 class PlatformsRegistry:
     """First-class platform access with explicit registration."""
 
     def __init__(self) -> None:
-        self._deployers: dict[str, RuleDeployer] = {}
-        self._validators: dict[str, QueryValidator] = {}
         self._instances: dict[str, Platform] = {}
         self._loaded = False
 
@@ -94,22 +173,19 @@ class PlatformsRegistry:
         enabled: bool | None = None,
     ) -> Platform:
         """Register or update a platform's operational engines."""
+        platform = self._instances.get(name) or Platform(name=name)
         if deployer is not None:
-            self._deployers[name] = deployer
+            platform.deployer = deployer
         if validator is not None:
-            self._validators[name] = validator
-        existing = self._instances.get(name)
-        platform = Platform(
-            name=name,
-            enabled=enabled if enabled is not None else existing.enabled if existing else False,
-            config=config if config is not None else existing.config if existing else None,
-            deployer=self._deployers.get(name),
-            validator=self._validators.get(name),
-        )
+            platform.validator = validator
+        if config is not None:
+            platform.config = config
+        if enabled is not None:
+            platform.enabled = enabled
         self._instances[name] = platform
         return platform
 
-    def _load_validator(self, system: str) -> QueryValidator | None:
+    def _validator_factory(self, system: str) -> Callable[[], QueryValidator] | None:
         candidates: list[str] = []
         module_suffix = _VALIDATOR_MODULES.get(system)
         if module_suffix is not None:
@@ -117,16 +193,14 @@ class PlatformsRegistry:
         pkg = _PLATFORM_PACKAGES.get(system, system)
         candidates.append(f"opentide.platforms.{pkg}.validator")
         _ensure_repo_on_path()
-        seen: set[str] = set()
-        for module_name in candidates:
-            if module_name in seen:
-                continue
-            seen.add(module_name)
+        for module_name in dict.fromkeys(candidates):
             try:
                 module = importlib.import_module(module_name)
-                return cast(QueryValidator, module.declare())
             except Exception:
                 continue
+            declare = getattr(module, "declare", None)
+            if callable(declare):
+                return cast(Callable[[], QueryValidator], declare)
         return None
 
     def _ensure_loaded(self) -> None:
@@ -137,25 +211,12 @@ class PlatformsRegistry:
         eps = entry_points(group="opentide.platforms")
         for ep in eps:
             system = ep.name.replace("-", "_")
-            try:
-                deployer = cast(RuleDeployer, ep.load()())
-                self._deployers[system] = deployer
-            except Exception:
-                # Entry point may be missing or fail to load for optional platforms.
-                pass
-            validator = self._load_validator(system)
-            if validator is not None:
-                self._validators[system] = validator
-            try:
-                config = build_system_config(system)
-            except Exception:
-                config = None
             self._instances[system] = Platform(
                 name=system,
                 enabled=system in active,
-                config=config,
-                deployer=self._deployers.get(system),
-                validator=self._validators.get(system),
+                config_factory=partial(build_system_config, system),
+                deployer_factory=_deployer_factory(ep),
+                validator_factory=self._validator_factory(system),
             )
         self._loaded = True
 
@@ -184,11 +245,13 @@ class PlatformsRegistry:
 
     def deployers(self) -> dict[str, RuleDeployer]:
         self._ensure_loaded()
-        return dict(self._deployers)
+        built = {name: platform.deployer for name, platform in self._instances.items()}
+        return {name: deployer for name, deployer in built.items() if deployer is not None}
 
     def validators(self) -> dict[str, QueryValidator]:
         self._ensure_loaded()
-        return dict(self._validators)
+        built = {name: platform.validator for name, platform in self._instances.items()}
+        return {name: validator for name, validator in built.items() if validator is not None}
 
     def __contains__(self, name: str) -> bool:
         self._ensure_loaded()
