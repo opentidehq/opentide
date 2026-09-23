@@ -23,7 +23,7 @@ opentide validate --check schema
 | Flag | Purpose |
 |------|---------|
 | `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `cve` |
-| `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name |
+| `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)) |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`) |
@@ -31,6 +31,20 @@ opentide validate --check schema
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Validation failures in `--json` mode include the complete report before the process exits.
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
+
+### Selecting a file
+
+Object folders may contain subfolders, and files in different folders may share a name. `--file` matches like this:
+
+| Target | Matches |
+|--------|---------|
+| Repo-relative path (`objects/rules/team-a/rule.yaml`, `./objects/rules/team-a/rule.yaml`) | That file only. It is resolved from the working directory and from the repository root, so it also works from outside the repo or with `--repo`. |
+| Absolute path | That file only. |
+| Bare file name (`rule.yaml`) | Every object file with that name, in any object folder or subfolder. |
+
+A path never falls back to its file name: `objects/rules/rule.yaml` does not select `objects/rules/team-a/rule.yaml`, and a path that names no object file fails with `scope_no_match`. Give a path when a file name is not unique.
+
+Every issue reports the `file_path` of the object it concerns, so issues from two files that share a name stay apart when a bare file name selects both.
 
 ### Unparseable object files
 

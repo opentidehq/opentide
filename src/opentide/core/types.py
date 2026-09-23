@@ -20,5 +20,6 @@ class IndexSnapshot(TypedDict, total=False):
     threats: dict[str, Any]
     platforms: dict[str, Any]
     files: dict[str, str]
+    file_paths: dict[str, str]
     paths: dict[str, Any]
     parse_errors: list[dict[str, str]]

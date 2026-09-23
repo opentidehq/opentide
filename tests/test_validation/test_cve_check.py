@@ -50,6 +50,33 @@ def _threat_index(cve: list[str], uuid: str = "00000000-0000-4000-8000-000000000
     }
 
 
+def test_check_cve_issues_scope_by_path_uses_each_threats_own_file(tmp_path) -> None:
+    """A parent-folder target must not select, or be blamed for, a nested twin (#297)."""
+    top = "00000000-0000-4000-8001-000000000001"
+    nested = "00000000-0000-4000-8001-000000000002"
+    top_path = tmp_path / "objects" / "threats" / "twin.yaml"
+    nested_path = tmp_path / "objects" / "threats" / "actors" / "twin.yaml"
+    index = {
+        "objects": {
+            "threat": {
+                uuid: {"metadata": {"uuid": uuid}, "threat": {"cve": ["CVE-2024-BAD"]}}
+                for uuid in (top, nested)
+            }
+        },
+        "files": {top: "twin.yaml", nested: "twin.yaml"},
+        "file_paths": {top: str(top_path), nested: str(nested_path)},
+    }
+    scope = ValidationScope.narrow(
+        files=frozenset({"objects/threats/actors/twin.yaml"}), roots=(tmp_path,)
+    )
+    with (
+        patch.object(cve_check_module, "load_cve_settings", return_value=CveSettings()),
+        patch.object(cve_check_module, "apply_cve_proxy_settings"),
+    ):
+        issues = cve_check_module.check_cve_issues(index, scope, client=_FakeLookup())
+    assert [(issue.object_uuid, issue.file_path) for issue in issues] == [(nested, nested_path)]
+
+
 def test_check_cve_issues_reports_invalid_cve() -> None:
     index = _threat_index(["CVE-2024-BAD"])
     with (
