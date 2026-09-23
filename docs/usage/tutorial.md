@@ -234,7 +234,19 @@ opentide info
 opentide --json info --technique T1059 coverage
 ```
 
-`info` reports the package version, your object counts, and each platform's deploy/validate capabilities; the coverage query shows that T1059 is now covered by one objective and one rule. To see the chain itself, use the Mermaid diagram in [`generate docs`](../cli/generate.md) output or the MCP `get_chaining` tool. See [`info`](../cli/info.md).
+`info` reports the package version, your object counts, and each platform's deploy/validate capabilities. The coverage query returns the same payload plus a `coverage` object listing the rules whose `techniques` include T1059, trimmed here to that key:
+
+```json output-of="opentide --json info --technique T1059 coverage"
+{
+  "coverage": {
+    "technique": "T1059",
+    "rules": ["00000000-0000-4000-8003-000000000001"],
+    "count": 1
+  }
+}
+```
+
+Coverage counts rules only; the objective and threat your rule links to are not listed. To see the chain itself, use the Mermaid diagram in [`generate docs`](../cli/generate.md) output or the MCP `get_chaining` tool. See [`info`](../cli/info.md).
 
 ## 9. Validate the query and dry-run the deploy
 
@@ -254,12 +266,12 @@ Add `--live` to send the query to Azure Monitor for a real round-trip; that need
 opentide deploy --platform sentinel --dry-run
 ```
 
-```text
+```text output-of="opentide deploy --platform sentinel --dry-run"
 == MDR Deployment ==
 OK Deployment completed
 ```
 
-`--dry-run` plans the deploy without touching the platform; per-rule detail is logged to stderr, and `opentide --json deploy --platform sentinel --dry-run` returns it as a structured payload. A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
+`--dry-run` plans the deploy without touching the platform. The human output does not list rules: `DEBUG=1` logs each selected rule to stderr, and `opentide --json deploy --platform sentinel --dry-run` returns the plan and each rule's API payload (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
 
 ## 10. Generate documentation
 
