@@ -8,6 +8,7 @@ from opentide.deployment.git_backend import DulwichRepo, open_repo
 from opentide.core.errors import Errors
 from opentide.core.registry import OpenTide
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.registry.discovery import discover_workspace
 
 SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
@@ -63,8 +64,28 @@ class GitRepository:
         )
 
 
-def local_rule_files() -> list[Path]:
-    """Rule YAML files directly under the rules folder.
+RULE_SUFFIXES = (".yaml", ".yml")
+
+
+@dataclass(frozen=True)
+class RuleScope:
+    """Rule files a plan reads, and the ones in subfolders it skips (#312)."""
+
+    files: tuple[Path, ...] = ()
+    nested: tuple[str, ...] = ()
+
+
+def rules_folder_in_repo() -> str:
+    """The rules folder relative to the workspace, spelled as git diff paths are."""
+    rule_dir = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
+    try:
+        return rule_dir.relative_to(discover_workspace()).as_posix()
+    except ValueError:
+        return rule_dir.as_posix()
+
+
+def local_rule_scope() -> RuleScope:
+    """Rule YAML files under the rules folder, split by depth.
 
     Git does not keep empty folders, so a clone of a repository without rules
     has no rules folder at all: that is an empty catalogue, not an error.
@@ -72,34 +93,51 @@ def local_rule_files() -> list[Path]:
     mdr_path = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
     if not mdr_path.is_dir():
         logger.info("rule_folder_not_found", path=str(mdr_path))
-        return []
-    return [
-        path
-        for path in sorted(mdr_path.iterdir())
-        if path.is_file() and path.suffix in {".yaml", ".yml"}
-    ]
+        return RuleScope()
+    folder = rules_folder_in_repo()
+    files: list[Path] = []
+    nested: list[str] = []
+    for path in sorted(mdr_path.rglob("*")):
+        if not path.is_file() or path.suffix not in RULE_SUFFIXES:
+            continue
+        if path.parent == mdr_path:
+            files.append(path)
+        else:
+            nested.append(f"{folder}/{path.relative_to(mdr_path).as_posix()}")
+    return RuleScope(tuple(files), tuple(nested))
 
 
-def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
+def local_rule_files() -> list[Path]:
+    """Rule YAML files directly under the rules folder."""
+    return list(local_rule_scope().files)
+
+
+def modified_rule_scope(plan: DeploymentStrategy) -> RuleScope:
+    """The local rule files, or in CI the rule files the git diff changed."""
     MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
     if CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug:
-        files = local_rule_files()
-        logger.info("computed_modified_mdr_files", detail=str(files))
-        return files
+        scope = local_rule_scope()
+        logger.info("computed_modified_mdr_files", detail=str(list(scope.files)))
+        return scope
 
     MDR_PATH_RAW = OpenTide.Configurations.Global.Paths.Tide._raw["rule"]
     MDR_PATH_RAW = MDR_PATH_RAW.replace(r"/", r"\/")
 
     mdr_path_regex = rf"^.*{MDR_PATH_RAW}[^\/]+(\.yaml|\.yml)$"
-    mdr_files = [
-        mdr.split("/")[-1] for mdr in diff_calculation(plan) if re.match(mdr_path_regex, mdr)
-    ]
+    nested_regex = rf"^(.*/)?{re.escape(rules_folder_in_repo())}/.+/[^/]+\.(yaml|yml)$"
+    changed = diff_calculation(plan)
+    mdr_files = [mdr.split("/")[-1] for mdr in changed if re.match(mdr_path_regex, mdr)]
     # Extracting only the file name so it can be appended to MDR_PATH
     # which is absolute, and thus more reliable
 
     mdr_files = [(MDR_PATH / Path(f)) for f in mdr_files]
+    nested = sorted(mdr for mdr in changed if re.match(nested_regex, mdr))
     logger.info("computed_modified_mdr_files", detail=str(mdr_files))
-    return mdr_files
+    return RuleScope(tuple(mdr_files), tuple(nested))
+
+
+def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
+    return list(modified_rule_scope(plan).files)
 
 
 def diff_calculation(plan: DeploymentStrategy) -> list:

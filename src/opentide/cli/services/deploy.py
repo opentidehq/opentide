@@ -43,6 +43,33 @@ def run_deploy(
     wide: bool = False,
 ) -> dict[str, object]:
     """Deploy detection rules (Orchestration/deploy.py parity)."""
+    plan_warnings: list[str] = []
+    result = _deploy(
+        ctx,
+        plan_warnings,
+        platform=platform,
+        plan=plan,
+        dry_run=dry_run,
+        skip_promotion=skip_promotion,
+        keep_deprecated=keep_deprecated,
+        wide=wide,
+    )
+    if plan_warnings:
+        result["warnings"] = [*plan_warnings, *cast(list[str], result.get("warnings", []))]
+    return result
+
+
+def _deploy(
+    ctx: CliContext,
+    plan_warnings: list[str],
+    *,
+    platform: DetectionPlatform | None,
+    plan: str | None,
+    dry_run: bool,
+    skip_promotion: bool,
+    keep_deprecated: bool,
+    wide: bool,
+) -> dict[str, object]:
     ctx.apply_environment()
     os.environ["INDEX_OUTPUT"] = "cache"
     if plan is not None:
@@ -71,7 +98,10 @@ def run_deploy(
             emit_section("Pre-deployment Routine")
             PromoteMDR().promote(pre_deployment)
         deployment_list = make_deploy_plan(
-            deployment_plan, wide_scope=wide, keep_deprecated=keep_deprecated
+            deployment_plan,
+            wide_scope=wide,
+            keep_deprecated=keep_deprecated,
+            warnings=plan_warnings,
         )
     except ValueError as exc:
         return {"status": "failed", "message": str(exc), "_exit_code": 1}

@@ -10,11 +10,26 @@ from unittest.mock import MagicMock
 
 import pytest
 from pytest_console_scripts import ScriptRunner
+from tests.corpus_support import (
+    CORPUS_RULE_UUIDS,
+    INERT_RULE_UUID,
+    SUBFOLDER_RULE_UUIDS,
+    add_unplanned_rules,
+    classify_deploy_scope,
+    real_rules_folder,
+    write_rule_variant,
+)
 from tests.test_cli.conftest import LOCAL_SHELL_UNSET, assert_json_ok
 
 from opentide.core.root import find_repo_root
+from opentide.models.deployment_enums import StatusStrategy
 
 pytestmark = pytest.mark.cli_e2e
+
+SUBFOLDER_RULES_LEAD = (
+    "rule file(s) in subfolders of objects/rules are not deployed (deploy reads only "
+    "files directly in objects/rules; see https://github.com/OpenTideHQ/opentide/issues/312): "
+)
 
 
 def _mock_deployer(monkeypatch: pytest.MonkeyPatch, platform: str) -> MagicMock:
@@ -27,6 +42,12 @@ def _mock_deployer(monkeypatch: pytest.MonkeyPatch, platform: str) -> MagicMock:
 
     monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
     return deployer
+
+
+def _log_events(stderr: str, event: str) -> list[dict[str, object]]:
+    """The ``--json`` log records on stderr named *event*."""
+    records = [json.loads(line) for line in stderr.splitlines() if line.startswith("{")]
+    return [record for record in records if record.get("event") == event]
 
 
 @pytest.mark.parametrize("platform", ["sentinel", "defender_for_endpoint", "splunk"])
@@ -243,3 +264,137 @@ def test_deploy_dry_run_in_an_empty_directory_on_console_script(
     assert payload["status"] == "skipped"
     assert payload["dry_run"] is True
     assert payload["plan"] == {}
+
+
+@pytest.mark.parametrize("json_output", [True, False], ids=["json", "human"])
+def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
+    invoke_cli,
+    tide_corpus_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    json_output: bool,
+) -> None:
+    """#300 follow-up: with the subfolder crash fixed, a nested rule was dropped silently."""
+    for name in LOCAL_SHELL_UNSET:
+        monkeypatch.delenv(name, raising=False)
+    rules = real_rules_folder(tide_corpus_repo)
+    nested_uuid = SUBFOLDER_RULE_UUIDS["team-a/rule-0101-subfolder.yaml"]
+    write_rule_variant(rules, "team-a/rule-0101-subfolder.yaml", nested_uuid)
+    deployer = _mock_deployer(monkeypatch, "sentinel")
+    result = invoke_cli(
+        "deploy",
+        "--platform",
+        "sentinel",
+        "--dry-run",
+        json_output=json_output,
+        extra_env={"DEPLOYMENT_PLAN": ""},
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    deployer.deploy.assert_not_called()
+    warning = f"1 {SUBFOLDER_RULES_LEAD}objects/rules/team-a/rule-0101-subfolder.yaml"
+    if not json_output:
+        assert "OK Deployment completed" in result.stdout
+        stderr = " ".join(result.stderr.split())
+        assert stderr.count(f"WARNING {warning}") == 1
+        assert stderr.count("in subfolders of") == 1
+        return
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "completed"
+    assert payload["warnings"] == [warning]
+    assert CORPUS_RULE_UUIDS["sentinel"] in payload["plan"]["sentinel"]
+    assert nested_uuid not in payload["plan"]["sentinel"]
+    assert [
+        event["files"] for event in _log_events(result.stderr, "deploy_nested_rules_skipped")
+    ] == [["objects/rules/team-a/rule-0101-subfolder.yaml"]]
+
+
+@pytest.mark.parametrize("json_output", [True, False], ids=["json", "human"])
+@pytest.mark.parametrize(
+    ("argv", "fields", "message"),
+    [
+        pytest.param(
+            ("--platform", "sentinel"),
+            {"platform": "sentinel"},
+            "No rules to deploy for this platform",
+            id="one-platform",
+        ),
+        pytest.param((), {}, "No rules matched this deployment plan", id="every-platform"),
+    ],
+)
+def test_deploy_dry_run_with_rules_only_in_subfolders_is_skipped_with_the_warning(
+    invoke_cli,
+    tide_corpus_repo: Path,
+    refuse_deployment_engines: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    argv: tuple[str, ...],
+    fields: dict[str, str],
+    message: str,
+    json_output: bool,
+) -> None:
+    for name in LOCAL_SHELL_UNSET:
+        monkeypatch.delenv(name, raising=False)
+    rules = real_rules_folder(tide_corpus_repo)
+    (rules / "team-a").mkdir()
+    for path in sorted(rules.glob("*.yaml")):
+        path.rename(rules / "team-a" / path.name)
+    result = invoke_cli(
+        "deploy", *argv, "--dry-run", json_output=json_output, extra_env={"DEPLOYMENT_PLAN": ""}
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert refuse_deployment_engines == []
+    warning = f"8 {SUBFOLDER_RULES_LEAD}" + ", ".join(
+        [
+            "objects/rules/team-a/rule-0001-sentinel-kql.yaml",
+            "objects/rules/team-a/rule-0002-defender-kql.yaml",
+            "objects/rules/team-a/rule-0003-splunk-spl.yaml",
+            "objects/rules/team-a/rule-0004-sentinel-one-s1ql.yaml",
+            "objects/rules/team-a/rule-0005-carbon-black-lucene.yaml",
+            "+3 more",
+        ]
+    )
+    if not json_output:
+        assert f"SKIPPED {message}" in result.stdout
+        assert " ".join(result.stderr.split()).count(f"WARNING {warning}") == 1
+        return
+    assert json.loads(result.stdout) == {
+        **fields,
+        "deployed": [],
+        "dry_run": True,
+        "plan": {},
+        "payloads": {},
+        "ok": True,
+        "status": "skipped",
+        "message": message,
+        "warnings": [warning],
+    }
+
+
+@pytest.mark.parametrize("layout", ["plain", "symlinked"])
+def test_full_dry_run_accounts_for_every_indexed_rule(
+    invoke_cli,
+    tide_corpus_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    layout: str,
+) -> None:
+    """#312 guard: an indexed rule is planned, excluded by status, or named in a warning."""
+    for name in LOCAL_SHELL_UNSET:
+        monkeypatch.delenv(name, raising=False)
+    if layout == "plain":
+        real_rules_folder(tide_corpus_repo)
+    add_unplanned_rules(tide_corpus_repo / "objects" / "rules")
+    indexed = assert_json_ok(invoke_cli("info", "rules"))["rules"]
+    payload = assert_json_ok(
+        invoke_cli("deploy", "--dry-run", "--plan", "FULL", extra_env={"DEPLOYMENT_PLAN": ""})
+    )
+    scope = classify_deploy_scope(
+        tide_corpus_repo,
+        indexed,
+        payload["plan"],
+        payload.get("warnings", []),
+        excluded=frozenset(
+            {StatusStrategy.INERT, StatusStrategy.DISABLEMENT, StatusStrategy.DELETION}
+        ),
+    )
+    assert scope["silent"] == set()
+    assert set(CORPUS_RULE_UUIDS.values()) <= scope["planned"]
+    assert scope["status"] == {INERT_RULE_UUID}
+    assert scope["warned"] == set(SUBFOLDER_RULE_UUIDS.values())

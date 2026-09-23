@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.io import load_yaml
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
 from opentide.core.registry import DebugHelpers, OpenTide
-from opentide.deployment.git_repo import local_rule_files, modified_mdr_files
+from opentide.deployment.git_repo import local_rule_scope, modified_rule_scope, rules_folder_in_repo
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.platforms.enabled import enabled_systems
 
@@ -16,6 +15,8 @@ logger = get_logger(__name__)
 
 SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
+NESTED_RULES_ISSUE = "https://github.com/OpenTideHQ/opentide/issues/312"
+NESTED_RULES_SHOWN = 5
 
 __all__ = [
     "DEPRECATED_STATUSES",
@@ -51,12 +52,40 @@ def check_status(status_name: str) -> StatusStrategy:
     raise Exception
 
 
+def _nested_rules_warning(nested: tuple[str, ...]) -> str:
+    folder = rules_folder_in_repo()
+    names = ", ".join(nested[:NESTED_RULES_SHOWN])
+    if len(nested) > NESTED_RULES_SHOWN:
+        names += f", +{len(nested) - NESTED_RULES_SHOWN} more"
+    return (
+        f"{len(nested)} rule file(s) in subfolders of {folder} are not deployed "
+        f"(deploy reads only files directly in {folder}; see {NESTED_RULES_ISSUE}): {names}"
+    )
+
+
+def _report_nested_rules(nested: tuple[str, ...], warnings: list[str] | None) -> None:
+    fields = {"count": len(nested), "files": list(nested), "issue": NESTED_RULES_ISSUE}
+    if warnings is None:
+        logger.warning("deploy_nested_rules_skipped", **fields)
+        return
+    # The caller prints the message: a warning-level log would print it twice.
+    logger.info("deploy_nested_rules_skipped", **fields)
+    warnings.append(_nested_rules_warning(nested))
+
+
 def make_deploy_plan(
     plan: DeploymentStrategy,
     wide_scope: bool = False,
     keep_deprecated: bool = True,
+    *,
+    warnings: list[str] | None = None,
 ) -> dict[str, list[str]]:
-    """Assemble MDR UUIDs to deploy, organized per system."""
+    """Assemble MDR UUIDs to deploy, organized per system.
+
+    Only the files directly in the rules folder are deployed (#312). The
+    message naming the skipped subfolder files is appended to *warnings*;
+    without a list to report through, it is logged as a warning instead.
+    """
     systems_deployment = enabled_systems()
 
     logger.info("compiling_deploy_plan", plan=plan.name, wide_scope=wide_scope)
@@ -66,16 +95,17 @@ def make_deploy_plan(
             detail="Assembling plan without status filtering.",
         )
 
-    mdr_files: list[Path]
     deploy_mdr: dict[str, list[str]] = {}
 
     if plan is DeploymentStrategy.FULL:
-        mdr_files = local_rule_files()
-        logger.info("full_redeploy_scope", mdr_count=len(mdr_files))
+        scope = local_rule_scope()
+        logger.info("full_redeploy_scope", mdr_count=len(scope.files))
     else:
-        mdr_files = modified_mdr_files(plan)
+        scope = modified_rule_scope(plan)
+    if scope.nested:
+        _report_nested_rules(scope.nested, warnings)
 
-    for rule in mdr_files:
+    for rule in scope.files:
         data = load_yaml(rule)
         name = data["name"]
         conf_data = data["configurations"]

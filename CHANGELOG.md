@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Fixed
 
 - `deploy` in a workspace without `objects/rules/` (an empty directory, or a fresh clone before the first rule is committed) no longer exits `1` with `FATAL: [Errno 2] No such file or directory`. It reports `skipped` with exit `0` and contacts no platform, as `validate`, `lint`, `info`, and `generate` already did. The same applies to `validate query --live`, and to a rules folder holding only `.gitkeep` or a subfolder, which failed with `'NoneType' object is not subscriptable` and `[Errno 21] Is a directory`. A skipped deploy now returns the same JSON keys as one that planned rules: `dry_run`, an empty `plan` and `deployed`, and `payloads` on `--dry-run` ([#300](https://github.com/OpenTideHQ/opentide/issues/300)).
+- `deploy` no longer skips rule files in subfolders of `objects/rules/` silently. Deploy still reads only the files directly in `objects/rules/` ([#312](https://github.com/OpenTideHQ/opentide/issues/312)), but every plan now warns once and names the skipped files: a `WARNING` line in human output, and the result's `warnings` with `--json`. The list shows five names and then `+N more`. In CI, where `STAGING` and `PRODUCTION` plan from the git diff, only changed files are named. A repository whose rules all sit in subfolders reports `skipped` with the warning ([#300](https://github.com/OpenTideHQ/opentide/issues/300)).
 
 ## [0.5.0] — 2026-09-23
 
