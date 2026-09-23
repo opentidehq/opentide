@@ -85,8 +85,7 @@ def test_missing_tenants_error_names_the_platform_and_its_file(workspace: Path) 
         "sentinel has no tenants configured in .opentide/configurations/systems/sentinel.toml"
     )
     assert error.advice == (
-        "add (or uncomment) a [[tenants]] entry in "
-        ".opentide/configurations/systems/sentinel.toml"
+        "add (or uncomment) a [[tenants]] entry in .opentide/configurations/systems/sentinel.toml"
     )
 
 
