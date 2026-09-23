@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from rich.markup import escape
 from rich.panel import Panel
 from rich.text import Text
 
@@ -16,10 +17,10 @@ def emit_section(title: str) -> None:
 
     console = get_console()
     if is_plain_output():
-        console.print(f"\n== {title} ==\n")
+        console.print(f"\n== {title} ==\n", markup=False)
         return
 
-    console.rule(f"[bold cyan]{title}[/]")
+    console.rule(f"[bold cyan]{escape(title)}[/]")
 
 
 def emit_fatal(message: str, *, detail: str = "", advice: str = "") -> None:
@@ -36,18 +37,18 @@ def emit_fatal(message: str, *, detail: str = "", advice: str = "") -> None:
 
     console = get_console()
     if is_plain_output():
-        console.print(f"FATAL: {message}")
+        console.print(f"FATAL: {message}", markup=False)
         if detail:
-            console.print(f"  detail: {detail}")
+            console.print(f"  detail: {detail}", markup=False)
         if advice:
-            console.print(f"  advice: {advice}")
+            console.print(f"  advice: {advice}", markup=False)
         return
 
-    body_lines = [f"[bold red]{message}[/]"]
+    body_lines = [f"[bold red]{escape(message)}[/]"]
     if detail:
-        body_lines.append(f"[purple]Detail:[/] {detail}")
+        body_lines.append(f"[purple]Detail:[/] {escape(detail)}")
     if advice:
-        body_lines.append(f"[cyan]Advice:[/] {advice}")
+        body_lines.append(f"[cyan]Advice:[/] {escape(advice)}")
 
     console.print(
         Panel(

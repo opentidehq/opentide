@@ -198,10 +198,11 @@ def run_validate(
 
     if not ctx.json_output and report.issues:
         from rich.panel import Panel
+        from rich.text import Text
 
         get_stdout_console().print(
             Panel(
-                format_issues_for_console(report.issues),
+                Text(format_issues_for_console(report.issues)),
                 title="[bold red]Validation issues[/]",
                 border_style="red",
             )

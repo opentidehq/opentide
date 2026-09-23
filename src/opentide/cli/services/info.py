@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from opentide.cli.enums import DetectionPlatform
+from opentide.cli.enums import DetectionPlatform, platform_label
+from opentide.core.logging.config import get_stdout_console
 from opentide.core.object_fields import matches_technique
 from opentide.core.registry import OpenTide
 from opentide.platforms.enabled import enabled_systems
@@ -55,6 +56,35 @@ def collect_info(
     elif section == "coverage" and technique:
         payload["coverage"] = _technique_coverage(technique)
     return payload
+
+
+def render_info(payload: dict[str, Any]) -> None:
+    """Print the human view of :func:`collect_info`."""
+    from rich.table import Table
+    from rich.text import Text
+
+    table = Table(title="OpenTide Info")
+    table.add_column("Key")
+    table.add_column("Value")
+    table.add_row("Version", Text(str(payload["version"])))
+    table.add_row("Rules", str(payload["counts"]["rules"]))
+    table.add_row("Threats", str(payload["counts"]["threats"]))
+    table.add_row("Objectives", str(payload["counts"]["objectives"]))
+    for plat in payload["platforms"]:
+        caps = []
+        if plat["can_deploy"]:
+            caps.append("deploy")
+        if plat["can_validate"]:
+            caps.append("validate")
+        try:
+            display_name = platform_label(DetectionPlatform(plat["name"]))
+        except ValueError:
+            display_name = plat["name"]
+        table.add_row(
+            Text(display_name),
+            Text(f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]"),
+        )
+    get_stdout_console().print(table)
 
 
 def _package_version() -> str:

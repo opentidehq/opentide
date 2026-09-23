@@ -38,11 +38,11 @@ A parent technique also matches its sub-techniques (`T1059` finds rules tagged `
 
 ## Default output
 
-Interactive mode prints a Rich table:
+Without `--json`, `info` prints a Rich table:
 
 - Package version
 - Rule, threat, objective counts
-- Per-platform `enabled`, deploy, and validate capabilities
+- One row per platform: `enabled=True` or `enabled=False`, then its capabilities — `[deploy, validate]`, or `[deploy]` for CrowdStrike and HarfangLab
 
 ## JSON payload shape
 

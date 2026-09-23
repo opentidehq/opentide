@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from io import StringIO
+from typing import Any
 from unittest.mock import MagicMock, patch
+
+import pytest
+from rich.console import Console
 
 from opentide.cli.context import CliContext
 from opentide.cli.enums import DetectionPlatform
@@ -111,3 +116,28 @@ def test_technique_coverage_matches_top_level_techniques() -> None:
 
 def test_package_version_helper() -> None:
     assert info_service._package_version()
+
+
+_SUMMARY: dict[str, Any] = {
+    "version": "0.0.0",
+    "counts": {"rules": 1, "threats": 1, "objectives": 1},
+    "platforms": [
+        {"name": "sentinel", "enabled": True, "can_deploy": True, "can_validate": True},
+        {"name": "crowdstrike", "enabled": False, "can_deploy": True, "can_validate": False},
+    ],
+}
+
+
+def _render(monkeypatch: pytest.MonkeyPatch, payload: dict[str, Any]) -> str:
+    buffer = StringIO()
+    console = Console(file=buffer, width=200, force_terminal=False, no_color=True)
+    monkeypatch.setattr(info_service, "get_stdout_console", lambda: console)
+    info_service.render_info(payload)
+    return buffer.getvalue()
+
+
+def test_render_info_summary_keeps_the_capability_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rich read `[deploy, validate]` as a markup tag and printed nothing (#292)."""
+    output = _render(monkeypatch, _SUMMARY)
+    assert "enabled=True [deploy, validate]" in output
+    assert "enabled=False [deploy]" in output

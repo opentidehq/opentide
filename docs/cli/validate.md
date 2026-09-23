@@ -30,6 +30,8 @@ opentide validate --check schema
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Validation failures in `--json` mode include the complete report before the process exits.
 
+Without `--json`, issues are listed in a **Validation issues** panel, grouped by file, one `[severity] field: message` line each — for example `[error] detection_model: Unknown objective reference '…'`.
+
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 
 ### Unparseable object files
@@ -120,7 +122,9 @@ Each language's own syntax is respected, so valid content is not rejected:
 `--live` builds the platform client and submits the query, so it needs the
 matching extra (`pip install 'opentide[sentinel]'`) and tenant credentials. When
 the SDK is absent the command fails with the extra to install rather than a
-`ModuleNotFoundError` traceback. Only the requested platform's engine is
+`ModuleNotFoundError` traceback: the `advice` field in `--json`, an
+`advice: install opentide[sentinel] …` line under the `FATAL` line otherwise.
+Only the requested platform's engine is
 loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
 modules.
 

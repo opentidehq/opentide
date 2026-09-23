@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 import typer
+from rich.markup import escape
 
 from opentide.cli.enums import (
     CiPlatform,
@@ -174,20 +175,27 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
 def _print_setup_plan(options: SetupOptions) -> None:
     """Show the choices and mutation target before files are written."""
     from rich.table import Table
+    from rich.text import Text
 
     table = Table(title="Setup plan", show_header=False)
     table.add_column("Step", style="bold cyan")
     table.add_column("Selection")
-    table.add_row("Repository", str(options.path.resolve()))
-    table.add_row("Platforms", ", ".join(platform_label(item) for item in options.platforms))
-    table.add_row("CI/CD", options.ci.value if options.run_ci and options.ci else "configure later")
+    table.add_row("Repository", Text(str(options.path.resolve())))
+    table.add_row("Platforms", Text(", ".join(platform_label(item) for item in options.platforms)))
+    table.add_row(
+        "CI/CD", Text(options.ci.value if options.run_ci and options.ci else "configure later")
+    )
     table.add_row(
         "MCP",
-        ", ".join(item.value for item in options.mcp_hosts) if options.run_mcp else "skip",
+        Text(", ".join(item.value for item in options.mcp_hosts) if options.run_mcp else "skip"),
     )
     table.add_row(
         "Agent skills",
-        ", ".join(item.value for item in options.skill_targets) if options.run_skills else "skip",
+        Text(
+            ", ".join(item.value for item in options.skill_targets)
+            if options.run_skills
+            else "skip"
+        ),
     )
     get_stdout_console().print(table)
 
@@ -272,7 +280,7 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
     _print_setup_plan(options)
     if options.warnings:
         for warning in options.warnings:
-            console.print(f"[yellow]WARNING[/] {warning}")
+            console.print(f"[yellow]WARNING[/] {escape(warning)}")
     if not ask_confirm("Apply this setup plan?", default=True):
         return {
             "message": "Setup cancelled; no files were written",

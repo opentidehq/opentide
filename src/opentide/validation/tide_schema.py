@@ -41,7 +41,7 @@ def run() -> None:
         overall += count
     if report.issues:
         if not is_json_output():
-            get_stdout_console().print(format_issues_for_console(report.issues))
+            get_stdout_console().print(format_issues_for_console(report.issues), markup=False)
         for issue in report.issues:
             logger.critical(
                 "fatal_error",
@@ -61,7 +61,7 @@ def run() -> None:
         statstable = _format_stats_table(statstable)
         logger.info("step_completed", detail=f"Successfully verified {overall} OpenTide objects")
         if not is_json_output():
-            get_stdout_console().print(statstable)
+            get_stdout_console().print(statstable, markup=False)
 
 
 if __name__ == "__main__":
