@@ -38,14 +38,28 @@ A GitHub Release whose `--target` is not the tagged commit is a failed release. 
 
 ## Patch vs minor
 
-This repo is **0.1.x beta**. User-facing bugfixes (generate crash, schema leak, CLI traceback) are **patches**. New commands/features may be patches during the 0.1 support window unless the user asks for a minor.
+The package is pre-1.0, so the minor number carries breaking and behaviour changes. Cut a **minor** (`0.x+1.0`) when any shipped change does one of these:
+
+- changes what input is accepted (schema or model shape, validation strictness);
+- changes CLI output, JSON fields, or exit codes that scripts depend on;
+- changes generated files that users must regenerate (`opentide setup ci`, schemas, docs);
+- adds a command or user-visible feature.
+
+Otherwise, for fixes that restore documented behaviour without changing those surfaces, cut a **patch** (`0.x.y+1`).
+
+Precedents:
+- **0.4.0**: fixes changed output that scripts depend on, and a security fix required users to regenerate CI (#244).
+- **0.5.0**: `threat.impact` and `threat.leverage` became lists (#189).
+
+State the rationale in the CHANGELOG upgrade cue.
 
 ## Required two-step flow
 
 **Step 1** — notes PR, merge to `development`.  
 **Step 1b** — CI green on that PR.  
 **Step 2** — `gh release create` on the merge commit (this publishes).  
-**Step 3** — prove PyPI.
+**Step 3** — prove PyPI.  
+**Step 4** — group the shipped issues under the release tracking issue and close it.
 
 Do not skip Step 1. The tag must sit on the merge commit that **already contains** the changelog, usage notes, GitHub notes file, and install pins.
 
@@ -183,7 +197,15 @@ gh release create v0.x.y \
 
 `--target development` must resolve to that merge commit.
 
-Watch [publish-pypi.yml](https://github.com/OpenTideHQ/opentide/actions/workflows/publish-pypi.yml). If the `pypi` environment has required reviewers, someone must approve.
+**Latest flag.** Do not pass `--latest` or `--latest=false` for the newest version: by default GitHub marks it **Latest**. When cutting several versions back to back, cut them in version order, and give each one the default flag. Pass `--latest=false` only when publishing an older version after a newer one already exists.
+
+This bit 0.4.0. It was cut with `--latest=false` because 0.5.0 was about to follow, so Releases kept showing 0.3.0 as Latest. Verify:
+
+```bash
+gh release list --repo OpenTideHQ/opentide --limit 3   # new tag must show Latest
+```
+
+Watch [publish-pypi.yml](https://github.com/OpenTideHQ/opentide/actions/workflows/publish-pypi.yml). If the `pypi` environment has required reviewers, someone must approve. The job ends with **Verify PyPI lists every built file**, which fails unless PyPI lists both the wheel and the sdist.
 
 ---
 
@@ -192,14 +214,35 @@ Watch [publish-pypi.yml](https://github.com/OpenTideHQ/opentide/actions/workflow
 Wait for the publish workflow, then:
 
 ```bash
-pip index versions opentide   # or: curl https://pypi.org/pypi/opentide/json
-pip install "opentide==0.x.y"
+uv venv /tmp/opentide-0.x.y && source /tmp/opentide-0.x.y/bin/activate
+uv pip install --no-cache --index-url https://pypi.org/simple "opentide==0.x.y"
 python -c "import opentide; print(opentide.__version__)"
+curl -s https://pypi.org/pypi/opentide/0.x.y/json | python -c \
+  "import json,sys; print(sorted((u['packagetype'], u['filename']) for u in json.load(sys.stdin)['urls']))"
 ```
 
-Must print `0.x.y`, **not** `0.x.dev…`.
+The Python check must print `0.x.y`, **not** `0.x.dev…`. The JSON check must list both a `bdist_wheel` and an `sdist`.
+
+**CDN delay:** for about 10–15 minutes after a successful upload, PyPI can serve stale data from different edges:
+- `/pypi/opentide/json` is cached for 900 s and `/simple/opentide/` for 600 s;
+- `pip install` can report "No matching distribution";
+- the per-version JSON can list only some files, even though both uploads succeeded.
+
+Query-string cache busting does not help. Wait and retry with `--no-cache`. Do not retag or re-publish during that window.
 
 If version is `0.1.dev…`: the tag was not on the checkout (`fetch-depth: 0` is already in the workflow; usually the Release targeted the wrong commit). Do not retag; fix target and publish from the correct tag.
+
+---
+
+### Step 4 — Group the shipped issues
+
+Every release gets a tracking issue. Examples: [#285](https://github.com/OpenTideHQ/opentide/issues/285) and [#286](https://github.com/OpenTideHQ/opentide/issues/286) for 0.4.0 / 0.5.0, and [#301](https://github.com/OpenTideHQ/opentide/issues/301) for 0.6.0.
+
+1. Create or reuse an issue titled `Release 0.x.y — …` with the `epic` label. Its body lists the scope, the bump rationale, and a PR → issue table.
+2. Attach every shipped issue as a sub-issue. With the GitHub MCP, use `sub_issue_write`, which takes the issue's database `id`, not its number.
+3. After Step 3, close shipped sub-issues that are still open, then close the tracking issue as completed. Link the GitHub Release and the PyPI page.
+
+Milestones are optional; `setup-cli-v1` is the only precedent. The Cursor GitHub App token gets 403 on milestone creation, so a maintainer must create `0.x.y` first; agents can then assign issues to it.
 
 ## Failure table
 
@@ -210,6 +253,9 @@ Copied from [`docs/internal/pypi-trusted-publishing.md`](../../../docs/internal/
 | `0.1.dev…` | Tag not on the checked-out commit. Wrong `--target`. Do not retag; retarget. |
 | 403 `invalid-publisher` | OIDC fields: owner `opentidehq` (lowercase), workflow `publish-pypi.yml`, env `pypi`. Re-run; do not retag. |
 | `No module named 'hatch'` in Build package | `hatch build` isolated env (hatch 1.18.1 / hatchling 1.32.1). Publish uses `uv build`. A tag cut before that still runs the old YAML on `release: published`. From `development`: `gh api repos/OpenTideHQ/opentide/dispatches -f event_type=publish-pypi -f client_payload[checkout_ref]=v0.x.y`. Do not retag. |
+| `502` / 5xx on upload, job failed, some files already on PyPI (0.4.0) | From `development`: `gh api repos/OpenTideHQ/opentide/dispatches -f event_type=publish-pypi -f client_payload[checkout_ref]=v0.x.y`. The upload sets `skip-existing: true`, so the retry uploads only the missing files. `gh run rerun` and `workflow_dispatch` return 403 for the GitHub App token (no `actions:write`), so dispatch is the agent path. Do not retag. |
+| Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then use the same dispatch retry. The step log prints the exact command. |
+| New tag not shown as Latest | It was created with `--latest=false`. `gh release edit v0.x.y --repo OpenTideHQ/opentide --latest`. |
 | Release exists but Publish to PyPI never starts | Workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag. |
 | Core Metadata 2.5 | Already pinned to `2.4` in pyproject sdist/wheel. `uvx twine check dist/*` before tag. |
 
