@@ -50,7 +50,7 @@ _LEAKY_ENV = (
 _GENERIC_MESSAGES = {"Completed successfully"}
 
 #: Top-level string fields that hold data for scripts rather than prose for a reader.
-_DATA_FIELDS = frozenset({"path", "repo", "version", "status"})
+_DATA_FIELDS = frozenset({"path", "repo", "workspace", "version", "status"})
 
 _RULE = "00000000-0000-4000-8003-000000000001"
 _THREAT = "00000000-0000-4000-8001-000000000001"
