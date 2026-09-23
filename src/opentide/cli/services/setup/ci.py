@@ -63,22 +63,62 @@ def _git_stdout(cwd: Path, *args: str) -> str:
     return done.stdout.strip() if done.returncode == 0 else ""
 
 
+def _repository_dir(path: Path) -> Path:
+    """A target that does not exist yet is read from the repository it will join."""
+    return next(p for p in (path, *path.parents) if p.is_dir())
+
+
+def _local_branches(cwd: Path) -> set[str]:
+    refs = _git_stdout(cwd, "for-each-ref", "--format=%(refname)", "refs/heads/")
+    return {ref.removeprefix("refs/heads/") for ref in refs.splitlines()}
+
+
+def _detect_default_branch(path: Path) -> tuple[str, str]:
+    """``(branch, source)``, where *source* names the setting that supplied it."""
+    cwd = _repository_dir(path)
+    remote_head = _git_stdout(cwd, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+    remote_default = (
+        remote_head.removeprefix("origin/") if remote_head.startswith("origin/") else ""
+    )
+    for source, branch in (
+        ("origin/HEAD", remote_default),
+        ("HEAD", _git_stdout(cwd, "symbolic-ref", "--quiet", "--short", "HEAD")),
+        ("init.defaultBranch", _git_stdout(cwd, "config", "--get", "init.defaultBranch")),
+    ):
+        if is_valid_branch_name(branch):
+            return branch, source
+    return FALLBACK_DEFAULT_BRANCH, "fallback"
+
+
 def detect_default_branch(path: Path) -> str:
     """The branch GitHub and Azure inflight jobs fetch and push to.
 
-    ``origin/HEAD`` names the remote's default branch in a clone; without it,
-    ``init.defaultBranch``, then ``main``. A target that does not exist yet
-    is read from its nearest existing parent, the repository it will join.
+    ``origin/HEAD`` names the remote's default branch in a clone. Without it,
+    the checked-out branch comes before ``init.defaultBranch``: that setting is
+    a per-user default for *new* repositories and says nothing about one made
+    with ``git init -b trunk``. It still predicts the branch of a target
+    outside any repository. ``main`` comes last.
     """
-    cwd = next(p for p in (path, *path.parents) if p.is_dir())
-    remote_head = _git_stdout(cwd, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
-    for branch in (
-        remote_head.removeprefix("origin/") if remote_head.startswith("origin/") else "",
-        _git_stdout(cwd, "config", "--get", "init.defaultBranch"),
-    ):
-        if is_valid_branch_name(branch):
-            return branch
-    return FALLBACK_DEFAULT_BRANCH
+    return _detect_default_branch(path)[0]
+
+
+def _default_branch_warnings(path: Path, branch: str, source: str) -> list[str]:
+    """Flag a detected branch that is likely not the one that deploys."""
+    local = _local_branches(_repository_dir(path))
+    if source == "fallback" and branch not in local:
+        logger.warning("ci_default_branch_missing", detail=branch)
+        return [
+            f"Found no origin/HEAD, checked-out branch or init.defaultBranch; the pipeline "
+            f"targets {branch!r}, which is not a branch of this repository. "
+            "Re-run with --default-branch <branch>."
+        ]
+    if source == "HEAD" and local - {branch}:
+        logger.warning("ci_default_branch_guessed", detail=branch)
+        return [
+            f"origin/HEAD is not set, so the pipeline targets the checked-out branch {branch!r}. "
+            "Re-run with --default-branch <branch> if another branch deploys."
+        ]
+    return []
 
 
 def run_ci_setup(options: CiSetupOptions) -> dict[str, object]:
@@ -102,8 +142,11 @@ def run_ci_setup(options: CiSetupOptions) -> dict[str, object]:
                 f"GitLab pipelines publish to {GITLAB_DEFAULT_BRANCH}; --default-branch is ignored."
             )
             logger.warning("ci_default_branch_ignored", detail=options.default_branch)
+    elif options.default_branch is not None:
+        branch = options.default_branch
     else:
-        branch = options.default_branch or detect_default_branch(target)
+        branch, source = _detect_default_branch(target)
+        warnings.extend(_default_branch_warnings(target, branch, source))
     render = CiRenderOptions.from_repo_options(
         replace(options, default_branch=branch), platform_ids
     )

@@ -40,6 +40,26 @@ def cli_runner() -> CliRunner:
     return CliRunner()
 
 
+@pytest.fixture
+def git_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An empty global git configuration and no system one."""
+    for name in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(name)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    home = tmp_path / "home"
+    home.mkdir()
+    for name, value in {
+        "HOME": str(home),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_AUTHOR_NAME": "dev",
+        "GIT_AUTHOR_EMAIL": "dev@example.test",
+        "GIT_COMMITTER_NAME": "dev",
+        "GIT_COMMITTER_EMAIL": "dev@example.test",
+    }.items():
+        monkeypatch.setenv(name, value)
+    return home
+
+
 def default_remote_skill_entries() -> list[SkillEntry]:
     """Minimal live-catalogue stand-in used by setup tests."""
     return [

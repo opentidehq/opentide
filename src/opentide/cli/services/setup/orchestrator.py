@@ -63,6 +63,8 @@ class SetupOptions:
     promotion_target: str = "PRODUCTION"
     python_version: str = "3.12"
     explorer_pages: bool = False
+    #: ``None`` detects it from the target repository.
+    default_branch: str | None = None
     vscode_setup: bool = False
     yes: bool = False
     run_repo: bool = True
@@ -97,6 +99,7 @@ def _ci_options(options: SetupOptions) -> CiSetupOptions:
         promotion_target=options.promotion_target,
         python_version=options.python_version,
         explorer_pages=options.explorer_pages,
+        default_branch=options.default_branch,
         yes=options.yes,
     )
 
