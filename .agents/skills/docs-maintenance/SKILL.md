@@ -113,9 +113,9 @@ A failure the finished tutorial cannot produce names the repository edit it
 needs, e.g. `state=dangling-reference`; the edits are `REPO_STATES` in the
 golden test — add one there rather than leave the sample unchecked.
 
-Tagging is not optional for CLI output: an untagged sample that looks like it
-fails the unchecked-samples gate. Mark a fence `illustrative` only when no
-command in the golden repository can print it, and say so in the prose. MCP
+Tagging is not optional for CLI output: an untagged fence that reads like CLI
+output fails the unchecked-samples gate. Mark a fence `illustrative` only when
+no command in the golden repository can print it, and say so in the prose. MCP
 pages (`docs/mcp/`) are exempt.
 
 ## Platform capability rule
