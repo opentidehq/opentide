@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 from pathlib import Path
@@ -24,14 +23,20 @@ _WORKSPACE_VARS = {
 }
 
 
-def _ci_env(tmp_path: Path, marker: str) -> dict[str, str]:
+def _ci_env(tmp_path: Path, marker: str) -> dict[str, str | None]:
+    """Enable one CI marker and clear the others.
+
+    ``CliRunner`` overlays ``env`` on ``os.environ``. A key that is only
+    omitted stays set, so a GitHub-hosted run would keep ``GITHUB_WORKSPACE``
+    and open that checkout instead of reporting the missing one.
+    """
     hidden = {
         *_MARKERS,
         *_WORKSPACE_VARS.values(),
         "OPENTIDE_REPO_ROOT",
         "OPENTIDE_TIDE_WORKSPACE",
     }
-    env = {key: value for key, value in os.environ.items() if key not in hidden}
+    env: dict[str, str | None] = {key: None for key in hidden}
     env[marker] = "true"
     env["OPENTIDE_REPO_ROOT"] = str(tmp_path)
     env["OPENTIDE_TIDE_WORKSPACE"] = str(tmp_path)
@@ -62,7 +67,10 @@ def test_ci_plan_without_a_checkout_names_the_directory(
         assert payload["message"] == message
     else:
         rendered = re.sub(r"\s+", " ", result.stdout + result.stderr)
-        assert f"FATAL: {message}" in rendered
+        # Plain mode prints ``FATAL: <message>``. A Rich console puts FATAL in
+        # the panel title and the same sentence in the body.
+        assert "FATAL" in rendered
+        assert message in rendered
 
 
 def test_full_plan_in_ci_does_not_need_a_checkout(
