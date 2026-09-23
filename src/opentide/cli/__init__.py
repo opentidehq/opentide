@@ -16,7 +16,6 @@ from opentide.cli.enums import (
     ExtractImport,
     LintCheck,
     ValidateCheck,
-    platform_label,
 )
 from opentide.cli.output import (
     CommandResult,
@@ -30,13 +29,12 @@ from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate, run_generate_docs
-from opentide.cli.services.info import collect_info
-from opentide.cli.services.lint import run_lint
+from opentide.cli.services.info import collect_info, render_info
+from opentide.cli.services.lint import render_findings, run_lint
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
 from opentide.core.logging import LoggingConfig, init_logging
 from opentide.core.logging import print_banner as print_banner  # noqa: F401
-from opentide.core.logging.config import get_stdout_console
 from opentide.core.root import get_repo_root
 
 logger = structlog.get_logger("opentide.cli.__init__")
@@ -317,7 +315,7 @@ def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
 
 @extract_app.command("sentinel")
 def generate_extract_sentinel(ctx: typer.Context) -> None:
-    """Import Sentinel analytics rules (needs opentide[sentinel] and tenant credentials)."""
+    """Import Sentinel analytics rules (needs opentide\\[sentinel] and tenant credentials)."""
     _run_extract_command(ctx, ExtractImport.sentinel)
 
 
@@ -379,6 +377,8 @@ def lint_cmd(
     cli = get_context(ctx)
     cli.apply_environment()
     result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)
+    if not cli.json_output:
+        render_findings(result["findings"])
     emit_result(cli, CommandResult.from_payload(result, default_message="Catalogue lint passed"))
 
 
@@ -445,9 +445,10 @@ def deploy_metadata_cmd(
 
 # --- Deprecated top-level commands (delegate to generate) ---
 
-document_app = typer.Typer(help="[deprecated] Use opentide generate docs", hidden=True)
-export_legacy_app = typer.Typer(help="[deprecated] Use opentide generate exports", hidden=True)
-extract_legacy_app = typer.Typer(help="[deprecated] Use opentide generate extract", hidden=True)
+# Help text is Rich markup: a bare `[deprecated]` renders as nothing.
+document_app = typer.Typer(help="\\[deprecated] Use opentide generate docs", hidden=True)
+export_legacy_app = typer.Typer(help="\\[deprecated] Use opentide generate exports", hidden=True)
+extract_legacy_app = typer.Typer(help="\\[deprecated] Use opentide generate extract", hidden=True)
 app.add_typer(document_app, name="document")
 app.add_typer(export_legacy_app, name="export")
 app.add_typer(extract_legacy_app, name="extract")
@@ -605,30 +606,7 @@ def info_cmd(
     if cli.json_output:
         emit_success(cli, result)
     else:
-        from rich.table import Table
-
-        table = Table(title="OpenTide Info")
-        table.add_column("Key")
-        table.add_column("Value")
-        table.add_row("Version", str(result["version"]))
-        table.add_row("Rules", str(result["counts"]["rules"]))
-        table.add_row("Threats", str(result["counts"]["threats"]))
-        table.add_row("Objectives", str(result["counts"]["objectives"]))
-        for plat in result["platforms"]:
-            caps = []
-            if plat["can_deploy"]:
-                caps.append("deploy")
-            if plat["can_validate"]:
-                caps.append("validate")
-            try:
-                display_name = platform_label(DetectionPlatform(plat["name"]))
-            except ValueError:
-                display_name = plat["name"]
-            table.add_row(
-                display_name,
-                f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]",
-            )
-        get_stdout_console().print(table)
+        render_info(result, section=section)
 
 
 def main() -> None:

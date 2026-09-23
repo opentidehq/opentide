@@ -8,6 +8,7 @@ from pathlib import Path
 
 import structlog
 import typer
+from rich.markup import escape
 
 from opentide.cli.enums import SkillTarget
 from opentide.cli.services.setup.interactive import (
@@ -237,7 +238,8 @@ def run_interactive_skills_setup(base_path: Path) -> dict[str, object]:
     if unavailable:
         raise RuntimeError("Agent skills unavailable: " + ", ".join(unavailable))
     get_stdout_console().print(
-        f"[bold]Target:[/] {base_path.resolve()}\n[bold]Agent environments:[/] {', '.join(keys)}"
+        f"[bold]Target:[/] {escape(str(base_path.resolve()))}\n"
+        f"[bold]Agent environments:[/] {escape(', '.join(keys))}"
     )
     if not ask_confirm("Install these agent skills?", default=True):
         return {"message": "Agent skills setup cancelled", "status": "skipped"}

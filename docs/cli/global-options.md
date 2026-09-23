@@ -42,6 +42,8 @@ Routine commands do not print an ASCII banner. The interactive setup wizard uses
 
 With `--json`, stdout is one machine-readable JSON document. Diagnostics and debug logs use stderr.
 
+Without `--json`, a result prints its `message` first, then any `detail` and `advice` from the payload as indented `detail:` / `advice:` lines, then its warnings. The text is printed as-is: brackets such as `[error]` or `opentide[sentinel]` are shown, never read as Rich markup.
+
 `--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits non-zero with a JSON error naming the flags to pass instead — `--yes` plus the explicit selections. Without `--json` the same commands open the wizard as before.
 
 ## Deployment plan

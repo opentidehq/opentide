@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+from rich.markup import escape
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
@@ -221,7 +222,7 @@ def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) ->
         require_interactive()
     except InteractiveRequiredError as exc:
         emit_error(cli, f"{exc} Add --yes to confirm this write.")
-    get_stdout_console().print(f"[bold]Target:[/] {target.resolve()}")
+    get_stdout_console().print(f"[bold]Target:[/] {escape(str(target.resolve()))}")
     return ask_confirm(message, default=True)
 
 
@@ -629,6 +630,7 @@ def setup_skills_discover_cmd(
         emit_success(cli, payload)
         return
     from rich.table import Table
+    from rich.text import Text
 
     table = Table(title="OpenTide Skills")
     table.add_column("Name")
@@ -636,12 +638,14 @@ def setup_skills_discover_cmd(
     table.add_column("Description")
     for item in payload["skills"]:
         table.add_row(
-            str(item["name"]),
+            Text(str(item["name"])),
             "yes" if item.get("installed") else "no",
-            str(item.get("description", ""))[:80],
+            Text(str(item.get("description", ""))[:80]),
         )
     get_stdout_console().print(table)
-    get_stdout_console().print(f"Source: {payload['source']} ({payload['count']} skills)")
+    get_stdout_console().print(
+        f"Source: {payload['source']} ({payload['count']} skills)", markup=False
+    )
 
 
 @skills_app.command("show")
@@ -665,13 +669,14 @@ def setup_skills_show_cmd(
             emit_success(cli, payload)
         return
     if "error" in payload:
-        get_console().print(f"[red]{payload['error']}[/red]")
+        get_console().print(f"[red]{escape(payload['error'])}[/red]")
         raise typer.Exit(1)
     skill = payload["skill"]
-    get_stdout_console().print(f"[bold]{skill['name']}[/bold] ({skill['slug']})")
-    get_stdout_console().print(skill.get("description", ""))
-    get_stdout_console().print(f"Installed: {'yes' if skill.get('installed') else 'no'}")
-    get_stdout_console().print(payload.get("install_hint", ""))
+    console = get_stdout_console()
+    console.print(f"[bold]{escape(skill['name'])}[/bold] ({escape(skill['slug'])})")
+    console.print(skill.get("description", ""), markup=False)
+    console.print(f"Installed: {'yes' if skill.get('installed') else 'no'}")
+    console.print(payload.get("install_hint", ""), markup=False)
 
 
 @setup_app.command("vscode")

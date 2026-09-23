@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Changed
 
 - SDK: the registry index has a `file_paths` map from UUID to the file each object was read from; `files` still holds bare file names. `ValidationScope.matches_file()` matches a path target only through the object's own path, and the `ValidationScope.path_basenames` field is removed ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
+- `opentide --json setup mcp --generic` returns its copy-the-file instruction as `advice` instead of `note`, so human output prints it too. Scripts that read `note` should read `advice` ([#292](https://github.com/OpenTideHQ/opentide/issues/292)).
 
 ### Fixed
 
@@ -18,10 +19,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - `validate --file` with a repo-relative or absolute path validates only that file when object folders have subfolders. The index kept only each object's file name, so `--file objects/rules/x.yaml` also validated `objects/rules/other/x.yaml` and reported its issues against `objects/rules/x.yaml`, while `--file objects/rules/other/x.yaml` matched nothing. A path no longer falls back to its file name, a bare file name still matches that name in every subfolder, and every issue names the file of the object it concerns — in the CLI, MCP `validation_report`, and `--check cve` ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
 - The duplicate-ID check reads object files in subfolders, as indexing does. A UUID duplicated in a file under `objects/rules/<subfolder>/` passed a full `validate` ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
 - SDK: `rule.file` on `OpenTide.Rules[...]` and `OpenTide.Models.Rules[...]` points at the rule's own file in subfolders. It was rebuilt as `<rules folder>/<file name>`, so a rule in `objects/rules/other/x.yaml` got `objects/rules/x.yaml` — another rule's file, or none ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
+- Human output no longer drops bracketed text. Rich read it as markup, so the `info` platform rows lost `[deploy, validate]`, the `validate` issues panel lost each `[error]` tag, and `generate extract sentinel` told you to `install opentide` without `[sentinel]` — `--no-color` included, while `--json` was correct. Help text that named `opentide[sentinel]` or `[deprecated]` lost it the same way ([#292](https://github.com/OpenTideHQ/opentide/issues/292)).
+- Human output prints a result's `advice` and `detail` as indented lines under its message, as `--json` carries them: `validate query --live` without the vendor SDK names the extra to install, and a live run on a disabled platform says how to enable it ([#292](https://github.com/OpenTideHQ/opentide/issues/292)).
+- Human `opentide lint` lists each finding as `[check] path: message` above its summary line. It used to print only `OK Catalogue lint found issues`, so without `--json` there was no way to see what to fix ([#292](https://github.com/OpenTideHQ/opentide/issues/292)).
+- `opentide info rules`, `info threats`, `info objectives`, and `info coverage --technique …` print the section asked for — UUID and name per object, the platforms each rule configures, the technique and its rule count — instead of the plain `info` summary ([#293](https://github.com/OpenTideHQ/opentide/issues/293)).
 
 ### Tests
 
 - A parity test fails when a `setup ci` option is missing from the one-shot `setup --ci`, declared with a different default, or not passed on to CI generation ([#288](https://github.com/OpenTideHQ/opentide/issues/288)).
+- A human-vs-JSON parity test runs a matrix of commands on the tutorial workspace with and without `--json` and requires every top-level prose string in the payload, plus its warnings, issue severities, findings, platform capabilities, and section items, to appear verbatim in the human output. A unit guard sends markup-like text through every emit helper and checks that every help string renders its brackets ([#292](https://github.com/OpenTideHQ/opentide/issues/292), [#293](https://github.com/OpenTideHQ/opentide/issues/293)).
 
 ## [0.5.0] — 2026-09-23
 

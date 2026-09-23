@@ -8,6 +8,7 @@ from pathlib import Path
 
 import structlog
 import typer
+from rich.markup import escape
 
 from opentide.cli.enums import McpHost
 from opentide.cli.services.setup.interactive import (
@@ -66,7 +67,7 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
         "files": written,
     }
     if McpHost.generic in options.hosts:
-        result["note"] = (
+        result["advice"] = (
             "Copy opentide.mcp.json into your editor MCP settings or run "
             "opentide setup mcp with a specific host flag."
         )
@@ -102,7 +103,8 @@ def run_interactive_mcp_setup(base_path: Path) -> dict[str, object]:
         require_selection=True,
     )
     get_stdout_console().print(
-        f"[bold]Target:[/] {base_path.resolve()}\n[bold]Hosts:[/] {', '.join(keys)}"
+        f"[bold]Target:[/] {escape(str(base_path.resolve()))}\n"
+        f"[bold]Hosts:[/] {escape(', '.join(keys))}"
     )
     if not ask_confirm("Write these MCP configurations?", default=True):
         return {"message": "MCP setup cancelled", "status": "skipped"}

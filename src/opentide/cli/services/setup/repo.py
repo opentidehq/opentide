@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
+from rich.markup import escape
 
 from opentide.cli.enums import DetectionPlatform
 from opentide.cli.services.setup.interactive import (
@@ -129,7 +130,7 @@ def run_interactive_repo_setup(ctx: CliContext, base_path: Path) -> dict[str, ob
         platforms=ask_platforms(),
         yes=True,
     )
-    get_stdout_console().print(f"[bold]Target:[/] {target}")
+    get_stdout_console().print(f"[bold]Target:[/] {escape(str(target))}")
     if not ask_confirm("Create this repository scaffold?", default=True):
         return {"message": "Repository setup cancelled", "status": "skipped"}
     return run_repo_setup(options)
