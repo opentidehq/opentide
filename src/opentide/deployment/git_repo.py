@@ -3,10 +3,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from opentide.deployment.git_backend import DulwichRepo, open_repo
-
 from opentide.core.errors import Errors
 from opentide.core.registry import OpenTide
+from opentide.deployment.git_backend import DulwichRepo, open_repo
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.registry.discovery import discover_workspace
 
@@ -112,6 +111,22 @@ def local_rule_files() -> list[Path]:
     return list(local_rule_scope().files)
 
 
+def split_changed_rule_paths(changed: list[str]) -> tuple[list[str], list[str]]:
+    """Split a git diff into top-level rule files and rule files in subfolders.
+
+    Diff entries are repo-relative (``objects/rules/rule.yaml``) or absolute.
+    The configured rules folder is absolute, so both patterns use the
+    repo-relative folder (#318). A file under ``objects/rules/<subfolder>/``
+    stays in the second list.
+    """
+    folder = re.escape(rules_folder_in_repo().strip("/"))
+    top_level = re.compile(rf"(?:^|/){folder}/[^/]+\.(?:yaml|yml)$")
+    nested = re.compile(rf"(?:^|/){folder}/.+/[^/]+\.(?:yaml|yml)$")
+    top_paths = [path for path in changed if path and top_level.search(path)]
+    nested_paths = sorted(path for path in changed if path and nested.search(path))
+    return top_paths, nested_paths
+
+
 def modified_rule_scope(plan: DeploymentStrategy) -> RuleScope:
     """The local rule files, or in CI the rule files the git diff changed."""
     MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
@@ -120,20 +135,13 @@ def modified_rule_scope(plan: DeploymentStrategy) -> RuleScope:
         logger.info("computed_modified_mdr_files", detail=str(list(scope.files)))
         return scope
 
-    MDR_PATH_RAW = OpenTide.Configurations.Global.Paths.Tide._raw["rule"]
-    MDR_PATH_RAW = MDR_PATH_RAW.replace(r"/", r"\/")
-
-    mdr_path_regex = rf"^.*{MDR_PATH_RAW}[^\/]+(\.yaml|\.yml)$"
-    nested_regex = rf"^(.*/)?{re.escape(rules_folder_in_repo())}/.+/[^/]+\.(yaml|yml)$"
     changed = diff_calculation(plan)
-    mdr_files = [mdr.split("/")[-1] for mdr in changed if re.match(mdr_path_regex, mdr)]
-    # Extracting only the file name so it can be appended to MDR_PATH
-    # which is absolute, and thus more reliable
-
-    mdr_files = [(MDR_PATH / Path(f)) for f in mdr_files]
-    nested = sorted(mdr for mdr in changed if re.match(nested_regex, mdr))
+    top_level, nested_paths = split_changed_rule_paths(changed)
+    # The diff path is repo-relative. The file itself lives under the absolute
+    # rules folder, and a top-level rule's name is its last path segment.
+    mdr_files = [MDR_PATH / Path(path).name for path in top_level]
     logger.info("computed_modified_mdr_files", detail=str(mdr_files))
-    return RuleScope(tuple(mdr_files), tuple(nested))
+    return RuleScope(tuple(mdr_files), tuple(nested_paths))
 
 
 def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
