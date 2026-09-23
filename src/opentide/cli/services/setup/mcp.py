@@ -67,7 +67,7 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
         "files": written,
     }
     if McpHost.generic in options.hosts:
-        result["note"] = (
+        result["advice"] = (
             "Copy opentide.mcp.json into your editor MCP settings or run "
             "opentide setup mcp with a specific host flag."
         )

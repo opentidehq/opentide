@@ -49,6 +49,9 @@ _LEAKY_ENV = (
 #: Envelope messages a command falls back to when it has nothing specific to say.
 _GENERIC_MESSAGES = {"Completed successfully"}
 
+#: Top-level string fields that hold data for scripts rather than prose for a reader.
+_DATA_FIELDS = frozenset({"path", "repo", "version", "status"})
+
 _RULE = "00000000-0000-4000-8003-000000000001"
 _THREAT = "00000000-0000-4000-8001-000000000001"
 _OBJECTIVE = "00000000-0000-4000-8002-000000000001"
@@ -244,6 +247,10 @@ _CASES = {
     "lint": Case(("lint",)),
     "lint-findings": Case(("lint",), _drop_author),
     "lint-findings-strict": Case(("lint", "--strict"), _drop_author),
+    "setup-mcp-generic": Case(("setup", "mcp", "--generic", "--yes")),
+    "setup-mcp-no-host": Case(("setup", "mcp", "--yes")),
+    "setup-skills": Case(("setup", "skills", "--generic", "--yes")),
+    "setup-platforms": Case(("setup", "platforms", "--splunk", "--yes")),
 }
 
 
@@ -271,11 +278,18 @@ def _info_expectations(payload: dict[str, Any]) -> list[Expectation]:
 
 
 def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
-    """The strings in a result document that a human reader has to see."""
+    """The strings in a result document that a human reader has to see.
+
+    Any top-level prose string counts, not only the fields named here, so a new
+    field a renderer does not know about (``setup mcp`` once had ``note``) fails.
+    """
     expected: list[Expectation] = [
-        payload[key]
-        for key in ("message", "error", "detail", "advice")
-        if isinstance(payload.get(key), str) and payload[key] not in _GENERIC_MESSAGES
+        value
+        for key, value in payload.items()
+        if isinstance(value, str)
+        and " " in value.strip()
+        and key not in _DATA_FIELDS
+        and value not in _GENERIC_MESSAGES
     ]
     expected.extend(payload.get("warnings") or [])
     for issue in (payload.get("report") or {}).get("issues", []):

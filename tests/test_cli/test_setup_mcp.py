@@ -58,6 +58,6 @@ def test_run_mcp_setup_multiple_hosts(tmp_path: Path) -> None:
     assert set(result["files"]) == {".vscode/mcp.json", ".cursor/mcp.json"}
 
 
-def test_run_mcp_setup_generic_note(tmp_path: Path) -> None:
+def test_run_mcp_setup_generic_advice(tmp_path: Path) -> None:
     result = run_mcp_setup(McpSetupOptions(path=tmp_path, hosts=[McpHost.generic], yes=True))
-    assert "note" in result
+    assert "Copy opentide.mcp.json into your editor MCP settings" in str(result["advice"])
