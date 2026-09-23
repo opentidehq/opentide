@@ -7,6 +7,41 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.6.0 — 23 September 2026
+
+Minor on 0.5.0. **Upgrade if a command checked the wrong directory, hid what `--json` already showed, or crashed on a repository that was not finished yet.** A few JSON fields and exit results change, so read the first list before upgrading a pipeline.
+
+**Install**
+
+```bash
+pip install opentide==0.6.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+If you generated CI with `opentide setup ci`, regenerate it so `--default-branch` matches the branch you deploy from: `opentide setup ci <github|gitlab|azure> --yes`.
+
+**What changes for authors and scripts**
+
+- `validate --json` names the directory it read under `workspace`. A full run that finds no objects still exits `0`, and its message names that directory ([#294](https://github.com/OpenTideHQ/opentide/issues/294)).
+- `setup mcp --generic` returns its copy-the-file instruction as `advice` instead of `note` ([#292](https://github.com/OpenTideHQ/opentide/issues/292)).
+- SDK: the registry index has a `file_paths` map. `ValidationScope.path_basenames` is removed; a path target matches only the object's own file ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
+- An unset Splunk `frequency_scheduling` keeps the mode it deployed with before: `current` for a legacy `[setup]` table, `random` for a `[[tenants]]` entry ([#295](https://github.com/OpenTideHQ/opentide/issues/295)).
+
+**What this version fixes**
+
+- Commands find a detection workspace from `.opentide/` or `objects/`, including one nested in a larger git checkout ([#294](https://github.com/OpenTideHQ/opentide/issues/294)). `validate --file` matches that path only, and issues name the object's own file ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
+- Human output keeps bracketed text, prints `advice` and lint findings, and `info rules`, `info threats`, `info objectives`, and `info coverage` print the section you asked for ([#292](https://github.com/OpenTideHQ/opentide/issues/292), [#293](https://github.com/OpenTideHQ/opentide/issues/293)).
+- `rule.metadata.schema` returns the schema id ([#298](https://github.com/OpenTideHQ/opentide/issues/298)). `generate docs` writes an actor stage as `att&ck`, not a Python tuple ([#296](https://github.com/OpenTideHQ/opentide/issues/296)). `info` no longer warns about Splunk in a repository that does not use it ([#295](https://github.com/OpenTideHQ/opentide/issues/295)).
+- `deploy` without `objects/rules/` reports `skipped` instead of `Errno 2`. Rules in subfolders are named in a warning and are still not deployed ([#300](https://github.com/OpenTideHQ/opentide/issues/300), [#312](https://github.com/OpenTideHQ/opentide/issues/312)). An enabled platform with no `[[tenants]]` entry fails `deploy` and `validate query --live` with the file to edit ([#314](https://github.com/OpenTideHQ/opentide/issues/314)).
+- `setup --ci` accepts `--default-branch` and prints step warnings ([#288](https://github.com/OpenTideHQ/opentide/issues/288), [#308](https://github.com/OpenTideHQ/opentide/issues/308)). `--no-promotion` and `--promotion-target` write `[promotion]` in `deployment.toml` ([#307](https://github.com/OpenTideHQ/opentide/issues/307)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.6.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.5.0 — 23 September 2026
 
 Minor on 0.4.0. **Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names** — 0.4.0 rejected every such threat with `Input should be a valid string`. A threat written the way 0.4.0 required (`impact: Data Breach`) now fails until it becomes a one-item list, so update threats before upgrading a pipeline.
