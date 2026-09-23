@@ -81,12 +81,16 @@ def _deploy(
         make_deploy_plan,
         modified_mdr_files,
     )
+    from opentide.deployment.git_repo import MissingGitCheckout, missing_checkout_message
     from opentide.mutation.promotion import PromoteMDR
     from opentide.platforms.plugins import DeployTide
 
     OpenTide.reload()
     try:
         deployment_plan = DeploymentStrategy.load_from_environment()
+    except ValueError as exc:
+        return {"status": "failed", "message": str(exc), "_exit_code": 1}
+    try:
         local_debug = CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug
         if (
             deployment_plan is DeploymentStrategy.PRODUCTION
@@ -103,8 +107,12 @@ def _deploy(
             keep_deprecated=keep_deprecated,
             warnings=plan_warnings,
         )
-    except ValueError as exc:
-        return {"status": "failed", "message": str(exc), "_exit_code": 1}
+    except MissingGitCheckout as exc:
+        return {
+            "status": "failed",
+            "message": missing_checkout_message(deployment_plan.name, exc.searched),
+            "_exit_code": 1,
+        }
     except Exception as exc:
         message = str(exc).strip() or (f"{type(exc).__name__} while compiling the deployment plan")
         return {"status": "failed", "message": message, "_exit_code": 1}
