@@ -32,6 +32,7 @@ from opentide.cli.services.setup.interactive import (
 )
 from opentide.cli.services.setup.mcp import McpSetupOptions, run_mcp_setup
 from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
+from opentide.cli.services.setup.promotion import effective_promotion, plan_promotion_override
 from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
 from opentide.cli.services.setup.skills import (
     SkillsDownloadError,
@@ -60,8 +61,9 @@ class SetupOptions:
     ci: CiPlatform | None = None
     staging: bool = True
     inflight: bool = True
-    promotion: bool = True
-    promotion_target: str = "PRODUCTION"
+    #: ``None`` keeps the repository's ``[promotion]`` setting.
+    promotion: bool | None = None
+    promotion_target: str | None = None
     python_version: str = "3.12"
     explorer_pages: bool = False
     #: ``None`` detects it from the target repository.
@@ -127,6 +129,13 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
     run_platforms = options.run_platforms or (
         bool(options.platforms) and options.run_ci and options.ci is not CiPlatform.none
     )
+    if options.run_ci and options.ci is not None and options.ci is not CiPlatform.none:
+        # Refuse bad promotion flags before the steps ahead of CI write anything.
+        plan_promotion_override(
+            options.path.resolve(),
+            enabled=options.promotion,
+            promotion_target=options.promotion_target,
+        )
 
     if options.run_repo:
         repo_result = run_repo_setup(_repo_options(options))
@@ -242,6 +251,7 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
     )
     options.run_ci = options.ci is not CiPlatform.none
     if options.run_ci:
+        promoting = effective_promotion(base_path).get("enabled") is True
         features = ask_checkbox(
             "CI workflow features",
             [
@@ -250,11 +260,13 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
                 ("Automatic status promotion", "promotion"),
                 ("Explorer pages", "explorer"),
             ],
-            defaults=("staging", "inflight", "promotion"),
+            defaults=("staging", "inflight", *(("promotion",) if promoting else ())),
         )
         options.staging = "staging" in features
         options.inflight = "inflight" in features
-        options.promotion = "promotion" in features
+        # Leaving the checkbox where the repository already has it writes nothing.
+        chosen = "promotion" in features
+        options.promotion = None if chosen is promoting else chosen
         options.explorer_pages = "explorer" in features
 
     if ask_confirm("Configure OpenTide MCP?", default=False):

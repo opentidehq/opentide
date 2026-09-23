@@ -11,7 +11,6 @@ from opentide.ci.stages import (
     header_comment,
     pip_install,
     production_deploy_steps,
-    promotion_steps,
     query_platforms,
     staging_deploy_steps,
 )
@@ -202,17 +201,6 @@ def render_github(options: CiRenderOptions) -> str:
             steps=join_blocks(setup, _run_steps(production_deploy_steps(options))),
         )
     )
-
-    if options.promotion and promotion_steps(options):
-        jobs.append(
-            _github_job(
-                "promote",
-                name="Promote Rules",
-                needs="deploy_production",
-                if_cond=prod_if,
-                steps=join_blocks(setup, _run_steps(promotion_steps(options))),
-            )
-        )
 
     jobs.append(
         _github_job(

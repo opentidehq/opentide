@@ -30,9 +30,9 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |
 | `--staging` / `--no-staging` | CI staging stage (default: on) |
 | `--inflight` / `--no-inflight` | Update pull-request preview shards (default: on) |
-| `--promotion` / `--no-promotion` | CI promotion stage (default: on; promotion runs in deploy) |
+| `--promotion` / `--no-promotion` | Status promotion in `opentide deploy`. Omit the flag to keep the repository's setting; `--no-promotion` writes `[promotion] enabled = false` (see [setup ci](#setup-ci)) |
 | `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs |
-| `--promotion-target` | Promotion target status (default `PRODUCTION`) |
+| `--promotion-target` | Status `deploy` promotes rules to. Omit the flag to keep the repository's setting; another status is written as `[promotion] promotion_target` |
 | `--python-version` | CI Python version (default `3.12`) |
 | `--default-branch` | Branch that deploys and receives inflight shards (see [setup ci](#setup-ci)) |
 | `--vscode-setup` | Deprecated VS Code yaml.schemas + snippets (generate-first) |
@@ -104,6 +104,18 @@ Without `--default-branch`, GitHub and Azure pipelines target the first of:
 4. `main`.
 
 The JSON result reports the branch used as `default_branch`. It adds a `warnings` entry, and logs a warning, when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist. Pass `--default-branch` in either case. A name the pipelines cannot hold unquoted (spaces, shell characters, or a value YAML reads as a number or boolean such as `2024` or `on`) is rejected with exit code 2.
+
+The pipeline has no promotion job: `opentide deploy --plan PRODUCTION` promotes rules as the merged `deployment.toml` [configures](../usage/configuration.md#promotion). Omitting the flags keeps that setting. An explicit flag writes the `[promotion]` table of `.opentide/configurations/deployment.toml` when the value differs from the bundled default and the file has no `[promotion]` table yet, and the result lists that file under `files`:
+
+```bash
+opentide setup ci github --no-promotion --yes                 # [promotion] enabled = false
+opentide setup ci github --promotion-target ACCEPTANCE --yes  # [promotion] promotion_target = "ACCEPTANCE"
+```
+
+- Omitting `--promotion` and `--promotion-target` changes nothing, including a table a previous run wrote.
+- An explicit value that matches the bundled default writes nothing on a repository that has no `[promotion]` table.
+- `--promotion-target` must name a status of the repository's merged `deployment.toml`; any other value exits with code 2 before a file is written.
+- An existing `deployment.toml` without a `[promotion]` table keeps its content; the table is appended. If it already has a `[promotion]` table and an explicit flag disagrees with it, setup exits with code 2 and leaves the file for you to edit, because rewriting it would drop its comments.
 
 ### setup env
 

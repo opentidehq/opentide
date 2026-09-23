@@ -23,7 +23,7 @@ def test_render_azure_includes_validate_stage() -> None:
     assert "Validate" in content
 
 
-def test_render_azure_omits_promote_when_no_steps() -> None:
+def test_render_azure_has_no_promote_stage() -> None:
     options = CiRenderOptions(ci="azure", promotion=True)
     content = render_azure(options)
     assert "stage: Promote" not in content

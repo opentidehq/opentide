@@ -9,7 +9,6 @@ from opentide.ci.stages import (
     inflight_generate_steps,
     pip_install,
     production_deploy_steps,
-    promotion_steps,
     query_platforms,
     staging_deploy_steps,
 )
@@ -36,13 +35,11 @@ def test_core_cli_steps_include_validate_and_generate() -> None:
     assert steps[-1] == "opentide generate"
 
 
-def test_staging_and_promotion_steps() -> None:
-    enabled = CiRenderOptions(ci="github", staging=True, promotion=True)
-    disabled = CiRenderOptions(ci="github", staging=False, promotion=False)
+def test_staging_and_production_steps() -> None:
+    enabled = CiRenderOptions(ci="github", staging=True)
+    disabled = CiRenderOptions(ci="github", staging=False)
     assert staging_deploy_steps(enabled) == ["opentide deploy --plan STAGING"]
     assert staging_deploy_steps(disabled) == []
-    assert promotion_steps(enabled) == []
-    assert promotion_steps(disabled) == []
     assert production_deploy_steps(enabled) == ["opentide deploy --plan PRODUCTION"]
     assert document_steps(enabled) == ["opentide generate docs --output docs"]
     assert document_steps(CiRenderOptions(ci="github", docs_enabled=False)) == []

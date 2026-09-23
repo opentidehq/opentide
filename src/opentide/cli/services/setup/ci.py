@@ -13,6 +13,10 @@ import yaml
 from opentide.ci.discovery import discover_enabled_platforms
 from opentide.ci.models import CiRenderOptions
 from opentide.cli.enums import CiPlatform
+from opentide.cli.services.setup.promotion import (
+    plan_promotion_override,
+    write_promotion_override,
+)
 
 logger = structlog.get_logger("opentide.cli.services.setup.ci")
 
@@ -35,8 +39,9 @@ class CiSetupOptions:
     path: Path = Path(".")
     ci: CiPlatform = CiPlatform.github
     staging: bool = True
-    promotion: bool = True
-    promotion_target: str = "PRODUCTION"
+    #: ``None`` keeps the repository's ``[promotion]`` setting.
+    promotion: bool | None = None
+    promotion_target: str | None = None
     python_version: str = "3.12"
     explorer_pages: bool = False
     inflight: bool = True
@@ -130,6 +135,9 @@ def run_ci_setup(options: CiSetupOptions) -> dict[str, object]:
     if options.default_branch is not None and not is_valid_branch_name(options.default_branch):
         raise ValueError(f"Invalid default branch name: {options.default_branch!r}")
     target = options.path.resolve()
+    promotion = plan_promotion_override(
+        target, enabled=options.promotion, promotion_target=options.promotion_target
+    )
     platform_ids = discover_enabled_platforms(target)
     warnings: list[str] = []
     if not platform_ids:
@@ -151,6 +159,8 @@ def run_ci_setup(options: CiSetupOptions) -> dict[str, object]:
         replace(options, default_branch=branch), platform_ids
     )
     written = write_ci(target, render)
+    if promotion is not None:
+        written.extend(write_promotion_override(target, promotion))
     logger.debug(
         "ci_pipelines_created",
         detail=str(target),
