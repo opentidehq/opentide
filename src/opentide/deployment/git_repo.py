@@ -18,6 +18,31 @@ from opentide.deployment.ci import CIEnvironment
 logger = get_logger(__name__)
 
 
+class MissingGitCheckout(Exception):
+    """A CI diff plan needs a git checkout and none was found."""
+
+    def __init__(self, searched: Path) -> None:
+        self.searched = searched
+        super().__init__(f"no .git was found from {searched}")
+
+
+def missing_checkout_message(plan: str, searched: Path) -> str:
+    """The deploy failure for a STAGING or PRODUCTION plan with no checkout."""
+    return (
+        f"deploy --plan {plan} needs a git checkout to compute changed rules; "
+        f"no .git was found from {searched}. "
+        "Run inside the repository, or use --plan FULL."
+    )
+
+
+def _git_worktree(start: Path) -> Path | None:
+    for candidate in (start, *start.parents):
+        git_path = candidate / ".git"
+        if git_path.is_dir() or git_path.is_file():
+            return candidate
+    return None
+
+
 class GitRepository:
     def __init__(self):
         self.repository = self._initialize_repository()
@@ -34,18 +59,25 @@ class GitRepository:
         match TARGET_CI:
             case CIEnvironment.CIPlatforms.GitHubActions:
                 logger.info("identified_github_actions_as_the_ci_runtime_platform")
-                REPO_DIR = os.getenv("GITHUB_WORKSPACE")
+                raw = os.getenv("GITHUB_WORKSPACE")
             case CIEnvironment.CIPlatforms.GitlabCI:
                 logger.info("identified_gitlab_ci_as_the_ci_runtime_platform")
-                REPO_DIR = os.getenv("CI_PROJECT_DIR")
+                raw = os.getenv("CI_PROJECT_DIR")
             case CIEnvironment.CIPlatforms.AzurePipeline:
                 logger.info("identified_azure_pipeline_as_the_ci_runtime_platform")
-                REPO_DIR = os.getenv("BUILD_SOURCESDIRECTORY")
+                raw = os.getenv("BUILD_SOURCESDIRECTORY")
             case CIEnvironment.CIPlatforms.LocalDebug:
                 return None  # type: ignore
-        logger.info("will_initialize_repository_located_on", detail=str(REPO_DIR))
-
-        return open_repo(REPO_DIR)
+            case _:
+                raw = None
+        searched = Path(raw).expanduser() if raw else Path.cwd()
+        if not searched.is_absolute():
+            searched = Path.cwd() / searched
+        searched = searched.resolve()
+        if _git_worktree(searched) is None:
+            raise MissingGitCheckout(searched)
+        logger.info("will_initialize_repository_located_on", detail=str(searched))
+        return open_repo(searched)
 
     def _latest_commit_information(self) -> LatestCommit:
 
