@@ -196,6 +196,7 @@ opentide --json validate
     "schema": { "check": "schema", "status": "passed" }
   },
   "report": { "ok": true, "issues": [], "warnings": [], "stats": {} },
+  "workspace": "/home/you/tutorial-detections",
   "ok": true,
   "status": "passed",
   "message": "Validation passed"

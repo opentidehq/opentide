@@ -124,7 +124,8 @@ def test_first_commands_agree_on_the_workspace_wherever_they_start(
     assert [p["name"] for p in info["platforms"] if p["enabled"]] == ["sentinel"], info
 
     validate = _ok(_run(script_runner, cwd, ["validate", "--strict"]))
-    assert validate["status"] == "passed", validate
+    assert Path(validate["workspace"]) == workspace, validate
+    assert validate["message"] == "Validation passed", validate
     assert validate["report"]["stats"]["objects_checked"] == 3, validate
 
     lint = _ok(_run(script_runner, cwd, ["lint", "--strict"]))
@@ -157,6 +158,10 @@ def test_a_checkout_without_markers_at_its_root_keeps_the_git_root(
 
     validate = _ok(_run(script_runner, checkout / start, ["validate", "--strict"]))
     assert validate["report"]["stats"]["objects_checked"] == 0, validate
+    assert Path(validate["workspace"]) == checkout, validate
+    assert validate["message"] == (
+        f"Validation passed, but no detection objects were found under {checkout}"
+    ), validate
 
 
 def _threat_only_workspace(script_runner: ScriptRunner, path: Path) -> Path:
@@ -184,4 +189,5 @@ def test_an_explicit_workspace_beats_discovery(
     assert info["counts"] == {"rules": 0, "threats": 1, "objectives": 0}, info
 
     validate = _ok(_run(script_runner, cwd, [*flags, "validate", "--strict"], **env))
+    assert Path(validate["workspace"]) == other, validate
     assert validate["report"]["stats"]["objects_checked"] == 1, validate

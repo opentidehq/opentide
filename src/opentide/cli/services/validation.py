@@ -11,6 +11,7 @@ from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
 from opentide.cli.output import emit_error
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
+from opentide.registry.discovery import discover_workspace
 from opentide.validation.errors import format_issues_for_console
 from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.scope import ValidationScope
@@ -195,6 +196,8 @@ def run_validate(
     else:
         result = _report_payload(report)
         result["check"] = check.value
+    workspace = discover_workspace()
+    result["workspace"] = str(workspace)
 
     if not ctx.json_output and report.issues:
         from rich.panel import Panel
@@ -211,7 +214,16 @@ def run_validate(
 
     outcome = validation_outcome(strict=strict)
     result["status"] = "failed" if outcome.failed else "passed"
-    result["message"] = "Validation failed" if outcome.failed else "Validation passed"
+    if outcome.failed:
+        result["message"] = "Validation failed"
+    elif check is None and scope.mode == "full" and report.stats.get("objects_checked") == 0:
+        # Not a failure: an empty catalogue exits 0, even under --strict. The
+        # path is what exposes a run that looked in the wrong directory.
+        result["message"] = (
+            f"Validation passed, but no detection objects were found under {workspace}"
+        )
+    else:
+        result["message"] = "Validation passed"
     if outcome.warned:
         result["warnings"] = ["Validation reported warnings"]
     result["_exit_code"] = outcome.exit_code

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- `opentide validate` reports the directory it read objects from as `workspace` in `--json` output. A full run that finds no objects still passes with exit `0`, `--strict` included, but its message names that directory (`Validation passed, but no detection objects were found under …`) instead of a bare `Validation passed` ([#294](https://github.com/OpenTideHQ/opentide/issues/294)).
+
 ### Fixed
 
 - Commands run from inside a detection workspace find it. Root discovery walked up for `.git` only, so from `objects/rules` in a scaffold outside git, or anywhere in a workspace kept below a larger checkout (`monorepo/detections/`), the root was the current directory or the checkout: `info` counted no objects, configured platforms showed as disabled, and `validate --strict` passed having checked nothing. The CLI, SDK, and MCP server now stop at the nearest directory holding `.opentide/` or `objects/`, never above the enclosing git checkout, and fall back to the git top level as before. `--repo`, `OPENTIDE_REPO_ROOT`, and `OPENTIDE_TIDE_WORKSPACE` still take precedence, and `generate docs --changed` finds a nested workspace's changes from the cwd alone ([#294](https://github.com/OpenTideHQ/opentide/issues/294)).

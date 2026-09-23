@@ -38,6 +38,8 @@ In order, the first of these wins:
 
 Git commands such as `generate docs --changed` and `generate inflight` still run against the whole checkout when the workspace sits below its top level: changed paths are reported relative to the git top level (`detections/objects/rules/…`).
 
+`opentide validate` prints the directory it checked when it finds no objects there. See [Which workspace was checked](./validate.md#which-workspace-was-checked).
+
 A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_WORKSPACE`. That variable is read before the repository root when locating detection objects, so without this precedence `--repo` resolved the root while the workspace — and therefore the objects actually validated — stayed on the exported path.
 
 Setup commands honour `--repo` when `--path` is `.` (default).
