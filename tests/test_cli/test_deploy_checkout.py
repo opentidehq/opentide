@@ -14,6 +14,7 @@ from opentide.cli import app
 from opentide.deployment.git_repo import missing_checkout_message
 
 runner = CliRunner()
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 _MARKERS = ("GITHUB_ACTIONS", "CI", "TF_BUILD")
 _WORKSPACE_VARS = {
@@ -66,11 +67,13 @@ def test_ci_plan_without_a_checkout_names_the_directory(
         assert payload["ok"] is False
         assert payload["message"] == message
     else:
-        rendered = re.sub(r"\s+", " ", result.stdout + result.stderr)
-        # Plain mode prints ``FATAL: <message>``. A Rich console puts FATAL in
-        # the panel title and the same sentence in the body.
+        rendered = result.stdout + result.stderr
+        # Plain mode prints ``FATAL: <message>``. A Rich panel titles itself
+        # FATAL and wraps the sentence between border characters.
         assert "FATAL" in rendered
-        assert message in rendered
+        visible = _ANSI.sub("", rendered)
+        visible = re.sub(r"[\u2500-\u257f]", "", visible)
+        assert re.sub(r"\s+", "", message) in re.sub(r"\s+", "", visible)
 
 
 def test_full_plan_in_ci_does_not_need_a_checkout(
