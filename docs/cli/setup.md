@@ -143,7 +143,7 @@ opentide setup mcp --cursor --vscode --yes
 | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
 | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
 
-VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. Generic hosts that do not interpolate editor placeholders should omit the variable so the server discovers the git root from cwd, or set an absolute path. See [MCP configuration](../mcp/configuration.md).
+VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. Generic hosts that do not interpolate editor placeholders should omit the variable so the server discovers the detection workspace from cwd, or set an absolute path. See [MCP configuration](../mcp/configuration.md).
 
 ### setup skills
 

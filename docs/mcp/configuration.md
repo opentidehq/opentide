@@ -23,7 +23,7 @@ opentide setup mcp --vscode --generic --yes
 
 VS Code workspace MCP (`.vscode/mcp.json`) uses a top-level `servers` object. Cursor, Claude Code, and the generic template use `mcpServers`.
 
-Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. The generic file is copied into arbitrary hosts, so it does not set `OPENTIDE_REPO_ROOT` — the server walks from cwd to the git root (`get_repo_root`). Set an absolute path when cwd is not the detection repository.
+Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. The generic file is copied into arbitrary hosts, so it does not set `OPENTIDE_REPO_ROOT` — the server walks up from cwd to the nearest detection workspace (`get_repo_root`). Set an absolute path when cwd is not inside the detection workspace.
 
 ### VS Code
 
@@ -96,7 +96,7 @@ Set in the MCP host's server environment block when the catalogue is not discove
 | `OPENTIDE_DATA_ROOT` | No | Override bundled package data |
 | `DEBUG` | No | Verbose logging |
 
-If `OPENTIDE_REPO_ROOT` is unset, `get_repo_root()` walks from cwd to the nearest `.git` directory. A literal unexpanded token such as `${workspaceFolder}` is treated as a path, not interpolated by the server.
+If `OPENTIDE_REPO_ROOT` is unset, `get_repo_root()` walks up from cwd to the nearest directory holding `.opentide/` or `objects/`, without leaving the enclosing git checkout, and falls back to the git top level. See [Repository root resolution](../cli/global-options.md#repository-root-resolution). A literal unexpanded token such as `${workspaceFolder}` is treated as a path, not interpolated by the server.
 
 ### Cursor example
 

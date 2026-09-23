@@ -190,6 +190,42 @@ def test_a_workspace_nested_in_the_checkout_still_sees_its_changes(
     assert shards, "a nested workspace must still produce an inflight shard"
 
 
+@pytest.mark.parametrize("start", ["detections", "detections/objects/rules"])
+def test_a_nested_workspace_is_found_from_the_cwd_for_changed_objects(
+    script_runner: ScriptRunner, tmp_path: Path, start: str
+) -> None:
+    """#294: with no ``--repo`` or ``OPENTIDE_*``, the checkout root used to win."""
+    checkout = tmp_path.resolve() / "checkout"
+    checkout.mkdir()
+    repo = checkout / "detections"
+    _scaffold(script_runner, repo)
+    _git(checkout, "init", "-q", "-b", "main", ".")
+    _git(checkout, "add", "-A")
+    _git(checkout, "commit", "-qm", "initial catalogue")
+    _git(checkout, "checkout", "-qb", "feature")
+    _bump_rule(repo)
+    _git(checkout, "commit", "-qam", "bump rule version")
+
+    env = {key: value for key, value in _env(repo).items() if not key.startswith("OPENTIDE_")}
+
+    def run(*args: str) -> RunResult:
+        return script_runner.run(
+            ["opentide", "--json", *args], env=env, cwd=str(checkout / start), print_result=False
+        )
+
+    docs = run("generate", "docs", "--changed")
+    assert docs.returncode == 0, docs.stdout + docs.stderr
+    payload = json.loads(docs.stdout.strip())
+    assert payload["changed_paths"] == ["detections/objects/rules/sentinel-kql-rule.yaml"], payload
+    assert payload["counts"]["rules"] >= 1, payload
+    assert Path(payload["output"]) == repo / "docs", payload
+
+    inflight = run("generate", "inflight")
+    assert inflight.returncode == 0, inflight.stdout + inflight.stderr
+    shard = repo / ".opentide" / "inflight" / "00000000-0000-4000-8003-000000000001.json"
+    assert shard.is_file(), sorted(p.name for p in (repo / ".opentide" / "inflight").glob("*"))
+
+
 def _bump_rule(repo: Path) -> None:
     rule = repo / "objects" / "rules" / "sentinel-kql-rule.yaml"
     rule.write_text(

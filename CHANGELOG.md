@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- Commands run from inside a detection workspace find it. Root discovery walked up for `.git` only, so from `objects/rules` in a scaffold outside git, or anywhere in a workspace kept below a larger checkout (`monorepo/detections/`), the root was the current directory or the checkout: `info` counted no objects, configured platforms showed as disabled, and `validate --strict` passed having checked nothing. The CLI, SDK, and MCP server now stop at the nearest directory holding `.opentide/` or `objects/`, never above the enclosing git checkout, and fall back to the git top level as before. `--repo`, `OPENTIDE_REPO_ROOT`, and `OPENTIDE_TIDE_WORKSPACE` still take precedence, and `generate docs --changed` finds a nested workspace's changes from the cwd alone ([#294](https://github.com/OpenTideHQ/opentide/issues/294)).
+
+### Tests
+
+- A console-script E2E runs `info`, `validate --strict`, `lint --strict`, `generate docs`, and `generate` from the root of a scaffold, from `objects/rules` and `.opentide/configurations/platforms` inside it, and from a workspace nested in a parent git checkout, with no `OPENTIDE_*` variables set, and requires the same workspace, counts, and output location from each ([#294](https://github.com/OpenTideHQ/opentide/issues/294)).
+
 ## [0.5.0] — 2026-09-23
 
 Minor on 0.4.0. Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names: 0.4.0 rejected every such threat with `Input should be a valid string` ([#189](https://github.com/OpenTideHQ/opentide/issues/189)). It is a minor rather than a patch because a threat written the way 0.4.0 required (`impact: Data Breach`) now fails validation until it becomes a one-item list — read **Changed** before upgrading a pipeline.

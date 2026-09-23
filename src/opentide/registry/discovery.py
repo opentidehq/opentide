@@ -5,13 +5,15 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from opentide.core.root import get_repo_root
-
-OPENTIDE_DIR = ".opentide"
+from opentide.core.root import OPENTIDE_DIR, get_repo_root
 
 
 def discover_workspace() -> Path:
-    """Return detection workspace root (``OPENTIDE_TIDE_WORKSPACE``, fixture, or repo root)."""
+    """Return detection workspace root (``OPENTIDE_TIDE_WORKSPACE``, repo root, or dev fixture).
+
+    The repo root is itself found by walking up from the cwd for ``.opentide/``
+    or ``objects/`` (:func:`opentide.core.root.find_workspace_root`).
+    """
     workspace_env = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
     if workspace_env:
         return Path(workspace_env).resolve()

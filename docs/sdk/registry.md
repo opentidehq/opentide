@@ -96,7 +96,7 @@ subset = {u: r for u, r in rules.items() if r.status == "PRODUCTION"}
 ```python
 OpenTide.debug   # DEBUG env
 OpenTide.ci      # CI detection
-OpenTide.root    # repository root Path
+OpenTide.root    # detection workspace root Path (not necessarily the git top level)
 ```
 
 ## MCP parity
