@@ -604,7 +604,7 @@ def info_cmd(
     if cli.json_output:
         emit_success(cli, result)
     else:
-        render_info(result)
+        render_info(result, section=section)
 
 
 def main() -> None:

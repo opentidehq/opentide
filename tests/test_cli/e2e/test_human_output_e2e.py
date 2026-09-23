@@ -1,10 +1,10 @@
-"""CLI E2E: human output carries what the JSON document carries (#292).
+"""CLI E2E: human output carries what the JSON document carries (#292, #293).
 
 Each command runs twice on the tutorial workspace, once with ``--json`` and once
 without. The strings a reader acts on (messages, advice, severities, capability
-names) are taken from the JSON document and must appear verbatim in the human
-output: Rich markup swallowed bracketed text and advice was never printed, while
-the JSON stayed correct.
+names, section items) are taken from the JSON document and must appear verbatim
+in the human output: Rich markup swallowed bracketed text, and some commands
+printed a generic summary instead of the payload, while the JSON stayed correct.
 """
 
 from __future__ import annotations
@@ -49,6 +49,8 @@ _LEAKY_ENV = (
 #: Envelope messages a command falls back to when it has nothing specific to say.
 _GENERIC_MESSAGES = {"Completed successfully"}
 
+_RULE = "00000000-0000-4000-8003-000000000001"
+_THREAT = "00000000-0000-4000-8001-000000000001"
 _OBJECTIVE = "00000000-0000-4000-8002-000000000001"
 _RULE_FILE = Path("objects/rules/sentinel-kql-rule.yaml")
 
@@ -166,6 +168,40 @@ def test_live_validation_without_sdk_prints_the_advice(tutorial: Path) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("argv", "rows"),
+    [
+        (("info", "rules"), ((_RULE, "Sentinel KQL Rule", "sentinel"),)),
+        (("info", "threats"), ((_THREAT, "Simulated Actor"),)),
+        (("info", "objectives"), ((_OBJECTIVE, "Credential Access Objective"),)),
+        (
+            ("info", "coverage", "--technique", "T1059"),
+            (("Coverage for T1059: 1 rule",), (_RULE, "Sentinel KQL Rule", "sentinel")),
+        ),
+        (
+            ("info", "--technique", "T1059", "coverage"),
+            (("Coverage for T1059: 1 rule",), (_RULE, "Sentinel KQL Rule", "sentinel")),
+        ),
+    ],
+    ids=["rules", "threats", "objectives", "coverage", "coverage-option-first"],
+)
+def test_info_sections_render_their_payload(
+    tutorial: Path, argv: tuple[str, ...], rows: tuple[tuple[str, ...], ...]
+) -> None:
+    """#293: every section printed the plain `info` summary instead of its payload."""
+    output = _human(tutorial, *argv)
+    lines = output.splitlines()
+    for row in rows:
+        assert any(all(part in line for part in row) for line in lines), (row, output)
+    assert output != _human(tutorial, "info")
+
+
+def test_info_rejects_an_unknown_section(tutorial: Path) -> None:
+    result = _run(tutorial, "info", "platforms", json_output=False)
+    assert result.exit_code == 1
+    assert "Unknown info section: platforms" in result.output
+
+
 # --------------------------------------------------------------------------
 # Human-vs-JSON parity
 # --------------------------------------------------------------------------
@@ -182,6 +218,12 @@ class Case:
 _CASES = {
     "info": Case(("info",)),
     "info-platform": Case(("info", "--platform", "sentinel")),
+    "info-rules": Case(("info", "rules")),
+    "info-threats": Case(("info", "threats")),
+    "info-objectives": Case(("info", "objectives")),
+    "info-coverage": Case(("info", "coverage", "--technique", "T1059")),
+    "info-coverage-option-first": Case(("info", "--technique", "T1059", "coverage")),
+    "info-coverage-no-rules": Case(("info", "coverage", "--technique", "T9999")),
     "info-unknown-section": Case(("info", "platforms")),
     "validate": Case(("validate", "--strict")),
     "validate-broken-reference": Case(("validate", "--strict"), _break_objective_reference),
@@ -214,7 +256,13 @@ _CASES = {
 
 
 def _info_expectations(payload: dict[str, Any]) -> list[Expectation]:
-    """What the `info` summary table shows."""
+    """What each `info` view shows: the section asked for, else the summary table."""
+    if "coverage" in payload:
+        coverage = payload["coverage"]
+        return [("Coverage for", coverage["technique"], str(coverage["count"])), *coverage["rules"]]
+    sections = [key for key in ("rules", "threats", "objectives") if key in payload]
+    if sections:
+        return [uuid for key in sections for uuid in payload[key]]
     expected: list[Expectation] = [
         (family.capitalize(), str(count)) for family, count in payload["counts"].items()
     ]
