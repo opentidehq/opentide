@@ -125,6 +125,28 @@ def test_lint_cli_json(tmp_path: Path) -> None:
     assert '"count": 1' in result.stdout
 
 
+def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "Simulated Actor.yaml", _THREAT)
+    result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
+    assert result.exit_code == 0, result.output
+    assert (
+        "[filenames] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml'"
+        " does not match slugify(name)='simulated-actor'"
+    ) in result.output
+    assert "OK Catalogue lint found issues" in result.output
+
+
+def test_lint_cli_human_names_the_renamed_file(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "Simulated Actor.yaml", _THREAT)
+    result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint", "--fix"])
+    assert result.exit_code == 0, result.output
+    assert (
+        "[filenames] objects/threats/simulated-actor.yaml: Filename 'Simulated Actor.yaml'"
+        " does not match slugify(name)='simulated-actor'"
+        " (renamed from objects/threats/Simulated Actor.yaml)"
+    ) in result.output
+
+
 def test_lint_cli_strict(tmp_path: Path) -> None:
     _write_object(tmp_path, "threats", "Simulated Actor.yaml", _THREAT)
     result = runner.invoke(

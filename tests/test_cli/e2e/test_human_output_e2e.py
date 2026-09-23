@@ -242,16 +242,8 @@ _CASES = {
     "extract-without-sdk": Case(("generate", "extract", "sentinel"), context=_without_azure),
     "deploy-metadata-unimplemented": Case(("deploy", "metadata", "--platform", "sentinel")),
     "lint": Case(("lint",)),
-    "lint-findings": Case(
-        ("lint",),
-        _drop_author,
-        marks=(
-            pytest.mark.xfail(
-                reason="human lint prints its summary message but not the findings",
-                strict=True,
-            ),
-        ),
-    ),
+    "lint-findings": Case(("lint",), _drop_author),
+    "lint-findings-strict": Case(("lint", "--strict"), _drop_author),
 }
 
 

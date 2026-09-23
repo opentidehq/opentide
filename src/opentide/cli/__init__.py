@@ -30,7 +30,7 @@ from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate, run_generate_docs
 from opentide.cli.services.info import collect_info, render_info
-from opentide.cli.services.lint import run_lint
+from opentide.cli.services.lint import render_findings, run_lint
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
 from opentide.core.logging import LoggingConfig, init_logging
@@ -377,6 +377,8 @@ def lint_cmd(
     cli = get_context(ctx)
     cli.apply_environment()
     result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)
+    if not cli.json_output:
+        render_findings(result["findings"])
     emit_result(cli, CommandResult.from_payload(result, default_message="Catalogue lint passed"))
 
 

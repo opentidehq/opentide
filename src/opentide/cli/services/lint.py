@@ -12,6 +12,7 @@ import yaml
 
 from opentide.cli.enums import LintCheck
 from opentide.core.io import parse_yaml
+from opentide.core.logging.config import get_stdout_console
 from opentide.documentation.markdown.links import slugify
 
 logger = structlog.get_logger("opentide.cli.services.lint")
@@ -219,3 +220,15 @@ def run_lint(
         "status": "failed" if failed else "completed",
         "_exit_code": 1 if failed else 0,
     }
+
+
+def render_findings(findings: list[dict[str, object]]) -> None:
+    """Print one line per finding for the human view, ahead of the summary line."""
+    console = get_stdout_console()
+    for finding in findings:
+        renamed = f" (renamed from {finding['from']})" if finding.get("fixed") is True else ""
+        console.print(
+            f"[{finding['check']}] {finding['path']}: {finding['message']}{renamed}",
+            markup=False,
+            soft_wrap=True,
+        )

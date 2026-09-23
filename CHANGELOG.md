@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - Human output no longer drops bracketed text. Rich read it as markup, so the `info` platform rows lost `[deploy, validate]`, the `validate` issues panel lost each `[error]` tag, and `generate extract sentinel` told you to `install opentide` without `[sentinel]` — `--no-color` included, while `--json` was correct. Help text that named `opentide[sentinel]` or `[deprecated]` lost it the same way ([#292](https://github.com/OpenTideHQ/opentide/issues/292)).
 - Human output prints a result's `advice` and `detail` as indented lines under its message, as `--json` carries them: `validate query --live` without the vendor SDK names the extra to install, and a live run on a disabled platform says how to enable it ([#292](https://github.com/OpenTideHQ/opentide/issues/292)).
+- Human `opentide lint` lists each finding as `[check] path: message` above its summary line. It used to print only `OK Catalogue lint found issues`, so without `--json` there was no way to see what to fix ([#292](https://github.com/OpenTideHQ/opentide/issues/292)).
 - `opentide info rules`, `info threats`, `info objectives`, and `info coverage --technique …` print the section asked for — UUID and name per object, the platforms each rule configures, the technique and its rule count — instead of the plain `info` summary ([#293](https://github.com/OpenTideHQ/opentide/issues/293)).
 
 ### Tests
