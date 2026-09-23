@@ -618,10 +618,16 @@ def _as_list(value: str | list[str] | None) -> list[str]:
 
 
 def _stringify(value: object) -> str:
-    if isinstance(value, list):
-        return ", ".join(str(item) for item in value)
+    """Render a value or a collection of values as text, never as a Python repr."""
     if value is None:
         return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, Iterable) and not isinstance(value, (bytes, bytearray)):
+        items = [text for item in value if (text := _stringify(item))]
+        if isinstance(value, (set, frozenset)):
+            items.sort()
+        return ", ".join(items)
     return str(value)
 
 

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- `generate docs` writes an actor's Source cell as its vocabulary stage (`att&ck`) instead of the Python tuple `('att&ck',)`. Documentation cells join any collection of values the same way, and a cell with no value shows `-` ([#296](https://github.com/OpenTideHQ/opentide/issues/296)).
+
 ## [0.5.0] — 2026-09-23
 
 Minor on 0.4.0. Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names: 0.4.0 rejected every such threat with `Input should be a valid string` ([#189](https://github.com/OpenTideHQ/opentide/issues/189)). It is a minor rather than a patch because a threat written the way 0.4.0 required (`impact: Data Breach`) now fails validation until it becomes a one-item list — read **Changed** before upgrading a pipeline.

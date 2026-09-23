@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -33,6 +35,7 @@ from opentide.documentation.parts.sections import (
 from opentide.documentation.types import DocumentFlavor, DocumentRecord, DocumentScope
 from opentide.documentation.vocabulary import EnrichedEntry
 from opentide.documentation.vocabulary import enrich as enrich_vocab
+from opentide.generation import framework as fw
 from opentide.loading.objective_loader import load_objective_from_dict
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.rule import DetectionRule
@@ -338,6 +341,84 @@ def test_render_threat_assessment_lists_every_impact_and_leverage_name(
     assert rows["Impact"].count("<br>") == 2
     assert "| Elevation of privilege<br>Repudiation | Capacity to augment" in rows["Leverage"]
     assert rows["Leverage"].count("<br>") == 2
+
+
+def _actor_source_cells(metadata: dict[str, Any], *actors: str) -> dict[str, str]:
+    threat = ThreatVector.from_yaml_dict(
+        {
+            "name": "Threat",
+            "criticality": "High",
+            "metadata": {**metadata, "schema": "threat::1.0"},
+            "threat": {
+                "description": "Credential theft",
+                "severity": "Significant incident",
+                "impact": ["Data Breach"],
+                "leverage": ["Elevation of privilege"],
+                "viability": "Likely",
+                "terrain": "Endpoint workstations.",
+                "surface": ["Windows::Desktop"],
+                "actors": [{"name": actor} for actor in actors],
+                "att&ck": ["T1059"],
+            },
+        }
+    )
+    rendered = render_actors(threat.threat, formatter_for(DocumentFlavor.github))
+    rows = [
+        [cell.strip() for cell in re.split(r"(?<!\\)\|", line)[1:-1]]
+        for line in rendered.splitlines()
+        if line.startswith("| ")
+    ]
+    assert rows[0] == ["Actor", "ID", "Source", "Description"]
+    return {actor_id.strip("`"): source for _, actor_id, source, _ in rows[2:]}
+
+
+@pytest.mark.parametrize(
+    ("actor", "source"),
+    [
+        ("att&ck::G0006", "att&ck"),
+        ("misp::1cb7e1cc-d695-42b1-92f4-fd0112a3c9be", "misp"),
+    ],
+)
+def test_render_actors_source_is_the_actor_stage(
+    metadata: dict[str, Any], actor: str, source: str
+) -> None:
+    """The vocabulary stores ``tide.vocab.stages`` as a tuple; the cell is its text (#296)."""
+    assert _actor_source_cells(metadata, actor) == {actor: source}
+
+
+@pytest.mark.parametrize(
+    ("make_stages", "source"),
+    [
+        (lambda: ("att&ck",), "att&ck"),
+        (lambda: ("att&ck", "misp"), "att&ck, misp"),
+        (lambda: ["misp"], "misp"),
+        (lambda: {"misp", "att&ck"}, "att&ck, misp"),
+        (lambda: frozenset({"misp", "att&ck"}), "att&ck, misp"),
+        (lambda: (stage for stage in ("att&ck", "misp")), "att&ck, misp"),
+        (lambda: ("att&ck", None, ""), "att&ck"),
+        (lambda: (), "-"),
+        (lambda: "", "-"),
+        (lambda: None, "-"),
+    ],
+    ids=[
+        "tuple",
+        "tuple-of-two",
+        "list",
+        "set",
+        "frozenset",
+        "generator",
+        "blank-items",
+        "empty-tuple",
+        "empty-string",
+        "none",
+    ],
+)
+def test_render_actors_source_joins_any_stages_collection(
+    metadata: dict[str, Any], make_stages: Callable[[], object], source: str
+) -> None:
+    with patch.object(fw, "get_vocab_entry", side_effect=lambda *_, **__: make_stages()):
+        cells = _actor_source_cells(metadata, "att&ck::G0006")
+    assert cells == {"att&ck::G0006": source}
 
 
 def test_render_signals_and_threat_body(metadata: dict[str, Any]) -> None:
