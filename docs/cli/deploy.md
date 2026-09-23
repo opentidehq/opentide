@@ -78,7 +78,7 @@ opentide --json deploy --platform sentinel --dry-run
 }
 ```
 
-`plan` lists the rule UUIDs selected for each platform. `payloads` is present on dry-runs only and holds the API request each rule would send (elided here). A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
+`plan` lists the rule UUIDs selected for each platform. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request the Sentinel deployer compiles when the `sentinel` extra is installed, and otherwise the rule's platform configuration block. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 
 When no rules match the selected plan, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 

@@ -271,7 +271,7 @@ opentide deploy --platform sentinel --dry-run
 OK Deployment completed
 ```
 
-`--dry-run` plans the deploy without touching the platform. The human output does not list rules: `DEBUG=1` logs each selected rule to stderr, and `opentide --json deploy --platform sentinel --dry-run` returns the plan and each rule's API payload (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
+`--dry-run` plans the deploy without touching the platform. The human output does not list rules: `DEBUG=1` logs each selected rule to stderr, and `opentide --json deploy --platform sentinel --dry-run` returns the plan and a payload preview for each rule (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
 
 ## 10. Generate documentation
 
