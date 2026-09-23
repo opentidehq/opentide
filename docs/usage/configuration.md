@@ -131,7 +131,7 @@ enabled = true
 promotion_target = "PRODUCTION"
 ```
 
-`opentide setup ci <provider> --no-promotion` or `--promotion-target <STATUS>` writes this table for you; see [setup ci](../cli/setup.md#setup-ci).
+`opentide setup --no-promotion` or `--promotion-target <STATUS>` writes this table, with or without `--ci`; see [setup](../cli/setup.md#default-callback-flags).
 
 There is no separate promote command. Edit a rule's `status` in YAML for deliberate changes, then run `opentide deploy` — when promotion is enabled, deploy applies the promotion target to every status whose strategy is not `RELEASE`, `DISABLEMENT`, or `DELETION`. See [`deploy`](../cli/deploy.md) and the [detection-as-code workflow](./workflows/detection-as-code.md#status-and-deployment-strategy).
 
