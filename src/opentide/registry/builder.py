@@ -64,6 +64,9 @@ class RegistryBuilder:
         # Files the loader could not parse. Kept on the index so validation can
         # report them instead of silently dropping the object.
         self.parse_errors: list[dict[str, str]] = []
+        # UUID -> the YAML file the object was read from. ``files`` keeps only
+        # the basename, which is ambiguous once object folders are nested.
+        self.file_paths: dict[str, str] = {}
 
     def build(self) -> dict[str, Any]:
         configs = resolve_configurations()
@@ -100,6 +103,7 @@ class RegistryBuilder:
         apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
         index["objects"] = objects_index
         index["files"] = files_index
+        index["file_paths"] = self.file_paths
 
         from opentide.indexing.object_vocab import build_object_vocabularies
 
@@ -292,6 +296,7 @@ class RegistryBuilder:
         model_cat = objects_index[meta_name]
         model_cat[identifier] = body
         files_index[identifier] = model_path.name
+        self.file_paths[identifier] = str(model_path)
         if meta_name == "objective":
             objective = body.get("objective")
             if not isinstance(objective, dict):

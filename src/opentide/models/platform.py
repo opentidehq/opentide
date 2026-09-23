@@ -60,6 +60,11 @@ class PlatformConfigBase(TideModel):
     tenants: list[str] | None = None
     contributors: list[str] | None = None
 
+    @property
+    def schema(self) -> str | None:
+        """The identifier under its YAML key, which would otherwise be ``BaseModel.schema``."""
+        return self.platform_schema
+
 
 class SentinelConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::sentinel::1.0"

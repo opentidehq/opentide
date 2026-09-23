@@ -21,6 +21,14 @@ opentide --repo /path/to/detection-repo validate
 
 See [Installation → environment variables](./installation.md#environment-variables).
 
+### `validate --strict` passes with 0 objects from `objects/rules` or a monorepo subdirectory
+
+Through `0.5.0` root discovery walked up for `.git` only. Outside git, from `objects/rules`, the current directory itself became the root; in a workspace kept below a larger checkout (`monorepo/detections/`), the checkout root did. Neither holds `objects/`, so `info` counted nothing, every platform showed as disabled, and `validate --strict` passed having checked no objects. Releases after `0.5.0` walk up to the nearest `.opentide/` or `objects/` without leaving the git checkout ([#294](https://github.com/OpenTideHQ/opentide/issues/294)); see [Repository root resolution](../cli/global-options.md#repository-root-resolution). A `validate` run that still finds nothing names the directory it looked in. On `0.5.0`, run from the workspace root or pass it explicitly:
+
+```bash
+opentide --repo /path/to/detections validate --strict
+```
+
 ### The command `opentide` is not found
 
 The CLI ships as an extra. Install it:
@@ -394,9 +402,19 @@ Verify with `opentide info --platform sentinel`. See [Configuration → enabling
 
 Credentials are missing or wrong. OpenTide reads them from your platform TOML, typically via environment variables. Confirm the variables are set in your shell (or CI secrets) and match the keys the platform expects (`opentide info --platform <name>`). Never commit secrets — see [Configuration → credentials](./configuration.md#credentials).
 
-### `deploy metadata` seems to do nothing
+### `deploy metadata` fails with "not implemented"
 
-`opentide deploy metadata` (Splunk lookup tables) currently signals intent in logs — full metadata deployment is pending. See [`deploy`](../cli/deploy.md).
+`opentide deploy metadata` is reserved for pushing Splunk lookup tables and is not implemented. It deploys nothing and exits `2`, so a CI step that runs it fails:
+
+```bash
+opentide deploy metadata --platform splunk
+```
+
+```text output-of="opentide deploy metadata --platform splunk" exit=2
+FATAL: Metadata deployment is not implemented for splunk
+```
+
+With `--json` it prints one document with `"ok": false` and the same message. Remove the step from your pipeline; lookup tables are not deployed by OpenTide yet. See [`deploy metadata`](../cli/deploy.md#deploy-metadata).
 
 ## Still stuck?
 

@@ -33,11 +33,6 @@ def production_deploy_steps(options: CiRenderOptions) -> list[str]:
     return ["opentide deploy --plan PRODUCTION"]
 
 
-def promotion_steps(options: CiRenderOptions) -> list[str]:
-    """Promotion runs inside ``opentide deploy`` pre-step; no separate mutate command."""
-    return []
-
-
 def document_steps(options: CiRenderOptions) -> list[str]:
     if not options.docs_enabled:
         return []

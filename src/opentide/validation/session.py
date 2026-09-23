@@ -456,9 +456,8 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
         object_path = paths.get(meta_name)
         if not object_path or not object_path.exists():
             continue
-        for model_file in object_path.iterdir():
-            if not str(model_file).endswith(".yaml"):
-                continue
+        # Must walk the same tree as ``RegistryBuilder``, which indexes subfolders.
+        for model_file in sorted(object_path.rglob("*.yaml")):
             scan_paths.append((model_file, meta_name))
     return scan_paths
 

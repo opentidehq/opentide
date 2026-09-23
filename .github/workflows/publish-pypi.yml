@@ -21,6 +21,10 @@
 #     -f client_payload[checkout_ref]=v0.x.y
 # (workflow_dispatch is equivalent in the Actions UI; GitHub App tokens often
 # lack actions:write and cannot call that endpoint.)
+#
+# The same dispatch is the retry after a PyPI 5xx or partial upload.
+# `skip-existing: true` makes it upload only the files PyPI does not have yet,
+# and the verify step fails the job unless PyPI lists every file in dist/.
 name: Publish to PyPI
 
 on:
@@ -91,6 +95,61 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: dist/
+          skip-existing: true
+
+      # Inline on purpose: a dispatch retry checks out an older tag, which would
+      # not contain a helper script added after it.
+      - name: Verify PyPI lists every built file
+        env:
+          PYPI_JSON_BASE: https://pypi.org/pypi
+          VERIFY_TIMEOUT_SECONDS: "600"
+          VERIFY_INTERVAL_SECONDS: "15"
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          built = sorted(p.name for p in Path("dist").iterdir() if p.is_file())
+          wheels = [name for name in built if name.endswith(".whl")]
+          sdists = [name for name in built if name.endswith(".tar.gz")]
+          if len(wheels) != 1 or len(sdists) != 1:
+              print(f"::error::Expected one wheel and one sdist in dist/, found {built}")
+              sys.exit(1)
+          project, version = wheels[0].split("-")[:2]
+          expected = set(wheels + sdists)
+          url = f"{os.environ['PYPI_JSON_BASE'].rstrip('/')}/{project}/{version}/json"
+          deadline = time.monotonic() + float(os.environ["VERIFY_TIMEOUT_SECONDS"])
+          interval = float(os.environ["VERIFY_INTERVAL_SECONDS"])
+          while True:
+              try:
+                  request = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      listed = {item["filename"] for item in json.load(response).get("urls", [])}
+                  status = f"PyPI lists {sorted(listed)}"
+              except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+                  listed = set()
+                  status = f"{url}: {exc}"
+              missing = sorted(expected - listed)
+              if not missing:
+                  print(f"PyPI lists every built file for {project} {version}: {sorted(expected)}")
+                  sys.exit(0)
+              if time.monotonic() >= deadline:
+                  print(f"::error::PyPI is missing {missing} for {project} {version} ({status}).")
+                  print(
+                      "Retry without retagging; skip-existing uploads only the missing files:\n"
+                      "  gh api repos/OpenTideHQ/opentide/dispatches \\\n"
+                      "    -f event_type=publish-pypi \\\n"
+                      f"    -f client_payload[checkout_ref]=v{version}"
+                  )
+                  sys.exit(1)
+              print(f"Waiting for {missing}; {status}")
+              time.sleep(interval)
+          PY
 
       - name: Token to notify the website
         id: website

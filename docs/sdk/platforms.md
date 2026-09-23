@@ -24,17 +24,19 @@ for name, platform in OpenTide.Platforms.items():
     print(name, platform.enabled, platform.can_deploy, platform.can_validate)
 ```
 
-## Platform dataclass
+## Platform
+
+`config`, `deployer` and `validator` are built the first time they are read. Listing platforms (`opentide info`, the MCP platforms resource) therefore never builds a client or reads the tenant configuration of a platform you do not use.
 
 | Field | Description |
 |-------|-------------|
 | `name` | Registry key (e.g. `defender_for_endpoint`) |
 | `enabled` | Whether platform is active in client config |
-| `config` | Loaded platform configuration |
-| `deployer` | Rule deployer instance or None |
-| `validator` | Query validator instance or None |
-| `can_deploy` | Property — deployer present |
-| `can_validate` | Property — validator present |
+| `config` | Loaded platform configuration, built on first access |
+| `deployer` | Rule deployer instance or None, built on first access |
+| `validator` | Query validator instance or None, built on first access |
+| `can_deploy` | Property — the platform declares a deployer (does not build it) |
+| `can_validate` | Property — the platform declares a validator (does not build it) |
 
 ## Query validators
 

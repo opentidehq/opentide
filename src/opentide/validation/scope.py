@@ -20,9 +20,9 @@ def _path_variants(target: str, roots: tuple[Path, ...]) -> tuple[str, frozenset
     """Return ``(basename, candidate absolute paths)`` for a ``--file`` target.
 
     The candidate set is empty for a bare basename, which is matched by name
-    against the index (``files`` only stores file names). A relative target is
-    resolved against the working directory *and* every known repository root,
-    because ``--repo`` lets the two differ.
+    against every object file. A relative target is resolved against the
+    working directory *and* every known repository root, because ``--repo``
+    lets the two differ.
     """
     raw = target.strip()
     as_path = Path(raw)
@@ -63,18 +63,13 @@ class ValidationScope:
     mode: Literal["full", "narrow"]
     targets: frozenset[str] = frozenset()
     object_types: frozenset[str] = frozenset()
-    # Derived from ``--file`` targets so repo-relative and absolute paths match
-    # the basename-only index (issue #240).
     #: Basenames of targets given *without* a directory component. These are
     #: the only targets a basename match is allowed to satisfy.
     file_names: frozenset[str] = field(default_factory=frozenset)
     #: Absolute candidates for targets given *with* a directory component.
+    #: They match an object only through its own path, never by basename, or
+    #: ``objects/rules/x.yaml`` would also select ``objects/rules/y/x.yaml``.
     file_paths: frozenset[str] = field(default_factory=frozenset)
-    #: Basenames of those same path-qualified targets, used only when the
-    #: object's own path is unknown. Matching them unconditionally would make
-    #: the directory component decorative: ``--file objects/threats/x.yaml``
-    #: would happily validate ``objects/rules/x.yaml`` instead.
-    path_basenames: frozenset[str] = field(default_factory=frozenset)
 
     @classmethod
     def full(cls) -> ValidationScope:
@@ -99,13 +94,11 @@ class ValidationScope:
         targets: set[str] = set()
         file_names: set[str] = set()
         file_paths: set[str] = set()
-        path_basenames: set[str] = set()
         for target in files or ():
             targets.add(target.strip())
             name, resolved = _path_variants(target, roots or ())
             if resolved:
                 file_paths.update(resolved)
-                path_basenames.add(name)
             else:
                 file_names.add(name)
         if uuids:
@@ -116,24 +109,24 @@ class ValidationScope:
             object_types=frozenset(types or ()),
             file_names=frozenset(file_names),
             file_paths=frozenset(file_paths),
-            path_basenames=frozenset(path_basenames),
         )
 
     def matches_file(self, file_name: str | None, file_path: Path | str | None = None) -> bool:
-        """Match a ``--file`` target by basename, repo-relative path, or absolute path."""
+        """Match a ``--file`` target against an object's own file.
+
+        *file_path* is the file the object was read from. A repo-relative or
+        absolute target matches that path and nothing else, so an object whose
+        path is unknown can only be selected by a bare file name. A bare file
+        name matches every object file with that name, in any subfolder.
+        """
         if (
             file_path is not None
             and self.file_paths
             and _resolve(Path(file_path)) in self.file_paths
         ):
             return True
-        if not file_name:
-            return False
-        if file_name in self.file_names:
-            return True
-        # A path-qualified target falls back to its basename only when the
-        # object's own path is unknown; otherwise the directory has to agree.
-        return file_path is None and file_name in self.path_basenames
+        name = file_name or (Path(file_path).name if file_path is not None else None)
+        return bool(name) and name in self.file_names
 
     def includes_object(
         self,

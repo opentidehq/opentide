@@ -89,8 +89,11 @@ def _bundled_platform_configs() -> dict[str, dict]:
     return systems
 
 
-def resolve_configurations() -> dict[str, dict]:
-    """Merge bundled, optional workspace, and parent-instance configuration TOMLs."""
+def resolve_configurations(workspace: Path | None = None) -> dict[str, dict]:
+    """Merge bundled, optional workspace, and parent-instance configuration TOMLs.
+
+    *workspace* defaults to the discovered detection workspace.
+    """
     data_root = get_data_root()
     unified = _fetch_configs(data_root / "configurations")
     if "paths" not in unified and "global" not in unified:
@@ -108,7 +111,7 @@ def resolve_configurations() -> dict[str, dict]:
         _deep_merge(unified["platforms"], bundled)
     unified.setdefault("systems", unified["platforms"])
 
-    workspace = discover_workspace()
+    workspace = workspace or discover_workspace()
     client_configs = client_configurations_dir(workspace)
     if client_configs.is_dir():
         _deep_merge(unified, _fetch_configs(client_configs))

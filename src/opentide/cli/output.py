@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, NoReturn
 
 import structlog
+from rich.markup import escape
 
 from opentide.cli.context import CliContext
 from opentide.core.io import dump_json_text
@@ -13,6 +14,10 @@ from opentide.core.logging.config import get_console, get_stdout_console, is_jso
 from opentide.core.logging.console import emit_fatal
 
 logger = structlog.get_logger("opentide.cli.output")
+
+#: Payload fields that tell the reader what to do about a result. They share
+#: names with :func:`emit_fatal`'s keyword arguments, which renders them for failures.
+REMEDIATION_FIELDS = ("detail", "advice")
 
 
 @dataclass(frozen=True)
@@ -73,14 +78,18 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
         return
 
     console = get_stdout_console()
+    remediation = {
+        name: str(result.data[name]) for name in REMEDIATION_FIELDS if result.data.get(name)
+    }
     if not result.ok:
-        emit_fatal(result.message)
-    elif result.status == "skipped":
-        console.print(f"[yellow]SKIPPED[/] {result.message}")
+        emit_fatal(result.message, **remediation)
     else:
-        console.print(f"[bold green]OK[/] {result.message}")
+        label = "[yellow]SKIPPED[/]" if result.status == "skipped" else "[bold green]OK[/]"
+        console.print(f"{label} {escape(result.message)}")
+        for name, value in remediation.items():
+            console.print(f"  [cyan]{name}:[/] {escape(value)}")
     for warning in result.warnings:
-        get_console().print(f"[yellow]WARNING[/] {warning}")
+        get_console().print(f"[yellow]WARNING[/] {escape(warning)}")
     if result.exit_code:
         raise SystemExit(result.exit_code)
 
@@ -110,4 +119,4 @@ def emit_deprecation(legacy: str, replacement: str) -> None:
     if is_json_output():
         logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
         return
-    get_console().print(f"[yellow]DEPRECATED[/] {legacy}; use {replacement}.")
+    get_console().print(f"[yellow]DEPRECATED[/] {escape(legacy)}; use {escape(replacement)}.")

@@ -68,6 +68,48 @@ Update docs in the **same PR** when you change:
 
 Run `scripts/validate-docs.sh` before pushing doc changes.
 
+### Output samples
+
+Show output you captured, not output you expect. Pair a `text` or `json` fence with the command that prints it by naming the command in the fence's info string, and add `exit=N` when the command is meant to fail:
+
+````markdown
+```bash
+opentide deploy metadata --platform splunk
+```
+
+```text output-of="opentide deploy metadata --platform splunk" exit=2
+FATAL: Metadata deployment is not implemented for splunk
+```
+````
+
+`tests/test_docs/test_docs_commands_golden.py` runs every paired command against a repository scaffolded as in the [tutorial](./usage/tutorial.md), with vendor APIs stubbed. It fails when:
+
+- the command is not in a shell fence on the same page, or is not one the harness runs (`validate`, `lint`, `info`, `generate`, `deploy`);
+- the command returns a code other than `exit=` (`0` when absent), or a non-zero `exit=` sits in a section that never says it exits `` `N` ``;
+- a `text` line is not printed whole and in order, reading stdout and stderr interleaved as a terminal shows them. Write the `--no-color` view; a colour run must carry the same lines, with its rules and FATAL panel read back as `== Title ==` and `FATAL: …`;
+- a `json` value differs from the document returned. Objects may return keys the sample leaves out, and `"..."` stands for any value.
+
+A sample of a failure the finished tutorial does not produce names the edit it needs with `state=NAME`, and the harness makes that edit to its copy of the repository before running the command:
+
+| `state=` | Edit to `objects/rules/sentinel-kql-rule.yaml` |
+|----------|------------------------------------------------|
+| `dangling-reference` | `detection_model` names an objective that does not exist, as in tutorial step 7 |
+| `unterminated-string` | The query's second line opens a string it never closes: `\| where EventID == "4688` |
+
+The edits live in `REPO_STATES` in the golden test. Add one there instead of leaving a failure sample unchecked.
+
+Pairing is required, not optional, for anything that reads like CLI output. Under `cli/` and `usage/`, a `text`, `json`, or unlabelled fence that holds a result-envelope key (`"ok"` or `"status"`), or a line starting `OK `, `SKIPPED `, `WARNING `, `DEPRECATED `, `FATAL`, or `== … ==`, must carry `output-of=`. If no command the harness runs can print it, mark it `illustrative` instead and say in the prose that it is not captured output:
+
+````markdown
+```text illustrative
+WARNING …
+```
+````
+
+Prefer a `state=` over `illustrative`: an illustrative sample is never compared with anything, so it can drift. MCP pages are exempt, because no `opentide` command prints an MCP tool call or response.
+
+None of these attributes renders: Fumadocs reads only `title`, `tab`, `noCopy` and `lineNumbers` from fence meta, and GitHub reads only the language.
+
 ## Agent maintenance
 
 Agents working on documentation should read [`.agents/skills/docs-maintenance/SKILL.md`](../.agents/skills/docs-maintenance/SKILL.md).

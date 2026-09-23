@@ -60,6 +60,33 @@ def test_preflight_graph_build_resolves_objects() -> None:
     assert ref.file_path == Path("/tmp/threats/sample-threat.yaml")
 
 
+def test_preflight_graph_uses_each_objects_own_file_over_the_basename() -> None:
+    """Joining the basename put a nested object at the top-level twin's path (#297)."""
+    index = _minimal_index()
+    top = "00000000-0000-4000-8000-000000000010"
+    nested = "00000000-0000-4000-8000-000000000011"
+    index["objects"]["threat"][nested] = {"name": "Nested Threat", "metadata": {"uuid": nested}}
+    index["files"][nested] = "sample-threat.yaml"
+    index["file_paths"] = {
+        top: "/tmp/threats/sample-threat.yaml",
+        nested: "/tmp/threats/actors/apt/sample-threat.yaml",
+    }
+    graph = PreflightGraph.build(index)
+    top_ref, nested_ref = graph.resolve(top), graph.resolve(nested)
+    assert top_ref is not None and nested_ref is not None
+    assert top_ref.file_path == Path("/tmp/threats/sample-threat.yaml")
+    assert nested_ref.file_path == Path("/tmp/threats/actors/apt/sample-threat.yaml")
+
+
+def test_preflight_graph_does_not_guess_a_path_missing_from_file_paths() -> None:
+    """An object without a file of its own (an inflight shard) has no path to report."""
+    index = _minimal_index()
+    index["file_paths"] = {}
+    ref = PreflightGraph.build(index).resolve("00000000-0000-4000-8000-000000000010")
+    assert ref is not None
+    assert ref.file_path is None
+
+
 def test_preflight_graph_enum_values_for_object_type() -> None:
     graph = PreflightGraph.build(_minimal_index())
     values = graph.enum_values("threat")

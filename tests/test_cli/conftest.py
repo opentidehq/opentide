@@ -40,6 +40,26 @@ def cli_runner() -> CliRunner:
     return CliRunner()
 
 
+@pytest.fixture
+def git_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An empty global git configuration and no system one."""
+    for name in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(name)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    home = tmp_path / "home"
+    home.mkdir()
+    for name, value in {
+        "HOME": str(home),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_AUTHOR_NAME": "dev",
+        "GIT_AUTHOR_EMAIL": "dev@example.test",
+        "GIT_COMMITTER_NAME": "dev",
+        "GIT_COMMITTER_EMAIL": "dev@example.test",
+    }.items():
+        monkeypatch.setenv(name, value)
+    return home
+
+
 def default_remote_skill_entries() -> list[SkillEntry]:
     """Minimal live-catalogue stand-in used by setup tests."""
     return [
@@ -144,6 +164,36 @@ def invoke_cli(cli_runner: CliRunner, tide_corpus_repo: Path) -> Callable[..., R
         return cli_runner.invoke(app, cmd, env=env, **kwargs)
 
     return _invoke
+
+
+#: Set by CI runners and the corpus fixtures but not by a user's shell. Removing
+#: them selects the local-debug deploy path a first user runs.
+LOCAL_SHELL_UNSET = (
+    "OPENTIDE_REPO_ROOT",
+    "OPENTIDE_TIDE_WORKSPACE",
+    "DEPLOYMENT_PLAN",
+    "CI",
+    "GITHUB_ACTIONS",
+    "TF_BUILD",
+)
+
+
+@pytest.fixture
+def refuse_deployment_engines(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Fail loudly if a platform engine loads, recording the attempt.
+
+    Loading an engine precedes every platform API call, so an empty list
+    afterwards proves a command never reached the network.
+    """
+    loaded: list[str] = []
+
+    class _NoEngines:
+        def __init__(self) -> None:
+            loaded.append("DeployTide")
+            raise AssertionError("a command with no rules loaded a platform engine")
+
+    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _NoEngines)
+    return loaded
 
 
 @pytest.fixture

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.validation_support import assert_issues_point_at_their_objects
 
 from opentide.validation.scope import ValidationScope
 from opentide.validation.session import _IdScanParseError, _scan_id_file, _yaml_parse_issues
@@ -24,8 +25,13 @@ def test_scope_matches_repo_relative_target(tmp_path: Path, monkeypatch) -> None
 
     scope = ValidationScope.narrow(files=frozenset({"objects/rules/rule.yaml"}))
     assert scope.includes_object("uuid-1", "rule", file_name="rule.yaml", file_path=rule)
-    # The index does not store a path for every object; fall back by name.
-    assert scope.includes_object("uuid-1", "rule", file_name="rule.yaml")
+
+
+def test_a_path_target_never_matches_an_object_whose_path_is_unknown() -> None:
+    """The basename fallback is what let a parent path select a nested twin (#297)."""
+    scope = ValidationScope.narrow(files=frozenset({"objects/rules/rule.yaml"}))
+    assert not scope.matches_file("rule.yaml")
+    assert not scope.includes_object("uuid-1", "rule", file_name="rule.yaml")
 
 
 def test_scope_matches_a_repo_relative_target_from_another_directory(tmp_path: Path) -> None:
@@ -104,13 +110,58 @@ def test_a_bare_basename_still_matches_a_known_path(tmp_path: Path) -> None:
     assert scope.includes_object("uuid-1", "rule", file_name="rule.yaml", file_path=rule)
 
 
-def test_scope_still_honours_object_types() -> None:
-    scope = ValidationScope.narrow(files=frozenset({"objects/rules/rule.yaml"}))
-    assert scope.includes_object("uuid-1", "rule", file_name="rule.yaml")
-    typed = ValidationScope.narrow(
-        files=frozenset({"objects/rules/rule.yaml"}), types=frozenset({"threat"})
-    )
-    assert not typed.includes_object("uuid-1", "rule", file_name="rule.yaml")
+def test_scope_still_honours_object_types(tmp_path: Path) -> None:
+    rule = tmp_path / "objects" / "rules" / "rule.yaml"
+    target = frozenset({"objects/rules/rule.yaml"})
+    scope = ValidationScope.narrow(files=target, roots=(tmp_path,))
+    assert scope.includes_object("uuid-1", "rule", file_name="rule.yaml", file_path=rule)
+    typed = ValidationScope.narrow(files=target, types=frozenset({"threat"}), roots=(tmp_path,))
+    assert not typed.includes_object("uuid-1", "rule", file_name="rule.yaml", file_path=rule)
+
+
+_NESTED_TWINS = (
+    "objects/rules/twin.yaml",
+    "objects/rules/team-a/twin.yaml",
+    "objects/rules/team-a/emea/twin.yaml",
+    "objects/rules/team-b/twin.yaml",
+    "objects/threats/twin.yaml",
+    "objects/threats/actors/apt/twin.yaml",
+    "objects/objectives/access/twin.yaml",
+)
+
+
+@pytest.mark.parametrize("target", _NESTED_TWINS)
+@pytest.mark.parametrize("form", ["repo-relative", "dot-relative", "absolute"])
+def test_a_path_target_matches_only_its_own_file_among_same_named_twins(
+    tmp_path: Path, target: str, form: str
+) -> None:
+    """Same basename at depth 1, 2 and 3, across object types (#297)."""
+    written = {relative: tmp_path / relative for relative in _NESTED_TWINS}
+    for path in written.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("name: x\n", encoding="utf-8")
+    spelled = {
+        "repo-relative": target,
+        "dot-relative": f"./{target}",
+        "absolute": str(tmp_path / target),
+    }[form]
+    scope = ValidationScope.narrow(files=frozenset({spelled}), roots=(tmp_path,))
+    matched = {rel for rel, path in written.items() if scope.matches_file(path.name, path)}
+    assert matched == {target}
+
+
+def test_a_bare_basename_matches_the_same_name_at_every_depth(tmp_path: Path) -> None:
+    scope = ValidationScope.narrow(files=frozenset({"twin.yaml"}), roots=(tmp_path,))
+    for relative in _NESTED_TWINS:
+        path = tmp_path / relative
+        assert scope.matches_file(path.name, path), relative
+    assert not scope.matches_file("other.yaml", tmp_path / "objects" / "rules" / "other.yaml")
+
+
+def test_a_bare_basename_matches_by_the_path_when_no_name_is_given(tmp_path: Path) -> None:
+    scope = ValidationScope.narrow(files=frozenset({"twin.yaml"}), roots=(tmp_path,))
+    assert scope.matches_file(None, tmp_path / "objects" / "rules" / "deep" / "twin.yaml")
+    assert not scope.matches_file(None, None)
 
 
 def test_yaml_parse_issues_reported_for_full_scope() -> None:
@@ -127,8 +178,24 @@ def test_yaml_parse_issues_respect_narrow_file_scope() -> None:
     errors = [{"path": "/repo/objects/rules/broken.yaml", "object_type": "rule", "error": "boom"}]
     matched = _yaml_parse_issues(errors, ValidationScope.narrow(files=frozenset({"broken.yaml"})))
     assert len(matched) == 1
+    assert_issues_point_at_their_objects(matched)
     skipped = _yaml_parse_issues(errors, ValidationScope.narrow(files=frozenset({"other.yaml"})))
     assert skipped == []
+
+
+def test_yaml_parse_issues_match_a_path_target_by_the_broken_files_own_path(
+    tmp_path: Path,
+) -> None:
+    nested = tmp_path / "objects" / "rules" / "team-a" / "broken.yaml"
+    errors = [{"path": str(nested), "object_type": "rule", "error": "boom"}]
+    parent = ValidationScope.narrow(
+        files=frozenset({"objects/rules/broken.yaml"}), roots=(tmp_path,)
+    )
+    assert _yaml_parse_issues(errors, parent) == []
+    own = ValidationScope.narrow(
+        files=frozenset({"objects/rules/team-a/broken.yaml"}), roots=(tmp_path,)
+    )
+    assert [issue.file_path for issue in _yaml_parse_issues(errors, own)] == [nested]
 
 
 def test_yaml_parse_issues_respect_narrow_type_scope() -> None:

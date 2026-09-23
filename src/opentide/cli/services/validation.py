@@ -11,6 +11,7 @@ from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
 from opentide.cli.output import emit_error
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
+from opentide.registry.discovery import discover_workspace
 from opentide.validation.errors import format_issues_for_console
 from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.scope import ValidationScope
@@ -195,13 +196,16 @@ def run_validate(
     else:
         result = _report_payload(report)
         result["check"] = check.value
+    workspace = discover_workspace()
+    result["workspace"] = str(workspace)
 
     if not ctx.json_output and report.issues:
         from rich.panel import Panel
+        from rich.text import Text
 
         get_stdout_console().print(
             Panel(
-                format_issues_for_console(report.issues),
+                Text(format_issues_for_console(report.issues)),
                 title="[bold red]Validation issues[/]",
                 border_style="red",
             )
@@ -211,7 +215,16 @@ def run_validate(
 
     outcome = validation_outcome(strict=strict)
     result["status"] = "failed" if outcome.failed else "passed"
-    result["message"] = "Validation failed" if outcome.failed else "Validation passed"
+    if outcome.failed:
+        result["message"] = "Validation failed"
+    elif check is None and scope.mode == "full" and report.stats.get("objects_checked") == 0:
+        # Not a failure: an empty catalogue exits 0, even under --strict. The
+        # path is what exposes a run that looked in the wrong directory.
+        result["message"] = (
+            f"Validation passed, but no detection objects were found under {workspace}"
+        )
+    else:
+        result["message"] = "Validation passed"
     if outcome.warned:
         result["warnings"] = ["Validation reported warnings"]
     result["_exit_code"] = outcome.exit_code
@@ -380,6 +393,20 @@ def validate_query_platform(
             "mode": "live",
             "status": "skipped",
             "message": "No rules to validate for this platform in the current plan",
+        }
+    from opentide.platforms.enabled import MissingTenantsError, systems_without_tenants
+
+    if systems_without_tenants([platform]):
+        missing = MissingTenantsError(platform)
+        return {
+            "platform": platform,
+            "mode": "live",
+            "status": "failed",
+            "supported": True,
+            "message": f"Cannot run live query validation: {missing}",
+            "advice": missing.advice,
+            "missing_tenants": {platform: missing.config_path},
+            "_exit_code": 1,
         }
     query_validators = cast(dict[str, Any], DeployTide().query_validation_for(platform))
     if platform not in query_validators:

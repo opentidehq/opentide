@@ -68,6 +68,10 @@ gh release create v0.1.8 \
 
 The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.8.md`. Do not tag a feature branch.
 
+Do not pass `--latest=false` for the newest version; the default marks it Latest (check with `gh release list --repo OpenTideHQ/opentide --limit 3`).
+
+**CDN delay:** for about 10–15 minutes after a successful upload, PyPI's CDN can serve stale data. `/pypi/opentide/json` is cached for 900 s and `/simple/opentide/` for 600 s. During that window `pip install opentide==0.1.8` can report "No matching distribution", or `https://pypi.org/pypi/opentide/0.1.8/json` can list only one of the two files. Wait, and install with `uv pip install --no-cache --index-url https://pypi.org/simple`. Do not retag or re-publish.
+
 After a successful upload, `publish-pypi.yml` dispatches `opentide-released` to [`OpenTideHQ/website`](https://github.com/OpenTideHQ/website) so docs, changelog pages, and specs rebuild immediately:
 
 ```bash
@@ -92,4 +96,5 @@ Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https
     -f client_payload[checkout_ref]=v0.x.y
   ```
   The Actions UI `workflow_dispatch` input `checkout_ref` is the same path. Do not retag.
+- PyPI 5xx (`502 Bad Gateway`) or a partial upload, where PyPI kept the wheel but not the sdist (0.4.0): re-run with the same `repository_dispatch` command. The publish step sets `skip-existing: true`, so the retry uploads only the files PyPI is missing instead of failing with `400 File already exists`. The **Verify PyPI lists every built file** step then fails the job unless `https://pypi.org/pypi/opentide/<version>/json` lists both the wheel and the sdist, and its log prints the retry command. `gh run rerun` does not work with the GitHub App token (403, no `actions:write`).
 - Release exists but Publish to PyPI never starts: the workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag.

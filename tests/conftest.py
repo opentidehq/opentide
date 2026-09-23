@@ -22,14 +22,18 @@ os.environ.setdefault("TERM_PROGRAM", "vscode")
 pytest_plugins = ["tests.corpus_support"]
 
 _repo_patcher: patch | None = None
-_original_find_repo_root = None
+_original_find_workspace_root = None
 
 
-def _test_find_repo_root(start: Path | None = None) -> Path:
-    """Pin default repo root for imports; honour env override and explicit *start*."""
+def _test_find_workspace_root(start: Path | None = None) -> Path:
+    """Pin default repo root for imports; honour env override and explicit *start*.
+
+    In-process tests therefore never discover a root from the cwd; cover
+    discovery with an explicit *start* or through a console-script subprocess.
+    """
     if start is not None:
-        assert _original_find_repo_root is not None
-        return _original_find_repo_root(start)
+        assert _original_find_workspace_root is not None
+        return _original_find_workspace_root(start)
     override = os.environ.get("OPENTIDE_REPO_ROOT")
     if override:
         return Path(override)
@@ -38,11 +42,11 @@ def _test_find_repo_root(start: Path | None = None) -> Path:
 
 def pytest_configure(config: object) -> None:
     """Pin repo root before Engines modules resolve paths at import time."""
-    global _repo_patcher, _original_find_repo_root
+    global _repo_patcher, _original_find_workspace_root
     import opentide.core.root as root_mod
 
-    _original_find_repo_root = root_mod.find_repo_root
-    _repo_patcher = patch.object(root_mod, "find_repo_root", _test_find_repo_root)
+    _original_find_workspace_root = root_mod.find_workspace_root
+    _repo_patcher = patch.object(root_mod, "find_workspace_root", _test_find_workspace_root)
     _repo_patcher.start()
 
 

@@ -9,7 +9,6 @@ from opentide.ci.stages import (
     header_comment,
     pip_install,
     production_deploy_steps,
-    promotion_steps,
     staging_deploy_steps,
 )
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
@@ -47,9 +46,6 @@ def _gitlab_job(
 
 def render_gitlab(options: CiRenderOptions) -> str:
     stages = ["validate", "generate", "deploy", "document"]
-    promote_cmds = promotion_steps(options)
-    if promote_cmds:
-        stages.insert(3, "promote")
 
     query_jobs: list[str] = []
     for platform in options.platforms:
@@ -103,17 +99,6 @@ def render_gitlab(options: CiRenderOptions) -> str:
             )
         )
 
-    promote_job = ""
-    if promote_cmds:
-        promote_job = _gitlab_job(
-            "promote",
-            options=options,
-            stage="promote",
-            script=promote_cmds,
-            needs="deploy_production",
-            rules="$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH",
-        )
-
     document_job = _gitlab_job(
         "document",
         options=options,
@@ -153,7 +138,5 @@ def render_gitlab(options: CiRenderOptions) -> str:
     parts = [header_comment(options), core]
     parts.extend(query_jobs)
     parts.extend(deploy_jobs)
-    if promote_job:
-        parts.append(promote_job)
     parts.append(document_job)
     return "\n".join(parts) + "\n"

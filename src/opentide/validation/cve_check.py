@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from opentide.core.logging import get_logger
@@ -37,11 +38,16 @@ def check_cve_issues(
     issues: list[ValidationIssue] = []
     threats = index.get("objects", {}).get("threat", {})
     files_index = index.get("files", {})
+    file_paths = index.get("file_paths", {})
 
     for threat_id, threat_data in threats.items():
         threat_uuid = str(threat_data.get("metadata", {}).get("uuid") or threat_id)
         file_name = files_index.get(threat_uuid)
-        if not scope.includes_object(threat_uuid, "threat", file_name=file_name):
+        raw_path = file_paths.get(threat_uuid)
+        file_path = Path(raw_path) if raw_path else None
+        if not scope.includes_object(
+            threat_uuid, "threat", file_name=file_name, file_path=file_path
+        ):
             continue
 
         cve_list = normalize_identifiers(threat_data.get(THREAT_MODEL_FIELD, {}).get("cve"))
@@ -82,6 +88,7 @@ def check_cve_issues(
                     severity="error",
                     object_uuid=threat_uuid,
                     object_type="threat",
+                    file_path=file_path,
                     field_path=(THREAT_MODEL_FIELD, "cve"),
                     message=f"Invalid CVE references: {', '.join(broken)}",
                     suggestion="Confirm each identifier on Vulnerability-Lookup (https://vulnerability.circl.lu).",

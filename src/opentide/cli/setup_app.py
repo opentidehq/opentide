@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+from rich.markup import escape
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
@@ -155,6 +156,24 @@ PATH_OPTION = typer.Option(".", "--path", "-C", help="Repository path")
 PATH_ARGUMENT = typer.Argument(".", help="Repository path (alias for --path)", hidden=True)
 
 
+def _renderable_branch(value: str | None) -> str | None:
+    if value is not None and not is_valid_branch_name(value):
+        raise typer.BadParameter(
+            f"{value!r} cannot be written into a pipeline; "
+            "use letters, digits, '.', '_', '/' and '-'"
+        )
+    return value
+
+
+DEFAULT_BRANCH_OPTION = typer.Option(
+    None,
+    "--default-branch",
+    callback=_renderable_branch,
+    help="Branch that deploys and receives inflight shards (default: origin/HEAD, then the "
+    "checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
+)
+
+
 def _has_repo_flags(
     name: str | None,
     org: str | None,
@@ -203,7 +222,7 @@ def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) ->
         require_interactive()
     except InteractiveRequiredError as exc:
         emit_error(cli, f"{exc} Add --yes to confirm this write.")
-    get_stdout_console().print(f"[bold]Target:[/] {target.resolve()}")
+    get_stdout_console().print(f"[bold]Target:[/] {escape(str(target.resolve()))}")
     return ask_confirm(message, default=True)
 
 
@@ -226,14 +245,23 @@ def setup_cmd(
         "--inflight/--no-inflight",
         help="Update .opentide/inflight/ preview shards on pull requests",
     ),
-    promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
-    promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
+    promotion: bool | None = typer.Option(
+        None,
+        "--promotion/--no-promotion",
+        help="Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+    ),
+    promotion_target: str | None = typer.Option(
+        None,
+        "--promotion-target",
+        help="Status deploy promotes rules to. Omit to keep the repository's setting.",
+    ),
     python_version: str = typer.Option("3.12", "--python-version"),
     explorer_pages: bool = typer.Option(
         False,
         "--explorer-pages/--no-explorer-pages",
         help="Include GitHub Pages explorer build and deploy jobs",
     ),
+    default_branch: str | None = DEFAULT_BRANCH_OPTION,
     vscode_setup: bool = typer.Option(
         False, "--vscode-setup", help="Run deprecated VS Code settings + snippets"
     ),
@@ -267,6 +295,7 @@ def setup_cmd(
             promotion_target=promotion_target,
             python_version=python_version,
             explorer_pages=explorer_pages,
+            default_branch=default_branch,
             vscode_setup=vscode_setup,
             yes=yes,
             run_repo=_should_run_repo(
@@ -388,32 +417,29 @@ def setup_ci_cmd(
         "--inflight/--no-inflight",
         help="Update .opentide/inflight/ preview shards on pull requests",
     ),
-    promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
-    promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
+    promotion: bool | None = typer.Option(
+        None,
+        "--promotion/--no-promotion",
+        help="Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+    ),
+    promotion_target: str | None = typer.Option(
+        None,
+        "--promotion-target",
+        help="Status deploy promotes rules to. Omit to keep the repository's setting.",
+    ),
     python_version: str = typer.Option("3.12", "--python-version"),
     explorer_pages: bool = typer.Option(
         False,
         "--explorer-pages/--no-explorer-pages",
         help="Include GitHub Pages explorer build and deploy jobs",
     ),
-    default_branch: str | None = typer.Option(
-        None,
-        "--default-branch",
-        help="Branch that deploys and receives inflight shards "
-        "(default: origin/HEAD, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
-    ),
+    default_branch: str | None = DEFAULT_BRANCH_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
     cli = get_context(ctx)
     if ci_platform is CiPlatform.none:
         raise typer.BadParameter("Choose github, gitlab, or azure")
-    if default_branch is not None and not is_valid_branch_name(default_branch):
-        raise typer.BadParameter(
-            f"{default_branch!r} cannot be written into a pipeline; "
-            "use letters, digits, '.', '_', '/' and '-'",
-            param_hint="--default-branch",
-        )
     target = _option_path(ctx, cli, path)
     yes = _consented(ctx, yes)
     if not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
@@ -620,6 +646,7 @@ def setup_skills_discover_cmd(
         emit_success(cli, payload)
         return
     from rich.table import Table
+    from rich.text import Text
 
     table = Table(title="OpenTide Skills")
     table.add_column("Name")
@@ -627,12 +654,14 @@ def setup_skills_discover_cmd(
     table.add_column("Description")
     for item in payload["skills"]:
         table.add_row(
-            str(item["name"]),
+            Text(str(item["name"])),
             "yes" if item.get("installed") else "no",
-            str(item.get("description", ""))[:80],
+            Text(str(item.get("description", ""))[:80]),
         )
     get_stdout_console().print(table)
-    get_stdout_console().print(f"Source: {payload['source']} ({payload['count']} skills)")
+    get_stdout_console().print(
+        f"Source: {payload['source']} ({payload['count']} skills)", markup=False
+    )
 
 
 @skills_app.command("show")
@@ -656,13 +685,14 @@ def setup_skills_show_cmd(
             emit_success(cli, payload)
         return
     if "error" in payload:
-        get_console().print(f"[red]{payload['error']}[/red]")
+        get_console().print(f"[red]{escape(payload['error'])}[/red]")
         raise typer.Exit(1)
     skill = payload["skill"]
-    get_stdout_console().print(f"[bold]{skill['name']}[/bold] ({skill['slug']})")
-    get_stdout_console().print(skill.get("description", ""))
-    get_stdout_console().print(f"Installed: {'yes' if skill.get('installed') else 'no'}")
-    get_stdout_console().print(payload.get("install_hint", ""))
+    console = get_stdout_console()
+    console.print(f"[bold]{escape(skill['name'])}[/bold] ({escape(skill['slug'])})")
+    console.print(skill.get("description", ""), markup=False)
+    console.print(f"Installed: {'yes' if skill.get('installed') else 'no'}")
+    console.print(payload.get("install_hint", ""), markup=False)
 
 
 @setup_app.command("vscode")

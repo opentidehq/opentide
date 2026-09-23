@@ -71,10 +71,9 @@ class OpenTideRegistry:
     def _load_objects(self) -> None:
         assert self._index is not None
         objects = self._index["objects"]
-        files = self._index.get("files", {})
         self._rules = {}
         for uuid, data in objects.get("rule", {}).items():
-            file_path = _resolve_file("rule", files.get(uuid), self._index)
+            file_path = _resolve_file("rule", uuid, self._index)
             from opentide.loading.rule_loader import load_rule_from_dict
 
             rule = load_rule_from_dict(data, file=file_path)
@@ -202,7 +201,15 @@ class OpenTideRegistry:
 OpenTide = OpenTideRegistry()
 
 
-def _resolve_file(category: str, filename: str | None, index: Mapping[str, Any]) -> Path | None:
+def _resolve_file(category: str, uuid: str, index: Mapping[str, Any]) -> Path | None:
+    """Return the YAML file the object *uuid* was read from, if known."""
+    file_paths: Mapping[str, str] | None = index.get("file_paths")
+    if file_paths is not None:
+        real_path = file_paths.get(uuid)
+        return Path(real_path) if real_path else None
+    # Only for indexes built without ``file_paths``: ``files`` holds bare file
+    # names, so this join is wrong for any object in a subfolder.
+    filename = index.get("files", {}).get(uuid)
     if not filename:
         return None
     paths = index["paths"]
@@ -546,10 +553,9 @@ class _ModelsAccessor:
 
         if self._rules:
             return dict(self._rules)
-        files = self._index.get("files", {})
         typed: dict[str, DetectionRule] = {}
         for uuid, data in self.rules.items():
-            file_path = _resolve_file("rule", files.get(uuid), self._index)
+            file_path = _resolve_file("rule", uuid, self._index)
             typed[uuid] = load_rule_from_dict(data, file=file_path)
         return typed
 

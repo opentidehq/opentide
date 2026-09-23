@@ -149,7 +149,7 @@ Structured validation report for agents. Full registry by default; narrow with f
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `file` | string | `""` | Single file path |
+| `file` | string | `""` | Single file: a repo-relative or absolute path matches that file only; a bare file name matches every object file with that name (as [`validate --file`](../cli/validate.md#selecting-a-file)) |
 | `uuid` | string | `""` | Single UUID |
 | `object_type` | string | `""` | `rule`, `threat`, or `objective` |
 

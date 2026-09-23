@@ -23,14 +23,42 @@ opentide validate --check schema
 | Flag | Purpose |
 |------|---------|
 | `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `cve` |
-| `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name |
+| `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)) |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`) |
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Validation failures in `--json` mode include the complete report before the process exits.
 
+Without `--json`, issues are listed in a **Validation issues** panel, grouped by file, one `[severity] field: message` line each — for example `[error] detection_model: Unknown objective reference '…'`.
+
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
+
+### Which workspace was checked
+
+Run from anywhere inside the detection workspace: the CLI walks up to it (see [Repository root resolution](./global-options.md#repository-root-resolution)). The JSON payload names the directory it read objects from under `workspace`.
+
+An empty catalogue is not an error. A full run that checked no objects still passes with exit `0`, `--strict` included, but says where it looked:
+
+```text illustrative
+OK Validation passed, but no detection objects were found under /home/you/monorepo
+```
+
+If that path is not your workspace, `cd` into it or pass `--repo`.
+
+### Selecting a file
+
+Object folders may contain subfolders, and files in different folders may share a name. `--file` matches like this:
+
+| Target | Matches |
+|--------|---------|
+| Repo-relative path (`objects/rules/team-a/rule.yaml`, `./objects/rules/team-a/rule.yaml`) | That file only. It is resolved from the working directory and from the repository root, so it also works from outside the repo or with `--repo`. |
+| Absolute path | That file only. |
+| Bare file name (`rule.yaml`) | Every object file with that name, in any object folder or subfolder. |
+
+A path never falls back to its file name: `objects/rules/rule.yaml` does not select `objects/rules/team-a/rule.yaml`, and a path that names no object file fails with `scope_no_match`. Give a path when a file name is not unique.
+
+Every issue reports the `file_path` of the object it concerns, so issues from two files that share a name stay apart when a bare file name selects both.
 
 ### Unparseable object files
 
@@ -78,27 +106,36 @@ opentide validate query --platform sentinel --live
 Without `--live` the command reads every query out of the rules it can see and
 runs a **language-aware structural check** in-process: no vendor SDK, no
 credentials, no network. The JSON payload reports `"mode": "offline-syntax"`
-and a `findings` list:
+and a `findings` list. If the [tutorial](../usage/tutorial.md) rule's query
+opens a string it never closes (`| where EventID == "4688`), the command
+exits `1` and names the rule, line, and column:
 
-```json
+```bash
+opentide --json validate query --platform sentinel
+```
+
+```json output-of="opentide --json validate query --platform sentinel" exit=1 state=unterminated-string
 {
   "platform": "sentinel",
   "mode": "offline-syntax",
   "language": "kql",
-  "rules": 2,
-  "checked": 2,
-  "status": "failed",
+  "supported": true,
+  "rules": 1,
+  "checked": 1,
   "findings": [
     {
-      "uuid": "…",
-      "rule": "Suspicious parent process",
+      "uuid": "00000000-0000-4000-8003-000000000001",
+      "rule": "Sentinel KQL Rule",
       "field": "configurations.sentinel.query",
       "code": "unterminated_string",
       "message": "Unterminated \" string literal",
       "line": 2,
       "column": 20
     }
-  ]
+  ],
+  "ok": false,
+  "status": "failed",
+  "message": "Offline KQL syntax validation found 1 problem(s) for sentinel (1 query across 1 rule)"
 }
 ```
 
@@ -120,9 +157,13 @@ Each language's own syntax is respected, so valid content is not rejected:
 `--live` builds the platform client and submits the query, so it needs the
 matching extra (`pip install 'opentide[sentinel]'`) and tenant credentials. When
 the SDK is absent the command fails with the extra to install rather than a
-`ModuleNotFoundError` traceback. Only the requested platform's engine is
+`ModuleNotFoundError` traceback: the `advice` field in `--json`, an
+`advice: install opentide[sentinel] …` line under the `FATAL` line otherwise.
+Only the requested platform's engine is
 loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
-modules.
+modules. A platform with no `[[tenants]]` entry fails the same way, before the
+client is built, and names the file to edit. Offline validation does not need
+tenants.
 
 ### Supported platforms
 
@@ -138,7 +179,11 @@ CrowdStrike and HarfangLab return unsupported — never fake validation. The
 result is a normal failure envelope, so `--json` shape does not change between
 supported and unsupported platforms:
 
-```json
+```bash
+opentide --json validate query --platform crowdstrike
+```
+
+```json output-of="opentide --json validate query --platform crowdstrike" exit=1
 {
   "platform": "crowdstrike",
   "valid": null,

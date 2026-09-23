@@ -69,6 +69,7 @@ class PreflightGraph:
         )
 
         files_index = dict(index.get("files", {}))
+        file_paths: Mapping[str, str] | None = index.get("file_paths")
         paths = index.get("paths", {})
         tide_paths = paths.get("tide", paths)
 
@@ -77,9 +78,13 @@ class PreflightGraph:
             if object_type not in CORE_OBJECT_TYPES and object_type != "signal":
                 continue
             for uuid, body in registry.items():
-                file_name = files_index.get(uuid)
                 file_path: Path | None = None
-                if file_name and object_type in tide_paths:
+                if file_paths is not None:
+                    real_path = file_paths.get(uuid)
+                    file_path = Path(real_path) if real_path else None
+                elif (file_name := files_index.get(uuid)) and object_type in tide_paths:
+                    # Only correct for a flat folder: a nested object would be
+                    # placed at the top-level file that shares its basename.
                     file_path = Path(tide_paths[object_type]) / file_name
                 objects_by_uuid[uuid] = ObjectRef(
                     uuid=uuid,

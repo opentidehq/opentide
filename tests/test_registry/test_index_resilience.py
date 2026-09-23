@@ -84,6 +84,29 @@ def test_registry_indexes_malformed_objects_without_raising(
     )
 
 
+def test_registry_records_each_objects_own_file_in_nested_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``files`` keeps the basename; ``file_paths`` tells same-named twins apart (#297)."""
+    layout = {
+        "objects/rules/twin.yaml": str(uuid4()),
+        "objects/rules/team-a/twin.yaml": str(uuid4()),
+        "objects/rules/team-a/emea/twin.yaml": str(uuid4()),
+    }
+    for relative, rule_uuid in layout.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(_minimal_rule(rule_uuid)), encoding="utf-8")
+
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path.resolve()))
+    index = build_registry()
+
+    for relative, rule_uuid in layout.items():
+        assert rule_uuid in index["objects"]["rule"]
+        assert index["files"][rule_uuid] == "twin.yaml"
+        assert Path(index["file_paths"][rule_uuid]) == (tmp_path / relative).resolve()
+
+
 def test_validation_reports_all_schema_errors_without_aborting(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

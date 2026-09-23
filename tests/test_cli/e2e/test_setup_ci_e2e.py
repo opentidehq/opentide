@@ -48,28 +48,36 @@ def test_setup_ci_on_fresh_repo_writes_parseable_yaml(
     assert "opentide validate" in rendered
 
 
-def test_setup_ci_default_branch_option_sets_the_trunk(invoke_cli, tmp_path: Path) -> None:
+#: ``setup ci <provider>`` and the one-shot ``setup --ci <provider>`` (#288).
+_ENTRY_POINTS = pytest.mark.parametrize(
+    "entry", [("setup", "ci"), ("setup", "--ci")], ids=["setup ci", "setup --ci"]
+)
+
+
+@_ENTRY_POINTS
+def test_setup_ci_default_branch_option_sets_the_trunk(
+    invoke_cli, tmp_path: Path, entry: tuple[str, str]
+) -> None:
     fresh = tmp_path / "fresh-detections"
     run_repo_setup(RepoSetupOptions(path=fresh, name="Fresh", yes=True))
-    result = invoke_cli(
-        "setup", "ci", "azure", "--path", str(fresh), "--default-branch", "trunk", "--yes"
-    )
+    result = invoke_cli(*entry, "azure", "--path", str(fresh), "--default-branch", "trunk", "--yes")
     payload = assert_json_ok(result)
+    if entry[1] == "--ci":
+        [payload] = [step for step in payload["steps"] if step["step"] == "ci"]
     assert payload["default_branch"] == "trunk"
     parsed = yaml.safe_load((fresh / "azure-pipelines.yml").read_text(encoding="utf-8"))
     assert parsed["trigger"]["branches"]["include"] == ["trunk"]
     assert parsed["pr"]["branches"]["include"] == ["trunk"]
 
 
+@_ENTRY_POINTS
 @pytest.mark.parametrize("branch", ["main; id", "2024"])
 def test_setup_ci_rejects_a_default_branch_it_cannot_render(
-    invoke_cli, tmp_path: Path, branch: str
+    invoke_cli, tmp_path: Path, entry: tuple[str, str], branch: str
 ) -> None:
     fresh = tmp_path / "fresh-detections"
     run_repo_setup(RepoSetupOptions(path=fresh, name="Fresh", yes=True))
-    result = invoke_cli(
-        "setup", "ci", "github", "--path", str(fresh), "--default-branch", branch, "--yes"
-    )
+    result = invoke_cli(*entry, "github", "--path", str(fresh), "--default-branch", branch, "--yes")
     assert result.exit_code == 2, result.stdout + result.stderr
     assert "--default-branch" in re.sub(r"\x1b\[[0-9;]*m", "", result.stderr)
     assert not (fresh / ".github" / "workflows" / "opentide.yml").exists()

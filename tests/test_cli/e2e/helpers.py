@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import re
 import sys
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -69,6 +70,13 @@ def hidden_modules(*prefixes: str, purge: Sequence[str] = ()) -> Iterator[None]:
         for name in [n for n in sys.modules if purge_all._blocks(n)]:
             del sys.modules[name]
         sys.modules.update(saved)
+
+
+def uncomment_tenants(config: Path) -> None:
+    """Uncomment the trailing ``#[[tenants]]`` example that setup and the corpus ship."""
+    template, example = config.read_text(encoding="utf-8").split("#[[tenants]]")
+    tenants = re.sub(r"^#", "", "#[[tenants]]" + example, flags=re.MULTILINE)
+    config.write_text(template + tenants, encoding="utf-8")
 
 
 ROOT = Path(__file__).resolve().parents[3]

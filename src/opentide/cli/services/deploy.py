@@ -17,6 +17,21 @@ if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
 
+def _nothing_to_deploy(message: str, *, dry_run: bool, **fields: object) -> dict[str, object]:
+    """A skipped deploy, in the same envelope as one that planned rules."""
+    result: dict[str, object] = {
+        **fields,
+        "status": "skipped",
+        "message": message,
+        "deployed": [],
+        "dry_run": dry_run,
+        "plan": {},
+    }
+    if dry_run:
+        result["payloads"] = {}
+    return result
+
+
 def run_deploy(
     ctx: CliContext,
     *,
@@ -28,6 +43,33 @@ def run_deploy(
     wide: bool = False,
 ) -> dict[str, object]:
     """Deploy detection rules (Orchestration/deploy.py parity)."""
+    plan_warnings: list[str] = []
+    result = _deploy(
+        ctx,
+        plan_warnings,
+        platform=platform,
+        plan=plan,
+        dry_run=dry_run,
+        skip_promotion=skip_promotion,
+        keep_deprecated=keep_deprecated,
+        wide=wide,
+    )
+    if plan_warnings:
+        result["warnings"] = [*plan_warnings, *cast(list[str], result.get("warnings", []))]
+    return result
+
+
+def _deploy(
+    ctx: CliContext,
+    plan_warnings: list[str],
+    *,
+    platform: DetectionPlatform | None,
+    plan: str | None,
+    dry_run: bool,
+    skip_promotion: bool,
+    keep_deprecated: bool,
+    wide: bool,
+) -> dict[str, object]:
     ctx.apply_environment()
     os.environ["INDEX_OUTPUT"] = "cache"
     if plan is not None:
@@ -56,7 +98,10 @@ def run_deploy(
             emit_section("Pre-deployment Routine")
             PromoteMDR().promote(pre_deployment)
         deployment_list = make_deploy_plan(
-            deployment_plan, wide_scope=wide, keep_deprecated=keep_deprecated
+            deployment_plan,
+            wide_scope=wide,
+            keep_deprecated=keep_deprecated,
+            warnings=plan_warnings,
         )
     except ValueError as exc:
         return {"status": "failed", "message": str(exc), "_exit_code": 1}
@@ -66,11 +111,9 @@ def run_deploy(
     if platform is not None:
         platform_key = platform.value
         if platform_key not in deployment_list:
-            return {
-                "status": "skipped",
-                "platform": platform_key,
-                "message": "No rules to deploy for this platform",
-            }
+            return _nothing_to_deploy(
+                "No rules to deploy for this platform", dry_run=dry_run, platform=platform_key
+            )
         deployment_list = {platform_key: deployment_list[platform_key]}
     if len(deployment_list) == 0:
         environment = CIEnvironment().environment
@@ -82,16 +125,30 @@ def run_deploy(
                 highlight=False,
                 soft_wrap=True,
             )
-        return {
-            "status": "skipped",
-            "message": "No rules matched this deployment plan",
-            "deployed": [],
-        }
-    IndexManager.reload()
+        return _nothing_to_deploy("No rules matched this deployment plan", dry_run=dry_run)
     deployed: list[str] = []
     plan_payload: dict[str, list[str]] = {
         system: list(uuids) for system, uuids in deployment_list.items()
     }
+    from opentide.platforms.enabled import MissingTenantsError, systems_without_tenants
+
+    tenantless = [
+        MissingTenantsError(system) for system in systems_without_tenants(deployment_list)
+    ]
+    missing_tenants = {error.system: error.config_path for error in tenantless}
+    tenants_advice = "; ".join(error.advice for error in tenantless)
+    if tenantless and not dry_run:
+        return {
+            "status": "failed",
+            "message": "Cannot deploy: " + "; ".join(str(error) for error in tenantless),
+            "advice": tenants_advice,
+            "missing_tenants": missing_tenants,
+            "deployed": deployed,
+            "dry_run": False,
+            "plan": plan_payload,
+            "_exit_code": 1,
+        }
+    IndexManager.reload()
     try:
         mdr_deployers = cast(dict[str, Any], DeployTide().mdr_for(deployment_list))
     except Exception as exc:
@@ -113,7 +170,8 @@ def run_deploy(
             from opentide.deployment.preview import preview_platform_deployment
 
             payloads[system] = preview_platform_deployment(system, uuids)
-            deployed.append(system)
+            if system not in missing_tenants:
+                deployed.append(system)
             continue
         try:
             deployer.deploy(mdr_deployment=uuids, deployment_plan=deployment_plan)
@@ -132,8 +190,14 @@ def run_deploy(
         "plan": plan_payload,
         "_exit_code": outcome.exit_code,
     }
+    warnings = [f"{error}, so a real deploy would stop" for error in tenantless]
     if outcome.warned:
-        result["warnings"] = ["Some rules reported deployment warnings"]
+        warnings.append("Some rules reported deployment warnings")
+    if warnings:
+        result["warnings"] = warnings
     if dry_run:
         result["payloads"] = payloads
+        if missing_tenants:
+            result["missing_tenants"] = missing_tenants
+            result["advice"] = tenants_advice
     return result

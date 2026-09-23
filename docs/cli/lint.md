@@ -35,6 +35,24 @@ Lint walks `objects/{threats,objectives,rules}/**/*.yaml` and does not rebuild t
 
 `--fix` is idempotent.
 
+## Output
+
+Human output prints one line per finding, then the summary. The [tutorial](../usage/tutorial.md) catalogue passes both checks:
+
+```text output-of="opentide lint"
+OK Catalogue lint passed
+```
+
+A file that fails them is printed as `[check] path: message` before that summary. This is the shape, from a threat whose file was not renamed to its slug and whose recommended metadata is empty:
+
+```text illustrative
+[metadata] objects/threats/Simulated Actor.yaml: Recommended metadata missing: author, organisation
+[filenames] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml' does not match slugify(name)='simulated-actor'
+OK Catalogue lint found issues
+```
+
+A file renamed by `--fix` gets `(renamed from <old path>)`. `--json` returns the same findings under `findings`, with `count` and `fixed` totals.
+
 ## Source
 
 `src/opentide/cli/services/lint.py`
