@@ -28,14 +28,16 @@ Machine-readable catalogs live under [`/workspace/catalogs/kql/`](../../catalogs
 | --- | --- | --- |
 | `catalogs/kql/core/operators.toml` | 53 | [`operators.md`](operators.md) |
 | `catalogs/kql/core/operators-scalar.toml` | 54 | [`operators-scalar.md`](operators-scalar.md) |
-| `catalogs/kql/core/functions.toml` | 298 | [`scalar-functions.md`](scalar-functions.md) + [`aggregation-functions.md`](aggregation-functions.md) + [`scalar-functions-geo-series.md`](scalar-functions-geo-series.md) |
+| `catalogs/kql/core/functions.toml` | 409 | [`scalar-functions.md`](scalar-functions.md) + [`aggregation-functions.md`](aggregation-functions.md) + [`scalar-functions-geo-series.md`](scalar-functions-geo-series.md) |
 | `catalogs/kql/core/types.toml` | 10 | [`types.md`](types.md) |
 | `catalogs/kql/sentinel/tables.toml` | 99 | [`sentinel-tables.md`](sentinel-tables.md) |
 | `catalogs/kql/defender/tables.toml` | 65 | [`defender-tables.md`](defender-tables.md) |
-| *(none yet)* | — | [`evaluate-plugins.md`](evaluate-plugins.md), [`syntax.md`](syntax.md), [`control-commands.md`](control-commands.md) |
-| *(gap analysis)* | — | [`coverage-gap.md`](coverage-gap.md), [`IMPLEMENTATION-GAPS.md`](IMPLEMENTATION-GAPS.md) |
+| `catalogs/kql/sentinel/columns.toml` | Sentinel table columns (hover / `| where` completions) | [`DESIGN.md`](DESIGN.md) |
+| `catalogs/kql/defender/columns.toml` | Defender hunting columns | [`DESIGN.md`](DESIGN.md) |
+| `catalogs/kql/core/operator-options.toml` | `join kind=` and related options | [`DESIGN.md`](DESIGN.md) |
+| *(design)* | — | [`DESIGN.md`](DESIGN.md) |
 
-Core tabular ops, scalar ops, types, and common tables are largely cataloged. The largest remaining catalog hole is **111** Learn scalar functions (`series_*` / `geo_*` / `convert_*`) plus **evaluate plugins**. See [`coverage-gap.md`](coverage-gap.md).
+Core tabular ops, scalar ops, types, tables, **columns**, and **operator options** are cataloged. Remaining drift is long-tail Learn names and detection-quality warnings; see [`coverage-gap.md`](coverage-gap.md) and [`DESIGN.md`](DESIGN.md).
 
 ## Detection validity legend
 

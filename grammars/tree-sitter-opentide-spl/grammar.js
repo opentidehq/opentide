@@ -9,6 +9,8 @@
  *
  * Unknown commands parse as `unknown_command` so the engine can emit
  * `spl_unknown_command` instead of silently eating them.
+ *
+ * Comments are ```triple-backtick``` spans. Single-backtick pairs are macros.
  */
 module.exports = grammar({
   name: "opentide_spl",
@@ -20,10 +22,25 @@ module.exports = grammar({
   rules: {
     source_file: ($) => $.pipeline,
 
-    comment: (_) => token(choice(seq("```", /.*/), seq("`", /[^`\n]+/, "`"))),
+    // Three backticks both sides. Single-backtick pairs are macros, not comments.
+    comment: (_) => token(seq("```", /[^`\n]*/, "```")),
+
+    macro: (_) =>
+      token(
+        seq(
+          "`",
+          /[A-Za-z_][A-Za-z0-9_]*/,
+          optional(seq("(", /[^)`\n]*/, ")")),
+          "`",
+        ),
+      ),
 
     pipeline: ($) =>
-      seq(choice($.bare_search, $.command), repeat(seq("|", $.command))),
+      seq(
+        optional("|"),
+        choice($.bare_search, $.command, $.macro),
+        repeat(seq("|", choice($.command, $.macro))),
+      ),
 
     // Authored `index=main sourcetype=foo` without a `search` keyword.
     // Requires at least one field=value so it does not steal unknown commands.
@@ -56,7 +73,33 @@ module.exports = grammar({
     search_command: ($) => seq("search", field("clause", repeat($.search_term))),
 
     search_term: ($) =>
-      choice($.field_value, $.string, $.identifier, $.number),
+      choice(
+        $.in_clause,
+        $.term_clause,
+        $.case_clause,
+        $.macro,
+        $.subsearch,
+        $.field_value,
+        $.string,
+        $.identifier,
+        $.number,
+      ),
+
+    in_clause: ($) =>
+      seq(
+        field("field", $.identifier),
+        "IN",
+        $.value_list,
+      ),
+
+    term_clause: ($) => seq("TERM", "(", field("value", choice($.string, $.identifier)), ")"),
+
+    case_clause: ($) => seq("CASE", "(", field("value", choice($.string, $.identifier)), ")"),
+
+    value_list: ($) =>
+      seq("(", commaSep1(choice($.string, $.identifier, $.number)), ")"),
+
+    subsearch: ($) => seq("[", $.pipeline, "]"),
 
     where_command: ($) => seq("where", field("predicate", $.expression)),
 
@@ -66,8 +109,14 @@ module.exports = grammar({
     stats_command: ($) =>
       seq(
         "stats",
-        field("aggregates", commaSep1(choice($.function_call, $.identifier))),
+        field("aggregates", commaSep1($.aggregate_item)),
         optional(seq("by", field("by", commaSep1($.identifier)))),
+      ),
+
+    aggregate_item: ($) =>
+      seq(
+        choice($.function_call, $.identifier),
+        optional(seq(choice("as", "AS"), field("alias", $.identifier))),
       ),
 
     rex_command: ($) =>
@@ -105,9 +154,7 @@ module.exports = grammar({
       seq(
         "join",
         optional(field("type_or_field", $.identifier)),
-        "[",
-        field("subsearch", $.pipeline),
-        "]",
+        $.subsearch,
       ),
 
     lookup_command: ($) =>
@@ -125,10 +172,35 @@ module.exports = grammar({
     tstats_command: ($) =>
       seq(
         "tstats",
-        field("aggregates", commaSep1(choice($.function_call, $.identifier))),
-        optional(seq("from", $.identifier)),
+        repeat($.tstats_preamble),
+        field("aggregates", commaSep1($.aggregate_item)),
+        optional(
+          seq(
+            "from",
+            optional(seq("datamodel", "=")),
+            field("datamodel", $.identifier),
+          ),
+        ),
         optional(seq("where", $.expression)),
         optional(seq("by", commaSep1($.identifier))),
+      ),
+
+    tstats_preamble: ($) =>
+      choice(
+        $.macro,
+        seq(
+          field(
+            "option",
+            choice(
+              "summariesonly",
+              "prestats",
+              "allow_old_summaries",
+              "fillnull_value",
+            ),
+          ),
+          "=",
+          field("value", choice($.boolean, $.identifier, $.string, $.number)),
+        ),
       ),
 
     catalog_command: ($) =>
@@ -275,7 +347,16 @@ module.exports = grammar({
       seq(field("name", $.identifier), optional($.argument_list)),
 
     argument_list: ($) =>
-      repeat1(choice($.field_value, $.string, $.identifier, $.number)),
+      repeat1(
+        choice(
+          $.macro,
+          $.subsearch,
+          $.field_value,
+          $.string,
+          $.identifier,
+          $.number,
+        ),
+      ),
 
     assignment: ($) =>
       seq(field("name", $.identifier), "=", field("value", $.expression)),
@@ -287,7 +368,7 @@ module.exports = grammar({
       seq(
         field("field", $.identifier),
         "=",
-        field("value", choice($.string, $.identifier, $.number)),
+        field("value", choice($.string, $.identifier, $.number, $.value_list)),
       ),
 
     expression: ($) => $.or_expression,
@@ -313,9 +394,12 @@ module.exports = grammar({
         seq(
           $.additive_expression,
           optional(
-            seq(
-              choice("==", "!=", "<", ">", "<=", ">=", "=", "LIKE", "IN"),
-              $.additive_expression,
+            choice(
+              seq("IN", $.value_list),
+              seq(
+                choice("==", "!=", "<", ">", "<=", ">=", "=", "LIKE"),
+                $.additive_expression,
+              ),
             ),
           ),
         ),
@@ -345,6 +429,7 @@ module.exports = grammar({
     primary_expression: ($) =>
       choice(
         $.function_call,
+        $.macro,
         $.identifier,
         $.string,
         $.number,
@@ -363,7 +448,8 @@ module.exports = grammar({
         ),
       ),
 
-    identifier: (_) => /[A-Za-z_][A-Za-z0-9_:]*/,
+    // Dots allowed so CIM-prefixed fields (Processes.user) are one token.
+    identifier: (_) => /[A-Za-z_][A-Za-z0-9_:.]*/,
 
     string: (_) =>
       token(

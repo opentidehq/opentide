@@ -5,7 +5,7 @@ use crate::jsonrpc::{self, Incoming};
 use anyhow::Result;
 use opentide_analysis::{
     AnalyzeRequest, MemoryWorkspace, WorkspaceHost, analyze, compiled_kql, compiled_spl,
-    completions, hover, index_workspace,
+    completions, hover, index_workspace, signature_help,
 };
 use opentide_core::{LanguageId, Position, Range};
 use opentide_highlight::encode_lsp_semantic_tokens;
@@ -115,7 +115,8 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                         "capabilities": {
                             "textDocumentSync": 1,
                             "hoverProvider": true,
-                            "completionProvider": { "resolveProvider": true, "triggerCharacters": ["|", " ", ":", "."] },
+                            "completionProvider": { "resolveProvider": true, "triggerCharacters": ["|", " ", ":", ".", "(", ",", "`", "="] },
+                            "signatureHelpProvider": { "triggerCharacters": ["(", ",", "=", "`"] },
                             "definitionProvider": true,
                             "referencesProvider": true,
                             "documentSymbolProvider": true,
@@ -162,6 +163,12 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
         "textDocument/completion" => {
             let result = handle_completion(session, &params);
             jsonrpc::write_message(writer, &jsonrpc::success(id, result))?;
+        }
+        "textDocument/signatureHelp" => {
+            jsonrpc::write_message(
+                writer,
+                &jsonrpc::success(id, handle_signature_help(session, &params)),
+            )?;
         }
         "completionItem/resolve" => {
             jsonrpc::write_message(writer, &jsonrpc::success(id, params))?;
@@ -384,12 +391,45 @@ fn handle_completion(session: &Session, params: &Value) -> Value {
             json!({
                 "label": c.label,
                 "detail": c.detail,
-                "kind": 1,
+                "documentation": c.documentation.as_ref().map(|d| json!({ "kind": "markdown", "value": d })),
+                "kind": match c.kind.as_str() {
+                    "operator" | "keyword" | "command" => 14,
+                    "function" | "plugin" => 3,
+                    "table" | "type" => 7,
+                    "column" | "property" => 5,
+                    "macro" => 23,
+                    "enum" => 13,
+                    "reference" => 18,
+                    _ => 1,
+                },
                 "insertText": c.label,
             })
         })
         .collect();
     json!(items)
+}
+
+fn handle_signature_help(session: &Session, params: &Value) -> Value {
+    let Some((_uri, language, text, pos)) = doc_pos(session, params) else {
+        return Value::Null;
+    };
+    let host = session.host();
+    signature_help(&host, language, &text, pos)
+        .map(|help| {
+            json!({
+                "signatures": help.signatures.iter().map(|s| json!({
+                    "label": s.label,
+                    "documentation": s.documentation,
+                    "parameters": s.parameters.iter().map(|p| json!({
+                        "label": p.label,
+                        "documentation": p.documentation
+                    })).collect::<Vec<_>>()
+                })).collect::<Vec<_>>(),
+                "activeSignature": help.active_signature,
+                "activeParameter": help.active_parameter
+            })
+        })
+        .unwrap_or(Value::Null)
 }
 
 fn handle_definition(session: &Session, params: &Value) -> Value {

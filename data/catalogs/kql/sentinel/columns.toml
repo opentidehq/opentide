@@ -1,0 +1,1993 @@
+# Sentinel / Azure Monitor table columns. Detection-critical subset with Learn citations.
+# Generated for OpenTide LSP hover, completions, and highlight overlay.
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Ingestion/event time (Sentinel analytics time column)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "TenantId"
+type = "string"
+docs = "Log Analytics workspace tenant."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "EventID"
+type = "int"
+docs = "Windows Security event identifier (4688 process create, 4624 logon, 4625 failure, 4104 script)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "Activity"
+type = "string"
+docs = "Friendly activity name derived from EventID."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "Computer"
+type = "string"
+docs = "Host that reported the event."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "Account"
+type = "string"
+docs = "Normalized account (DOMAIN\\user)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "AccountType"
+type = "string"
+docs = "User / Machine classification."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "Channel"
+type = "string"
+docs = "Event log channel (Security)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "EventSourceName"
+type = "string"
+docs = "Event provider (Microsoft-Windows-Security-Auditing)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "Task"
+type = "int"
+docs = "Task category."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "Level"
+type = "string"
+docs = "Event level."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "EventData"
+type = "string"
+docs = "Raw event payload XML/JSON."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "SubjectUserName"
+type = "string"
+docs = "Actor user name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "SubjectDomainName"
+type = "string"
+docs = "Actor domain."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "SubjectUserSid"
+type = "string"
+docs = "Actor SID."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "SubjectLogonId"
+type = "string"
+docs = "Actor logon ID."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "TargetUserName"
+type = "string"
+docs = "Target user name (created process owner, logon target)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "TargetDomainName"
+type = "string"
+docs = "Target domain."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "TargetUserSid"
+type = "string"
+docs = "Target SID."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "TargetLogonId"
+type = "string"
+docs = "Target logon ID."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "LogonType"
+type = "int"
+docs = "Windows logon type (2 interactive, 3 network, 10 RDP)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "LogonProcessName"
+type = "string"
+docs = "Logon process (Advapi, User32, Kerberos)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "IpAddress"
+type = "string"
+docs = "Source IP for network logons."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "IpPort"
+type = "string"
+docs = "Source port."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "WorkstationName"
+type = "string"
+docs = "Source workstation."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "Process"
+type = "string"
+docs = "Process image path."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "ProcessId"
+type = "string"
+docs = "Process ID (hex in some collectors)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "ProcessName"
+type = "string"
+docs = "Process image name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "NewProcessName"
+type = "string"
+docs = "4688 new process path."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "NewProcessId"
+type = "string"
+docs = "4688 new PID."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "ParentProcessName"
+type = "string"
+docs = "4688 creator process."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "CommandLine"
+type = "string"
+docs = "Process command line (4688 / Sysmon-mapped)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "ObjectName"
+type = "string"
+docs = "Object path (handle, file, registry)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "ObjectType"
+type = "string"
+docs = "Object class."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "ShareName"
+type = "string"
+docs = "SMB share name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "IpAddress"
+type = "string"
+docs = "Client IP."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "AuthenticationPackageName"
+type = "string"
+docs = "Auth package (NTLM, Kerberos)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "FailureReason"
+type = "string"
+docs = "Logon failure reason."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "Status"
+type = "string"
+docs = "NTSTATUS."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "SubStatus"
+type = "string"
+docs = "Sub-status for 4625."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "ServiceName"
+type = "string"
+docs = "Service name (7045 / 4697)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "ServiceFileName"
+type = "string"
+docs = "Service binary."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "HandleId"
+type = "string"
+docs = "Object handle."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "AccessMask"
+type = "string"
+docs = "Requested access mask."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "PrivilegeList"
+type = "string"
+docs = "Privileges used/assigned."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "MemberName"
+type = "string"
+docs = "Group member name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "MemberSid"
+type = "string"
+docs = "Group member SID."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "SourceComputerId"
+type = "string"
+docs = "AMA source computer id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "EventOriginId"
+type = "string"
+docs = "Originating event id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SecurityEvent"
+profile = "sentinel"
+name = "Type"
+type = "string"
+docs = "Table type discriminator."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Sign-in time."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "UserPrincipalName"
+type = "string"
+docs = "UPN of the user."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "UserId"
+type = "string"
+docs = "Entra object id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "UserDisplayName"
+type = "string"
+docs = "Display name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "AppDisplayName"
+type = "string"
+docs = "Application name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "AppId"
+type = "string"
+docs = "Application (client) id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "ResourceDisplayName"
+type = "string"
+docs = "Resource app name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "ResourceIdentity"
+type = "string"
+docs = "Resource app id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "IPAddress"
+type = "string"
+docs = "Client IP."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "Location"
+type = "string"
+docs = "City/country location string."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "LocationDetails"
+type = "dynamic"
+docs = "Structured geo (city, state, countryOrRegion)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "ResultType"
+type = "string"
+docs = "Error code (0 = success, 50126 invalid password, …)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "ResultDescription"
+type = "string"
+docs = "Result text."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "ConditionalAccessStatus"
+type = "string"
+docs = "CA result (success / failure / notApplied)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "RiskLevelDuringSignIn"
+type = "string"
+docs = "Identity Protection risk at sign-in."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "RiskLevelAggregated"
+type = "string"
+docs = "Aggregated user risk."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "RiskState"
+type = "string"
+docs = "Risk state."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "RiskDetail"
+type = "string"
+docs = "Risk detail."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "AuthenticationRequirement"
+type = "string"
+docs = "singleFactor / multiFactor."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "AuthenticationDetails"
+type = "dynamic"
+docs = "Auth method steps."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "ClientAppUsed"
+type = "string"
+docs = "Browser / modern / Exchange ActiveSync / …"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "DeviceDetail"
+type = "dynamic"
+docs = "Device id, OS, browser, trust type."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "Status"
+type = "dynamic"
+docs = "errorCode / failureReason."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "IsInteractive"
+type = "bool"
+docs = "Interactive vs non-interactive."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "CorrelationId"
+type = "string"
+docs = "Sign-in correlation."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "OriginalRequestId"
+type = "string"
+docs = "Original request id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "NetworkLocationDetails"
+type = "dynamic"
+docs = "Named locations."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "MfaDetail"
+type = "dynamic"
+docs = "MFA method."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "TokenIssuerType"
+type = "string"
+docs = "AzureAD / ADFederationServices."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "SigninLogs"
+profile = "sentinel"
+name = "OperationName"
+type = "string"
+docs = "Sign-in operation."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Directory audit time."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "OperationName"
+type = "string"
+docs = "Add user / Update user / Add member to group / Consent to application."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "OperationVersion"
+type = "string"
+docs = "API version."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "Category"
+type = "string"
+docs = "UserManagement / GroupManagement / ApplicationManagement / RoleManagement."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "Result"
+type = "string"
+docs = "success / failure."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "ResultReason"
+type = "string"
+docs = "Failure reason."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "Identity"
+type = "string"
+docs = "Actor display."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "InitiatedBy"
+type = "dynamic"
+docs = "user / app actor (userPrincipalName, appId, ipAddress)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "TargetResources"
+type = "dynamic"
+docs = "Modified objects (id, displayName, modifiedProperties)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "AdditionalDetails"
+type = "dynamic"
+docs = "Key/value extra properties."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "CorrelationId"
+type = "string"
+docs = "Audit correlation."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "ActivityDisplayName"
+type = "string"
+docs = "Friendly operation."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "LoggedByService"
+type = "string"
+docs = "Core Directory / PIM / …"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "AuditLogs"
+profile = "sentinel"
+name = "AADOperationType"
+type = "string"
+docs = "Add / Update / Delete."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Alert time."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "AlertName"
+type = "string"
+docs = "Alert title."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "AlertSeverity"
+type = "string"
+docs = "High / Medium / Low / Informational."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "Description"
+type = "string"
+docs = "Alert description."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "ProviderName"
+type = "string"
+docs = "Product that raised the alert."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "VendorName"
+type = "string"
+docs = "Vendor."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "Status"
+type = "string"
+docs = "New / InProgress / Resolved."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "CompromisedEntity"
+type = "string"
+docs = "Primary entity."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "Tactics"
+type = "string"
+docs = "MITRE tactics."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "Techniques"
+type = "string"
+docs = "MITRE techniques."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "Entities"
+type = "dynamic"
+docs = "Alert entities."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "ExtendedLinks"
+type = "dynamic"
+docs = "Deep links."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "AlertType"
+type = "string"
+docs = "Product alert type."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "SystemAlertId"
+type = "string"
+docs = "Product alert id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "ProductName"
+type = "string"
+docs = "Product."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityAlert"
+profile = "sentinel"
+name = "ResourceId"
+type = "string"
+docs = "Azure resource id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Incident time."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "IncidentNumber"
+type = "int"
+docs = "Sentinel incident number."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "Title"
+type = "string"
+docs = "Incident title."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "Severity"
+type = "string"
+docs = "Incident severity."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "Status"
+type = "string"
+docs = "New / Active / Closed."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "Classification"
+type = "string"
+docs = "TruePositive / FalsePositive / …"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "ClassificationReason"
+type = "string"
+docs = "Close reason."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "Owner"
+type = "dynamic"
+docs = "Assigned owner."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "AdditionalData"
+type = "dynamic"
+docs = "Alert product names, tactics."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "FirstActivityTime"
+type = "datetime"
+docs = "Earliest related activity."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "LastActivityTime"
+type = "datetime"
+docs = "Latest related activity."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "IncidentUrl"
+type = "string"
+docs = "Portal URL."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "ProviderIncidentId"
+type = "string"
+docs = "Provider id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "SecurityIncident"
+profile = "sentinel"
+name = "RelatedAnalyticRuleIds"
+type = "dynamic"
+docs = "Analytics rule ids."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Office activity time."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "Operation"
+type = "string"
+docs = "FileAccessed / FileDownloaded / SharingSet / MailItemsAccessed / …"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "UserId"
+type = "string"
+docs = "Actor UPN."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "OfficeWorkload"
+type = "string"
+docs = "SharePoint / Exchange / AzureActiveDirectory / Teams."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "RecordType"
+type = "string"
+docs = "Audit record type."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "ClientIP"
+type = "string"
+docs = "Client IP."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "UserAgent"
+type = "string"
+docs = "User agent."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "SourceFileName"
+type = "string"
+docs = "File name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "SourceFileExtension"
+type = "string"
+docs = "Extension."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "Site_Url"
+type = "string"
+docs = "SharePoint site URL."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "ObjectId"
+type = "string"
+docs = "Object path / message id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "ResultStatus"
+type = "string"
+docs = "Success / Failed."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "OfficeObjectId"
+type = "string"
+docs = "Item id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "Parameters"
+type = "dynamic"
+docs = "Operation parameters."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "AuthenticationType"
+type = "string"
+docs = "Auth type."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "OfficeActivity"
+profile = "sentinel"
+name = "Logon_Type"
+type = "string"
+docs = "Owner / Delegate / Admin (MailItemsAccessed)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "ARM activity time."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "OperationName"
+type = "string"
+docs = "ARM operation (Microsoft.Compute/virtualMachines/runCommand/action)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "OperationNameValue"
+type = "string"
+docs = "Normalized operation."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "ActivityStatus"
+type = "string"
+docs = "Success / Failed / Started."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "ActivityStatusValue"
+type = "string"
+docs = "Normalized status."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "Caller"
+type = "string"
+docs = "Caller UPN / SP."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "CallerIpAddress"
+type = "string"
+docs = "Caller IP."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "Category"
+type = "string"
+docs = "Administrative / Security / Alert / Policy."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "ResourceId"
+type = "string"
+docs = "Target resource id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "ResourceGroup"
+type = "string"
+docs = "Resource group."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "ResourceProvider"
+type = "string"
+docs = "Provider namespace."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "SubscriptionId"
+type = "string"
+docs = "Subscription."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "HTTPRequest"
+type = "dynamic"
+docs = "HTTP method / uri / client."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "Properties"
+type = "dynamic"
+docs = "Request/response properties."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "AzureActivity"
+profile = "sentinel"
+name = "Authorization"
+type = "dynamic"
+docs = "RBAC action / scope / role."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "CEF event time."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "DeviceVendor"
+type = "string"
+docs = "CEF vendor."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "DeviceProduct"
+type = "string"
+docs = "CEF product."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "DeviceAction"
+type = "string"
+docs = "Action (allow / block / …)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "Activity"
+type = "string"
+docs = "CEF name / signature."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "DestinationIP"
+type = "string"
+docs = "Dest IP."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "DestinationPort"
+type = "int"
+docs = "Dest port."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "SourceIP"
+type = "string"
+docs = "Source IP."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "SourcePort"
+type = "int"
+docs = "Source port."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "Protocol"
+type = "string"
+docs = "Transport protocol."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "RequestURL"
+type = "string"
+docs = "URL."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "RequestMethod"
+type = "string"
+docs = "HTTP method."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "SourceUserName"
+type = "string"
+docs = "Source user."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "DestinationUserName"
+type = "string"
+docs = "Dest user."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "DeviceSeverity"
+type = "string"
+docs = "Vendor severity."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "LogSeverity"
+type = "string"
+docs = "Normalized severity."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "Message"
+type = "string"
+docs = "Message."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "AdditionalExtensions"
+type = "string"
+docs = "CEF extensions."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "CommonSecurityLog"
+profile = "sentinel"
+name = "Computer"
+type = "string"
+docs = "Collector host."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[columns]]
+table = "Syslog"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Syslog time."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[columns]]
+table = "Syslog"
+profile = "sentinel"
+name = "Computer"
+type = "string"
+docs = "Host."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[columns]]
+table = "Syslog"
+profile = "sentinel"
+name = "HostName"
+type = "string"
+docs = "Syslog hostname."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[columns]]
+table = "Syslog"
+profile = "sentinel"
+name = "Facility"
+type = "string"
+docs = "Syslog facility."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[columns]]
+table = "Syslog"
+profile = "sentinel"
+name = "SeverityLevel"
+type = "string"
+docs = "Syslog severity."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[columns]]
+table = "Syslog"
+profile = "sentinel"
+name = "SyslogMessage"
+type = "string"
+docs = "Message body."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[columns]]
+table = "Syslog"
+profile = "sentinel"
+name = "ProcessName"
+type = "string"
+docs = "Process / tag."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[columns]]
+table = "Syslog"
+profile = "sentinel"
+name = "ProcessID"
+type = "string"
+docs = "PID."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[columns]]
+table = "Syslog"
+profile = "sentinel"
+name = "HostIP"
+type = "string"
+docs = "Host IP."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Windows Event log time (non-Security channels)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "EventID"
+type = "int"
+docs = "Event id."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "EventLevel"
+type = "int"
+docs = "Level number."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "EventLevelName"
+type = "string"
+docs = "Level name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "Computer"
+type = "string"
+docs = "Host."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "EventLog"
+type = "string"
+docs = "Log name (System / Application)."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "Source"
+type = "string"
+docs = "Provider."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "RenderedDescription"
+type = "string"
+docs = "Rendered message."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "EventData"
+type = "string"
+docs = "Event data XML."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "UserName"
+type = "string"
+docs = "User."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Event"
+profile = "sentinel"
+name = "ParameterXml"
+type = "string"
+docs = "Parameter XML."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Agent heartbeat time."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "Computer"
+type = "string"
+docs = "Agent computer."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "OSType"
+type = "string"
+docs = "Linux / Windows."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "OSName"
+type = "string"
+docs = "OS name."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "Version"
+type = "string"
+docs = "Agent version."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "Category"
+type = "string"
+docs = "Direct agent / SCOM."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "ComputerPrivateIPs"
+type = "dynamic"
+docs = "Private IPs."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "RemoteIPLongitude"
+type = "real"
+docs = "Geo."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "RemoteIPLatitude"
+type = "real"
+docs = "Geo."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "Heartbeat"
+profile = "sentinel"
+name = "RemoteIPCountry"
+type = "string"
+docs = "Country."
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Sentinel-streamed time (also Timestamp)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "Timestamp"
+type = "datetime"
+docs = "Advanced hunting event time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "DeviceName"
+type = "string"
+docs = "Device hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "ActionType"
+type = "string"
+docs = "ProcessCreated / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "FileName"
+type = "string"
+docs = "Image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "FolderPath"
+type = "string"
+docs = "Image folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "ProcessCommandLine"
+type = "string"
+docs = "Command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "ProcessId"
+type = "long"
+docs = "PID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "AccountName"
+type = "string"
+docs = "Process account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "AccountDomain"
+type = "string"
+docs = "Account domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Parent image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Parent command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "InitiatingProcessParentFileName"
+type = "string"
+docs = "Grandparent image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "SHA1"
+type = "string"
+docs = "Image SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "SHA256"
+type = "string"
+docs = "Image SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "sentinel"
+name = "ReportId"
+type = "long"
+docs = "Event report id (custom detections)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Sentinel-streamed time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "Timestamp"
+type = "datetime"
+docs = "Event time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "DeviceName"
+type = "string"
+docs = "Hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "ActionType"
+type = "string"
+docs = "FileCreated / FileModified / FileDeleted / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "FileName"
+type = "string"
+docs = "File name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "FolderPath"
+type = "string"
+docs = "Directory."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "SHA1"
+type = "string"
+docs = "File SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "SHA256"
+type = "string"
+docs = "File SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "MD5"
+type = "string"
+docs = "File MD5."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Actor image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Actor command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "RequestAccountName"
+type = "string"
+docs = "Account that touched the file."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "sentinel"
+name = "ReportId"
+type = "long"
+docs = "Report id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "TimeGenerated"
+type = "datetime"
+docs = "Sentinel-streamed time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "Timestamp"
+type = "datetime"
+docs = "Event time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "DeviceName"
+type = "string"
+docs = "Hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "ActionType"
+type = "string"
+docs = "ConnectionSuccess / ConnectionFailed / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "RemoteIP"
+type = "string"
+docs = "Remote IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "RemotePort"
+type = "int"
+docs = "Remote port."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "RemoteUrl"
+type = "string"
+docs = "Remote URL / domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "LocalIP"
+type = "string"
+docs = "Local IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "LocalPort"
+type = "int"
+docs = "Local port."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "Protocol"
+type = "string"
+docs = "Tcp / Udp."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Actor image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Actor command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "sentinel"
+name = "ReportId"
+type = "long"
+docs = "Report id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"

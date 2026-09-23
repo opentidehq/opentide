@@ -110,6 +110,10 @@ fn initialize_and_analyze_kql() {
     );
     assert_eq!(init["result"]["serverInfo"]["name"], "opentide-lsp");
     assert_eq!(init["result"]["capabilities"]["hoverProvider"], true);
+    assert!(
+        init["result"]["capabilities"]["signatureHelpProvider"].is_object(),
+        "{init}"
+    );
     lsp.notify("initialized", json!({}));
 
     let kql = "SecurityEvent | where EventID == 4688 | take 1";
@@ -138,6 +142,33 @@ fn initialize_and_analyze_kql() {
             .unwrap_or("")
             .contains("where"),
         "{hover}"
+    );
+
+    let event_hover = lsp.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///tmp/sample.kql" },
+            "position": { "line": 0, "character": 24 }
+        }),
+    );
+    let event_md = event_hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        event_md.contains("EventID"),
+        "column hover for EventID, got {event_hover}"
+    );
+
+    let sig = lsp.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": "file:///tmp/sample.kql" },
+            "position": { "line": 0, "character": 16 }
+        }),
+    );
+    assert!(
+        sig["result"].is_object() || sig["result"].is_null(),
+        "{sig}"
     );
 
     let tokens = lsp.request(

@@ -10,6 +10,10 @@ Legend: **MUST** = blocks 100% completion/hover/highlight fidelity; **SHOULD** =
 
 ## a) Catalogs (`catalogs/kql`)
 
+### Columns — `sentinel/columns.toml` / `defender/columns.toml`
+
+Detection-critical columns for SecurityEvent, SigninLogs, AuditLogs, Defender endpoint/email/identity tables, plus operator options in `core/operator-options.toml`. Runtime model: [`DESIGN.md`](DESIGN.md).
+
 ### `core/operators.toml` — 53 tabular
 
 **Missing primary operators vs inventory:** none.

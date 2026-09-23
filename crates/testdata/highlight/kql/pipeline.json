@@ -70,8 +70,8 @@
           "character": 29
         }
       },
-      "capture": "variable",
-      "token_type": 7
+      "capture": "property",
+      "token_type": 8
     },
     {
       "span": {

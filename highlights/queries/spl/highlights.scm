@@ -20,6 +20,13 @@
 (tstats_command "tstats" @keyword)
 (catalog_command (catalog_command_name) @keyword)
 (unknown_command name: (identifier) @error)
+(macro) @macro
+(tstats_preamble "summariesonly" @keyword)
+(tstats_preamble "prestats" @keyword)
+(tstats_command "datamodel" @keyword)
+(term_clause "TERM" @function.builtin)
+(case_clause "CASE" @function.builtin)
+(in_clause "IN" @operator)
 
 "|" @operator.pipe
 

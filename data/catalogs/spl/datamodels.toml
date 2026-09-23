@@ -1,0 +1,105 @@
+# CIM data models used in ES / ESCU tstats detections.
+# prefix is applied to fields until `drop_dm_object_name(prefix)` runs.
+[[datamodels]]
+name = "Endpoint.Processes"
+prefix = "Processes"
+model = "Endpoint"
+docs = "Process creation (CIM Endpoint)."
+fields = ["process_name", "process", "process_exec", "process_path", "process_id", "process_guid", "process_hash", "parent_process_name", "parent_process_path", "parent_process_id", "user", "dest", "os", "original_file_name", "action"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/Endpoint"
+
+[[datamodels]]
+name = "Endpoint.Filesystem"
+prefix = "Filesystem"
+model = "Endpoint"
+docs = "File create/modify/delete."
+fields = ["file_name", "file_path", "file_hash", "file_size", "dest", "user", "process_name", "action"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/Endpoint"
+
+[[datamodels]]
+name = "Endpoint.Registry"
+prefix = "Registry"
+model = "Endpoint"
+docs = "Registry changes."
+fields = ["registry_hive", "registry_path", "registry_key_name", "registry_value_name", "registry_value_data", "dest", "user", "process_name", "action"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/Endpoint"
+
+[[datamodels]]
+name = "Endpoint.Services"
+prefix = "Services"
+model = "Endpoint"
+docs = "Service install / start."
+fields = ["service_name", "dest", "user", "process_name", "action"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/Endpoint"
+
+[[datamodels]]
+name = "Authentication.Authentication"
+prefix = "Authentication"
+model = "Authentication"
+docs = "Logon / auth events."
+fields = ["user", "src_user", "src", "dest", "action", "app", "src_nt_domain", "dest_nt_domain"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[datamodels]]
+name = "Network_Traffic.All_Traffic"
+prefix = "All_Traffic"
+model = "Network_Traffic"
+docs = "Firewall / flow."
+fields = ["src", "dest", "src_ip", "dest_ip", "src_port", "dest_port", "transport", "action", "bytes", "bytes_in", "bytes_out", "rule", "vendor_product"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[datamodels]]
+name = "Web.Web"
+prefix = "Web"
+model = "Web"
+docs = "Proxy / HTTP."
+fields = ["url", "url_domain", "http_method", "http_user_agent", "src", "dest", "status", "action", "user"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[datamodels]]
+name = "Intrusion_Detection.IDS_Attacks"
+prefix = "IDS_Attacks"
+model = "Intrusion_Detection"
+docs = "IDS / IPS alerts."
+fields = ["signature", "signature_id", "ids_type", "src", "dest", "severity", "vendor_product"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[datamodels]]
+name = "Malware.Malware_Attacks"
+prefix = "Malware_Attacks"
+model = "Malware"
+docs = "AV / EDR malware."
+fields = ["file_name", "file_hash", "file_path", "dest", "user", "signature", "action", "vendor_product"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[datamodels]]
+name = "Change.All_Changes"
+prefix = "All_Changes"
+model = "Change"
+docs = "Account / object change."
+fields = ["object", "object_path", "action", "status", "user", "src_user", "dest"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[datamodels]]
+name = "Network_Resolution.DNS"
+prefix = "DNS"
+model = "Network_Resolution"
+docs = "DNS queries."
+fields = ["query", "query_type", "answer", "reply_code", "src", "dest", "message_type"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[datamodels]]
+name = "Email.All_Email"
+prefix = "All_Email"
+model = "Email"
+docs = "Email flow."
+fields = ["recipient", "src_user", "subject", "file_name", "action"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[datamodels]]
+name = "Alerts.Alerts"
+prefix = "Alerts"
+model = "Alerts"
+docs = "Product alerts."
+fields = ["signature", "severity", "src", "dest", "user", "vendor_product"]
+citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"

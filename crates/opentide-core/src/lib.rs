@@ -174,6 +174,50 @@ pub struct CompletionItem {
     pub label: String,
     pub detail: Option<String>,
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub documentation: Option<String>,
+}
+
+impl CompletionItem {
+    pub fn new(label: impl Into<String>, kind: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            detail: None,
+            kind: kind.into(),
+            documentation: None,
+        }
+    }
+
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
+    pub fn with_docs(mut self, documentation: impl Into<String>) -> Self {
+        self.documentation = Some(documentation.into());
+        self
+    }
+}
+
+/// LSP `textDocument/signatureHelp` payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignatureHelp {
+    pub signatures: Vec<SignatureInformation>,
+    pub active_signature: u32,
+    pub active_parameter: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignatureInformation {
+    pub label: String,
+    pub documentation: Option<String>,
+    pub parameters: Vec<ParameterInformation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ParameterInformation {
+    pub label: String,
+    pub documentation: Option<String>,
 }
 
 impl Diagnostic {

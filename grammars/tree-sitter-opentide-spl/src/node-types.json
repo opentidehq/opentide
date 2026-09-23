@@ -15,6 +15,36 @@
     }
   },
   {
+    "type": "aggregate_item",
+    "named": true,
+    "fields": {
+      "alias": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "and_expression",
     "named": true,
     "fields": {},
@@ -46,11 +76,19 @@
           "named": true
         },
         {
+          "type": "macro",
+          "named": true
+        },
+        {
           "type": "number",
           "named": true
         },
         {
           "type": "string",
+          "named": true
+        },
+        {
+          "type": "subsearch",
           "named": true
         }
       ]
@@ -112,6 +150,26 @@
     "type": "boolean",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "case_clause",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
   },
   {
     "type": "catalog_command",
@@ -242,6 +300,10 @@
         {
           "type": "additive_expression",
           "named": true
+        },
+        {
+          "type": "value_list",
+          "named": true
         }
       ]
     }
@@ -329,6 +391,10 @@
           {
             "type": "string",
             "named": true
+          },
+          {
+            "type": "value_list",
+            "named": true
           }
         ]
       }
@@ -401,19 +467,35 @@
     }
   },
   {
-    "type": "join_command",
+    "type": "in_clause",
     "named": true,
     "fields": {
-      "subsearch": {
+      "field": {
         "multiple": false,
         "required": true,
         "types": [
           {
-            "type": "pipeline",
+            "type": "identifier",
             "named": true
           }
         ]
-      },
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "value_list",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "join_command",
+    "named": true,
+    "fields": {
       "type_or_field": {
         "multiple": false,
         "required": false,
@@ -424,6 +506,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "subsearch",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -539,6 +631,10 @@
         {
           "type": "command",
           "named": true
+        },
+        {
+          "type": "macro",
+          "named": true
         }
       ]
     }
@@ -565,6 +661,10 @@
         },
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "macro",
           "named": true
         },
         {
@@ -675,6 +775,10 @@
       "required": true,
       "types": [
         {
+          "type": "case_clause",
+          "named": true
+        },
+        {
           "type": "field_value",
           "named": true
         },
@@ -683,11 +787,27 @@
           "named": true
         },
         {
+          "type": "in_clause",
+          "named": true
+        },
+        {
+          "type": "macro",
+          "named": true
+        },
+        {
           "type": "number",
           "named": true
         },
         {
           "type": "string",
+          "named": true
+        },
+        {
+          "type": "subsearch",
+          "named": true
+        },
+        {
+          "type": "term_clause",
           "named": true
         }
       ]
@@ -767,11 +887,7 @@
             "named": false
           },
           {
-            "type": "function_call",
-            "named": true
-          },
-          {
-            "type": "identifier",
+            "type": "aggregate_item",
             "named": true
           }
         ]
@@ -790,6 +906,21 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "subsearch",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "pipeline",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -829,6 +960,26 @@
     }
   },
   {
+    "type": "term_clause",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "tstats_command",
     "named": true,
     "fields": {
@@ -841,9 +992,15 @@
             "named": false
           },
           {
-            "type": "function_call",
+            "type": "aggregate_item",
             "named": true
-          },
+          }
+        ]
+      },
+      "datamodel": {
+        "multiple": false,
+        "required": false,
+        "types": [
           {
             "type": "identifier",
             "named": true
@@ -861,6 +1018,70 @@
         },
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "tstats_preamble",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "tstats_preamble",
+    "named": true,
+    "fields": {
+      "option": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "allow_old_summaries",
+            "named": false
+          },
+          {
+            "type": "fillnull_value",
+            "named": false
+          },
+          {
+            "type": "prestats",
+            "named": false
+          },
+          {
+            "type": "summariesonly",
+            "named": false
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "macro",
           "named": true
         }
       ]
@@ -902,6 +1123,29 @@
       "types": [
         {
           "type": "argument_list",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "value_list",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "string",
           "named": true
         }
       ]
@@ -992,6 +1236,10 @@
     "named": false
   },
   {
+    "type": "CASE",
+    "named": false
+  },
+  {
     "type": "FALSE",
     "named": false
   },
@@ -1009,6 +1257,10 @@
   },
   {
     "type": "OR",
+    "named": false
+  },
+  {
+    "type": "TERM",
     "named": false
   },
   {
@@ -1041,6 +1293,10 @@
   },
   {
     "type": "addtotals",
+    "named": false
+  },
+  {
+    "type": "allow_old_summaries",
     "named": false
   },
   {
@@ -1077,6 +1333,10 @@
   },
   {
     "type": "arules",
+    "named": false
+  },
+  {
+    "type": "as",
     "named": false
   },
   {
@@ -1217,6 +1477,10 @@
     "named": false
   },
   {
+    "type": "fillnull_value",
+    "named": false
+  },
+  {
     "type": "findtypes",
     "named": false
   },
@@ -1325,6 +1589,10 @@
     "named": false
   },
   {
+    "type": "macro",
+    "named": true
+  },
+  {
     "type": "makecontinuous",
     "named": false
   },
@@ -1430,6 +1698,10 @@
   },
   {
     "type": "predict",
+    "named": false
+  },
+  {
+    "type": "prestats",
     "named": false
   },
   {
@@ -1567,6 +1839,10 @@
   {
     "type": "string",
     "named": true
+  },
+  {
+    "type": "summariesonly",
+    "named": false
   },
   {
     "type": "table",

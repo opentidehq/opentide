@@ -1,0 +1,107 @@
+# Command option / argument schemas for signature help (tstats, stats, rex, …).
+[[options]]
+command = "tstats"
+name = "summariesonly"
+values = ["t", "f", "true", "false"]
+docs = "Restrict to accelerated data-model summaries (true/false/t/f)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "prestats"
+values = ["t", "f", "true", "false"]
+docs = "Emit prestats format for a later stats/chart."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "allow_old_summaries"
+values = ["t", "f", "true", "false"]
+docs = "Include outdated summaries."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "fillnull_value"
+docs = "Fill missing values."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "from"
+docs = "from datamodel=Model.Dataset (or namespace)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "datamodel"
+docs = "CIM / ES data model path (Endpoint.Processes)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "where"
+docs = "Predicate over indexed/CIM fields (Processes.process_name=cmd.exe)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "by"
+docs = "Split-by fields (usually Dataset.field before drop_dm_object_name)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "stats"
+name = "by"
+docs = "Split-by fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Stats"
+
+[[options]]
+command = "chart"
+name = "over"
+docs = "Chart over field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "by"
+docs = "Chart split-by."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "timechart"
+name = "span"
+docs = "Bucket span (1h, 5m)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "rex"
+name = "field"
+docs = "Field to apply the regex to (default _raw)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rex"
+
+[[options]]
+command = "rex"
+name = "mode"
+values = ["sed"]
+docs = "sed vs extract."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rex"
+
+[[options]]
+command = "join"
+name = "type"
+values = ["inner", "left", "outer"]
+docs = "inner / left / outer."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+
+[[options]]
+command = "lookup"
+name = "output"
+docs = "Fields to add from the lookup."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Lookup"
+
+[[options]]
+command = "eval"
+name = "assignment"
+docs = "field=expression (comma-separated)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Eval"

@@ -1,0 +1,3 @@
+``` prod:macro valid
+| tstats `security_content_summariesonly` count from datamodel=Endpoint.Processes by Processes.user
+| `drop_dm_object_name(Processes)`
