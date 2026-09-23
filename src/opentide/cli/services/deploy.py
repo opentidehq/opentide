@@ -126,11 +126,29 @@ def _deploy(
                 soft_wrap=True,
             )
         return _nothing_to_deploy("No rules matched this deployment plan", dry_run=dry_run)
-    IndexManager.reload()
     deployed: list[str] = []
     plan_payload: dict[str, list[str]] = {
         system: list(uuids) for system, uuids in deployment_list.items()
     }
+    from opentide.platforms.enabled import MissingTenantsError, systems_without_tenants
+
+    tenantless = [
+        MissingTenantsError(system) for system in systems_without_tenants(deployment_list)
+    ]
+    missing_tenants = {error.system: error.config_path for error in tenantless}
+    tenants_advice = "; ".join(error.advice for error in tenantless)
+    if tenantless and not dry_run:
+        return {
+            "status": "failed",
+            "message": "Cannot deploy: " + "; ".join(str(error) for error in tenantless),
+            "advice": tenants_advice,
+            "missing_tenants": missing_tenants,
+            "deployed": deployed,
+            "dry_run": False,
+            "plan": plan_payload,
+            "_exit_code": 1,
+        }
+    IndexManager.reload()
     try:
         mdr_deployers = cast(dict[str, Any], DeployTide().mdr_for(deployment_list))
     except Exception as exc:
@@ -152,7 +170,8 @@ def _deploy(
             from opentide.deployment.preview import preview_platform_deployment
 
             payloads[system] = preview_platform_deployment(system, uuids)
-            deployed.append(system)
+            if system not in missing_tenants:
+                deployed.append(system)
             continue
         try:
             deployer.deploy(mdr_deployment=uuids, deployment_plan=deployment_plan)
@@ -171,8 +190,14 @@ def _deploy(
         "plan": plan_payload,
         "_exit_code": outcome.exit_code,
     }
+    warnings = [f"{error}, so a real deploy would stop" for error in tenantless]
     if outcome.warned:
-        result["warnings"] = ["Some rules reported deployment warnings"]
+        warnings.append("Some rules reported deployment warnings")
+    if warnings:
+        result["warnings"] = warnings
     if dry_run:
         result["payloads"] = payloads
+        if missing_tenants:
+            result["missing_tenants"] = missing_tenants
+            result["advice"] = tenants_advice
     return result

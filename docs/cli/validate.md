@@ -161,7 +161,9 @@ the SDK is absent the command fails with the extra to install rather than a
 `advice: install opentide[sentinel] …` line under the `FATAL` line otherwise.
 Only the requested platform's engine is
 loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
-modules.
+modules. A platform with no `[[tenants]]` entry fails the same way, before the
+client is built, and names the file to edit. Offline validation does not need
+tenants.
 
 ### Supported platforms
 
