@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- `threat.impact` and `threat.leverage` must be non-empty YAML lists of vocabulary names, as `threat::1.0` specifies. A single string (`impact: Data Breach`), which 0.4.0 required, now fails validation with `must be a YAML list of impact vocabulary names`; rewrite it as a one-item list. Several names joined with `;` fail too, as the whole value or as one list item: give each name its own item and keep all of them ([#189](https://github.com/OpenTideHQ/opentide/issues/189)).
+
+### Fixed
+
+- A threat written to the `threat::1.0` spec (`impact: [Data Breach, Identity Theft]`) no longer fails with `Input should be a valid string`, and `validate` no longer suggests a single vocabulary name for a `;`-joined value, which would drop the other names ([#189](https://github.com/OpenTideHQ/opentide/issues/189)).
+
 ## [0.4.0] — 2026-09-22
 
 Minor on the public 0.3.0 beta. Upgrade if a first-run command crashed, printed a traceback, or quietly did nothing: this release fixes the first-user bugs filed against 0.3.0 ([#239](https://github.com/OpenTideHQ/opentide/issues/239)–[#258](https://github.com/OpenTideHQ/opentide/issues/258), [#202](https://github.com/OpenTideHQ/opentide/issues/202), [#233](https://github.com/OpenTideHQ/opentide/issues/233)) and the test-harness gaps that let them ship ([#259](https://github.com/OpenTideHQ/opentide/issues/259)). It is a minor rather than a patch because several fixes change output that scripts can depend on — read **Changed** before upgrading a pipeline. If you generated GitHub CI with `opentide setup ci`, regenerate it — see **Security**.

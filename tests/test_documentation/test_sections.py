@@ -293,8 +293,8 @@ def test_render_threat_assessment_keeps_impact_vocab_spelling(
             "threat": {
                 "description": "Service disruption",
                 "severity": "High",
-                "impact": "Impairement",
-                "leverage": "High",
+                "impact": ["Impairement"],
+                "leverage": ["High"],
                 "viability": "High",
                 "terrain": "Endpoint workstations.",
                 "surface": ["Windows::Desktop"],
@@ -305,6 +305,39 @@ def test_render_threat_assessment_keeps_impact_vocab_spelling(
     rendered = render_threat_assessment(threat.threat, formatter_for(DocumentFlavor.github))
     assert "Impairement" in rendered
     assert "Impairment" not in rendered
+
+
+def test_render_threat_assessment_lists_every_impact_and_leverage_name(
+    metadata: dict[str, Any],
+) -> None:
+    threat = ThreatVector.from_yaml_dict(
+        {
+            "name": "Threat",
+            "criticality": "High",
+            "metadata": {**metadata, "schema": "threat::1.0"},
+            "threat": {
+                "description": "Credential theft",
+                "severity": "Significant incident",
+                "impact": ["Data Breach", "Identity Theft"],
+                "leverage": ["Elevation of privilege", "Repudiation"],
+                "viability": "Likely",
+                "terrain": "Endpoint workstations.",
+                "surface": ["Windows::Desktop"],
+                "att&ck": ["T1059"],
+            },
+        }
+    )
+    rows = {
+        line.split(" | ")[0].lstrip("| "): line
+        for line in render_threat_assessment(
+            threat.threat, formatter_for(DocumentFlavor.github)
+        ).splitlines()
+        if line.startswith("| ")
+    }
+    assert "| Data Breach<br>Identity Theft | Non-public information" in rows["Impact"]
+    assert rows["Impact"].count("<br>") == 2
+    assert "| Elevation of privilege<br>Repudiation | Capacity to augment" in rows["Leverage"]
+    assert rows["Leverage"].count("<br>") == 2
 
 
 def test_render_signals_and_threat_body(metadata: dict[str, Any]) -> None:
@@ -338,8 +371,8 @@ def test_render_signals_and_threat_body(metadata: dict[str, Any]) -> None:
             "threat": {
                 "description": "Ransomware",
                 "severity": "High",
-                "impact": "Data Breach",
-                "leverage": "High",
+                "impact": ["Data Breach"],
+                "leverage": ["High"],
                 "viability": "High",
                 "terrain": "Endpoint workstations and user devices.",
                 "surface": ["Windows::Desktop"],
@@ -366,8 +399,8 @@ def test_render_threat_sections_with_enrichment(metadata: dict[str, Any]) -> Non
             "threat": {
                 "description": "Ransomware",
                 "severity": "High",
-                "impact": "Data Breach",
-                "leverage": "High",
+                "impact": ["Data Breach"],
+                "leverage": ["High"],
                 "viability": "High",
                 "terrain": "Cloud identity and Azure account inventory telemetry.",
                 "surface": ["Azure"],
@@ -508,8 +541,8 @@ def test_render_threat_body_includes_cve_section(metadata: dict[str, Any]) -> No
             "threat": {
                 "description": "Supply-chain implant",
                 "severity": "High",
-                "impact": "Data Breach",
-                "leverage": "High",
+                "impact": ["Data Breach"],
+                "leverage": ["High"],
                 "viability": "High",
                 "terrain": "Build infrastructure.",
                 "surface": ["Linux::Server"],

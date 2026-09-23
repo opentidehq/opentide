@@ -12,8 +12,10 @@ metadata:
 threat:
   description: Adversary gathers victim cloud account inventory and telemetry context.
   severity: High
-  impact: Credential Exposure
-  leverage: High
+  impact:
+    - Credential Exposure
+  leverage:
+    - High
   viability: Medium
   terrain: Cloud identity and Azure account inventory telemetry.
   surface:

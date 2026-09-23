@@ -48,8 +48,10 @@ metadata:
 threat:
   description: Simulated threat actor for credential access
   severity: Substantial incident
-  impact: Data Breach
-  leverage: Information Gathering
+  impact:
+    - Data Breach
+  leverage:
+    - Information Gathering
   viability: Likely
   terrain: Endpoint workstations and user devices.
   surface:
@@ -61,6 +63,8 @@ threat:
   # cve:                    # optional; CIRCL Vulnerability-Lookup (CVE, GHSA, GCVE)
   #   - CVE-2024-3094
 ```
+
+`threat.impact` and `threat.leverage` are non-empty lists of vocabulary names, one name per item. A scalar string or a `;`-joined string is invalid.
 
 Optional `threat.actors` entries are objects. `name` is a scoped key from the bundled actors vocabulary (`att&ck::G0006`, or a MISP cluster ID). Optional `sighting` and `references` sit on the same object — not a bare string list.
 

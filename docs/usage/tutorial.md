@@ -71,8 +71,10 @@ metadata:
 threat:
   description: Simulated threat actor exercising credential access
   severity: Substantial incident
-  impact: Data Breach
-  leverage: Information Gathering
+  impact:
+    - Data Breach
+  leverage:
+    - Information Gathering
   viability: Likely
   terrain: Endpoint workstations and user devices.
   surface:
@@ -82,6 +84,8 @@ threat:
   actors:
     - name: att&ck::G0006
 ```
+
+`threat.impact` and `threat.leverage` are lists with one vocabulary name per item. Add another `- …` line for each extra name; a single string, or several names joined with `;`, fails validation.
 
 `threat.actors` is a list of **objects**. `name` is a scoped actors-vocabulary ID (`att&ck::G0006` is APT1). Optional `sighting` and `references` record why that actor is attributed. `opentide generate` enriches `name` when it writes the objects export.
 

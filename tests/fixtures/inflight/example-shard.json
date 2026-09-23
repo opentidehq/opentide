@@ -27,8 +27,12 @@
         "Windows::Desktop"
       ],
       "severity": "Localised incident",
-      "leverage": "Example",
-      "impact": "Example",
+      "leverage": [
+        "Example"
+      ],
+      "impact": [
+        "Example"
+      ],
       "viability": "Unlikely",
       "description": "Example threat object used to validate inflight preview shard generation in CI."
     }
