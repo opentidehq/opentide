@@ -25,7 +25,7 @@ DetectionRule.__schema_identifier__  # "rule::1.0"
 | Attribute | Type | Notes |
 |-----------|------|-------|
 | `name` | `str` | Display name |
-| `metadata` | `ObjectMetadata` | Identity, schema, version, tlp |
+| `metadata` | `ObjectMetadata` | Identity (`uuid`), `schema_id`, `version`, `tlp` |
 | `description` | `str` | Rule narrative |
 | `status` | `str` | Deployment status (default `STAGING`) |
 | `severity` | `str` | Severity vocabulary (default `Informational`) |
@@ -40,10 +40,13 @@ The YAML you author maps one-to-one onto these attributes:
 ```python
 rule = OpenTide.Rules["00000000-0000-4000-8003-000000000001"]
 rule.name                       # "Sentinel KQL Rule"
-rule.metadata.schema            # "rule::1.0"
+rule.metadata.schema_id         # "rule::1.0"  (YAML `metadata.schema`)
+rule.metadata.schema            # "rule::1.0"  (read-only alias of schema_id)
 rule.detection_model            # objective UUID
 rule.configurations.sentinel.query
 ```
+
+`ObjectMetadata.schema_id` is the field. Validation accepts it under the YAML key `schema` or as `schema_id`, and `model_dump(by_alias=True)["schema"]` writes it back under `schema`. Platform blocks follow the same pattern: `platform_schema` is the field, and `rule.configurations.sentinel.schema` reads it (`None` when the block declares no `schema`). In 0.5.0 and earlier, `.schema` on either model returned Pydantic's deprecated `BaseModel.schema` method, not the identifier; read `schema_id` if your code must support those releases.
 
 ## DetectionObjective — key fields
 
@@ -75,7 +78,7 @@ threat.threat.att_ck            # ["T1059"]  (YAML `att&ck`, aliased att_ck)
 threat.threat.terrain           # free-form prose
 threat.threat.surface           # vocabulary list, e.g. ["Windows::Desktop"]
 threat.threat.impact            # vocabulary list, e.g. ["Data Breach", "Identity Theft"]
-threat.threat.cve               # ["CVE-2024-3094"] — CIRCL Vulnerability-Lookup (CVE, GHSA, GCVE)
+threat.threat.cve               # list[str] | None, e.g. ["CVE-2024-3094"] — CIRCL Vulnerability-Lookup (CVE, GHSA, GCVE)
 threat.threat.actors            # list[ThreatActor] | None; name is scoped (att&ck::G0006)
 ```
 

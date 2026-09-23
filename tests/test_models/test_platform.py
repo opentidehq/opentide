@@ -25,6 +25,22 @@ def test_parse_platform_config_sentinel() -> None:
     assert config.enabled is True
 
 
+def test_platform_schema_attribute_is_the_schema_identifier() -> None:
+    """Issue #298: `.schema` on a platform block was `BaseModel.schema`, not the YAML value."""
+    block = {
+        "enabled": True,
+        "name": "Sentinel",
+        "query": "SecurityEvent | take 1",
+        "scheduling": {"frequency": "PT1H", "lookback": "PT2H"},
+        "alert": {"title": "T", "suppression": False},
+    }
+    declared = parse_platform_config("sentinel", {**block, "schema": "platform::sentinel::1.0"})
+    assert declared.schema == "platform::sentinel::1.0"
+    assert declared.platform_schema == "platform::sentinel::1.0"
+    assert declared.model_dump(by_alias=True)["schema"] == "platform::sentinel::1.0"
+    assert parse_platform_config("sentinel", block).schema is None
+
+
 def test_rule_configurations_from_platforms_dict() -> None:
     configs = RuleConfigurations.from_platforms_dict(
         {
