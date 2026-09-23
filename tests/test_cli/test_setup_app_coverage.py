@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -53,10 +55,11 @@ def test_has_repo_flags_and_should_run_repo() -> None:
     )
 
 
-def test_resolve_setup_path_uses_cli_repo_when_path_is_dot(
+def test_resolve_setup_path_keeps_dot_unless_repo_was_passed(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
+    """#324: ``.`` follows ``cli.repo`` only when the user passed ``--repo``."""
     from opentide.cli.context import CliContext
 
     repo = tmp_path / "detection"
@@ -64,9 +67,63 @@ def test_resolve_setup_path_uses_cli_repo_when_path_is_dot(
     other = tmp_path / "other"
     other.mkdir()
     monkeypatch.chdir(other)
-    cli = CliContext(repo=repo)
-    assert _resolve_setup_path(cli, ".") == repo
-    assert _resolve_setup_path(cli, str(other)) == other
+    discovered = CliContext(repo=repo)
+    assert _resolve_setup_path(discovered, ".") == Path(".")
+    explicit = CliContext(repo=repo, repo_explicit=True)
+    assert _resolve_setup_path(explicit, ".") == repo
+    assert _resolve_setup_path(explicit, str(other)) == Path(str(other))
+
+
+def _clean_env() -> dict[str, str]:
+    hidden = {"OPENTIDE_REPO_ROOT", "OPENTIDE_TIDE_WORKSPACE"}
+    return {key: value for key, value in os.environ.items() if key not in hidden}
+
+
+def test_setup_from_a_git_subdirectory_scaffolds_that_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path
+) -> None:
+    """#324: ``--path .`` inside a checkout must not climb to the git root."""
+    from opentide.core.root import get_data_root, get_repo_root
+
+    del git_home
+    repo = tmp_path / "repo"
+    detections = repo / "detections"
+    detections.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    monkeypatch.chdir(detections)
+    monkeypatch.delenv("OPENTIDE_REPO_ROOT", raising=False)
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    get_repo_root.cache_clear()
+    get_data_root.cache_clear()
+
+    nested = runner.invoke(
+        app,
+        ["--json", "setup", "--yes", "--name", "Nested", "--platform", "sentinel", "--path", "."],
+        env=_clean_env(),
+    )
+    assert nested.exit_code == 0, nested.stdout + nested.stderr
+    assert (detections / ".opentide").is_dir()
+    assert (detections / "objects" / "rules").is_dir()
+    assert not (repo / ".opentide").exists()
+
+    inner = detections / "inner"
+    absolute = runner.invoke(
+        app,
+        ["--json", "setup", "--yes", "--name", "Inner", "--path", str(inner)],
+        env=_clean_env(),
+    )
+    assert absolute.exit_code == 0, absolute.stdout + absolute.stderr
+    assert (inner / "README.md").is_file()
+    assert not (repo / "README.md").exists()
+
+    climbed = runner.invoke(
+        app,
+        ["--repo", str(repo), "--json", "setup", "--yes", "--name", "Root", "--path", "."],
+        env=_clean_env(),
+    )
+    assert climbed.exit_code == 0, climbed.stdout + climbed.stderr
+    assert (repo / ".opentide").is_dir()
+    assert (repo / "README.md").is_file()
 
 
 def test_setup_yes_only_scaffolds_repo(tmp_path: Path) -> None:

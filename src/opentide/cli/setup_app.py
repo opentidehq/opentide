@@ -48,9 +48,13 @@ setup_app.add_typer(skills_app, name="skills")
 
 
 def _resolve_setup_path(cli: CliContext, path: str | Path) -> Path:
-    """Honor ``--repo`` when setup path is the default (``.``)."""
+    """Honor an explicit ``--repo`` when the setup path is the default (``.``).
+
+    A discovered git root is not ``--repo``. ``opentide setup --path .`` from a
+    subdirectory scaffolds that directory (#324).
+    """
     target = Path(path)
-    if target == Path(".") and cli.repo.resolve() != Path.cwd().resolve():
+    if target == Path(".") and cli.repo_explicit and cli.repo.resolve() != Path.cwd().resolve():
         return cli.repo
     return target
 
