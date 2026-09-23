@@ -164,5 +164,5 @@ def test_deploy_loads_only_the_requested_engine(
         "--skip-promotion",
     )
     payload = assert_json_ok(result)
-    assert payload["deployed"] == ["sentinel"]
+    assert list(payload["payloads"]) == ["sentinel"]
     assert imported == ["opentide.platforms.sentinel.deployer"]

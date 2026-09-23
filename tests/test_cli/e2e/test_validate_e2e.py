@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
-from tests.test_cli.e2e.helpers import hidden_modules
+from tests.test_cli.e2e.helpers import hidden_modules, uncomment_tenants
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -157,6 +157,13 @@ def test_validate_query_offline_needs_no_vendor_sdk(invoke_cli) -> None:
     assert payload["language"] == "kql"
 
 
+@pytest.fixture
+def sentinel_tenant(tide_corpus_repo: Path) -> None:
+    """``--live`` stops before the engine when no tenant is configured (#314)."""
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
+
+
+@pytest.mark.usefixtures("sentinel_tenant")
 def test_validate_query_live_without_sdk_reports_the_extra(invoke_cli) -> None:
     """--live is allowed to fail, but with advice instead of a traceback (#239)."""
     with hidden_modules("azure", purge=("opentide.platforms.sentinel",)):
@@ -168,6 +175,7 @@ def test_validate_query_live_without_sdk_reports_the_extra(invoke_cli) -> None:
     assert "opentide[sentinel]" in payload["advice"]
 
 
+@pytest.mark.usefixtures("sentinel_tenant")
 def test_validate_query_live_uses_the_platform_engine(invoke_cli, mock_query_validators) -> None:
     result = invoke_cli("validate", "query", "--platform", "sentinel", "--live", "--wide")
     payload = assert_json_ok(result)
@@ -175,6 +183,7 @@ def test_validate_query_live_uses_the_platform_engine(invoke_cli, mock_query_val
     assert payload["status"] == "passed"
 
 
+@pytest.mark.usefixtures("sentinel_tenant")
 def test_validate_query_loads_only_the_requested_engine(
     invoke_cli, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -190,6 +199,7 @@ def test_validate_query_loads_only_the_requested_engine(
 
     monkeypatch.setattr(plugins.PlatformLoader, "import_engine", staticmethod(_record))
     invoke_cli("validate", "query", "--platform", "sentinel", "--live", "--wide")
+    assert imported
     assert not [path for path in imported if "crowdstrike" in path or "harfanglab" in path]
 
 

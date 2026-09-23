@@ -16,6 +16,7 @@ from opentide.models.system_config import (
     SystemConfig,
     TenantDeployment,
 )
+from opentide.platforms.enabled import MissingTenantsError
 
 SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
@@ -158,7 +159,7 @@ class TideDeployment:
                 + " | "
                 + "Review the system configuration and ensure you have at least one tenant",
             )
-            raise Exception
+            raise MissingTenantsError(system.name.lower())
 
         for tenant in tenants:
             # Resolve tenant deployments when they are specific or not in the MDR spec

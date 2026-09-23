@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,14 @@ from opentide.cli.services import deploy as deploy_service
 from opentide.deployment.ci import CIEnvironment
 
 CLEAN_OUTCOME = CiOutcome(exit_code=0, failed=False, warned=False)
+SPLUNK_TOML = ".opentide/configurations/platforms/splunk.toml"
+
+
+@pytest.fixture(autouse=True)
+def tenantless() -> Iterator[MagicMock]:
+    """Every platform has a tenant unless a test says otherwise."""
+    with patch("opentide.platforms.enabled.systems_without_tenants", return_value=[]) as mock:
+        yield mock
 
 
 def test_run_deploy_skips_when_platform_has_no_rules() -> None:
@@ -100,6 +109,9 @@ def test_run_deploy_dry_run_collects_payloads() -> None:
     assert result["status"] == "completed"
     assert result["dry_run"] is True
     assert result["payloads"] == {"sentinel": preview}
+    assert result["deployed"] == ["sentinel"]
+    assert "missing_tenants" not in result
+    assert "warnings" not in result
     deployer.deploy.assert_not_called()
 
 
@@ -255,6 +267,102 @@ def test_run_deploy_local_debug_skips_production_promotion(
     mock_modified.assert_not_called()
     mock_promote.assert_not_called()
     assert result["status"] == "completed"
+
+
+def test_run_deploy_without_tenants_fails_before_loading_engines(tenantless: MagicMock) -> None:
+    """#314: the resolver's bare ``raise Exception`` reached the user as a traceback."""
+    ctx = CliContext(json_output=True)
+    tenantless.return_value = ["splunk"]
+    with (
+        patch("opentide.core.registry.OpenTide.reload"),
+        patch(
+            "opentide.deployment.DeploymentStrategy.load_from_environment",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "opentide.deployment.make_deploy_plan",
+            return_value={"sentinel": ["u1"], "splunk": ["u2"]},
+        ),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload") as mock_reload,
+        patch("opentide.platforms.enabled.platform_config_path", return_value=SPLUNK_TOML),
+    ):
+        result = deploy_service.run_deploy(ctx)
+    tenantless.assert_called_once_with({"sentinel": ["u1"], "splunk": ["u2"]})
+    mock_tide.assert_not_called()
+    mock_reload.assert_not_called()
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+    assert result["message"] == f"Cannot deploy: splunk has no tenants configured in {SPLUNK_TOML}"
+    assert result["advice"] == f"add (or uncomment) a [[tenants]] entry in {SPLUNK_TOML}"
+    assert result["missing_tenants"] == {"splunk": SPLUNK_TOML}
+    assert result["deployed"] == []
+    assert result["plan"] == {"sentinel": ["u1"], "splunk": ["u2"]}
+
+
+def test_run_deploy_dry_run_does_not_claim_a_platform_without_tenants(
+    tenantless: MagicMock,
+) -> None:
+    ctx = CliContext(json_output=True)
+    tenantless.return_value = ["splunk"]
+    deployers = {"sentinel": MagicMock(), "splunk": MagicMock()}
+    with (
+        patch("opentide.core.registry.OpenTide.reload"),
+        patch(
+            "opentide.deployment.DeploymentStrategy.load_from_environment",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "opentide.deployment.make_deploy_plan",
+            return_value={"sentinel": ["u1"], "splunk": ["u2"]},
+        ),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+        patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
+        patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
+        patch("opentide.platforms.enabled.platform_config_path", return_value=SPLUNK_TOML),
+    ):
+        mock_tide.return_value.mdr_for.return_value = deployers
+        result = deploy_service.run_deploy(ctx, dry_run=True)
+    assert result["status"] == "completed"
+    assert result["_exit_code"] == 0
+    assert result["deployed"] == ["sentinel"]
+    assert set(result["payloads"]) == {"sentinel", "splunk"}
+    assert result["missing_tenants"] == {"splunk": SPLUNK_TOML}
+    assert result["advice"] == f"add (or uncomment) a [[tenants]] entry in {SPLUNK_TOML}"
+    assert result["warnings"] == [
+        f"splunk has no tenants configured in {SPLUNK_TOML}, so a real deploy would stop"
+    ]
+    for deployer in deployers.values():
+        deployer.deploy.assert_not_called()
+
+
+def test_run_deploy_dry_run_keeps_rule_warnings_next_to_tenant_warnings(
+    tenantless: MagicMock,
+) -> None:
+    ctx = CliContext(json_output=True)
+    tenantless.return_value = ["splunk"]
+    warned = CiOutcome(exit_code=0, failed=False, warned=True)
+    with (
+        patch("opentide.core.registry.OpenTide.reload"),
+        patch(
+            "opentide.deployment.DeploymentStrategy.load_from_environment",
+            return_value=MagicMock(),
+        ),
+        patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u2"]}),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+        patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
+        patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
+        patch("opentide.platforms.enabled.platform_config_path", return_value=SPLUNK_TOML),
+    ):
+        mock_tide.return_value.mdr_for.return_value = {"splunk": MagicMock()}
+        result = deploy_service.run_deploy(ctx, dry_run=True)
+    assert result["deployed"] == []
+    assert result["warnings"] == [
+        f"splunk has no tenants configured in {SPLUNK_TOML}, so a real deploy would stop",
+        "Some rules reported deployment warnings",
+    ]
 
 
 def test_run_deploy_empty_exception_does_not_advise_full_plan() -> None:

@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- `deploy` and `validate query --live` no longer crash with a bare `Exception` when an enabled platform has rules but no `[[tenants]]` entry. Both exit `1` with the platform and the file to edit, before any engine loads. `deploy --dry-run` still previews payloads, leaves that platform out of `deployed`, and warns that a real deploy would stop ([#314](https://github.com/OpenTideHQ/opentide/issues/314)).
+
+### Tests
+
+- Every platform is deployed and live-query-validated from a `setup repo` scaffold whose tenant example is still commented out. A real deploy must fail before an engine import; a dry run must not list the platform as deployed ([#314](https://github.com/OpenTideHQ/opentide/issues/314)).
+
 ## [0.5.0] — 2026-09-23
 
 Minor on 0.4.0. Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names: 0.4.0 rejected every such threat with `Input should be a valid string` ([#189](https://github.com/OpenTideHQ/opentide/issues/189)). It is a minor rather than a patch because a threat written the way 0.4.0 required (`impact: Data Breach`) now fails validation until it becomes a one-item list — read **Changed** before upgrading a pipeline.

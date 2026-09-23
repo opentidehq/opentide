@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from opentide.cli.context import CliContext
 from opentide.cli.enums import ValidateCheck
@@ -12,6 +15,13 @@ from opentide.validation.issues import ValidationIssue, ValidationReport
 
 FAILED_OUTCOME = CiOutcome(exit_code=1, failed=True, warned=False)
 CLEAN_OUTCOME = CiOutcome(exit_code=0, failed=False, warned=False)
+
+
+@pytest.fixture(autouse=True)
+def tenantless() -> Iterator[MagicMock]:
+    """Every platform has a tenant unless a test says otherwise."""
+    with patch("opentide.platforms.enabled.systems_without_tenants", return_value=[]) as mock:
+        yield mock
 
 
 def test_run_validate_cve_delegates_to_session() -> None:
@@ -240,6 +250,34 @@ def test_validate_query_platform_is_offline_by_default(monkeypatch) -> None:
         result = validation_service.validate_query_platform(ctx, "sentinel")
     offline.assert_called_once_with("sentinel")
     assert result["mode"] == "offline-syntax"
+
+
+def test_validate_query_live_without_tenants_fails_before_loading_a_validator(
+    tenantless: MagicMock,
+) -> None:
+    """#314: the resolver's bare ``raise Exception`` reached the user as a traceback."""
+    ctx = CliContext(json_output=True)
+    config = ".opentide/configurations/platforms/splunk.toml"
+    tenantless.return_value = ["splunk"]
+    with (
+        patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u1"]}),
+        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.enabled.platform_config_path", return_value=config),
+    ):
+        result = validation_service.validate_query_platform(ctx, "splunk", live=True)
+    tenantless.assert_called_once_with(["splunk"])
+    mock_tide.assert_not_called()
+    assert result == {
+        "platform": "splunk",
+        "mode": "live",
+        "status": "failed",
+        "supported": True,
+        "message": f"Cannot run live query validation: splunk has no tenants configured in {config}",
+        "advice": f"add (or uncomment) a [[tenants]] entry in {config}",
+        "missing_tenants": {"splunk": config},
+        "_exit_code": 1,
+    }
 
 
 def test_validate_query_live_without_the_sdk_names_the_extra() -> None:

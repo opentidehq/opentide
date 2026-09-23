@@ -381,6 +381,20 @@ def validate_query_platform(
             "status": "skipped",
             "message": "No rules to validate for this platform in the current plan",
         }
+    from opentide.platforms.enabled import MissingTenantsError, systems_without_tenants
+
+    if systems_without_tenants([platform]):
+        missing = MissingTenantsError(platform)
+        return {
+            "platform": platform,
+            "mode": "live",
+            "status": "failed",
+            "supported": True,
+            "message": f"Cannot run live query validation: {missing}",
+            "advice": missing.advice,
+            "missing_tenants": {platform: missing.config_path},
+            "_exit_code": 1,
+        }
     query_validators = cast(dict[str, Any], DeployTide().query_validation_for(platform))
     if platform not in query_validators:
         return {
