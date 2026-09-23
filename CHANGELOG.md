@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Fixed
 
 - `opentide setup --ci <github|gitlab|azure>` accepts `--default-branch`, like `setup ci`. Without the flag, a repository with no `origin/HEAD` now gets its checked-out branch, ahead of `init.defaultBranch` and `main`: a repository whose only branch was `trunk` got a pipeline that fetched from, pushed to, and deployed on `main`. Both forms warn when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist ([#288](https://github.com/OpenTideHQ/opentide/issues/288)).
+- `opentide setup` prints the warnings of its steps. The one-shot `setup --ci <provider>` showed none of the CI step's `WARNING` lines that `setup ci <provider>` prints for the same condition, such as GitLab ignoring `--default-branch`; with `--json` they now also appear in the top-level `warnings`, not only under `steps[].warnings` ([#308](https://github.com/OpenTideHQ/opentide/issues/308)).
 
 ### Tests
 

@@ -2,7 +2,8 @@
 
 #288: the one-shot form had no ``--default-branch``, and without ``origin/HEAD``
 or ``init.defaultBranch`` both forms wrote ``main`` into the pipeline of a
-repository whose only branch was ``trunk``.
+repository whose only branch was ``trunk``. #308: the one-shot form printed
+none of the CI step's warnings.
 """
 
 from __future__ import annotations
@@ -191,6 +192,61 @@ def test_both_entry_points_refuse_a_default_branch_they_cannot_render(
     assert result.exit_code == 2, result.stdout + result.stderr
     assert "--default-branch" in re.sub(r"\x1b\[[0-9;]*m", "", result.stderr)
     assert not (repo / _WORKFLOWS["github"]).exists()
+
+
+#: A ``WARNING <message>`` line of the human result, not a timestamped structlog record.
+_PRINTED_WARNING = re.compile(r"^WARNING (?!\s|\d{4}-\d\d-\d\d )(.+)$", re.MULTILINE)
+
+
+def _printed_warnings(entry: str, ci: str, repo: Path, *extra: str) -> list[str]:
+    result = runner.invoke(
+        app,
+        [*_argv(entry, ci), "--path", str(repo), *extra, "--yes"],
+        env={
+            "OPENTIDE_REPO_ROOT": str(repo),
+            "OPENTIDE_TIDE_WORKSPACE": str(repo),
+            "COLUMNS": "1000",
+        },
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    output = re.sub(r"\x1b\[[0-9;]*m", "", f"{result.stdout}\n{result.stderr}")
+    return _PRINTED_WARNING.findall(output)
+
+
+@pytest.mark.parametrize(
+    ("ci", "extra", "detach", "expected"),
+    [
+        (
+            "gitlab",
+            ("--default-branch", "x"),
+            False,
+            "GitLab pipelines publish to $CI_DEFAULT_BRANCH; --default-branch is ignored.",
+        ),
+        (
+            "github",
+            (),
+            True,
+            "Found no origin/HEAD, checked-out branch or init.defaultBranch; the pipeline "
+            "targets 'main', which is not a branch of this repository. "
+            "Re-run with --default-branch <branch>.",
+        ),
+    ],
+    ids=["gitlab-ignores-default-branch", "fallback-main-is-missing"],
+)
+def test_both_entry_points_print_the_same_warnings(
+    tmp_path: Path, git_home: Path, ci: str, extra: tuple[str, ...], detach: bool, expected: str
+) -> None:
+    """#308: ``setup --ci`` kept the CI step's warnings out of its human output."""
+    printed: dict[str, list[str]] = {}
+    for entry in ENTRY_POINTS:
+        workdir = tmp_path / entry.replace(" ", "_")
+        workdir.mkdir()
+        repo = _trunk_repo(workdir)
+        if detach:
+            _git(repo, "checkout", "-q", "--detach")
+        printed[entry] = _printed_warnings(entry, ci, repo, *extra)
+
+    assert printed == dict.fromkeys(ENTRY_POINTS, [expected])
 
 
 def _command(*names: str) -> click.Command:
