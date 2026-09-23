@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Fixed
 
-- `opentide info` and `OpenTide.initialise()` no longer build a client for every installed platform, so a repo that does not use Splunk no longer logs `The frequency scheduling setting was not correct set` twice. Clients are built only when a command deploys to or validates against their platform. A Splunk setup without `frequency_scheduling` uses the default, `random`, without a warning (a legacy `systems/splunk.toml` fell back to `current`); an invalid value logs one `frequency_scheduling_is_not_valid` warning that names the value ([#295](https://github.com/OpenTideHQ/opentide/issues/295)).
+- `opentide info` and `OpenTide.initialise()` no longer build a client for every installed platform, so a repo that does not use Splunk no longer logs `The frequency scheduling setting was not correct set` twice. Clients are built only when a command deploys to or validates against their platform. A Splunk setup without `frequency_scheduling` no longer warns and keeps the mode it deployed with before: `random` for a `[[tenants]]` entry, `current` for a legacy `[setup]` table. An invalid value logs one `frequency_scheduling_is_not_valid` warning that names the value ([#295](https://github.com/OpenTideHQ/opentide/issues/295)).
 
 ## [0.5.0] — 2026-09-23
 

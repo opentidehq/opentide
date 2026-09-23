@@ -50,10 +50,11 @@ def _warnings(log: CapturingLogger) -> list[object]:
 
 
 @pytest.mark.parametrize("unset", [None, ""])
-def test_unset_frequency_scheduling_uses_random_without_warning(
+def test_unset_frequency_scheduling_uses_the_default_without_warning(
     splunk_log: CapturingLogger, unset: str | None
 ) -> None:
     assert correct_timerange_mode(unset) == "random"
+    assert correct_timerange_mode(unset, unset="current") == "current"
     assert _warnings(splunk_log) == []
 
 
@@ -106,7 +107,12 @@ def _tenant_setup(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[str 
     return _write
 
 
-@pytest.fixture(params=["legacy-setup", "tenant"])
+#: What an absent ``frequency_scheduling`` resolves to: the tenant model's default,
+#: and for a legacy ``[setup]`` table the mode 0.5.0 deployed with.
+_UNSET_FREQUENCY = {"legacy-setup": "current", "tenant": "random"}
+
+
+@pytest.fixture(params=list(_UNSET_FREQUENCY))
 def splunk_frequency(
     request: pytest.FixtureRequest,
     tide_corpus_repo: Path,
@@ -140,10 +146,11 @@ def test_enabled_tenant_with_invalid_frequency_warns_once(
     assert _warnings(splunk_log) == ["frequency_scheduling_is_not_valid"]
 
 
-def test_enabled_tenant_without_frequency_uses_random_silently(
-    splunk_frequency, splunk_log: CapturingLogger
+def test_enabled_tenant_without_frequency_keeps_its_default_silently(
+    splunk_frequency, splunk_log: CapturingLogger, request: pytest.FixtureRequest
 ) -> None:
     splunk_frequency(None)
     deployer = OpenTide.Platforms["splunk"].deployer
-    assert getattr(deployer, "TIMERANGE_MODE", None) == "random"
+    expected = _UNSET_FREQUENCY[request.node.callspec.params["splunk_frequency"]]
+    assert getattr(deployer, "TIMERANGE_MODE", None) == expected
     assert _warnings(splunk_log) == []
