@@ -1,4 +1,4 @@
-"""Assertions shared by validation tests, in-process and through the CLI."""
+"""Layouts and assertions shared by validation and SDK tests, in-process and through the CLI."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import BaseModel
 
 from opentide.validation.issues import ValidationIssue, ValidationReport
 
@@ -65,3 +66,91 @@ def assert_issues_point_at_their_objects(
         assert owner == uuid, (
             f"{issue['code']} for {uuid} is attributed to {path}, which declares {owner}"
         )
+
+
+def assert_objects_point_at_their_files(objects: Mapping[str, BaseModel]) -> int:
+    """Every loaded object that carries a ``file`` names the file that declares it.
+
+    ``DetectionRule.file`` was once rebuilt as ``<rules folder>/<basename>``, so
+    a rule in ``objects/rules/other/x.yaml`` pointed at ``objects/rules/x.yaml``
+    (#297). Returns how many objects were checked, so callers can tell a real
+    check from a model without a ``file`` field.
+    """
+    checked = 0
+    for uuid, obj in objects.items():
+        if "file" not in type(obj).model_fields:
+            continue
+        path = getattr(obj, "file", None)
+        assert path is not None, f"{uuid} was loaded without a file"
+        assert Path(path).is_file(), f"{uuid} points at missing file {path}"
+        owner = declared_uuid(Path(path))
+        assert owner == uuid, f"{uuid} points at {path}, which declares {owner}"
+        checked += 1
+    return checked
+
+
+# --- Same-basename layout across object types and depths (#297) --------------
+
+TWIN = "nested-twin.yaml"
+DANGLING = {
+    "rule": "00000000-0000-4000-8002-00000000dead",
+    "objective": "00000000-0000-4000-8001-00000000dead",
+    "threat": "00000000-0000-4000-8001-00000000dead",
+}
+#: repo-relative path -> (object type, UUID). Depth 1 is the type folder itself.
+NESTED_TWIN_LAYOUT: dict[str, tuple[str, str]] = {
+    f"objects/rules/{TWIN}": ("rule", "00000000-0000-4000-8003-0000000000a1"),
+    f"objects/rules/team-a/{TWIN}": ("rule", "00000000-0000-4000-8003-0000000000a2"),
+    f"objects/rules/team-a/emea/{TWIN}": ("rule", "00000000-0000-4000-8003-0000000000a3"),
+    f"objects/rules/team-b/{TWIN}": ("rule", "00000000-0000-4000-8003-0000000000a4"),
+    f"objects/threats/{TWIN}": ("threat", "00000000-0000-4000-8001-0000000000a1"),
+    f"objects/threats/actors/{TWIN}": ("threat", "00000000-0000-4000-8001-0000000000a2"),
+    f"objects/threats/actors/apt/{TWIN}": ("threat", "00000000-0000-4000-8001-0000000000a3"),
+    f"objects/objectives/{TWIN}": ("objective", "00000000-0000-4000-8002-0000000000a1"),
+    f"objects/objectives/access/{TWIN}": ("objective", "00000000-0000-4000-8002-0000000000a2"),
+    f"objects/objectives/access/emea/{TWIN}": (
+        "objective",
+        "00000000-0000-4000-8002-0000000000a3",
+    ),
+}
+_CORPUS_TEMPLATES = {
+    "rule": ("Detection Rules/rule-0001-sentinel-kql.yaml", "00000000-0000-4000-8003-000000000001"),
+    "objective": (
+        "Detection Objectives/objective-0001-credential-access.yaml",
+        "00000000-0000-4000-8002-000000000001",
+    ),
+    "threat": (
+        "Threat Vectors/threat-0001-simulated-actor.yaml",
+        "00000000-0000-4000-8001-000000000001",
+    ),
+}
+
+
+def _twin_body(repo: Path, object_type: str, uuid: str) -> str:
+    """A copy of a corpus object with a new UUID and one dangling reference.
+
+    The dangling reference makes every validated twin report an issue carrying
+    its UUID, so the set of UUIDs in the report is the set of objects checked.
+    """
+    template, template_uuid = _CORPUS_TEMPLATES[object_type]
+    text = (repo / "Objects" / template).read_text(encoding="utf-8").replace(template_uuid, uuid)
+    dangling = DANGLING[object_type]
+    if object_type == "rule":
+        return text.replace(
+            "detection_model: 00000000-0000-4000-8002-000000000001", f"detection_model: {dangling}"
+        )
+    if object_type == "objective":
+        text = text.replace("00000000-0000-4000-8099-000000000001", uuid.replace("8002", "8099"))
+        return text.replace("    - 00000000-0000-4000-8001-000000000001", f"    - {dangling}")
+    return text + f"  chaining:\n    - relation: enables\n      vector: {dangling}\n"
+
+
+def write_nested_twins(corpus_repo: Path) -> dict[str, Path]:
+    """Write :data:`NESTED_TWIN_LAYOUT` into a ``tide_corpus`` copy; return UUID -> real path."""
+    real_paths: dict[str, Path] = {}
+    for relative, (object_type, uuid) in NESTED_TWIN_LAYOUT.items():
+        path = corpus_repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_twin_body(corpus_repo, object_type, uuid), encoding="utf-8")
+        real_paths[uuid] = path.resolve()
+    return real_paths

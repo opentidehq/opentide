@@ -18,7 +18,12 @@ from pytest_console_scripts import ScriptRunner
 from tests.corpus_support import clear_runtime_caches
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
 from tests.test_cli.e2e.helpers import write_tutorial_objects
-from tests.validation_support import assert_issues_point_at_their_objects
+from tests.validation_support import (
+    NESTED_TWIN_LAYOUT,
+    TWIN,
+    assert_issues_point_at_their_objects,
+    write_nested_twins,
+)
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -221,80 +226,22 @@ def test_issue_297_commands_on_console_script(script_runner: ScriptRunner, tmp_p
 
 # --- Same-basename layouts across object types and depths -------------------
 
-TWIN = "nested-twin.yaml"
-DANGLING = {
-    "rule": "00000000-0000-4000-8002-00000000dead",
-    "objective": "00000000-0000-4000-8001-00000000dead",
-    "threat": "00000000-0000-4000-8001-00000000dead",
-}
-#: repo-relative path -> (object type, UUID). Depth 1 is the type folder itself.
-LAYOUT: dict[str, tuple[str, str]] = {
-    f"objects/rules/{TWIN}": ("rule", "00000000-0000-4000-8003-0000000000a1"),
-    f"objects/rules/team-a/{TWIN}": ("rule", "00000000-0000-4000-8003-0000000000a2"),
-    f"objects/rules/team-a/emea/{TWIN}": ("rule", "00000000-0000-4000-8003-0000000000a3"),
-    f"objects/rules/team-b/{TWIN}": ("rule", "00000000-0000-4000-8003-0000000000a4"),
-    f"objects/threats/{TWIN}": ("threat", "00000000-0000-4000-8001-0000000000a1"),
-    f"objects/threats/actors/{TWIN}": ("threat", "00000000-0000-4000-8001-0000000000a2"),
-    f"objects/threats/actors/apt/{TWIN}": ("threat", "00000000-0000-4000-8001-0000000000a3"),
-    f"objects/objectives/{TWIN}": ("objective", "00000000-0000-4000-8002-0000000000a1"),
-    f"objects/objectives/access/{TWIN}": ("objective", "00000000-0000-4000-8002-0000000000a2"),
-    f"objects/objectives/access/emea/{TWIN}": (
-        "objective",
-        "00000000-0000-4000-8002-0000000000a3",
-    ),
-}
-_CORPUS_TEMPLATES = {
-    "rule": ("Detection Rules/rule-0001-sentinel-kql.yaml", "00000000-0000-4000-8003-000000000001"),
-    "objective": (
-        "Detection Objectives/objective-0001-credential-access.yaml",
-        "00000000-0000-4000-8002-000000000001",
-    ),
-    "threat": (
-        "Threat Vectors/threat-0001-simulated-actor.yaml",
-        "00000000-0000-4000-8001-000000000001",
-    ),
-}
-
-
-def _twin_body(repo: Path, object_type: str, uuid: str) -> str:
-    """A copy of a corpus object with a new UUID and one dangling reference.
-
-    The dangling reference makes every validated twin report an issue carrying
-    its UUID, so the set of UUIDs in the report is the set of objects checked.
-    """
-    template, template_uuid = _CORPUS_TEMPLATES[object_type]
-    text = (repo / "Objects" / template).read_text(encoding="utf-8").replace(template_uuid, uuid)
-    dangling = DANGLING[object_type]
-    if object_type == "rule":
-        return text.replace(
-            "detection_model: 00000000-0000-4000-8002-000000000001", f"detection_model: {dangling}"
-        )
-    if object_type == "objective":
-        text = text.replace("00000000-0000-4000-8099-000000000001", uuid.replace("8002", "8099"))
-        return text.replace("    - 00000000-0000-4000-8001-000000000001", f"    - {dangling}")
-    return text + f"  chaining:\n    - relation: enables\n      vector: {dangling}\n"
-
 
 @pytest.fixture
 def nested_twins(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
-    """Write :data:`LAYOUT` into the corpus; return UUID -> real file path."""
-    real_paths: dict[str, Path] = {}
-    for relative, (object_type, uuid) in LAYOUT.items():
-        path = tide_corpus_repo / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(_twin_body(tide_corpus_repo, object_type, uuid), encoding="utf-8")
-        real_paths[uuid] = path.resolve()
+    """Write the nested-twin layout into the corpus; return UUID -> real file path."""
+    real_paths = write_nested_twins(tide_corpus_repo)
     monkeypatch.chdir(tide_corpus_repo)
     return real_paths
 
 
 def _uuid(relative: str) -> str:
-    return LAYOUT[relative][1]
+    return NESTED_TWIN_LAYOUT[relative][1]
 
 
-_ALL_TWINS = frozenset(uuid for _, uuid in LAYOUT.values())
+_ALL_TWINS = frozenset(uuid for _, uuid in NESTED_TWIN_LAYOUT.values())
 _LAYOUT_CASES: list[tuple[str, frozenset[str]]] = [
-    *((relative, frozenset({_uuid(relative)})) for relative in LAYOUT),
+    *((relative, frozenset({_uuid(relative)})) for relative in NESTED_TWIN_LAYOUT),
     (TWIN, _ALL_TWINS),
     (
         f"./objects/threats/actors/apt/{TWIN}",
