@@ -248,7 +248,7 @@ def setup_cmd(
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
-        help="Write [promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+        help="Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
     ),
     promotion_target: str | None = typer.Option(
         None,
@@ -420,7 +420,7 @@ def setup_ci_cmd(
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
-        help="Write [promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+        help="Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
     ),
     promotion_target: str | None = typer.Option(
         None,
