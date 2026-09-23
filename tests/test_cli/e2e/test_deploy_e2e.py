@@ -20,6 +20,7 @@ from tests.corpus_support import (
     write_rule_variant,
 )
 from tests.test_cli.conftest import LOCAL_SHELL_UNSET, assert_json_ok
+from tests.test_cli.e2e.helpers import uncomment_tenants
 
 from opentide.core.root import find_repo_root
 from opentide.models.deployment_enums import StatusStrategy
@@ -279,6 +280,9 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
     rules = real_rules_folder(tide_corpus_repo)
     nested_uuid = SUBFOLDER_RULE_UUIDS["team-a/rule-0101-subfolder.yaml"]
     write_rule_variant(rules, "team-a/rule-0101-subfolder.yaml", nested_uuid)
+    # The corpus ships #[[tenants]] commented out. A tenantless platform adds its
+    # own warning (#314); this test is about the nested-rule warning alone.
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
     deployer = _mock_deployer(monkeypatch, "sentinel")
     result = invoke_cli(
         "deploy",

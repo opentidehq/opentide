@@ -60,7 +60,7 @@ opentide --json deploy --platform sentinel --dry-run
 
 ```json output-of="opentide --json deploy --platform sentinel --dry-run"
 {
-  "deployed": ["sentinel"],
+  "deployed": [],
   "dry_run": true,
   "plan": { "sentinel": ["00000000-0000-4000-8003-000000000001"] },
   "payloads": {
@@ -72,13 +72,20 @@ opentide --json deploy --platform sentinel --dry-run
       }
     ]
   },
+  "missing_tenants": {
+    "sentinel": ".opentide/configurations/platforms/sentinel.toml"
+  },
+  "advice": "add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
   "ok": true,
   "status": "completed",
-  "message": "Deployment completed"
+  "message": "Deployment completed",
+  "warnings": [
+    "sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop"
+  ]
 }
 ```
 
-`plan` lists the rule UUIDs selected for each platform. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request the Sentinel deployer compiles when the `sentinel` extra is installed, and otherwise the rule's platform configuration block. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
+`plan` lists the rule UUIDs selected for each platform. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request the Sentinel deployer compiles when the `sentinel` extra is installed, and otherwise the rule's platform configuration block. The [tutorial](../usage/tutorial.md) scaffold leaves `[[tenants]]` commented out, so this dry-run previews the payload, leaves `deployed` empty, and warns that a real deploy would stop. After you uncomment a tenant, `deployed` lists the platform and the warning is gone. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 
 When no rules match the selected plan, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 

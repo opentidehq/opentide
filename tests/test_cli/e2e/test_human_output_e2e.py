@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 from tests.corpus_support import clear_runtime_caches
-from tests.test_cli.e2e.helpers import hidden_modules, write_tutorial_objects
+from tests.test_cli.e2e.helpers import hidden_modules, uncomment_tenants, write_tutorial_objects
 from typer.testing import CliRunner, Result
 
 from opentide.cli import app
@@ -162,7 +162,13 @@ def test_extract_without_sdk_names_the_extra(tutorial: Path) -> None:
 
 
 def test_live_validation_without_sdk_prints_the_advice(tutorial: Path) -> None:
-    """#292: human `--live` printed the message and dropped the advice."""
+    """#292: human `--live` printed the message and dropped the advice.
+
+    The tutorial scaffold leaves ``[[tenants]]`` commented out, which stops
+    ``--live`` before the SDK check (#314). Uncomment it so this guard still
+    reaches the missing-extra advice.
+    """
+    uncomment_tenants(tutorial / ".opentide/configurations/platforms/sentinel.toml")
     with _without_azure():
         output = _human(tutorial, "validate", "query", "--platform", "sentinel", "--live", "--wide")
     assert (
