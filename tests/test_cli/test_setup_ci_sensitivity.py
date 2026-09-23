@@ -25,6 +25,7 @@ _NO_OUTPUT_OF_THEIR_OWN = {
 #: A non-default value for each field that is not a flag.
 _SAMPLES: dict[str, object] = {
     "ci": CiPlatform.gitlab,
+    "promotion": False,
     "promotion_target": "STAGING",
     "python_version": "3.11",
     "default_branch": "release",

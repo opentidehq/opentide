@@ -39,8 +39,9 @@ class CiSetupOptions:
     path: Path = Path(".")
     ci: CiPlatform = CiPlatform.github
     staging: bool = True
-    promotion: bool = True
-    promotion_target: str = "PRODUCTION"
+    #: ``None`` keeps the repository's ``[promotion]`` setting.
+    promotion: bool | None = None
+    promotion_target: str | None = None
     python_version: str = "3.12"
     explorer_pages: bool = False
     inflight: bool = True

@@ -22,7 +22,7 @@ else:
 
 logger = structlog.get_logger("opentide.cli.services.setup.promotion")
 
-_FLAGS = {"enabled": "--no-promotion", "promotion_target": "--promotion-target"}
+_FLAGS = {"enabled": "--promotion/--no-promotion", "promotion_target": "--promotion-target"}
 
 
 @dataclass(frozen=True)
@@ -80,38 +80,64 @@ def _append(existing: str, table: dict[str, object]) -> str:
     return existing + ("\n" if existing.endswith("\n") else "\n\n") + block
 
 
+def promotion_defaults() -> dict[str, object]:
+    """The bundled ``[promotion]`` table ``deploy`` uses when a repository sets none."""
+    bundled = get_data_root() / "configurations" / "deployment.toml"
+    table = tomllib.loads(bundled.read_text(encoding="utf-8"))["promotion"]
+    if not isinstance(table, dict):
+        raise typer.BadParameter("bundled deployment.toml has no [promotion] table")
+    return table
+
+
+def effective_promotion(target: Path) -> dict[str, object]:
+    """``[promotion]`` as ``deploy`` will read it: the repository table over the bundled defaults."""
+    defaults = promotion_defaults()
+    try:
+        deployment = resolve_configurations(target).get("deployment", {})
+    except tomllib.TOMLDecodeError:
+        return defaults
+    current = deployment.get("promotion") if isinstance(deployment, dict) else None
+    if not isinstance(current, dict):
+        return defaults
+    return {**defaults, **{key: current[key] for key in defaults if key in current}}
+
+
 def plan_promotion_override(
-    target: Path, *, enabled: bool, promotion_target: str
+    target: Path, *, enabled: bool | None, promotion_target: str | None
 ) -> PromotionOverride | None:
     """What ``.opentide/configurations/deployment.toml`` needs so ``deploy`` promotes as asked.
 
-    Only keys that differ from the bundled ``[promotion]`` are set, so the
-    defaults return ``None``. Raises ``typer.BadParameter`` before anything is
-    written for an unknown status, or for an existing ``[promotion]`` table
-    that holds other values: tomli-w cannot rewrite it without dropping comments.
+    ``None`` means the flag was omitted, so that key is left as the repository
+    configures it. An explicit value that already matches writes nothing. An
+    explicit value that disagrees with an existing ``[promotion]`` table is
+    refused: tomli-w cannot rewrite it without dropping comments.
     """
-    bundled = get_data_root() / "configurations" / "deployment.toml"
-    defaults = tomllib.loads(bundled.read_text(encoding="utf-8"))["promotion"]
-    table: dict[str, object] = {
+    defaults = promotion_defaults()
+    requested: dict[str, object] = {
         key: value
         for key, value in (("enabled", enabled), ("promotion_target", promotion_target))
-        if value != defaults.get(key)
+        if value is not None
     }
-    if not table:
+    if not requested:
         return None
-    hint = [_FLAGS[key] for key in table]
+    hint = [_FLAGS[key] for key in requested]
     path = client_configurations_dir(target) / "deployment.toml"
     existing, parsed = _read(target, path, hint)
-    if "promotion_target" in table:
+    if promotion_target is not None:
         _check_status(target, promotion_target)
     current = parsed.get("promotion")
     if current is None:
+        table = {key: value for key, value in requested.items() if value != defaults.get(key)}
+        if not table:
+            return None
         return PromotionOverride(path, table, _append(existing, table))
-    if isinstance(current, dict) and all(current.get(k) == v for k, v in table.items()):
-        return PromotionOverride(path, table, None)
+    if isinstance(current, dict) and all(
+        current.get(key, defaults.get(key)) == value for key, value in requested.items()
+    ):
+        return PromotionOverride(path, requested, None)
     raise typer.BadParameter(
         f"{_shown(target, path)} already has a [promotion] table, which setup does not "
-        f"rewrite. Set {_assignments(table)} in it, or delete it and re-run setup.",
+        f"rewrite. Set {_assignments(requested)} in it, or delete it and re-run setup.",
         param_hint=hint,
     )
 

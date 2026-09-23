@@ -256,3 +256,79 @@ def test_deploy_promotion_follows_what_setup_configured(
     )
 
     assert f"status: {status}\n" in rule.read_text(encoding="utf-8")
+
+
+def test_an_explicit_default_that_disagrees_with_the_file_is_refused(tmp_path: Path) -> None:
+    """Passing the bundled default must not exit 0 while the file says otherwise."""
+    repo = _repo(tmp_path)
+    _setup(repo, promotion=False, promotion_target="STAGING")
+    original = (repo / OVERRIDE).read_bytes()
+
+    with pytest.raises(typer.BadParameter, match=r"already has a \[promotion\] table"):
+        _setup(repo, promotion=True)
+    with pytest.raises(typer.BadParameter, match=r"already has a \[promotion\] table"):
+        _setup(repo, promotion_target="PRODUCTION")
+
+    assert (repo / OVERRIDE).read_bytes() == original
+    result = _setup(repo)
+    assert (repo / OVERRIDE).read_bytes() == original
+    assert OVERRIDE not in result["files"]  # type: ignore[operator]
+
+
+@pytest.mark.parametrize("entry", ["setup ci", "setup --ci"])
+def test_cli_explicit_default_against_an_existing_table_exits_2(tmp_path: Path, entry: str) -> None:
+    repo = _repo(tmp_path)
+    (repo / OVERRIDE).parent.mkdir(parents=True, exist_ok=True)
+    (repo / OVERRIDE).write_text(
+        '[promotion]\nenabled = false\npromotion_target = "STAGING"\n', encoding="utf-8"
+    )
+    original = (repo / OVERRIDE).read_bytes()
+
+    refused = _invoke(entry, repo, "--promotion", "--promotion-target", "PRODUCTION")
+    assert refused.exit_code == 2, refused.stdout + refused.stderr
+    assert (repo / OVERRIDE).read_bytes() == original
+
+    kept = _invoke(entry, repo)
+    assert kept.exit_code == 0, kept.stdout + kept.stderr
+    assert (repo / OVERRIDE).read_bytes() == original
+
+
+@pytest.mark.parametrize("enabled", [True, False, None])
+@pytest.mark.parametrize("target", ["PRODUCTION", "STAGING", None])
+@pytest.mark.parametrize(
+    "prior",
+    [None, {"enabled": False, "promotion_target": "STAGING"}],
+    ids=["no-table", "existing"],
+)
+def test_an_explicit_promotion_flag_is_applied_or_refused(
+    tmp_path: Path,
+    enabled: bool | None,
+    target: str | None,
+    prior: dict[str, object] | None,
+) -> None:
+    """An explicit flag is never silently overridden by the file."""
+    from opentide.core.files import resolve_configurations
+
+    repo = _repo(tmp_path)
+    if prior is not None:
+        lines = ["[promotion]"]
+        if "enabled" in prior:
+            lines.append(f"enabled = {'true' if prior['enabled'] else 'false'}")
+        if "promotion_target" in prior:
+            lines.append(f'promotion_target = "{prior["promotion_target"]}"')
+        (repo / OVERRIDE).parent.mkdir(parents=True, exist_ok=True)
+        (repo / OVERRIDE).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    before = (repo / OVERRIDE).read_bytes() if (repo / OVERRIDE).is_file() else None
+
+    try:
+        _setup(repo, promotion=enabled, promotion_target=target)
+    except typer.BadParameter:
+        after = (repo / OVERRIDE).read_bytes() if (repo / OVERRIDE).is_file() else None
+        assert after == before
+        return
+
+    merged = resolve_configurations(repo)["deployment"]["promotion"]
+    if enabled is not None:
+        assert merged["enabled"] is enabled
+    if target is not None:
+        assert merged["promotion_target"] == target

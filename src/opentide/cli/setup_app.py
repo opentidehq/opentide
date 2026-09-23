@@ -226,8 +226,16 @@ def setup_cmd(
         "--inflight/--no-inflight",
         help="Update .opentide/inflight/ preview shards on pull requests",
     ),
-    promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
-    promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
+    promotion: bool | None = typer.Option(
+        None,
+        "--promotion/--no-promotion",
+        help="Write [promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+    ),
+    promotion_target: str | None = typer.Option(
+        None,
+        "--promotion-target",
+        help="Status deploy promotes rules to. Omit to keep the repository's setting.",
+    ),
     python_version: str = typer.Option("3.12", "--python-version"),
     explorer_pages: bool = typer.Option(
         False,
@@ -388,8 +396,16 @@ def setup_ci_cmd(
         "--inflight/--no-inflight",
         help="Update .opentide/inflight/ preview shards on pull requests",
     ),
-    promotion: bool = typer.Option(True, "--promotion/--no-promotion"),
-    promotion_target: str = typer.Option("PRODUCTION", "--promotion-target"),
+    promotion: bool | None = typer.Option(
+        None,
+        "--promotion/--no-promotion",
+        help="Write [promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+    ),
+    promotion_target: str | None = typer.Option(
+        None,
+        "--promotion-target",
+        help="Status deploy promotes rules to. Omit to keep the repository's setting.",
+    ),
     python_version: str = typer.Option("3.12", "--python-version"),
     explorer_pages: bool = typer.Option(
         False,
