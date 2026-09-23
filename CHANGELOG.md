@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- `deploy` in a workspace without `objects/rules/` (an empty directory, or a fresh clone before the first rule is committed) no longer exits `1` with `FATAL: [Errno 2] No such file or directory`. It reports `skipped` with exit `0` and contacts no platform, as `validate`, `lint`, `info`, and `generate` already did. The same applies to `validate query --live`, and to a rules folder holding only `.gitkeep` or a subfolder, which failed with `'NoneType' object is not subscriptable` and `[Errno 21] Is a directory`. A skipped deploy now returns the same JSON keys as one that planned rules: `dry_run`, an empty `plan` and `deployed`, and `payloads` on `--dry-run` ([#300](https://github.com/OpenTideHQ/opentide/issues/300)).
+
 ## [0.5.0] — 2026-09-23
 
 Minor on 0.4.0. Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names: 0.4.0 rejected every such threat with `Input should be a valid string` ([#189](https://github.com/OpenTideHQ/opentide/issues/189)). It is a minor rather than a patch because a threat written the way 0.4.0 required (`impact: Data Breach`) now fails validation until it becomes a one-item list — read **Changed** before upgrading a pipeline.

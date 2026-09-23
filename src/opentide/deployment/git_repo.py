@@ -63,14 +63,27 @@ class GitRepository:
         )
 
 
+def local_rule_files() -> list[Path]:
+    """Rule YAML files directly under the rules folder.
+
+    Git does not keep empty folders, so a clone of a repository without rules
+    has no rules folder at all: that is an empty catalogue, not an error.
+    """
+    mdr_path = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
+    if not mdr_path.is_dir():
+        logger.info("rule_folder_not_found", path=str(mdr_path))
+        return []
+    return [
+        path
+        for path in sorted(mdr_path.iterdir())
+        if path.is_file() and path.suffix in {".yaml", ".yml"}
+    ]
+
+
 def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
     MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
     if CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug:
-        files = (
-            [path for path in sorted(MDR_PATH.iterdir()) if path.suffix in {".yaml", ".yml"}]
-            if MDR_PATH.is_dir()
-            else []
-        )
+        files = local_rule_files()
         logger.info("computed_modified_mdr_files", detail=str(files))
         return files
 
@@ -110,16 +123,9 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
             "local_debug_using_full_rule_tree",
             detail="Git diff is unavailable outside CI; compiling from the local rules folder",
         )
-        mdr_path = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
         raw = OpenTide.Configurations.Global.Paths.Tide._raw["rule"]
-        if not mdr_path.is_dir():
-            return []
         # Repo-relative paths so modified_mdr_files' regex still matches.
-        return [
-            str(Path(raw) / path.name)
-            for path in sorted(mdr_path.iterdir())
-            if path.suffix in {".yaml", ".yml"}
-        ]
+        return [str(Path(raw) / path.name) for path in local_rule_files()]
 
     repo = TideRepo().repository
 

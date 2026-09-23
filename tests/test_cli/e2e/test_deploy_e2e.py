@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import os
 from collections.abc import Iterable
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from tests.test_cli.conftest import assert_json_ok
+from pytest_console_scripts import ScriptRunner
+from tests.test_cli.conftest import LOCAL_SHELL_UNSET, assert_json_ok
+
+from opentide.core.root import find_repo_root
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -166,3 +172,74 @@ def test_deploy_loads_only_the_requested_engine(
     payload = assert_json_ok(result)
     assert payload["deployed"] == ["sentinel"]
     assert imported == ["opentide.platforms.sentinel.deployer"]
+
+
+@pytest.mark.parametrize("json_output", [True, False], ids=["json", "human"])
+def test_deploy_dry_run_without_rules_folder_reports_no_rules(
+    invoke_cli,
+    refuse_deployment_engines: list[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    json_output: bool,
+) -> None:
+    """Issue #300: no ``objects/rules`` exited 1 with ``FATAL: [Errno 2] ...``."""
+    for name in LOCAL_SHELL_UNSET:
+        monkeypatch.delenv(name, raising=False)
+    workspace = tmp_path / "empty"
+    workspace.mkdir()
+    result = invoke_cli(
+        "deploy",
+        "--platform",
+        "sentinel",
+        "--dry-run",
+        repo=workspace,
+        json_output=json_output,
+        extra_env={"DEPLOYMENT_PLAN": ""},
+    )
+    output = result.stdout + result.stderr
+    assert result.exit_code == 0, output
+    assert "Errno" not in output
+    assert "No such file or directory" not in output
+    assert refuse_deployment_engines == []
+    if not json_output:
+        assert "SKIPPED No rules to deploy for this platform" in result.stdout
+        return
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "platform": "sentinel",
+        "deployed": [],
+        "dry_run": True,
+        "plan": {},
+        "payloads": {},
+        "ok": True,
+        "status": "skipped",
+        "message": "No rules to deploy for this platform",
+    }
+
+
+@pytest.mark.cli_smoke
+@pytest.mark.script_launch_mode("subprocess")
+def test_deploy_dry_run_in_an_empty_directory_on_console_script(
+    script_runner: ScriptRunner, tmp_path: Path
+) -> None:
+    """The #300 report verbatim: cwd is the workspace, no ``.git``, no env root."""
+    workspace = tmp_path / "empty"
+    workspace.mkdir()
+    assert find_repo_root(workspace) == workspace.resolve(), "a parent directory is a git tree"
+    env = {k: v for k, v in os.environ.items() if k not in LOCAL_SHELL_UNSET}
+    argv = ["opentide", "deploy", "--platform", "sentinel", "--dry-run"]
+
+    human = script_runner.run(argv, cwd=workspace, env=env, print_result=False)
+    assert human.returncode == 0, human.stdout + human.stderr
+    assert "Errno" not in human.stdout + human.stderr
+    assert "No rules to deploy for this platform" in human.stdout
+
+    machine = script_runner.run(
+        [argv[0], "--json", *argv[1:]], cwd=workspace, env=env, print_result=False
+    )
+    assert machine.returncode == 0, machine.stdout + machine.stderr
+    assert "Errno" not in machine.stdout + machine.stderr
+    payload = json.loads(machine.stdout)
+    assert payload["status"] == "skipped"
+    assert payload["dry_run"] is True
+    assert payload["plan"] == {}

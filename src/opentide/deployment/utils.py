@@ -8,7 +8,7 @@ from opentide.core.io import load_yaml
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
 from opentide.core.registry import DebugHelpers, OpenTide
-from opentide.deployment.git_repo import modified_mdr_files
+from opentide.deployment.git_repo import local_rule_files, modified_mdr_files
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.platforms.enabled import enabled_systems
 
@@ -70,8 +70,7 @@ def make_deploy_plan(
     deploy_mdr: dict[str, list[str]] = {}
 
     if plan is DeploymentStrategy.FULL:
-        mdr_path = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
-        mdr_files = [mdr_path / mdr for mdr in os.listdir(mdr_path)]
+        mdr_files = local_rule_files()
         logger.info("full_redeploy_scope", mdr_count=len(mdr_files))
     else:
         mdr_files = modified_mdr_files(plan)
