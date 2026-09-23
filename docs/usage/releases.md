@@ -7,6 +7,45 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.5.0 — 23 September 2026
+
+Minor on 0.4.0. **Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names** — 0.4.0 rejected every such threat with `Input should be a valid string`. A threat written the way 0.4.0 required (`impact: Data Breach`) now fails until it becomes a one-item list, so update threats before upgrading a pipeline.
+
+**Install**
+
+```bash
+pip install opentide==0.5.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+Then run `opentide generate` so new threats start from the list template.
+
+**What changes for authors and scripts**
+
+- `threat.impact` and `threat.leverage` are non-empty YAML lists of vocabulary names. A single string fails with `must be a YAML list of … vocabulary names`; a value or list item that joins several names with `;` fails too. Give every name its own item and keep all of them ([#189](https://github.com/OpenTideHQ/opentide/issues/189)). See [Troubleshooting](./troubleshooting.md#threat-impact--leverage-input-should-be-a-valid-string-must-be-a-yaml-list-or-packs-several-vocabulary-names).
+- SDK: `ThreatBody.impact` / `.leverage` are `list[str]`. Threat templates, editor schemas, and the explorer bundle carry lists.
+
+```yaml
+threat:
+  impact:
+    - Data Breach
+    - Identity Theft
+  leverage:
+    - Elevation of privilege
+```
+
+**What this version fixes**
+
+- Threats written to the `threat::1.0` spec validate, and `validate` no longer suggests a single name for a `;`-joined value, which would drop the others ([#189](https://github.com/OpenTideHQ/opentide/issues/189)).
+- The spec's threat conformance fixtures run in CI, so the engine cannot drift from `threat::1.0` again.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.5.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.5.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.4.0 — 22 September 2026
 
 Minor on 0.3.0. **Upgrade if a first-run command crashed, printed a traceback, or quietly did nothing.** Fixes the first-user bugs filed against 0.3.0 and the test-harness gaps that let them ship. A few fixes change output scripts can depend on, so read the first list before upgrading a pipeline.

@@ -6,13 +6,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-23
+
+Minor on 0.4.0. Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names: 0.4.0 rejected every such threat with `Input should be a valid string` ([#189](https://github.com/OpenTideHQ/opentide/issues/189)). It is a minor rather than a patch because a threat written the way 0.4.0 required (`impact: Data Breach`) now fails validation until it becomes a one-item list — read **Changed** before upgrading a pipeline.
+
 ### Changed
 
 - `threat.impact` and `threat.leverage` must be non-empty YAML lists of vocabulary names, as `threat::1.0` specifies. A single string (`impact: Data Breach`), which 0.4.0 required, now fails validation with `must be a YAML list of impact vocabulary names`; rewrite it as a one-item list. Several names joined with `;` fail too, as the whole value or as one list item: give each name its own item and keep all of them ([#189](https://github.com/OpenTideHQ/opentide/issues/189)).
+- In the SDK `ThreatBody.impact` and `ThreatBody.leverage` are `list[str]`. Generated threat templates, editor schemas (`type: array`, `minItems: 1`), and the explorer bundle carry both fields as lists ([#189](https://github.com/OpenTideHQ/opentide/issues/189)).
 
 ### Fixed
 
 - A threat written to the `threat::1.0` spec (`impact: [Data Breach, Identity Theft]`) no longer fails with `Input should be a valid string`, and `validate` no longer suggests a single vocabulary name for a `;`-joined value, which would drop the other names ([#189](https://github.com/OpenTideHQ/opentide/issues/189)).
+
+### Tests
+
+- The 14 `threat-*.yaml` conformance fixtures from [OpenTideHQ/specifications](https://github.com/OpenTideHQ/specifications) are vendored under `tests/fixtures/specifications/threat-1.0/` and run through `opentide validate --file` in the E2E suite. The valid fixture must pass, each invalid one must fail on the field it breaks, and a guard test fails when upstream adds a fixture without an expectation ([#189](https://github.com/OpenTideHQ/opentide/issues/189)).
+
+### Install
+
+```bash
+pip install opentide==0.5.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+Rewrite each `impact: Data Breach` as a one-item list (same for `leverage`), then run `opentide generate` so new threats start from the list template. If your CI patches the installed model to accept lists, drop that step.
 
 ## [0.4.0] — 2026-09-22
 
@@ -330,7 +349,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.5.0
 [0.4.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.4.0
 [0.3.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.3.0
 [0.2.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.2.1

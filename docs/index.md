@@ -18,10 +18,10 @@ OpenTide is the **DetectionOps engine** for detection-as-code repositories. Inst
 
 ## Quick start
 
-The latest release is **[0.4.0](./usage/releases.md)** (22 September 2026). The first public release was **0.1.0**. Pin `0.4.0` if you installed `0.3.x`, `0.2.x`, or `0.1.x` from PyPI.
+The latest release is **[0.5.0](./usage/releases.md)** (23 September 2026). The first public release was **0.1.0**. Pin `0.5.0` if you installed `0.4.x`, `0.3.x`, `0.2.x`, or `0.1.x` from PyPI.
 
 ```bash
-pip install 'opentide==0.4.0'
+pip install 'opentide==0.5.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 
 opentide setup --yes --platform sentinel --ci github

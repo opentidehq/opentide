@@ -26,10 +26,10 @@ opentide setup ci gitlab --yes
 opentide setup ci azure --python-version 3.12 --yes
 ```
 
-`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines install **`opentide>=`** the version that generated them (`opentide>=0.4.0` from 0.4.0) and set `OPENTIDE_REPO_ROOT` for every job (GitHub workflow `env`, GitLab `variables`, Azure pipeline `variables`). Re-run `opentide setup ci` after you upgrade to raise the floor.
+`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines install **`opentide>=`** the version that generated them (`opentide>=0.5.0` from 0.5.0) and set `OPENTIDE_REPO_ROOT` for every job (GitHub workflow `env`, GitLab `variables`, Azure pipeline `variables`). Re-run `opentide setup ci` after you upgrade to raise the floor.
 
 <Callout type="info">
-Hand-written examples below pin `pip install 'opentide==0.4.0'` so a pipeline cannot float onto an accidental `0.x.dev…` local build. `opentide setup ci` is the source of truth.
+Hand-written examples below pin `pip install 'opentide==0.5.0'` so a pipeline cannot float onto an accidental `0.x.dev…` local build. `opentide setup ci` is the source of truth.
 </Callout>
 
 | Flag | Default | Purpose |
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.4.0'
+      - run: pip install 'opentide==0.5.0'
       - run: opentide generate
       - run: opentide validate --strict
       - run: opentide validate query --platform sentinel
@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.4.0'
+      - run: pip install 'opentide==0.5.0'
       - run: opentide generate
       - run: opentide deploy --platform sentinel --dry-run   # preview in logs
       - run: opentide deploy --platform sentinel
@@ -114,7 +114,7 @@ Promotion is a deliberate step — gate it behind a protected environment or man
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.4.0'
+      - run: pip install 'opentide==0.5.0'
       - run: opentide deploy --platform sentinel
 ```
 
@@ -142,7 +142,7 @@ validate:
   variables:
     OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
   script:
-    - pip install 'opentide==0.4.0'
+    - pip install 'opentide==0.5.0'
     - opentide generate
     - opentide validate --strict
     - opentide validate query --platform sentinel
@@ -156,7 +156,7 @@ deploy-staging:
     OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
     DEPLOYMENT_PLAN: staging
   script:
-    - pip install 'opentide==0.4.0'
+    - pip install 'opentide==0.5.0'
     - opentide generate
     - opentide deploy --platform sentinel
 ```
@@ -172,7 +172,7 @@ variables:
 steps:
   - task: UsePythonVersion@0
     inputs: { versionSpec: '3.12' }
-  - script: pip install 'opentide==0.4.0'
+  - script: pip install 'opentide==0.5.0'
   - script: opentide generate && opentide validate --strict
   - script: opentide validate query --platform sentinel
 ```
