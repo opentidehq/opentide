@@ -38,7 +38,9 @@ Hand-written examples below pin `pip install 'opentide==0.5.0'` so a pipeline ca
 | `--promotion` / `--no-promotion` | promotion on | Include the promotion stage |
 | `--promotion-target` | `PRODUCTION` | Target status for promotion |
 | `--python-version` | `3.12` | CI Python version |
-| `--default-branch` | `origin/HEAD`, then `init.defaultBranch`, then `main` | Branch that deploys and receives inflight shards (GitHub, Azure; GitLab uses `$CI_DEFAULT_BRANCH`) |
+| `--default-branch` | `origin/HEAD`, then the checked-out branch, then `init.defaultBranch`, then `main` | Branch that deploys and receives inflight shards (GitHub, Azure; GitLab uses `$CI_DEFAULT_BRANCH`) |
+
+The one-shot `opentide setup --ci <github|gitlab|azure>` accepts the same flags. On a repository without `origin/HEAD` whose deploying branch is not checked out, pass `--default-branch`; the result warns when the detected branch is only a guess.
 
 ## Stage 1 — validate every PR
 

@@ -9,6 +9,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Fixed
 
 - In the SDK, `rule.metadata.schema` returns the schema identifier (`"rule::1.0"`), as `docs/sdk/models.md` shows. It returned Pydantic's deprecated `BaseModel.schema` method, so the documented line printed a bound method; the same held for `.schema` on platform blocks (`rule.configurations.sentinel.schema`). `schema_id` / `platform_schema` stay the canonical fields, and validation, `model_dump(by_alias=True)` and generated JSON Schemas still use the `schema` key ([#298](https://github.com/OpenTideHQ/opentide/issues/298)).
+- `opentide setup --ci <github|gitlab|azure>` accepts `--default-branch`, like `setup ci`. Without the flag, a repository with no `origin/HEAD` now gets its checked-out branch, ahead of `init.defaultBranch` and `main`: a repository whose only branch was `trunk` got a pipeline that fetched from, pushed to, and deployed on `main`. Both forms warn when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist ([#288](https://github.com/OpenTideHQ/opentide/issues/288)).
+- `opentide setup` prints the warnings of its steps. The one-shot `setup --ci <provider>` showed none of the CI step's `WARNING` lines that `setup ci <provider>` prints for the same condition, such as GitLab ignoring `--default-branch`; with `--json` they now also appear in the top-level `warnings`, not only under `steps[].warnings` ([#308](https://github.com/OpenTideHQ/opentide/issues/308)).
+
+### Tests
+
+- A parity test fails when a `setup ci` option is missing from the one-shot `setup --ci`, declared with a different default, or not passed on to CI generation ([#288](https://github.com/OpenTideHQ/opentide/issues/288)).
 
 ## [0.5.0] — 2026-09-23
 

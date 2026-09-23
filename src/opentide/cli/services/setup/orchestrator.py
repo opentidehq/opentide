@@ -63,6 +63,8 @@ class SetupOptions:
     promotion_target: str = "PRODUCTION"
     python_version: str = "3.12"
     explorer_pages: bool = False
+    #: ``None`` detects it from the target repository.
+    default_branch: str | None = None
     vscode_setup: bool = False
     yes: bool = False
     run_repo: bool = True
@@ -97,19 +99,29 @@ def _ci_options(options: SetupOptions) -> CiSetupOptions:
         promotion_target=options.promotion_target,
         python_version=options.python_version,
         explorer_pages=options.explorer_pages,
+        default_branch=options.default_branch,
         yes=options.yes,
     )
 
 
 def run_setup(options: SetupOptions) -> dict[str, object]:
     """Run configured setup steps and aggregate results."""
+    steps: list[dict[str, object]] = []
+    warnings: list[str] = list(options.warnings)
     results: dict[str, object] = {
         "path": str(options.path.resolve()),
-        "steps": [],
-        "warnings": list(options.warnings),
+        "steps": steps,
+        "warnings": warnings,
     }
-    steps = results["steps"]
-    assert isinstance(steps, list)
+
+    def record(step: str, result: dict[str, object]) -> None:
+        # Human output prints only the top-level warnings, never steps[].warnings.
+        steps.append({"step": step, **result})
+        step_warnings = result.get("warnings")
+        if isinstance(step_warnings, list):
+            for warning in map(str, step_warnings):
+                if warning not in warnings:
+                    warnings.append(warning)
 
     run_platforms = options.run_platforms or (
         bool(options.platforms) and options.run_ci and options.ci is not CiPlatform.none
@@ -117,23 +129,23 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
 
     if options.run_repo:
         repo_result = run_repo_setup(_repo_options(options))
-        steps.append({"step": "repo", **repo_result})
+        record("repo", repo_result)
 
     if run_platforms and options.platforms:
         plat_result = run_platforms_setup(
             PlatformsSetupOptions(path=options.path, platforms=options.platforms, yes=options.yes)
         )
-        steps.append({"step": "platforms", **plat_result})
+        record("platforms", plat_result)
 
     if options.run_ci and options.ci is not None and options.ci is not CiPlatform.none:
         ci_result = run_ci_setup(_ci_options(options))
-        steps.append({"step": "ci", **ci_result})
+        record("ci", ci_result)
 
     if options.run_mcp and options.mcp_hosts:
         mcp_result = run_mcp_setup(
             McpSetupOptions(path=options.path, hosts=options.mcp_hosts, yes=options.yes)
         )
-        steps.append({"step": "mcp", **mcp_result})
+        record("mcp", mcp_result)
 
     if options.run_skills and options.skill_targets:
         try:
@@ -147,17 +159,15 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
                     yes=options.yes,
                 )
             )
-            steps.append({"step": "skills", **skills_result})
+            record("skills", skills_result)
         except (typer.BadParameter, SkillsDownloadError, SkillsManifestError) as exc:
-            warnings = results["warnings"]
-            assert isinstance(warnings, list)
             warnings.append(f"Agent skills skipped: {exc}")
 
     if options.vscode_setup:
         target = options.path.resolve()
         vscode_result = dict(run_vscode_setup(target))
         exit_code = vscode_result.pop("_exit_code", None)
-        steps.append({"step": "vscode", **vscode_result})
+        record("vscode", vscode_result)
         if vscode_result.get("status") == "failed":
             results["status"] = "failed"
             results["message"] = vscode_result.get("message", "VS Code setup failed")

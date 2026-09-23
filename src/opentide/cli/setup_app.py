@@ -155,6 +155,24 @@ PATH_OPTION = typer.Option(".", "--path", "-C", help="Repository path")
 PATH_ARGUMENT = typer.Argument(".", help="Repository path (alias for --path)", hidden=True)
 
 
+def _renderable_branch(value: str | None) -> str | None:
+    if value is not None and not is_valid_branch_name(value):
+        raise typer.BadParameter(
+            f"{value!r} cannot be written into a pipeline; "
+            "use letters, digits, '.', '_', '/' and '-'"
+        )
+    return value
+
+
+DEFAULT_BRANCH_OPTION = typer.Option(
+    None,
+    "--default-branch",
+    callback=_renderable_branch,
+    help="Branch that deploys and receives inflight shards (default: origin/HEAD, then the "
+    "checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
+)
+
+
 def _has_repo_flags(
     name: str | None,
     org: str | None,
@@ -234,6 +252,7 @@ def setup_cmd(
         "--explorer-pages/--no-explorer-pages",
         help="Include GitHub Pages explorer build and deploy jobs",
     ),
+    default_branch: str | None = DEFAULT_BRANCH_OPTION,
     vscode_setup: bool = typer.Option(
         False, "--vscode-setup", help="Run deprecated VS Code settings + snippets"
     ),
@@ -267,6 +286,7 @@ def setup_cmd(
             promotion_target=promotion_target,
             python_version=python_version,
             explorer_pages=explorer_pages,
+            default_branch=default_branch,
             vscode_setup=vscode_setup,
             yes=yes,
             run_repo=_should_run_repo(
@@ -396,24 +416,13 @@ def setup_ci_cmd(
         "--explorer-pages/--no-explorer-pages",
         help="Include GitHub Pages explorer build and deploy jobs",
     ),
-    default_branch: str | None = typer.Option(
-        None,
-        "--default-branch",
-        help="Branch that deploys and receives inflight shards "
-        "(default: origin/HEAD, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)",
-    ),
+    default_branch: str | None = DEFAULT_BRANCH_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
     cli = get_context(ctx)
     if ci_platform is CiPlatform.none:
         raise typer.BadParameter("Choose github, gitlab, or azure")
-    if default_branch is not None and not is_valid_branch_name(default_branch):
-        raise typer.BadParameter(
-            f"{default_branch!r} cannot be written into a pipeline; "
-            "use letters, digits, '.', '_', '/' and '-'",
-            param_hint="--default-branch",
-        )
     target = _option_path(ctx, cli, path)
     yes = _consented(ctx, yes)
     if not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
