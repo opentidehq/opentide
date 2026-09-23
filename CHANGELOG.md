@@ -6,11 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- SDK: the registry index has a `file_paths` map from UUID to the file each object was read from; `files` still holds bare file names. `ValidationScope.matches_file()` matches a path target only through the object's own path, and the `ValidationScope.path_basenames` field is removed ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
+
 ### Fixed
 
 - In the SDK, `rule.metadata.schema` returns the schema identifier (`"rule::1.0"`), as `docs/sdk/models.md` shows. It returned Pydantic's deprecated `BaseModel.schema` method, so the documented line printed a bound method; the same held for `.schema` on platform blocks (`rule.configurations.sentinel.schema`). `schema_id` / `platform_schema` stay the canonical fields, and validation, `model_dump(by_alias=True)` and generated JSON Schemas still use the `schema` key ([#298](https://github.com/OpenTideHQ/opentide/issues/298)).
 - `opentide setup --ci <github|gitlab|azure>` accepts `--default-branch`, like `setup ci`. Without the flag, a repository with no `origin/HEAD` now gets its checked-out branch, ahead of `init.defaultBranch` and `main`: a repository whose only branch was `trunk` got a pipeline that fetched from, pushed to, and deployed on `main`. Both forms warn when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist ([#288](https://github.com/OpenTideHQ/opentide/issues/288)).
 - `opentide setup` prints the warnings of its steps. The one-shot `setup --ci <provider>` showed none of the CI step's `WARNING` lines that `setup ci <provider>` prints for the same condition, such as GitLab ignoring `--default-branch`; with `--json` they now also appear in the top-level `warnings`, not only under `steps[].warnings` ([#308](https://github.com/OpenTideHQ/opentide/issues/308)).
+- `validate --file` with a repo-relative or absolute path validates only that file when object folders have subfolders. The index kept only each object's file name, so `--file objects/rules/x.yaml` also validated `objects/rules/other/x.yaml` and reported its issues against `objects/rules/x.yaml`, while `--file objects/rules/other/x.yaml` matched nothing. A path no longer falls back to its file name, a bare file name still matches that name in every subfolder, and every issue names the file of the object it concerns — in the CLI, MCP `validation_report`, and `--check cve` ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
+- The duplicate-ID check reads object files in subfolders, as indexing does. A UUID duplicated in a file under `objects/rules/<subfolder>/` passed a full `validate` ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
+- SDK: `rule.file` on `OpenTide.Rules[...]` and `OpenTide.Models.Rules[...]` points at the rule's own file in subfolders. It was rebuilt as `<rules folder>/<file name>`, so a rule in `objects/rules/other/x.yaml` got `objects/rules/x.yaml` — another rule's file, or none ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
 
 ### Tests
 

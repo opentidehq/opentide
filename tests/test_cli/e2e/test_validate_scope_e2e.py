@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from pytest_console_scripts import ScriptRunner
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
+from tests.validation_support import assert_issues_point_at_their_objects
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -54,6 +55,7 @@ def test_validate_file_accepts_every_documented_path_form(
     assert isinstance(report, dict)
     assert report["ok"] is True
     assert report["stats"]["objects_checked"] == 1, report["stats"]
+    assert_issues_point_at_their_objects(report)
 
 
 def test_validate_file_resolves_against_the_repo_from_another_directory(
@@ -65,6 +67,7 @@ def test_validate_file_resolves_against_the_repo_from_another_directory(
     monkeypatch.chdir(elsewhere)
     payload = assert_json_ok(invoke_cli("validate", "--file", CORPUS_RULE_RELATIVE))
     assert payload["report"]["stats"]["objects_checked"] == 1, payload["report"]
+    assert_issues_point_at_their_objects(payload["report"])
 
 
 def test_mcp_validation_report_resolves_against_the_repo_from_another_directory(
@@ -79,6 +82,7 @@ def test_mcp_validation_report_resolves_against_the_repo_from_another_directory(
     report = tool_validation_report(file=CORPUS_RULE_RELATIVE)
     assert report["ok"] is True, report["issues"]
     assert report["stats"]["objects_checked"] == 1, report["stats"]
+    assert_issues_point_at_their_objects(report)
 
 
 @pytest.mark.parametrize("target_style", ["basename", "repo-relative", "absolute"])
@@ -100,6 +104,7 @@ def test_validate_file_reports_a_duplicate_id_in_the_target(
     payload = parse_cli_json(result)
     assert "duplicate_id" in _issue_codes(payload)
     assert payload["checks"]["id-uniqueness"]["status"] == "failed"
+    assert_issues_point_at_their_objects(payload["report"])
 
 
 def test_validate_file_unknown_path_does_not_silently_pass(invoke_cli) -> None:
@@ -107,6 +112,7 @@ def test_validate_file_unknown_path_does_not_silently_pass(invoke_cli) -> None:
     assert result.exit_code != 0
     payload = parse_cli_json(result)
     assert "scope_no_match" in _issue_codes(payload)
+    assert_issues_point_at_their_objects(payload["report"])
 
 
 def test_validate_file_honours_the_directory_component(
@@ -126,6 +132,7 @@ def test_validate_file_honours_the_directory_component(
     report = payload["report"]
     assert isinstance(report, dict)
     assert report["stats"]["objects_checked"] == 0
+    assert_issues_point_at_their_objects(report)
 
 
 def test_validate_file_rejects_an_absolute_target_outside_the_repo(
@@ -133,7 +140,9 @@ def test_validate_file_rejects_an_absolute_target_outside_the_repo(
 ) -> None:
     result = invoke_cli("validate", "--file", f"/nowhere/at/all/{CORPUS_RULE}")
     assert result.exit_code != 0
-    assert "scope_no_match" in _issue_codes(parse_cli_json(result))
+    payload = parse_cli_json(result)
+    assert "scope_no_match" in _issue_codes(payload)
+    assert_issues_point_at_their_objects(payload["report"])
 
 
 def test_validate_file_scopes_out_other_objects(
@@ -144,6 +153,7 @@ def test_validate_file_scopes_out_other_objects(
     report = payload["report"]
     assert isinstance(report, dict)
     assert report["stats"]["objects_checked"] == 1
+    assert_issues_point_at_their_objects(report)
 
 
 def test_unparseable_object_yaml_is_a_validation_issue(invoke_cli, tide_corpus_repo: Path) -> None:
@@ -156,6 +166,7 @@ def test_unparseable_object_yaml_is_a_validation_issue(invoke_cli, tide_corpus_r
     assert "yaml_parse" in _issue_codes(payload)
     assert "Traceback" not in (result.stdout + result.stderr)
     assert payload["checks"]["schema"]["status"] == "failed"
+    assert_issues_point_at_their_objects(payload["report"])
 
 
 def test_unparseable_debug_yaml_is_still_reported(invoke_cli, tide_corpus_repo: Path) -> None:
@@ -172,6 +183,7 @@ def test_unparseable_debug_yaml_is_still_reported(invoke_cli, tide_corpus_repo: 
     payload = parse_cli_json(result)
     assert "yaml_parse" in _issue_codes(payload)
     assert "Traceback" not in (result.stdout + result.stderr)
+    assert_issues_point_at_their_objects(payload["report"])
 
 
 def test_unparseable_object_yaml_scoped_by_file(invoke_cli, tide_corpus_repo: Path) -> None:
@@ -179,8 +191,10 @@ def test_unparseable_object_yaml_scoped_by_file(invoke_cli, tide_corpus_repo: Pa
     broken.write_text("name: [\n", encoding="utf-8")
     result = invoke_cli("validate", "--file", "broken.yaml")
     assert result.exit_code != 0
-    codes = _issue_codes(parse_cli_json(result))
+    payload = parse_cli_json(result)
+    codes = _issue_codes(payload)
     assert codes == ["yaml_parse"], codes
+    assert_issues_point_at_their_objects(payload["report"])
 
 
 @pytest.mark.cli_smoke
@@ -230,6 +244,7 @@ def test_validate_file_and_broken_yaml_on_console_script(
     assert scoped.returncode == 0, scoped.stdout + scoped.stderr
     payload = json.loads(scoped.stdout.strip())
     assert payload["report"]["stats"]["objects_checked"] == 1
+    assert_issues_point_at_their_objects(payload["report"])
 
     (repo / "objects" / "rules" / "broken.yaml").write_text("name: [\n", encoding="utf-8")
     broken = script_runner.run(
@@ -244,3 +259,4 @@ def test_validate_file_and_broken_yaml_on_console_script(
     assert any(issue["code"] == "yaml_parse" for issue in broken_payload["report"]["issues"]), (
         broken_payload
     )
+    assert_issues_point_at_their_objects(broken_payload["report"])
