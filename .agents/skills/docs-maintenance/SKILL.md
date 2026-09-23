@@ -97,14 +97,17 @@ uv run pytest tests/test_docs/test_docs_commands_golden.py -q
 |------|------------|
 | Resolution | A documented subcommand, flag, or positional count the live Typer tree does not have |
 | Execution | A read-only sample (`validate`, `lint`, `info`, `generate`) that raises or does not emit one JSON envelope |
-| Output samples | A `text`/`json` fence whose lines the command no longer prints |
+| Output samples | A `text`/`json` fence tagged `output-of="opentide …"` whose lines the command no longer prints, or whose `exit=N` the command or its section contradicts |
 
 Failures name the page and line, so fix the page — or the CLI — rather than
 loosening the test. Extraction lives in `tests/docs_commands.py`; add a page
 and it is picked up automatically.
 
-Writing a sample means committing to it. Prefer showing real output captured
-from a scaffolded repo over illustrative text.
+Writing a sample means committing to it. Capture real output from a scaffolded
+repo and tag the fence with the command that printed it, e.g.
+`` ```text output-of="opentide deploy metadata --platform splunk" exit=2 ``.
+The command must also appear in a shell fence on the page; see
+[`docs/README.md`](../../../docs/README.md#output-samples) for the matching rules.
 
 ## Platform capability rule
 
