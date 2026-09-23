@@ -14,6 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - A `text` or `json` fence in `docs/` tagged `output-of="opentide …"` (plus `exit=N` for a command meant to fail) is run against a repository scaffolded as in the tutorial, with deployers stubbed. Its lines or JSON values and its exit code must match the live command, the command must be printed on the same page, and a failing sample's section must say which code it exits with ([#299](https://github.com/OpenTideHQ/opentide/issues/299)).
 - A sample of a failure the finished tutorial does not produce names the repository edit it needs, `state=dangling-reference` or `state=unterminated-string`, so the `exit-codes` failure envelope and the `validate` offline-syntax finding are checked like any other sample ([#299](https://github.com/OpenTideHQ/opentide/issues/299)).
+- Pairing is no longer opt-in for CLI output. A `text`, `json`, or unlabelled fence under `docs/cli/` or `docs/usage/` that holds an `"ok"` / `"status"` key, or a line starting `OK `, `SKIPPED `, `WARNING `, `DEPRECATED `, `FATAL`, or `== … ==`, fails the golden test unless it carries `output-of=` or is marked `illustrative` ([#299](https://github.com/OpenTideHQ/opentide/issues/299)).
 
 ## [0.5.0] — 2026-09-23
 

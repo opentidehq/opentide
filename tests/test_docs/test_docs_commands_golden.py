@@ -14,7 +14,9 @@ Three gates here, in increasing cost:
   has to produce exactly one JSON document;
 * output samples — a ``text`` / ``json`` fence tagged ``output-of="opentide …"``
   runs that command against the same repo and must match what it prints and
-  the exit code it returns (#299).
+  the exit code it returns (#299). A fence under ``docs/cli/`` or
+  ``docs/usage/`` that reads like CLI output must be tagged, or marked
+  ``illustrative``.
 """
 
 from __future__ import annotations
@@ -31,19 +33,24 @@ import pytest
 from click.testing import Result
 from tests.docs_commands import (
     DOCS,
+    GUARDED_LANGUAGES,
+    ROOT,
     DocCommand,
     DocOutput,
     documented_commands,
     documented_outputs,
     fenced_blocks,
     heading_line,
+    iter_fences,
     iter_shell_lines,
+    looks_like_cli_output,
     normalise,
     outputs_in,
     resolve,
     section_prose,
     split_invocations,
     stated_exit_codes,
+    unchecked_output_fences,
 )
 from typer.testing import CliRunner
 
@@ -324,6 +331,93 @@ def test_every_repo_state_is_named_by_a_sample() -> None:
     """A state no sample names is an edit no page describes."""
     named = {output.state for output in DOC_OUTPUTS if output.state}
     assert not set(REPO_STATES) - named, f"unused: {sorted(set(REPO_STATES) - named)}"
+
+
+#: Pages about the CLI. MCP pages show tool calls and responses, which no
+#: `opentide` command prints.
+CLI_OUTPUT_DIRS = (DOCS / "cli", DOCS / "usage")
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ('{ "ok": true }', True),
+        ('{"status" : "passed"}', True),
+        ("OK Full generation pipeline completed", True),
+        ("SKIPPED nothing to deploy", True),
+        ("  WARNING rule has no author", True),
+        ("DEPRECATED opentide x; use opentide y.", True),
+        ("FATAL: Validation failed", True),
+        ("== Documentation generation ==", True),
+        ("OKAY", False),
+        ("status: STAGING", False),
+        ('{ "statuses": [] }', False),
+        ("==not a header==", False),
+        ("ValueError: validate must be callable", False),
+    ],
+)
+def test_what_reads_as_cli_output(body: str, expected: bool) -> None:
+    assert looks_like_cli_output(body.splitlines()) is expected
+
+
+_UNCHECKED_PAGE = "\n".join(
+    [
+        "```json",
+        '{ "ok": false, "status": "failed", "message": "Validation failed" }',
+        "```",
+        "```text",
+        "== MDR Deployment ==",
+        "OK Deployment completed",
+        "```",
+        "```",
+        "FATAL: Validation failed",
+        "```",
+        '```json output-of="opentide --json validate" exit=1',
+        '{ "ok": false }',
+        "```",
+        "```text illustrative",
+        "WARNING shown for the layout, not captured",
+        "```",
+        "```yaml",
+        "status: STAGING",
+        "```",
+        "```text",
+        "Validation issues are grouped by file.",
+        "```",
+    ]
+)
+
+
+def test_the_output_guard_fails_an_untagged_envelope() -> None:
+    """Self-test: an envelope, phase headers, or a FATAL line with no command must be reported."""
+    assert [fence.line for fence in unchecked_output_fences(_UNCHECKED_PAGE)] == [1, 4, 8]
+
+
+def test_every_cli_output_sample_is_checked_or_marked_illustrative() -> None:
+    """Class guard for #299: an untagged sample is never run, so it drifts unseen.
+
+    Pairing is opt-in. The deploy sample and `info`'s message both drifted
+    because nothing named the command that printed them.
+    """
+    pages = sorted(page for directory in CLI_OUTPUT_DIRS for page in directory.rglob("*.md"))
+    texts = {page.relative_to(ROOT).as_posix(): page.read_text(encoding="utf-8") for page in pages}
+    read_as_output = [
+        fence
+        for text in texts.values()
+        for fence in iter_fences(text)
+        if fence.language in GUARDED_LANGUAGES and looks_like_cli_output(fence.body)
+    ]
+    assert len(read_as_output) >= 10, "the guard no longer recognises the samples it protects"
+    unchecked = [
+        f"{page}:{fence.line}: ```{fence.info}"
+        for page, text in texts.items()
+        for fence in unchecked_output_fences(text)
+    ]
+    assert not unchecked, (
+        "These fences read like OpenTide CLI output but name no command. Add "
+        'output-of="opentide …" (and exit=N when it fails) so the output check runs it, '
+        "or mark the fence illustrative and say why in the prose:\n  " + "\n  ".join(unchecked)
+    )
 
 
 @pytest.mark.parametrize("output", [o for o in DOC_OUTPUTS if o.exit_code], ids=_where)

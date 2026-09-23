@@ -98,6 +98,16 @@ A sample of a failure the finished tutorial does not produce names the edit it n
 
 The edits live in `REPO_STATES` in the golden test. Add one there instead of leaving a failure sample unchecked.
 
+Pairing is required, not optional, for anything that reads like CLI output. Under `cli/` and `usage/`, a `text`, `json`, or unlabelled fence that holds a result-envelope key (`"ok"` or `"status"`), or a line starting `OK `, `SKIPPED `, `WARNING `, `DEPRECATED `, `FATAL`, or `== … ==`, must carry `output-of=`. If no command the harness runs can print it, mark it `illustrative` instead and say in the prose that it is not captured output:
+
+````markdown
+```text illustrative
+WARNING …
+```
+````
+
+Prefer a `state=` over `illustrative`: an illustrative sample is never compared with anything, so it can drift. MCP pages are exempt, because no `opentide` command prints an MCP tool call or response.
+
 None of these attributes renders: Fumadocs reads only `title`, `tab`, `noCopy` and `lineNumbers` from fence meta, and GitHub reads only the language.
 
 ## Agent maintenance

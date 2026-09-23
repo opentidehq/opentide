@@ -98,6 +98,7 @@ uv run pytest tests/test_docs/test_docs_commands_golden.py -q
 | Resolution | A documented subcommand, flag, or positional count the live Typer tree does not have |
 | Execution | A read-only sample (`validate`, `lint`, `info`, `generate`) that raises or does not emit one JSON envelope |
 | Output samples | A `text`/`json` fence tagged `output-of="opentide …"` whose lines the command no longer prints, or whose `exit=N` the command or its section contradicts |
+| Unchecked samples | A `text`/`json`/unlabelled fence under `docs/cli/` or `docs/usage/` that reads like CLI output (`"ok"`/`"status"` keys, or a line starting `OK `, `SKIPPED `, `WARNING `, `DEPRECATED `, `FATAL`, `== … ==`) with neither `output-of=` nor `illustrative` |
 
 Failures name the page and line, so fix the page — or the CLI — rather than
 loosening the test. Extraction lives in `tests/docs_commands.py`; add a page
@@ -111,6 +112,11 @@ The command must also appear in a shell fence on the page; see
 A failure the finished tutorial cannot produce names the repository edit it
 needs, e.g. `state=dangling-reference`; the edits are `REPO_STATES` in the
 golden test — add one there rather than leave the sample unchecked.
+
+Tagging is not optional for CLI output: an untagged sample that looks like it
+fails the unchecked-samples gate. Mark a fence `illustrative` only when no
+command in the golden repository can print it, and say so in the prose. MCP
+pages (`docs/mcp/`) are exempt.
 
 ## Platform capability rule
 

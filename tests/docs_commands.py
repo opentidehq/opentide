@@ -15,7 +15,8 @@ questions and only the first one has an answer.
 Output samples had the same gap: a ``text`` block under a command was never
 compared with what the command prints, so the deploy dry-run sample went on
 showing lines 0.5.0 never emits (#299). A sample opts in by naming its
-command, ``output-of="opentide …"``, in the fence's info string.
+command, ``output-of="opentide …"``, in the fence's info string; one that reads
+like CLI output and does not opt in has to say it is ``illustrative``.
 """
 
 from __future__ import annotations
@@ -351,6 +352,37 @@ def documented_outputs(paths: list[Path] | None = None) -> list[DocOutput]:
         relative = page.relative_to(ROOT).as_posix()
         found.extend(outputs_in(page.read_text(encoding="utf-8"), relative))
     return found
+
+
+#: Pairing is opt-in, so the guard below reads every fence a sample could sit
+#: in: the two languages ``output-of`` accepts, and none at all.
+GUARDED_LANGUAGES = OUTPUT_LANGUAGES | {""}
+#: Lines only OpenTide's renderer starts: ``emit_result``'s status words and
+#: ``emit_deprecation``'s, the ``--no-color`` FATAL line, and a phase header.
+_CLI_LINE = re.compile(r"^\s*(?:(?:OK|SKIPPED|WARNING|DEPRECATED)\s|FATAL\b|==\s.*\s==\s*$)")
+#: A key of the result envelope every ``--json`` command writes.
+_ENVELOPE_KEY = re.compile(r'"(?:ok|status)"\s*:')
+#: A sample that shows output no command in the golden repository can print.
+_ILLUSTRATIVE = re.compile(r"(?:^|\s)illustrative(?=\s|$)")
+
+
+def looks_like_cli_output(body: tuple[str, ...] | list[str]) -> bool:
+    """Whether *body* reads like something ``opentide`` printed."""
+    if _ENVELOPE_KEY.search("\n".join(body)):
+        return True
+    return any(_CLI_LINE.match(line) for line in body)
+
+
+def unchecked_output_fences(text: str) -> list[CodeFence]:
+    """Fences in *text* that read like CLI output but name no command and are not illustrative."""
+    return [
+        fence
+        for fence in iter_fences(text)
+        if fence.language in GUARDED_LANGUAGES
+        and looks_like_cli_output(fence.body)
+        and not (fence.language in OUTPUT_LANGUAGES and _OUTPUT_OF.search(fence.info))
+        and not _ILLUSTRATIVE.search(fence.info)
+    ]
 
 
 def _is_group(command: click.Command) -> bool:
