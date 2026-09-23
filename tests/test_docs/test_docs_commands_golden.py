@@ -31,7 +31,6 @@ import pytest
 from click.testing import Result
 from tests.docs_commands import (
     DOCS,
-    ROOT,
     DocCommand,
     DocOutput,
     documented_commands,
@@ -543,33 +542,6 @@ def _no_color_view(output: str) -> str:
 
 
 @pytest.mark.cli_e2e
-@pytest.mark.parametrize("colour", [False, True], ids=["no-color", "colour"])
-@pytest.mark.parametrize("page", ["docs/usage/tutorial.md", "docs/usage/quickstart.md"])
-def test_documented_generate_output_matches_the_live_pipeline(
-    page: str, colour: bool, documented_repo: Path
-) -> None:
-    """Issue #247: both pages printed a checkmark list the CLI never emitted.
-
-    The pages show the `--no-color` headers and say a colour terminal draws
-    each one as a rule; both forms must carry the documented phases in order.
-    """
-    blocks = fenced_blocks(ROOT / page, "text")
-    sample = next(block for block in blocks if "generation" in block)
-    argv = ["--repo", str(documented_repo), "generate"]
-    result = CliRunner().invoke(app, argv if colour else ["--no-color", *argv])
-    assert result.exit_code == 0, result.stdout + result.stderr
-    # Phase headers go to stderr, the closing status to stdout; the page shows
-    # the terminal view, which is both interleaved. `stdout + stderr` would put
-    # the closing line first and fail the ordering check for the wrong reason.
-    live = _no_color_view(result.output) if colour else result.output
-    missing = _lines_in_order(sample, live)
-    assert not missing, (
-        f"{page} documents lines `generate` does not print as whole lines in this order: "
-        f"{missing}\n--- live ---\n{live}"
-    )
-
-
-@pytest.mark.cli_e2e
 def test_info_json_carries_the_documented_envelope(documented_repo: Path) -> None:
     """Issue #247: the reference claimed `info` had no `ok` wrapper."""
     sample = next(
@@ -585,23 +557,6 @@ def test_info_json_carries_the_documented_envelope(documented_repo: Path) -> Non
     assert not undocumented, f"`info` returns keys docs/cli/info.md does not show: {undocumented}"
     assert live["ok"] is True
     assert live["status"] == "completed"
-
-
-@pytest.mark.cli_e2e
-def test_tutorial_query_validation_sample_is_offline(documented_repo: Path) -> None:
-    """The tutorial promises an offline parse; #239 made that true."""
-    sample = next(
-        block
-        for block in fenced_blocks(ROOT / "docs/usage/tutorial.md", "text")
-        if "syntax validation" in block
-    )
-    result = CliRunner().invoke(
-        app, ["--repo", str(documented_repo), "validate", "query", "--platform", "sentinel"]
-    )
-    live = result.output
-    assert "Offline KQL syntax validation" in live
-    missing = _lines_in_order(sample, live)
-    assert not missing, f"tutorial sample lines not printed in order: {missing}\n{live}"
 
 
 #: A documented JSON value spelled like this stands for whatever is returned.

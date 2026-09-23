@@ -138,7 +138,11 @@ CrowdStrike and HarfangLab return unsupported — never fake validation. The
 result is a normal failure envelope, so `--json` shape does not change between
 supported and unsupported platforms:
 
-```json
+```bash
+opentide --json validate query --platform crowdstrike
+```
+
+```json output-of="opentide --json validate query --platform crowdstrike" exit=1
 {
   "platform": "crowdstrike",
   "valid": null,

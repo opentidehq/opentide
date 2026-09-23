@@ -36,7 +36,7 @@ Before validation can work, the schemas and templates must exist:
 opentide generate
 ```
 
-```text
+```text output-of="opentide generate"
 == Documentation generation ==
 == Export generation ==
 == Object vocabulary generation ==
@@ -188,14 +188,19 @@ On success the CLI logs that all content passed validation (exit `0`). Filenames
 opentide --json validate
 ```
 
-```json
+```json output-of="opentide --json validate"
 {
   "checks": {
     "id-uniqueness": { "check": "id-uniqueness", "status": "passed" },
     "uuid-format": { "check": "uuid-format", "status": "passed" },
     "schema": { "check": "schema", "status": "passed" }
   },
-  "report": { "ok": true, "issues": [], "warnings": [], "stats": {} },
+  "report": {
+    "ok": true,
+    "issues": [],
+    "warnings": [],
+    "stats": { "objects_checked": 3, "wall_ms": "..." }
+  },
   "ok": true,
   "status": "passed",
   "message": "Validation passed"
@@ -256,7 +261,7 @@ Sentinel supports query validation, so check the KQL before deploying. `validate
 opentide validate query --platform sentinel
 ```
 
-```text
+```text output-of="opentide validate query --platform sentinel"
 OK Offline KQL syntax validation passed for sentinel (1 query across 1 rule)
 ```
 
