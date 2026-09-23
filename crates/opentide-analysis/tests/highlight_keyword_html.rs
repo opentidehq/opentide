@@ -100,3 +100,23 @@ configurations:
         "{html}"
     );
 }
+
+#[test]
+fn tide_markdown_text_fields_are_multi_tier() {
+    let src = "name: X\ndescription: |-\n  #### Heading\n  use `DeviceFileEvents`\n  - list item\n";
+    let r = highlight(LanguageId::TideYaml, src);
+    let html = tokens_to_html(src, &r.tokens);
+    assert!(
+        r.tokens
+            .iter()
+            .any(|t| t.capture == "markdown.heading"
+                && src[t.span.start..t.span.end].contains("####")),
+        "{:?}",
+        r.tokens
+    );
+    assert!(html.contains("markdown-heading"), "{html}");
+    assert!(
+        html.contains("markdown-code") || html.contains("`DeviceFileEvents`"),
+        "{html}"
+    );
+}

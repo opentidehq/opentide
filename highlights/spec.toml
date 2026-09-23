@@ -2,7 +2,7 @@
 
 [meta]
 id = "opentide-highlight"
-version = "0.1.0"
+version = "0.2.0"
 legend = [
   "comment",
   "keyword",
@@ -25,6 +25,14 @@ legend = [
   "tide.property",
   "tide.uuid",
   "tide.schema",
+  "markdown.heading",
+  "markdown.emphasis",
+  "markdown.strong",
+  "markdown.code",
+  "markdown.link",
+  "markdown.list",
+  "markdown.quote",
+  "macro",
 ]
 
 [captures.comment]
@@ -131,3 +139,43 @@ helix = "constant"
 tm = "entity.name.type.schema.tide"
 monaco = "type"
 helix = "type"
+
+[captures."markdown.heading"]
+tm = "markup.heading.markdown.tide"
+monaco = "type"
+helix = "markup.heading"
+
+[captures."markdown.emphasis"]
+tm = "markup.italic.markdown.tide"
+monaco = "variable"
+helix = "markup.italic"
+
+[captures."markdown.strong"]
+tm = "markup.bold.markdown.tide"
+monaco = "keyword"
+helix = "markup.bold"
+
+[captures."markdown.code"]
+tm = "markup.inline.raw.markdown.tide"
+monaco = "string"
+helix = "markup.raw.inline"
+
+[captures."markdown.link"]
+tm = "markup.underline.link.markdown.tide"
+monaco = "type"
+helix = "markup.link.url"
+
+[captures."markdown.list"]
+tm = "punctuation.definition.list.markdown.tide"
+monaco = "keyword"
+helix = "markup.list"
+
+[captures."markdown.quote"]
+tm = "markup.quote.markdown.tide"
+monaco = "comment"
+helix = "markup.quote"
+
+[captures.macro]
+tm = "entity.name.function.macro.opentide"
+monaco = "predefined"
+helix = "function.macro"

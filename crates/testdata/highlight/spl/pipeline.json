@@ -106,8 +106,8 @@
           "character": 24
         }
       },
-      "capture": "variable",
-      "token_type": 7
+      "capture": "function.builtin",
+      "token_type": 5
     },
     {
       "span": {
@@ -221,6 +221,14 @@
     "tide.keyword",
     "tide.property",
     "tide.uuid",
-    "tide.schema"
+    "tide.schema",
+    "markdown.heading",
+    "markdown.emphasis",
+    "markdown.strong",
+    "markdown.code",
+    "markdown.link",
+    "markdown.list",
+    "markdown.quote",
+    "macro"
   ]
 }

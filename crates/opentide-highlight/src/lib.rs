@@ -1,14 +1,21 @@
 //! Frozen HighlightSpec and semantic-token encoding.
 //!
 //! Capture rename in `highlights/spec.toml` is a **major** (breaking) change.
+//! Adding captures is a minor.
+
+mod markdown;
 
 use opentide_core::{ByteSpan, LanguageId, Range, span_to_range};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 use thiserror::Error;
 
+pub use markdown::highlight_markdown_line;
+
 pub const SPEC_TOML: &str = include_str!("../../../highlights/spec.toml");
+pub const TIDE_FIELDS_TOML: &str = include_str!("../../../catalogs/tide/fields.toml");
 pub const KQL_HIGHLIGHTS_SCM: &str = include_str!("../../../highlights/queries/kql/highlights.scm");
 pub const SPL_HIGHLIGHTS_SCM: &str = include_str!("../../../highlights/queries/spl/highlights.scm");
 pub const TIDE_HIGHLIGHTS_SCM: &str =
@@ -83,6 +90,78 @@ impl HighlightSpec {
     pub fn contains_capture(&self, capture: &str) -> bool {
         self.captures.contains_key(capture)
     }
+}
+
+/// One pydantic-aligned Tide field (keys, markdown flags, hover docs).
+#[derive(Debug, Clone, Deserialize)]
+pub struct TideField {
+    pub name: String,
+    #[serde(default = "default_tide_capture")]
+    pub capture: String,
+    #[serde(default)]
+    pub markdown: bool,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    #[serde(default, rename = "type")]
+    pub type_name: Option<String>,
+    #[serde(default)]
+    pub vocab: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+}
+
+fn default_tide_capture() -> String {
+    "tide.property".into()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct TideFieldsFile {
+    fields: Vec<TideField>,
+}
+
+fn tide_fields_index() -> &'static BTreeMap<String, TideField> {
+    static INDEX: OnceLock<BTreeMap<String, TideField>> = OnceLock::new();
+    INDEX.get_or_init(|| {
+        let file: TideFieldsFile = toml::from_str(TIDE_FIELDS_TOML).expect("fields.toml");
+        let mut m = BTreeMap::new();
+        for f in file.fields {
+            m.insert(f.name.clone(), f);
+        }
+        m
+    })
+}
+
+pub fn load_tide_fields() -> Vec<TideField> {
+    tide_fields_index().values().cloned().collect()
+}
+
+pub fn tide_field(name: &str) -> Option<&'static TideField> {
+    tide_fields_index().get(name)
+}
+
+/// HighlightSpec capture used for a YAML mapping key.
+pub fn tide_key_capture(key: &str) -> &'static str {
+    match tide_field(key).map(|f| f.capture.as_str()) {
+        Some("tide.keyword") => "tide.keyword",
+        Some("tide.property") => "tide.property",
+        Some("tide.schema") => "tide.schema",
+        Some("property") => "property",
+        _ => "property",
+    }
+}
+
+pub fn tide_field_is_markdown(key: &str) -> bool {
+    tide_field(key).is_some_and(|f| f.markdown)
+}
+
+pub fn tide_keys_for_capture(capture: &str) -> Vec<String> {
+    let mut names: Vec<String> = tide_fields_index()
+        .values()
+        .filter(|f| f.capture == capture)
+        .map(|f| f.name.clone())
+        .collect();
+    names.sort();
+    names
 }
 
 /// Extract `@capture` names from a tree-sitter highlights.scm file.
@@ -170,6 +249,14 @@ pub fn lsp_token_type_index(capture: &str) -> u32 {
         "number" | "tide.uuid" => "number",
         "boolean" | "constant" => "enumMember",
         "error" => "macro",
+        "markdown.heading" => "type",
+        "markdown.strong" => "keyword",
+        "markdown.emphasis" => "variable",
+        "markdown.code" => "regexp",
+        "markdown.link" => "decorator",
+        "markdown.list" => "operator",
+        "markdown.quote" => "comment",
+        "macro" => "macro",
         _ => "variable",
     };
     LSP_TOKEN_TYPES.iter().position(|n| *n == name).unwrap_or(8) as u32
@@ -239,6 +326,14 @@ pre{margin:0;white-space:pre-wrap}
 .tide-uuid{color:#b5cea8}
 .tide-schema{color:#4ec9b0}
 .variable{color:#9cdcfe}
+.markdown-heading{color:#4fc1ff;font-weight:800}
+.markdown-emphasis{color:#d4d4d4;font-style:italic}
+.markdown-strong{color:#dcdcaa;font-weight:800}
+.markdown-code{color:#e6c07b;background:#2d2d2d}
+.markdown-link{color:#4ec9b0;text-decoration:underline}
+.markdown-list{color:#c586c0;font-weight:800}
+.markdown-quote{color:#6a9955;font-style:italic}
+.macro{color:#56b6c2;font-weight:700;font-style:italic}
 </style><pre>"#,
     );
     let mut last = 0usize;
@@ -331,18 +426,51 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         "comment": "capture:number",
     }));
     if language == LanguageId::TideYaml {
+        let keyword_keys = tide_keys_for_capture("tide.keyword");
+        let property_keys = tide_keys_for_capture("tide.property");
         if let Some(maps) = spec.captures.get("tide.keyword") {
+            let joined = keyword_keys
+                .iter()
+                .map(|k| regex::escape(k))
+                .collect::<Vec<_>>()
+                .join("|");
             patterns.push(serde_json::json!({
                 "name": maps.tm,
-                "match": "(?m)^\\s*(name|metadata|description|status|severity|techniques|detection_model|response|configurations|objective|threat|composition|criticality|references|procedure)\\s*:",
+                "match": format!("(?m)^\\s*(?:{joined})\\s*:"),
                 "comment": "capture:tide.keyword",
             }));
         }
         if let Some(maps) = spec.captures.get("tide.property") {
+            let joined = property_keys
+                .iter()
+                .map(|k| regex::escape(k))
+                .collect::<Vec<_>>()
+                .join("|");
             patterns.push(serde_json::json!({
                 "name": maps.tm,
-                "match": "(?m)^\\s*(uuid|schema|version|created|modified|tlp|author|organisation|query|search|enabled)\\s*:",
+                "match": format!("(?m)^\\s*(?:{joined})\\s*:"),
                 "comment": "capture:tide.property",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("markdown.heading") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "(?m)^\\s*#{1,6}\\s+.*$",
+                "comment": "capture:markdown.heading",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("markdown.code") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "`[^`]+`",
+                "comment": "capture:markdown.code",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("markdown.list") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "(?m)^\\s*(?:[-*+]|\\d+\\.)\\s+",
+                "comment": "capture:markdown.list",
             }));
         }
         if let Some(maps) = spec.captures.get("tide.uuid") {
@@ -475,7 +603,14 @@ mod tests {
         let spec = HighlightSpec::load().expect("spec");
         assert!(spec.legend.contains(&"keyword".to_string()));
         assert!(spec.contains_capture("tide.keyword"));
+        assert!(spec.contains_capture("markdown.heading"));
+        assert!(spec.contains_capture("macro"));
         assert!(spec.token_index("keyword").is_ok());
+        assert!(!load_tide_fields().is_empty());
+        assert_eq!(tide_key_capture("description"), "tide.keyword");
+        assert_eq!(tide_key_capture("alert"), "tide.property");
+        assert!(tide_field_is_markdown("description"));
+        assert!(!tide_field_is_markdown("query"));
     }
 
     #[test]
@@ -484,6 +619,24 @@ mod tests {
         assert_scm_subset_of_spec(&spec, KQL_HIGHLIGHTS_SCM).unwrap();
         assert_scm_subset_of_spec(&spec, SPL_HIGHLIGHTS_SCM).unwrap();
         assert_scm_subset_of_spec(&spec, TIDE_HIGHLIGHTS_SCM).unwrap();
+    }
+
+    #[test]
+    fn tide_highlights_scm_lists_every_field_catalog_key() {
+        let re = Regex::new(r#"\^\(([^)]+)\)\$"#).unwrap();
+        let mut scm_keys = std::collections::BTreeSet::new();
+        for cap in re.captures_iter(TIDE_HIGHLIGHTS_SCM) {
+            for part in cap[1].split('|') {
+                scm_keys.insert(part.to_string());
+            }
+        }
+        let catalog: std::collections::BTreeSet<String> =
+            load_tide_fields().into_iter().map(|f| f.name).collect();
+        let missing: Vec<_> = catalog.difference(&scm_keys).cloned().collect();
+        assert!(
+            missing.is_empty(),
+            "highlights.scm missing fields.toml keys: {missing:?}"
+        );
     }
 
     #[test]
@@ -554,6 +707,9 @@ mod tests {
         assert!(html.contains("class=\"operator-pipe\""));
         assert!(html.contains("#c586c0"));
         assert!(html.contains("#ff79c6"));
+        assert!(html.contains("#4fc1ff"));
+        assert!(html.contains(".markdown-heading"));
+        assert!(html.contains(".macro"));
     }
 }
 

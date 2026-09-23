@@ -1,6 +1,6 @@
 {
   "name": "OpenTide opentide-yaml",
-  "opentideHighlightSpec": "0.1.0",
+  "opentideHighlightSpec": "0.2.0",
   "patterns": [
     {
       "comment": "capture:comment",
@@ -19,13 +19,28 @@
     },
     {
       "comment": "capture:tide.keyword",
-      "match": "(?m)^\\s*(name|metadata|description|status|severity|techniques|detection_model|response|configurations|objective|threat|composition|criticality|references|procedure)\\s*:",
+      "match": "(?m)^\\s*(?:carbon_black_cloud|composition|configurations|criticality|crowdstrike|defender_for_endpoint|description|detection_model|file|harfanglab|metadata|name|objective|platforms|procedure|references|response|sentinel|sentinel_one|severity|splunk|status|techniques|threat)\\s*:",
       "name": "keyword.control.tide"
     },
     {
       "comment": "capture:tide.property",
-      "match": "(?m)^\\s*(uuid|schema|version|created|modified|tlp|author|organisation|query|search|enabled)\\s*:",
+      "match": "(?m)^\\s*(?:actors|alert|alert_severity|analysis|att\\&ck|author|availability|category|chaining|containment|contributors|created|cron_schedule|data|device|enabled|entities|event|frequency|grouping|impact|impacted_entities|internal|leverage|lookback|methodology|modified|organisation|priority|public|purpose|query|recommendation|relation|reports|requirements|scheduling|schema|scope|search|searches|selection|signals|strategy|suppression|surface|system|terrain|threats|title|tlp|type|uuid|vector|version|viability)\\s*:",
       "name": "variable.other.property.tide"
+    },
+    {
+      "comment": "capture:markdown.heading",
+      "match": "(?m)^\\s*#{1,6}\\s+.*$",
+      "name": "markup.heading.markdown.tide"
+    },
+    {
+      "comment": "capture:markdown.code",
+      "match": "`[^`]+`",
+      "name": "markup.inline.raw.markdown.tide"
+    },
+    {
+      "comment": "capture:markdown.list",
+      "match": "(?m)^\\s*(?:[-*+]|\\d+\\.)\\s+",
+      "name": "punctuation.definition.list.markdown.tide"
     },
     {
       "comment": "capture:tide.uuid",
