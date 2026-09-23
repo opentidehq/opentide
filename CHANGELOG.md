@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- `opentide setup --ci <github|gitlab|azure>` accepts `--default-branch`, like `setup ci`. Without the flag, a repository with no `origin/HEAD` now gets its checked-out branch, ahead of `init.defaultBranch` and `main`: a repository whose only branch was `trunk` got a pipeline that fetched from, pushed to, and deployed on `main`. Both forms warn when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist ([#288](https://github.com/OpenTideHQ/opentide/issues/288)).
+
+### Tests
+
+- A parity test fails when a `setup ci` option is missing from the one-shot `setup --ci`, declared with a different default, or not passed on to CI generation ([#288](https://github.com/OpenTideHQ/opentide/issues/288)).
+
 ## [0.5.0] — 2026-09-23
 
 Minor on 0.4.0. Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names: 0.4.0 rejected every such threat with `Input should be a valid string` ([#189](https://github.com/OpenTideHQ/opentide/issues/189)). It is a minor rather than a patch because a threat written the way 0.4.0 required (`impact: Data Breach`) now fails validation until it becomes a one-item list — read **Changed** before upgrading a pipeline.
