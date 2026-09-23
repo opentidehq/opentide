@@ -32,7 +32,11 @@ from opentide.cli.services.setup.interactive import (
 )
 from opentide.cli.services.setup.mcp import McpSetupOptions, run_mcp_setup
 from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
-from opentide.cli.services.setup.promotion import effective_promotion, plan_promotion_override
+from opentide.cli.services.setup.promotion import (
+    effective_promotion,
+    plan_promotion_override,
+    write_promotion_override,
+)
 from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
 from opentide.cli.services.setup.skills import (
     SkillsDownloadError,
@@ -129,13 +133,34 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
     run_platforms = options.run_platforms or (
         bool(options.platforms) and options.run_ci and options.ci is not CiPlatform.none
     )
-    if options.run_ci and options.ci is not None and options.ci is not CiPlatform.none:
-        # Refuse bad promotion flags before the steps ahead of CI write anything.
+    ci_writes_promotion = (
+        options.run_ci and options.ci is not None and options.ci is not CiPlatform.none
+    )
+    # Refuse a bad flag before any step writes. ``setup ci`` writes the table
+    # itself; plain ``setup`` writes it here (#325).
+    if options.promotion is not None or options.promotion_target is not None:
         plan_promotion_override(
             options.path.resolve(),
             enabled=options.promotion,
             promotion_target=options.promotion_target,
         )
+
+    if not ci_writes_promotion:
+        override = plan_promotion_override(
+            options.path.resolve(),
+            enabled=options.promotion,
+            promotion_target=options.promotion_target,
+        )
+        if override is not None:
+            written = write_promotion_override(options.path.resolve(), override)
+            record(
+                "promotion",
+                {
+                    "message": "Promotion configured",
+                    "files": written,
+                    "path": str(options.path.resolve()),
+                },
+            )
 
     if options.run_repo:
         repo_result = run_repo_setup(_repo_options(options))

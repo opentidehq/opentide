@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 from opentide.cli import app
 from opentide.cli.enums import CiPlatform
 from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
+from opentide.cli.services.setup.orchestrator import SetupOptions, run_setup
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -332,3 +333,127 @@ def test_an_explicit_promotion_flag_is_applied_or_refused(
         assert merged["enabled"] is enabled
     if target is not None:
         assert merged["promotion_target"] == target
+
+
+def _plain(repo: Path, **options: Any) -> dict[str, object]:
+    return run_setup(
+        SetupOptions(
+            path=repo,
+            yes=True,
+            run_repo=True,
+            run_ci=False,
+            promotion=options.get("promotion"),
+            promotion_target=options.get("promotion_target"),
+        )
+    )
+
+
+@pytest.mark.parametrize("enabled", [True, False, None])
+@pytest.mark.parametrize("target", ["PRODUCTION", "STAGING", None])
+@pytest.mark.parametrize(
+    "prior",
+    [None, {"enabled": False, "promotion_target": "STAGING"}],
+    ids=["no-table", "existing"],
+)
+def test_plain_setup_applies_or_refuses_an_explicit_promotion_flag(
+    tmp_path: Path,
+    enabled: bool | None,
+    target: str | None,
+    prior: dict[str, object] | None,
+) -> None:
+    """#325: the same flag on ``opentide setup`` without ``--ci`` is applied or refused."""
+    from opentide.core.files import resolve_configurations
+
+    repo = _repo(tmp_path)
+    if prior is not None:
+        lines = ["[promotion]"]
+        if "enabled" in prior:
+            lines.append(f"enabled = {'true' if prior['enabled'] else 'false'}")
+        if "promotion_target" in prior:
+            lines.append(f'promotion_target = "{prior["promotion_target"]}"')
+        (repo / OVERRIDE).parent.mkdir(parents=True, exist_ok=True)
+        (repo / OVERRIDE).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    before = (repo / OVERRIDE).read_bytes() if (repo / OVERRIDE).is_file() else None
+
+    try:
+        _plain(repo, promotion=enabled, promotion_target=target)
+    except typer.BadParameter:
+        after = (repo / OVERRIDE).read_bytes() if (repo / OVERRIDE).is_file() else None
+        assert after == before
+        assert not (repo / "README.md").exists()
+        return
+
+    merged = resolve_configurations(repo)["deployment"]["promotion"]
+    if enabled is not None:
+        assert merged["enabled"] is enabled
+    if target is not None:
+        assert merged["promotion_target"] == target
+
+
+def test_plain_setup_writes_promotion_without_ci(tmp_path: Path) -> None:
+    repo = tmp_path / "named"
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "--yes",
+            "--name",
+            "Promo",
+            "--org",
+            "Example",
+            "--platform",
+            "sentinel",
+            "--no-promotion",
+            "--path",
+            str(repo),
+        ],
+        env={"OPENTIDE_REPO_ROOT": str(repo), "OPENTIDE_TIDE_WORKSPACE": str(repo)},
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert _override(repo)["promotion"] == {"enabled": False}
+    assert (repo / ".opentide/configurations/platforms/sentinel.toml").is_file()
+
+    targeted = tmp_path / "target"
+    targeted_result = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "--yes",
+            "--name",
+            "Promo",
+            "--platform",
+            "sentinel",
+            "--promotion-target",
+            "STAGING",
+            "--path",
+            str(targeted),
+        ],
+        env={"OPENTIDE_REPO_ROOT": str(targeted), "OPENTIDE_TIDE_WORKSPACE": str(targeted)},
+    )
+    assert targeted_result.exit_code == 0, targeted_result.stdout + targeted_result.stderr
+    assert _override(targeted)["promotion"] == {"promotion_target": "STAGING"}
+
+
+def test_yes_only_setup_still_writes_no_promotion(tmp_path: Path) -> None:
+    repo = tmp_path / "yes-only"
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "--yes", "--no-promotion", "--path", str(repo)],
+        env={"OPENTIDE_REPO_ROOT": str(repo), "OPENTIDE_TIDE_WORKSPACE": str(repo)},
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert (repo / "README.md").is_file()
+    assert _override(repo)["promotion"] == {"enabled": False}
+
+
+def test_plain_setup_refuses_an_unknown_target_before_writing(tmp_path: Path) -> None:
+    repo = tmp_path / "bad"
+    result = runner.invoke(
+        app,
+        ["setup", "--yes", "--promotion-target", "STAGNG", "--path", str(repo)],
+        env={"OPENTIDE_REPO_ROOT": str(repo), "OPENTIDE_TIDE_WORKSPACE": str(repo)},
+    )
+    assert result.exit_code == 2, result.stdout + result.stderr
+    assert not repo.exists() or not any(repo.rglob("*"))
