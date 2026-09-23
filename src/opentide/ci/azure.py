@@ -9,7 +9,6 @@ from opentide.ci.stages import (
     header_comment,
     pip_install,
     production_deploy_steps,
-    promotion_steps,
     staging_deploy_steps,
 )
 from opentide.ci.text import indent
@@ -143,26 +142,6 @@ def render_azure(options: CiRenderOptions) -> str:
         )
     )
 
-    promote_stage = ""
-    promote_cmds = promotion_steps(options)
-    if promote_cmds:
-        promote_stage = (
-            "- stage: Promote\n"
-            "  displayName: Promote\n"
-            "  dependsOn: Deploy\n"
-            "  condition: >\n"
-            f"    and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/{branch}'))\n"
-            "  jobs:\n"
-            + indent(
-                _azure_job(
-                    "promote",
-                    display_name="Promote rules",
-                    steps=_job_steps(options, promote_cmds),
-                ),
-                4,
-            )
-        )
-
     document_stage = (
         "- stage: Document\n"
         "  displayName: Document\n"
@@ -218,6 +197,4 @@ def render_azure(options: CiRenderOptions) -> str:
         "\n"
         f"{document_stage_yaml}\n"
     )
-    if promote_stage:
-        body += "\n" + indent(promote_stage, 2) + "\n"
     return header_comment(options) + body

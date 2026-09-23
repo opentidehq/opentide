@@ -31,6 +31,7 @@ from opentide.cli.services.setup.interactive import (
 )
 from opentide.cli.services.setup.mcp import McpSetupOptions, run_mcp_setup
 from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
+from opentide.cli.services.setup.promotion import plan_promotion_override
 from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
 from opentide.cli.services.setup.skills import (
     SkillsDownloadError,
@@ -114,6 +115,13 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
     run_platforms = options.run_platforms or (
         bool(options.platforms) and options.run_ci and options.ci is not CiPlatform.none
     )
+    if options.run_ci and options.ci is not None and options.ci is not CiPlatform.none:
+        # Refuse bad promotion flags before the steps ahead of CI write anything.
+        plan_promotion_override(
+            options.path.resolve(),
+            enabled=options.promotion,
+            promotion_target=options.promotion_target,
+        )
 
     if options.run_repo:
         repo_result = run_repo_setup(_repo_options(options))

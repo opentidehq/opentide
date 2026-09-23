@@ -61,7 +61,8 @@ def test_render_github_no_inflight_skips_inflight_job() -> None:
     assert "inflight_shards:" not in workflow
 
 
-def test_render_github_promotion_job_omitted_when_no_steps() -> None:
+def test_render_github_has_no_promote_job() -> None:
+    """Promotion runs inside ``opentide deploy``, configured by ``deployment.toml``."""
     options = CiRenderOptions(ci="github", promotion=True, promotion_target="PRODUCTION")
     workflow = render_github(options)
     assert "promote:" not in workflow

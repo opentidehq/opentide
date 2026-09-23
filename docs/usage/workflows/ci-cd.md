@@ -35,8 +35,8 @@ Hand-written examples below pin `pip install 'opentide==0.5.0'` so a pipeline ca
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--staging` / `--no-staging` | staging on | Include the staging deploy stage |
-| `--promotion` / `--no-promotion` | promotion on | Include the promotion stage |
-| `--promotion-target` | `PRODUCTION` | Target status for promotion |
+| `--promotion` / `--no-promotion` | promotion on | Whether `opentide deploy` promotes rules; `--no-promotion` writes `[promotion] enabled = false` to `.opentide/configurations/deployment.toml` |
+| `--promotion-target` | `PRODUCTION` | Status `deploy` promotes rules to; another status is written to the same `[promotion]` table |
 | `--python-version` | `3.12` | CI Python version |
 | `--default-branch` | `origin/HEAD`, then `init.defaultBranch`, then `main` | Branch that deploys and receives inflight shards (GitHub, Azure; GitLab uses `$CI_DEFAULT_BRANCH`) |
 

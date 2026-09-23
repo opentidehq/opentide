@@ -231,6 +231,19 @@ def test_resolve_configurations_merges_parent_opentide_configs(
     assert configs["overlay"]["marker"] == "parent"
 
 
+def test_resolve_configurations_reads_the_workspace_it_is_given(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("discovered", "given"):
+        configs = tmp_path / name / ".opentide" / "configurations"
+        configs.mkdir(parents=True)
+        (configs / "overlay.toml").write_text(f'marker = "{name}"\n', encoding="utf-8")
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path / "discovered"))
+
+    assert resolve_configurations()["overlay"]["marker"] == "discovered"
+    assert resolve_configurations(tmp_path / "given")["overlay"]["marker"] == "given"
+
+
 def test_resolve_paths_supports_separate_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = Path(__file__).resolve().parents[2]
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(repo))
