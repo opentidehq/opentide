@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- `opentide info` and `OpenTide.initialise()` no longer build a client for every installed platform, so a repo that does not use Splunk no longer logs `The frequency scheduling setting was not correct set` twice. Clients are built only when a command deploys to or validates against their platform. A Splunk setup without `frequency_scheduling` uses the default, `random`, without a warning (a legacy `systems/splunk.toml` fell back to `current`); an invalid value logs one `frequency_scheduling_is_not_valid` warning that names the value ([#295](https://github.com/OpenTideHQ/opentide/issues/295)).
+
 ## [0.5.0] — 2026-09-23
 
 Minor on 0.4.0. Upgrade if your threats follow `threat::1.0` and list their `impact` / `leverage` names: 0.4.0 rejected every such threat with `Input should be a valid string` ([#189](https://github.com/OpenTideHQ/opentide/issues/189)). It is a minor rather than a patch because a threat written the way 0.4.0 required (`impact: Data Breach`) now fails validation until it becomes a one-item list — read **Changed** before upgrading a pipeline.

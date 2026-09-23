@@ -73,12 +73,12 @@ def test_registry_items() -> None:
     assert "sentinel" in items
 
 
-def test_registry_load_validator_returns_none_for_unknown() -> None:
+def test_registry_validator_factory_returns_none_for_unknown() -> None:
     registry = PlatformsRegistry()
-    assert registry._load_validator("crowdstrike") is None
+    assert registry._validator_factory("crowdstrike") is None
 
 
-def test_registry_load_validator_falls_back_to_platform_package() -> None:
+def test_registry_validator_factory_falls_back_to_platform_package() -> None:
     registry = PlatformsRegistry()
     mock_validator = MagicMock()
     mock_module = MagicMock()
@@ -92,34 +92,67 @@ def test_registry_load_validator_falls_back_to_platform_package() -> None:
         raise ModuleNotFoundError(name)
 
     with patch("importlib.import_module", side_effect=_import):
-        result = registry._load_validator("sentinel")
-    assert result is mock_validator
+        factory = registry._validator_factory("sentinel")
+    assert factory is not None
+    mock_module.declare.assert_not_called()
+    assert factory() is mock_validator
 
 
-def test_registry_load_validator_imports_module() -> None:
+def test_registry_validator_factory_skips_module_without_declare() -> None:
     registry = PlatformsRegistry()
-    mock_validator = MagicMock()
-    mock_module = MagicMock()
-    mock_module.declare.return_value = mock_validator
-    with patch("importlib.import_module", return_value=mock_module):
-        result = registry._load_validator("sentinel")
-    assert result is mock_validator
+    fallback = MagicMock()
+
+    def _import(name: str) -> object:
+        if name == "opentide.validation.sentinel_query":
+            return object()
+        return fallback
+
+    with patch("importlib.import_module", side_effect=_import):
+        assert registry._validator_factory("sentinel") is fallback.declare
 
 
 def test_registry_ensure_loaded_from_entry_points() -> None:
     registry = PlatformsRegistry()
+    deployer = MagicMock()
+    declare = MagicMock(return_value=deployer)
     mock_ep = MagicMock()
     mock_ep.name = "sentinel"
-    mock_ep.load.return_value = MagicMock(return_value=MagicMock())
+    mock_ep.load.return_value = declare
+    build = MagicMock(return_value={"host": "x"})
+    validator_factory = MagicMock()
     with (
         patch("opentide.platforms.registry.entry_points", return_value=[mock_ep]),
         patch("opentide.platforms.registry.enabled_systems", return_value=["sentinel"]),
-        patch("opentide.platforms.registry.build_system_config", return_value={"host": "x"}),
-        patch.object(registry, "_load_validator", return_value=MagicMock()),
+        patch("opentide.platforms.registry.build_system_config", build),
+        patch.object(registry, "_validator_factory", return_value=validator_factory),
     ):
         registry._ensure_loaded()
+        platform = registry._instances["sentinel"]
+        assert platform.enabled is True
+        assert platform.can_deploy is True
+        assert platform.can_validate is True
+        declare.assert_not_called()
+        validator_factory.assert_not_called()
+        build.assert_not_called()
+        assert platform.deployer is deployer
+        assert platform.config == {"host": "x"}
     assert registry._loaded is True
-    assert "sentinel" in registry._instances
+    build.assert_called_once_with("sentinel")
+
+
+def test_platform_builds_each_engine_once() -> None:
+    factory = MagicMock(return_value=MagicMock())
+    platform = Platform(name="splunk", deployer_factory=factory)
+    factory.assert_not_called()
+    assert platform.deployer is platform.deployer
+    factory.assert_called_once_with()
+
+
+def test_platform_engine_that_fails_to_build_is_unavailable() -> None:
+    platform = Platform(name="splunk", validator_factory=MagicMock(side_effect=KeyError("url")))
+    assert platform.can_validate is True
+    assert platform.validator is None
+    assert platform.can_validate is False
 
 
 def test_platform_can_validate_property() -> None:

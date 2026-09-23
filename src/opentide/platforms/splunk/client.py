@@ -100,7 +100,7 @@ class SplunkConnection(ABC):
         self.CORRELATION_SEARCHES = setup.get("correlation_searches", True)
         self.SPLUNK_ACTIONS = setup.get("actions_enabled") or []
         self.SPLUNK_DEFAULT_ACTIONS = setup.get("default_actions") or []
-        self.TIMERANGE_MODE = correct_timerange_mode(setup.get("frequency_scheduling", ""))
+        self.TIMERANGE_MODE = correct_timerange_mode(setup.get("frequency_scheduling"))
         skewing = setup.get("allow_skew")
         if skewing:
             self.SKEWING_VALUE = float(str(skewing).replace("%", "e-2"))
@@ -116,18 +116,18 @@ class SplunkConnection(ABC):
             Proxy.unset_proxy()
 
 
-def correct_timerange_mode(timerange: str) -> Literal["random", "current", "custom"]:
-    corrected_timerange: Literal["random", "current", "custom"]
-    if timerange not in ["random", "current", "custom"]:
+def correct_timerange_mode(timerange: str | None) -> Literal["random", "current", "custom"]:
+    """Resolve ``frequency_scheduling``; unset means the documented default, ``random``."""
+    if not timerange:
+        return "random"
+    if timerange not in ("random", "current", "custom"):
         logger.warning(
-            "the_frequency_scheduling_setting_was_not_correct_set",
-            detail="hard setting it to current",
-            advice="Expected values are random, current, or custom",
+            "frequency_scheduling_is_not_valid",
+            detail=f"Got {timerange!r}, using current",
+            advice="Set frequency_scheduling to random, current, or custom in splunk.toml",
         )
-        corrected_timerange = "current"
-    else:
-        corrected_timerange = timerange  # type: ignore[assignment]
-    return corrected_timerange
+        return "current"
+    return timerange  # type: ignore[return-value]
 
 
 def splunk_timerange(time: str, skewing: float | int = 1, offset: int = 0) -> str:
