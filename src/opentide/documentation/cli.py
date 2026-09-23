@@ -256,11 +256,11 @@ def run(
         catalog_records = [*catalog.rules, *catalog.objectives, *catalog.threats]
         catalog_uuids = {record.uuid for record in catalog_records}
         from opentide.core.git_baseline import GitBaselineError
-        from opentide.core.root import get_repo_root
+        from opentide.registry.discovery import discover_workspace
 
         try:
             changed_paths, changed_uuids, target_uuids, deleted_objects = _resolve_changed_targets(
-                catalog_uuids, get_repo_root()
+                catalog_uuids, discover_workspace()
             )
         except GitBaselineError as exc:
             logger.warning("docs_changed_requires_git", detail=str(exc))

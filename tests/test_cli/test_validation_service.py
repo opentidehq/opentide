@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from opentide.cli.context import CliContext
 from opentide.cli.enums import ValidateCheck
@@ -129,6 +132,42 @@ def test_run_validate_default_checks_payload() -> None:
     assert "report" in result
     assert result["checks"]["id-uniqueness"]["status"] == "passed"
     assert result["checks"]["schema"]["status"] == "passed"
+
+
+def _validate_against(workspace: Path, objects_checked: int, **kwargs: object) -> dict[str, object]:
+    report = ValidationReport(ok=True, stats={"objects_checked": objects_checked})
+    with (
+        patch.object(validation_service, "run_validation", return_value=report),
+        patch.object(validation_service, "discover_workspace", return_value=workspace),
+    ):
+        return validation_service.run_validate(CliContext(json_output=True), **kwargs)
+
+
+def test_run_validate_reports_the_workspace_it_scanned(tmp_path: Path) -> None:
+    result = _validate_against(tmp_path, 3, strict=True)
+    assert result["workspace"] == str(tmp_path)
+    assert result["message"] == "Validation passed"
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_an_empty_catalogue_names_the_workspace_and_still_passes(
+    tmp_path: Path, strict: bool
+) -> None:
+    """#294: from the wrong directory, a bare "Validation passed" had checked nothing."""
+    result = _validate_against(tmp_path, 0, strict=strict)
+    assert result["message"] == (
+        f"Validation passed, but no detection objects were found under {tmp_path}"
+    )
+    assert result["status"] == "passed"
+    assert result["_exit_code"] == 0
+    assert "warnings" not in result
+
+
+def test_a_single_non_object_check_keeps_the_plain_message(tmp_path: Path) -> None:
+    """``id-uniqueness`` alone never counts objects, so zero says nothing."""
+    result = _validate_against(tmp_path, 0, check=ValidateCheck.id_uniqueness)
+    assert result["message"] == "Validation passed"
+    assert result["workspace"] == str(tmp_path)
 
 
 def test_run_validate_default_checks_schema_only_failure() -> None:

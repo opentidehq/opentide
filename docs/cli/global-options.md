@@ -16,7 +16,7 @@ opentide --debug --no-color generate
 
 | Flag | Environment variable | Default | Description |
 |------|---------------------|---------|-------------|
-| `--repo` | `OPENTIDE_REPO_ROOT` | Auto-detected repo root | Detection content repository |
+| `--repo` | `OPENTIDE_REPO_ROOT` | Discovered from the current directory | Detection workspace root |
 | `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Override vocabulary and default configs |
 | `--debug` | `DEBUG` | off | Enable structlog debug logging |
 | `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable Rich colour output |
@@ -24,7 +24,21 @@ opentide --debug --no-color generate
 
 ## Repository root resolution
 
-When `--repo` is omitted, OpenTide walks up from the current directory to find the repository root (objects, configurations markers). Explicit `--repo` or `OPENTIDE_REPO_ROOT` always wins.
+When `--repo` is omitted, OpenTide walks up from the current directory and stops at the first directory holding `.opentide/` or `objects/`. That is the detection workspace, so every command sees the same catalogue whether you start at its root, in `objects/rules`, or in `.opentide/configurations/platforms`.
+
+The walk never leaves the enclosing git checkout. A workspace kept in a subdirectory of a larger repository (`monorepo/detections/`) is found from anywhere inside `detections/`, while markers above the checkout are ignored. When nothing on the way up is marked, the root is the git top level, or the current directory outside git. Git's own `.git/objects` and a Python package named `objects/` (one with an `__init__.py`) are not markers.
+
+In order, the first of these wins:
+
+1. `--repo`
+2. `OPENTIDE_REPO_ROOT`
+3. `OPENTIDE_TIDE_WORKSPACE` (selects the objects read; the repository root is still resolved as below)
+4. The nearest `.opentide/` or `objects/` walking up from the current directory
+5. The git top level, or the current directory outside git
+
+Git commands such as `generate docs --changed` and `generate inflight` still run against the whole checkout when the workspace sits below its top level: changed paths are reported relative to the git top level (`detections/objects/rules/…`).
+
+`opentide validate` prints the directory it checked when it finds no objects there. See [Which workspace was checked](./validate.md#which-workspace-was-checked).
 
 A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_WORKSPACE`. That variable is read before the repository root when locating detection objects, so without this precedence `--repo` resolved the root while the workspace — and therefore the objects actually validated — stayed on the exported path.
 

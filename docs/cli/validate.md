@@ -34,6 +34,18 @@ Without `--json`, issues are listed in a **Validation issues** panel, grouped by
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 
+### Which workspace was checked
+
+Run from anywhere inside the detection workspace: the CLI walks up to it (see [Repository root resolution](./global-options.md#repository-root-resolution)). The JSON payload names the directory it read objects from under `workspace`.
+
+An empty catalogue is not an error. A full run that checked no objects still passes with exit `0`, `--strict` included, but says where it looked:
+
+```text
+OK Validation passed, but no detection objects were found under /home/you/monorepo
+```
+
+If that path is not your workspace, `cd` into it or pass `--repo`.
+
 ### Selecting a file
 
 Object folders may contain subfolders, and files in different folders may share a name. `--file` matches like this:
