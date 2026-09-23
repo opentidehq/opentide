@@ -1,250 +1,5667 @@
 {
-    "type": "object",
-    "properties": {
-        "name": {
-            "title": "Name",
-            "type": "string"
+  "type": "object",
+  "properties": {
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "title": "Uuid",
+          "type": "string"
         },
-        "metadata": {
-            "type": "object",
-            "properties": {
-                "uuid": {
-                    "title": "Uuid",
-                    "type": "string"
-                },
-                "schema": {
-                    "title": "Schema",
-                    "const": "rule::1.0",
-                    "type": "string"
-                },
-                "version": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "integer"
-                        }
-                    ],
-                    "title": "Version"
-                },
-                "created": {
-                    "title": "Created",
-                    "type": "string"
-                },
-                "modified": {
-                    "title": "Modified",
-                    "type": "string"
-                },
-                "tlp": {
-                    "title": "Tlp",
-                    "type": "string"
-                },
-                "author": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Author"
-                },
-                "contributors": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Contributors"
-                },
-                "organisation": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/Organisation"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Organisation"
-                }
+        "schema": {
+          "title": "Schema",
+          "const": "rule::1.0",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
             },
-            "required": [
-                "uuid",
-                "schema",
-                "version",
-                "created",
-                "modified",
-                "tlp"
-            ],
-            "additionalProperties": false
+            {
+              "type": "integer"
+            }
+          ],
+          "title": "Version"
         },
-        "description": {
-            "title": "Description",
-            "type": "string"
+        "created": {
+          "format": "date",
+          "title": "Created",
+          "type": "string"
+        },
+        "modified": {
+          "format": "date",
+          "title": "Modified",
+          "type": "string"
+        },
+        "tlp": {
+          "title": "Tlp",
+          "type": "string",
+          "enum": [
+            "clear",
+            "green",
+            "amber",
+            "amber+strict",
+            "red"
+          ],
+          "markdownEnumDescriptions": [
+            "Recipients can spread this to the world, there is no limit on disclosure.",
+            "Limited disclosure, recipients can spread this within their community. Sources may use TLP:GREEN when information is useful to increase awareness within their\u2026",
+            "Limited disclosure, recipients can only spread this on a need-to-know basis within their organization and its clients.",
+            "Similar to TLP:AMBER, but restricts sharing to the organization only.",
+            "For the eyes and ears of individual recipients only, no further disclosure."
+          ]
+        },
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "organisation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Organisation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Organisation"
+        }
+      },
+      "$defs": {
+        "Organisation": {
+          "additionalProperties": false,
+          "properties": {
+            "uuid": {
+              "title": "Uuid",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          "required": [
+            "uuid",
+            "name"
+          ],
+          "title": "Organisation",
+          "type": "object"
+        }
+      },
+      "required": [
+        "uuid",
+        "schema",
+        "version",
+        "created",
+        "modified",
+        "tlp"
+      ],
+      "additionalProperties": false
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "status": {
+      "default": "STAGING",
+      "title": "Status",
+      "type": "string"
+    },
+    "severity": {
+      "default": "Informational",
+      "title": "Severity",
+      "type": "string",
+      "enum": [
+        "Localised incident",
+        "Moderate incident",
+        "Substantial incident",
+        "Significant incident",
+        "Highly significant incident",
+        "National cyber emergency"
+      ],
+      "markdownEnumDescriptions": [
+        "A cyber attack on an individual, or preliminary indications of cyber activity against a small or medium-sized organisation.",
+        "A cyber attack on a small organisation, or which poses a considerable risk to a medium-sized organisation, or preliminary indications of cyber activity against\u2026",
+        "A cyber attack which has a serious impact on a medium-sized organisation, or which poses a considerable risk to a large organisation or wider / local governmen\u2026",
+        "A cyber attack which has a serious impact on a large organisation or on wider / local government, or which poses a considerable risk to central government or (\u2026",
+        "A cyber attack which has a serious impact on central government, (inter)national essential services, a large proportion of the (inter)national population, or t\u2026",
+        "A cyber attack which causes sustained disruption of (inter)national essential services or affects (inter)national national security, leading to severe economic\u2026"
+      ]
+    },
+    "techniques": {
+      "items": {
+        "enum": [
+          "T1548",
+          "T1548.002",
+          "T1548.004",
+          "T1548.001",
+          "T1548.003",
+          "T1548.006",
+          "T1548.005",
+          "T1134",
+          "T1134.002",
+          "T1134.003",
+          "T1134.004",
+          "T1134.005",
+          "T1134.001",
+          "T1531",
+          "T1087",
+          "T1087.004",
+          "T1087.002",
+          "T1087.003",
+          "T1087.001",
+          "T1098",
+          "T1098.001",
+          "T1098.003",
+          "T1098.006",
+          "T1098.002",
+          "T1098.007",
+          "T1098.005",
+          "T1098.004",
+          "T1650",
+          "T1583",
+          "T1583.005",
+          "T1583.002",
+          "T1583.001",
+          "T1583.008",
+          "T1583.004",
+          "T1583.007",
+          "T1583.003",
+          "T1583.006",
+          "T1595",
+          "T1595.001",
+          "T1595.002",
+          "T1595.003",
+          "T1557",
+          "T1557.002",
+          "T1557.003",
+          "T1557.004",
+          "T1557.001",
+          "T1071",
+          "T1071.004",
+          "T1071.002",
+          "T1071.003",
+          "T1071.005",
+          "T1071.001",
+          "T1010",
+          "T1560",
+          "T1560.003",
+          "T1560.002",
+          "T1560.001",
+          "T1123",
+          "T1119",
+          "T1020",
+          "T1020.001",
+          "T1197",
+          "T1547",
+          "T1547.014",
+          "T1547.002",
+          "T1547.006",
+          "T1547.008",
+          "T1547.015",
+          "T1547.010",
+          "T1547.012",
+          "T1547.007",
+          "T1547.001",
+          "T1547.005",
+          "T1547.009",
+          "T1547.003",
+          "T1547.004",
+          "T1547.013",
+          "T1037",
+          "T1037.002",
+          "T1037.001",
+          "T1037.003",
+          "T1037.004",
+          "T1037.005",
+          "T1217",
+          "T1185",
+          "T1110",
+          "T1110.004",
+          "T1110.002",
+          "T1110.001",
+          "T1110.003",
+          "T1612",
+          "T1115",
+          "T1651",
+          "T1671",
+          "T1580",
+          "T1538",
+          "T1526",
+          "T1619",
+          "T1059",
+          "T1059.002",
+          "T1059.010",
+          "T1059.009",
+          "T1059.012",
+          "T1059.007",
+          "T1059.011",
+          "T1059.008",
+          "T1059.001",
+          "T1059.006",
+          "T1059.004",
+          "T1059.005",
+          "T1059.003",
+          "T1092",
+          "T1586",
+          "T1586.003",
+          "T1586.002",
+          "T1586.001",
+          "T1554",
+          "T1584",
+          "T1584.005",
+          "T1584.002",
+          "T1584.001",
+          "T1584.008",
+          "T1584.004",
+          "T1584.007",
+          "T1584.003",
+          "T1584.006",
+          "T1609",
+          "T1613",
+          "T1659",
+          "T1136",
+          "T1136.003",
+          "T1136.002",
+          "T1136.001",
+          "T1543",
+          "T1543.005",
+          "T1543.001",
+          "T1543.004",
+          "T1543.002",
+          "T1543.003",
+          "T1555",
+          "T1555.006",
+          "T1555.003",
+          "T1555.001",
+          "T1555.005",
+          "T1555.002",
+          "T1555.004",
+          "T1485",
+          "T1485.001",
+          "T1132",
+          "T1132.002",
+          "T1132.001",
+          "T1486",
+          "T1565",
+          "T1565.003",
+          "T1565.001",
+          "T1565.002",
+          "T1001",
+          "T1001.001",
+          "T1001.003",
+          "T1001.002",
+          "T1074",
+          "T1074.001",
+          "T1074.002",
+          "T1030",
+          "T1530",
+          "T1602",
+          "T1602.002",
+          "T1602.001",
+          "T1213",
+          "T1213.003",
+          "T1213.001",
+          "T1213.004",
+          "T1213.005",
+          "T1213.002",
+          "T1005",
+          "T1039",
+          "T1025",
+          "T1622",
+          "T1491",
+          "T1491.002",
+          "T1491.001",
+          "T1140",
+          "T1610",
+          "T1587",
+          "T1587.002",
+          "T1587.003",
+          "T1587.004",
+          "T1587.001",
+          "T1652",
+          "T1006",
+          "T1561",
+          "T1561.001",
+          "T1561.002",
+          "T1482",
+          "T1484",
+          "T1484.001",
+          "T1484.002",
+          "T1189",
+          "T1568",
+          "T1568.003",
+          "T1568.002",
+          "T1568.001",
+          "T1675",
+          "T1667",
+          "T1114",
+          "T1114.003",
+          "T1114.001",
+          "T1114.002",
+          "T1672",
+          "T1573",
+          "T1573.002",
+          "T1573.001",
+          "T1499",
+          "T1499.003",
+          "T1499.004",
+          "T1499.001",
+          "T1499.002",
+          "T1611",
+          "T1585",
+          "T1585.003",
+          "T1585.002",
+          "T1585.001",
+          "T1546",
+          "T1546.008",
+          "T1546.009",
+          "T1546.010",
+          "T1546.011",
+          "T1546.001",
+          "T1546.015",
+          "T1546.014",
+          "T1546.012",
+          "T1546.016",
+          "T1546.006",
+          "T1546.007",
+          "T1546.013",
+          "T1546.002",
+          "T1546.005",
+          "T1546.017",
+          "T1546.004",
+          "T1546.003",
+          "T1668",
+          "T1480",
+          "T1480.001",
+          "T1480.002",
+          "T1048",
+          "T1048.002",
+          "T1048.001",
+          "T1048.003",
+          "T1041",
+          "T1011",
+          "T1011.001",
+          "T1052",
+          "T1052.001",
+          "T1567",
+          "T1567.004",
+          "T1567.002",
+          "T1567.001",
+          "T1567.003",
+          "T1190",
+          "T1203",
+          "T1212",
+          "T1211",
+          "T1068",
+          "T1210",
+          "T1133",
+          "T1008",
+          "T1083",
+          "T1222",
+          "T1222.002",
+          "T1222.001",
+          "T1657",
+          "T1495",
+          "T1187",
+          "T1606",
+          "T1606.002",
+          "T1606.001",
+          "T1592",
+          "T1592.004",
+          "T1592.003",
+          "T1592.001",
+          "T1592.002",
+          "T1589",
+          "T1589.001",
+          "T1589.002",
+          "T1589.003",
+          "T1590",
+          "T1590.002",
+          "T1590.001",
+          "T1590.005",
+          "T1590.006",
+          "T1590.004",
+          "T1590.003",
+          "T1591",
+          "T1591.002",
+          "T1591.001",
+          "T1591.003",
+          "T1591.004",
+          "T1615",
+          "T1200",
+          "T1564",
+          "T1564.013",
+          "T1564.008",
+          "T1564.014",
+          "T1564.012",
+          "T1564.005",
+          "T1564.001",
+          "T1564.002",
+          "T1564.003",
+          "T1564.011",
+          "T1564.004",
+          "T1564.010",
+          "T1564.009",
+          "T1564.006",
+          "T1564.007",
+          "T1665",
+          "T1574",
+          "T1574.014",
+          "T1574.012",
+          "T1574.001",
+          "T1574.004",
+          "T1574.006",
+          "T1574.005",
+          "T1574.013",
+          "T1574.007",
+          "T1574.008",
+          "T1574.009",
+          "T1574.010",
+          "T1574.011",
+          "T1562",
+          "T1562.002",
+          "T1562.007",
+          "T1562.008",
+          "T1562.012",
+          "T1562.004",
+          "T1562.001",
+          "T1562.010",
+          "T1562.003",
+          "T1562.006",
+          "T1562.009",
+          "T1562.011",
+          "T1656",
+          "T1525",
+          "T1070",
+          "T1070.003",
+          "T1070.002",
+          "T1070.008",
+          "T1070.007",
+          "T1070.009",
+          "T1070.001",
+          "T1070.004",
+          "T1070.005",
+          "T1070.010",
+          "T1070.006",
+          "T1202",
+          "T1105",
+          "T1490",
+          "T1056",
+          "T1056.004",
+          "T1056.002",
+          "T1056.001",
+          "T1056.003",
+          "T1674",
+          "T1559",
+          "T1559.001",
+          "T1559.002",
+          "T1559.003",
+          "T1534",
+          "T1570",
+          "T1654",
+          "T1036",
+          "T1036.009",
+          "T1036.007",
+          "T1036.001",
+          "T1036.010",
+          "T1036.008",
+          "T1036.004",
+          "T1036.005",
+          "T1036.011",
+          "T1036.003",
+          "T1036.002",
+          "T1036.006",
+          "T1556",
+          "T1556.009",
+          "T1556.001",
+          "T1556.007",
+          "T1556.006",
+          "T1556.004",
+          "T1556.008",
+          "T1556.002",
+          "T1556.003",
+          "T1556.005",
+          "T1578",
+          "T1578.002",
+          "T1578.001",
+          "T1578.003",
+          "T1578.005",
+          "T1578.004",
+          "T1666",
+          "T1112",
+          "T1601",
+          "T1601.002",
+          "T1601.001",
+          "T1111",
+          "T1621",
+          "T1104",
+          "T1106",
+          "T1599",
+          "T1599.001",
+          "T1498",
+          "T1498.001",
+          "T1498.002",
+          "T1046",
+          "T1135",
+          "T1040",
+          "T1095",
+          "T1571",
+          "T1003",
+          "T1003.008",
+          "T1003.005",
+          "T1003.006",
+          "T1003.004",
+          "T1003.001",
+          "T1003.003",
+          "T1003.007",
+          "T1003.002",
+          "T1027",
+          "T1027.001",
+          "T1027.010",
+          "T1027.004",
+          "T1027.015",
+          "T1027.007",
+          "T1027.009",
+          "T1027.013",
+          "T1027.011",
+          "T1027.006",
+          "T1027.005",
+          "T1027.016",
+          "T1027.012",
+          "T1027.014",
+          "T1027.017",
+          "T1027.002",
+          "T1027.003",
+          "T1027.008",
+          "T1588",
+          "T1588.007",
+          "T1588.003",
+          "T1588.004",
+          "T1588.005",
+          "T1588.001",
+          "T1588.002",
+          "T1588.006",
+          "T1137",
+          "T1137.006",
+          "T1137.001",
+          "T1137.002",
+          "T1137.003",
+          "T1137.004",
+          "T1137.005",
+          "T1201",
+          "T1120",
+          "T1069",
+          "T1069.003",
+          "T1069.002",
+          "T1069.001",
+          "T1566",
+          "T1598",
+          "T1598.002",
+          "T1598.003",
+          "T1598.001",
+          "T1598.004",
+          "T1566.001",
+          "T1566.002",
+          "T1566.004",
+          "T1566.003",
+          "T1647",
+          "T1653",
+          "T1542",
+          "T1542.003",
+          "T1542.002",
+          "T1542.004",
+          "T1542.001",
+          "T1542.005",
+          "T1057",
+          "T1055",
+          "T1055.004",
+          "T1055.001",
+          "T1055.011",
+          "T1055.015",
+          "T1055.002",
+          "T1055.009",
+          "T1055.013",
+          "T1055.012",
+          "T1055.008",
+          "T1055.003",
+          "T1055.005",
+          "T1055.014",
+          "T1572",
+          "T1090",
+          "T1090.004",
+          "T1090.002",
+          "T1090.001",
+          "T1090.003",
+          "T1012",
+          "T1620",
+          "T1219",
+          "T1219.001",
+          "T1219.003",
+          "T1219.002",
+          "T1563",
+          "T1563.002",
+          "T1563.001",
+          "T1021",
+          "T1021.007",
+          "T1021.008",
+          "T1021.003",
+          "T1021.001",
+          "T1021.002",
+          "T1021.004",
+          "T1021.005",
+          "T1021.006",
+          "T1018",
+          "T1091",
+          "T1496",
+          "T1496.002",
+          "T1496.004",
+          "T1496.001",
+          "T1496.003",
+          "T1207",
+          "T1014",
+          "T1053",
+          "T1053.002",
+          "T1053.007",
+          "T1053.003",
+          "T1053.005",
+          "T1053.006",
+          "T1029",
+          "T1113",
+          "T1597",
+          "T1597.002",
+          "T1597.001",
+          "T1596",
+          "T1596.004",
+          "T1596.001",
+          "T1596.003",
+          "T1596.005",
+          "T1596.002",
+          "T1593",
+          "T1593.003",
+          "T1593.002",
+          "T1593.001",
+          "T1594",
+          "T1505",
+          "T1505.004",
+          "T1505.001",
+          "T1505.005",
+          "T1505.002",
+          "T1505.003",
+          "T1505.006",
+          "T1648",
+          "T1489",
+          "T1129",
+          "T1072",
+          "T1518",
+          "T1518.001",
+          "T1176",
+          "T1176.001",
+          "T1176.002",
+          "T1608",
+          "T1608.004",
+          "T1608.003",
+          "T1608.005",
+          "T1608.006",
+          "T1608.001",
+          "T1608.002",
+          "T1528",
+          "T1539",
+          "T1649",
+          "T1558",
+          "T1558.004",
+          "T1558.005",
+          "T1558.001",
+          "T1558.003",
+          "T1558.002",
+          "T1553",
+          "T1553.002",
+          "T1553.006",
+          "T1553.001",
+          "T1553.004",
+          "T1553.005",
+          "T1553.003",
+          "T1195",
+          "T1195.003",
+          "T1195.001",
+          "T1195.002",
+          "T1218",
+          "T1218.003",
+          "T1218.001",
+          "T1218.002",
+          "T1218.015",
+          "T1218.004",
+          "T1218.014",
+          "T1218.013",
+          "T1218.005",
+          "T1218.007",
+          "T1218.008",
+          "T1218.009",
+          "T1218.010",
+          "T1218.011",
+          "T1218.012",
+          "T1082",
+          "T1614",
+          "T1614.001",
+          "T1016",
+          "T1016.001",
+          "T1016.002",
+          "T1049",
+          "T1033",
+          "T1216",
+          "T1216.001",
+          "T1216.002",
+          "T1007",
+          "T1569",
+          "T1569.001",
+          "T1569.002",
+          "T1569.003",
+          "T1529",
+          "T1124",
+          "T1080",
+          "T1221",
+          "T1205",
+          "T1205.001",
+          "T1205.002",
+          "T1537",
+          "T1127",
+          "T1127.002",
+          "T1127.003",
+          "T1127.001",
+          "T1199",
+          "T1552",
+          "T1552.003",
+          "T1552.008",
+          "T1552.005",
+          "T1552.007",
+          "T1552.001",
+          "T1552.002",
+          "T1552.006",
+          "T1552.004",
+          "T1535",
+          "T1550",
+          "T1550.001",
+          "T1550.002",
+          "T1550.003",
+          "T1550.004",
+          "T1204",
+          "T1204.004",
+          "T1204.002",
+          "T1204.003",
+          "T1204.001",
+          "T1078",
+          "T1078.004",
+          "T1078.001",
+          "T1078.002",
+          "T1078.003",
+          "T1125",
+          "T1673",
+          "T1497",
+          "T1497.001",
+          "T1497.003",
+          "T1497.002",
+          "T1600",
+          "T1600.002",
+          "T1600.001",
+          "T1102",
+          "T1102.002",
+          "T1102.001",
+          "T1102.003",
+          "T1669",
+          "T1047",
+          "T1220",
+          "T1626",
+          "T1517",
+          "T1640",
+          "T1638",
+          "T1437",
+          "T1661",
+          "T1532",
+          "T1521.002",
+          "T1429",
+          "T1481.002",
+          "T1398",
+          "T1624.001",
+          "T1636.001",
+          "T1616",
+          "T1636.002",
+          "T1414",
+          "T1632.001",
+          "T1623",
+          "T1577",
+          "T1645",
+          "T1474.002",
+          "T1474.001",
+          "T1474.003",
+          "T1628.003",
+          "T1636.003",
+          "T1634",
+          "T1662",
+          "T1471",
+          "T1641",
+          "T1533",
+          "T1481.001",
+          "T1626.001",
+          "T1629.002",
+          "T1629.003",
+          "T1630.003",
+          "T1637.001",
+          "T1407",
+          "T1456",
+          "T1637",
+          "T1521",
+          "T1642",
+          "T1624",
+          "T1627",
+          "T1639",
+          "T1646",
+          "T1639.001",
+          "T1658",
+          "T1664",
+          "T1404",
+          "T1428",
+          "T1630.002",
+          "T1420",
+          "T1541",
+          "T1417.002",
+          "T1643",
+          "T1627.001",
+          "T1628",
+          "T1625",
+          "T1617",
+          "T1629",
+          "T1430.002",
+          "T1630",
+          "T1544",
+          "T1417",
+          "T1516",
+          "T1422.001",
+          "T1634.001",
+          "T1417.001",
+          "T1430",
+          "T1461",
+          "T1655",
+          "T1655.001",
+          "T1575",
+          "T1464",
+          "T1423",
+          "T1509",
+          "T1406",
+          "T1481.003",
+          "T1644",
+          "T1660",
+          "T1629.001",
+          "T1424",
+          "T1631",
+          "T1636",
+          "T1604",
+          "T1631.001",
+          "T1663",
+          "T1430.001",
+          "T1458",
+          "T1451",
+          "T1582",
+          "T1636.004",
+          "T1521.003",
+          "T1603",
+          "T1513",
+          "T1418.001",
+          "T1418",
+          "T1406.002",
+          "T1635",
+          "T1406.001",
+          "T1409",
+          "T1632",
+          "T1474",
+          "T1628.001",
+          "T1521.001",
+          "T1633.001",
+          "T1426",
+          "T1422",
+          "T1421",
+          "T1625.001",
+          "T1641.001",
+          "T1635.001",
+          "T1630.001",
+          "T1623.001",
+          "T1628.002",
+          "T1512",
+          "T1670",
+          "T1633",
+          "T1437.001",
+          "T1481",
+          "T1422.002",
+          "T0800",
+          "T0830",
+          "T0878",
+          "T0802",
+          "T0895",
+          "T0803",
+          "T0804",
+          "T0805",
+          "T0806",
+          "T0892",
+          "T0858",
+          "T0807",
+          "T0885",
+          "T0884",
+          "T0879",
+          "T0809",
+          "T0811",
+          "T0893",
+          "T0812",
+          "T0813",
+          "T0814",
+          "T0815",
+          "T0868",
+          "T0816",
+          "T0817",
+          "T0871",
+          "T0819",
+          "T0820",
+          "T0890",
+          "T0866",
+          "T0822",
+          "T0823",
+          "T0891",
+          "T0874",
+          "T0877",
+          "T0872",
+          "T0883",
+          "T0867",
+          "T0826",
+          "T0827",
+          "T0828",
+          "T0837",
+          "T0880",
+          "T0829",
+          "T0835",
+          "T0831",
+          "T0832",
+          "T0849",
+          "T0838",
+          "T0821",
+          "T0836",
+          "T0889",
+          "T0839",
+          "T0801",
+          "T0834",
+          "T0840",
+          "T0842",
+          "T0861",
+          "T0843",
+          "T0845",
+          "T0873",
+          "T0886",
+          "T0846",
+          "T0888",
+          "T0847",
+          "T0848",
+          "T0851",
+          "T0852",
+          "T0853",
+          "T0881",
+          "T0865",
+          "T0856",
+          "T0869",
+          "T0862",
+          "T0894",
+          "T0857",
+          "T0882",
+          "T0864",
+          "T0855",
+          "T0863",
+          "T0859",
+          "T0860",
+          "T0887",
+          "T1548 #Abuse Elevation Control Mechanism",
+          "T1548.002 #Abuse Elevation Control Mechanism: Bypass  r Account Control",
+          "T1548.004 #Abuse Elevation Control Mechanism: Elevated Execution w/ Prompt",
+          "T1548.001 #Abuse Elevation Control Mechanism: Setuid & Setgid",
+          "T1548.003 #Abuse Elevation Control Mechanism: Sudo & Sudo Caching",
+          "T1548.006 #Abuse Elevation Control Mechanism: TCC Manipulation",
+          "T1548.005 #Abuse Elevation Control Mechanism: Temporary Elevated Cloud Access",
+          "T1134 #Access Token Manipulation",
+          "T1134.002 #Access Token Manipulation: Create Process w/ Token",
+          "T1134.003 #Access Token Manipulation: Make & Impersonate Token",
+          "T1134.004 #Access Token Manipulation: Parent PID Spoofing",
+          "T1134.005 #Access Token Manipulation: SID-History Injection",
+          "T1134.001 #Access Token Manipulation: Token Impersonation/Theft",
+          "T1531 #Account Access Removal",
+          "T1087 #Account Discovery",
+          "T1087.004 #Account Discovery: Cloud Account",
+          "T1087.002 #Account Discovery: Domain Account",
+          "T1087.003 #Account Discovery: Email Account",
+          "T1087.001 #Account Discovery: Local Account",
+          "T1098 #Account Manipulation",
+          "T1098.001 #Account Manipulation: Additional Cloud Credentials",
+          "T1098.003 #Account Manipulation: Additional Cloud Roles",
+          "T1098.006 #Account Manipulation: Additional Container Cluster Roles",
+          "T1098.002 #Account Manipulation: Additional Email Delegate Permissions",
+          "T1098.007 #Account Manipulation: Additional Local or Domain Groups",
+          "T1098.005 #Account Manipulation: Device Registration",
+          "T1098.004 #Account Manipulation: SSH Authorized Keys",
+          "T1650 #Acquire Access",
+          "T1583 #Acquire Infrastructure",
+          "T1583.005 #Acquire Infrastructure: Botnet",
+          "T1583.002 #Acquire Infrastructure: DNS Server",
+          "T1583.001 #Acquire Infrastructure: Domains",
+          "T1583.008 #Acquire Infrastructure: Malvertising",
+          "T1583.004 #Acquire Infrastructure: Server",
+          "T1583.007 #Acquire Infrastructure: Serverless",
+          "T1583.003 #Acquire Infrastructure: Virtual Private Server",
+          "T1583.006 #Acquire Infrastructure: Web Services",
+          "T1595 #Active Scanning",
+          "T1595.001 #Active Scanning: Scanning IP Blocks",
+          "T1595.002 #Active Scanning: Vulnerability Scanning",
+          "T1595.003 #Active Scanning: Wordlist Scanning",
+          "T1557 #Adversary-in-the-Middle",
+          "T1557.002 #Adversary-in-the-Middle: ARP Cache Poisoning",
+          "T1557.003 #Adversary-in-the-Middle: DHCP Spoofing",
+          "T1557.004 #Adversary-in-the-Middle: Evil Twin",
+          "T1557.001 #Adversary-in-the-Middle: LLMNR/NBT-NS Poisoning & SMB Relay",
+          "T1071 #Application Layer Protocol",
+          "T1071.004 #Application Layer Protocol: DNS",
+          "T1071.002 #Application Layer Protocol: File Transfer Protocols",
+          "T1071.003 #Application Layer Protocol: Mail Protocols",
+          "T1071.005 #Application Layer Protocol: Publish/Subscribe Protocols",
+          "T1071.001 #Application Layer Protocol: Web Protocols",
+          "T1010 #Application Window Discovery",
+          "T1560 #Archive Collected Data",
+          "T1560.003 #Archive Collected Data: Archive via Custom Method",
+          "T1560.002 #Archive Collected Data: Archive via Library",
+          "T1560.001 #Archive Collected Data: Archive via Utility",
+          "T1123 #Audio Capture",
+          "T1119 #Automated Collection",
+          "T1020 #Automated Exfiltration",
+          "T1020.001 #Automated Exfiltration: Traffic Duplication",
+          "T1197 #BITS Jobs",
+          "T1547 #Boot or Logon Autostart Execution",
+          "T1547.014 #Boot or Logon Autostart Execution: Active Setup",
+          "T1547.002 #Boot or Logon Autostart Execution: Authentication Package",
+          "T1547.006 #Boot or Logon Autostart Execution: Kernel Modules & Extensions",
+          "T1547.008 #Boot or Logon Autostart Execution: LSASS Driver",
+          "T1547.015 #Boot or Logon Autostart Execution: Login Items",
+          "T1547.010 #Boot or Logon Autostart Execution: Port Monitors",
+          "T1547.012 #Boot or Logon Autostart Execution: Print Processors",
+          "T1547.007 #Boot or Logon Autostart Execution: Re-opened Applications",
+          "T1547.001 #Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder",
+          "T1547.005 #Boot or Logon Autostart Execution: Security Support Provider",
+          "T1547.009 #Boot or Logon Autostart Execution: Shortcut Modification",
+          "T1547.003 #Boot or Logon Autostart Execution: Time Providers",
+          "T1547.004 #Boot or Logon Autostart Execution: Winlogon Helper DLL",
+          "T1547.013 #Boot or Logon Autostart Execution: XDG Autostart Entries",
+          "T1037 #Boot or Logon Initialization Scripts",
+          "T1037.002 #Boot or Logon Initialization Scripts: Login Hook",
+          "T1037.001 #Boot or Logon Initialization Scripts: Logon Script (Windows)",
+          "T1037.003 #Boot or Logon Initialization Scripts: Network Logon Script",
+          "T1037.004 #Boot or Logon Initialization Scripts: RC Scripts",
+          "T1037.005 #Boot or Logon Initialization Scripts: Startup Items",
+          "T1217 #Browser Information Discovery",
+          "T1185 #Browser Session Hijacking",
+          "T1110 #Brute Force",
+          "T1110.004 #Brute Force: Credential Stuffing",
+          "T1110.002 #Brute Force: Password Cracking",
+          "T1110.001 #Brute Force: Password Guessing",
+          "T1110.003 #Brute Force: Password Spraying",
+          "T1612 #Build Image on Host",
+          "T1115 #Clipboard Data",
+          "T1651 #Cloud Administration Command",
+          "T1671 #Cloud Application Integration",
+          "T1580 #Cloud Infrastructure Discovery",
+          "T1538 #Cloud Service Dashboard",
+          "T1526 #Cloud Service Discovery",
+          "T1619 #Cloud Storage Object Discovery",
+          "T1059 #Command and Scripting Interpreter",
+          "T1059.002 #Command and Scripting Interpreter: AppleScript",
+          "T1059.010 #Command & Scripting Interpreter: AutoHotKey & AutoIT",
+          "T1059.009 #Command and Scripting Interpreter: Cloud API",
+          "T1059.012 #Command and Scripting Interpreter: Hypervisor CLI",
+          "T1059.007 #Command and Scripting Interpreter: JavaScript",
+          "T1059.011 #Command and Scripting Interpreter: Lua",
+          "T1059.008 #Command & Scripting Interpreter: Network Device CLI",
+          "T1059.001 #Command and Scripting Interpreter: PowerShell",
+          "T1059.006 #Command and Scripting Interpreter: Python",
+          "T1059.004 #Command and Scripting Interpreter: Unix Shell",
+          "T1059.005 #Command and Scripting Interpreter: Visual Basic",
+          "T1059.003 #Command & Scripting Interpreter: Windows Command Shell",
+          "T1092 #Communication Through Removable Media",
+          "T1586 #Compromise Accounts",
+          "T1586.003 #Compromise Accounts: Cloud Accounts",
+          "T1586.002 #Compromise Accounts: Email Accounts",
+          "T1586.001 #Compromise Accounts: Social Media Accounts",
+          "T1554 #Compromise Host Software Binary",
+          "T1584 #Compromise Infrastructure",
+          "T1584.005 #Compromise Infrastructure: Botnet",
+          "T1584.002 #Compromise Infrastructure: DNS Server",
+          "T1584.001 #Compromise Infrastructure: Domains",
+          "T1584.008 #Compromise Infrastructure: Network Devices",
+          "T1584.004 #Compromise Infrastructure: Server",
+          "T1584.007 #Compromise Infrastructure: Serverless",
+          "T1584.003 #Compromise Infrastructure: Virtual Private Server",
+          "T1584.006 #Compromise Infrastructure: Web Services",
+          "T1609 #Container Administration Command",
+          "T1613 #Container and Resource Discovery",
+          "T1659 #Content Injection",
+          "T1136 #Create Account",
+          "T1136.003 #Create Account: Cloud Account",
+          "T1136.002 #Create Account: Domain Account",
+          "T1136.001 #Create Account: Local Account",
+          "T1543 #Create or Modify System Process",
+          "T1543.005 #Create or Modify System Process: Container Service",
+          "T1543.001 #Create or Modify System Process: Launch Agent",
+          "T1543.004 #Create or Modify System Process: Launch Daemon",
+          "T1543.002 #Create or Modify System Process: Systemd Service",
+          "T1543.003 #Create or Modify System Process: Windows Service",
+          "T1555 #Credentials from Password Stores",
+          "T1555.006 #Credentials from Password Stores: Cloud Secrets Management Stores",
+          "T1555.003 #Credentials from Password Stores: Credentials from Web Browsers",
+          "T1555.001 #Credentials from Password Stores: Keychain",
+          "T1555.005 #Credentials from Password Stores: Password Managers",
+          "T1555.002 #Credentials from Password Stores: Securityd Memory",
+          "T1555.004 #Credentials from Password Stores: Windows Credential Manager",
+          "T1485 #Data Destruction",
+          "T1485.001 #Data Destruction: Lifecycle-Triggered Deletion",
+          "T1132 #Data Encoding",
+          "T1132.002 #Data Encoding: Non-Standard Encoding",
+          "T1132.001 #Data Encoding: Standard Encoding",
+          "T1486 #Data Encrypted for Impact",
+          "T1565 #Data Manipulation",
+          "T1565.003 #Data Manipulation: Runtime Data Manipulation",
+          "T1565.001 #Data Manipulation: Stored Data Manipulation",
+          "T1565.002 #Data Manipulation: Transmitted Data Manipulation",
+          "T1001 #Data Obfuscation",
+          "T1001.001 #Data Obfuscation: Junk Data",
+          "T1001.003 #Data Obfuscation: Protocol or Service Impersonation",
+          "T1001.002 #Data Obfuscation: Steganography",
+          "T1074 #Data Staged",
+          "T1074.001 #Data Staged: Local Data Staging",
+          "T1074.002 #Data Staged: Remote Data Staging",
+          "T1030 #Data Transfer Size Limits",
+          "T1530 #Data from Cloud Storage",
+          "T1602 #Data from Configuration Repository",
+          "T1602.002 #Data from Configuration Repository: Network Device Configuration Dump",
+          "T1602.001 #Data from Configuration Repository: SNMP (MIB Dump)",
+          "T1213 #Data from Information Repositories",
+          "T1213.003 #Data from Information Repositories: Code Repositories",
+          "T1213.001 #Data from Information Repositories: Confluence",
+          "T1213.004 #Data from Information Repositories: Customer Relationship Management Software",
+          "T1213.005 #Data from Information Repositories: Messaging Applications",
+          "T1213.002 #Data from Information Repositories: Sharepoint",
+          "T1005 #Data from Local System",
+          "T1039 #Data from Network Shared Drive",
+          "T1025 #Data from Removable Media",
+          "T1622 #Debugger Evasion",
+          "T1491 #Defacement",
+          "T1491.002 #Defacement: External Defacement",
+          "T1491.001 #Defacement: Internal Defacement",
+          "T1140 #Deobfuscate/Decode Files or Information",
+          "T1610 #Deploy Container",
+          "T1587 #Develop Capabilities",
+          "T1587.002 #Develop Capabilities: Code Signing Certificates",
+          "T1587.003 #Develop Capabilities: Digital Certificates",
+          "T1587.004 #Develop Capabilities: Exploits",
+          "T1587.001 #Develop Capabilities: Malware",
+          "T1652 #Device Driver Discovery",
+          "T1006 #Direct Volume Access",
+          "T1561 #Disk Wipe",
+          "T1561.001 #Disk Wipe: Disk Content Wipe",
+          "T1561.002 #Disk Wipe: Disk Structure Wipe",
+          "T1482 #Domain Trust Discovery",
+          "T1484 #Domain or Tenant Policy Modification",
+          "T1484.001 #Domain or Tenant Policy Modification: Group Policy Modification",
+          "T1484.002 #Domain or Tenant Policy Modification: Trust Modification",
+          "T1189 #Drive-by Compromise",
+          "T1568 #Dynamic Resolution",
+          "T1568.003 #Dynamic Resolution: DNS Calculation",
+          "T1568.002 #Dynamic Resolution: Domain Generation Algorithms",
+          "T1568.001 #Dynamic Resolution: Fast Flux DNS",
+          "T1675 #ESXi Administration Command",
+          "T1667 #Email Bombing",
+          "T1114 #Email Collection",
+          "T1114.003 #Email Collection: Email Forwarding Rule",
+          "T1114.001 #Email Collection: Local Email Collection",
+          "T1114.002 #Email Collection: Remote Email Collection",
+          "T1672 #Email Spoofing",
+          "T1573 #Encrypted Channel",
+          "T1573.002 #Encrypted Channel: Asymmetric Cryptography",
+          "T1573.001 #Encrypted Channel: Symmetric Cryptography",
+          "T1499 #Endpoint Denial of Service",
+          "T1499.003 #Endpoint Denial Service: Application Exhaustion Flood",
+          "T1499.004 #Endpoint Denial Service: Application or System Exploitation",
+          "T1499.001 #Endpoint Denial of Service: OS Exhaustion Flood",
+          "T1499.002 #Endpoint Denial Service: Service Exhaustion Flood",
+          "T1611 #Escape to Host",
+          "T1585 #Establish Accounts",
+          "T1585.003 #Establish Accounts: Cloud Accounts",
+          "T1585.002 #Establish Accounts: Email Accounts",
+          "T1585.001 #Establish Accounts: Social Media Accounts",
+          "T1546 #Event Triggered Execution",
+          "T1546.008 #Event Triggered Execution: Accessibility Features",
+          "T1546.009 #Event Triggered Execution: AppCert DLLs",
+          "T1546.010 #Event Triggered Execution: AppInit DLLs",
+          "T1546.011 #Event Triggered Execution: Application Shimming",
+          "T1546.001 #Event Triggered Execution: Change Default File Association",
+          "T1546.015 #Event Triggered Execution: Component Object Model Hijacking",
+          "T1546.014 #Event Triggered Execution: Emond",
+          "T1546.012 #Event Triggered Execution: Image File Execution Options Injection",
+          "T1546.016 #Event Triggered Execution: Installer Packages",
+          "T1546.006 #Event Triggered Execution: LC_LOAD_DYLIB Addition",
+          "T1546.007 #Event Triggered Execution: Netsh Helper DLL",
+          "T1546.013 #Event Triggered Execution: PowerShell Profile",
+          "T1546.002 #Event Triggered Execution: Screensaver",
+          "T1546.005 #Event Triggered Execution: Trap",
+          "T1546.017 #Event Triggered Execution: Udev Rules",
+          "T1546.004 #Event Triggered Execution: Unix Shell Configuration Modification",
+          "T1546.003 #Event Triggered Execution: Windows Management Instrumentation Event Subscription",
+          "T1668 #Exclusive Control",
+          "T1480 #Execution Guardrails",
+          "T1480.001 #Execution Guardrails: Environmental Keying",
+          "T1480.002 #Execution Guardrails: Mutual Exclusion",
+          "T1048 #Exfiltration Over Alternative Protocol",
+          "T1048.002 #Exfiltration Over Alternative Protocol: Exfiltration Over Asymmetric Encrypted Non-C2 Protocol",
+          "T1048.001 #Exfiltration Over Alternative Protocol: Exfiltration Over Symmetric Encrypted Non-C2 Protocol",
+          "T1048.003 #Exfiltration Over Alternative Protocol: Exfiltration Over Unencrypted Non-C2 Protocol",
+          "T1041 #Exfiltration Over C2 Channel",
+          "T1011 #Exfiltration Over Other Network Medium",
+          "T1011.001 #Exfiltration Over Other Network Medium: Exfiltration Over Bluetooth",
+          "T1052 #Exfiltration Over Physical Medium",
+          "T1052.001 #Exfiltration Over Physical Medium: Exfiltration over USB",
+          "T1567 #Exfiltration Over Web Service",
+          "T1567.004 #Exfiltration Over Web Service: Exfiltration Over Webhook",
+          "T1567.002 #Exfiltration Over Web Service: Exfiltration Cloud Storage",
+          "T1567.001 #Exfiltration Over Web Service: Exfiltration Code Repository",
+          "T1567.003 #Exfiltration Over Web Service: Exfiltration Text Storage Sites",
+          "T1190 #Exploit Public-Facing Application",
+          "T1203 #Exploitation for Client Execution",
+          "T1212 #Exploitation for Credential Access",
+          "T1211 #Exploitation for Defense Evasion",
+          "T1068 #Exploitation for Privilege Escalation",
+          "T1210 #Exploitation of Remote Services",
+          "T1133 #External Remote Services",
+          "T1008 #Fallback Channels",
+          "T1083 #File and Directory Discovery",
+          "T1222 #File and Directory Permissions Modification",
+          "T1222.002 #File & Directory Permissions Modification: Linux & Mac File & Directory Permissions Modification",
+          "T1222.001 #File & Directory Permissions Modification: Windows File & Directory Permissions Modification",
+          "T1657 #Financial Theft",
+          "T1495 #Firmware Corruption",
+          "T1187 #Forced Authentication",
+          "T1606 #Forge Web Credentials",
+          "T1606.002 #Forge Web Credentials: SAML Tokens",
+          "T1606.001 #Forge Web Credentials: Web Cookies",
+          "T1592 #Gather Victim Host Information",
+          "T1592.004 #Gather Victim Host Information: Client Configurations",
+          "T1592.003 #Gather Victim Host Information: Firmware",
+          "T1592.001 #Gather Victim Host Information: Hardware",
+          "T1592.002 #Gather Victim Host Information: Software",
+          "T1589 #Gather Victim Identity Information",
+          "T1589.001 #Gather Victim Identity Information: Credentials",
+          "T1589.002 #Gather Victim Identity Information: Email Addresses",
+          "T1589.003 #Gather Victim Identity Information: Employee Names",
+          "T1590 #Gather Victim Network Information",
+          "T1590.002 #Gather Victim Network Information: DNS",
+          "T1590.001 #Gather Victim Network Information: Domain Properties",
+          "T1590.005 #Gather Victim Network Information: IP Addresses",
+          "T1590.006 #Gather Victim Network Information: Network Security Appliances",
+          "T1590.004 #Gather Victim Network Information: Network Topology",
+          "T1590.003 #Gather Victim Network Information: Network Trust Dependencies",
+          "T1591 #Gather Victim Org Information",
+          "T1591.002 #Gather Victim Org Information: Business Relationships",
+          "T1591.001 #Gather Victim Org Information: Determine Physical Locations",
+          "T1591.003 #Gather Victim Org Information: Identify Business Tempo",
+          "T1591.004 #Gather Victim Org Information: Identify Roles",
+          "T1615 #Group Policy Discovery",
+          "T1200 #Hardware Additions",
+          "T1564 #Hide Artifacts",
+          "T1564.013 #Hide Artifacts: Bind Mounts",
+          "T1564.008 #Hide Artifacts: Email Hiding Rules",
+          "T1564.014 #Hide Artifacts: Extended Attributes",
+          "T1564.012 #Hide Artifacts: File/Path Exclusions",
+          "T1564.005 #Hide Artifacts: Hidden File System",
+          "T1564.001 #Hide Artifacts: Hidden Files and Directories",
+          "T1564.002 #Hide Artifacts: Hidden Users",
+          "T1564.003 #Hide Artifacts: Hidden Window",
+          "T1564.011 #Hide Artifacts: Ignore Process Interrupts",
+          "T1564.004 #Hide Artifacts: NTFS File Attributes",
+          "T1564.010 #Hide Artifacts: Process Argument Spoofing",
+          "T1564.009 #Hide Artifacts: Resource Forking",
+          "T1564.006 #Hide Artifacts: Run Virtual Instance",
+          "T1564.007 #Hide Artifacts: VBA Stomping",
+          "T1665 #Hide Infrastructure",
+          "T1574 #Hijack Execution Flow",
+          "T1574.014 #Hijack Execution Flow: AppDomainManager",
+          "T1574.012 #Hijack Execution Flow: COR_PROFILER",
+          "T1574.001 #Hijack Execution Flow: DLL",
+          "T1574.004 #Hijack Execution Flow: Dylib Hijacking",
+          "T1574.006 #Hijack Execution Flow: Dynamic Linker Hijacking",
+          "T1574.005 #Hijack Execution Flow: Executable Installer File Permissions Weakness",
+          "T1574.013 #Hijack Execution Flow: KernelCallbackTable",
+          "T1574.007 #Hijack Execution Flow: Path Interception by PATH Environment Variable",
+          "T1574.008 #Hijack Execution Flow: Path Interception by Search Order Hijacking",
+          "T1574.009 #Hijack Execution Flow: Path Interception by Unquoted Path",
+          "T1574.010 #Hijack Execution Flow: Services File Permissions Weakness",
+          "T1574.011 #Hijack Execution Flow: Services Registry Permissions Weakness",
+          "T1562 #Impair Defenses",
+          "T1562.002 #Impair Defenses: Disable Windows Event Logging",
+          "T1562.007 #Impair Defenses: Disable or Modify Cloud Firewall",
+          "T1562.008 #Impair Defenses: Disable or Modify Cloud Logs",
+          "T1562.012 #Impair Defenses: Disable or Modify Linux Audit System",
+          "T1562.004 #Impair Defenses: Disable or Modify System Firewall",
+          "T1562.001 #Impair Defenses: Disable or Modify Tools",
+          "T1562.010 #Impair Defenses: Downgrade Attack",
+          "T1562.003 #Impair Defenses: Impair Command History Logging",
+          "T1562.006 #Impair Defenses: Indicator Blocking",
+          "T1562.009 #Impair Defenses: Safe Mode Boot",
+          "T1562.011 #Impair Defenses: Spoof Security Alerting",
+          "T1656 #Impersonation",
+          "T1525 #Implant Internal Image",
+          "T1070 #Indicator Removal",
+          "T1070.003 #Indicator Removal: Clear Command History",
+          "T1070.002 #Indicator Removal: Clear Linux or Mac System Logs",
+          "T1070.008 #Indicator Removal: Clear Mailbox Data",
+          "T1070.007 #Indicator Removal: Clear Network Connection History & Configurations",
+          "T1070.009 #Indicator Removal: Clear Persistence",
+          "T1070.001 #Indicator Removal: Clear Windows Event Logs",
+          "T1070.004 #Indicator Removal: File Deletion",
+          "T1070.005 #Indicator Removal: Network Share Connection Removal",
+          "T1070.010 #Indicator Removal: Relocate Malware",
+          "T1070.006 #Indicator Removal: Timestomp",
+          "T1202 #Indirect Command Execution",
+          "T1105 #Ingress Tool Transfer",
+          "T1490 #Inhibit System Recovery",
+          "T1056 #Input Capture",
+          "T1056.004 #Input Capture: Credential API Hooking",
+          "T1056.002 #Input Capture: GUI Input Capture",
+          "T1056.001 #Input Capture: Keylogging",
+          "T1056.003 #Input Capture: Web Portal Capture",
+          "T1674 #Input Injection",
+          "T1559 #Inter-Process Communication",
+          "T1559.001 #Inter-Process Communication: Component Object Model",
+          "T1559.002 #Inter-Process Communication: Dynamic Data Exchange",
+          "T1559.003 #Inter-Process Communication: XPC Services",
+          "T1534 #Internal Spearphishing",
+          "T1570 #Lateral Tool Transfer",
+          "T1654 #Log Enumeration",
+          "T1036 #Masquerading",
+          "T1036.009 #Masquerading: Break Process Trees",
+          "T1036.007 #Masquerading: Double File Extension",
+          "T1036.001 #Masquerading: Invalid Code Signature",
+          "T1036.010 #Masquerading: Masquerade Account Name",
+          "T1036.008 #Masquerading: Masquerade File Type",
+          "T1036.004 #Masquerading: Masquerade Task or Service",
+          "T1036.005 #Masquerading: Match Legitimate Resource Name or Location",
+          "T1036.011 #Masquerading: Overwrite Process Arguments",
+          "T1036.003 #Masquerading: Rename Legitimate Utilities",
+          "T1036.002 #Masquerading: Right-to-Left Override",
+          "T1036.006 #Masquerading: Space after Filename",
+          "T1556 #Modify Authentication Process",
+          "T1556.009 #Modify Authentication Process: Conditional Access Policies",
+          "T1556.001 #Modify Authentication Process: Domain Controller Authentication",
+          "T1556.007 #Modify Authentication Process: Hybrid Identity",
+          "T1556.006 #Modify Authentication Process: Multi-Factor Authentication",
+          "T1556.004 #Modify Authentication Process: Network Device Authentication",
+          "T1556.008 #Modify Authentication Process: Network Provider DLL",
+          "T1556.002 #Modify Authentication Process: Password Filter DLL",
+          "T1556.003 #Modify Authentication Process: Pluggable Authentication Modules",
+          "T1556.005 #Modify Authentication Process: Reversible Encryption",
+          "T1578 #Modify Cloud Compute Infrastructure",
+          "T1578.002 #Modify Cloud Compute Infrastructure: Create Cloud Instance",
+          "T1578.001 #Modify Cloud Compute Infrastructure: Create Snapshot",
+          "T1578.003 #Modify Cloud Compute Infrastructure: Delete Cloud Instance",
+          "T1578.005 #Modify Cloud Compute Infrastructure: Modify Cloud Compute Configurations",
+          "T1578.004 #Modify Cloud Compute Infrastructure: Revert Cloud Instance",
+          "T1666 #Modify Cloud Resource Hierarchy",
+          "T1112 #Modify Registry",
+          "T1601 #Modify System Image",
+          "T1601.002 #Modify System Image: Downgrade System Image",
+          "T1601.001 #Modify System Image: Patch System Image",
+          "T1111 #Multi-Factor Authentication Interception",
+          "T1621 #Multi-Factor Authentication Request Generation",
+          "T1104 #Multi-Stage Channels",
+          "T1106 #Native API",
+          "T1599 #Network Boundary Bridging",
+          "T1599.001 #Network Boundary Bridging: Network Address Translation Traversal",
+          "T1498 #Network Denial of Service",
+          "T1498.001 #Network Denial of Service: Direct Network Flood",
+          "T1498.002 #Network Denial Service: Reflection Amplification",
+          "T1046 #Network Service Discovery",
+          "T1135 #Network Share Discovery",
+          "T1040 #Network Sniffing",
+          "T1095 #Non-Application Layer Protocol",
+          "T1571 #Non-Standard Port",
+          "T1003 #OS Credential Dumping",
+          "T1003.008 #OS Credential Dumping: /etc/passwd & /etc/shadow",
+          "T1003.005 #OS Credential Dumping: Cached Domain Credentials",
+          "T1003.006 #OS Credential Dumping: DCSync",
+          "T1003.004 #OS Credential Dumping: LSA Secrets",
+          "T1003.001 #OS Credential Dumping: LSASS Memory",
+          "T1003.003 #OS Credential Dumping: NTDS",
+          "T1003.007 #OS Credential Dumping: Proc Filesystem",
+          "T1003.002 #OS Credential Dumping: Security Account Manager",
+          "T1027 #Obfuscated Files or Information",
+          "T1027.001 #Obfuscated Files or Information: Binary Padding",
+          "T1027.010 #Obfuscated Files or Information: Command Obfuscation",
+          "T1027.004 #Obfuscated Files or Information: Compile After Delivery",
+          "T1027.015 #Obfuscated Files or Information: Compression",
+          "T1027.007 #Obfuscated Files or Information: Dynamic API Resolution",
+          "T1027.009 #Obfuscated Files or Information: Embedded Payloads",
+          "T1027.013 #Obfuscated Files or Information: Encrypted/Encoded File",
+          "T1027.011 #Obfuscated Files or Information: Fileless Storage",
+          "T1027.006 #Obfuscated Files or Information: HTML Smuggling",
+          "T1027.005 #Obfuscated Files or Information: Indicator Removal from Tools",
+          "T1027.016 #Obfuscated Files or Information: Junk Code Insertion",
+          "T1027.012 #Obfuscated Files or Information: LNK Icon Smuggling",
+          "T1027.014 #Obfuscated Files or Information: Polymorphic Code",
+          "T1027.017 #Obfuscated Files or Information: SVG Smuggling",
+          "T1027.002 #Obfuscated Files or Information: Software Packing",
+          "T1027.003 #Obfuscated Files or Information: Steganography",
+          "T1027.008 #Obfuscated Files or Information: Stripped Payloads",
+          "T1588 #Obtain Capabilities",
+          "T1588.007 #Obtain Capabilities: Artificial Intelligence",
+          "T1588.003 #Obtain Capabilities: Code Signing Certificates",
+          "T1588.004 #Obtain Capabilities: Digital Certificates",
+          "T1588.005 #Obtain Capabilities: Exploits",
+          "T1588.001 #Obtain Capabilities: Malware",
+          "T1588.002 #Obtain Capabilities: Tool",
+          "T1588.006 #Obtain Capabilities: Vulnerabilities",
+          "T1137 #Office Application Startup",
+          "T1137.006 #Office Application Startup: Add-ins",
+          "T1137.001 #Office Application Startup: Office Template Macros",
+          "T1137.002 #Office Application Startup: Office Test",
+          "T1137.003 #Office Application Startup: Outlook Forms",
+          "T1137.004 #Office Application Startup: Outlook Home Page",
+          "T1137.005 #Office Application Startup: Outlook Rules",
+          "T1201 #Password Policy Discovery",
+          "T1120 #Peripheral Device Discovery",
+          "T1069 #Permission Groups Discovery",
+          "T1069.003 #Permission Groups Discovery: Cloud Groups",
+          "T1069.002 #Permission Groups Discovery: Domain Groups",
+          "T1069.001 #Permission Groups Discovery: Local Groups",
+          "T1566 #Phishing",
+          "T1598 #Phishing for Information",
+          "T1598.002 #Phishing for Information: Spearphishing Attachment",
+          "T1598.003 #Phishing for Information: Spearphishing Link",
+          "T1598.001 #Phishing for Information: Spearphishing Service",
+          "T1598.004 #Phishing for Information: Spearphishing Voice",
+          "T1566.001 #Phishing: Spearphishing Attachment",
+          "T1566.002 #Phishing: Spearphishing Link",
+          "T1566.004 #Phishing: Spearphishing Voice",
+          "T1566.003 #Phishing: Spearphishing via Service",
+          "T1647 #Plist File Modification",
+          "T1653 #Power Settings",
+          "T1542 #Pre-OS Boot",
+          "T1542.003 #Pre-OS Boot: Bootkit",
+          "T1542.002 #Pre-OS Boot: Component Firmware",
+          "T1542.004 #Pre-OS Boot: ROMMONkit",
+          "T1542.001 #Pre-OS Boot: System Firmware",
+          "T1542.005 #Pre-OS Boot: TFTP Boot",
+          "T1057 #Process Discovery",
+          "T1055 #Process Injection",
+          "T1055.004 #Process Injection: Asynchronous Procedure Call",
+          "T1055.001 #Process Injection: Dynamic-link Library Injection",
+          "T1055.011 #Process Injection: Extra Window Memory Injection",
+          "T1055.015 #Process Injection: ListPlanting",
+          "T1055.002 #Process Injection: Portable Executable Injection",
+          "T1055.009 #Process Injection: Proc Memory",
+          "T1055.013 #Process Injection: Process Doppelg\u00e4nging",
+          "T1055.012 #Process Injection: Process Hollowing",
+          "T1055.008 #Process Injection: Ptrace System Calls",
+          "T1055.003 #Process Injection: Thread Execution Hijacking",
+          "T1055.005 #Process Injection: Thread Local Storage",
+          "T1055.014 #Process Injection: VDSO Hijacking",
+          "T1572 #Protocol Tunneling",
+          "T1090 #Proxy",
+          "T1090.004 #Proxy: Domain Fronting",
+          "T1090.002 #Proxy: External Proxy",
+          "T1090.001 #Proxy: Internal Proxy",
+          "T1090.003 #Proxy: Multi-hop Proxy",
+          "T1012 #Query Registry",
+          "T1620 #Reflective Code Loading",
+          "T1219 #Remote Access Tools",
+          "T1219.001 #Remote Access Tools: IDE Tunneling",
+          "T1219.003 #Remote Access Tools: Remote Access Hardware",
+          "T1219.002 #Remote Access Tools: Remote Desktop Software",
+          "T1563 #Remote Service Session Hijacking",
+          "T1563.002 #Remote Service Session Hijacking: RDP Hijacking",
+          "T1563.001 #Remote Service Session Hijacking: SSH Hijacking",
+          "T1021 #Remote Services",
+          "T1021.007 #Remote Services: Cloud Services",
+          "T1021.008 #Remote Services: Direct Cloud VM Connections",
+          "T1021.003 #Remote Services: Distributed Component Object Model",
+          "T1021.001 #Remote Services: Remote Desktop Protocol",
+          "T1021.002 #Remote Services: SMB/Windows Admin Shares",
+          "T1021.004 #Remote Services: SSH",
+          "T1021.005 #Remote Services: VNC",
+          "T1021.006 #Remote Services: Windows Remote Management",
+          "T1018 #Remote System Discovery",
+          "T1091 #Replication Through Removable Media",
+          "T1496 #Resource Hijacking",
+          "T1496.002 #Resource Hijacking: Bandwidth Hijacking",
+          "T1496.004 #Resource Hijacking: Cloud Service Hijacking",
+          "T1496.001 #Resource Hijacking: Compute Hijacking",
+          "T1496.003 #Resource Hijacking: SMS Pumping",
+          "T1207 #Rogue Domain Controller",
+          "T1014 #Rootkit",
+          "T1053 #Scheduled Task/Job",
+          "T1053.002 #Scheduled Task/Job: At",
+          "T1053.007 #Scheduled Task/Job: Container Orchestration Job",
+          "T1053.003 #Scheduled Task/Job: Cron",
+          "T1053.005 #Scheduled Task/Job: Scheduled Task",
+          "T1053.006 #Scheduled Task/Job: Systemd Timers",
+          "T1029 #Scheduled Transfer",
+          "T1113 #Screen Capture",
+          "T1597 #Search Closed Sources",
+          "T1597.002 #Search Closed Sources: Purchase Technical Data",
+          "T1597.001 #Search Closed Sources: Threat Intel Vendors",
+          "T1596 #Search Open Technical Databases",
+          "T1596.004 #Search Open Technical Databases: CDNs",
+          "T1596.001 #Search Open Technical Databases: DNS/Passive DNS",
+          "T1596.003 #Search Open Technical Databases: Digital Certificates",
+          "T1596.005 #Search Open Technical Databases: Scan Databases",
+          "T1596.002 #Search Open Technical Databases: WHOIS",
+          "T1593 #Search Open Websites/Domains",
+          "T1593.003 #Search Open Websites/Domains: Code Repositories",
+          "T1593.002 #Search Open Websites/Domains: Search Engines",
+          "T1593.001 #Search Open Websites/Domains: Social Media",
+          "T1594 #Search Victim-Owned Websites",
+          "T1505 #Server Software Component",
+          "T1505.004 #Server Software Component: IIS Components",
+          "T1505.001 #Server Software Component: SQL Stored Procedures",
+          "T1505.005 #Server Software Component: Terminal Services DLL",
+          "T1505.002 #Server Software Component: Transport Agent",
+          "T1505.003 #Server Software Component: Web Shell",
+          "T1505.006 #Server Software Component: vSphere Installation Bundles",
+          "T1648 #Serverless Execution",
+          "T1489 #Service Stop",
+          "T1129 #Shared Modules",
+          "T1072 #Software Deployment Tools",
+          "T1518 #Software Discovery",
+          "T1518.001 #Software Discovery: Security Software Discovery",
+          "T1176 #Software Extensions",
+          "T1176.001 #Software Extensions: Browser Extensions",
+          "T1176.002 #Software Extensions: IDE Extensions",
+          "T1608 #Stage Capabilities",
+          "T1608.004 #Stage Capabilities: Drive-by Target",
+          "T1608.003 #Stage Capabilities: Install Digital Certificate",
+          "T1608.005 #Stage Capabilities: Link Target",
+          "T1608.006 #Stage Capabilities: SEO Poisoning",
+          "T1608.001 #Stage Capabilities: Upload Malware",
+          "T1608.002 #Stage Capabilities: Upload Tool",
+          "T1528 #Steal Application Access Token",
+          "T1539 #Steal Web Session Cookie",
+          "T1649 #Steal or Forge Authentication Certificates",
+          "T1558 #Steal or Forge Kerberos Tickets",
+          "T1558.004 #Steal or Forge Kerberos Tickets: AS-REP Roasting",
+          "T1558.005 #Steal or Forge Kerberos Tickets: Ccache Files",
+          "T1558.001 #Steal or Forge Kerberos Tickets: Golden Ticket",
+          "T1558.003 #Steal or Forge Kerberos Tickets: Kerberoasting",
+          "T1558.002 #Steal or Forge Kerberos Tickets: Silver Ticket",
+          "T1553 #Subvert Trust Controls",
+          "T1553.002 #Subvert Trust Controls: Code Signing",
+          "T1553.006 #Subvert Trust Controls: Code Signing Policy Modification",
+          "T1553.001 #Subvert Trust Controls: Gatekeeper Bypass",
+          "T1553.004 #Subvert Trust Controls: Install Root Certificate",
+          "T1553.005 #Subvert Trust Controls: Mark-of-the-Web Bypass",
+          "T1553.003 #Subvert Trust Controls: SIP & Trust Provider Hijacking",
+          "T1195 #Supply Chain Compromise",
+          "T1195.003 #Supply Chain Compromise: Compromise Hardware Supply Chain",
+          "T1195.001 #Supply Chain Compromise: Compromise Software Dependencies & Development Tools",
+          "T1195.002 #Supply Chain Compromise: Compromise Software Supply Chain",
+          "T1218 #System Binary Proxy Execution",
+          "T1218.003 #System Binary Proxy Execution: CMSTP",
+          "T1218.001 #System Binary Proxy Execution: Compiled HTML File",
+          "T1218.002 #System Binary Proxy Execution: Control Panel",
+          "T1218.015 #System Binary Proxy Execution: Electron Applications",
+          "T1218.004 #System Binary Proxy Execution: InstallUtil",
+          "T1218.014 #System Binary Proxy Execution: MMC",
+          "T1218.013 #System Binary Proxy Execution: Mavinject",
+          "T1218.005 #System Binary Proxy Execution: Mshta",
+          "T1218.007 #System Binary Proxy Execution: Msiexec",
+          "T1218.008 #System Binary Proxy Execution: Odbcconf",
+          "T1218.009 #System Binary Proxy Execution: Regsvcs/Regasm",
+          "T1218.010 #System Binary Proxy Execution: Regsvr32",
+          "T1218.011 #System Binary Proxy Execution: Rundll32",
+          "T1218.012 #System Binary Proxy Execution: Verclsid",
+          "T1082 #System Information Discovery",
+          "T1614 #System Location Discovery",
+          "T1614.001 #System Location Discovery: System Language Discovery",
+          "T1016 #System Network Configuration Discovery",
+          "T1016.001 #System Network Configuration Discovery: Internet Connection Discovery",
+          "T1016.002 #System Network Configuration Discovery: Wi-Fi Discovery",
+          "T1049 #System Network Connections Discovery",
+          "T1033 #System Owner/User Discovery",
+          "T1216 #System Script Proxy Execution",
+          "T1216.001 #System Script Proxy Execution: PubPrn",
+          "T1216.002 #System Script Proxy Execution: SyncAppvPublishingServer",
+          "T1007 #System Service Discovery",
+          "T1569 #System Services",
+          "T1569.001 #System Services: Launchctl",
+          "T1569.002 #System Services: Service Execution",
+          "T1569.003 #System Services: Systemctl",
+          "T1529 #System Shutdown/Reboot",
+          "T1124 #System Time Discovery",
+          "T1080 #Taint Shared Content",
+          "T1221 #Template Injection",
+          "T1205 #Traffic Signaling",
+          "T1205.001 #Traffic Signaling: Port Knocking",
+          "T1205.002 #Traffic Signaling: Socket Filters",
+          "T1537 #Transfer Data to Cloud Account",
+          "T1127 #Trusted Developer Utilities Proxy Execution",
+          "T1127.002 #Trusted Developer Utilities Proxy Execution: ClickOnce",
+          "T1127.003 #Trusted Developer Utilities Proxy Execution: JamPlus",
+          "T1127.001 #Trusted Developer Utilities Proxy Execution: MSBuild",
+          "T1199 #Trusted Relationship",
+          "T1552 #Unsecured Credentials",
+          "T1552.003 #Unsecured Credentials: Bash History",
+          "T1552.008 #Unsecured Credentials: Chat Messages",
+          "T1552.005 #Unsecured Credentials: Cloud Instance Metadata API",
+          "T1552.007 #Unsecured Credentials: Container API",
+          "T1552.001 #Unsecured Credentials: Credentials In Files",
+          "T1552.002 #Unsecured Credentials: Credentials in Registry",
+          "T1552.006 #Unsecured Credentials: Group Policy Preferences",
+          "T1552.004 #Unsecured Credentials: Private Keys",
+          "T1535 #Unused/Unsupported Cloud Regions",
+          "T1550 #Use Alternate Authentication Material",
+          "T1550.001 #  Alternate Authentication Material: Application Access Token",
+          "T1550.002 #  Alternate Authentication Material: Pass the Hash",
+          "T1550.003 #  Alternate Authentication Material: Pass the Ticket",
+          "T1550.004 #  Alternate Authentication Material: Web Session Cookie",
+          "T1204 #User Execution",
+          "T1204.004 #User Execution: Malicious Copy and Paste",
+          "T1204.002 #User Execution: Malicious File",
+          "T1204.003 #User Execution: Malicious Image",
+          "T1204.001 #User Execution: Malicious Link",
+          "T1078 #Valid Accounts",
+          "T1078.004 #Valid Accounts: Cloud Accounts",
+          "T1078.001 #Valid Accounts: Default Accounts",
+          "T1078.002 #Valid Accounts: Domain Accounts",
+          "T1078.003 #Valid Accounts: Local Accounts",
+          "T1125 #Video Capture",
+          "T1673 #Virtual Machine Discovery",
+          "T1497 #Virtualization/Sandbox Evasion",
+          "T1497.001 #Virtualization/Sandbox Evasion: System Checks",
+          "T1497.003 #Virtualization/Sandbox Evasion: Time Based Evasion",
+          "T1497.002 #Virtualization/Sandbox Evasion:  r Activity Based Checks",
+          "T1600 #Weaken Encryption",
+          "T1600.002 #Weaken Encryption: Disable Crypto Hardware",
+          "T1600.001 #Weaken Encryption: Reduce Key Space",
+          "T1102 #Web Service",
+          "T1102.002 #Web Service: Bidirectional Communication",
+          "T1102.001 #Web Service: Dead Drop Resolver",
+          "T1102.003 #Web Service: One-Way Communication",
+          "T1669 #Wi-Fi Networks",
+          "T1047 #Windows Management Instrumentation",
+          "T1220 #XSL Script Processing",
+          "T1626 #Mobile : Abuse Elevation Control Mechanism",
+          "T1517 #Mobile : Access Notifications",
+          "T1640 #Mobile : Account Access Removal",
+          "T1638 #Mobile : Adversary-in-the-Middle",
+          "T1437 #Mobile : Application Layer Protocol",
+          "T1661 #Mobile : Application Versioning",
+          "T1532 #Mobile : Archive Collected Data",
+          "T1521.002 #Mobile : Asymmetric Cryptography",
+          "T1429 #Mobile : Audio Capture",
+          "T1481.002 #Mobile : Bidirectional Communication",
+          "T1398 #Mobile : Boot or Logon Initialization Scripts",
+          "T1624.001 #Mobile : Broadcast Receivers",
+          "T1636.001 #Mobile : Calendar Entries",
+          "T1616 #Mobile : Call Control",
+          "T1636.002 #Mobile : Call Log",
+          "T1414 #Mobile : Clipboard Data",
+          "T1632.001 #Mobile : Code Signing Policy Modification",
+          "T1623 #Mobile : Command and Scripting Interpreter",
+          "T1577 #Mobile : Compromise Application Executable",
+          "T1645 #Mobile : Compromise Client Software Binary",
+          "T1474.002 #Mobile : Compromise Hardware Supply Chain",
+          "T1474.001 #Mobile : Compromise Software Dependencies & Development Tools",
+          "T1474.003 #Mobile : Compromise Software Supply Chain",
+          "T1628.003 #Mobile : Conceal Multimedia Files",
+          "T1636.003 #Mobile : Contact List",
+          "T1634 #Mobile : Credentials from Password Store",
+          "T1662 #Mobile : Data Destruction",
+          "T1471 #Mobile : Data Encrypted for Impact",
+          "T1641 #Mobile : Data Manipulation",
+          "T1533 #Mobile : Data from Local System",
+          "T1481.001 #Mobile : Dead Drop Resolver",
+          "T1626.001 #Mobile : Device Administrator Permissions",
+          "T1629.002 #Mobile : Device Lockout",
+          "T1629.003 #Mobile : Disable or Modify Tools",
+          "T1630.003 #Mobile : Disguise Root/Jailbreak Indicators",
+          "T1637.001 #Mobile : Domain Generation Algorithms",
+          "T1407 #Mobile : Download New Code at Runtime",
+          "T1456 #Mobile : Drive-By Compromise",
+          "T1637 #Mobile : Dynamic Resolution",
+          "T1521 #Mobile : Encrypted Channel",
+          "T1642 #Mobile : Endpoint Denial of Service",
+          "T1624 #Mobile : Event Triggered Execution",
+          "T1627 #Mobile : Execution Guardrails",
+          "T1639 #Mobile : Exfiltration Over Alternative Protocol",
+          "T1646 #Mobile : Exfiltration Over C2 Channel",
+          "T1639.001 #Mobile : Exfiltration Over Unencrypted Non-C2 Protocol",
+          "T1658 #Mobile : Exploitation for Client Execution",
+          "T1664 #Mobile : Exploitation for Initial Access",
+          "T1404 #Mobile : Exploitation for Privilege Escalation",
+          "T1428 #Mobile : Exploitation of Remote Services",
+          "T1630.002 #Mobile : File Deletion",
+          "T1420 #Mobile : File and Directory Discovery",
+          "T1541 #Mobile : Foreground Persistence",
+          "T1417.002 #Mobile : GUI Input Capture",
+          "T1643 #Mobile : Generate Traffic from Victim",
+          "T1627.001 #Mobile : Geofencing",
+          "T1628 #Mobile : Hide Artifacts",
+          "T1625 #Mobile : Hijack Execution Flow",
+          "T1617 #Mobile : Hooking",
+          "T1629 #Mobile : Impair Defenses",
+          "T1430.002 #Mobile : Impersonate SS7 Nodes",
+          "T1630 #Mobile : Indicator Removal on Host",
+          "T1544 #Mobile : Ingress Tool Transfer",
+          "T1417 #Mobile : Input Capture",
+          "T1516 #Mobile : Input Injection",
+          "T1422.001 #Mobile : Internet Connection Discovery",
+          "T1634.001 #Mobile : Keychain",
+          "T1417.001 #Mobile : Keylogging",
+          "T1430 #Mobile : Location Tracking",
+          "T1461 #Mobile : Lockscreen Bypass",
+          "T1655 #Mobile : Masquerading",
+          "T1655.001 #Mobile : Match Legitimate Name or Location",
+          "T1575 #Mobile : Native API",
+          "T1464 #Mobile : Network Denial of Service",
+          "T1423 #Mobile : Network Service Scanning",
+          "T1509 #Mobile : Non-Standard Port",
+          "T1406 #Mobile : Obfuscated Files or Information",
+          "T1481.003 #Mobile : One-Way Communication",
+          "T1644 #Mobile : Out of Band Data",
+          "T1660 #Mobile : Phishing",
+          "T1629.001 #Mobile : Prevent Application Removal",
+          "T1424 #Mobile : Process Discovery",
+          "T1631 #Mobile : Process Injection",
+          "T1636 #Mobile : Protected User Data",
+          "T1604 #Mobile : Proxy Through Victim",
+          "T1631.001 #Mobile : Ptrace System Calls",
+          "T1663 #Mobile : Remote Access Software",
+          "T1430.001 #Mobile : Remote Device Management Services",
+          "T1458 #Mobile : Replication Through Removable Media",
+          "T1451 #Mobile : SIM Card Swap",
+          "T1582 #Mobile : SMS Control",
+          "T1636.004 #Mobile : SMS Messages",
+          "T1521.003 #Mobile : SSL Pinning",
+          "T1603 #Mobile : Scheduled Task/Job",
+          "T1513 #Mobile : Screen Capture",
+          "T1418.001 #Mobile : Security Software Discovery",
+          "T1418 #Mobile : Software Discovery",
+          "T1406.002 #Mobile : Software Packing",
+          "T1635 #Mobile : Steal Application Access Token",
+          "T1406.001 #Mobile : Steganography",
+          "T1409 #Mobile : Stored Application Data",
+          "T1632 #Mobile : Subvert Trust Controls",
+          "T1474 #Mobile : Supply Chain Compromise",
+          "T1628.001 #Mobile : Suppress Application Icon",
+          "T1521.001 #Mobile : Symmetric Cryptography",
+          "T1633.001 #Mobile : System Checks",
+          "T1426 #Mobile : System Information Discovery",
+          "T1422 #Mobile : System Network Configuration Discovery",
+          "T1421 #Mobile : System Network Connections Discovery",
+          "T1625.001 #Mobile : System Runtime API Hijacking",
+          "T1641.001 #Mobile : Transmitted Data Manipulation",
+          "T1635.001 #Mobile : URI Hijacking",
+          "T1630.001 #Mobile : Uninstall Malicious Application",
+          "T1623.001 #Mobile : Unix Shell",
+          "T1628.002 #Mobile : User Evasion",
+          "T1512 #Mobile : Video Capture",
+          "T1670 #Mobile : Virtualization Solution",
+          "T1633 #Mobile : Virtualization/Sandbox Evasion",
+          "T1437.001 #Mobile : Web Protocols",
+          "T1481 #Mobile : Web Service",
+          "T1422.002 #Mobile : Wi-Fi Discovery",
+          "T0800 #Industrial : Activate Firmware Update Mode",
+          "T0830 #Industrial : Adversary-in-the-Middle",
+          "T0878 #Industrial : Alarm Suppression",
+          "T0802 #Industrial : Automated Collection",
+          "T0895 #Industrial : Autorun Image",
+          "T0803 #Industrial : Block Command Message",
+          "T0804 #Industrial : Block Reporting Message",
+          "T0805 #Industrial : Block Serial COM",
+          "T0806 #Industrial : Brute Force I/O",
+          "T0892 #Industrial : Change Credential",
+          "T0858 #Industrial : Change Operating Mode",
+          "T0807 #Industrial : Command-Line Interface",
+          "T0885 #Industrial : Commonly Used Port",
+          "T0884 #Industrial : Connection Proxy",
+          "T0879 #Industrial : Damage to Property",
+          "T0809 #Industrial : Data Destruction",
+          "T0811 #Industrial : Data from Information Repositories",
+          "T0893 #Industrial : Data from Local System",
+          "T0812 #Industrial : Default Credentials",
+          "T0813 #Industrial : Denial of Control",
+          "T0814 #Industrial : Denial of Service",
+          "T0815 #Industrial : Denial of View",
+          "T0868 #Industrial : Detect Operating Mode",
+          "T0816 #Industrial : Device Restart/Shutdown",
+          "T0817 #Industrial : Drive-by Compromise",
+          "T0871 #Industrial : Execution through API",
+          "T0819 #Industrial : Exploit Public-Facing Application",
+          "T0820 #Industrial : Exploitation for Evasion",
+          "T0890 #Industrial : Exploitation for Privilege Escalation",
+          "T0866 #Industrial : Exploitation of Remote Services",
+          "T0822 #Industrial : External Remote Services",
+          "T0823 #Industrial : Graphical User Interface",
+          "T0891 #Industrial : Hardcoded Credentials",
+          "T0874 #Industrial : Hooking",
+          "T0877 #Industrial : I/O Image",
+          "T0872 #Industrial : Indicator Removal on Host",
+          "T0883 #Industrial : Internet Accessible Device",
+          "T0867 #Industrial : Lateral Tool Transfer",
+          "T0826 #Industrial : Loss of Availability",
+          "T0827 #Industrial : Loss of Control",
+          "T0828 #Industrial : Loss of Productivity and Revenue",
+          "T0837 #Industrial : Loss of Protection",
+          "T0880 #Industrial : Loss of Safety",
+          "T0829 #Industrial : Loss of View",
+          "T0835 #Industrial : Manipulate I/O Image",
+          "T0831 #Industrial : Manipulation of Control",
+          "T0832 #Industrial : Manipulation of View",
+          "T0849 #Industrial : Masquerading",
+          "T0838 #Industrial : Modify Alarm Settings",
+          "T0821 #Industrial : Modify Controller Tasking",
+          "T0836 #Industrial : Modify Parameter",
+          "T0889 #Industrial : Modify Program",
+          "T0839 #Industrial : Module Firmware",
+          "T0801 #Industrial : Monitor Process State",
+          "T0834 #Industrial : Native API",
+          "T0840 #Industrial : Network Connection Enumeration",
+          "T0842 #Industrial : Network Sniffing",
+          "T0861 #Industrial : Point & Tag Identification",
+          "T0843 #Industrial : Program Download",
+          "T0845 #Industrial : Program Upload",
+          "T0873 #Industrial : Project File Infection",
+          "T0886 #Industrial : Remote Services",
+          "T0846 #Industrial : Remote System Discovery",
+          "T0888 #Industrial : Remote System Information Discovery",
+          "T0847 #Industrial : Replication Through Removable Media",
+          "T0848 #Industrial : Rogue Master",
+          "T0851 #Industrial : Rootkit",
+          "T0852 #Industrial : Screen Capture",
+          "T0853 #Industrial : Scripting",
+          "T0881 #Industrial : Service Stop",
+          "T0865 #Industrial : Spearphishing Attachment",
+          "T0856 #Industrial : Spoof Reporting Message",
+          "T0869 #Industrial : Standard Application Layer Protocol",
+          "T0862 #Industrial : Supply Chain Compromise",
+          "T0894 #Industrial : System Binary Proxy Execution",
+          "T0857 #Industrial : System Firmware",
+          "T0882 #Industrial : Theft of Operational Information",
+          "T0864 #Industrial : Transient Cyber Asset",
+          "T0855 #Industrial : Unauthorized Command Message",
+          "T0863 #Industrial : User Execution",
+          "T0859 #Industrial : Valid Accounts",
+          "T0860 #Industrial : Wireless Compromise",
+          "T0887 #Industrial : Wireless Sniffing"
+        ]
+      },
+      "title": "Techniques",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "platforms": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Platforms",
+      "type": "object"
+    },
+    "references": {
+      "type": "object",
+      "properties": {
+        "public": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Public"
+        },
+        "internal": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Internal"
+        },
+        "reports": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reports"
+        }
+      },
+      "additionalProperties": false
+    },
+    "detection_model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detection Model",
+      "enum": [
+        ""
+      ],
+      "markdownEnumDescriptions": []
+    },
+    "response": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RuleResponse"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Response"
+    },
+    "configurations": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RuleConfigurations"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detection System Technical Setup",
+      "recomposition": "systems",
+      "properties": {}
+    },
+    "file": {
+      "anyOf": [
+        {
+          "format": "path",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "File"
+    }
+  },
+  "$defs": {
+    "CarbonBlackConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
         },
         "status": {
-            "default": "STAGING",
-            "title": "Status",
-            "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "organizations": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Organizations"
+        },
+        "watchlist": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Watchlist"
+        },
+        "report": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tags"
+        },
+        "rule_id_bundle": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule Id Bundle"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "CarbonBlackConfig",
+      "type": "object"
+    },
+    "CrowdstrikeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "details": {
+          "$ref": "#/$defs/CrowdstrikeDetails",
+          "title": "Details"
+        },
+        "schedule": {
+          "$ref": "#/$defs/CrowdstrikeSchedule",
+          "title": "Schedule"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "rule_id_bundle": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule Id Bundle"
+        }
+      },
+      "required": [
+        "details",
+        "schedule",
+        "query"
+      ],
+      "title": "CrowdstrikeConfig",
+      "type": "object"
+    },
+    "CrowdstrikeDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "trigger": {
+          "title": "Trigger",
+          "type": "string"
+        },
+        "outcome": {
+          "title": "Outcome",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
         },
         "severity": {
-            "default": "Informational",
-            "title": "Severity",
-            "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "tactic": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tactic"
+        },
+        "technique": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Technique"
+        }
+      },
+      "required": [
+        "trigger",
+        "outcome"
+      ],
+      "title": "CrowdstrikeDetails",
+      "type": "object"
+    },
+    "CrowdstrikeSchedule": {
+      "additionalProperties": false,
+      "properties": {
+        "frequency": {
+          "title": "Frequency",
+          "type": "string"
+        },
+        "lookback": {
+          "title": "Lookback",
+          "type": "string"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        }
+      },
+      "required": [
+        "frequency",
+        "lookback"
+      ],
+      "title": "CrowdstrikeSchedule",
+      "type": "object"
+    },
+    "DefenderAlert": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "recommendation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recommendation"
         },
         "techniques": {
-            "items": {
+          "anyOf": [
+            {
+              "items": {
                 "type": "string"
+              },
+              "type": "array"
             },
-            "title": "Techniques",
-            "type": "array"
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Techniques"
+        }
+      },
+      "required": [
+        "category"
+      ],
+      "title": "DefenderAlert",
+      "type": "object"
+    },
+    "DefenderAllowBlockAction": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "Allow",
+            "Block"
+          ],
+          "title": "Action",
+          "type": "string"
         },
-        "platforms": {
-            "additionalProperties": {
-                "additionalProperties": true,
-                "type": "object"
+        "identifier": {
+          "title": "Identifier",
+          "type": "string"
+        },
+        "groups": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderAllowBlockGroupScoping"
             },
-            "title": "Platforms",
-            "type": "object"
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Groups"
+        }
+      },
+      "required": [
+        "action",
+        "identifier"
+      ],
+      "title": "DefenderAllowBlockAction",
+      "type": "object"
+    },
+    "DefenderAllowBlockGroupScoping": {
+      "additionalProperties": false,
+      "properties": {
+        "selection": {
+          "enum": [
+            "All",
+            "Specific"
+          ],
+          "title": "Selection",
+          "type": "string"
         },
-        "references": {
-            "type": "object",
-            "properties": {
-                "public": {
-                    "anyOf": [
-                        {
-                            "additionalProperties": {
-                                "type": "string"
-                            },
-                            "type": "object"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Public"
-                },
-                "internal": {
-                    "anyOf": [
-                        {
-                            "additionalProperties": {
-                                "type": "string"
-                            },
-                            "type": "object"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Internal"
-                },
-                "reports": {
-                    "anyOf": [
-                        {
-                            "items": {
-                                "type": "string"
-                            },
-                            "type": "array"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Reports"
-                }
+        "device_groups": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
-            "additionalProperties": false
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device Groups"
+        }
+      },
+      "required": [
+        "selection"
+      ],
+      "title": "DefenderAllowBlockGroupScoping",
+      "type": "object"
+    },
+    "DefenderConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
         },
-        "detection_model": {
-            "anyOf": [
-                {
-                    "type": "string"
-                },
-                {
-                    "type": "null"
-                }
-            ],
-            "default": null,
-            "title": "Detection Model",
-            "enum": [
-                ""
-            ],
-            "markdownEnumDescriptions": []
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "alert": {
+          "$ref": "#/$defs/DefenderAlert",
+          "title": "Alert"
+        },
+        "impacted_entities": {
+          "$ref": "#/$defs/DefenderImpactedEntities",
+          "title": "Impacted Entities"
+        },
+        "scheduling": {
+          "enum": [
+            "NRT",
+            "1H",
+            "3H",
+            "12H",
+            "24H"
+          ],
+          "title": "Scheduling",
+          "type": "string"
+        },
+        "rule_id": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule Id"
+        },
+        "actions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderResponseActions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actions"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderGroupScoping"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "exclusions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/DefenderExclusion"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exclusions"
+        }
+      },
+      "required": [
+        "query",
+        "alert",
+        "impacted_entities",
+        "scheduling"
+      ],
+      "title": "DefenderConfig",
+      "type": "object"
+    },
+    "DefenderDeviceActions": {
+      "additionalProperties": false,
+      "properties": {
+        "isolate_device": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Isolate Device"
+        },
+        "collect_investigation_package": {
+          "default": false,
+          "title": "Collect Investigation Package",
+          "type": "boolean"
+        },
+        "run_antivirus_scan": {
+          "default": false,
+          "title": "Run Antivirus Scan",
+          "type": "boolean"
+        },
+        "initiate_investigation": {
+          "default": false,
+          "title": "Initiate Investigation",
+          "type": "boolean"
+        },
+        "restrict_app_execution": {
+          "default": false,
+          "title": "Restrict App Execution",
+          "type": "boolean"
+        }
+      },
+      "title": "DefenderDeviceActions",
+      "type": "object"
+    },
+    "DefenderExclusion": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "tenant": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenant"
+        },
+        "let": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Let"
+        }
+      },
+      "required": [
+        "query",
+        "reason"
+      ],
+      "title": "DefenderExclusion",
+      "type": "object"
+    },
+    "DefenderFileActions": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_block": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderAllowBlockAction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Allow Block"
+        },
+        "quarantine_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quarantine File"
+        }
+      },
+      "title": "DefenderFileActions",
+      "type": "object"
+    },
+    "DefenderGroupScoping": {
+      "additionalProperties": false,
+      "properties": {
+        "selection": {
+          "enum": [
+            "All",
+            "Specific"
+          ],
+          "title": "Selection",
+          "type": "string"
+        },
+        "device_groups": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device Groups"
+        }
+      },
+      "required": [
+        "selection"
+      ],
+      "title": "DefenderGroupScoping",
+      "type": "object"
+    },
+    "DefenderImpactedEntities": {
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device"
+        },
+        "mailbox": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mailbox"
+        },
+        "user": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User"
+        }
+      },
+      "title": "DefenderImpactedEntities",
+      "type": "object"
+    },
+    "DefenderResponseActions": {
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderDeviceActions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Devices"
+        },
+        "files": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderFileActions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Files"
+        },
+        "users": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderUserActions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Users"
+        }
+      },
+      "title": "DefenderResponseActions",
+      "type": "object"
+    },
+    "DefenderUserActions": {
+      "additionalProperties": false,
+      "properties": {
+        "mark_as_compromised": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mark As Compromised"
+        },
+        "disable_user": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Disable User"
+        },
+        "force_password_reset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Force Password Reset"
+        }
+      },
+      "title": "DefenderUserActions",
+      "type": "object"
+    },
+    "HarfangLabConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "maturity": {
+          "default": "Experimental",
+          "title": "Maturity",
+          "type": "string"
+        },
+        "confidence": {
+          "default": "Moderate",
+          "title": "Confidence",
+          "type": "string"
+        },
+        "action": {
+          "default": "Alert",
+          "title": "Action",
+          "type": "string"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tags"
+        },
+        "sigma": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HarfangLabSigma"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sigma"
+        },
+        "yara": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HarfangLabYara"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Yara"
+        },
+        "rule_id_bundle": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule Id Bundle"
+        }
+      },
+      "title": "HarfangLabConfig",
+      "type": "object"
+    },
+    "HarfangLabSigma": {
+      "additionalProperties": false,
+      "properties": {
+        "logsource": {
+          "$ref": "#/$defs/HarfangLabSigmaLogSource",
+          "title": "Logsource"
+        },
+        "selections": {
+          "items": {
+            "$ref": "#/$defs/HarfangLabSigmaSelection"
+          },
+          "title": "Selections",
+          "type": "array"
+        },
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "false_positives": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "False Positives"
+        }
+      },
+      "required": [
+        "logsource",
+        "selections",
+        "condition"
+      ],
+      "title": "HarfangLabSigma",
+      "type": "object"
+    },
+    "HarfangLabSigmaLogSource": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "product": {
+          "title": "Product",
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "product"
+      ],
+      "title": "HarfangLabSigmaLogSource",
+      "type": "object"
+    },
+    "HarfangLabSigmaSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value"
+        },
+        "modifiers": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modifiers"
+        }
+      },
+      "required": [
+        "name",
+        "field",
+        "value"
+      ],
+      "title": "HarfangLabSigmaSelection",
+      "type": "object"
+    },
+    "HarfangLabYara": {
+      "additionalProperties": false,
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/HarfangLabYaraMeta",
+          "title": "Meta"
+        },
+        "strings": {
+          "title": "Strings",
+          "type": "string"
+        },
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "imports": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imports"
+        }
+      },
+      "required": [
+        "meta",
+        "strings",
+        "condition"
+      ],
+      "title": "HarfangLabYara",
+      "type": "object"
+    },
+    "HarfangLabYaraMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Context",
+          "type": "array"
+        },
+        "os": {
+          "title": "Os",
+          "type": "string"
+        },
+        "arch": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arch"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "classification": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Classification"
+        }
+      },
+      "required": [
+        "context",
+        "os"
+      ],
+      "title": "HarfangLabYaraMeta",
+      "type": "object"
+    },
+    "ObjectMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "uuid": {
+          "title": "Uuid",
+          "type": "string"
+        },
+        "schema": {
+          "title": "Schema",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "title": "Version"
+        },
+        "created": {
+          "format": "date",
+          "title": "Created",
+          "type": "string"
+        },
+        "modified": {
+          "format": "date",
+          "title": "Modified",
+          "type": "string"
+        },
+        "tlp": {
+          "title": "Tlp",
+          "type": "string",
+          "enum": [
+            "clear",
+            "green",
+            "amber",
+            "amber+strict",
+            "red"
+          ],
+          "markdownEnumDescriptions": [
+            "Recipients can spread this to the world, there is no limit on disclosure.",
+            "Limited disclosure, recipients can spread this within their community. Sources may use TLP:GREEN when information is useful to increase awareness within their\u2026",
+            "Limited disclosure, recipients can only spread this on a need-to-know basis within their organization and its clients.",
+            "Similar to TLP:AMBER, but restricts sharing to the organization only.",
+            "For the eyes and ears of individual recipients only, no further disclosure."
+          ]
+        },
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "organisation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Organisation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Organisation"
+        }
+      },
+      "required": [
+        "uuid",
+        "schema",
+        "version",
+        "created",
+        "modified",
+        "tlp"
+      ],
+      "title": "ObjectMetadata",
+      "type": "object"
+    },
+    "ObjectReferences": {
+      "additionalProperties": false,
+      "properties": {
+        "public": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Public"
+        },
+        "internal": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Internal"
+        },
+        "reports": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reports"
+        }
+      },
+      "title": "ObjectReferences",
+      "type": "object"
+    },
+    "Organisation": {
+      "additionalProperties": false,
+      "properties": {
+        "uuid": {
+          "title": "Uuid",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "name"
+      ],
+      "title": "Organisation",
+      "type": "object"
+    },
+    "ResponseProcedure": {
+      "additionalProperties": false,
+      "properties": {
+        "analysis": {
+          "title": "Analysis",
+          "type": "string"
+        },
+        "searches": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ResponseSearch"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Searches"
+        },
+        "containment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Containment"
+        }
+      },
+      "required": [
+        "analysis"
+      ],
+      "title": "ResponseProcedure",
+      "type": "object"
+    },
+    "ResponseSearch": {
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        },
+        "system": {
+          "title": "System",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "required": [
+        "purpose",
+        "system",
+        "query"
+      ],
+      "title": "ResponseSearch",
+      "type": "object"
+    },
+    "RuleConfigurations": {
+      "additionalProperties": false,
+      "description": "Dynamically composed rule platform configurations.",
+      "properties": {
+        "sentinel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sentinel"
+        },
+        "defender_for_endpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Defender For Endpoint"
+        },
+        "splunk": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Splunk"
+        },
+        "sentinel_one": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelOneConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sentinel One"
+        },
+        "crowdstrike": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CrowdstrikeConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crowdstrike"
+        },
+        "harfanglab": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HarfangLabConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Harfanglab"
+        },
+        "carbon_black_cloud": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CarbonBlackConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carbon Black Cloud"
+        }
+      },
+      "title": "RuleConfigurations",
+      "type": "object"
+    },
+    "RuleResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "alert_severity": {
+          "default": "Informational",
+          "title": "Alert Severity",
+          "type": "string",
+          "enum": [
+            "Informational",
+            "Low",
+            "Medium",
+            "High",
+            "Critical"
+          ],
+          "markdownEnumDescriptions": [
+            "No severity level assigned, can suppport correlations or other metrics.",
+            "Response trigger is not necessarily expected, but alert should be handled.",
+            "Moderate SLAs required, can be grouped into a larger investigation.",
+            "Needs attention within tight SLAs alongside a comprehensive investigation.",
+            "Immediate and targeted response required, threat to organization absolute."
+          ]
+        },
+        "playbook": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Playbook"
+        },
+        "responders": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Responders",
+          "enum": [
+            ""
+          ],
+          "markdownEnumDescriptions": []
+        },
+        "procedure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResponseProcedure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Procedure"
+        }
+      },
+      "title": "RuleResponse",
+      "type": "object"
+    },
+    "SentinelAlert": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "suppression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "default": false,
+          "title": "Suppression"
+        },
+        "create_incident": {
+          "default": true,
+          "title": "Create Incident",
+          "type": "boolean"
+        },
+        "tactics": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tactics"
+        },
+        "techniques": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Techniques"
+        },
+        "custom_details": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SentinelCustomDetails"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Details"
+        },
+        "dynamic_properties": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SentinelDynamicProperties"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dynamic Properties"
+        }
+      },
+      "title": "SentinelAlert",
+      "type": "object"
+    },
+    "SentinelAlertGrouping": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "reopen_closed_incidents": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reopen Closed Incidents"
+        },
+        "grouping_lookback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grouping Lookback"
+        },
+        "matching": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matching"
+        },
+        "group_by_entities": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group By Entities"
+        },
+        "group_by_alert_details": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group By Alert Details"
+        },
+        "group_by_custom_details": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group By Custom Details"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "title": "SentinelAlertGrouping",
+      "type": "object"
+    },
+    "SentinelConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "scheduling": {
+          "$ref": "#/$defs/SentinelScheduling",
+          "title": "Scheduling"
+        },
+        "alert": {
+          "$ref": "#/$defs/SentinelAlert",
+          "title": "Alert"
+        },
+        "exclusions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SentinelExclusion"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exclusions"
+        },
+        "template": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelTemplate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Template"
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelTrigger"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger"
+        },
+        "grouping": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelGrouping"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grouping"
+        },
+        "entities": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SentinelEntityMapping"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entities"
+        }
+      },
+      "required": [
+        "query",
+        "scheduling",
+        "alert"
+      ],
+      "title": "SentinelConfig",
+      "type": "object"
+    },
+    "SentinelCustomDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "column": {
+          "title": "Column",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "column"
+      ],
+      "title": "SentinelCustomDetails",
+      "type": "object"
+    },
+    "SentinelDynamicProperties": {
+      "additionalProperties": false,
+      "properties": {
+        "property": {
+          "title": "Property",
+          "type": "string"
+        },
+        "column": {
+          "title": "Column",
+          "type": "string"
+        }
+      },
+      "required": [
+        "property",
+        "column"
+      ],
+      "title": "SentinelDynamicProperties",
+      "type": "object"
+    },
+    "SentinelEntityMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "title": "Entity",
+          "type": "string"
+        },
+        "mappings": {
+          "items": {
+            "$ref": "#/$defs/SentinelMappingEntry"
+          },
+          "title": "Mappings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entity",
+        "mappings"
+      ],
+      "title": "SentinelEntityMapping",
+      "type": "object"
+    },
+    "SentinelExclusion": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "tenant": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenant"
+        },
+        "let": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Let"
+        }
+      },
+      "required": [
+        "query",
+        "reason"
+      ],
+      "title": "SentinelExclusion",
+      "type": "object"
+    },
+    "SentinelGrouping": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "title": "Event",
+          "type": "string"
+        },
+        "alert": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelAlertGrouping"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alert"
+        }
+      },
+      "required": [
+        "event"
+      ],
+      "title": "SentinelGrouping",
+      "type": "object"
+    },
+    "SentinelMappingEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "identifier": {
+          "title": "Identifier",
+          "type": "string"
+        },
+        "column": {
+          "title": "Column",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identifier",
+        "column"
+      ],
+      "title": "SentinelMappingEntry",
+      "type": "object"
+    },
+    "SentinelOneCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "Single Event",
+            "Correlation"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "single_event": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelOneSingleEvent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Single Event"
+        },
+        "correlation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelOneCorrelation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation"
+        },
+        "cool_off": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cool Off"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "SentinelOneCondition",
+      "type": "object"
+    },
+    "SentinelOneConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "condition": {
+          "$ref": "#/$defs/SentinelOneCondition",
+          "title": "Condition"
         },
         "response": {
-            "anyOf": [
-                {
-                    "$ref": "#/$defs/RuleResponse"
-                },
-                {
-                    "type": "null"
-                }
-            ],
-            "default": null,
-            "title": "Response"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelOneResponse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response"
         },
-        "configurations": {
-            "anyOf": [
-                {
-                    "$ref": "#/$defs/RuleConfigurations"
-                },
-                {
-                    "type": "null"
-                }
-            ],
-            "default": null,
-            "title": "Detection System Technical Setup",
-            "recomposition": "systems",
-            "properties": {}
+        "details": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentinelOneDetails"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Details"
         },
-        "file": {
-            "anyOf": [
-                {
-                    "format": "path",
-                    "type": "string"
-                },
-                {
-                    "type": "null"
-                }
-            ],
-            "default": null,
-            "title": "File"
+        "rule_id_bundle": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule Id Bundle"
         }
+      },
+      "required": [
+        "condition"
+      ],
+      "title": "SentinelOneConfig",
+      "type": "object"
     },
-    "required": [
-        "name",
-        "response",
-        "description",
-        "configurations"
-    ],
-    "title": "Detection Rule Schema",
-    "description": "A detection rule defines how a detection opportunity is implemented.",
-    "additionalProperties": false,
-    "anyOf": [
-        {
-            "required": [
-                "metadata"
-            ]
+    "SentinelOneCorrelation": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "title": "Entity",
+          "type": "string"
         },
-        {
-            "required": [
-                "meta"
-            ]
+        "match_in_order": {
+          "title": "Match In Order",
+          "type": "boolean"
+        },
+        "time_window": {
+          "title": "Time Window",
+          "type": "string"
+        },
+        "sub_queries": {
+          "items": {
+            "$ref": "#/$defs/SentinelOneSubQuery"
+          },
+          "title": "Sub Queries",
+          "type": "array"
         }
-    ]
+      },
+      "required": [
+        "entity",
+        "match_in_order",
+        "time_window",
+        "sub_queries"
+      ],
+      "title": "SentinelOneCorrelation",
+      "type": "object"
+    },
+    "SentinelOneDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "expiration": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expiration"
+        }
+      },
+      "title": "SentinelOneDetails",
+      "type": "object"
+    },
+    "SentinelOneResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "treat_as_threat": {
+          "enum": [
+            false,
+            "Malicious",
+            "Suspicious"
+          ],
+          "title": "Treat As Threat"
+        },
+        "network_quarantine": {
+          "title": "Network Quarantine",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "treat_as_threat",
+        "network_quarantine"
+      ],
+      "title": "SentinelOneResponse",
+      "type": "object"
+    },
+    "SentinelOneSingleEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "SentinelOneSingleEvent",
+      "type": "object"
+    },
+    "SentinelOneSubQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "matches_required": {
+          "title": "Matches Required",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query",
+        "matches_required"
+      ],
+      "title": "SentinelOneSubQuery",
+      "type": "object"
+    },
+    "SentinelScheduling": {
+      "additionalProperties": false,
+      "properties": {
+        "nrt": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nrt"
+        },
+        "frequency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frequency"
+        },
+        "lookback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lookback"
+        }
+      },
+      "title": "SentinelScheduling",
+      "type": "object"
+    },
+    "SentinelTemplate": {
+      "additionalProperties": false,
+      "properties": {
+        "uuid": {
+          "title": "Uuid",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "version"
+      ],
+      "title": "SentinelTemplate",
+      "type": "object"
+    },
+    "SentinelTrigger": {
+      "additionalProperties": false,
+      "properties": {
+        "operator": {
+          "title": "Operator",
+          "type": "string"
+        },
+        "threshold": {
+          "title": "Threshold",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "operator",
+        "threshold"
+      ],
+      "title": "SentinelTrigger",
+      "type": "object"
+    },
+    "SplunkActions": {
+      "additionalProperties": false,
+      "properties": {
+        "notable": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkNotable"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notable"
+        },
+        "risk": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkRisk"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Risk"
+        },
+        "email": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkEmail"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Email"
+        }
+      },
+      "title": "SplunkActions",
+      "type": "object"
+    },
+    "SplunkConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "scheduling": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkScheduling"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scheduling"
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkTrigger"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger"
+        },
+        "actions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkActions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actions"
+        },
+        "correlation_search": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Search"
+        },
+        "advanced": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advanced"
+        },
+        "search": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Search"
+        },
+        "cron_schedule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cron Schedule"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "SplunkConfig",
+      "type": "object"
+    },
+    "SplunkEmail": {
+      "additionalProperties": false,
+      "properties": {
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "To"
+        },
+        "cc": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cc"
+        },
+        "bcc": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bcc"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "content_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Type"
+        },
+        "send_csv": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Send Csv"
+        },
+        "send_pdf": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Send Pdf"
+        },
+        "inline_results": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inline Results"
+        },
+        "include": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkEmailInclude"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Include"
+        }
+      },
+      "title": "SplunkEmail",
+      "type": "object"
+    },
+    "SplunkEmailInclude": {
+      "additionalProperties": false,
+      "properties": {
+        "results_link": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Results Link"
+        },
+        "search_string": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Search String"
+        },
+        "trigger_condition": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger Condition"
+        },
+        "trigger_time": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger Time"
+        }
+      },
+      "title": "SplunkEmailInclude",
+      "type": "object"
+    },
+    "SplunkNotable": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkNotableEvent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event"
+        },
+        "drilldown": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkNotableDrilldown"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Drilldown"
+        },
+        "security_domain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Security Domain"
+        }
+      },
+      "title": "SplunkNotable",
+      "type": "object"
+    },
+    "SplunkNotableDrilldown": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "search": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Search"
+        }
+      },
+      "title": "SplunkNotableDrilldown",
+      "type": "object"
+    },
+    "SplunkNotableEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "title": "SplunkNotableEvent",
+      "type": "object"
+    },
+    "SplunkRisk": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "risk_objects": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SplunkRiskObject"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Risk Objects"
+        },
+        "threat_objects": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SplunkThreatObject"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Threat Objects"
+        }
+      },
+      "title": "SplunkRisk",
+      "type": "object"
+    },
+    "SplunkRiskObject": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "score": {
+          "title": "Score",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "field",
+        "type",
+        "score"
+      ],
+      "title": "SplunkRiskObject",
+      "type": "object"
+    },
+    "SplunkSchedule": {
+      "additionalProperties": false,
+      "properties": {
+        "frequency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frequency"
+        },
+        "cron": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cron"
+        },
+        "custom_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Time"
+        }
+      },
+      "title": "SplunkSchedule",
+      "type": "object"
+    },
+    "SplunkScheduling": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Type"
+        },
+        "expires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires"
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkSchedule"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schedule"
+        },
+        "timerange": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkTimerange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timerange"
+        }
+      },
+      "title": "SplunkScheduling",
+      "type": "object"
+    },
+    "SplunkThreatObject": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "type"
+      ],
+      "title": "SplunkThreatObject",
+      "type": "object"
+    },
+    "SplunkThrottling": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fields"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration"
+        },
+        "group_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group Name"
+        }
+      },
+      "title": "SplunkThrottling",
+      "type": "object"
+    },
+    "SplunkTimerange": {
+      "additionalProperties": false,
+      "properties": {
+        "lookback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lookback"
+        },
+        "earliest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Earliest"
+        },
+        "latest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latest"
+        }
+      },
+      "title": "SplunkTimerange",
+      "type": "object"
+    },
+    "SplunkTrigger": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "comparator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comparator"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Threshold"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "custom_condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Condition"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Type"
+        },
+        "throttling": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplunkThrottling"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Throttling"
+        }
+      },
+      "title": "SplunkTrigger",
+      "type": "object"
+    }
+  },
+  "required": [
+    "name",
+    "response",
+    "description",
+    "configurations"
+  ],
+  "title": "Detection Rule Schema",
+  "description": "A detection rule defines how a detection opportunity is implemented.",
+  "additionalProperties": false,
+  "anyOf": [
+    {
+      "required": [
+        "metadata"
+      ]
+    },
+    {
+      "required": [
+        "meta"
+      ]
+    }
+  ]
 }

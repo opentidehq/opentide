@@ -8,9 +8,9 @@ There is **no YAML formatter**. The LSP does not rename object `name`.
 
 | schema | refs |
 | --- | --- |
-| `rule::1.0` | `detection_model` → objective UUID |
+| `rule::1.0` | `detection_model` → objective UUID (optional; not schema-required) |
 | `objective::1.0` | `objective.threats[]` → threat UUIDs |
-| `threat::1.0` | `threat.chaining[].vector` / `relation` |
+| `threat::1.0` | `threat.impact` / `threat.leverage` are non-empty lists. `threat.chaining[].vector` / `relation` are not schema properties in 0.5.0 |
 
 ## Diagnostic codes (CLI-compatible)
 

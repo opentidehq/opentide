@@ -1,13 +1,13 @@
 //! Path-aware Tide hover, completions, inlay hints, and completion resolve.
+//!
+//! Field identity is `(schema family, YAML path)` from the generated OpenTide
+//! catalog. Enum completions come from that node's schema enum. Empty-enum
+//! sentinels are already dropped. Cross-object UUID fields use `ref`.
 
 use crate::IndexedObject;
-use crate::vocabs::{bundled_vocabs, vocab_for_field};
 use crate::yaml_path::{YamlCursor, object_schema_kind, yaml_cursor};
 use opentide_core::{CompletionItem, Position, offset_to_position};
-use opentide_highlight::{TideField, load_tide_fields, tide_field};
-
-pub const STATUS_VALUES: &[&str] = &["STAGING", "DEVELOPMENT", "PRODUCTION", "DEPRECATED"];
-pub const SCHEMA_VALUES: &[&str] = &["rule::1.0", "objective::1.0", "threat::1.0"];
+use opentide_highlight::{TideField, load_tide_fields, tide_children, tide_field_at};
 
 #[derive(Debug, Clone)]
 pub struct TideInlay {
@@ -16,50 +16,61 @@ pub struct TideInlay {
 }
 
 pub fn field_markdown(field: &TideField) -> String {
-    let title = field.title.as_deref().unwrap_or(&field.name);
-    let ty = field.type_name.as_deref().unwrap_or("any");
+    let title = if field.title.is_empty() {
+        field.name.as_str()
+    } else {
+        field.title.as_str()
+    };
+    let ty = if field.type_name.is_empty() {
+        "any"
+    } else {
+        field.type_name.as_str()
+    };
     let req = if field.required {
         "required"
     } else {
         "optional"
     };
     let mut md = format!("**{title}** `{ty}` — {req}\n\n");
-    if let Some(d) = &field.description {
-        md.push_str(d);
+    if !field.description.is_empty() {
+        md.push_str(&field.description);
+        md.push_str("\n\n");
     }
-    if let Some(v) = &field.vocab {
-        md.push_str(&format!("\n\nVocabulary: `{v}`"));
+    if field.markdown {
+        md.push_str("Markdown text.\n\n");
+    }
+    if field.array && field.min_items.unwrap_or(0) >= 1 {
+        md.push_str("Non-empty list.\n\n");
     }
     if let Some(r) = &field.ref_kind {
-        md.push_str(&format!("\n\nReferences: `{r}::1.0` UUID"));
+        md.push_str(&format!("References `{r}::1.0` objects by UUID.\n\n"));
     }
-    if !field.parents.is_empty() {
-        let parents: Vec<&str> = field
-            .parents
-            .iter()
-            .map(|p| if p.is_empty() { "(root)" } else { p.as_str() })
-            .collect();
-        md.push_str(&format!("\n\nParent: {}", parents.join(", ")));
+    if let Some(c) = &field.const_value {
+        md.push_str(&format!("Const: `{c}`\n\n"));
+    }
+    if let Some(d) = &field.default_value {
+        md.push_str(&format!("Default: `{d}`\n\n"));
     }
     md
 }
 
-fn schema_allows(field: &TideField, schema: &str) -> bool {
-    field.schemas.is_empty() || schema.is_empty() || field.schemas.iter().any(|s| s == schema)
-}
-
-fn field_at_parent(field: &TideField, parent: &str) -> bool {
-    if field.parents.is_empty() {
-        return parent.is_empty();
+fn field_for(source: &str, cursor: &YamlCursor) -> Option<&'static TideField> {
+    let path = cursor.field_path();
+    if path.is_empty() {
+        return None;
     }
-    field.parents.iter().any(|p| p == parent)
-}
-
-fn fields_for_parent(parent: &str, schema: &str) -> Vec<TideField> {
-    load_tide_fields()
+    let schema = object_schema_kind(source);
+    if !schema.is_empty() {
+        return tide_field_at(&schema, &path);
+    }
+    let matches: Vec<_> = ["rule", "objective", "threat"]
         .into_iter()
-        .filter(|f| field_at_parent(f, parent) && schema_allows(f, schema))
-        .collect()
+        .filter_map(|family| tide_field_at(family, &path))
+        .collect();
+    match matches.as_slice() {
+        [field] => Some(*field),
+        _ => None,
+    }
 }
 
 fn is_block_scalar_marker(value: &str) -> bool {
@@ -76,15 +87,21 @@ fn hover_markdown(field: &TideField, cursor: &YamlCursor) -> String {
     md
 }
 
+fn enum_hover(field: &TideField, value: &str) -> Option<String> {
+    let index = field.enum_values.iter().position(|item| item == value)?;
+    let doc = field.enum_docs.get(index).map(String::as_str).unwrap_or("");
+    let mut md = format!("**{value}**\n\n`{}`", field.path);
+    if !doc.is_empty() {
+        md.push_str("\n\n");
+        md.push_str(doc);
+    }
+    Some(md)
+}
+
 pub fn hover_tide(source: &str, offset: usize, workspace: &[IndexedObject]) -> Option<String> {
     let cursor = yaml_cursor(source, offset);
     if cursor.on_key {
-        if let Some(name) = &cursor.current_key {
-            if let Some(field) = tide_field(name) {
-                return Some(hover_markdown(field, &cursor));
-            }
-        }
-        return None;
+        return field_for(source, &cursor).map(|field| hover_markdown(field, &cursor));
     }
     if let Some(value) = cursor
         .value
@@ -100,30 +117,19 @@ pub fn hover_tide(source: &str, offset: usize, workspace: &[IndexedObject]) -> O
                 ));
             }
         }
-        if let Some(name) = &cursor.current_key {
-            if let Some(field) = tide_field(name) {
-                if let Some(vocab_name) = &field.vocab {
-                    if let Some(vocab) = vocab_for_field(vocab_name) {
-                        if let Some(md) = vocab.hover(value) {
-                            return Some(md);
-                        }
-                    }
-                }
-                if name == "status" && STATUS_VALUES.contains(&value) {
-                    return Some(format!("**{value}** (object lifecycle)"));
-                }
-                if name == "schema" && SCHEMA_VALUES.contains(&value) {
-                    return Some(format!("**{value}** (Tide object schema)"));
-                }
+        if let Some(field) = field_for(source, &cursor) {
+            if let Some(md) = enum_hover(field, value) {
+                return Some(md);
+            }
+            if field.default_value.as_deref() == Some(value) {
+                return Some(format!("**{value}**\n\nDefault for `{}`.", field.path));
+            }
+            if field.const_value.as_deref() == Some(value) {
+                return Some(format!("**{value}**\n\nConst for `{}`.", field.path));
             }
         }
     }
-    if let Some(name) = &cursor.current_key {
-        if let Some(field) = tide_field(name) {
-            return Some(hover_markdown(field, &cursor));
-        }
-    }
-    None
+    field_for(source, &cursor).map(|field| hover_markdown(field, &cursor))
 }
 
 pub fn completions_tide(
@@ -136,7 +142,18 @@ pub fn completions_tide(
     if cursor.on_key || cursor.value.is_none() {
         return complete_keys(&cursor, &schema);
     }
-    complete_values(&cursor, workspace)
+    // An empty `- ` under an array of objects completes that object's keys.
+    // An empty `- ` under an array of enums completes the enum.
+    if cursor.in_list && cursor.current_key.is_none() {
+        let path = cursor.field_path();
+        if tide_children(&schema, &path)
+            .iter()
+            .any(|field| !field.hidden)
+        {
+            return complete_keys(&cursor, &schema);
+        }
+    }
+    complete_values(source, &cursor, workspace)
 }
 
 fn complete_keys(cursor: &YamlCursor, schema: &str) -> Vec<CompletionItem> {
@@ -145,107 +162,117 @@ fn complete_keys(cursor: &YamlCursor, schema: &str) -> Vec<CompletionItem> {
         .as_deref()
         .filter(|_| cursor.on_key)
         .unwrap_or("");
-    let known_complete = opentide_highlight::tide_field(raw_prefix).is_some()
-        && cursor.siblings.iter().any(|s| s == raw_prefix);
+    let parent = cursor.container_path();
+    let known_complete = tide_field_at(schema, &join_path(&parent, raw_prefix)).is_some()
+        && cursor.siblings.iter().any(|sibling| sibling == raw_prefix);
     let prefix = if known_complete { "" } else { raw_prefix };
     let existing: std::collections::BTreeSet<&str> =
         cursor.siblings.iter().map(String::as_str).collect();
-    fields_for_parent(&cursor.parent, schema)
+    let mut fields = tide_children(schema, &parent);
+    if fields.is_empty() && schema.is_empty() {
+        fields = tide_children("rule", &parent);
+    }
+    fields
         .into_iter()
-        .filter(|f| {
-            (prefix.is_empty() || f.name.starts_with(prefix))
-                && (prefix == f.name || !existing.contains(f.name.as_str()))
+        .filter(|field| !field.hidden)
+        .filter(|field| {
+            (prefix.is_empty() || field.name.starts_with(prefix))
+                && (prefix == field.name || !existing.contains(field.name.as_str()))
         })
-        .map(|f| {
-            let req = if f.required { "required" } else { "optional" };
-            let ty = f.type_name.clone().unwrap_or_else(|| "field".into());
-            CompletionItem::new(f.name.clone(), "property")
+        .map(|field| {
+            let req = if field.required {
+                "required"
+            } else {
+                "optional"
+            };
+            let ty = if field.type_name.is_empty() {
+                "field"
+            } else {
+                field.type_name.as_str()
+            };
+            CompletionItem::new(field.name.clone(), "property")
                 .with_detail(format!("{ty} · {req}"))
-                .with_docs(field_markdown(&f))
+                .with_docs(field_markdown(field))
         })
         .collect()
 }
 
-fn complete_values(cursor: &YamlCursor, workspace: &[IndexedObject]) -> Vec<CompletionItem> {
-    let Some(name) = cursor.current_key.as_deref() else {
-        return Vec::new();
-    };
-    let raw_prefix = cursor
+fn join_path(parent: &str, name: &str) -> String {
+    if parent.is_empty() {
+        name.to_string()
+    } else if name.is_empty() {
+        parent.to_string()
+    } else {
+        format!("{parent}.{name}")
+    }
+}
+
+fn value_prefix(cursor: &YamlCursor, field: Option<&TideField>) -> String {
+    let raw = cursor
         .value
         .as_deref()
         .map(str::trim)
         .unwrap_or("")
         .to_string();
-    let field = tide_field(name);
-    let known_vocab = field
-        .and_then(|f| f.vocab.as_deref())
-        .and_then(vocab_for_field)
-        .is_some_and(|v| v.contains(&raw_prefix));
-    let prefix = if known_vocab {
-        String::new()
-    } else {
-        raw_prefix
+    let known = field.is_some_and(|field| field.enum_values.iter().any(|value| value == &raw));
+    if known { String::new() } else { raw }
+}
+
+fn prefix_match(prefix: &str, candidate: &str) -> bool {
+    prefix.is_empty()
+        || candidate
+            .to_ascii_lowercase()
+            .starts_with(&prefix.to_ascii_lowercase())
+}
+
+fn complete_values(
+    source: &str,
+    cursor: &YamlCursor,
+    workspace: &[IndexedObject],
+) -> Vec<CompletionItem> {
+    let Some(field) = field_for(source, cursor) else {
+        return Vec::new();
     };
+    if field.hidden {
+        return Vec::new();
+    }
+    let prefix = value_prefix(cursor, Some(field));
     let mut items = Vec::new();
-    if let Some(field) = field {
-        if let Some(vocab_name) = &field.vocab {
-            if let Some(vocab) = vocab_for_field(vocab_name) {
-                for key in &vocab.keys {
-                    if prefix.is_empty()
-                        || key
-                            .name
-                            .to_ascii_lowercase()
-                            .starts_with(&prefix.to_ascii_lowercase())
-                        || key.title.as_deref().is_some_and(|t| {
-                            t.to_ascii_lowercase()
-                                .contains(&prefix.to_ascii_lowercase())
-                        })
-                    {
-                        let mut item =
-                            CompletionItem::new(key.name.clone(), "enum").with_detail(format!(
-                                "{} vocabulary",
-                                vocab.title.as_deref().unwrap_or(&vocab.field)
-                            ));
-                        if let Some(d) = &key.description {
-                            item = item.with_docs(d.clone());
-                        } else if let Some(t) = &key.title {
-                            item = item.with_docs(t.clone());
-                        }
-                        items.push(item);
-                    }
-                }
-            }
+    for (index, value) in field.enum_values.iter().enumerate() {
+        if !prefix_match(&prefix, value) {
+            continue;
         }
-        if let Some(kind) = &field.ref_kind {
-            for o in workspace.iter().filter(|o| o.object_type == *kind) {
-                if prefix.is_empty() || o.uuid.starts_with(&prefix) || o.name.contains(&prefix) {
-                    items.push(
-                        CompletionItem::new(o.uuid.clone(), "reference")
-                            .with_detail(format!("{} ({kind})", o.name))
-                            .with_docs(format!("**{}** `{kind}::1.0`\n\n`{}`", o.name, o.uuid)),
-                    );
-                }
-            }
+        let mut item = CompletionItem::new(value.clone(), "enum")
+            .with_detail(format!("{} {}", field.schema, field.path));
+        if let Some(doc) = field.enum_docs.get(index).filter(|doc| !doc.is_empty()) {
+            item = item.with_docs(doc.clone());
         }
-        if field.type_name.as_deref() == Some("boolean") {
-            for b in ["true", "false"] {
-                if prefix.is_empty() || b.starts_with(&prefix) {
-                    items.push(CompletionItem::new(b, "enum").with_detail("boolean"));
-                }
+        items.push(item);
+    }
+    if let Some(kind) = &field.ref_kind {
+        for object in workspace
+            .iter()
+            .filter(|object| object.object_type == *kind)
+        {
+            if prefix.is_empty()
+                || object.uuid.starts_with(&prefix)
+                || object.name.contains(&prefix)
+            {
+                items.push(
+                    CompletionItem::new(object.uuid.clone(), "reference")
+                        .with_detail(format!("{} ({kind})", object.name))
+                        .with_docs(format!(
+                            "**{}** `{kind}::1.0`\n\n`{}`",
+                            object.name, object.uuid
+                        )),
+                );
             }
         }
     }
-    if name == "status" {
-        for s in STATUS_VALUES {
-            if prefix.is_empty() || s.starts_with(&prefix) {
-                items.push(CompletionItem::new(*s, "enum").with_detail("lifecycle"));
-            }
-        }
-    }
-    if name == "schema" {
-        for s in SCHEMA_VALUES {
-            if prefix.is_empty() || s.starts_with(&prefix) {
-                items.push(CompletionItem::new(*s, "enum").with_detail("Tide schema"));
+    if field.type_name == "boolean" {
+        for value in ["true", "false"] {
+            if prefix_match(&prefix, value) {
+                items.push(CompletionItem::new(value, "enum").with_detail("boolean"));
             }
         }
     }
@@ -256,19 +283,61 @@ pub fn resolve_completion(mut item: CompletionItem) -> CompletionItem {
     if item.documentation.is_some() {
         return item;
     }
-    if let Some(field) = tide_field(&item.label) {
+    if let Some(field) = field_from_detail(item.detail.as_deref()) {
+        if let Some(index) = field
+            .enum_values
+            .iter()
+            .position(|value| value == &item.label)
+        {
+            if let Some(doc) = field.enum_docs.get(index).filter(|doc| !doc.is_empty()) {
+                let label = item.label.clone();
+                return item.with_docs(format!("**{label}**\n\n{doc}"));
+            }
+        }
+    }
+    for field in load_tide_fields() {
+        if let Some(index) = field
+            .enum_values
+            .iter()
+            .position(|value| value == &item.label)
+        {
+            if let Some(doc) = field.enum_docs.get(index).filter(|doc| !doc.is_empty()) {
+                let label = item.label.clone();
+                return item.with_docs(format!("**{label}**\n\n{doc}"));
+            }
+        }
+    }
+    if let Some(field) = resolve_field_by_name(&item.label) {
         item = item.with_docs(field_markdown(field));
         if item.detail.is_none() {
-            item = item.with_detail(field.type_name.clone().unwrap_or_else(|| "field".into()));
-        }
-        return item;
-    }
-    for vocab in bundled_vocabs().values() {
-        if let Some(md) = vocab.hover(&item.label) {
-            return item.with_docs(md);
+            let ty = if field.type_name.is_empty() {
+                "field".to_string()
+            } else {
+                field.type_name.clone()
+            };
+            item = item.with_detail(ty);
         }
     }
     item
+}
+
+fn field_from_detail(detail: Option<&str>) -> Option<&'static TideField> {
+    let detail = detail?;
+    let (schema, path) = detail.split_once(' ')?;
+    tide_field_at(schema, path)
+}
+
+/// Name-only resolve prefers the document-root field (`path == name`).
+fn resolve_field_by_name(label: &str) -> Option<&'static TideField> {
+    let named: Vec<_> = load_tide_fields()
+        .into_iter()
+        .filter(|field| field.name == label)
+        .collect();
+    named
+        .iter()
+        .copied()
+        .find(|field| field.path == label)
+        .or_else(|| (named.len() == 1).then(|| named[0]))
 }
 
 fn document_uuid(source: &str) -> Option<String> {
@@ -391,5 +460,66 @@ detection_model: 00000000-0000-4000-8002-000000000001
         let md = hover_tide(RULE, off, &[]).expect("block hover");
         assert!(md.contains("Description"), "{md}");
         assert!(md.contains("Path: `description`"), "{md}");
+    }
+
+    #[test]
+    fn detection_model_is_an_optional_objective_reference() {
+        let off = RULE.find("detection_model:").unwrap();
+        let md = hover_tide(RULE, off, &[]).expect("hover");
+        assert!(md.contains("optional"), "{md}");
+        assert!(md.contains("objective"), "{md}");
+        assert!(!md.to_lowercase().contains("required"), "{md}");
+    }
+
+    #[test]
+    fn status_value_does_not_invent_lifecycle_enums() {
+        let src = "name: R\nmetadata:\n  schema: rule::1.0\nstatus: ST\n";
+        let off = src.find("ST").unwrap() + 2;
+        let items = completions_tide(src, off, &[]);
+        let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+        assert!(
+            !labels.iter().any(|label| {
+                matches!(
+                    *label,
+                    "STAGING" | "PRODUCTION" | "DEVELOPMENT" | "DEPRECATED"
+                )
+            }),
+            "{labels:?}"
+        );
+    }
+
+    #[test]
+    fn impact_list_completions_come_from_schema_enum() {
+        let src = "name: T\nmetadata:\n  schema: threat::1.0\nthreat:\n  impact:\n  - \n";
+        let off = src.find("- ").unwrap() + 2;
+        let items = completions_tide(src, off, &[]);
+        assert!(
+            items.iter().any(|item| item.label == "Nuisance"),
+            "{:?}",
+            items.iter().map(|item| &item.label).collect::<Vec<_>>()
+        );
+        assert!(items.iter().all(|item| item.kind == "enum"), "{items:?}");
+    }
+
+    #[test]
+    fn next_search_item_completes_purpose_again() {
+        let src = "name: R\nmetadata:\n  schema: rule::1.0\nresponse:\n  procedure:\n    searches:\n    - purpose: first\n      system: defender_for_endpoint\n    - \n";
+        let off = src.rfind("- ").unwrap() + 2;
+        let items = completions_tide(src, off, &[]);
+        assert!(
+            items.iter().any(|item| item.label == "purpose"),
+            "{:?}",
+            items.iter().map(|item| &item.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn metadata_schema_const_is_not_every_family() {
+        let off = RULE.find("rule::1.0").unwrap() + 2;
+        let items = completions_tide(RULE, off, &[]);
+        let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+        assert!(labels.contains(&"rule::1.0"), "{labels:?}");
+        assert!(!labels.contains(&"threat::1.0"), "{labels:?}");
+        assert!(!labels.contains(&"objective::1.0"), "{labels:?}");
     }
 }
