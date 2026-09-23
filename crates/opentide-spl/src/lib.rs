@@ -288,7 +288,15 @@ fn highlight_tree(
                     *capture = "function.builtin".into();
                 } else if (matches!(
                     text,
-                    "by" | "AS" | "as" | "from" | "datamodel" | "summariesonly"
+                    "by" | "AS"
+                        | "as"
+                        | "from"
+                        | "datamodel"
+                        | "summariesonly"
+                        | "where"
+                        | "prestats"
+                        | "allow_old_summaries"
+                        | "fillnull_value"
                 ) && *capture == "variable")
                     || (catalog.command(text).is_some()
                         && (*capture == "variable" || *capture == "error"))
@@ -331,11 +339,35 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         "|" => Some("operator.pipe"),
         "catalog_command_name" => Some("keyword"),
         "macro" => Some("macro"),
-        "search" | "where" | "eval" | "stats" | "rex" | "table" | "rename" | "fields" | "dedup"
-        | "sort" | "head" | "tail" | "join" | "lookup" | "makemv" | "mvexpand" | "tstats"
-        | "AS" | "as" | "by" | "from" | "datamodel" | "summariesonly" | "TERM" | "CASE" | "IN" => {
-            Some("keyword")
-        }
+        "search"
+        | "where"
+        | "eval"
+        | "stats"
+        | "rex"
+        | "table"
+        | "rename"
+        | "fields"
+        | "dedup"
+        | "sort"
+        | "head"
+        | "tail"
+        | "join"
+        | "lookup"
+        | "makemv"
+        | "mvexpand"
+        | "tstats"
+        | "AS"
+        | "as"
+        | "by"
+        | "from"
+        | "datamodel"
+        | "summariesonly"
+        | "prestats"
+        | "allow_old_summaries"
+        | "fillnull_value"
+        | "TERM"
+        | "CASE"
+        | "IN" => Some("keyword"),
         "identifier" => {
             if node.parent().map(|p| p.kind()) == Some("function_call") {
                 Some("function")
@@ -836,6 +868,35 @@ mod tests {
                 .iter()
                 .map(|t| (t.capture.as_str(), slice(t)))
                 .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn tstats_as_and_where_are_keywords() {
+        let src = "| tstats count min(_time) as firstTime from datamodel=Endpoint.Processes where Processes.user=foo by Processes.user";
+        let r = analyze(src);
+        let pairs: Vec<(&str, &str)> = r
+            .tokens
+            .iter()
+            .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+            .collect();
+        assert!(
+            pairs.iter().any(|(c, t)| *c == "keyword" && *t == "as"),
+            "as should be a keyword: {pairs:?}"
+        );
+        assert!(
+            pairs.iter().any(|(c, t)| *c == "keyword" && *t == "where"),
+            "tstats where should be a keyword: {pairs:?}"
+        );
+        assert!(
+            pairs.iter().any(|(c, t)| *c == "keyword" && *t == "from"),
+            "{pairs:?}"
+        );
+        assert!(
+            pairs
+                .iter()
+                .any(|(c, t)| *c == "type" && *t == "Endpoint.Processes"),
+            "{pairs:?}"
         );
     }
 

@@ -63,6 +63,33 @@ fn spl_keyword_tokens_and_html_spans() {
 }
 
 #[test]
+fn spl_tstats_as_where_and_macros() {
+    let src = "| tstats `security_content_summariesonly` count min(_time) as firstTime from datamodel=Endpoint.Processes where Processes.user IN (\"a\") by Processes.user";
+    let r = highlight(LanguageId::Spl, src);
+    let html = tokens_to_html(src, &r.tokens);
+    assert!(
+        r.tokens
+            .iter()
+            .any(|t| t.capture == "keyword" && &src[t.span.start..t.span.end] == "as"),
+        "{:?}",
+        r.tokens
+    );
+    assert!(
+        r.tokens
+            .iter()
+            .any(|t| t.capture == "keyword" && &src[t.span.start..t.span.end] == "where"),
+        "{:?}",
+        r.tokens
+    );
+    assert!(html.contains("<span class=\"keyword\">as</span>"), "{html}");
+    assert!(
+        html.contains("<span class=\"keyword\">where</span>"),
+        "{html}"
+    );
+    assert!(html.contains("macro"), "{html}");
+}
+
+#[test]
 fn tide_html_colors_object_values() {
     let src = r#"
 name: Sentinel KQL Rule

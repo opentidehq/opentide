@@ -167,32 +167,7 @@ pub fn hover(
                 };
             }
             let workspace = index_workspace(host);
-            let window = text
-                .get(offset.saturating_sub(40)..(offset + 40).min(text.len()))
-                .unwrap_or("");
-            let re = regex::Regex::new(
-                r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-            )
-            .ok()?;
-            if let Some(uuid) = re.find(window).map(|m| m.as_str()) {
-                if let Some(o) = opentide_tide::definition(&workspace, uuid) {
-                    return Some(format!(
-                        "**{}** ({})\n\n`{}`",
-                        o.name, o.object_type, o.uuid
-                    ));
-                }
-            }
-            for vocab in opentide_tide::bundled_vocabs().values() {
-                for key in &vocab.keys {
-                    for (idx, _) in text.match_indices(&key.name) {
-                        let end = idx + key.name.len();
-                        if offset >= idx && offset < end {
-                            return vocab.hover(&key.name);
-                        }
-                    }
-                }
-            }
-            None
+            opentide_tide::hover_tide(text, offset, &workspace)
         }
     }
 }
@@ -219,22 +194,7 @@ pub fn completions(
                 };
             }
             let workspace = index_workspace(host);
-            let mut items = Vec::new();
-            for (name, uuid) in opentide_tide::completions_for(&workspace, "objective") {
-                items.push(CompletionItem::new(name, "reference").with_detail(uuid));
-            }
-            for (name, uuid) in opentide_tide::completions_for(&workspace, "threat") {
-                items.push(CompletionItem::new(name, "reference").with_detail(uuid));
-            }
-            for (field, vocab) in opentide_tide::bundled_vocabs() {
-                for key in vocab.keys {
-                    items.push(
-                        CompletionItem::new(key.name, "enum")
-                            .with_detail(format!("{field} vocabulary")),
-                    );
-                }
-            }
-            items
+            opentide_tide::completions_tide(text, offset, &workspace)
         }
     }
 }
@@ -343,6 +303,71 @@ configurations:
             items.iter().any(|i| i.label == "where"),
             "{:?}",
             items.iter().map(|i| &i.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn tide_field_hover_and_path_scoped_completions() {
+        let src = r#"name: Sentinel KQL Rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000001
+  schema: rule::1.0
+  tlp: clear
+description: |
+  hello
+detection_model: 00000000-0000-4000-8002-000000000001
+"#;
+        let host = MemoryWorkspace {
+            files: vec![
+                ("objects/rules/rule.yaml".into(), src.to_string()),
+                (
+                    "objects/objectives/o.yaml".into(),
+                    "name: Parent\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  schema: objective::1.0\n".into(),
+                ),
+            ],
+        };
+        let desc = src.find("description:").unwrap();
+        let line = src[..desc].bytes().filter(|b| *b == b'\n').count() as u32;
+        let h = hover(&host, LanguageId::TideYaml, src, Position::new(line, 0));
+        assert!(
+            h.as_deref().unwrap_or("").contains("Description"),
+            "key hover, got {h:?}"
+        );
+        let tlp_val = src.find("clear").unwrap();
+        let tlp_line = src[..tlp_val].bytes().filter(|b| *b == b'\n').count() as u32;
+        let col = src[..tlp_val]
+            .rsplit_once('\n')
+            .map(|(_, rest)| rest.len())
+            .unwrap_or(tlp_val) as u32;
+        let tlp = hover(
+            &host,
+            LanguageId::TideYaml,
+            src,
+            Position::new(tlp_line, col),
+        );
+        assert!(
+            tlp.as_deref()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains("clear"),
+            "{tlp:?}"
+        );
+        let meta_off = src.find("  tlp:").unwrap();
+        let items = completions(&host, LanguageId::TideYaml, src, meta_off);
+        assert!(
+            items.iter().any(|i| i.label == "author"),
+            "{:?}",
+            items.iter().map(|i| &i.label).collect::<Vec<_>>()
+        );
+        assert!(items.iter().any(|i| i.documentation.is_some()));
+        assert!(!items.iter().any(|i| i.label == "High"));
+        let dm = src.find("detection_model:").unwrap() + "detection_model: ".len();
+        let refs = completions(&host, LanguageId::TideYaml, src, dm);
+        assert!(
+            refs.iter()
+                .any(|i| i.label == "00000000-0000-4000-8002-000000000001"),
+            "{:?}",
+            refs.iter().map(|i| &i.label).collect::<Vec<_>>()
         );
     }
 }

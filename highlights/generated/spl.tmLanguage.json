@@ -29,7 +29,7 @@
     },
     {
       "comment": "capture:keyword",
-      "match": "(?i)(?<![A-Za-z0-9_])(?:AS|append|bin|by|chart|convert|datamodel|dedup|eval|eventstats|extract|fields|fillnull|foreach|from|head|inputlookup|join|lookup|makemv|makeresults|map|metadata|mvexpand|outputlookup|prestats|rare|regex|rename|rest|reverse|rex|search|sort|spath|stats|strcat|streamstats|summariesonly|table|tail|timechart|top|transaction|tstats|union|where)(?![A-Za-z0-9_])",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:AS|allow_old_summaries|append|as|bin|by|chart|convert|datamodel|dedup|eval|eventstats|extract|fields|fillnull|fillnull_value|foreach|from|head|inputlookup|join|lookup|makemv|makeresults|map|metadata|mvexpand|outputlookup|prestats|rare|regex|rename|rest|reverse|rex|search|sort|spath|stats|strcat|streamstats|summariesonly|table|tail|timechart|top|transaction|tstats|union|where)(?![A-Za-z0-9_])",
       "name": "keyword.control.opentide"
     },
     {

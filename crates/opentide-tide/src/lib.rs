@@ -3,10 +3,14 @@
 //! Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}`
 //! with real source ranges. OpenTide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 
+mod intel;
+mod vocabs;
+mod yaml_path;
+
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
 use opentide_highlight::{
-    HighlightSpec, HighlightToken, highlight_markdown_line, tide_field_is_markdown,
-    tide_key_capture, tokens_from_spans,
+    HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
+    tokens_from_spans,
 };
 use opentide_kql::Profile;
 use regex::Regex;
@@ -14,16 +18,12 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
-const RULE_SCHEMA: &str = include_str!("../../../catalogs/tide/schemas/rule.1.0.schema.json");
-const OBJECTIVE_SCHEMA: &str =
-    include_str!("../../../catalogs/tide/schemas/objective.1.0.schema.json");
-const THREAT_SCHEMA: &str = include_str!("../../../catalogs/tide/schemas/threat.1.0.schema.json");
-const TLP_VOCAB: &str = include_str!("../../../catalogs/tide/vocabs/tlp.vocab.toml");
-const SEVERITY_VOCAB: &str = include_str!("../../../catalogs/tide/vocabs/severity.vocab.toml");
-const ALERT_SEVERITY_VOCAB: &str =
-    include_str!("../../../catalogs/tide/vocabs/alert_severity.vocab.toml");
-const CHAINING_VOCAB: &str =
-    include_str!("../../../catalogs/tide/vocabs/chaining_relations.vocab.toml");
+pub use intel::{
+    TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
+};
+pub use vocabs::{Vocab, VocabKey, bundled_vocabs, vocab_for_field};
+pub use yaml_path::{YamlCursor, object_schema_kind, uuid_span, yaml_cursor};
+
 const RULE_TEMPLATE: &str = include_str!("../../../catalogs/tide/templates/rule.1.0.template.yaml");
 const OBJECTIVE_TEMPLATE: &str =
     include_str!("../../../catalogs/tide/templates/objective.1.0.template.yaml");
@@ -42,92 +42,6 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "crowdstrike", ..] => None,
         _ => None,
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Vocab {
-    pub field: String,
-    pub keys: Vec<VocabKey>,
-}
-
-#[derive(Debug, Clone)]
-pub struct VocabKey {
-    pub name: String,
-    pub description: Option<String>,
-}
-
-impl Vocab {
-    pub fn contains(&self, value: &str) -> bool {
-        self.keys.iter().any(|k| k.name == value)
-    }
-
-    pub fn suggest(&self, value: &str) -> Option<String> {
-        self.keys
-            .iter()
-            .map(|k| {
-                let d = k
-                    .name
-                    .chars()
-                    .zip(value.chars())
-                    .filter(|(a, b)| a != b)
-                    .count()
-                    + k.name.len().abs_diff(value.len());
-                (k.name.clone(), d)
-            })
-            .filter(|(_, d)| *d <= 4)
-            .min_by_key(|(_, d)| *d)
-            .map(|(n, _)| n)
-    }
-
-    pub fn hover(&self, value: &str) -> Option<String> {
-        self.keys.iter().find(|k| k.name == value).map(|k| {
-            format!(
-                "**{}** (`{}`)\n\n{}",
-                k.name,
-                self.field,
-                k.description.clone().unwrap_or_default()
-            )
-        })
-    }
-}
-
-fn parse_vocab(toml_src: &str) -> Vocab {
-    let v: toml::Value = toml::from_str(toml_src).expect("vocab");
-    let field = v
-        .get("field")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let keys = v
-        .get("keys")
-        .and_then(|v| v.as_array())
-        .into_iter()
-        .flatten()
-        .filter_map(|k| {
-            Some(VocabKey {
-                name: k.get("name")?.as_str()?.to_string(),
-                description: k
-                    .get("description")
-                    .and_then(|d| d.as_str())
-                    .map(str::to_string),
-            })
-        })
-        .collect();
-    Vocab { field, keys }
-}
-
-pub fn bundled_vocabs() -> BTreeMap<String, Vocab> {
-    let mut m = BTreeMap::new();
-    for src in [
-        TLP_VOCAB,
-        SEVERITY_VOCAB,
-        ALERT_SEVERITY_VOCAB,
-        CHAINING_VOCAB,
-    ] {
-        let v = parse_vocab(src);
-        m.insert(v.field.clone(), v);
-    }
-    m
 }
 
 pub fn slugify(name: &str) -> String {
@@ -212,13 +126,15 @@ pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
         //   - purpose: ...
         //     system: defender_for_endpoint
         //     query: |-
-        if indent == 0
-            || (platform.is_some()
-                && indent <= platform_indent
-                && !trimmed.is_empty()
-                && !trimmed.starts_with('#')
-                && !content.starts_with("query:")
-                && !content.starts_with("search:"))
+        let blank_or_comment = trimmed.is_empty() || trimmed.starts_with('#');
+        // A blank line has indent 0. It must not drop a `system:` platform
+        // before the following `query:` block.
+        if !blank_or_comment
+            && (indent == 0
+                || (platform.is_some()
+                    && indent <= platform_indent
+                    && !content.starts_with("query:")
+                    && !content.starts_with("search:")))
         {
             platform = None;
         }
@@ -255,7 +171,7 @@ fn parse_query_block(
 ) -> Option<InjectedQuery> {
     let line = *lines.get(i)?;
     let indent = line.chars().take_while(|c| *c == ' ').count();
-    let trimmed = line.trim();
+    let trimmed = line.trim().strip_prefix("- ").unwrap_or(line.trim());
     let (key, is_block) = if trimmed == "query: |" || trimmed.starts_with("query: |") {
         ("query", true)
     } else if trimmed == "search: |" || trimmed.starts_with("search: |") {
@@ -516,20 +432,66 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                 .with_field_path(vec!["metadata".into(), "uuid".into()]),
             );
         }
+        if meta.schema.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.schema'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "schema".into()]),
+            );
+        }
+        if meta.version.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.version'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "version".into()]),
+            );
+        }
+        if meta.created.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.created'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "created".into()]),
+            );
+        }
+        if meta.modified.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.modified'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "modified".into()]),
+            );
+        }
+        if meta.tlp.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'metadata.tlp'",
+                    key_range(input.source, "metadata"),
+                )
+                .with_field_path(vec!["metadata".into(), "tlp".into()]),
+            );
+        }
         if let Some(tlp) = &meta.tlp {
-            if let Some(vocab) = vocabs.get("tlp") {
-                if !vocab.contains(tlp) {
-                    let mut d = Diagnostic::error(
+            if let Some(message) = unknown_enum(&object_type, "metadata.tlp", tlp) {
+                diagnostics.push(
+                    Diagnostic::error(
                         codes::VOCAB_UNKNOWN,
-                        format!("unknown tlp value '{tlp}'"),
+                        message,
                         key_range(input.source, "tlp"),
                     )
-                    .with_field_path(vec!["metadata".into(), "tlp".into()]);
-                    if let Some(s) = vocab.suggest(tlp) {
-                        d = d.with_suggestion(s);
-                    }
-                    diagnostics.push(d);
-                }
+                    .with_field_path(vec!["metadata".into(), "tlp".into()]),
+                );
             }
         }
         if meta.author.is_none() {
@@ -562,20 +524,38 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                 .with_field_path(vec!["description".into()]),
             );
         }
+        if schema == "rule::1.0" && object.response.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'response'",
+                    Range::point(0, 0),
+                )
+                .with_field_path(vec!["response".into()]),
+            );
+        }
+        if schema == "rule::1.0" && object.configurations.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    "missing required field 'configurations'",
+                    Range::point(0, 0),
+                )
+                .with_field_path(vec!["configurations".into()]),
+            );
+        }
     }
 
     if let Some(sev) = &object.severity {
-        if let Some(vocab) = vocabs.get("severity") {
-            if !vocab.contains(sev) {
-                diagnostics.push(
-                    Diagnostic::error(
-                        codes::VOCAB_UNKNOWN,
-                        format!("unknown severity '{sev}'"),
-                        key_range(input.source, "severity"),
-                    )
-                    .with_field_path(vec!["severity".into()]),
-                );
-            }
+        if let Some(message) = unknown_enum(&object_type, "severity", sev) {
+            diagnostics.push(
+                Diagnostic::error(
+                    codes::VOCAB_UNKNOWN,
+                    message,
+                    key_range(input.source, "severity"),
+                )
+                .with_field_path(vec!["severity".into()]),
+            );
         }
     }
 
@@ -819,8 +799,6 @@ fn remap_token(
     })
 }
 
-const STATUS_VALUES: &[&str] = &["STAGING", "DEVELOPMENT", "PRODUCTION", "DEPRECATED"];
-
 fn overlaps(skip: &[ByteSpan], start: usize, end: usize) -> bool {
     skip.iter().any(|s| start < s.end && end > s.start)
 }
@@ -844,8 +822,34 @@ fn push_span(
     spans.push((ByteSpan::new(start, end), capture));
 }
 
-fn key_capture(key: &str) -> &'static str {
-    tide_key_capture(key)
+fn lookup_field(schema: &str, path: &str) -> Option<&'static TideField> {
+    if path.is_empty() {
+        return None;
+    }
+    if !schema.is_empty() {
+        return tide_field_at(schema, path);
+    }
+    let matches: Vec<_> = ["rule", "objective", "threat"]
+        .into_iter()
+        .filter_map(|family| tide_field_at(family, path))
+        .collect();
+    match matches.as_slice() {
+        [field] => Some(*field),
+        _ => None,
+    }
+}
+
+fn block_is_query_injection(path: &str, key: &str) -> bool {
+    // Platform and hunt queries are KQL/SPL. Example queries are prose.
+    matches!(key, "query" | "search") && !path.contains(".examples.")
+}
+
+fn join_field_path(parent: &str, key: &str) -> String {
+    if parent.is_empty() {
+        key.to_string()
+    } else {
+        format!("{parent}.{key}")
+    }
 }
 
 fn highlight_scalar(
@@ -853,7 +857,7 @@ fn highlight_scalar(
     skip: &[ByteSpan],
     start: usize,
     value: &str,
-    vocab: &[String],
+    field: Option<&TideField>,
 ) {
     let trimmed = value.trim_end_matches(['\n', '\r', ' ']);
     let leading = value.len() - value.trim_start().len();
@@ -868,6 +872,11 @@ fn highlight_scalar(
         return;
     }
     let end = start + value.len();
+    let in_enum = field.is_some_and(|field| {
+        field.enum_values.iter().any(|item| item == value)
+            || field.default_value.as_deref() == Some(value)
+            || field.const_value.as_deref() == Some(value)
+    });
     let capture =
         if Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
             .unwrap()
@@ -885,8 +894,7 @@ fn highlight_scalar(
             || (value.starts_with('\'') && value.ends_with('\''))
         {
             "string"
-        } else if vocab.iter().any(|v| v == value)
-            || STATUS_VALUES.contains(&value)
+        } else if in_enum
             || Regex::new(r"^T[0-9]{4}(\.[0-9]{3})?$")
                 .unwrap()
                 .is_match(value)
@@ -927,17 +935,24 @@ fn line_list_item(line: &str) -> Option<(&str, usize)> {
     Some((item, indent))
 }
 
-fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<HighlightToken> {
-    let mut spans = Vec::new();
-    let mut vocab: Vec<String> = bundled_vocabs()
-        .values()
-        .flat_map(|v| v.keys.iter().map(|k| k.name.clone()))
-        .collect();
-    vocab.sort_by_key(|s| std::cmp::Reverse(s.len()));
+fn is_block_scalar(rest: &str) -> bool {
+    let t = rest.trim();
+    t == "|"
+        || t == "|-"
+        || t == "|+"
+        || t == ">"
+        || t == ">-"
+        || t == ">+"
+        || t.starts_with('|')
+        || t.starts_with('>')
+}
 
+fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<HighlightToken> {
+    let schema = object_schema_kind(source);
+    let mut spans = Vec::new();
+    let mut stack: Vec<(usize, String, bool)> = Vec::new();
     let mut in_block = false;
     let mut block_indent = 0usize;
-    let mut block_is_injected = false;
     let mut block_is_markdown = false;
     let mut byte = 0usize;
     for line in source.split_inclusive('\n') {
@@ -945,7 +960,6 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
         let trimmed = line.trim();
         if in_block && !trimmed.is_empty() && indent <= block_indent {
             in_block = false;
-            block_is_injected = false;
             block_is_markdown = false;
         }
 
@@ -960,7 +974,7 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
 
         // Block-scalar bodies are literal text, never nested YAML keys.
         if in_block {
-            if !block_is_injected && !trimmed.is_empty() {
+            if !trimmed.is_empty() {
                 let body = line.trim_end_matches(['\n', '\r']);
                 if block_is_markdown {
                     for (span, cap) in highlight_markdown_line(byte, body) {
@@ -976,13 +990,31 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
             continue;
         }
 
+        let is_list = trimmed == "-" || trimmed.starts_with("- ");
+        while stack.last().is_some_and(|(open, _, from_item)| {
+            if is_list {
+                *open > indent || (*open == indent && *from_item)
+            } else {
+                *open >= indent
+            }
+        }) {
+            stack.pop();
+        }
+        let parent_path = stack
+            .iter()
+            .map(|(_, key, _)| key.as_str())
+            .collect::<Vec<_>>()
+            .join(".");
+
         if let Some((key, rest_text, key_start, key_end)) = line_key(line) {
+            let path = join_field_path(&parent_path, key);
+            let field = lookup_field(&schema, &path);
             push_span(
                 &mut spans,
                 skip,
                 byte + key_start,
                 byte + key_end,
-                key_capture(key),
+                tide_key_capture_at_or(field),
             );
             let colon_at = byte + key_end;
             if source.as_bytes().get(colon_at) == Some(&b':') {
@@ -995,41 +1027,36 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
                 );
             }
             let rest_off = key_end + 1;
-            let is_block = {
-                let t = rest_text.trim();
-                t == "|"
-                    || t == "|-"
-                    || t == "|+"
-                    || t == ">"
-                    || t == ">-"
-                    || t == ">+"
-                    || t.starts_with('|')
-                    || t.starts_with('>')
-            };
-            if is_block {
+            let block = is_block_scalar(rest_text);
+            if block {
                 in_block = true;
                 block_indent = indent;
-                block_is_injected = matches!(key, "query" | "search");
-                block_is_markdown = !block_is_injected && tide_field_is_markdown(key);
+                block_is_markdown = field.is_some_and(|field| field.markdown)
+                    && !block_is_query_injection(&path, key);
             } else {
-                highlight_scalar(&mut spans, skip, byte + rest_off, rest_text, &vocab);
+                highlight_scalar(&mut spans, skip, byte + rest_off, rest_text, field);
+            }
+            if rest_text.trim().is_empty() || block {
+                stack.push((indent, key.to_string(), false));
             }
             byte += line.len();
             continue;
         }
 
-        if let Some((item, indent)) = line_list_item(line) {
-            let dash = byte + indent;
+        if let Some((item, item_indent)) = line_list_item(line) {
+            let dash = byte + item_indent;
             push_span(&mut spans, skip, dash, dash + 1, "punctuation");
             if let Some((key, rest)) = item.split_once(':') {
                 if !key.is_empty() && key.chars().all(is_yaml_key_char) {
-                    let key_start = byte + indent + 2;
+                    let path = join_field_path(&parent_path, key);
+                    let field = lookup_field(&schema, &path);
+                    let key_start = byte + item_indent + 2;
                     push_span(
                         &mut spans,
                         skip,
                         key_start,
                         key_start + key.len(),
-                        key_capture(key),
+                        tide_key_capture_at_or(field),
                     );
                     let colon_at = key_start + key.len();
                     push_span(
@@ -1039,18 +1066,51 @@ fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<
                         colon_at + 1,
                         "punctuation.delimiter",
                     );
-                    highlight_scalar(&mut spans, skip, key_start + key.len() + 1, rest, &vocab);
+                    let block = is_block_scalar(rest);
+                    if block {
+                        in_block = true;
+                        block_indent = item_indent;
+                        block_is_markdown = field.is_some_and(|field| field.markdown)
+                            && !block_is_query_injection(&path, key);
+                    } else {
+                        highlight_scalar(&mut spans, skip, key_start + key.len() + 1, rest, field);
+                    }
+                    if rest.trim().is_empty() || block {
+                        stack.push((item_indent, key.to_string(), true));
+                    }
                 } else {
-                    highlight_scalar(&mut spans, skip, byte + indent + 2, item, &vocab);
+                    let field = lookup_field(&schema, &parent_path);
+                    highlight_scalar(&mut spans, skip, byte + item_indent + 2, item, field);
                 }
             } else {
-                highlight_scalar(&mut spans, skip, byte + indent + 2, item, &vocab);
+                let field = lookup_field(&schema, &parent_path);
+                highlight_scalar(&mut spans, skip, byte + item_indent + 2, item, field);
             }
         }
 
         byte += line.len();
     }
     tokens_from_spans(spec, source, &spans).unwrap_or_default()
+}
+
+fn tide_key_capture_at_or(field: Option<&TideField>) -> &'static str {
+    match field {
+        Some(field) => match field.capture.as_str() {
+            "tide.keyword" => "tide.keyword",
+            "tide.property" => "tide.property",
+            "tide.schema" => "tide.schema",
+            _ => "property",
+        },
+        None => "property",
+    }
+}
+
+fn unknown_enum(schema: &str, path: &str, value: &str) -> Option<String> {
+    let field = tide_field_at(schema, path)?;
+    if field.enum_values.is_empty() || field.enum_values.iter().any(|item| item == value) {
+        return None;
+    }
+    Some(format!("unknown {} value '{value}'", field.name))
 }
 
 fn key_range(source: &str, key: &str) -> Range {
@@ -1087,14 +1147,6 @@ pub fn snippet(kind: &str) -> Option<&'static str> {
         "threat" => Some(THREAT_TEMPLATE),
         _ => None,
     }
-}
-
-pub fn schemas() -> BTreeMap<&'static str, &'static str> {
-    BTreeMap::from([
-        ("rule::1.0", RULE_SCHEMA),
-        ("objective::1.0", OBJECTIVE_SCHEMA),
-        ("threat::1.0", THREAT_SCHEMA),
-    ])
 }
 
 pub fn index_object(path: &str, source: &str) -> Option<IndexedObject> {
@@ -1253,6 +1305,26 @@ configurations:
             workspace: &[],
         });
         assert!(r.diagnostics.iter().any(|d| d.code == codes::INVALID_UUID));
+    }
+
+    #[test]
+    fn detection_model_absence_is_not_a_schema_error() {
+        let src = RULE.replace(
+            "detection_model: 00000000-0000-4000-8002-000000000001\n",
+            "",
+        );
+        let r = analyze(AnalyzeInput {
+            path: "objects/rules/sentinel-kql-rule.yaml",
+            source: &src,
+            workspace: &[],
+        });
+        assert!(
+            !r.diagnostics.iter().any(|d| {
+                d.message.contains("detection_model") && d.code == codes::SCHEMA_VALIDATION
+            }),
+            "{:?}",
+            r.diagnostics
+        );
     }
 
     #[test]
