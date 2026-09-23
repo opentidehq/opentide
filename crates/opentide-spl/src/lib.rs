@@ -1,10 +1,10 @@
 //! I/O-free SPL engine. Catalogs compiled in; unknown commands are never silently eaten.
 
 use opentide_core::{
-    codes, span_to_range, ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation,
-    Range, SignatureHelp, SignatureInformation,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, SignatureHelp,
+    SignatureInformation, codes, span_to_range,
 };
-use opentide_highlight::{tokens_from_spans, HighlightSpec, HighlightToken};
+use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
 use tree_sitter::Node;
@@ -401,11 +401,7 @@ fn last_command(before: &str) -> Option<String> {
         .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
         .next()?
         .to_ascii_lowercase();
-    if op.is_empty() {
-        None
-    } else {
-        Some(op)
-    }
+    if op.is_empty() { None } else { Some(op) }
 }
 
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
@@ -825,10 +821,11 @@ mod tests {
                 .map(|t| (t.capture.as_str(), slice(t)))
                 .collect::<Vec<_>>()
         );
-        assert!(r
-            .tokens
-            .iter()
-            .any(|t| t.capture == "keyword" && slice(t) == "head"));
+        assert!(
+            r.tokens
+                .iter()
+                .any(|t| t.capture == "keyword" && slice(t) == "head")
+        );
         assert!(r.tokens.iter().any(|t| t.capture == "operator.pipe"));
         assert!(
             r.tokens.iter().any(|t| {

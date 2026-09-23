@@ -2,7 +2,7 @@
 
 use opentide_core::{CompletionItem, Diagnostic, LanguageId, Position, SignatureHelp};
 use opentide_highlight::{
-    encode_lsp_semantic_tokens, HighlightResult, HighlightSpec, HighlightToken, SemanticTokens,
+    HighlightResult, HighlightSpec, HighlightToken, SemanticTokens, encode_lsp_semantic_tokens,
 };
 use opentide_kql::Profile;
 use opentide_tide::{IndexedObject, TideAnalyzeResult};
