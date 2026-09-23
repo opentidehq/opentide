@@ -6,6 +6,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-09-23
+
+Patch on 0.6.0. Upgrade if a CI `STAGING` or `PRODUCTION` plan skipped a changed rule file that sits directly in `objects/rules/`: 0.6.0 left that file out of the plan, and 0.6.1 deploys it. A file in a subdirectory of `objects/rules/` is still not deployed. The missing-checkout failure is still exit `1`, with a different message.
+
+### Changed
+
+- CI `STAGING` and `PRODUCTION` plans include a changed rule file that sits directly in `objects/rules/`. 0.6.0 matched the git diff against an absolute rules path, so a repo-relative entry such as `objects/rules/rule.yaml` was left out and the plan deployed nothing for that change. A file under `objects/rules/<subfolder>/` stays out of the plan; the existing warning names it ([#318](https://github.com/OpenTideHQ/opentide/issues/318)).
+
+### Fixed
+
+- `deploy --plan STAGING` or `PRODUCTION` with `GITHUB_ACTIONS`, `CI`, or `TF_BUILD` set and no git checkout exits `1` and names the directory it searched, and points at `--plan FULL`. 0.6.0 exited `1` with `FATAL: No git repository was found at None`. `FULL` still does not need a checkout. A directory that has `.git` is still opened ([#310](https://github.com/OpenTideHQ/opentide/issues/310)).
+- `opentide setup --path .` from a subdirectory of a git checkout scaffolds that directory. 0.6.0 treated the discovered git root as `--repo` and wrote the scaffold there. An explicit `--repo` still replaces `.` when it is not the working directory ([#324](https://github.com/OpenTideHQ/opentide/issues/324)).
+- `opentide setup --no-promotion` and `--promotion-target` write `[promotion]` in `.opentide/configurations/deployment.toml` without `--ci`. 0.6.0 applied those flags only when the same command generated a CI pipeline. Omitting them still keeps the repository's setting, and an explicit flag that disagrees with an existing table still exits `2` before anything is written ([#325](https://github.com/OpenTideHQ/opentide/issues/325)).
+
+### Tests
+
+- CI diff selection keeps a top-level `.yaml` or `.yml` (repo-relative or absolute) in the plan and a file under `objects/rules/<subfolder>/` in the skipped list, and rejects lookalike paths such as `objects/rules-archive/` ([#318](https://github.com/OpenTideHQ/opentide/issues/318)).
+- The missing-checkout failure is checked for all three CI markers, both diff plans, human and JSON output, a `FULL` plan, and a real `git init` checkout. The CI overlay clears `GITHUB_WORKSPACE` and the other platform variables, so a GitHub-hosted run does not open the checkout the job itself is in ([#310](https://github.com/OpenTideHQ/opentide/issues/310)).
+- `setup --path .` from a subdirectory of a git checkout writes `.opentide` there, and an explicit `--repo` still selects the git root ([#324](https://github.com/OpenTideHQ/opentide/issues/324)).
+- A plain `setup` applies or refuses `--no-promotion` and `--promotion-target` before any file is written ([#325](https://github.com/OpenTideHQ/opentide/issues/325)).
+
+### Install
+
+```bash
+pip install opentide==0.6.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.6.0] — 2026-09-23
 
 Minor on 0.5.0. Upgrade if a command checked the wrong directory, hid what `--json` already showed, or crashed on a repository that was not finished yet. A few JSON fields and exit results change, so read **Changed** before upgrading a pipeline.
@@ -402,7 +431,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.1
 [0.6.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.0
 [0.5.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.5.0
 [0.4.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.4.0

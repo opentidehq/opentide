@@ -24,7 +24,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 
 | Flag | Purpose |
 |------|---------|
-| `--path` / `-C` | Repository directory (default `.`; honours `--repo` when `.`) |
+| `--path` / `-C` | Repository directory. The default `.` is the working directory; an explicit `--repo` replaces `.` |
 | `--name`, `--org`, `--description` | README metadata |
 | `--platform` | Detection platforms — runs the `setup platforms` step when set (repeatable) |
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |
@@ -105,9 +105,10 @@ Without `--default-branch`, GitHub and Azure pipelines target the first of:
 
 The JSON result reports the branch used as `default_branch`. It adds a `warnings` entry, and logs a warning, when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist. Pass `--default-branch` in either case. A name the pipelines cannot hold unquoted (spaces, shell characters, or a value YAML reads as a number or boolean such as `2024` or `on`) is rejected with exit code 2.
 
-The pipeline has no promotion job: `opentide deploy --plan PRODUCTION` promotes rules as the merged `deployment.toml` [configures](../usage/configuration.md#promotion). Omitting the flags keeps that setting. An explicit flag writes the `[promotion]` table of `.opentide/configurations/deployment.toml` when the value differs from the bundled default and the file has no `[promotion]` table yet, and the result lists that file under `files`:
+The pipeline has no promotion job: `opentide deploy --plan PRODUCTION` promotes rules as the merged `deployment.toml` [configures](../usage/configuration.md#promotion). Omitting the flags keeps that setting. An explicit flag writes the `[promotion]` table of `.opentide/configurations/deployment.toml` when the value differs from the bundled default and the file has no `[promotion]` table yet, and the result lists that file under `files`. The same flags on `opentide setup` without `--ci` write that table too:
 
 ```bash
+opentide setup --yes --no-promotion                           # same table, no CI pipeline
 opentide setup ci github --no-promotion --yes                 # [promotion] enabled = false
 opentide setup ci github --promotion-target ACCEPTANCE --yes  # [promotion] promotion_target = "ACCEPTANCE"
 ```

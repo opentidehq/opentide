@@ -7,6 +7,34 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.6.1 — 23 September 2026
+
+Patch on 0.6.0. **Upgrade if a CI `STAGING` or `PRODUCTION` plan skipped a changed rule file that sits directly in `objects/rules/`.** 0.6.0 left that file out of the plan, and 0.6.1 deploys it. A file in a subdirectory of `objects/rules/` is still not deployed. The missing-checkout failure is still exit `1`, with a different message.
+
+**Install**
+
+```bash
+pip install opentide==0.6.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- CI `STAGING` and `PRODUCTION` plans include a changed `objects/rules/*.yaml` (or `.yml`). 0.6.0 matched the diff against an absolute path, so a repo-relative change was skipped ([#318](https://github.com/OpenTideHQ/opentide/issues/318)).
+
+**What this version fixes**
+
+- `deploy --plan STAGING` or `PRODUCTION` outside a git checkout names the directory it searched and points at `--plan FULL`, instead of `No git repository was found at None` ([#310](https://github.com/OpenTideHQ/opentide/issues/310)).
+- `opentide setup --path .` from a git subdirectory scaffolds that directory. An explicit `--repo` still replaces `.` ([#324](https://github.com/OpenTideHQ/opentide/issues/324)).
+- `setup --no-promotion` and `--promotion-target` write `[promotion]` without `--ci` ([#325](https://github.com/OpenTideHQ/opentide/issues/325)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.6.1/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.1)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.6.0 — 23 September 2026
 
 Minor on 0.5.0. **Upgrade if a command checked the wrong directory, hid what `--json` already showed, or crashed on a repository that was not finished yet.** A few JSON fields and exit results change, so read the first list before upgrading a pipeline.
