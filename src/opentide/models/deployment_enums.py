@@ -25,7 +25,7 @@ class DeploymentStrategy(Enum):
     STAGING = 'Deployment allowed during a Pull (or Merge) Request Pipeline'
     PRODUCTION = 'Deployment allowed during a Default Branch Pipeline'
     FULL = 'Deployment allowed during both Pull (or Merge) Request Pipeline and Default Branch Pipeline'
-    ALWAYS = 'Deployment allowed during both Pull (or Merge) Request Pipeline and Default Branch Pipeline'
+    ALWAYS = 'Deployment allowed on every run, including outside a pull request and the default branch'
     MANUAL = 'Deployment allowed during both Pull (or Merge) Request Pipeline and Default Branch Pipeline, but only when explictely specified under tenants'
     DEBUG = 'Deployment used for debugging and testing purposes only'
 
