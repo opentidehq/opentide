@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-09-24
+
+Patch on 0.6.1. Upgrade if a GitLab `STAGING` or `PRODUCTION` plan crashed with `'Repo' object has no attribute 'lookup_ref'`, or a GitHub `STAGING` plan asked for Azure pull-request variables and then `KeyError`. Both still exit `1`. GitLab reports `No Source Commit Found`. GitHub names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`.
+
+### Fixed
+
+- GitLab `STAGING` and `PRODUCTION` with an unset or unknown base SHA exit `1` with `No Source Commit Found`. 0.6.1 walked `origin/main` through Dulwich `Repo.lookup_ref`, which does not exist, so the command died with `FATAL: 'Repo' object has no attribute 'lookup_ref'` and never reached that message. The same command still succeeds when both SHAs are in the checkout ([#333](https://github.com/OpenTideHQ/opentide/issues/333)).
+- GitHub Actions `STAGING` without `GITHUB_HEAD_REF` and `GITHUB_BASE_REF` exits `1` with `Expected to find GITHUB_HEAD_REF and GITHUB_BASE_REF | Ensure this is running in a Pull Request pipeline`. 0.6.1 fetched `origin` first, logged Azure `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME`, then raised a bare `KeyError`, which deploy printed as `KeyError while compiling the deployment plan`. The Azure branch still cites the Azure names it reads ([#334](https://github.com/OpenTideHQ/opentide/issues/334)).
+
+### Tests
+
+- A GitLab diff plan with an unset or unknown base, for `STAGING` and `PRODUCTION` and for human and JSON output, exits `1` with `No Source Commit Found` and does not mention `lookup_ref`. The same command exits `0` when both SHAs are in the checkout, including when `origin/main` exists and still does not contain the base ([#333](https://github.com/OpenTideHQ/opentide/issues/333)).
+- GitHub `STAGING` with an `origin` remote and neither pull-request ref set exits `1` with the GitHub variable sentence, in human and JSON output, and does not mention `SYSTEM_PULLREQUEST` or `KeyError` ([#334](https://github.com/OpenTideHQ/opentide/issues/334)).
+
+### Install
+
+```bash
+pip install opentide==0.6.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.6.1] — 2026-09-23
 
 Patch on 0.6.0. Upgrade if a CI `STAGING` or `PRODUCTION` plan skipped a changed rule file that sits directly in `objects/rules/`: 0.6.0 left that file out of the plan, and 0.6.1 deploys it. A file in a subdirectory of `objects/rules/` is still not deployed. The missing-checkout failure is still exit `1`, with a different message.
@@ -431,7 +453,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.2
 [0.6.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.1
 [0.6.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.0
 [0.5.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.5.0

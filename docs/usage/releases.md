@@ -7,6 +7,29 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.6.2 — 24 September 2026
+
+Patch on 0.6.1. **Upgrade if a GitLab `STAGING` or `PRODUCTION` plan crashed with `'Repo' object has no attribute 'lookup_ref'`, or a GitHub `STAGING` plan asked for Azure pull-request variables and then `KeyError`.** Both still exit `1`. GitLab reports `No Source Commit Found`. GitHub names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`.
+
+**Install**
+
+```bash
+pip install opentide==0.6.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- A GitLab diff plan whose base SHA is missing exits `1` with `No Source Commit Found` instead of an `AttributeError` ([#333](https://github.com/OpenTideHQ/opentide/issues/333)).
+- A GitHub `STAGING` plan without `GITHUB_HEAD_REF` and `GITHUB_BASE_REF` exits `1` with that sentence, instead of Azure variable names and `KeyError while compiling the deployment plan` ([#334](https://github.com/OpenTideHQ/opentide/issues/334)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.6.2/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.2)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.6.1 — 23 September 2026
 
 Patch on 0.6.0. **Upgrade if a CI `STAGING` or `PRODUCTION` plan skipped a changed rule file that sits directly in `objects/rules/`.** 0.6.0 left that file out of the plan, and 0.6.1 deploys it. A file in a subdirectory of `objects/rules/` is still not deployed. The missing-checkout failure is still exit `1`, with a different message.
