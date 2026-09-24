@@ -127,6 +127,7 @@ FATAL: Metadata deployment is not implemented for splunk
 - **No tenants** — `setup repo` enables a platform and leaves the `[[tenants]]` example commented out. A real `deploy` of rules for that platform exits `1` before any engine loads, and names the file to edit. `--dry-run` still previews the payloads and warns that a real deploy would stop.
 - **GitLab `No Source Commit Found`** — a `STAGING` or `PRODUCTION` plan whose base SHA is unset or not in the checkout exits `1` with that sentence. Through 0.6.1 the same case crashed with `'Repo' object has no attribute 'lookup_ref'`.
 - **GitHub `STAGING` without pull-request refs** — the failure names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`. Through 0.6.1 it asked for Azure `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME`, then `KeyError`.
+- **Other CI diff failures** — a missing tip SHA names `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION`. Azure `STAGING` without its pull-request variables names those variables before fetching. A ref that is not on `origin` names `origin/<name>`. `DEBUG`, `MANUAL`, and `ALWAYS` say they are not a CI diff plan. A one-parent GitLab merged result keeps the tip SHA.
 
 ## Per-rule deployment via SDK or MCP
 

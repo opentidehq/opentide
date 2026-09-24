@@ -6,6 +6,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-09-24
+
+Patch on 0.6.2. Upgrade if a CI diff plan still crashed after 0.6.2: a missing tip SHA died on `encode`, Azure `STAGING` died on `KeyError` or a fetch of a missing `origin`, a ref that is not on `origin` died on `Invalid object name`, or `DEBUG`, `MANUAL`, or `ALWAYS` died on `KeyError`. Each still exits `1`, with the sentence for that case. `FULL` is unchanged.
+
+### Fixed
+
+- A CI diff plan whose tip SHA is unset exits `1` and names the variable: `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION` is required to compute the changed rules. 0.6.2 reached `repo.commit(None)` and died with `'NoneType' object has no attribute 'encode'` ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+- Azure `STAGING` without `SYSTEM_PULLREQUEST_SOURCEBRANCH` or `SYSTEM_PULLREQUEST_TARGETBRANCHNAME` exits `1` with `Expected to find SYSTEM_PULLREQUEST_SOURCEBRANCH and SYSTEM_PULLREQUEST_TARGETBRANCHNAME | Ensure this is running in a Pull Request pipeline`. 0.6.2 fetched `origin` first, so a checkout with no remote died with `No git repository was found at origin`, and a checkout that had one died with `KeyError while compiling the deployment plan`. The variables are read before the fetch ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+- GitHub or Azure `STAGING` whose pull-request ref is not on `origin` exits `1` with `Could not find git ref origin/<name>`. 0.6.2 died with `Invalid object name` ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+- `DEBUG`, `MANUAL`, and `ALWAYS` under CI exit `1` with `Deployment plan <NAME> is not a CI diff plan. Use STAGING, PRODUCTION, or FULL.` `ALWAYS` was an alias of `FULL` because both enum values were the same string, so `--plan ALWAYS` took the full-redeploy path. It is now its own plan. `FULL` still does not compute a git diff ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+- A GitLab merged-result pipeline reads the second parent only when that commit has more than one parent. A one-parent `CI_COMMIT_BEFORE_SHA` keeps `CI_COMMIT_SHA` as the tip and exits `0` when both SHAs are in the checkout. 0.6.2 died with `list index out of range` ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+
+### Tests
+
+- Each skipped arm is checked for human and JSON output on GitLab, GitHub, and Azure, including Azure `STAGING` with no `origin` remote. The messages are the sentences above, and the output does not contain `lookup_ref`, `encode`, `list index out of range`, `KeyError while compiling the deployment plan`, or `Invalid object name` ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+- A one-parent merged-result commit exits `0`. The 0.6.2 GitLab base and GitHub pull-request-ref checks still pass ([#333](https://github.com/OpenTideHQ/opentide/issues/333), [#334](https://github.com/OpenTideHQ/opentide/issues/334), [#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+
+### Install
+
+```bash
+pip install opentide==0.6.3
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.6.2] — 2026-09-24
 
 Patch on 0.6.1. Upgrade if a GitLab `STAGING` or `PRODUCTION` plan crashed with `'Repo' object has no attribute 'lookup_ref'`, or a GitHub `STAGING` plan asked for Azure pull-request variables and then `KeyError`. Both still exit `1`. GitLab reports `No Source Commit Found`. GitHub names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`.
@@ -453,7 +478,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.3
 [0.6.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.2
 [0.6.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.1
 [0.6.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.0

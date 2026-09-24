@@ -7,6 +7,32 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.6.3 — 24 September 2026
+
+Patch on 0.6.2. **Upgrade if a CI diff plan still crashed after 0.6.2** with `encode`, `KeyError`, `Invalid object name`, or `list index out of range`. Each of those cases still exits `1`, with a sentence instead of the exception. `FULL` is unchanged.
+
+**Install**
+
+```bash
+pip install opentide==0.6.3
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- A missing tip SHA names `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION` ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+- Azure `STAGING` without pull-request variables names `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME`, before any fetch ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+- A pull-request ref that is not on `origin` names `origin/<name>` ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+- `DEBUG`, `MANUAL`, and `ALWAYS` say they are not a CI diff plan. `ALWAYS` is no longer an alias of `FULL` ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+- A GitLab merged-result commit with one parent keeps `CI_COMMIT_SHA` and exits `0` when both SHAs are in the checkout ([#339](https://github.com/OpenTideHQ/opentide/issues/339)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.6.3/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.3)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.6.2 — 24 September 2026
 
 Patch on 0.6.1. **Upgrade if a GitLab `STAGING` or `PRODUCTION` plan crashed with `'Repo' object has no attribute 'lookup_ref'`, or a GitHub `STAGING` plan asked for Azure pull-request variables and then `KeyError`.** Both still exit `1`. GitLab reports `No Source Commit Found`. GitHub names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`.
