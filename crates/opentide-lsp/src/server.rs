@@ -9,6 +9,7 @@ use opentide_analysis::{
 };
 use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
+use opentide_tide::{install_deprecation_overlay, parse_deprecation_overlay};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{BufReader, Write};
@@ -105,7 +106,11 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                 .and_then(|v| v.as_str())
                 .map(uri_to_path)
             {
-                session.root = Some(PathBuf::from(root));
+                let root = PathBuf::from(root);
+                install_deprecation_overlay(load_catalog_deprecations(&root));
+                session.root = Some(root);
+            } else {
+                install_deprecation_overlay(Vec::new());
             }
             jsonrpc::write_message(
                 writer,
@@ -995,6 +1000,14 @@ fn range_json(range: Range) -> Value {
         "start": { "line": range.start.line, "character": range.start.character },
         "end": { "line": range.end.line, "character": range.end.character }
     })
+}
+
+fn load_catalog_deprecations(root: &Path) -> Vec<opentide_tide::FieldDeprecation> {
+    let path = root.join(".opentide/lsp/catalogs/generated/deprecations.json");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    parse_deprecation_overlay(&text).unwrap_or_default()
 }
 
 fn uri_to_path(uri: &str) -> String {

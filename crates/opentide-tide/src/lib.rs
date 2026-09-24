@@ -15,7 +15,9 @@ use opentide_highlight::{
 use opentide_kql::Profile;
 use regex::Regex;
 use serde::Deserialize;
+use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 use uuid::Uuid;
 
 pub use intel::{
@@ -382,11 +384,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         }
     };
 
-    let schema = object
-        .metadata
-        .as_ref()
-        .and_then(|m| m.schema.as_deref())
-        .unwrap_or("");
+    let schema = object_schema_id(&object);
     let object_type = schema.split("::").next().unwrap_or("").to_string();
 
     if object.name.as_deref().unwrap_or("").is_empty() {
@@ -560,6 +558,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     }
 
     diagnose_catalog_values(&object_type, &object, input.source, &mut diagnostics);
+    diagnose_deprecations(&object_type, input.source, &mut diagnostics);
 
     let uuid = object
         .metadata
@@ -1107,6 +1106,128 @@ fn tide_key_capture_at_or(field: Option<&TideField>) -> &'static str {
     }
 }
 
+const DEPRECATIONS_JSON: &str = include_str!("../../../catalogs/tide/generated/deprecations.json");
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FieldDeprecation {
+    pub schema: String,
+    pub path: String,
+    pub message: String,
+}
+
+#[derive(Deserialize)]
+struct DeprecationFile {
+    fields: Vec<DeprecationRow>,
+}
+
+#[derive(Deserialize)]
+struct DeprecationRow {
+    schema: String,
+    path: String,
+    message: Option<String>,
+    deprecated: Option<String>,
+}
+
+thread_local! {
+    static DEPRECATION_OVERLAY: RefCell<Vec<FieldDeprecation>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Workspace `.opentide/lsp/catalogs/` entries. Replaces the overlay for this thread.
+pub fn install_deprecation_overlay(items: Vec<FieldDeprecation>) {
+    DEPRECATION_OVERLAY.with(|cell| *cell.borrow_mut() = items);
+}
+
+/// Parse `deprecations.json` or a `fields.json` that carries `deprecated` messages.
+pub fn parse_deprecation_overlay(json: &str) -> Result<Vec<FieldDeprecation>, String> {
+    let file: DeprecationFile = serde_json::from_str(json).map_err(|err| err.to_string())?;
+    Ok(file
+        .fields
+        .into_iter()
+        .filter_map(|row| {
+            let message = row.message.or(row.deprecated)?;
+            if message.is_empty() {
+                return None;
+            }
+            Some(FieldDeprecation {
+                schema: row.schema,
+                path: row.path,
+                message,
+            })
+        })
+        .collect())
+}
+
+fn object_schema_id(object: &TideObject) -> String {
+    if let Some(schema) = object
+        .metadata
+        .as_ref()
+        .and_then(|meta| meta.schema.clone())
+    {
+        return schema;
+    }
+    object
+        .extra
+        .get("meta")
+        .and_then(|value| value.get("schema"))
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+fn bundled_deprecations() -> &'static [FieldDeprecation] {
+    static ROWS: OnceLock<Vec<FieldDeprecation>> = OnceLock::new();
+    ROWS.get_or_init(|| parse_deprecation_overlay(DEPRECATIONS_JSON).expect("deprecations.json"))
+}
+
+fn diagnose_deprecations(object_type: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) {
+    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(source) else {
+        return;
+    };
+    let mut present = Vec::new();
+    collect_mapping_paths(&value, &[], &mut present);
+    let overlay = DEPRECATION_OVERLAY.with(|cell| cell.borrow().clone());
+    for path in present {
+        let dotted = path.join(".");
+        let message = overlay
+            .iter()
+            .find(|row| row.schema == object_type && row.path == dotted)
+            .map(|row| row.message.as_str())
+            .or_else(|| {
+                bundled_deprecations()
+                    .iter()
+                    .find(|row| row.schema == object_type && row.path == dotted)
+                    .map(|row| row.message.as_str())
+            });
+        let Some(message) = message else {
+            continue;
+        };
+        let leaf = path.last().map(String::as_str).unwrap_or(&dotted);
+        diagnostics.push(
+            Diagnostic::warning(
+                codes::DEPRECATED_FIELD,
+                format!("Field '{dotted}' is deprecated: {message}"),
+                key_range(source, leaf),
+            )
+            .with_field_path(path),
+        );
+    }
+}
+
+fn collect_mapping_paths(value: &serde_yaml::Value, prefix: &[String], out: &mut Vec<Vec<String>>) {
+    let Some(mapping) = value.as_mapping() else {
+        return;
+    };
+    for (key, child) in mapping {
+        let Some(name) = key.as_str() else {
+            continue;
+        };
+        let mut path = prefix.to_vec();
+        path.push(name.to_string());
+        out.push(path.clone());
+        collect_mapping_paths(child, &path, out);
+    }
+}
+
 fn diagnose_catalog_values(
     object_type: &str,
     object: &TideObject,
@@ -1343,6 +1464,58 @@ configurations:
       | where EventID == 4688
       | take 1
 "#;
+
+    #[test]
+    fn legacy_meta_is_deprecated_field() {
+        let src = r#"
+name: Legacy
+meta:
+  uuid: 11111111-1111-4111-8111-111111111111
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+"#;
+        let r = analyze(AnalyzeInput {
+            path: "objects/rules/legacy.yaml",
+            source: src,
+            workspace: &[],
+        });
+        let diag = r
+            .diagnostics
+            .iter()
+            .find(|d| d.code == codes::DEPRECATED_FIELD)
+            .expect("deprecated meta");
+        assert_eq!(
+            diag.field_path.as_deref(),
+            Some(["meta".to_string()].as_slice())
+        );
+        assert!(diag.message.contains("metadata"));
+    }
+
+    #[test]
+    fn workspace_deprecation_overlay_wins() {
+        install_deprecation_overlay(vec![FieldDeprecation {
+            schema: "rule".into(),
+            path: "legacy_note".into(),
+            message: "removed in 1.0".into(),
+        }]);
+        let src = "name: Rule\nlegacy_note: still here\nmetadata:\n  schema: rule::1.0\n";
+        let r = analyze(AnalyzeInput {
+            path: "objects/rules/overlay.yaml",
+            source: src,
+            workspace: &[],
+        });
+        install_deprecation_overlay(Vec::new());
+        assert!(
+            r.diagnostics.iter().any(|d| {
+                d.code == codes::DEPRECATED_FIELD && d.message.contains("removed in 1.0")
+            }),
+            "{:?}",
+            r.diagnostics
+        );
+    }
 
     #[test]
     fn scalar_impact_is_schema_validation() {

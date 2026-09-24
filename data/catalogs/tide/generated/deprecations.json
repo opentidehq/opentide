@@ -1,0 +1,21 @@
+{
+  "opentide": "0.5.0",
+  "generator": "scripts/sync_opentide_schemas.py",
+  "fields": [
+    {
+      "schema": "rule",
+      "path": "configurations.splunk.advanced",
+      "message": "Use nested Splunk action blocks"
+    },
+    {
+      "schema": "rule",
+      "path": "configurations.splunk.security_domain",
+      "message": "security_domain is now nested under the notable block"
+    },
+    {
+      "schema": "rule",
+      "path": "meta",
+      "message": "Use metadata keyword instead"
+    }
+  ]
+}
