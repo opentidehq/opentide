@@ -24,7 +24,7 @@ Install OpenTide into a virtual environment so its dependencies never collide wi
 ```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install 'opentide==0.6.2'
+pip install 'opentide==0.6.3'
 ```
 
 </Tab>
@@ -33,7 +33,7 @@ pip install 'opentide==0.6.2'
 
 ```bash
 uv venv
-uv pip install 'opentide==0.6.2'
+uv pip install 'opentide==0.6.3'
 ```
 
 </Tab>
@@ -48,7 +48,7 @@ The latest release is **0.6.1** (23 September 2026). The first public release wa
 
 ```bash
 pip install opentide              # latest on PyPI
-pip install 'opentide==0.6.2'     # pin the current release
+pip install 'opentide==0.6.3'     # pin the current release
 ```
 
 That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
