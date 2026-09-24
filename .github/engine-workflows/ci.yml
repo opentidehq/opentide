@@ -17,6 +17,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: opentide schemas
+        run: pip install -r scripts/requirements-opentide.txt
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy
@@ -29,6 +34,17 @@ jobs:
         run: cargo test --workspace
       - name: generate-highlights --check
         run: cargo run -p opentide-lsp -- generate-highlights --check
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "maturin>=1.7,<2"
+      - run: maturin build
 
   grammars:
     runs-on: ubuntu-latest

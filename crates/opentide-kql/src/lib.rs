@@ -7,6 +7,7 @@ use opentide_core::{
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
+use std::sync::OnceLock;
 use tree_sitter::Node;
 
 const OPERATORS_TOML: &str = include_str!("../../../catalogs/kql/core/operators.toml");
@@ -198,6 +199,24 @@ impl Catalog {
         }
         self.columns = columns;
         self
+    }
+
+    /// Parsed once per profile for the process. `core()` still reparses for tests.
+    pub fn cached(profile: Profile) -> &'static Self {
+        match profile {
+            Profile::Core => {
+                static CORE: OnceLock<Catalog> = OnceLock::new();
+                CORE.get_or_init(Self::core)
+            }
+            Profile::Sentinel => {
+                static SENTINEL: OnceLock<Catalog> = OnceLock::new();
+                SENTINEL.get_or_init(|| Self::core().with_profile(Profile::Sentinel))
+            }
+            Profile::Defender => {
+                static DEFENDER: OnceLock<Catalog> = OnceLock::new();
+                DEFENDER.get_or_init(|| Self::core().with_profile(Profile::Defender))
+            }
+        }
     }
 
     pub fn operator(&self, name: &str) -> Option<&OperatorRow> {
@@ -426,8 +445,8 @@ pub struct AnalyzeResult {
 }
 
 pub fn analyze(source: &str, profile: Profile) -> AnalyzeResult {
-    let catalog = Catalog::core().with_profile(profile);
-    analyze_with_catalog(source, &catalog)
+    let catalog = Catalog::cached(profile);
+    analyze_with_catalog(source, catalog)
 }
 
 pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
@@ -455,13 +474,6 @@ pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
     }
 
     let hir = lower(source);
-    if let Hir::ControlCommand { name } = &hir {
-        diagnostics.push(Diagnostic::error(
-            codes::KQL_CONTROL_COMMAND_UNSUPPORTED,
-            format!("KQL control command '.{name}' is not valid in detections"),
-            Range::point(0, 0),
-        ));
-    }
     collect_control_commands(tree.root_node(), source, &mut diagnostics);
 
     collect_operator_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
@@ -788,6 +800,9 @@ pub fn compile_kql_query(base: &str, exclusions: &[Exclusion], tenant: &str) -> 
     out
 }
 
+/// 1.0 Defender profile: the 18 tables whose output-column groups are known.
+/// `defender/tables.toml` lists more tables; those are completable but do not
+/// select an NRT column group until a group is catalogued for them.
 /// Defender required output column groups (OR-groups).
 pub fn defender_required_column_groups(query: &str) -> Vec<Vec<&'static str>> {
     let stripped = strip_kql_literals_and_comments(query);
@@ -917,7 +932,7 @@ const COLUMN_OPERATORS: &[&str] = &[
 ];
 
 pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<CompletionItem> {
-    let catalog = Catalog::core().with_profile(profile);
+    let catalog = Catalog::cached(profile);
     let before = &source[..offset.min(source.len())];
     let trimmed = before.trim_end();
     let lower = trimmed.to_ascii_lowercase();
@@ -1024,7 +1039,7 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
 }
 
 pub fn hover(source: &str, position: opentide_core::Position, profile: Profile) -> Option<String> {
-    let catalog = Catalog::core().with_profile(profile);
+    let catalog = Catalog::cached(profile);
     let offset = position_to_offset(source, position);
     let word = word_at(source, offset)?;
     if let Some(op) = catalog.operator(&word) {
@@ -1130,7 +1145,7 @@ pub fn hover(source: &str, position: opentide_core::Position, profile: Profile) 
 }
 
 pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<SignatureHelp> {
-    let catalog = Catalog::core().with_profile(profile);
+    let catalog = Catalog::cached(profile);
     let before = &source[..offset.min(source.len())];
     let lower = before.to_ascii_lowercase();
     if let Some(op) = last_operator(before) {
@@ -1321,11 +1336,24 @@ mod tests {
     #[test]
     fn control_command_is_unsupported() {
         let r = analyze(".show tables", Profile::Core);
+        let diag = r
+            .diagnostics
+            .iter()
+            .find(|d| d.code == codes::KQL_CONTROL_COMMAND_UNSUPPORTED)
+            .expect("control command diagnostic");
         assert!(
-            r.diagnostics
-                .iter()
-                .any(|d| d.code == codes::KQL_CONTROL_COMMAND_UNSUPPORTED)
+            diag.range.end.character > diag.range.start.character
+                || diag.range.end.line > diag.range.start.line,
+            "control command range must cover the command, got {:?}",
+            diag.range
         );
+    }
+
+    #[test]
+    fn hll_merge_is_aggregate() {
+        let c = Catalog::cached(Profile::Core);
+        let row = c.function("hll_merge").expect("hll_merge");
+        assert_eq!(row.kind.as_deref(), Some("aggregate"));
     }
 
     #[test]

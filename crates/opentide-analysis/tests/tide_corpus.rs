@@ -1,5 +1,6 @@
 //! Conformance: tide_corpus objects produce `{code, field_path, severity}` diagnostics
-//! matching CLI issue shape. Engine may add extra query diagnostics inside `query: |`.
+//! matching CLI issue shape. Pydantic object issues are a subset of the LSP.
+//! Engine may add extra query diagnostics inside `query: |`.
 
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze, index_workspace};
 use opentide_core::LanguageId;
@@ -175,4 +176,101 @@ fn library_rule_is_analyzable() {
             .map(|t| (t.capture.as_str(), text.get(t.span.start..t.span.end)))
             .collect::<Vec<_>>(),
     );
+}
+
+#[derive(serde::Deserialize)]
+struct PydanticIssue {
+    file: String,
+    code: String,
+    field_path: Vec<String>,
+    severity: String,
+}
+
+fn pydantic_issues(dir: &str) -> Vec<PydanticIssue> {
+    let root = repo_root();
+    let output = std::process::Command::new("python3")
+        .arg(root.join("scripts/pydantic_object_issues.py"))
+        .arg(root.join(dir))
+        .output()
+        .expect("python3");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).expect("pydantic json")
+}
+
+fn lsp_covers(dir: &str, issues: &[PydanticIssue]) {
+    let host = load_workspace(dir);
+    for issue in issues {
+        let (uri, text) = host
+            .files
+            .iter()
+            .find(|(path, _)| path.ends_with(&issue.file))
+            .cloned()
+            .unwrap_or_else(|| panic!("missing {}", issue.file));
+        let response = analyze(
+            &host,
+            AnalyzeRequest {
+                uri,
+                language: LanguageId::TideYaml,
+                text,
+            },
+        );
+        let covered = response.diagnostics.iter().any(|diag| {
+            diag.code == issue.code
+                && diag.severity.as_str() == issue.severity
+                && diag.field_path.as_deref() == Some(issue.field_path.as_slice())
+        });
+        assert!(
+            covered,
+            "LSP missing {} {:?} {} on {}; have {:?}",
+            issue.code,
+            issue.field_path,
+            issue.severity,
+            issue.file,
+            response
+                .diagnostics
+                .iter()
+                .map(|diag| (
+                    diag.code.as_str(),
+                    diag.field_path.clone(),
+                    diag.severity.as_str()
+                ))
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn pydantic_object_issues_are_subset_of_lsp() {
+    let corpus = pydantic_issues("testdata/workspaces/tide_corpus");
+    lsp_covers("testdata/workspaces/tide_corpus", &corpus);
+    let shaped = pydantic_issues("testdata/conformance/pydantic");
+    assert!(
+        shaped
+            .iter()
+            .any(|issue| issue.code == "schema_validation"
+                && issue.field_path == ["threat", "impact"]),
+        "scalar impact fixture must be rejected by pydantic"
+    );
+    assert!(
+        shaped
+            .iter()
+            .any(|issue| issue.code == "deprecated_field" && issue.field_path == ["meta"]),
+        "legacy meta fixture must be deprecated by pydantic"
+    );
+    let claimed: Vec<_> = shaped
+        .into_iter()
+        .filter(|issue| {
+            matches!(
+                issue.code.as_str(),
+                "deprecated_field" | "schema_validation"
+            ) && (issue.field_path == ["threat", "impact"]
+                || issue.field_path == ["meta"] && issue.code == "deprecated_field"
+                || issue.field_path == ["metadata"])
+        })
+        .collect();
+    lsp_covers("testdata/conformance/pydantic", &claimed);
 }

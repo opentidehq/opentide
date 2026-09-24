@@ -9,6 +9,7 @@ use opentide_analysis::{
 };
 use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
+use opentide_tide::{install_deprecation_overlay, parse_deprecation_overlay};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{BufReader, Write};
@@ -105,7 +106,11 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                 .and_then(|v| v.as_str())
                 .map(uri_to_path)
             {
-                session.root = Some(PathBuf::from(root));
+                let root = PathBuf::from(root);
+                install_deprecation_overlay(load_catalog_deprecations(&root));
+                session.root = Some(root);
+            } else {
+                install_deprecation_overlay(Vec::new());
             }
             jsonrpc::write_message(
                 writer,
@@ -113,7 +118,7 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                     id,
                     json!({
                         "capabilities": {
-                            "textDocumentSync": 1,
+                            "textDocumentSync": 2,
                             "hoverProvider": true,
                             "completionProvider": { "resolveProvider": true, "triggerCharacters": ["|", " ", ":", ".", "(", ",", "`", "="] },
                             "signatureHelpProvider": { "triggerCharacters": ["(", ",", "=", "`"] },
@@ -154,6 +159,13 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
         "textDocument/didClose" => {
             if let Some(uri) = params.pointer("/textDocument/uri").and_then(|v| v.as_str()) {
                 session.docs.remove(uri);
+                jsonrpc::write_message(
+                    writer,
+                    &jsonrpc::notify(
+                        "textDocument/publishDiagnostics",
+                        json!({ "uri": uri, "diagnostics": [] }),
+                    ),
+                )?;
             }
         }
         "textDocument/hover" => {
@@ -308,20 +320,71 @@ fn handle_did_change(session: &mut Session, writer: &mut impl Write, params: &Va
         .pointer("/textDocument/uri")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let text = params
-        .pointer("/contentChanges/0/text")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
     let language = session
         .docs
         .get(uri)
         .map(|(l, _)| *l)
         .unwrap_or(LanguageId::TideYaml);
-    session
+    let current = session
         .docs
-        .insert(uri.to_string(), (language, text.to_string()));
+        .get(uri)
+        .map(|(_, text)| text.clone())
+        .unwrap_or_default();
+    let changes = params
+        .get("contentChanges")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let text = apply_content_changes(&current, &changes);
+    session.docs.insert(uri.to_string(), (language, text));
     publish_diagnostics(session, writer, uri)?;
     Ok(())
+}
+
+fn apply_content_changes(text: &str, changes: &[Value]) -> String {
+    let mut current = text.to_string();
+    for change in changes {
+        let Some(next) = change.get("text").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if let Some(range) = change.get("range") {
+            current = splice_range(&current, range, next);
+        } else {
+            current = next.to_string();
+        }
+    }
+    current
+}
+
+fn splice_range(text: &str, range: &Value, insert: &str) -> String {
+    let start = offset_at(
+        text,
+        range.pointer("/start/line"),
+        range.pointer("/start/character"),
+    );
+    let end = offset_at(
+        text,
+        range.pointer("/end/line"),
+        range.pointer("/end/character"),
+    );
+    let mut out = String::new();
+    out.push_str(&text[..start.min(text.len())]);
+    out.push_str(insert);
+    out.push_str(&text[end.min(text.len())..]);
+    out
+}
+
+fn offset_at(text: &str, line: Option<&Value>, character: Option<&Value>) -> usize {
+    let line = line.and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    let character = character.and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    let mut offset = 0;
+    for (i, src) in text.split_inclusive('\n').enumerate() {
+        if i == line {
+            return offset + character.min(src.trim_end_matches('\n').len());
+        }
+        offset += src.len();
+    }
+    text.len()
 }
 
 fn publish_diagnostics(session: &Session, writer: &mut impl Write, uri: &str) -> Result<()> {
@@ -549,18 +612,28 @@ fn handle_workspace_symbol(session: &Session, params: &Value) -> Value {
     let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
     let host = session.host();
     let workspace = index_workspace(&host);
-    json!(opentide_tide::workspace_symbols(&workspace, query)
-        .into_iter()
-        .map(|o| json!({
-            "name": o.name,
-            "kind": 5,
-            "location": {
-                "uri": path_to_uri(&o.path),
-                "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 1 } }
-            },
-            "containerName": o.object_type
-        }))
-        .collect::<Vec<_>>())
+    json!(
+        opentide_tide::workspace_symbols(&workspace, query)
+            .into_iter()
+            .map(|o| {
+                let text = session
+                    .docs
+                    .iter()
+                    .find(|(uri, _)| uri_to_path(uri) == o.path || uri.as_str() == o.path)
+                    .map(|(_, (_, text))| text.as_str())
+                    .unwrap_or("");
+                json!({
+                    "name": o.name,
+                    "kind": 5,
+                    "location": {
+                        "uri": path_to_uri(&o.path),
+                        "range": name_token_range(text, &o.name)
+                    },
+                    "containerName": o.object_type
+                })
+            })
+            .collect::<Vec<_>>()
+    )
 }
 
 fn handle_semantic_tokens(session: &Session, params: &Value) -> Value {
@@ -634,9 +707,11 @@ fn handle_code_action(session: &Session, params: &Value) -> Value {
             text: text.clone(),
         },
     );
+    let requested = params.get("range");
     let actions: Vec<Value> = response
         .diagnostics
         .iter()
+        .filter(|d| range_overlaps_param(d.range, requested))
         .filter_map(|d| {
             let suggestion = d.suggestion.as_ref()?;
             Some(json!({
@@ -664,11 +739,12 @@ fn handle_folding(session: &Session, params: &Value) -> Value {
     let Some((_, text)) = session.docs.get(uri) else {
         return json!([]);
     };
-    let last = text.lines().count().saturating_sub(1) as u32;
-    if last == 0 {
-        return json!([]);
-    }
-    json!([{ "startLine": 0, "endLine": last, "kind": "region" }])
+    json!(
+        folding_ranges(text)
+            .into_iter()
+            .map(|(start, end)| json!({ "startLine": start, "endLine": end, "kind": "region" }))
+            .collect::<Vec<_>>()
+    )
 }
 
 fn handle_inlay(session: &Session, params: &Value) -> Value {
@@ -684,8 +760,10 @@ fn handle_inlay(session: &Session, params: &Value) -> Value {
     }
     let host = session.host();
     let workspace = index_workspace(&host);
+    let requested = params.get("range");
     let hints: Vec<Value> = opentide_tide::inlay_hints(text, &workspace)
         .into_iter()
+        .filter(|h| position_in_param(h.position, requested))
         .map(|h| {
             json!({
                 "position": { "line": h.position.line, "character": h.position.character },
@@ -702,15 +780,9 @@ fn handle_document_highlight(session: &Session, params: &Value) -> Value {
         return json!([]);
     };
     if let Some(uuid) = uuid_at(&text, pos) {
-        let line = text.lines().nth(pos.line as usize).unwrap_or("");
-        if let Some(idx) = line.find(&uuid) {
-            return json!([{
-                "range": {
-                    "start": { "line": pos.line, "character": idx as u32 },
-                    "end": { "line": pos.line, "character": (idx + uuid.len()) as u32 }
-                },
-                "kind": 1
-            }]);
+        let hits = uuid_ranges(&text, &uuid);
+        if !hits.is_empty() {
+            return json!(hits);
         }
     }
     json!([])
@@ -729,21 +801,28 @@ fn handle_selection_range(session: &Session, params: &Value) -> Value {
     let Some((_, text)) = session.docs.get(uri) else {
         return json!([]);
     };
-    let last_line = text.lines().count().saturating_sub(1) as u32;
-    let last_col = text.lines().last().map(|l| l.len() as u32).unwrap_or(0);
+    let lines: Vec<&str> = text.lines().collect();
     json!(
         positions
             .iter()
             .map(|p| {
+                let line = p.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                let (parent_start, parent_end) = enclosing_block(&lines, line);
                 json!({
                     "range": {
-                        "start": p,
-                        "end": p
+                        "start": { "line": line, "character": 0 },
+                        "end": {
+                            "line": line,
+                            "character": lines.get(line).map(|l| l.len()).unwrap_or(0)
+                        }
                     },
                     "parent": {
                         "range": {
-                            "start": { "line": 0, "character": 0 },
-                            "end": { "line": last_line, "character": last_col }
+                            "start": { "line": parent_start, "character": 0 },
+                            "end": {
+                                "line": parent_end,
+                                "character": lines.get(parent_end as usize).map(|l| l.len()).unwrap_or(0)
+                            }
                         }
                     }
                 })
@@ -794,11 +873,141 @@ fn doc_pos(session: &Session, params: &Value) -> Option<(String, LanguageId, Str
     Some((uri, *language, text.clone(), Position::new(line, character)))
 }
 
+fn name_token_range(text: &str, name: &str) -> Value {
+    for (line, src) in text.lines().enumerate() {
+        if let Some(idx) = src.find(name) {
+            return json!({
+                "start": { "line": line, "character": idx },
+                "end": { "line": line, "character": idx + name.len() }
+            });
+        }
+    }
+    json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 1 } })
+}
+
+fn folding_ranges(text: &str) -> Vec<(u32, u32)> {
+    let lines: Vec<&str> = text.lines().collect();
+    let last = lines.len().saturating_sub(1);
+    let mut out = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let Some(indent) = content_indent(line) else {
+            continue;
+        };
+        let mut end = None;
+        for (j, child) in lines.iter().enumerate().skip(i + 1) {
+            let Some(child_indent) = content_indent(child) else {
+                continue;
+            };
+            if child_indent > indent {
+                end = Some(j);
+            } else {
+                break;
+            }
+        }
+        if let Some(end) = end {
+            if !(i == 0 && end == last) {
+                out.push((i as u32, end as u32));
+            }
+        }
+    }
+    out
+}
+
+fn enclosing_block(lines: &[&str], line: usize) -> (u32, u32) {
+    let line = line.min(lines.len().saturating_sub(1));
+    let indent = content_indent(lines.get(line).copied().unwrap_or("")).unwrap_or(0);
+    let mut parent = line;
+    for i in (0..line).rev() {
+        if let Some(parent_indent) = content_indent(lines[i]) {
+            if parent_indent < indent {
+                parent = i;
+                break;
+            }
+        }
+    }
+    let parent_indent = content_indent(lines.get(parent).copied().unwrap_or("")).unwrap_or(0);
+    let mut end = parent;
+    for (j, child) in lines.iter().enumerate().skip(parent + 1) {
+        if let Some(child_indent) = content_indent(child) {
+            if child_indent <= parent_indent {
+                break;
+            }
+            end = j;
+        }
+    }
+    (parent as u32, end as u32)
+}
+
+fn content_indent(line: &str) -> Option<usize> {
+    if line.trim().is_empty() {
+        None
+    } else {
+        Some(line.chars().take_while(|c| *c == ' ').count())
+    }
+}
+
+fn uuid_ranges(text: &str, uuid: &str) -> Vec<Value> {
+    let mut hits = Vec::new();
+    for (line, src) in text.lines().enumerate() {
+        let mut from = 0;
+        while let Some(idx) = src[from..].find(uuid) {
+            let start = from + idx;
+            hits.push(json!({
+                "range": {
+                    "start": { "line": line, "character": start },
+                    "end": { "line": line, "character": start + uuid.len() }
+                },
+                "kind": 1
+            }));
+            from = start + uuid.len();
+        }
+    }
+    hits
+}
+
+fn range_overlaps_param(range: Range, requested: Option<&Value>) -> bool {
+    let Some(requested) = requested else {
+        return true;
+    };
+    let start_line = requested
+        .pointer("/start/line")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+    let end_line = requested
+        .pointer("/end/line")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+    range.start.line <= end_line && range.end.line >= start_line
+}
+
+fn position_in_param(position: Position, requested: Option<&Value>) -> bool {
+    let Some(requested) = requested else {
+        return true;
+    };
+    let start_line = requested
+        .pointer("/start/line")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+    let end_line = requested
+        .pointer("/end/line")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(u64::MAX) as u32;
+    position.line >= start_line && position.line <= end_line
+}
+
 fn range_json(range: Range) -> Value {
     json!({
         "start": { "line": range.start.line, "character": range.start.character },
         "end": { "line": range.end.line, "character": range.end.character }
     })
+}
+
+fn load_catalog_deprecations(root: &Path) -> Vec<opentide_tide::FieldDeprecation> {
+    let path = root.join(".opentide/lsp/catalogs/generated/deprecations.json");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    parse_deprecation_overlay(&text).unwrap_or_default()
 }
 
 fn uri_to_path(uri: &str) -> String {

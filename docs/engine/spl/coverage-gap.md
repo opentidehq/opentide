@@ -1,5 +1,7 @@
 # Coverage gap: inventory vs `catalogs/spl/commands.toml`
 
+Historical inventory. The punch list is [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md).
+
 Comparison of this docs inventory against the **current** catalog compiled into the engine:
 
 [`catalogs/spl/commands.toml`](../../catalogs/spl/commands.toml)

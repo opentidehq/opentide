@@ -85,6 +85,7 @@ def main() -> None:
     print(f"wrote {GENERATED.relative_to(ROOT)} ({len(nodes)} fields)")
     write_highlights(nodes)
     print(f"updated {HIGHLIGHTS.relative_to(ROOT)}")
+    write_deprecations(version)
 
 
 def dump_schema(schema: dict[str, Any]) -> str:
@@ -486,6 +487,53 @@ def write_highlights(nodes: list[dict[str, Any]]) -> None:
 (comment) @comment
 """
     HIGHLIGHTS.write_text(text, encoding="utf-8")
+
+
+def write_deprecations(version: str) -> None:
+    """``tide.meta.deprecation`` lives on the metaschema, not on JSON Schema nodes.
+
+    Root ``meta`` and Splunk ``advanced`` / ``security_domain`` are the 0.5.0 markers.
+    """
+    from opentide.generation.pydantic_metaschema import CORE_ROOT_EXTRAS
+    from opentide.models.platform_schema import _PLATFORM_EXTRAS
+    from opentide.models.platform import SplunkConfig
+
+    rows: list[dict[str, str]] = []
+    for family, extras in CORE_ROOT_EXTRAS.items():
+        for name, spec in (extras.get("property_extras") or {}).items():
+            if isinstance(spec, dict) and spec.get("tide.meta.deprecation"):
+                rows.append(
+                    {
+                        "schema": family,
+                        "path": name,
+                        "message": str(spec["tide.meta.deprecation"]),
+                    }
+                )
+    splunk = _PLATFORM_EXTRAS.get(SplunkConfig, {})
+    for name, spec in (splunk.get("property_extras") or {}).items():
+        if isinstance(spec, dict) and spec.get("tide.meta.deprecation"):
+            rows.append(
+                {
+                    "schema": "rule",
+                    "path": f"configurations.splunk.{name}",
+                    "message": str(spec["tide.meta.deprecation"]),
+                }
+            )
+    rows.sort(key=lambda row: (row["schema"], row["path"]))
+    path = GENERATED.parent / "deprecations.json"
+    path.write_text(
+        json.dumps(
+            {
+                "opentide": version,
+                "generator": "scripts/sync_opentide_schemas.py",
+                "fields": rows,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {path.relative_to(ROOT)} ({len(rows)} deprecations)")
 
 
 def alt(names: list[str]) -> str:

@@ -53,7 +53,11 @@ pub fn index_workspace(host: &dyn WorkspaceHost) -> Vec<IndexedObject> {
 }
 
 pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
-    let workspace = index_workspace(host);
+    let workspace = if request.language == LanguageId::TideYaml {
+        index_workspace(host)
+    } else {
+        Vec::new()
+    };
     match request.language {
         LanguageId::Kql => {
             let r = opentide_kql::analyze(&request.text, Profile::Sentinel);

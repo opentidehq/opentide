@@ -42,7 +42,7 @@ Query extras (engine may add these inside `query: |`):
 
 ## Catalogs
 
-Snapshot from `opentide generate schemas` into `catalogs/tide/`. Workspace override: `.opentide/lsp/catalogs/`.
+Snapshot from `opentide generate schemas` into `catalogs/tide/`. A workspace file `.opentide/lsp/catalogs/generated/deprecations.json` (same shape as the bundled catalog) adds `deprecated_field` warnings on top of `catalogs/tide/generated/deprecations.json`.
 
 Snippets come from the same templates `opentide generate` writes (`catalogs/tide/templates/`).
 

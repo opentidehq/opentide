@@ -12,8 +12,12 @@ metadata:
 threat:
   description: Simulated threat actor for CLI E2E corpus
   severity: Substantial incident
-  impact: Data Breach
-  leverage: Information Gathering
+  impact:
+    - Data Breach
+    - Identity Theft
+  leverage:
+    - Information Gathering
+    - Elevation of privilege
   viability: Likely
   terrain: Endpoint workstations and user devices.
   surface:

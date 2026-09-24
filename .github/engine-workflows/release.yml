@@ -14,23 +14,45 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Host triples only until a cross linker (zig/cross) is wired.
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
           - os: macos-latest
             target: aarch64-apple-darwin
           - os: macos-13
             target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: musl linker
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: build
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         run: cargo build --release -p opentide-lsp --target ${{ matrix.target }}
+      - name: size budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin=$(find "target/${{ matrix.target }}/release" -maxdepth 1 -type f -name 'opentide-lsp*' ! -name '*.d' ! -name '*.pdb' | head -n 1)
+          test -n "$bin"
+          size=$(wc -c < "$bin")
+          echo "$bin is $size bytes"
+          test "$size" -lt 31457280
       - name: upload
         uses: actions/upload-artifact@v4
         with:
@@ -54,7 +76,8 @@ jobs:
           name: highlights-zip
           path: highlights-v*.zip
 
-  # PyPI: maturin abi3-py310. 3.14 free-threaded is best-effort.
+  # Wheel is always attached to the GitHub Release. PyPI upload runs when
+  # PYPI_API_TOKEN is set. abi3-py310; 3.14 free-threaded stays best-effort.
   pypi:
     runs-on: ubuntu-latest
     steps:
@@ -63,6 +86,38 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install maturin
-      - run: maturin build --release -m crates/opentide-lsp/Cargo.toml || maturin build --release
-        continue-on-error: true
+      - run: pip install "maturin>=1.7,<2"
+      - run: maturin build --release -m crates/opentide-lsp/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opentide-lsp-wheel
+          path: target/wheels/*.whl
+      - name: publish to PyPI
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -z "${MATURIN_PYPI_TOKEN}" ]; then
+            echo "PYPI_API_TOKEN is unset; the wheel is attached to the GitHub Release only"
+            exit 0
+          fi
+          maturin publish -m crates/opentide-lsp/Cargo.toml
+
+  release:
+    needs: [native, highlights, pypi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: attach GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "$(find dist -name 'highlights-*.zip' -print -quit)"
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "OpenTide language server ${GITHUB_REF_NAME}. Tags are independent of the opentide package. npm @opentide/lsp-client is tracked separately." \
+            || gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
