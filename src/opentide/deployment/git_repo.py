@@ -220,18 +220,21 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                     return []
 
             elif plan is DeploymentStrategy.STAGING:
-                repo.remotes.origin.fetch()
                 source_branch = os.getenv("GITHUB_HEAD_REF")
                 target_branch = os.getenv("GITHUB_BASE_REF")
 
                 if not source_branch or not target_branch:
-                    logger.critical(
-                        "could_not_identify_source_and_target_branch_using_predefined_azure_pipeline_vari",
-                        detail="Expected to find SYSTEM_PULLREQUEST_SOURCEBRANCH and SYSTEM_PULLREQUEST_TARGETBRANCHNAME"
-                        + " | "
-                        + "Ensure this is runnning in a Pull Request pipeline",
+                    message = (
+                        "Expected to find GITHUB_HEAD_REF and GITHUB_BASE_REF"
+                        " | Ensure this is running in a Pull Request pipeline"
                     )
-                    raise KeyError
+                    logger.critical(
+                        "could_not_identify_source_and_target_branch",
+                        detail=message,
+                    )
+                    raise Exception(message)
+
+                repo.remotes.origin.fetch()
 
                 source_branch = source_branch.replace("refs/heads/", "")
                 source_branch = "origin/" + source_branch
