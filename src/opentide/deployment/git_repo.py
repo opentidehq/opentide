@@ -3,7 +3,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from opentide.core.errors import Errors
 from opentide.core.registry import OpenTide
 from opentide.deployment.git_backend import DulwichRepo, open_repo
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
@@ -180,6 +179,19 @@ def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
     return list(modified_rule_scope(plan).files)
 
 
+def _not_a_ci_diff_plan(plan: DeploymentStrategy) -> Exception:
+    return Exception(
+        f"Deployment plan {plan.name} is not a CI diff plan. Use STAGING, PRODUCTION, or FULL."
+    )
+
+
+def _require_origin_ref(repo: DulwichRepo, ref: str) -> None:
+    try:
+        repo._resolve_sha(ref)
+    except KeyError:
+        raise Exception(f"Could not find git ref {ref}") from None
+
+
 def diff_calculation(plan: DeploymentStrategy) -> list:
     """
     Calculates the files in scope of deployment based on the execution context.
@@ -243,18 +255,22 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                     "identified_source_and_target_branch_in_the_pull_request",
                     detail=f"source: {source_branch} -> target: {target_branch}",
                 )
+                _require_origin_ref(repo, target_branch)
+                _require_origin_ref(repo, source_branch)
                 base_commit = repo.merge_base(target_branch, source_branch)
 
-                if base_commit[0]:
+                if base_commit:
                     BASE_COMMIT = base_commit[0].hexsha
                 else:
-                    logger.critical(
-                        "could_not_identify_the_base_of_the_pull_request",
-                        detail="You may not have a sufficient Checkout Depth configuration"
-                        + " | "
-                        + "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR",
+                    message = (
+                        "You may not have a sufficient Checkout Depth configuration"
+                        " | "
+                        "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR"
                     )
-                    raise Errors
+                    logger.critical("could_not_identify_the_base_of_the_pull_request", detail=message)
+                    raise Exception(message)
+            else:
+                raise _not_a_ci_diff_plan(plan)
 
         case CIEnvironment.CIPlatforms.GitlabCI:
             logger.info("identified_gitlab_ci_as_the_ci_runtime_platform")
@@ -269,18 +285,19 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                     logger.info("currently_running_a_diff_calculation_for_merge_results")
                     for commit in repo.iter_commits():
                         if commit.hexsha == os.getenv("CI_COMMIT_BEFORE_SHA"):
-                            mr_correct_parent = commit.parents[1]
-                            logger.info(
-                                "current_evaluating_commit_and_found_parent",
-                                detail=str(f"{commit.hexsha} | {commit.message}")
-                                + " | "
-                                + str(str(mr_correct_parent)),
-                            )
-                            LATEST_COMMIT = mr_correct_parent.hexsha
+                            if len(commit.parents) > 1:
+                                mr_correct_parent = commit.parents[1]
+                                logger.info(
+                                    "current_evaluating_commit_and_found_parent",
+                                    detail=str(f"{commit.hexsha} | {commit.message}")
+                                    + " | "
+                                    + str(str(mr_correct_parent)),
+                                )
+                                LATEST_COMMIT = mr_correct_parent.hexsha
                             break
             else:
                 logger.critical("illegal_deployment_plan")
-                raise KeyError
+                raise _not_a_ci_diff_plan(plan)
 
         case CIEnvironment.CIPlatforms.AzurePipeline:
             logger.info("identified_azure_pipeline_as_the_ci_runtime_platform")
@@ -294,19 +311,22 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                     return []
 
             elif plan is DeploymentStrategy.STAGING:
-                repo.remotes.origin.fetch()
                 source_branch = os.getenv("SYSTEM_PULLREQUEST_SOURCEBRANCH")
                 target_branch = os.getenv("SYSTEM_PULLREQUEST_TARGETBRANCHNAME")
 
                 if not source_branch or not target_branch:
+                    message = (
+                        "Expected to find SYSTEM_PULLREQUEST_SOURCEBRANCH and "
+                        "SYSTEM_PULLREQUEST_TARGETBRANCHNAME"
+                        " | Ensure this is running in a Pull Request pipeline"
+                    )
                     logger.critical(
                         "could_not_identify_source_and_target_branch_using_predefined_azure_pipeline_vari",
-                        detail="Expected to find SYSTEM_PULLREQUEST_SOURCEBRANCH and SYSTEM_PULLREQUEST_TARGETBRANCHNAME"
-                        + " | "
-                        + "Ensure this is runnning in a Pull Request pipeline",
+                        detail=message,
                     )
-                    raise KeyError
+                    raise Exception(message)
 
+                repo.remotes.origin.fetch()
                 source_branch = source_branch.replace("refs/heads/", "")
                 source_branch = "origin/" + source_branch
                 target_branch = "origin/" + target_branch
@@ -314,27 +334,28 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                     "identified_source_and_target_branch_in_the_pull_request",
                     detail=f"source: {source_branch} -> target: {target_branch}",
                 )
+                _require_origin_ref(repo, target_branch)
+                _require_origin_ref(repo, source_branch)
                 base_commit = repo.merge_base(target_branch, source_branch)
 
-                if base_commit[0]:
+                if base_commit:
                     BASE_COMMIT = base_commit[0].hexsha
                 else:
-                    logger.critical(
-                        "could_not_identify_the_base_of_the_pull_request",
-                        detail="You may not have a sufficient OpenTide.Repo.Checkout.Depth configuration"
-                        + " | "
-                        + "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR",
+                    message = (
+                        "You may not have a sufficient OpenTide.Repo.Checkout.Depth configuration"
+                        " | "
+                        "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR"
                     )
-                    raise Errors
+                    logger.critical("could_not_identify_the_base_of_the_pull_request", detail=message)
+                    raise Exception(message)
 
             else:
                 logger.critical("illegal_deployment_plan")
-                raise KeyError
+                raise _not_a_ci_diff_plan(plan)
 
         case _:
             logger.critical("illegal_ci_environment_detected", detail=str(TARGET_CI))
-
-            raise Exception
+            raise Exception(f"Unsupported CI environment {TARGET_CI}")
 
     logger.info(
         "setting_source_and_target_commit_for_the_diff_calculation_to",
@@ -364,6 +385,14 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
     if not source_commit:
         logger.critical("no_source_commit_could_be_identified")
         raise Exception("No Source Commit Found")
+
+    tip_names = {
+        CIEnvironment.CIPlatforms.GitHubActions: "GITHUB_SHA",
+        CIEnvironment.CIPlatforms.GitlabCI: "CI_COMMIT_SHA",
+        CIEnvironment.CIPlatforms.AzurePipeline: "BUILD_SOURCEVERSION",
+    }
+    if not LATEST_COMMIT:
+        raise Exception(f"{tip_names[TARGET_CI]} is required to compute the changed rules")
 
     latest_commit = repo.commit(LATEST_COMMIT)
     diff = source_commit.diff(latest_commit)
