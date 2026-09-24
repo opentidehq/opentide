@@ -343,17 +343,20 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
         source_commit = repo.commit(BASE_COMMIT)
     except Exception:
         logger.info("could_not_find_source_commit_in_current_branch_trying_iter_commits_method")
-        remote_refs = repo.remote().refs
+        try:
+            remote_refs = repo.remote().refs
 
-        for refs in remote_refs:
-            logger.info("info", detail=refs.name)
+            for refs in remote_refs:
+                logger.info("info", detail=refs.name)
 
-        for commit in repo.iter_commits("origin/main"):
-            logger.info("currently_evaluating", detail=f"{commit.message}")
-            if commit.hexsha == BASE_COMMIT:
-                source_commit = commit
-                logger.info("found_source_commit", detail=f"{commit.hexsha} | {commit.message}")
-                break
+            for commit in repo.iter_commits("origin/main"):
+                logger.info("currently_evaluating", detail=f"{commit.message}")
+                if commit.hexsha == BASE_COMMIT:
+                    source_commit = commit
+                    logger.info("found_source_commit", detail=f"{commit.hexsha} | {commit.message}")
+                    break
+        except Exception:
+            logger.info("could_not_walk_origin_main_for_the_source_commit")
 
     if not source_commit:
         logger.critical("no_source_commit_could_be_identified")

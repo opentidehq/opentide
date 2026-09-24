@@ -171,10 +171,16 @@ class DulwichRepo:
         ref_bytes = _normalize_ref(ref)
         if ref_bytes == b"HEAD":
             return self._repo.head()
-        try:
-            return self._repo.lookup_ref(ref_bytes)
-        except KeyError:
-            return self._repo.lookup_ref(ref.encode("utf-8"))
+        candidates = [ref_bytes]
+        raw = ref.encode("utf-8")
+        if raw != ref_bytes:
+            candidates.append(raw)
+        for candidate in candidates:
+            try:
+                return self._repo.refs[candidate]
+            except KeyError:
+                continue
+        raise KeyError(ref)
 
     def iter_commits(self, ref: str | None = None, max_count: int | None = None) -> Iterator[CommitInfo]:
         start = [self._resolve_sha(ref)] if ref is not None else [self._repo.head()]
