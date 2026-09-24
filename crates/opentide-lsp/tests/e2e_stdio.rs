@@ -167,8 +167,30 @@ fn initialize_and_analyze_kql() {
         }),
     );
     assert!(
-        sig["result"].is_object() || sig["result"].is_null(),
+        sig["result"].is_null() || sig["result"].is_object(),
         "{sig}"
+    );
+    lsp.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": "file:///tmp/sample.kql" },
+            "contentChanges": [{ "text": "SecurityEvent | where ago(" }]
+        }),
+    );
+    let _ = lsp.read();
+    let ago = lsp.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": "file:///tmp/sample.kql" },
+            "position": { "line": 0, "character": 26 }
+        }),
+    );
+    let label = ago["result"]["signatures"][0]["label"]
+        .as_str()
+        .unwrap_or("");
+    assert!(
+        label.contains("ago("),
+        "signature must be an object, got {ago}"
     );
 
     let tokens = lsp.request(
@@ -455,4 +477,110 @@ fn highlight_html_contains_spans() {
     );
     let html = String::from_utf8_lossy(&out.stdout);
     assert!(html.contains("<span class=\"keyword\">") && html.contains("operator-pipe"));
+}
+
+#[test]
+fn tide_structure_methods_are_not_whole_buffer_stubs() {
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": {}, "rootUri": "file:///tmp" }),
+    );
+    lsp.notify("initialized", json!({}));
+    let yaml = "name: Sentinel Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: clear\ndescription: |\n  hello\n  world\n";
+    let uri = "file:///tmp/struct-rule.yaml";
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "opentide-yaml",
+                "version": 1,
+                "text": yaml
+            }
+        }),
+    );
+    let _ = lsp.read();
+
+    let folds = lsp.request(
+        "textDocument/foldingRange",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let ranges = folds["result"].as_array().unwrap();
+    assert!(ranges.len() > 1, "{folds}");
+    assert!(
+        ranges
+            .iter()
+            .all(|r| !(r["startLine"] == 0 && r["endLine"].as_u64().unwrap() >= 4)),
+        "folding must not be one whole-buffer region: {folds}"
+    );
+
+    let sel = lsp.request(
+        "textDocument/selectionRange",
+        json!({
+            "textDocument": { "uri": uri },
+            "positions": [{ "line": 2, "character": 4 }]
+        }),
+    );
+    let parent_end = sel["result"][0]["parent"]["range"]["end"]["line"]
+        .as_u64()
+        .unwrap();
+    assert!(
+        parent_end < 5,
+        "selection parent must be the metadata block, got {sel}"
+    );
+
+    let symbols = lsp.request("workspace/symbol", json!({ "query": "Sentinel Rule" }));
+    let range = &symbols["result"][0]["location"]["range"];
+    assert_eq!(range["start"]["line"], 0);
+    assert!(
+        range["end"]["character"].as_u64().unwrap() > range["start"]["character"].as_u64().unwrap()
+    );
+
+    let actions = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": { "start": { "line": 4, "character": 0 }, "end": { "line": 4, "character": 4 } }
+        }),
+    );
+    assert_eq!(actions["result"].as_array().unwrap().len(), 0, "{actions}");
+
+    lsp.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": uri },
+            "contentChanges": [
+                { "range": { "start": { "line": 0, "character": 6 }, "end": { "line": 0, "character": 6 } }, "text": "X" },
+                { "range": { "start": { "line": 0, "character": 7 }, "end": { "line": 0, "character": 7 } }, "text": "Y" }
+            ]
+        }),
+    );
+    let _ = lsp.read();
+    let after = lsp.request("workspace/symbol", json!({ "query": "XYSentinel" }));
+    assert!(
+        !after["result"].as_array().unwrap().is_empty(),
+        "both incremental edits must apply, got {after}"
+    );
+
+    lsp.notify(
+        "textDocument/didClose",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let closed = lsp.read();
+    assert_eq!(closed["method"], "textDocument/publishDiagnostics");
+    assert!(
+        closed["params"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    let pull = lsp.request(
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    assert!(
+        pull["result"]["items"].as_array().unwrap().is_empty(),
+        "{pull}"
+    );
 }
