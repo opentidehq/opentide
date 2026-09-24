@@ -60,6 +60,10 @@ pub struct HighlightSpec {
 
 impl HighlightSpec {
     pub fn load() -> Result<Self, HighlightError> {
+        static SPEC: OnceLock<HighlightSpec> = OnceLock::new();
+        if let Some(spec) = SPEC.get() {
+            return Ok(spec.clone());
+        }
         let file: SpecFile =
             toml::from_str(SPEC_TOML).map_err(|e| HighlightError::Spec(e.to_string()))?;
         if file.meta.legend.is_empty() {
@@ -72,12 +76,13 @@ impl HighlightSpec {
                 )));
             }
         }
-        Ok(Self {
+        let spec = Self {
             id: file.meta.id,
             version: file.meta.version,
             legend: file.meta.legend,
             captures: file.captures,
-        })
+        };
+        Ok(SPEC.get_or_init(|| spec.clone()).clone())
     }
 
     pub fn token_index(&self, capture: &str) -> Result<u32, HighlightError> {

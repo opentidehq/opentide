@@ -7,6 +7,7 @@ use opentide_core::{
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
+use std::sync::OnceLock;
 use tree_sitter::Node;
 
 const COMMANDS_TOML: &str = include_str!("../../../catalogs/spl/commands.toml");
@@ -123,6 +124,11 @@ impl Catalog {
         }
     }
 
+    pub fn cached() -> &'static Self {
+        static CATALOG: OnceLock<Catalog> = OnceLock::new();
+        CATALOG.get_or_init(Self::load)
+    }
+
     pub fn command(&self, name: &str) -> Option<&CommandRow> {
         self.commands
             .iter()
@@ -196,7 +202,7 @@ pub struct AnalyzeResult {
 }
 
 pub fn analyze(source: &str) -> AnalyzeResult {
-    let catalog = Catalog::load();
+    let catalog = Catalog::cached();
     let spec = HighlightSpec::load().expect("spec");
     let mut diagnostics = Vec::new();
     let Some(tree) = ts_parse(LanguageId::Spl, source) else {
@@ -216,7 +222,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
             node_range(source, tree.root_node()),
         ));
     }
-    collect_unknown_commands(tree.root_node(), source, &catalog, &mut diagnostics);
+    collect_unknown_commands(tree.root_node(), source, catalog, &mut diagnostics);
     let tokens = highlight_tree(&spec, source, tree.root_node()).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
@@ -269,7 +275,7 @@ fn highlight_tree(
     source: &str,
     root: Node,
 ) -> Result<Vec<HighlightToken>, opentide_highlight::HighlightError> {
-    let catalog = Catalog::load();
+    let catalog = Catalog::cached();
     match opentide_syntax::query_captures(
         LanguageId::Spl,
         source,
@@ -437,7 +443,7 @@ fn last_command(before: &str) -> Option<String> {
 }
 
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
-    let catalog = Catalog::load();
+    let catalog = Catalog::cached();
     let before = &source[..offset.min(source.len())];
     let trimmed = before.trim_end();
     if trimmed.ends_with('`') && !trimmed.ends_with("```") {
@@ -546,7 +552,7 @@ fn spl_word_at(source: &str, offset: usize) -> Option<String> {
 }
 
 pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> {
-    let catalog = Catalog::load();
+    let catalog = Catalog::cached();
     let offset = {
         let mut line = 0u32;
         let mut col = 0u32;
@@ -625,7 +631,7 @@ pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> 
 }
 
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
-    let catalog = Catalog::load();
+    let catalog = Catalog::cached();
     let before = &source[..offset.min(source.len())];
     if let Some(cmd) = last_command(before) {
         if cmd == "tstats" {

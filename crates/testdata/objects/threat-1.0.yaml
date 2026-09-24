@@ -11,10 +11,14 @@ metadata:
 
 threat:
   description: Simulated threat actor for conformance fixtures
-  severity: High
-  impact: Data Breach
-  leverage: High
-  viability: High
+  severity: Substantial incident
+  impact:
+    - Data Breach
+    - Identity Theft
+  leverage:
+    - Information Gathering
+    - Elevation of privilege
+  viability: Likely
   terrain: Endpoint workstations and user devices.
   surface:
     - Windows::Desktop

@@ -1,5 +1,7 @@
 # Coverage gap: `catalogs/kql` vs Microsoft Learn inventory
 
+Historical inventory (2026-09-15). The punch list is [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md).
+
 This file compares the machine-readable catalogs under [`/workspace/catalogs/kql/`](../../catalogs/kql/) with the Microsoft Learn–backed inventory in [`/workspace/docs/kql/`](./), plus grammar / highlights / LSP surface gaps.
 
 **Snapshot date:** 2026-09-15 (catalogs already expanded; replaces the stale “16 operators / 8 functions” counts).

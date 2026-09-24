@@ -17,4 +17,3 @@ classifiers = [
 [tool.maturin]
 manifest-path = "crates/opentide-lsp/Cargo.toml"
 bindings = "bin"
-python-source = "python"

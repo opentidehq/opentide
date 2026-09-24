@@ -559,6 +559,8 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         }
     }
 
+    diagnose_catalog_values(&object_type, &object, input.source, &mut diagnostics);
+
     let uuid = object
         .metadata
         .as_ref()
@@ -1105,6 +1107,111 @@ fn tide_key_capture_at_or(field: Option<&TideField>) -> &'static str {
     }
 }
 
+fn diagnose_catalog_values(
+    object_type: &str,
+    object: &TideObject,
+    source: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if let Some(criticality) = &object.criticality {
+        push_unknown_enum(object_type, "criticality", criticality, source, diagnostics);
+    }
+    let Some(threat) = object.threat.as_ref().and_then(|v| v.as_mapping()) else {
+        return;
+    };
+    for key in ["impact", "leverage", "severity", "viability"] {
+        let Some(value) = threat.get(serde_yaml::Value::String(key.to_string())) else {
+            continue;
+        };
+        let path = format!("threat.{key}");
+        diagnose_field_value(object_type, &path, value, source, diagnostics);
+    }
+}
+
+fn diagnose_field_value(
+    schema: &str,
+    path: &str,
+    value: &serde_yaml::Value,
+    source: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(field) = tide_field_at(schema, path) else {
+        return;
+    };
+    let field_path: Vec<String> = path.split('.').map(str::to_string).collect();
+    if field.array {
+        match value {
+            serde_yaml::Value::Sequence(items) => {
+                if let Some(min) = field.min_items {
+                    if (items.len() as u32) < min {
+                        diagnostics.push(
+                            Diagnostic::error(
+                                codes::SCHEMA_VALIDATION,
+                                format!("{path} must contain at least {min} item"),
+                                key_range(source, path.rsplit('.').next().unwrap_or(path)),
+                            )
+                            .with_field_path(field_path.clone()),
+                        );
+                    }
+                }
+                for item in items {
+                    if let Some(text) = item.as_str() {
+                        if let Some(message) = unknown_enum(schema, path, text) {
+                            diagnostics.push(
+                                Diagnostic::error(
+                                    codes::VOCAB_UNKNOWN,
+                                    message,
+                                    key_range(source, path.rsplit('.').next().unwrap_or(path)),
+                                )
+                                .with_field_path(field_path.clone()),
+                            );
+                        }
+                    }
+                }
+            }
+            serde_yaml::Value::String(text) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        codes::SCHEMA_VALIDATION,
+                        format!(
+                            "{path} must be a YAML list of {} vocabulary names, not a single string",
+                            field.name
+                        ),
+                        key_range(source, path.rsplit('.').next().unwrap_or(path)),
+                    )
+                    .with_field_path(field_path)
+                    .with_suggestion(format!("- {text}")),
+                );
+            }
+            _ => {}
+        }
+        return;
+    }
+    if let Some(text) = value.as_str() {
+        push_unknown_enum(schema, path, text, source, diagnostics);
+    }
+}
+
+fn push_unknown_enum(
+    schema: &str,
+    path: &str,
+    value: &str,
+    source: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if let Some(message) = unknown_enum(schema, path, value) {
+        let field_path: Vec<String> = path.split('.').map(str::to_string).collect();
+        diagnostics.push(
+            Diagnostic::error(
+                codes::VOCAB_UNKNOWN,
+                message,
+                key_range(source, path.rsplit('.').next().unwrap_or(path)),
+            )
+            .with_field_path(field_path),
+        );
+    }
+}
+
 fn unknown_enum(schema: &str, path: &str, value: &str) -> Option<String> {
     let field = tide_field_at(schema, path)?;
     if field.enum_values.is_empty() || field.enum_values.iter().any(|item| item == value) {
@@ -1236,6 +1343,42 @@ configurations:
       | where EventID == 4688
       | take 1
 "#;
+
+    #[test]
+    fn scalar_impact_is_schema_validation() {
+        let src = r#"
+name: Simulated Actor
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000001
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  severity: Substantial incident
+  impact: Data Breach
+  leverage:
+    - Information Gathering
+  viability: Likely
+"#;
+        let r = analyze(AnalyzeInput {
+            path: "objects/threats/t.yaml",
+            source: src,
+            workspace: &[],
+        });
+        let diag = r
+            .diagnostics
+            .iter()
+            .find(|d| d.message.contains("threat.impact"))
+            .expect("scalar impact diagnostic");
+        assert_eq!(diag.code, codes::SCHEMA_VALIDATION);
+        assert_eq!(
+            diag.field_path.as_deref(),
+            Some(["threat".to_string(), "impact".to_string()].as_slice())
+        );
+    }
 
     #[test]
     fn language_for_field_path_table() {
