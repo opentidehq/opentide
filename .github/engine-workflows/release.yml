@@ -93,10 +93,14 @@ jobs:
           name: opentide-lsp-wheel
           path: target/wheels/*.whl
       - name: publish to PyPI
-        if: ${{ secrets.PYPI_API_TOKEN != '' }}
         env:
           MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: maturin publish -m crates/opentide-lsp/Cargo.toml
+        run: |
+          if [ -z "${MATURIN_PYPI_TOKEN}" ]; then
+            echo "PYPI_API_TOKEN is unset; the wheel is attached to the GitHub Release only"
+            exit 0
+          fi
+          maturin publish -m crates/opentide-lsp/Cargo.toml
 
   release:
     needs: [native, highlights, pypi]
