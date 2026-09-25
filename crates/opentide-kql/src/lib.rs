@@ -5,6 +5,8 @@ use opentide_core::{
     SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+mod perf;
+
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
 use std::sync::OnceLock;
@@ -523,6 +525,7 @@ pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
     collect_operator_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
     collect_function_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
     collect_table_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
+    perf::collect(tree.root_node(), source, &mut diagnostics);
 
     let tokens = highlight_tree(&spec, source, tree.root_node(), catalog).unwrap_or_default();
     AnalyzeResult {

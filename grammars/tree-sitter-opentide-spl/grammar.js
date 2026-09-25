@@ -81,6 +81,7 @@ module.exports = grammar({
         $.subsearch,
         $.field_value,
         $.string,
+        $.glob,
         $.identifier,
         $.number,
       ),
@@ -97,7 +98,7 @@ module.exports = grammar({
     case_clause: ($) => seq("CASE", "(", field("value", choice($.string, $.identifier)), ")"),
 
     value_list: ($) =>
-      seq("(", commaSep1(choice($.string, $.identifier, $.number)), ")"),
+      seq("(", commaSep1(choice($.string, $.glob, $.identifier, $.number)), ")"),
 
     subsearch: ($) => seq("[", $.pipeline, "]"),
 
@@ -368,7 +369,20 @@ module.exports = grammar({
       seq(
         field("field", $.identifier),
         "=",
-        field("value", choice($.string, $.identifier, $.number, $.value_list)),
+        field("value", choice($.string, $.glob, $.identifier, $.number, $.value_list)),
+      ),
+
+    // Search wildcards (`fail*`, `*fail`, `f*il`, bare `*`). Not part of
+    // `identifier`, so `*` in eval stays multiplication. The engine warns on
+    // bare, leading, and mid-token globs; a trailing `fail*` is fine.
+    glob: (_) =>
+      token(
+        choice(
+          "*",
+          /[A-Za-z_][A-Za-z0-9_:.]*\*[A-Za-z0-9_:.*]*/,
+          /\*[A-Za-z0-9_:.*]+/,
+          /[0-9]+(\.[0-9]+)?\*[A-Za-z0-9_:.*]*/,
+        ),
       ),
 
     expression: ($) => $.or_expression,

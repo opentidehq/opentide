@@ -273,8 +273,16 @@ pub mod codes {
     pub const KQL_UNKNOWN_TABLE: &str = "kql_unknown_table";
     pub const KQL_RENDER_NOT_VALID: &str = "kql_render_not_valid";
     pub const KQL_PARSE_ERROR: &str = "kql_parse_error";
+    pub const KQL_WHERE_NOT_FIRST: &str = "kql_where_not_first";
+    pub const KQL_UNSCOPED_SEARCH: &str = "kql_unscoped_search";
+    pub const KQL_UNSCOPED_UNION: &str = "kql_unscoped_union";
+    pub const KQL_WILDCARD_TABLE: &str = "kql_wildcard_table";
+    pub const KQL_JOIN_SUMMARIZE_BEFORE_PROJECT: &str = "kql_join_summarize_before_project";
     pub const SPL_UNKNOWN_COMMAND: &str = "spl_unknown_command";
     pub const SPL_PARSE_ERROR: &str = "spl_parse_error";
+    pub const SPL_WILDCARD: &str = "spl_wildcard";
+    pub const SPL_LEADING_NOT: &str = "spl_leading_not";
+    pub const SPL_SUBSEARCH_TRUNCATION: &str = "spl_subsearch_truncation";
     pub const CROWDSTRIKE_UNSUPPORTED: &str = "crowdstrike_unsupported";
     pub const FILENAME_SLUG: &str = "filename_slug";
     pub const MISSING_AUTHOR: &str = "missing_author";

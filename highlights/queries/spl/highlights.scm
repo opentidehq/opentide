@@ -33,6 +33,7 @@
 (function_call name: (identifier) @function)
 (field_value field: (identifier) @property)
 (assignment name: (identifier) @variable)
+(glob) @variable
 (identifier) @variable
 (string) @string
 (number) @number

@@ -5,6 +5,8 @@ use opentide_core::{
     SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+mod perf;
+
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
 use std::sync::OnceLock;
@@ -253,6 +255,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
         ));
     }
     collect_unknown_commands(tree.root_node(), source, catalog, &mut diagnostics);
+    perf::collect(source, catalog, &mut diagnostics);
     let tokens = highlight_tree(&spec, source, tree.root_node()).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
@@ -404,6 +407,7 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         | "TERM"
         | "CASE"
         | "IN" => Some("keyword"),
+        "glob" => Some("variable"),
         "identifier" => {
             if node.parent().map(|p| p.kind()) == Some("function_call") {
                 Some("function")

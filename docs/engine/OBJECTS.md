@@ -35,8 +35,16 @@ Query extras (engine may add these inside `query: |`):
 - `kql_unknown_table`
 - `kql_render_not_valid`
 - `kql_parse_error`
+- `kql_where_not_first`
+- `kql_unscoped_search`
+- `kql_unscoped_union`
+- `kql_wildcard_table`
+- `kql_join_summarize_before_project`
 - `spl_unknown_command`
 - `spl_parse_error`
+- `spl_wildcard`
+- `spl_leading_not`
+- `spl_subsearch_truncation`
 - `crowdstrike_unsupported` (never faked)
 - `defender_output_columns`
 

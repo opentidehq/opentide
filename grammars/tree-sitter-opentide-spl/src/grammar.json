@@ -285,6 +285,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "glob"
+        },
+        {
+          "type": "SYMBOL",
           "name": "identifier"
         },
         {
@@ -401,6 +405,10 @@
                 },
                 {
                   "type": "SYMBOL",
+                  "name": "glob"
+                },
+                {
+                  "type": "SYMBOL",
                   "name": "identifier"
                 },
                 {
@@ -424,6 +432,10 @@
                       {
                         "type": "SYMBOL",
                         "name": "string"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "glob"
                       },
                       {
                         "type": "SYMBOL",
@@ -2075,6 +2087,10 @@
               },
               {
                 "type": "SYMBOL",
+                "name": "glob"
+              },
+              {
+                "type": "SYMBOL",
                 "name": "identifier"
               },
               {
@@ -2089,6 +2105,30 @@
           }
         }
       ]
+    },
+    "glob": {
+      "type": "TOKEN",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "*"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[A-Za-z_][A-Za-z0-9_:.]*\\*[A-Za-z0-9_:.*]*"
+          },
+          {
+            "type": "PATTERN",
+            "value": "\\*[A-Za-z0-9_:.*]+"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[0-9]+(\\.[0-9]+)?\\*[A-Za-z0-9_:.*]*"
+          }
+        ]
+      }
     },
     "expression": {
       "type": "SYMBOL",

@@ -1,0 +1,31 @@
+name: Leading Wildcard
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000057
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: analyst
+  organisation: opentide
+
+description: |
+  SPL leading wildcard in the search filter.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  splunk:
+    enabled: true
+    name: Leading Wildcard
+    status: STAGING
+    search: |
+      index=main sourcetype=wineventlog *fail
+    cron_schedule: "0 * * * *"
