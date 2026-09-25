@@ -1665,7 +1665,7 @@ threat:
             workspace: &[],
         });
         assert!(
-            r.tokens.iter().any(|t| t.capture == "tide.keyword"),
+            r.tokens.iter().any(|t| t.capture == "tide.property"),
             "{:?}",
             r.tokens
                 .iter()
@@ -1899,7 +1899,7 @@ configurations:
         assert!(
             pairs
                 .iter()
-                .any(|(c, t)| *c == "tide.keyword" && *t == "defender_for_endpoint"),
+                .any(|(c, t)| *c == "tide.property" && *t == "defender_for_endpoint"),
             "{pairs:?}"
         );
         assert!(

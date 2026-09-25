@@ -249,19 +249,13 @@ def flatten(
 
 
 def capture_for(path: str) -> str:
-    """HighlightSpec capture. JSON Schema has no keyword/property split.
+    """HighlightSpec capture for a YAML key.
 
-    Root keys and platform blocks directly under ``configurations`` are section
-    headers. ``response.procedure`` is the response section header. Every other
-    key is a property, including nested objects such as ``alert``.
+    Every schema key uses one capture. Nesting must not recolor the key.
+    Values stay on their own captures (markdown, enums, UUIDs, injected
+    KQL/SPL). ``tide.keyword`` stays in HighlightSpec and is not assigned.
     """
-    if "." not in path:
-        return "tide.keyword"
-    parent, name = path.rsplit(".", 1)
-    if parent == "configurations" or parent.endswith(".configurations"):
-        return "tide.keyword"
-    if name == "procedure" and (parent == "response" or parent.endswith(".response")):
-        return "tide.keyword"
+    del path
     return "tide.property"
 
 
@@ -467,23 +461,36 @@ def array_items(spec: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def write_highlights(nodes: list[dict[str, Any]]) -> None:
-    keywords = sorted({n["name"] for n in nodes if n["capture"] == "tide.keyword"})
-    properties = sorted({n["name"] for n in nodes if n["capture"] == "tide.property"})
+    groups = [
+        (
+            "tide.property",
+            sorted({n["name"] for n in nodes if n["capture"] == "tide.property"}),
+        ),
+        (
+            "tide.keyword",
+            sorted({n["name"] for n in nodes if n["capture"] == "tide.keyword"}),
+        ),
+    ]
+    queries = []
+    for capture, names in groups:
+        if not names:
+            continue
+        queries.append(
+            f"""\
+((block_mapping_pair
+  key: (_) @{capture})
+ (#match? @{capture} "^({alt(names)})$"))
+"""
+        )
     text = f"""\
 ; Tide YAML object highlighting. Injected KQL/SPL tokens are remapped onto
 ; the host document by opentide-highlight (not by this query).
 ; Generated key lists come from catalogs/tide/generated/fields.json
 ; (opentide {EXPECTED_VERSION}). Runtime highlighting is path-aware and does not
-; use this query. Capture names must stay a subset of HighlightSpec.
+; use this query. Every schema key uses tide.property so nesting does not
+; recolor the key. Capture names must stay a subset of HighlightSpec.
 
-((block_mapping_pair
-  key: (_) @tide.keyword)
- (#match? @tide.keyword "^({alt(keywords)})$"))
-
-((block_mapping_pair
-  key: (_) @tide.property)
- (#match? @tide.property "^({alt(properties)})$"))
-
+{''.join(queries)}
 (comment) @comment
 """
     HIGHLIGHTS.write_text(text, encoding="utf-8")

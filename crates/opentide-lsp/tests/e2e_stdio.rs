@@ -454,7 +454,7 @@ fn cli_analyze_and_highlight_never_emit_jsonrpc() {
         .iter()
         .map(|t| t["capture"].as_str().unwrap())
         .collect();
-    assert!(captures.contains(&"tide.keyword"));
+    assert!(captures.contains(&"tide.property"));
     assert!(
         captures
             .iter()

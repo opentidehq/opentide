@@ -547,31 +547,23 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         "comment": "capture:number",
     }));
     if language == LanguageId::TideYaml {
-        let keyword_keys = tide_keys_for_capture("tide.keyword");
-        let property_keys = tide_keys_for_capture("tide.property");
-        if let Some(maps) = spec.captures.get("tide.keyword") {
-            let joined = keyword_keys
-                .iter()
-                .map(|k| regex::escape(k))
-                .collect::<Vec<_>>()
-                .join("|");
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": format!("(?m)^\\s*(?:{joined})\\s*:"),
-                "comment": "capture:tide.keyword",
-            }));
-        }
-        if let Some(maps) = spec.captures.get("tide.property") {
-            let joined = property_keys
-                .iter()
-                .map(|k| regex::escape(k))
-                .collect::<Vec<_>>()
-                .join("|");
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": format!("(?m)^\\s*(?:{joined})\\s*:"),
-                "comment": "capture:tide.property",
-            }));
+        for capture in ["tide.property", "tide.keyword"] {
+            let keys = tide_keys_for_capture(capture);
+            if keys.is_empty() {
+                continue;
+            }
+            if let Some(maps) = spec.captures.get(capture) {
+                let joined = keys
+                    .iter()
+                    .map(|k| regex::escape(k))
+                    .collect::<Vec<_>>()
+                    .join("|");
+                patterns.push(serde_json::json!({
+                    "name": maps.tm,
+                    "match": format!("(?m)^\\s*(?:{joined})\\s*:"),
+                    "comment": format!("capture:{capture}"),
+                }));
+            }
         }
         if let Some(maps) = spec.captures.get("markdown.heading") {
             patterns.push(serde_json::json!({
@@ -729,12 +721,23 @@ mod tests {
         assert!(spec.token_index("keyword").is_ok());
         assert!(!load_tide_fields().is_empty());
         assert_eq!(tide_catalog_version(), "0.5.0");
-        assert_eq!(tide_key_capture("description"), "tide.keyword");
+        assert_eq!(tide_key_capture("description"), "tide.property");
         assert_eq!(tide_key_capture("alert"), "tide.property");
-        assert_eq!(tide_key_capture_at("rule", "description"), "tide.keyword");
+        assert_eq!(tide_key_capture("response"), "tide.property");
+        assert_eq!(tide_key_capture_at("rule", "description"), "tide.property");
+        assert_eq!(
+            tide_key_capture_at("rule", "response.alert_severity"),
+            "tide.property"
+        );
         assert_eq!(
             tide_key_capture_at("rule", "configurations.sentinel.alert"),
             "tide.property"
+        );
+        assert!(
+            load_tide_fields()
+                .iter()
+                .all(|field| field.capture == "tide.property"),
+            "YAML keys share one capture; nesting must not recolor them"
         );
         assert!(tide_field_is_markdown_at("rule", "description"));
         assert!(tide_field_is_markdown_at(
@@ -880,7 +883,7 @@ mod tm_language_stub_bug {
         let patterns = tm["patterns"].as_array().unwrap();
         let key = patterns
             .iter()
-            .find(|p| p["comment"] == "capture:tide.keyword")
+            .find(|p| p["comment"] == "capture:tide.property")
             .unwrap();
         let m = key["match"].as_str().unwrap();
         assert!(

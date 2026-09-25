@@ -69,7 +69,7 @@ configurations:
 "#;
     golden("tide", "sentinel_injection", LanguageId::TideYaml, src);
     let result = highlight(LanguageId::TideYaml, src);
-    assert!(result.tokens.iter().any(|t| t.capture == "tide.keyword"));
+    assert!(result.tokens.iter().any(|t| t.capture == "tide.property"));
     assert!(
         result
             .tokens

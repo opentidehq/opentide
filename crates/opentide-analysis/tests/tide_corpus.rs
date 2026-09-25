@@ -54,7 +54,7 @@ fn sentinel_rule_has_injected_kql_tokens_and_no_unknown_operator() {
             text,
         },
     );
-    assert!(r.tokens.iter().any(|t| t.capture == "tide.keyword"));
+    assert!(r.tokens.iter().any(|t| t.capture == "tide.property"));
     assert!(
         r.tokens
             .iter()
@@ -166,7 +166,7 @@ fn library_rule_is_analyzable() {
             text: text.clone(),
         },
     );
-    assert!(r.tokens.iter().any(|t| t.capture == "tide.keyword"));
+    assert!(r.tokens.iter().any(|t| t.capture == "tide.property"));
     assert!(
         r.tokens.iter().any(|t| t.capture == "type"
             && text.get(t.span.start..t.span.end) == Some("DeviceNetworkEvents")),
