@@ -8,7 +8,7 @@ It is a **docs inventory**, not a grammar. The engine still owns parsing. Catalo
 - [`catalogs/spl/fields.toml`](../../catalogs/spl/fields.toml) — default + CIM + raw Windows fields
 - [`catalogs/spl/datamodels.toml`](../../catalogs/spl/datamodels.toml) — `tstats from datamodel=`
 - [`catalogs/spl/macros.toml`](../../catalogs/spl/macros.toml) — ESCU / ES macros (never expanded)
-- [`catalogs/spl/command-options.toml`](../../catalogs/spl/command-options.toml) — `tstats` option schema
+- [`catalogs/spl/command-options.toml`](../../catalogs/spl/command-options.toml) — command arguments for completion and signature help
 
 Runtime model: [`DESIGN.md`](DESIGN.md).
 
@@ -111,8 +111,8 @@ Measured from the tables in this directory (aliases and dual-kind rows included;
 | --- | --- | --- |
 | Commands | **~115** unique primary table names (+ aliases / adjacent) | **118** `[[commands]]` |
 | Eval functions | **107** (93 table rows + 14 trig) | **109** `kind = "eval"` (includes trig + dual-use math) |
-| Stats aggregations | **35** primary table names (+ aliases) | **35** `kind = "aggregate"` (includes `c` / `distinct_count` / `p` / `percentile`) |
-| Functions total | — | **144** (`eval` + `aggregate`) |
+| Stats aggregations | **35** primary table names (+ aliases) | **39** `kind = "aggregate"` (includes `sum` / `avg` / `min` / `max` plus `c` / `distinct_count` / `p` / `percentile`) |
+| Functions total | — | **148** (`eval` + `aggregate`) |
 
 Remaining gaps (including ~32 rare Search Reference commands still absent): [coverage-gap.md](coverage-gap.md), [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md).
 

@@ -105,7 +105,7 @@ Trig / hyperbolic (**done in catalog**): `acos` `acosh` `asin` `asinh` `atan` `a
 | Name | Status |
 | --- | --- |
 | `c` `distinct_count` `p` `percentile` | **Added** as aggregate alias rows |
-| `sum` `avg` `min` `max` | still only `kind = "eval"` (name-unique `function()` lookup) |
+| `sum` `avg` `min` `max` | eval and aggregate rows; stats-family hover uses the aggregate row |
 
 ### 4. Syntax / LSP modeling
 

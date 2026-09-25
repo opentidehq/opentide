@@ -36,6 +36,10 @@ pub struct FunctionRow {
     pub name: String,
     pub kind: Option<String>,
     pub docs: Option<String>,
+    #[serde(default)]
+    pub signature: Option<String>,
+    #[serde(default)]
+    pub citation: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -139,6 +143,32 @@ impl Catalog {
         self.functions
             .iter()
             .find(|f| f.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Eval and aggregate rows can share a name (`sum`, `avg`, `min`, `max`).
+    /// `aggregate` selects the stats/chart form; otherwise the eval form wins.
+    pub fn function_in_context(&self, name: &str, aggregate: bool) -> Option<&FunctionRow> {
+        let mut fallback = None;
+        for f in &self.functions {
+            if !f.name.eq_ignore_ascii_case(name) {
+                continue;
+            }
+            let is_agg = f.kind.as_deref() == Some("aggregate");
+            if fallback.is_none() {
+                fallback = Some(f);
+            }
+            if aggregate == is_agg {
+                return Some(f);
+            }
+        }
+        fallback
+    }
+
+    pub fn options_for<'a>(&'a self, command: &str) -> Vec<&'a CommandOption> {
+        self.options
+            .iter()
+            .filter(|o| o.command.eq_ignore_ascii_case(command))
+            .collect()
     }
 
     pub fn suggest_command(&self, name: &str) -> Option<String> {
@@ -442,6 +472,91 @@ fn last_command(before: &str) -> Option<String> {
     if op.is_empty() { None } else { Some(op) }
 }
 
+const AGGREGATE_COMMANDS: &[&str] = &[
+    "stats",
+    "eventstats",
+    "streamstats",
+    "tstats",
+    "chart",
+    "timechart",
+    "mstats",
+    "sistats",
+    "sichart",
+    "sitimechart",
+];
+
+fn aggregate_command(cmd: &str) -> bool {
+    AGGREGATE_COMMANDS.contains(&cmd)
+}
+
+/// `bucket` is the Search Reference alias of `bin` and takes the same arguments.
+fn argument_command(cmd: &str) -> &str {
+    match cmd {
+        "bucket" => "bin",
+        _ => cmd,
+    }
+}
+
+fn eval_command(cmd: &str) -> bool {
+    matches!(cmd, "eval" | "where" | "fieldformat")
+}
+
+fn field_command(cmd: &str) -> bool {
+    matches!(
+        cmd,
+        "tstats" | "stats" | "where" | "table" | "fields" | "eval"
+    )
+}
+
+fn option_is_clause(opt: &CommandOption) -> bool {
+    let name = opt.name.to_ascii_lowercase();
+    matches!(
+        name.as_str(),
+        "from"
+            | "where"
+            | "by"
+            | "over"
+            | "output"
+            | "outputnew"
+            | "search"
+            | "flat"
+            | "acceleration_search"
+            | "search_string"
+            | "flat_string"
+            | "acceleration_search_string"
+            | "lookup"
+            | "savedsearch"
+            | "assignment"
+    ) || (opt.command.eq_ignore_ascii_case("from") && name == "datamodel")
+}
+
+fn option_fragment(opt: &CommandOption) -> String {
+    if option_is_clause(opt) {
+        format!("[{}]", opt.name)
+    } else {
+        format!("[{}=]", opt.name)
+    }
+}
+
+fn assigned_option<'a>(before: &str, catalog: &'a Catalog, cmd: &str) -> Option<&'a CommandOption> {
+    let trimmed = before.trim_end();
+    if !trimmed.ends_with('=') {
+        return None;
+    }
+    let left = trimmed[..trimmed.len() - 1].trim_end();
+    let name = left
+        .rsplit(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .next()
+        .unwrap_or("");
+    if name.is_empty() {
+        return None;
+    }
+    catalog
+        .options_for(argument_command(cmd))
+        .into_iter()
+        .find(|o| o.name.eq_ignore_ascii_case(name) && !o.values.is_empty())
+}
+
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     let catalog = Catalog::cached();
     let before = &source[..offset.min(source.len())];
@@ -475,43 +590,112 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
             .collect();
     }
     if let Some(cmd) = last_command(before) {
-        if matches!(
-            cmd.as_str(),
-            "tstats" | "stats" | "where" | "table" | "fields" | "eval"
-        ) {
+        if let Some(opt) = assigned_option(before, catalog, &cmd) {
+            return opt
+                .values
+                .iter()
+                .map(|v| {
+                    complete_item(
+                        v.clone(),
+                        "keyword",
+                        Some(format!("{cmd} {}=", opt.name)),
+                        opt.docs.clone(),
+                    )
+                })
+                .collect();
+        }
+        let opts = catalog.options_for(argument_command(&cmd));
+        let wants_fields = field_command(&cmd);
+        let wants_agg = aggregate_command(&cmd);
+        let wants_eval = eval_command(&cmd);
+        if !opts.is_empty() || wants_fields || wants_agg || wants_eval {
             let mut items = Vec::new();
-            if let Some(dm) = catalog.active_datamodel(source) {
-                for f in &dm.fields {
+            let mut seen = std::collections::BTreeSet::new();
+            for opt in &opts {
+                if seen.insert(opt.name.to_ascii_lowercase()) {
                     items.push(complete_item(
-                        format!("{}.{}", dm.prefix, f),
-                        "column",
-                        Some(format!("{} field", dm.name)),
-                        catalog.field(f).and_then(|row| row.docs.clone()),
-                    ));
-                    items.push(complete_item(
-                        f.clone(),
-                        "column",
-                        Some(format!("{} field", dm.name)),
-                        catalog.field(f).and_then(|row| row.docs.clone()),
+                        opt.name.clone(),
+                        "keyword",
+                        opt.docs.clone(),
+                        opt.citation.clone(),
                     ));
                 }
             }
-            for field in &catalog.fields {
-                items.push(complete_item(
-                    field.name.clone(),
-                    "column",
-                    Some(field.kind.clone().unwrap_or_else(|| "field".into())),
-                    field.docs.clone(),
-                ));
+            if wants_agg {
+                for f in catalog
+                    .functions
+                    .iter()
+                    .filter(|f| f.kind.as_deref() == Some("aggregate"))
+                {
+                    if seen.insert(f.name.to_ascii_lowercase()) {
+                        items.push(complete_item(
+                            f.name.clone(),
+                            "function",
+                            f.signature.clone().or(f.docs.clone()),
+                            f.docs.clone(),
+                        ));
+                    }
+                }
+            } else if wants_eval {
+                for f in catalog
+                    .functions
+                    .iter()
+                    .filter(|f| f.kind.as_deref() != Some("aggregate"))
+                {
+                    if seen.insert(f.name.to_ascii_lowercase()) {
+                        items.push(complete_item(
+                            f.name.clone(),
+                            "function",
+                            f.signature.clone().or(f.docs.clone()),
+                            f.docs.clone(),
+                        ));
+                    }
+                }
+            }
+            if wants_fields {
+                if let Some(dm) = catalog.active_datamodel(source) {
+                    for f in &dm.fields {
+                        let prefixed = format!("{}.{}", dm.prefix, f);
+                        if seen.insert(prefixed.to_ascii_lowercase()) {
+                            items.push(complete_item(
+                                prefixed,
+                                "column",
+                                Some(format!("{} field", dm.name)),
+                                catalog.field(f).and_then(|row| row.docs.clone()),
+                            ));
+                        }
+                        if seen.insert(f.to_ascii_lowercase()) {
+                            items.push(complete_item(
+                                f.clone(),
+                                "column",
+                                Some(format!("{} field", dm.name)),
+                                catalog.field(f).and_then(|row| row.docs.clone()),
+                            ));
+                        }
+                    }
+                }
+                for field in &catalog.fields {
+                    if seen.insert(field.name.to_ascii_lowercase()) {
+                        items.push(complete_item(
+                            field.name.clone(),
+                            "column",
+                            Some(field.kind.clone().unwrap_or_else(|| "field".into())),
+                            field.docs.clone(),
+                        ));
+                    }
+                }
             }
             if cmd == "tstats" {
                 for m in &catalog.macros {
-                    items.push(complete_item(
-                        format!("`{}`", m.name.trim_matches('`')),
-                        "macro",
-                        m.docs.clone(),
-                        m.docs.clone(),
-                    ));
+                    let label = format!("`{}`", m.name.trim_matches('`'));
+                    if seen.insert(label.to_ascii_lowercase()) {
+                        items.push(complete_item(
+                            label,
+                            "macro",
+                            m.docs.clone(),
+                            m.docs.clone(),
+                        ));
+                    }
                 }
             }
             if !items.is_empty() {
@@ -519,10 +703,19 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
             }
         }
     }
+    let mut seen = std::collections::BTreeSet::new();
     catalog
         .functions
         .iter()
-        .map(|f| complete_item(f.name.clone(), "function", f.docs.clone(), f.docs.clone()))
+        .filter(|f| seen.insert(f.name.to_ascii_lowercase()))
+        .map(|f| {
+            complete_item(
+                f.name.clone(),
+                "function",
+                f.signature.clone().or(f.docs.clone()),
+                f.docs.clone(),
+            )
+        })
         .collect()
 }
 
@@ -584,6 +777,15 @@ pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> 
         }
         return Some(md);
     }
+    if let Some(cmd) = last_command(&source[..offset]) {
+        if let Some(opt) = catalog
+            .options_for(argument_command(&cmd))
+            .into_iter()
+            .find(|o| o.name.eq_ignore_ascii_case(&word))
+        {
+            return Some(option_markdown(opt));
+        }
+    }
     if let Some(c) = catalog.command(&word) {
         let citation = c
             .citation
@@ -597,14 +799,9 @@ pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> 
             c.docs.clone().unwrap_or_default()
         ));
     }
-    if let Some(f) = catalog.function(&word) {
-        let kind = f.kind.clone().unwrap_or_else(|| "function".into());
-        return Some(format!(
-            "**{}** ({})\n\n{}",
-            f.name,
-            kind,
-            f.docs.clone().unwrap_or_default()
-        ));
+    let aggregate = last_command(&source[..offset]).is_some_and(|cmd| aggregate_command(&cmd));
+    if let Some(f) = catalog.function_in_context(&word, aggregate) {
+        return Some(function_markdown(f));
     }
     if let Some(d) = catalog.datamodel(&word) {
         return Some(format!(
@@ -630,50 +827,173 @@ pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> 
     None
 }
 
+fn function_markdown(f: &FunctionRow) -> String {
+    let kind = f.kind.clone().unwrap_or_else(|| "function".into());
+    let mut md = format!(
+        "**{}** ({})\n\n{}",
+        f.name,
+        kind,
+        f.docs.clone().unwrap_or_default()
+    );
+    if let Some(s) = &f.signature {
+        md.push_str(&format!("\n\n`{s}`"));
+    }
+    if let Some(c) = &f.citation {
+        md.push_str(&format!("\n\n[Search Reference]({c})"));
+    }
+    md
+}
+
+fn option_markdown(opt: &CommandOption) -> String {
+    let mut md = format!(
+        "**{}** (`{}` argument)\n\n{}",
+        opt.name,
+        opt.command,
+        opt.docs.clone().unwrap_or_default()
+    );
+    if !opt.values.is_empty() {
+        md.push_str(&format!("\n\nValues: {}", opt.values.join(", ")));
+    }
+    if let Some(c) = &opt.citation {
+        md.push_str(&format!("\n\n[Search Reference]({c})"));
+    }
+    md
+}
+
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let catalog = Catalog::cached();
     let before = &source[..offset.min(source.len())];
-    if let Some(cmd) = last_command(before) {
-        if cmd == "tstats" {
-            return Some(SignatureHelp {
-                signatures: vec![SignatureInformation {
-                    label: "tstats [summariesonly=] <aggregates> [from datamodel=Model.Dataset] [where] [by]".into(),
-                    documentation: Some(
-                        "Statistical aggregation on indexed fields / accelerated datamodels."
-                            .into(),
-                    ),
-                    parameters: vec![
-                        ParameterInformation {
-                            label: "aggregates".into(),
-                            documentation: Some("count, min(_time) as firstTime, …".into()),
-                        },
-                        ParameterInformation {
-                            label: "from datamodel=".into(),
-                            documentation: Some("CIM path such as Endpoint.Processes.".into()),
-                        },
-                        ParameterInformation {
-                            label: "where".into(),
-                            documentation: Some("Predicate over prefixed CIM fields.".into()),
-                        },
-                        ParameterInformation {
-                            label: "by".into(),
-                            documentation: Some("Split-by fields (Processes.user, …).".into()),
-                        },
-                    ],
-                }],
-                active_signature: 0,
-                active_parameter: if before.to_ascii_lowercase().contains(" by ") {
-                    3
-                } else if before.to_ascii_lowercase().contains(" where ") {
-                    2
-                } else if before.to_ascii_lowercase().contains("datamodel=") {
-                    1
-                } else {
-                    0
-                },
-            });
+    if let Some((name, active)) = innermost_call(before) {
+        let cmd = last_command(before);
+        let same_as_command = cmd.as_ref().is_some_and(|c| c.eq_ignore_ascii_case(&name));
+        if !same_as_command {
+            let aggregate = cmd.as_ref().is_some_and(|c| aggregate_command(c));
+            if let Some(f) = catalog.function_in_context(&name, aggregate) {
+                if let Some(help) = function_signature(f, active) {
+                    return Some(help);
+                }
+            }
+        }
+        if let Some(m) = catalog.macro_named(&name) {
+            let label = m
+                .signature
+                .clone()
+                .unwrap_or_else(|| format!("`{}`", m.name));
+            return Some(signature_from_label(label, m.docs.clone(), active));
         }
     }
+    let cmd = last_command(before)?;
+    command_signature(catalog, &cmd, before)
+}
+
+fn function_signature(f: &FunctionRow, active: u32) -> Option<SignatureHelp> {
+    let label = f.signature.clone()?;
+    if !label.contains('(') {
+        return None;
+    }
+    Some(signature_from_label(label, f.docs.clone(), active))
+}
+
+fn signature_from_label(
+    label: String,
+    documentation: Option<String>,
+    active: u32,
+) -> SignatureHelp {
+    let parameters = parameters_from_signature(&label);
+    let active = if parameters.is_empty() {
+        0
+    } else {
+        active.min(parameters.len().saturating_sub(1) as u32)
+    };
+    SignatureHelp {
+        signatures: vec![SignatureInformation {
+            label,
+            documentation,
+            parameters,
+        }],
+        active_signature: 0,
+        active_parameter: active,
+    }
+}
+
+fn command_signature(catalog: &Catalog, cmd: &str, before: &str) -> Option<SignatureHelp> {
+    let opts = catalog.options_for(argument_command(cmd));
+    if opts.is_empty() {
+        return None;
+    }
+    let label = format!(
+        "{cmd} {}",
+        opts.iter()
+            .map(|opt| option_fragment(opt))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    let parameters = opts
+        .iter()
+        .map(|opt| ParameterInformation {
+            label: opt.name.clone(),
+            documentation: opt.docs.clone(),
+        })
+        .collect();
+    let row = catalog.command(cmd);
+    let mut documentation = row.and_then(|c| c.docs.clone());
+    if let Some(citation) = row.and_then(|c| c.citation.clone()) {
+        let line = format!("[Search Reference]({citation})");
+        documentation = Some(match documentation {
+            Some(docs) if !docs.is_empty() => format!("{docs}\n\n{line}"),
+            _ => line,
+        });
+    }
+    Some(SignatureHelp {
+        signatures: vec![SignatureInformation {
+            label,
+            documentation,
+            parameters,
+        }],
+        active_signature: 0,
+        active_parameter: active_option(before, &opts),
+    })
+}
+
+fn active_option(before: &str, opts: &[&CommandOption]) -> u32 {
+    let lower = before.to_ascii_lowercase();
+    let mut best: Option<(usize, u32)> = None;
+    for (i, opt) in opts.iter().enumerate() {
+        let needle = opt.name.to_ascii_lowercase();
+        if let Some(pos) = rfind_word(&lower, &needle) {
+            if best.map(|(at, _)| pos >= at).unwrap_or(true) {
+                best = Some((pos, i as u32));
+            }
+        }
+    }
+    best.map(|(_, index)| index).unwrap_or(0)
+}
+
+fn rfind_word(haystack: &str, needle: &str) -> Option<usize> {
+    let bytes = haystack.as_bytes();
+    let needle = needle.as_bytes();
+    if needle.is_empty() || needle.len() > bytes.len() {
+        return None;
+    }
+    let mut i = bytes.len() - needle.len();
+    loop {
+        if &bytes[i..i + needle.len()] == needle {
+            let before_ok = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
+            let after = i + needle.len();
+            let after_ok = after == bytes.len() || !bytes[after].is_ascii_alphanumeric();
+            if before_ok && after_ok {
+                return Some(i);
+            }
+        }
+        if i == 0 {
+            break;
+        }
+        i -= 1;
+    }
+    None
+}
+
+fn innermost_call(before: &str) -> Option<(String, u32)> {
     let bytes = before.as_bytes();
     let mut depth = 0i32;
     let mut open = None;
@@ -701,35 +1021,65 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
         }
     }
     let name = before[i..open].trim_matches('`').to_string();
-    if let Some(f) = catalog.function(&name) {
-        return Some(SignatureHelp {
-            signatures: vec![SignatureInformation {
-                label: format!("{}()", f.name),
-                documentation: f.docs.clone(),
-                parameters: vec![ParameterInformation {
-                    label: "args".into(),
-                    documentation: None,
-                }],
-            }],
-            active_signature: 0,
-            active_parameter: 0,
-        });
+    if name.is_empty() {
+        return None;
     }
-    if let Some(m) = catalog.macro_named(&name) {
-        return Some(SignatureHelp {
-            signatures: vec![SignatureInformation {
-                label: m
-                    .signature
-                    .clone()
-                    .unwrap_or_else(|| format!("`{}`", m.name)),
-                documentation: m.docs.clone(),
-                parameters: Vec::new(),
-            }],
-            active_signature: 0,
-            active_parameter: 0,
-        });
+    let inside = &before[open + 1..];
+    let mut commas = 0u32;
+    let mut nested = 0i32;
+    for b in inside.bytes() {
+        match b {
+            b'(' => nested += 1,
+            b')' => nested -= 1,
+            b',' if nested == 0 => commas += 1,
+            _ => {}
+        }
     }
-    None
+    Some((name, commas))
+}
+
+fn parameters_from_signature(sig: &str) -> Vec<ParameterInformation> {
+    let Some(open) = sig.find('(') else {
+        return Vec::new();
+    };
+    let start = open + 1;
+    let end = sig.rfind(')').unwrap_or(sig.len());
+    if start >= end {
+        return Vec::new();
+    }
+    let mut params = Vec::new();
+    let mut depth = 0i32;
+    let mut cur = String::new();
+    for ch in sig[start..end].chars() {
+        match ch {
+            '(' => {
+                depth += 1;
+                cur.push(ch);
+            }
+            ')' => {
+                depth -= 1;
+                cur.push(ch);
+            }
+            ',' if depth == 0 => {
+                push_param(&mut params, &cur);
+                cur.clear();
+            }
+            _ => cur.push(ch),
+        }
+    }
+    push_param(&mut params, &cur);
+    params
+}
+
+fn push_param(out: &mut Vec<ParameterInformation>, raw: &str) {
+    let label = raw.trim();
+    if label.is_empty() {
+        return;
+    }
+    out.push(ParameterInformation {
+        label: label.to_string(),
+        documentation: None,
+    });
 }
 
 #[cfg(test)]
@@ -961,5 +1311,201 @@ mod tests {
         let src = "index=main | `drop_dm_object_name(Processes)`";
         let h = hover(src, opentide_core::Position::new(0, 16)).expect("macro hover");
         assert!(h.contains("drop_dm_object_name"), "{h}");
+    }
+
+    #[test]
+    fn eval_signatures_come_from_search_reference() {
+        let c = Catalog::load();
+        let mut problems = Vec::new();
+        for f in &c.functions {
+            let sig = f.signature.as_deref().unwrap_or("");
+            let citation = f.citation.as_deref().unwrap_or("");
+            if !sig.starts_with(&f.name) || !sig.contains('(') {
+                problems.push(format!("{} missing signature ({sig})", f.name));
+            }
+            if !citation
+                .starts_with("https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/")
+            {
+                problems.push(format!("{} missing citation", f.name));
+            }
+        }
+        assert!(problems.is_empty(), "{problems:?}");
+        let evals = c
+            .functions
+            .iter()
+            .filter(|f| f.kind.as_deref() == Some("eval"))
+            .count();
+        let aggs = c
+            .functions
+            .iter()
+            .filter(|f| f.kind.as_deref() == Some("aggregate"))
+            .count();
+        assert_eq!(evals, 109, "{evals}");
+        assert!(aggs >= 39, "{aggs}");
+        assert!(
+            c.functions
+                .iter()
+                .filter(|f| f.name == "sum")
+                .any(|f| f.kind.as_deref() == Some("aggregate")),
+        );
+    }
+
+    #[test]
+    fn eval_signature_help_uses_real_parameters() {
+        let src = "| eval x=if(1, ";
+        let help = signature_help(src, src.len()).expect("if");
+        assert_eq!(help.signatures[0].label, "if(X,Y,Z)");
+        let labels: Vec<&str> = help.signatures[0]
+            .parameters
+            .iter()
+            .map(|p| p.label.as_str())
+            .collect();
+        assert_eq!(labels, ["X", "Y", "Z"]);
+        assert_eq!(help.active_parameter, 1);
+        assert!(labels.iter().all(|l| *l != "args"));
+
+        let lower = "| eval x=lower(";
+        let help = signature_help(lower, lower.len()).expect("lower");
+        assert_eq!(help.signatures[0].label, "lower(X)");
+        assert_eq!(help.signatures[0].parameters[0].label, "X");
+
+        let pi = "| eval x=pi(";
+        let help = signature_help(pi, pi.len()).expect("pi");
+        assert_eq!(help.signatures[0].label, "pi()");
+        assert!(help.signatures[0].parameters.is_empty());
+    }
+
+    #[test]
+    fn stats_sum_hovers_as_aggregate() {
+        let src = "| stats sum(bytes) avg(bytes) min(bytes) max(bytes) by host";
+        for name in ["sum", "avg", "min", "max"] {
+            let at = src.find(&format!("{name}(")).unwrap() as u32;
+            let text = hover(src, opentide_core::Position::new(0, at)).expect(name);
+            assert!(text.contains("(aggregate)"), "{name}: {text}");
+            assert!(text.contains(&format!("{name}(field)")), "{name}: {text}");
+            assert!(!text.contains("eval args"), "{name}: {text}");
+        }
+        let eval_src = "| eval total=sum(a, b)";
+        let at = eval_src.find("sum(").unwrap() as u32;
+        let text = hover(eval_src, opentide_core::Position::new(0, at)).expect("eval sum");
+        assert!(text.contains("(eval)"), "{text}");
+        assert!(text.contains("sum(X,...)"), "{text}");
+
+        let call = "| stats sum(";
+        let help = signature_help(call, call.len()).expect("agg sum");
+        assert_eq!(help.signatures[0].label, "sum(field)");
+        let eval_call = "| eval total=sum(";
+        let help = signature_help(eval_call, eval_call.len()).expect("eval sum");
+        assert_eq!(help.signatures[0].label, "sum(X,...)");
+    }
+
+    #[test]
+    fn macro_signature_is_unchanged() {
+        let src = "| `drop_dm_object_name(";
+        let help = signature_help(src, src.len()).expect("macro");
+        assert_eq!(help.signatures[0].label, "drop_dm_object_name(object)");
+        assert_eq!(help.signatures[0].parameters[0].label, "object");
+        let bare = "| `security_content_ctime(firstTime)`";
+        let h = hover(
+            bare,
+            opentide_core::Position::new(0, bare.find("security_content_ctime").unwrap() as u32),
+        )
+        .expect("macro hover");
+        assert!(h.contains("security_content_ctime(field)"), "{h}");
+
+        let notable = "| `notable(";
+        let help = signature_help(notable, notable.len()).expect("notable");
+        assert_eq!(help.signatures[0].label, "notable");
+        assert!(
+            help.signatures[0].parameters.is_empty(),
+            "a macro signature without parentheses has no parameters: {:?}",
+            help.signatures[0].parameters
+        );
+    }
+
+    #[test]
+    fn command_options_drive_signature_help() {
+        let src = "| tstats ";
+        let help = signature_help(src, src.len()).expect("tstats");
+        let label = &help.signatures[0].label;
+        assert!(label.starts_with("tstats "), "{label}");
+        for arg in ["summariesonly=", "from", "where", "by", "datamodel="] {
+            assert!(label.contains(arg), "{arg} missing from {label}");
+        }
+        assert!(
+            help.signatures[0]
+                .parameters
+                .iter()
+                .any(|p| p.label == "summariesonly")
+        );
+        let rex = "| rex field=_raw ";
+        let help = signature_help(rex, rex.len()).expect("rex");
+        assert!(
+            help.signatures[0].label.contains("[field=]"),
+            "{:?}",
+            help.signatures[0].label
+        );
+        assert!(help.signatures[0].label.contains("[mode=]"));
+        let by = help.signatures[0]
+            .parameters
+            .iter()
+            .position(|p| p.label == "field")
+            .unwrap() as u32;
+        assert_eq!(help.active_parameter, by);
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct ArgumentFixture {
+        cases: Vec<ArgumentCase>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct ArgumentCase {
+        command: String,
+        source: String,
+        citation: String,
+        expect: Vec<String>,
+        #[serde(default)]
+        absent: Vec<String>,
+    }
+
+    #[test]
+    fn argument_completion_matches_search_reference_fixture() {
+        let raw = include_str!("../../../testdata/conformance/spl/argument-completion.toml");
+        let fixture: ArgumentFixture = toml::from_str(raw).expect("argument fixture");
+        let required = ["tstats", "stats", "rex", "lookup", "join", "timechart"];
+        for command in required {
+            assert!(
+                fixture.cases.iter().any(|c| c.command == command),
+                "fixture missing {command}"
+            );
+        }
+        for case in &fixture.cases {
+            assert!(
+                case.citation.starts_with(
+                    "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/"
+                ),
+                "{} citation {}",
+                case.command,
+                case.citation
+            );
+            let items = completions(&case.source, case.source.len());
+            let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+            for expected in &case.expect {
+                assert!(
+                    labels.iter().any(|l| l.eq_ignore_ascii_case(expected)),
+                    "{} missing {expected} in {:?}",
+                    case.command,
+                    labels.iter().take(20).collect::<Vec<_>>()
+                );
+            }
+            for banned in &case.absent {
+                assert!(
+                    !labels.iter().any(|l| l.eq_ignore_ascii_case(banned)),
+                    "{} should not offer {banned}",
+                    case.command
+                );
+            }
+        }
     }
 }

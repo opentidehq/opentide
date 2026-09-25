@@ -1,4 +1,6 @@
-# Command option / argument schemas for signature help (tstats, stats, rex, …).
+# Command arguments for completion and signature help.
+# Names and values are the Search Reference syntax for that command.
+# Commands with no row here have no argument schema (names stay in commands.toml).
 [[options]]
 command = "tstats"
 name = "summariesonly"
@@ -103,5 +105,420 @@ citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/
 [[options]]
 command = "eval"
 name = "assignment"
-docs = "field=expression (comma-separated)."
+docs = "field=expression, comma-separated. Equality inside the expression is ==."
 citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Eval"
+
+# Additional arguments from the same Search Reference syntax sections.
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats
+[[options]]
+command = "tstats"
+name = "local"
+values = ["true", "false"]
+docs = "If true, run tstats only on the search head."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "append"
+values = ["true", "false"]
+docs = "When prestats=true, append prestats results to existing results."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "include_reduced_buckets"
+values = ["true", "false"]
+docs = "Use results from reduced buckets when enableTSIDXReduction is true."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "chunk_size"
+docs = "Events retrieved at a time from one tsidx file. Cannot be lower than 10000."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+[[options]]
+command = "tstats"
+name = "span"
+docs = "Time bucket when grouping by _time (BY _time span=1h). Default auto."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Stats
+[[options]]
+command = "stats"
+name = "partitions"
+docs = "Threads for the reduce step on split-by fields. 0 uses limits.conf default_partitions."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Stats"
+
+[[options]]
+command = "stats"
+name = "allnum"
+values = ["true", "false"]
+docs = "If true, compute numerical stats on a field only when every value is numerical."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Stats"
+
+[[options]]
+command = "stats"
+name = "delim"
+docs = "Delimiter for list() and values() output. Default is a single space."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Stats"
+
+[[options]]
+command = "stats"
+name = "dedup_splitvals"
+values = ["true", "false"]
+docs = "Remove duplicate values in multivalued BY fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Stats"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart
+[[options]]
+command = "chart"
+name = "agg"
+docs = "Aggregator or function placed into a named field with AS."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "cont"
+values = ["true", "false"]
+docs = "When true, empty x-axis bins stay in the output. Default true."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "format"
+docs = "Output field name template using $AGG$ and $VAL$. Takes precedence over sep."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "limit"
+docs = "How many column-split series to keep (topN, bottomN, or 0 for all). Default top10."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "sep"
+docs = "Separator used to build output field names. Equivalent to format=$AGG$ $VAL$."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "dedup_splitvals"
+values = ["true", "false"]
+docs = "Remove duplicate values in multivalued BY fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "bins"
+docs = "Maximum number of bins. Default 300."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "span"
+docs = "Bin size as a time span or a log span."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "start"
+docs = "Minimum extent for numerical bins. Data outside [start, end] is discarded."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "end"
+docs = "Maximum extent for numerical bins. Data outside [start, end] is discarded."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+[[options]]
+command = "chart"
+name = "aligntime"
+docs = "Align bin times to earliest, latest, or a time modifier. Ignored for day, month, and year spans."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Chart"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart
+[[options]]
+command = "timechart"
+name = "sep"
+docs = "Separator used to build output field names. Equivalent to format=$AGG$ $VAL$."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "format"
+docs = "Output field name template using $AGG$ and $VAL$. Takes precedence over sep."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "partial"
+values = ["true", "false"]
+docs = "Keep partial first and last time bins. Default true."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "cont"
+values = ["true", "false"]
+docs = "Fill time gaps when true. Default true."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "limit"
+docs = "How many split-by series to keep (topN, bottomN, or 0 for all). Default top10."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "agg"
+docs = "Aggregation function, optionally renamed with AS."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "bins"
+docs = "Maximum number of bins. Default 100."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "minspan"
+docs = "Smallest span granularity when the span is inferred from the time range."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "start"
+docs = "Minimum extent for numerical bins. Data outside [start, end] is discarded."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "end"
+docs = "Maximum extent for numerical bins. Data outside [start, end] is discarded."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "aligntime"
+docs = "Align bin times to earliest, latest, or a time modifier."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "fixedrange"
+values = ["true", "false"]
+docs = "When true, enforce the search earliest and latest. Default true."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+[[options]]
+command = "timechart"
+name = "dedup_splitvals"
+values = ["true", "false"]
+docs = "Remove duplicate values in multivalued split-by fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rex
+[[options]]
+command = "rex"
+name = "max_match"
+docs = "How many times the regex matches. 0 is unlimited. Default 1."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rex"
+
+[[options]]
+command = "rex"
+name = "offset_field"
+docs = "Field that records the match position of the regex in the source field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rex"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join
+[[options]]
+command = "join"
+name = "usetime"
+values = ["true", "false"]
+docs = "Limit subsearch matches by time, together with earlier. Default false."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+
+[[options]]
+command = "join"
+name = "earlier"
+values = ["true", "false"]
+docs = "When usetime=true, match only earlier (true) or later (false) subsearch results. Default true."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+
+[[options]]
+command = "join"
+name = "overwrite"
+values = ["true", "false"]
+docs = "When true, subsearch fields overwrite main-search fields of the same name. Default true."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+
+[[options]]
+command = "join"
+name = "max"
+docs = "Maximum subsearch results joined to each main result. 0 is unlimited. Default 1."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+
+[[options]]
+command = "join"
+name = "left"
+docs = "Alias for the left-side dataset. Required together with right and where."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+
+[[options]]
+command = "join"
+name = "right"
+docs = "Alias for the right-side dataset. Required together with left and where."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+
+[[options]]
+command = "join"
+name = "where"
+docs = "Join predicate left.field=right.field. Requires left and right aliases."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Lookup
+[[options]]
+command = "lookup"
+name = "local"
+values = ["true", "false"]
+docs = "If true, run the lookup on the search head. Default false."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Lookup"
+
+[[options]]
+command = "lookup"
+name = "update"
+values = ["true", "false"]
+docs = "If true, a real-time search picks up lookup-file changes. Implies local=true. Default false."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Lookup"
+
+[[options]]
+command = "lookup"
+name = "outputnew"
+docs = "OUTPUTNEW adds lookup fields only when the destination field is missing."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Lookup"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/From
+[[options]]
+command = "from"
+name = "datamodel"
+docs = "Dataset type. from datamodel:<model>.<dataset> or from datamodel <model>.<dataset>."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/From"
+
+[[options]]
+command = "from"
+name = "lookup"
+docs = "Dataset type for a CSV or KV Store lookup. from lookup:<name> or from lookup <name>."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/From"
+
+[[options]]
+command = "from"
+name = "savedsearch"
+docs = "Dataset type for a saved search. from savedsearch:<name> or from savedsearch <name>."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/From"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel
+[[options]]
+command = "datamodel"
+name = "summariesonly"
+values = ["true", "false"]
+docs = "When true, return only summarized TSIDX data for an accelerated data model. Default false."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+[[options]]
+command = "datamodel"
+name = "allow_old_summaries"
+values = ["true", "false"]
+docs = "When true, also use summaries generated before a data model definition change. Default false."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+[[options]]
+command = "datamodel"
+name = "strict_fields"
+values = ["true", "false"]
+docs = "When true, return only default fields and fields in the dataset constraints. Default true."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+[[options]]
+command = "datamodel"
+name = "search"
+docs = "Search mode that returns results as defined by the data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+[[options]]
+command = "datamodel"
+name = "flat"
+docs = "Search mode that returns results with hierarchical dataset prefixes removed."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+[[options]]
+command = "datamodel"
+name = "acceleration_search"
+docs = "Search mode that runs the data model acceleration search."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+[[options]]
+command = "datamodel"
+name = "search_string"
+docs = "Return the search string used for search mode."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+[[options]]
+command = "datamodel"
+name = "flat_string"
+docs = "Return the search string used for flat mode."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+[[options]]
+command = "datamodel"
+name = "acceleration_search_string"
+docs = "Return the search string used for acceleration_search mode."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Fillnull
+[[options]]
+command = "fillnull"
+name = "value"
+docs = "String written into null fields. Default 0."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Fillnull"
+
+# https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin
+[[options]]
+command = "bin"
+name = "bins"
+docs = "Maximum number of bins. Default 100."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"
+
+[[options]]
+command = "bin"
+name = "minspan"
+docs = "Smallest span granularity when the span is inferred from the time range."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"
+
+[[options]]
+command = "bin"
+name = "span"
+docs = "Bin size as a log span or a time span (for example 5m)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"
+
+[[options]]
+command = "bin"
+name = "start"
+docs = "Expand the minimum extent of numerical bins. Does not shorten the range."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"
+
+[[options]]
+command = "bin"
+name = "end"
+docs = "Expand the maximum extent of numerical bins. Does not shorten the range."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"
+
+[[options]]
+command = "bin"
+name = "aligntime"
+docs = "Align time bins to earliest, latest, or an epoch or relative time. Only for time-based bins."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"

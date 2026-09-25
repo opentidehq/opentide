@@ -21,7 +21,7 @@ Citations:
 | **CIM + default fields** | `catalogs/spl/fields.toml` | hover / completions after `by` / `where` / `table` |
 | **Data models** | `catalogs/spl/datamodels.toml` | `from datamodel=`; prefixed fields |
 | **Macros** | `catalogs/spl/macros.toml` | `` `drop_dm_object_name` `` hover + completion |
-| **Command options** | `catalogs/spl/command-options.toml` | `tstats summariesonly=`; signature help |
+| **Command options** | `catalogs/spl/command-options.toml` | argument completion and signature help |
 | Grammar | `grammars/tree-sitter-opentide-spl` | macros ≠ comments; dotted fields; subsearches |
 | HighlightSpec | `highlights/spec.toml` | `macro` capture (added in 0.2.0) |
 
@@ -101,10 +101,9 @@ Inside `search` / `bare_search` (not only `eval` comparisons):
 
 | Trigger | Label |
 | --- | --- |
-| `tstats` | aggregates + `from datamodel=` + `where` + `by` |
-| `stats` / `eventstats` | aggregations + `by` |
-| `eval` function `(` | catalog function signature |
-| `` `macro( `` | macro signature |
+| Command with rows in `command-options.toml` | one parameter per catalogued argument (`[name=]` or a bare clause) |
+| `(` on an eval or stats function | Search Reference `signature`. `stats` / `tstats` / `chart` / `timechart` (and the other aggregate commands) resolve `sum` / `avg` / `min` / `max` as aggregates |
+| `` `macro( `` | macro `signature` string |
 
 ## Highlight overlay
 

@@ -711,722 +711,1010 @@ citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/
 [[functions]]
 name = "if"
 kind = "eval"
+signature = "if(X,Y,Z)"
 docs = "If boolean X is true return Y else Z."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "case"
 kind = "eval"
+signature = "case(X1,Y1,X2,Y2,...,true(),Ydefault)"
 docs = "First true condition’s value; else null unless true() arm."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "coalesce"
 kind = "eval"
+signature = "coalesce(X,...)"
 docs = "First non-null argument."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "cidrmatch"
 kind = "eval"
+signature = "cidrmatch(\"cidr\", ip)"
 docs = "True if IP is in CIDR."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "match"
 kind = "eval"
+signature = "match(SUBJECT, \"REGEX\")"
 docs = "True if regex matches."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "like"
 kind = "eval"
+signature = "like(TEXT, PATTERN)"
 docs = "SQL-like: % and _."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "searchmatch"
 kind = "eval"
+signature = "searchmatch(\"search string\")"
 docs = "True if the search string matches the event (search semantics)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "in"
 kind = "eval"
+signature = "in(FIELD, v1, v2, ...)"
 docs = "True if field equals one value."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "validate"
 kind = "eval"
+signature = "validate(X,Y,...)"
 docs = "Opposite of case: first **false** X returns Y."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "nullif"
 kind = "eval"
+signature = "nullif(X,Y)"
 docs = "Null if X=Y else X."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "null"
 kind = "eval"
+signature = "null()"
 docs = "Null constant."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "true"
 kind = "eval"
+signature = "true()"
 docs = "Boolean true (default case arm)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "false"
 kind = "eval"
+signature = "false()"
 docs = "Boolean false."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "lookup"
 kind = "eval"
+signature = "lookup(table, json_object, json_array)"
 docs = "Eval-time CSV lookup returning JSON."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConditionalFunctions"
 
 [[functions]]
 name = "len"
 kind = "eval"
+signature = "len(X)"
 docs = "Character count (not bytes)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "lower"
 kind = "eval"
+signature = "lower(X)"
 docs = "Lowercase."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "upper"
 kind = "eval"
+signature = "upper(X)"
 docs = "Uppercase."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "replace"
 kind = "eval"
+signature = "replace(X,Y,Z)"
 docs = "Substitute regex Y with Z in X."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "substr"
 kind = "eval"
+signature = "substr(X,Y,Z)"
 docs = "Substring of X from 1-based Y, length Z."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "trim"
 kind = "eval"
+signature = "trim(X,Y)"
 docs = "Trim characters in Y (default whitespace) from both ends."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "ltrim"
 kind = "eval"
+signature = "ltrim(X,Y)"
 docs = "Left trim."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "rtrim"
 kind = "eval"
+signature = "rtrim(X,Y)"
 docs = "Right trim."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "urldecode"
 kind = "eval"
+signature = "urldecode(X)"
 docs = "Decode %xx URL encoding."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "spath"
 kind = "eval"
+signature = "spath(X,Y)"
 docs = "Extract from JSON/XML string X at path Y (eval form of the spath command)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TextFunctions"
 
 [[functions]]
 name = "split"
 kind = "eval"
+signature = "split(X,\"Y\")"
 docs = "Split X on delimiter Y → mv."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvcount"
 kind = "eval"
+signature = "mvcount(MVFIELD)"
 docs = "Number of values."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvindex"
 kind = "eval"
+signature = "mvindex(MV,START,END)"
 docs = "Slice; negative index counts from end."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvjoin"
 kind = "eval"
+signature = "mvjoin(MV,STR)"
 docs = "Join with delimiter."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvfilter"
 kind = "eval"
+signature = "mvfilter(X)"
 docs = "Keep mv values where boolean X is true (mvfilter(match(_,\"(?i)pass\")))."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvappend"
 kind = "eval"
+signature = "mvappend(X,...)"
 docs = "Concatenate mv/single values."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvdedup"
 kind = "eval"
+signature = "mvdedup(X)"
 docs = "Drop duplicate mv values."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvfind"
 kind = "eval"
+signature = "mvfind(MV,\"REGEX\")"
 docs = "Index of first matching value."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvmap"
 kind = "eval"
+signature = "mvmap(X,Y)"
 docs = "Map expression Y over mv X."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvrange"
 kind = "eval"
+signature = "mvrange(X,Y,Z)"
 docs = "Numeric range X..Y step Z."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvsort"
 kind = "eval"
+signature = "mvsort(X)"
 docs = "Lexicographic sort."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "mvzip"
 kind = "eval"
+signature = "mvzip(X,Y,\"Z\")"
 docs = "Zip two mv fields with delimiter Z."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "commands"
 kind = "eval"
+signature = "commands(X)"
 docs = "Mv list of SPL commands used in search string X."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MultivalueEvalFunctions"
 
 [[functions]]
 name = "tonumber"
 kind = "eval"
+signature = "tonumber(NUMSTR,BASE)"
 docs = "String → number; BASE 2..36."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConversionFunctions"
 
 [[functions]]
 name = "tostring"
 kind = "eval"
+signature = "tostring(X,Y)"
 docs = "To string."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConversionFunctions"
 
 [[functions]]
 name = "printf"
 kind = "eval"
+signature = "printf(\"format\", args...)"
 docs = "C-style format string."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConversionFunctions"
 
 [[functions]]
 name = "ipmask"
 kind = "eval"
+signature = "ipmask(mask, ip)"
 docs = "Mask IPv4 via bitwise AND (ipmask(\"255.255.0.0\", src))."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConversionFunctions"
 
 [[functions]]
 name = "toint"
 kind = "eval"
+signature = "toint(value, base)"
 docs = "Convert to integer (later platform versions)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConversionFunctions"
 
 [[functions]]
 name = "todouble"
 kind = "eval"
+signature = "todouble(value, base)"
 docs = "Convert to double."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/ConversionFunctions"
 
 [[functions]]
 name = "strftime"
 kind = "eval"
+signature = "strftime(X,Y)"
 docs = "UNIX time X → string with format Y (%Y-%m-%d %H:%M:%S)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/DateandTimeFunctions"
 
 [[functions]]
 name = "strptime"
 kind = "eval"
+signature = "strptime(X,Y)"
 docs = "Parse string X with format Y → UNIX time."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/DateandTimeFunctions"
 
 [[functions]]
 name = "now"
 kind = "eval"
+signature = "now()"
 docs = "Search start time (same for all events)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/DateandTimeFunctions"
 
 [[functions]]
 name = "relative_time"
 kind = "eval"
+signature = "relative_time(X,Y)"
 docs = "Apply relative specifier Y (-1h@h) to UNIX time X."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/DateandTimeFunctions"
 
 [[functions]]
 name = "time"
 kind = "eval"
+signature = "time()"
 docs = "Wall time when **this event** was processed (varies per event)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/DateandTimeFunctions"
 
 [[functions]]
 name = "isnull"
 kind = "eval"
+signature = "isnull(X)"
 docs = "True if null."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/InformationalFunctions"
 
 [[functions]]
 name = "isnotnull"
 kind = "eval"
+signature = "isnotnull(X)"
 docs = "True if not null."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/InformationalFunctions"
 
 [[functions]]
 name = "isnum"
 kind = "eval"
+signature = "isnum(X)"
 docs = "True if numeric."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/InformationalFunctions"
 
 [[functions]]
 name = "isstr"
 kind = "eval"
+signature = "isstr(X)"
 docs = "True if string."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/InformationalFunctions"
 
 [[functions]]
 name = "typeof"
 kind = "eval"
+signature = "typeof(X)"
 docs = "\"Number\", \"String\", \"Boolean\", \"Invalid\", …"
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/InformationalFunctions"
 
 [[functions]]
 name = "isbool"
 kind = "eval"
+signature = "isbool(X)"
 docs = "True if Boolean."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/InformationalFunctions"
 
 [[functions]]
 name = "isint"
 kind = "eval"
+signature = "isint(X)"
 docs = "True if integer."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/InformationalFunctions"
 
 [[functions]]
 name = "md5"
 kind = "eval"
+signature = "md5(X)"
 docs = "MD5 hex digest."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/CryptographicFunctions"
 
 [[functions]]
 name = "sha1"
 kind = "eval"
+signature = "sha1(X)"
 docs = "SHA-1 hex digest."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/CryptographicFunctions"
 
 [[functions]]
 name = "sha256"
 kind = "eval"
+signature = "sha256(X)"
 docs = "SHA-256 hex digest."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/CryptographicFunctions"
 
 [[functions]]
 name = "sha512"
 kind = "eval"
+signature = "sha512(X)"
 docs = "SHA-512 hex digest."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/CryptographicFunctions"
 
 [[functions]]
 name = "json_extract"
 kind = "eval"
+signature = "json_extract(json, path...)"
 docs = "Value at JSON path(s)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_object"
 kind = "eval"
+signature = "json_object(k1,v1,...)"
 docs = "Build a JSON object."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_array"
 kind = "eval"
+signature = "json_array(v,...)"
 docs = "Build a JSON array."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_keys"
 kind = "eval"
+signature = "json_keys(json)"
 docs = "Keys as JSON array."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_valid"
 kind = "eval"
+signature = "json_valid(json)"
 docs = "True if valid JSON."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_set"
 kind = "eval"
+signature = "json_set(json, path, value, ...)"
 docs = "Insert/overwrite nodes."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_set_exact"
 kind = "eval"
+signature = "json_set_exact(json, k, v, ...)"
 docs = "Set by literal keys."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_append"
 kind = "eval"
+signature = "json_append(json, path, value, ...)"
 docs = "Append to arrays."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_extend"
 kind = "eval"
+signature = "json_extend(json, path, value, ...)"
 docs = "Flatten and append array values."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_extract_exact"
 kind = "eval"
+signature = "json_extract_exact(json, keys...)"
 docs = "Extract by literal strings."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "json_array_to_mv"
 kind = "eval"
+signature = "json_array_to_mv(json_array)"
 docs = "JSON array → mv field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "mv_to_json_array"
 kind = "eval"
+signature = "mv_to_json_array(mv)"
 docs = "Mv field → JSON array."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/JSONFunctions"
 
 [[functions]]
 name = "round"
 kind = "eval"
+signature = "round(X,Y)"
 docs = "Round X to Y decimal places (default 0)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "abs"
 kind = "eval"
+signature = "abs(X)"
 docs = "Absolute value."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "ceil"
 kind = "eval"
+signature = "ceil(X)"
 docs = "Round up."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "ceiling"
 kind = "eval"
+signature = "ceiling(X)"
 docs = "Round up."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "floor"
 kind = "eval"
+signature = "floor(X)"
 docs = "Round down."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "log"
 kind = "eval"
+signature = "log(X,Y)"
 docs = "Log of X, base Y (default 10)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "ln"
 kind = "eval"
+signature = "ln(X)"
 docs = "Natural log."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "pow"
 kind = "eval"
+signature = "pow(X,Y)"
 docs = "X^Y."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "exp"
 kind = "eval"
+signature = "exp(X)"
 docs = "e^X."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "sqrt"
 kind = "eval"
+signature = "sqrt(X)"
 docs = "Square root."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "pi"
 kind = "eval"
+signature = "pi()"
 docs = "π to 11 digits."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "sigfig"
 kind = "eval"
+signature = "sigfig(X)"
 docs = "Significant figures."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "exact"
 kind = "eval"
+signature = "exact(X)"
 docs = "Higher precision numeric eval."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "sum"
 kind = "eval"
+signature = "sum(X,...)"
 docs = "Sum of numeric **eval args** (not the stats function)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/MathematicalFunctions"
 
 [[functions]]
 name = "random"
 kind = "eval"
+signature = "random()"
 docs = "Pseudo-random int in [0, 2^31-1)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/StatisticalFunctions"
 
 [[functions]]
 name = "min"
 kind = "eval"
+signature = "min(X,...)"
 docs = "Min of arguments on this event."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/StatisticalFunctions"
 
 [[functions]]
 name = "max"
 kind = "eval"
+signature = "max(X,...)"
 docs = "Max of arguments on this event."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/StatisticalFunctions"
 
 [[functions]]
 name = "avg"
 kind = "eval"
+signature = "avg(X,...)"
 docs = "Average of numeric arguments."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/StatisticalFunctions"
 
 [[functions]]
 name = "bit_and"
 kind = "eval"
+signature = "bit_and(X,Y,...)"
 docs = "Bitwise AND (flags / masks)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions"
 
 [[functions]]
 name = "bit_or"
 kind = "eval"
+signature = "bit_or(X,Y,...)"
 docs = "Bitwise OR."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions"
 
 [[functions]]
 name = "bit_xor"
 kind = "eval"
+signature = "bit_xor(X,Y,...)"
 docs = "Bitwise XOR."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions"
 
 [[functions]]
 name = "bit_not"
 kind = "eval"
+signature = "bit_not(X,Y)"
 docs = "Invert bits; optional bitmask truncates width."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions"
 
 [[functions]]
 name = "bit_shift_left"
 kind = "eval"
+signature = "bit_shift_left(X, offset)"
 docs = "Logical left shift."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions"
 
 [[functions]]
 name = "bit_shift_right"
 kind = "eval"
+signature = "bit_shift_right(X, offset)"
 docs = "Logical right shift."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions"
 
 [[functions]]
 name = "count"
 kind = "aggregate"
+signature = "count(field)"
 docs = "Occurrences where the field is non-empty."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "dc"
 kind = "aggregate"
+signature = "dc(field)"
 docs = "Count of distinct string values (\"1\" ≠ \"1.0\")."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "median"
 kind = "aggregate"
+signature = "median(field)"
 docs = "Middle-most numeric value."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "perc"
 kind = "aggregate"
+signature = "perc<N>(field)"
 docs = "Approximate N-th percentile, N in 1..99."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "stdev"
 kind = "aggregate"
+signature = "stdev(field)"
 docs = "Sample standard deviation."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "var"
 kind = "aggregate"
+signature = "var(field)"
 docs = "Sample variance."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "list"
 kind = "aggregate"
+signature = "list(field)"
 docs = "Up to 100 values, input order."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Multivaluefunctions"
 
 [[functions]]
 name = "values"
 kind = "aggregate"
+signature = "values(field)"
 docs = "Distinct values, lexicographic order."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Multivaluefunctions"
 
 [[functions]]
 name = "earliest"
 kind = "aggregate"
+signature = "earliest(field)"
 docs = "Chronologically oldest value of field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "latest"
 kind = "aggregate"
+signature = "latest(field)"
 docs = "Chronologically newest value of field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "first"
 kind = "aggregate"
+signature = "first(field)"
 docs = "First **seen** given input order (often most recent into stats)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Eventorderfunctions"
 
 [[functions]]
 name = "last"
 kind = "aggregate"
+signature = "last(field)"
 docs = "Last seen given input order (often oldest into stats)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Eventorderfunctions"
 
 [[functions]]
 name = "mode"
 kind = "aggregate"
+signature = "mode(field)"
 docs = "Most frequent value."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "range"
 kind = "aggregate"
+signature = "range(field)"
 docs = "max - min for numeric fields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "estdc"
 kind = "aggregate"
+signature = "estdc(field)"
 docs = "Estimated distinct count (cheaper than dc at huge cardinality)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "exactperc"
 kind = "aggregate"
+signature = "exactperc<N>(field)"
 docs = "Exact percentile; expensive at high cardinality."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "upperperc"
 kind = "aggregate"
+signature = "upperperc<N>(field)"
 docs = "Approximate upper bound of the percentile when n > 1000; else same as perc."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "mean"
 kind = "aggregate"
+signature = "mean(field)"
 docs = "Arithmetic mean (not on tstats)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "stdevp"
 kind = "aggregate"
+signature = "stdevp(field)"
 docs = "Population standard deviation."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "varp"
 kind = "aggregate"
+signature = "varp(field)"
 docs = "Population variance."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "sumsq"
 kind = "aggregate"
+signature = "sumsq(field)"
 docs = "Sum of squares."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "estdc_error"
 kind = "aggregate"
+signature = "estdc_error(field)"
 docs = "Theoretical error ratio of estdc."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "earliest_time"
 kind = "aggregate"
+signature = "earliest_time(field)"
 docs = "UNIX time of earliest occurrence of field."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "latest_time"
 kind = "aggregate"
+signature = "latest_time(field)"
 docs = "UNIX time of latest occurrence."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "rate"
 kind = "aggregate"
+signature = "rate(field)"
 docs = "(latest-earliest)/(latest_time-earliest_time) per second."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "rate_avg"
 kind = "aggregate"
+signature = "rate_avg(field)"
 docs = "Average rates for an accumulating counter metric."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "rate_sum"
 kind = "aggregate"
+signature = "rate_sum(field)"
 docs = "Summed rates for an accumulating counter metric."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "per_day"
 kind = "aggregate"
+signature = "per_day(field)"
 docs = "Values per day (charting)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "per_hour"
 kind = "aggregate"
+signature = "per_hour(field)"
 docs = "Values per hour."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "per_minute"
 kind = "aggregate"
+signature = "per_minute(field)"
 docs = "Values per minute."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "per_second"
 kind = "aggregate"
+signature = "per_second(field)"
 docs = "Values per second."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timefunctions"
 
 [[functions]]
 name = "acos"
 kind = "eval"
+signature = "acos(X)"
 docs = "Arc cosine."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "acosh"
 kind = "eval"
+signature = "acosh(X)"
 docs = "Inverse hyperbolic cosine."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "asin"
 kind = "eval"
+signature = "asin(X)"
 docs = "Arc sine."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "asinh"
 kind = "eval"
+signature = "asinh(X)"
 docs = "Inverse hyperbolic sine."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "atan"
 kind = "eval"
+signature = "atan(X)"
 docs = "Arc tangent."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "atan2"
 kind = "eval"
+signature = "atan2(Y,X)"
 docs = "Arc tangent of Y/X."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "atanh"
 kind = "eval"
+signature = "atanh(X)"
 docs = "Inverse hyperbolic tangent."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "cos"
 kind = "eval"
+signature = "cos(X)"
 docs = "Cosine."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "cosh"
 kind = "eval"
+signature = "cosh(X)"
 docs = "Hyperbolic cosine."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "hypot"
 kind = "eval"
+signature = "hypot(X,Y)"
 docs = "Hypotenuse (sqrt(x^2+y^2))."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "sin"
 kind = "eval"
+signature = "sin(X)"
 docs = "Sine."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "sinh"
 kind = "eval"
+signature = "sinh(X)"
 docs = "Hyperbolic sine."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "tan"
 kind = "eval"
+signature = "tan(X)"
 docs = "Tangent."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "tanh"
 kind = "eval"
+signature = "tanh(X)"
 docs = "Hyperbolic tangent."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions"
 
 [[functions]]
 name = "c"
 kind = "aggregate"
+signature = "c(field)"
 docs = "Alias of count."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "distinct_count"
 kind = "aggregate"
+signature = "distinct_count(field)"
 docs = "Alias of dc (distinct count)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "p"
 kind = "aggregate"
+signature = "p<N>(field)"
 docs = "Alias of perc (percentile)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[functions]]
 name = "percentile"
 kind = "aggregate"
+signature = "percentile<N>(field)"
 docs = "Alias of perc (percentile)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
 
 [[commands]]
 name = "abstract"
@@ -1619,3 +1907,32 @@ name = "x11"
 kind = "transforming"
 docs = "Seasonal adjustment of a time series"
 citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/X11"
+
+[[functions]]
+name = "sum"
+kind = "aggregate"
+signature = "sum(field)"
+docs = "Sum of numeric values."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
+
+[[functions]]
+name = "avg"
+kind = "aggregate"
+signature = "avg(field)"
+docs = "Average of numeric values."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
+
+[[functions]]
+name = "min"
+kind = "aggregate"
+signature = "min(field)"
+docs = "Minimum (numeric if possible, else lexicographic). ES: min(_time) AS firstTime."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
+
+[[functions]]
+name = "max"
+kind = "aggregate"
+signature = "max(field)"
+docs = "Maximum. ES: max(_time) AS lastTime."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Aggregatefunctions"
+

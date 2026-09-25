@@ -4,7 +4,7 @@ Machine-oriented punch list. Inventory prose lives in the other `docs/spl/*.md` 
 
 Measured against:
 
-- `catalogs/spl/commands.toml` — **150** commands, **144** functions (**109** eval + **35** aggregate)
+- `catalogs/spl/commands.toml` — **150** commands, **148** functions (**109** eval + **39** aggregate, including aggregate `sum` / `avg` / `min` / `max`)
 - `grammars/tree-sitter-opentide-spl/grammar.js` — 17 dedicated command rules + `catalog_command_name`
 - `highlights/queries/spl/highlights.scm`
 - `crates/opentide-spl/src/lib.rs` — completions / hover / analyze / highlight
@@ -48,16 +48,9 @@ sort head tail join lookup makemv mvexpand tstats
 
 **Resolved in catalog:** `acos` `acosh` `asin` `asinh` `atan` `atan2` `atanh` `cos` `cosh` `hypot` `sin` `sinh` `tan` `tanh`.
 
-### Dual-use names only stored as `kind = "eval"`
+### Dual-use names
 
-Valid as **stats** aggregations in Splunk; no separate aggregate row (name-unique `function()`):
-
-```
-sum
-avg
-min
-max
-```
+`sum` `avg` `min` `max` have both an eval row and an aggregate row. Hover and signature help pick the aggregate row inside `stats`, `eventstats`, `streamstats`, `tstats`, `chart`, `timechart`, `mstats`, `sistats`, `sichart`, and `sitimechart`. `function()` still returns the first row (eval).
 
 ### Stats aliases
 
@@ -105,13 +98,15 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 | API | Status |
 | --- | --- |
 | `completions` after `\|` | All 150 catalog commands |
-| `completions` otherwise | All catalog functions |
+| `completions` for a command in `command-options.toml` | That command's arguments (enum values after `name=`) |
+| `completions` inside `stats` / `tstats` / `chart` / `timechart` | Aggregate functions plus arguments; eval-only names are not offered |
+| `completions` otherwise, when the command has no argument schema | All catalog functions |
 | `hover` on commands | Catalog docs + citation |
-| `hover` on functions | Catalog function docs + kind |
-| Context-aware eval vs aggregate filtering | Not implemented |
+| `hover` on functions | Catalog docs, kind, Search Reference signature, citation. Aggregate kind inside stats-family commands |
+| `hover` on a catalogued argument | `command-options.toml` docs + citation |
 | Field completions (CIM) | `catalogs/spl/fields.toml` + datamodel-prefixed completions |
 | Macro name completions | `catalogs/spl/macros.toml` after `` ` `` / inside `tstats` |
-| Signature help | `tstats` / eval functions / macros |
+| Signature help | Command arguments from `command-options.toml`; function `signature` strings; macro `signature` strings |
 
 ---
 

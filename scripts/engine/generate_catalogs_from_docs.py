@@ -80,6 +80,30 @@ def first_name(cell: str) -> str | None:
     return names[0] if names else None
 
 
+def citation_url(cell: str) -> str:
+    match = re.search(r"\((https://[^)]+)\)", cell or "")
+    return match.group(1) if match else ""
+
+
+def primary_call_signature(name: str, syntax: str) -> str:
+    """First Search Reference call form for `name` inside a syntax cell."""
+    calls = re.findall(r"`([^`]+)`", syntax or "")
+    for call in calls:
+        head = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", call)
+        if head and head.group(1) == name and "(" in call:
+            return call
+    for call in calls:
+        if "(" in call:
+            return call
+    return ""
+
+
+def alias_call_signature(alias: str, primary: str, signature: str) -> str:
+    if signature.startswith(primary):
+        return alias + signature[len(primary) :]
+    return f"{alias}(field)"
+
+
 def write_kql_operators() -> None:
     rows = parse_md_tables(ROOT / "docs/kql/operators.md")
     seen: set[str] = set()
@@ -303,22 +327,45 @@ def write_spl() -> None:
         chunks.append("")
     print(f"spl commands: {len(seen)}")
 
-    fn_seen: set[str] = set()
+    fn_seen: set[tuple[str, str]] = set()
+
+    def add_fn(name: str, kind: str, signature: str, docs: str, citation: str) -> None:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            return
+        key = (name, kind)
+        if key in fn_seen:
+            return
+        fn_seen.add(key)
+        chunks.append("[[functions]]")
+        chunks.append(f'name = "{name}"')
+        chunks.append(f'kind = "{kind}"')
+        if signature:
+            chunks.append(f'signature = "{toml_escape(signature)}"')
+        if docs:
+            chunks.append(f'docs = "{toml_escape(clean_docs(docs))}"')
+        if citation:
+            chunks.append(f'citation = "{toml_escape(citation)}"')
+        chunks.append("")
+
     for rows, kind in [(eval_rows, "eval"), (stats_rows, "aggregate")]:
         for row in rows:
             name_cell = row.get("name") or row.get("function") or ""
             names = extract_backtick_names(name_cell)
             docs = re.sub(r"`+", "", (row.get("docs") or row.get("short docs") or "").strip())
+            citation = citation_url(row.get("citation") or "")
+            syntax = row.get("syntax") or ""
+            aliases = extract_backtick_names(row.get("aliases") or "")
             for n in names:
-                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", n) or n in fn_seen:
-                    continue
-                fn_seen.add(n)
-                chunks.append("[[functions]]")
-                chunks.append(f'name = "{n}"')
-                chunks.append(f'kind = "{kind}"')
-                if docs:
-                    chunks.append(f'docs = "{toml_escape(clean_docs(docs))}"')
-                chunks.append("")
+                signature = primary_call_signature(n, syntax)
+                add_fn(n, kind, signature, docs, citation)
+                for alias in aliases:
+                    add_fn(
+                        alias,
+                        kind,
+                        alias_call_signature(alias, n, signature),
+                        f"Alias of {n}.",
+                        citation,
+                    )
     print(f"spl functions: {len(fn_seen)}")
     (ROOT / "catalogs/spl/commands.toml").write_text("\n".join(chunks).rstrip() + "\n")
 

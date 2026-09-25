@@ -199,14 +199,14 @@ These are **not** the `stats` aggregations. They reduce arguments **on one event
 
 Nonnegative integers in `0 .. 2^53-1`. Citation: [Bitwise functions](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions)
 
-| Name | Syntax | Docs |
-| --- | --- | --- |
-| `bit_and` | `bit_and(X,Y,...)` | Bitwise AND (flags / masks). |
-| `bit_or` | `bit_or(X,Y,...)` | Bitwise OR. |
-| `bit_xor` | `bit_xor(X,Y,...)` | Bitwise XOR. |
-| `bit_not` | `bit_not(X, bitmask?)` | Invert bits; optional bitmask truncates width. |
-| `bit_shift_left` | `bit_shift_left(X, offset)` | Logical left shift. |
-| `bit_shift_right` | `bit_shift_right(X, offset)` | Logical right shift. |
+| Name | Syntax | Docs | Citation |
+| --- | --- | --- | --- |
+| `bit_and` | `bit_and(X,Y,...)` | Bitwise AND (flags / masks). | [bit_and](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions) |
+| `bit_or` | `bit_or(X,Y,...)` | Bitwise OR. | [bit_or](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions) |
+| `bit_xor` | `bit_xor(X,Y,...)` | Bitwise XOR. | [bit_xor](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions) |
+| `bit_not` | `bit_not(X,Y)` | Invert bits. Y is the optional bitmask (default 2^53-1). | [bit_not](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions) |
+| `bit_shift_left` | `bit_shift_left(X, offset)` | Logical left shift. | [bit_shift_left](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions) |
+| `bit_shift_right` | `bit_shift_right(X, offset)` | Logical right shift. | [bit_shift_right](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/BitFunctions) |
 
 ---
 
@@ -214,7 +214,22 @@ Nonnegative integers in `0 .. 2^53-1`. Citation: [Bitwise functions](https://doc
 
 Rare in detections. Citation: [Trig and Hyperbolic functions](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions)
 
-`acos`, `acosh`, `asin`, `asinh`, `atan`, `atan2`, `atanh`, `cos`, `cosh`, `hypot`, `sin`, `sinh`, `tan`, `tanh`.
+| Name | Syntax | Docs | Citation |
+| --- | --- | --- | --- |
+| `acos` | `acos(X)` | Arc cosine of X, in [0, pi] radians. | [acos](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `acosh` | `acosh(X)` | Arc hyperbolic cosine of X radians. | [acosh](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `asin` | `asin(X)` | Arc sine of X, in [-pi/2, +pi/2] radians. | [asin](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `asinh` | `asinh(X)` | Arc hyperbolic sine of X radians. | [asinh](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `atan` | `atan(X)` | Arc tangent of X, in [-pi/2, +pi/2] radians. | [atan](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `atan2` | `atan2(Y,X)` | Arc tangent of Y, X, in [-pi, +pi] radians. | [atan2](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `atanh` | `atanh(X)` | Arc hyperbolic tangent of X radians. | [atanh](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `cos` | `cos(X)` | Cosine of an angle of X radians. | [cos](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `cosh` | `cosh(X)` | Hyperbolic cosine of X radians. | [cosh](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `hypot` | `hypot(X,Y)` | Hypotenuse of a right triangle with legs X and Y. | [hypot](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `sin` | `sin(X)` | Sine of X. | [sin](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `sinh` | `sinh(X)` | Hyperbolic sine of X radians. | [sinh](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `tan` | `tan(X)` | Tangent of X radians. | [tan](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
+| `tanh` | `tanh(X)` | Hyperbolic tangent of X radians. | [tanh](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/TrigandHyperbolicFunctions) |
 
 ---
 
