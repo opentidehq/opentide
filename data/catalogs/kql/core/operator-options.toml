@@ -1,73 +1,248 @@
-# Tabular operator options (join kind=, union kind=, parse kind=, …).
-# Used for signature help and context completions.
+# Tabular operator options taken from each operator's Microsoft Learn syntax.
+# `place` is where a detection author types the option:
+#   equals    — `name=` then one of `values` (also offered as `name=` after the operator)
+#   value     — the value itself is the next token (render chart type)
+#   token     — a bare keyword in the operator prefix (`search in`)
+#   alongside — offered with ordinary completions, because an expression comes first
+
 [[options]]
 operator = "join"
 name = "kind"
 kind = "enum"
-values = ["inner", "innerunique", "leftouter", "rightouter", "fullouter", "leftanti", "anti", "rightanti", "leftsemi", "rightsemi"]
-docs = "Join flavor. innerunique is the default (left row matches at most one right row)."
+place = "equals"
+values = ["innerunique", "inner", "leftouter", "rightouter", "fullouter", "leftsemi", "rightsemi", "leftanti", "anti", "leftantisemi", "rightanti", "rightantisemi"]
+docs = "Join flavor. innerunique is the default. leftantisemi and rightantisemi are the anti-semi variants."
 citation = "https://learn.microsoft.com/kusto/query/join-operator"
-signature = "join kind=…"
+signature = "join [kind=JoinFlavor]"
 
 [[options]]
 operator = "join"
 name = "hint.strategy"
 kind = "enum"
-values = ["broadcast", "shuffle", "legacy"]
-docs = "Join strategy hint (not required in detections)."
+place = "equals"
+values = ["broadcast", "shuffle"]
+docs = "Join strategy hint. broadcast and shuffle are the Sentinel-documented strategies."
 citation = "https://learn.microsoft.com/kusto/query/join-operator"
-signature = "join hint.strategy=…"
+signature = "join hint.strategy=Strategy"
 
 [[options]]
 operator = "union"
 name = "kind"
 kind = "enum"
+place = "equals"
 values = ["inner", "outer"]
-docs = "inner = intersection of columns; outer = union of columns (default)."
+docs = "inner keeps columns common to every input. outer keeps every column and is the default."
 citation = "https://learn.microsoft.com/kusto/query/union-operator"
-signature = "union kind=…"
+signature = "union [kind=inner|outer]"
+
+[[options]]
+operator = "union"
+name = "withsource"
+kind = "assign"
+place = "equals"
+docs = "Add a column that names the source table for each row."
+citation = "https://learn.microsoft.com/kusto/query/union-operator"
+signature = "union [withsource=ColumnName]"
+
+[[options]]
+operator = "union"
+name = "isfuzzy"
+kind = "enum"
+place = "equals"
+values = ["true", "false"]
+docs = "When true, unresolved union sources are dropped instead of failing the query."
+citation = "https://learn.microsoft.com/kusto/query/union-operator"
+signature = "union [isfuzzy=true|false]"
 
 [[options]]
 operator = "parse"
 name = "kind"
 kind = "enum"
+place = "equals"
 values = ["simple", "regex", "relaxed"]
-docs = "Parse pattern dialect."
+docs = "Parse pattern dialect. simple is the default."
 citation = "https://learn.microsoft.com/kusto/query/parse-operator"
-signature = "parse kind=…"
+signature = "parse [kind=Kind]"
+
+[[options]]
+operator = "parse"
+name = "flags"
+kind = "enum"
+place = "equals"
+values = ["U", "m", "s", "i"]
+docs = "Regex flags when kind=regex. U ungreedy, m multiline, s dot matches newline, i case-insensitive."
+citation = "https://learn.microsoft.com/kusto/query/parse-operator"
+signature = "parse [flags=regexFlags]"
+
+[[options]]
+operator = "parse-where"
+name = "kind"
+kind = "enum"
+place = "equals"
+values = ["simple", "regex", "relaxed"]
+docs = "Parse pattern dialect. Rows that fail to match are dropped."
+citation = "https://learn.microsoft.com/kusto/query/parse-where-operator"
+signature = "parse-where [kind=Kind]"
+
+[[options]]
+operator = "parse-where"
+name = "flags"
+kind = "enum"
+place = "equals"
+values = ["U", "m", "s", "i"]
+docs = "Regex flags when kind=regex."
+citation = "https://learn.microsoft.com/kusto/query/parse-where-operator"
+signature = "parse-where [flags=regexFlags]"
 
 [[options]]
 operator = "lookup"
 name = "kind"
 kind = "enum"
+place = "equals"
 values = ["leftouter", "inner"]
-docs = "Lookup join flavor."
+docs = "How to treat fact rows with no dimension match. Default is leftouter."
 citation = "https://learn.microsoft.com/kusto/query/lookup-operator"
-signature = "lookup kind=…"
+signature = "lookup [kind=leftouter|inner]"
+
+[[options]]
+operator = "mv-expand"
+name = "kind"
+kind = "enum"
+place = "equals"
+values = ["bag", "array"]
+docs = "bag expands property bags into single-entry bags. array expands them into [key, value] pairs."
+citation = "https://learn.microsoft.com/kusto/query/mv-expand-operator"
+signature = "mv-expand [kind=bag|array]"
 
 [[options]]
 operator = "mv-expand"
 name = "bagexpansion"
 kind = "enum"
+place = "equals"
 values = ["bag", "array"]
-docs = "How dynamic bags expand."
+docs = "Legacy spelling of kind=bag or kind=array."
 citation = "https://learn.microsoft.com/kusto/query/mv-expand-operator"
-signature = "mv-expand bagexpansion=…"
+signature = "mv-expand [bagexpansion=bag|array]"
+
+[[options]]
+operator = "mv-expand"
+name = "with_itemindex"
+kind = "assign"
+place = "equals"
+docs = "Name of the column that receives the expanded item's index."
+citation = "https://learn.microsoft.com/kusto/query/mv-expand-operator"
+signature = "mv-expand [with_itemindex=IndexColumnName]"
+
+[[options]]
+operator = "search"
+name = "kind"
+kind = "enum"
+place = "equals"
+values = ["default", "case_insensitive", "case_sensitive"]
+docs = "Case behavior of string operators inside the search predicate."
+citation = "https://learn.microsoft.com/kusto/query/search-operator"
+signature = "search [kind=CaseSensitivity]"
+
+[[options]]
+operator = "search"
+name = "in"
+kind = "keyword"
+place = "token"
+docs = "Restrict the search to a parenthesized list of tables."
+citation = "https://learn.microsoft.com/kusto/query/search-operator"
+signature = "search [in (TableSources)]"
+
+[[options]]
+operator = "render"
+name = "visualization"
+kind = "enum"
+place = "value"
+values = ["areachart", "barchart", "columnchart", "piechart", "scatterchart", "table", "timechart"]
+docs = "Chart type supported for Azure Monitor and Microsoft Sentinel."
+citation = "https://learn.microsoft.com/kusto/query/render-operator"
+signature = "render visualization"
+
+[[options]]
+operator = "make-series"
+name = "on"
+kind = "keyword"
+place = "alongside"
+docs = "Axis column the series is built on."
+citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
+signature = "make-series ... on AxisColumn"
+
+[[options]]
+operator = "make-series"
+name = "from"
+kind = "keyword"
+place = "alongside"
+docs = "Low bound of the axis."
+citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
+signature = "make-series ... from start"
+
+[[options]]
+operator = "make-series"
+name = "to"
+kind = "keyword"
+place = "alongside"
+docs = "High bound of the axis."
+citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
+signature = "make-series ... to end"
+
+[[options]]
+operator = "make-series"
+name = "step"
+kind = "keyword"
+place = "alongside"
+docs = "Bin size between axis values."
+citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
+signature = "make-series ... step step"
+
+[[options]]
+operator = "make-series"
+name = "by"
+kind = "keyword"
+place = "alongside"
+docs = "Group the series by an expression."
+citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
+signature = "make-series ... by GroupExpression"
+
+[[options]]
+operator = "make-series"
+name = "default"
+kind = "assign"
+place = "alongside"
+docs = "Value used for axis bins that have no rows. Default is 0."
+citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
+signature = "make-series ... default=DefaultValue"
 
 [[options]]
 operator = "make-series"
 name = "kind"
 kind = "enum"
-values = ["nonempty", "empty"]
-docs = "Series emptiness."
+place = "alongside"
+values = ["nonempty"]
+docs = "Produces a default result when the make-series input is empty."
 citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
-signature = "make-series kind=…"
+signature = "make-series kind=nonempty"
 
 [[options]]
 operator = "summarize"
 name = "hint.strategy"
 kind = "enum"
-values = ["shuffle", "broadcast"]
-docs = "Aggregation shuffle hint."
+place = "alongside"
+values = ["shuffle"]
+docs = "Aggregation strategy hint."
 citation = "https://learn.microsoft.com/kusto/query/summarize-operator"
-signature = "summarize hint.strategy=…"
+signature = "summarize hint.strategy=shuffle"
+
+[[options]]
+operator = "bag_unpack"
+name = "columnsConflict"
+kind = "enum"
+place = "argument"
+parameter_index = 2
+values = ["error", "replace_source", "keep_source"]
+docs = "How to resolve a bag property that collides with a source column. error is the default."
+citation = "https://learn.microsoft.com/kusto/query/bag-unpack-plugin"
+signature = "bag_unpack(Column, OutputColumnPrefix, columnsConflict, ignoredProperties)"

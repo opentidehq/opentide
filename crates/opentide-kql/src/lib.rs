@@ -35,12 +35,26 @@ struct OperatorsFile {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ParamRow {
+    pub name: String,
+    #[serde(default)]
+    pub docs: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct OperatorRow {
     pub name: String,
     pub kind: String,
     pub docs: Option<String>,
     pub warning: Option<String>,
     pub citation: Option<String>,
+    pub signature: Option<String>,
+    #[serde(default)]
+    pub parameters: Vec<ParamRow>,
+    #[serde(default)]
+    pub alias_of: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -55,6 +69,8 @@ pub struct FunctionRow {
     pub docs: Option<String>,
     pub kind: Option<String>,
     pub citation: Option<String>,
+    #[serde(default)]
+    pub parameters: Vec<ParamRow>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -80,6 +96,9 @@ pub struct PluginRow {
     pub docs: Option<String>,
     pub citation: Option<String>,
     pub warning: Option<String>,
+    pub signature: Option<String>,
+    #[serde(default)]
+    pub parameters: Vec<ParamRow>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -137,6 +156,14 @@ pub struct OperatorOption {
     pub docs: Option<String>,
     pub citation: Option<String>,
     pub signature: Option<String>,
+    /// Where the option is typed: `equals` (`name=`), `value` (bare enum),
+    /// `token` (bare keyword in the operator prefix), `alongside` (offered with
+    /// ordinary completions for the rest of the clause).
+    #[serde(default)]
+    pub place: Option<String>,
+    /// When set, values complete inside `operator(` at this zero-based argument.
+    #[serde(default)]
+    pub parameter_index: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -301,6 +328,23 @@ impl Catalog {
         self.option_values("join", "kind")
             .iter()
             .any(|v| v.eq_ignore_ascii_case(name))
+    }
+
+    fn canonical_operator(&self, name: &str) -> String {
+        self.operator(name)
+            .and_then(|op| op.alias_of.clone())
+            .unwrap_or_else(|| name.to_string())
+    }
+
+    pub fn options_for(&self, operator: &str) -> Vec<&OperatorOption> {
+        let canonical = self.canonical_operator(operator);
+        self.options
+            .iter()
+            .filter(|o| {
+                o.operator.eq_ignore_ascii_case(operator)
+                    || o.operator.eq_ignore_ascii_case(&canonical)
+            })
+            .collect()
     }
 }
 
@@ -943,14 +987,69 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
             .map(|p| complete_item(p.name.clone(), "plugin", p.docs.clone(), p.docs.clone()))
             .collect();
     }
-    if lower.ends_with("kind=") {
-        let op = last_operator(before).unwrap_or_else(|| "join".into());
-        let values = catalog.option_values(&op, "kind");
-        if !values.is_empty() {
-            return values
+    if let Some((call, index)) = innermost_call(before) {
+        let named = before.trim_end().to_ascii_lowercase();
+        if let Some(opt) = catalog.options.iter().find(|opt| {
+            opt.operator.eq_ignore_ascii_case(&call)
+                && !opt.values.is_empty()
+                && named.ends_with(&format!("{}=", opt.name.to_ascii_lowercase()))
+        }) {
+            return opt
+                .values
                 .iter()
-                .map(|v| complete_item(v.clone(), "keyword", Some(format!("{op} kind")), None))
+                .map(|value| {
+                    complete_item(
+                        value.clone(),
+                        "keyword",
+                        Some(format!("{call} {}", opt.name)),
+                        opt.docs.clone(),
+                    )
+                })
                 .collect();
+        }
+        let argument_options: Vec<&OperatorOption> = catalog
+            .options
+            .iter()
+            .filter(|o| {
+                o.operator.eq_ignore_ascii_case(&call)
+                    && o.parameter_index == Some(index)
+                    && !o.values.is_empty()
+            })
+            .collect();
+        if !argument_options.is_empty() {
+            return argument_options
+                .iter()
+                .flat_map(|opt| {
+                    opt.values.iter().map(|value| {
+                        complete_item(
+                            value.clone(),
+                            "keyword",
+                            Some(format!("{call} {}", opt.name)),
+                            opt.docs.clone(),
+                        )
+                    })
+                })
+                .collect();
+        }
+    }
+    if let Some(op) = last_operator(before) {
+        let opts = catalog.options_for(&op);
+        if !opts.is_empty() {
+            let after = text_after_operator(before, &op);
+            if let Some(opt) = trailing_equals_option(after, &opts) {
+                return opt
+                    .values
+                    .iter()
+                    .map(|value| {
+                        complete_item(
+                            value.clone(),
+                            "keyword",
+                            Some(format!("{op} {}", opt.name)),
+                            opt.docs.clone(),
+                        )
+                    })
+                    .collect();
+            }
         }
     }
     if before.trim_end().ends_with('|') || before.ends_with("| ") {
@@ -995,6 +1094,10 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
                 }
             }
             if !items.is_empty() {
+                let opts = catalog.options_for(&op);
+                if !opts.is_empty() && text_after_operator(before, &op).trim().is_empty() {
+                    items.extend(prefix_option_items(&op, &opts));
+                }
                 return items;
             }
         }
@@ -1035,6 +1138,87 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
             .iter()
             .map(|t| complete_item(t.clone(), "type", Some("KQL scalar type".into()), None)),
     );
+    if let Some(op) = last_operator(before) {
+        let opts = catalog.options_for(&op);
+        if !opts.is_empty() && text_after_operator(before, &op).trim().is_empty() {
+            items.extend(prefix_option_items(&op, &opts));
+        }
+    }
+    items
+}
+
+fn text_after_operator<'a>(before: &'a str, op: &str) -> &'a str {
+    let chunk = before.rsplit('|').next().unwrap_or(before);
+    let lower = chunk.to_ascii_lowercase();
+    let op_l = op.to_ascii_lowercase();
+    if let Some(idx) = lower.find(&op_l) {
+        let end = idx + op_l.len();
+        let next = lower.as_bytes().get(end).copied();
+        let boundary = match next {
+            None => true,
+            Some(b) if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' => false,
+            Some(_) => true,
+        };
+        if boundary {
+            return &chunk[end..];
+        }
+    }
+    ""
+}
+
+fn trailing_equals_option<'a>(
+    after: &str,
+    options: &[&'a OperatorOption],
+) -> Option<&'a OperatorOption> {
+    let lower = after.trim_start().to_ascii_lowercase();
+    options
+        .iter()
+        .copied()
+        .filter(|opt| !opt.values.is_empty())
+        .filter(|opt| {
+            let key = format!("{}=", opt.name.to_ascii_lowercase());
+            lower.ends_with(&key)
+        })
+        .max_by_key(|opt| opt.name.len())
+}
+
+fn prefix_option_items(op: &str, options: &[&OperatorOption]) -> Vec<CompletionItem> {
+    let mut items = Vec::new();
+    for opt in options {
+        match opt.place.as_deref() {
+            Some("value") => {
+                for value in &opt.values {
+                    items.push(complete_item(
+                        value.clone(),
+                        "keyword",
+                        Some(format!("{op} {}", opt.name)),
+                        opt.docs.clone(),
+                    ));
+                }
+            }
+            Some("token") | Some("alongside") => {
+                items.push(complete_item(
+                    opt.name.clone(),
+                    "keyword",
+                    opt.docs.clone(),
+                    opt.docs.clone(),
+                ));
+            }
+            _ => {
+                let label = if opt.name.ends_with('=') {
+                    opt.name.clone()
+                } else {
+                    format!("{}=", opt.name)
+                };
+                items.push(complete_item(
+                    label,
+                    "keyword",
+                    opt.docs.clone(),
+                    opt.docs.clone(),
+                ));
+            }
+        }
+    }
     items
 }
 
@@ -1147,52 +1331,35 @@ pub fn hover(source: &str, position: opentide_core::Position, profile: Profile) 
 pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<SignatureHelp> {
     let catalog = Catalog::cached(profile);
     let before = &source[..offset.min(source.len())];
-    let lower = before.to_ascii_lowercase();
-    if let Some(op) = last_operator(before) {
-        if op == "join" {
-            let kinds = catalog.option_values("join", "kind");
-            let params = vec![
-                ParameterInformation {
-                    label: "kind".into(),
-                    documentation: Some(format!("One of: {}", kinds.join(", "))),
-                },
-                ParameterInformation {
-                    label: "RightTable".into(),
-                    documentation: Some(
-                        "Table or tabular expression on the right of the join.".into(),
-                    ),
-                },
-                ParameterInformation {
-                    label: "on".into(),
-                    documentation: Some(
-                        "Join predicate (`on EventID` or `$left.a == $right.b`).".into(),
-                    ),
-                },
-            ];
-            let active = if lower.contains("kind=") && !lower.contains(" on ") {
-                0
-            } else if lower.contains(" on ") {
-                2
-            } else {
-                1
-            };
-            return Some(SignatureHelp {
-                signatures: vec![SignatureInformation {
-                    label: "join kind=Kind RightTable on Predicate".into(),
-                    documentation: Some(
-                        "Merge rows of two tables. Default kind is innerunique.".into(),
-                    ),
-                    parameters: params,
-                }],
-                active_signature: 0,
-                active_parameter: active,
-            });
+    if let Some((name, active)) = innermost_call(before) {
+        if let Some(help) = signature_for_name(catalog, &name, active) {
+            return Some(help);
         }
     }
-    let (name, active) = innermost_call(before)?;
-    if let Some(f) = catalog.function(&name) {
+    if let Some(op_name) = last_operator(before) {
+        if let Some(op) = catalog.operator(&op_name) {
+            if let Some(sig) = op.signature.clone() {
+                let params = parameter_list(&op.parameters, &sig);
+                let active = active_operator_parameter(before, &params);
+                return Some(SignatureHelp {
+                    signatures: vec![SignatureInformation {
+                        label: sig,
+                        documentation: op.docs.clone(),
+                        parameters: params,
+                    }],
+                    active_signature: 0,
+                    active_parameter: active,
+                });
+            }
+        }
+    }
+    None
+}
+
+fn signature_for_name(catalog: &Catalog, name: &str, active: u32) -> Option<SignatureHelp> {
+    if let Some(f) = catalog.function(name) {
         let sig = f.signature.clone().unwrap_or_else(|| format!("{name}(…)"));
-        let params = parameters_from_signature(&sig);
+        let params = parameter_list(&f.parameters, &sig);
         let active = active.min(params.len().saturating_sub(1) as u32);
         return Some(SignatureHelp {
             signatures: vec![SignatureInformation {
@@ -1204,7 +1371,55 @@ pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<S
             active_parameter: active,
         });
     }
+    if let Some(plugin) = catalog.plugin(name) {
+        let sig = plugin.signature.clone()?;
+        let params = parameter_list(&plugin.parameters, &sig);
+        let active = active.min(params.len().saturating_sub(1) as u32);
+        return Some(SignatureHelp {
+            signatures: vec![SignatureInformation {
+                label: sig,
+                documentation: plugin.docs.clone(),
+                parameters: params,
+            }],
+            active_signature: 0,
+            active_parameter: active,
+        });
+    }
     None
+}
+
+fn parameter_list(params: &[ParamRow], signature: &str) -> Vec<ParameterInformation> {
+    if !params.is_empty() {
+        return params
+            .iter()
+            .map(|param| ParameterInformation {
+                label: param.name.clone(),
+                documentation: param.docs.clone(),
+            })
+            .collect();
+    }
+    parameters_from_signature(signature)
+}
+
+fn active_operator_parameter(before: &str, params: &[ParameterInformation]) -> u32 {
+    let lower = before.to_ascii_lowercase();
+    if lower.contains(" on ") {
+        if let Some(index) = params.iter().position(|param| {
+            let label = param.label.to_ascii_lowercase();
+            label.contains("condition") || label.contains("attribute") || label == "on"
+        }) {
+            return index as u32;
+        }
+    }
+    if lower.contains("kind=") {
+        if let Some(index) = params.iter().position(|param| {
+            let label = param.label.to_ascii_lowercase();
+            label.contains("kind") || label.contains("flavor")
+        }) {
+            return index as u32;
+        }
+    }
+    0
 }
 
 fn innermost_call(before: &str) -> Option<(String, u32)> {
@@ -1604,11 +1819,230 @@ mod tests {
         assert!(items.iter().any(|i| i.label == "leftouter"), "{items:?}");
         let help = signature_help(src, src.find("join ").unwrap() + 5, Profile::Sentinel)
             .expect("signature");
-        assert!(help.signatures[0].label.contains("join kind="));
+        assert!(
+            help.signatures[0].label.to_lowercase().contains("join"),
+            "{}",
+            help.signatures[0].label
+        );
+        assert!(
+            help.signatures[0].parameters.iter().any(|p| {
+                p.label.to_ascii_lowercase().contains("flavor")
+                    || p.label.to_ascii_lowercase().contains("kind")
+            }),
+            "{:?}",
+            help.signatures[0].parameters
+        );
         let ago = "SecurityEvent | where TimeGenerated > ago(1d)";
         let help = signature_help(ago, ago.find("ago(").unwrap() + 4, Profile::Sentinel)
             .expect("ago signature");
         assert!(help.signatures[0].label.to_lowercase().contains("ago"));
+        assert!(
+            help.signatures[0]
+                .parameters
+                .iter()
+                .any(|p| p.documentation.as_ref().is_some_and(|d| !d.is_empty())),
+            "ago parameters need Learn docs: {:?}",
+            help.signatures[0].parameters
+        );
+    }
+
+    #[test]
+    fn signatures_use_own_name_and_docs_are_not_pipe_tails() {
+        let catalog = Catalog::core();
+        for function in &catalog.functions {
+            assert_named_signature(&function.name, function.signature.as_deref());
+            if let Some(docs) = &function.docs {
+                assert!(
+                    !docs_hold_pipe_split_tail(function.signature.as_deref().unwrap_or(""), docs),
+                    "{} docs look like a pipe-split signature tail: {:?} (signature {:?})",
+                    function.name,
+                    docs,
+                    function.signature
+                );
+            }
+        }
+        for operator in &catalog.operators {
+            assert_named_signature(&operator.name, operator.signature.as_deref());
+            if let Some(docs) = &operator.docs {
+                assert!(
+                    !docs_hold_pipe_split_tail(operator.signature.as_deref().unwrap_or(""), docs),
+                    "{} docs look like a pipe-split signature tail: {:?} (signature {:?})",
+                    operator.name,
+                    docs,
+                    operator.signature
+                );
+            }
+        }
+        for plugin in &catalog.plugins {
+            assert_named_signature(&plugin.name, plugin.signature.as_deref());
+        }
+        let arg_max = catalog.function("arg_max").expect("arg_max");
+        let sig = arg_max.signature.as_deref().unwrap_or("");
+        assert!(sig.contains("ExprToReturn") && sig.contains(')'), "{sig}");
+        assert_ne!(
+            arg_max.docs.as_deref(),
+            Some("ExprToReturn [, …])"),
+            "arg_max docs still hold the pipe-split tail"
+        );
+        let parse_json = catalog.function("parse_json").expect("parse_json");
+        assert!(
+            parse_json
+                .signature
+                .as_deref()
+                .unwrap_or("")
+                .to_ascii_lowercase()
+                .starts_with("parse_json("),
+            "{:?}",
+            parse_json.signature
+        );
+    }
+
+    #[test]
+    fn operator_options_complete_where_the_syntax_puts_them() {
+        let render = "StormEvents | render ";
+        let items = completions(render, render.len(), Profile::Sentinel);
+        assert!(
+            items.iter().any(|i| i.label == "timechart"),
+            "render chart types complete after the operator, got {:?}",
+            items.iter().map(|i| &i.label).collect::<Vec<_>>()
+        );
+        assert!(
+            !render.trim_end().ends_with("kind="),
+            "this fixture must not depend on kind="
+        );
+
+        let series = "StormEvents | make-series ";
+        let items = completions(series, series.len(), Profile::Sentinel);
+        for keyword in ["on", "from", "to", "step", "by", "default"] {
+            assert!(
+                items.iter().any(|i| i.label == keyword),
+                "make-series missing {keyword}: {:?}",
+                items.iter().map(|i| &i.label).collect::<Vec<_>>()
+            );
+        }
+
+        let union = "StormEvents | union ";
+        let items = completions(union, union.len(), Profile::Sentinel);
+        assert!(items.iter().any(|i| i.label == "withsource="), "{items:?}");
+        assert!(items.iter().any(|i| i.label == "isfuzzy="), "{items:?}");
+
+        let search = "search ";
+        let items = completions(search, search.len(), Profile::Sentinel);
+        assert!(items.iter().any(|i| i.label == "kind="), "{items:?}");
+        assert!(items.iter().any(|i| i.label == "in"), "{items:?}");
+
+        let parse = "StormEvents | parse ";
+        let items = completions(parse, parse.len(), Profile::Sentinel);
+        assert!(items.iter().any(|i| i.label == "flags="), "{items:?}");
+
+        let expand = "StormEvents | mv-expand ";
+        let items = completions(expand, expand.len(), Profile::Sentinel);
+        assert!(items.iter().any(|i| i.label == "kind="), "{items:?}");
+        let kind = "StormEvents | mv-expand kind=";
+        let items = completions(kind, kind.len(), Profile::Sentinel);
+        assert!(items.iter().any(|i| i.label == "bag"), "{items:?}");
+        assert!(items.iter().any(|i| i.label == "array"), "{items:?}");
+
+        let join_prefix = "StormEvents | join ";
+        let items = completions(join_prefix, join_prefix.len(), Profile::Sentinel);
+        assert!(
+            items.iter().any(|i| i.label == "kind="),
+            "join options stay available: {items:?}"
+        );
+        assert!(
+            items.iter().any(|i| i.kind == "table"),
+            "join must still offer tables, got {:?}",
+            items
+                .iter()
+                .map(|i| (&i.label, &i.kind))
+                .take(12)
+                .collect::<Vec<_>>()
+        );
+
+        let named = "StormEvents | evaluate bag_unpack(Parsed, columnsConflict=";
+        let items = completions(named, named.len(), Profile::Sentinel);
+        assert!(
+            items.iter().any(|i| i.label == "replace_source"),
+            "named columnsConflict= should complete: {items:?}"
+        );
+
+        let join = "StormEvents | join kind=";
+        let items = completions(join, join.len(), Profile::Sentinel);
+        assert!(items.iter().any(|i| i.label == "leftantisemi"), "{items:?}");
+        assert!(
+            items.iter().any(|i| i.label == "rightantisemi"),
+            "{items:?}"
+        );
+
+        let unpack = "StormEvents | evaluate bag_unpack(Parsed, \"pre\", ";
+        let items = completions(unpack, unpack.len(), Profile::Sentinel);
+        assert!(
+            items.iter().any(|i| i.label == "replace_source"),
+            "{items:?}"
+        );
+    }
+
+    fn assert_named_signature(name: &str, signature: Option<&str>) {
+        let sig = signature.unwrap_or("");
+        assert!(
+            sig.to_ascii_lowercase()
+                .contains(&name.to_ascii_lowercase())
+                && sig.contains('(')
+                && sig.contains(')'),
+            "{name} signature {sig:?} must contain its own name and a parenthesized argument list"
+        );
+    }
+
+    /// A `|` split of a markdown table parks the rest of the signature in `docs`
+    /// (`arg_max(ExprToMaximize, * ` + docs `ExprToReturn [, …])`).
+    fn docs_hold_pipe_split_tail(signature: &str, docs: &str) -> bool {
+        let docs = docs.trim();
+        if docs.is_empty() {
+            return false;
+        }
+        let open = signature.matches('(').count();
+        let close = signature.matches(')').count();
+        if open > close && docs.contains(')') {
+            return true;
+        }
+        if docs.ends_with(')') && !docs.contains('.') {
+            let sentence = docs.split_whitespace().any(|word| {
+                let word = word
+                    .trim_matches(|c: char| !c.is_ascii_alphabetic())
+                    .to_ascii_lowercase();
+                matches!(
+                    word.as_str(),
+                    "the"
+                        | "a"
+                        | "an"
+                        | "to"
+                        | "of"
+                        | "for"
+                        | "from"
+                        | "with"
+                        | "returns"
+                        | "return"
+                        | "calculates"
+                        | "provides"
+                        | "when"
+                        | "that"
+                        | "and"
+                        | "or"
+                        | "in"
+                        | "is"
+                        | "by"
+                        | "which"
+                        | "was"
+                        | "this"
+                        | "into"
+                        | "over"
+                        | "all"
+                        | "not"
+                )
+            });
+            return !sentence;
+        }
+        false
     }
 
     #[test]

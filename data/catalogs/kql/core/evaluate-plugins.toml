@@ -1,119 +1,550 @@
 # KQL evaluate plugins. Invoked as: T | evaluate PluginName(...)
+# Signatures come from each plugin's Learn article. Extra ADX-only plugins are not added.
 
 [[plugins]]
 name = "bag_unpack"
-docs = "Expand a dynamic property bag into columns"
+signature = "bag_unpack(Column [, OutputColumnPrefix] [, columnsConflict] [, ignoredProperties])[: OutputSchema]"
+docs = "The bag_unpack plugin unpacks a single column of type dynamic, by treating each property bag top-level slot as a column."
 citation = "https://learn.microsoft.com/kusto/query/bag-unpack-plugin"
+
+[[plugins.parameters]]
+name = "Column"
+docs = "The column of T to unpack."
+required = true
+
+[[plugins.parameters]]
+name = "OutputColumnPrefix"
+docs = "A common prefix to add to all columns produced by the plugin."
+required = false
+
+[[plugins.parameters]]
+name = "columnsConflict"
+docs = "The direction for column conflict resolution."
+required = false
+
+[[plugins.parameters]]
+name = "ignoredProperties"
+docs = "An optional set of bag properties to be ignored."
+required = false
+
+[[plugins.parameters]]
+name = "OutputSchema"
+docs = "Specify the column names and types for the bag_unpack plugin output."
+required = false
 
 [[plugins]]
 name = "pivot"
-docs = "Rotate unique values of a column into columns plus aggregate"
+signature = "pivot(pivotColumn[, aggregationFunction] [, column1 [, column2 ...]])[: OutputSchema]"
+docs = "Rotates a table by turning the unique values from one column in the input table into multiple columns in the output table and performs aggregations as required on any remaining column values that will appear in the final output."
 citation = "https://learn.microsoft.com/kusto/query/pivot-plugin"
+
+[[plugins.parameters]]
+name = "pivotColumn"
+docs = "The column to rotate."
+required = true
+
+[[plugins.parameters]]
+name = "aggregationFunction"
+docs = "An aggregation function used to aggregate multiple rows in the input table to a single row in the output table."
+required = false
+
+[[plugins.parameters]]
+name = "column1, column2, ..."
+docs = "A column name or comma-separated list of column names."
+required = false
+
+[[plugins.parameters]]
+name = "OutputSchema"
+docs = "The names and types for the expected columns of the pivot plugin output."
+required = false
 
 [[plugins]]
 name = "autocluster"
-docs = "Find common discrete patterns"
+signature = "autocluster([SizeWeight [, WeightColumn [, NumSeeds [, CustomWildcard [, ...]]]]])"
+docs = "autocluster finds common patterns of discrete attributes (dimensions) in the data."
 citation = "https://learn.microsoft.com/kusto/query/autocluster-plugin"
+
+[[plugins.parameters]]
+name = "SizeWeight"
+docs = "A double between 0 and 1 that controls the balance between generic (high coverage) and informative (many shared) values."
+required = false
+
+[[plugins.parameters]]
+name = "WeightColumn"
+docs = "Considers each row in the input according to the specified weight."
+required = false
+
+[[plugins.parameters]]
+name = "NumSeeds"
+docs = "Determines the number of initial local search points."
+required = false
+
+[[plugins.parameters]]
+name = "CustomWildcard"
+docs = "A type literal that sets the wildcard value for a specific type in the results table, indicating no restriction on this column."
+required = false
 
 [[plugins]]
 name = "basket"
-docs = "Frequent itemsets / association patterns"
+signature = "basket([Threshold, WeightColumn, MaxDimensions, CustomWildcard, CustomWildcard, ...])"
+docs = "The basket plugin finds frequent patterns of attributes in the data and returns the patterns that pass a frequency threshold in that data."
 citation = "https://learn.microsoft.com/kusto/query/basket-plugin"
+
+[[plugins.parameters]]
+name = "Threshold"
+docs = "A double in the range of 0.015 to 1 that sets the minimal ratio of the rows to be considered frequent."
+required = false
+
+[[plugins.parameters]]
+name = "WeightColumn"
+docs = "The column name to use to consider each row in the input according to the specified weight."
+required = false
+
+[[plugins.parameters]]
+name = "MaxDimensions"
+docs = "Sets the maximal number of uncorrelated dimensions per basket, limited by default, to minimize the query runtime."
+required = false
+
+[[plugins.parameters]]
+name = "CustomWildcard"
+docs = "Sets the wildcard value for a specific type in the result table that will indicate that the current pattern doesn't have a restriction on this column."
+required = false
 
 [[plugins]]
 name = "diffpatterns"
-docs = "Contrast patterns between two datasets"
+signature = "diffpatterns(SplitColumn, SplitValueA, SplitValueB [, WeightColumn, Threshold, MaxDimensions, CustomWildcard, ...])"
+docs = "Compares two datasets of the same structure and finds patterns of discrete attributes (dimensions) that characterize differences between the two datasets."
 citation = "https://learn.microsoft.com/kusto/query/diffpatterns-plugin"
+
+[[plugins.parameters]]
+name = "SplitColumn"
+docs = "The column name that tells the algorithm how to split the query into datasets."
+required = true
+
+[[plugins.parameters]]
+name = "SplitValueA"
+docs = "A string representation of one of the values in the SplitColumn that was specified."
+required = true
+
+[[plugins.parameters]]
+name = "SplitValueB"
+docs = "A string representation of one of the values in the SplitColumn that was specified."
+required = true
+
+[[plugins.parameters]]
+name = "WeightColumn"
+docs = "The column used to consider each row in the input according to the specified weight."
+required = false
+
+[[plugins.parameters]]
+name = "Threshold"
+docs = "A real in the range of 0.015 to 1."
+required = false
+
+[[plugins.parameters]]
+name = "MaxDimensions"
+docs = "Sets the maximum number of uncorrelated dimensions per result pattern."
+required = false
+
+[[plugins.parameters]]
+name = "CustomWildcard"
+docs = "Sets the wildcard value for a specific type in the result table that will indicate that the current pattern doesn't have a restriction on this column."
+required = false
 
 [[plugins]]
 name = "diffpatterns_text"
-docs = "Text variant of diffpatterns"
+signature = "diffpatterns_text(TextColumn, BooleanCondition [, MinTokens, Threshold, MaxTokens])"
+docs = "Compares two datasets of string values and finds text patterns that characterize differences between the two datasets."
 citation = "https://learn.microsoft.com/kusto/query/diffpatterns-text-plugin"
+
+[[plugins.parameters]]
+name = "TextColumn"
+docs = "The text column to analyze."
+required = true
+
+[[plugins.parameters]]
+name = "BooleanCondition"
+docs = "An expression that evaluates to a boolean value."
+required = true
+
+[[plugins.parameters]]
+name = "MinTokens"
+docs = "An integer value between 0 and 200 that represents the minimal number of non-wildcard tokens per result pattern."
+required = false
+
+[[plugins.parameters]]
+name = "Threshold"
+docs = "A decimal value between 0.015 and 1 that sets the minimal pattern ratio difference between the two sets."
+required = false
+
+[[plugins.parameters]]
+name = "MaxTokens"
+docs = "An integer value between 0 and 20 that sets the maximal number of tokens per result pattern, specifying a lower limit decreases the query runtime."
+required = false
 
 [[plugins]]
 name = "sequence_detect"
-docs = "Detect sequences of events"
+signature = "sequence_detect(TimelineColumn, MaxSequenceStepWindow, MaxSequenceSpan, Expr1, Expr2, ..., Dim1, Dim2, ...)"
+docs = "Detects sequence occurrences based on provided predicates."
 citation = "https://learn.microsoft.com/kusto/query/sequence-detect-plugin"
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The column reference representing timeline, must be present in the source expression."
+required = true
+
+[[plugins.parameters]]
+name = "MaxSequenceStepWindow"
+docs = "The value of the max allowed timespan between 2 sequential steps in the sequence."
+required = true
+
+[[plugins.parameters]]
+name = "MaxSequenceSpan"
+docs = "The max timespan for the sequence to complete all steps."
+required = true
+
+[[plugins.parameters]]
+name = "Expr1, Expr2, ..."
+docs = "The boolean predicate expressions defining sequence steps."
+required = true
+
+[[plugins.parameters]]
+name = "Dim1, Dim2, ..."
+docs = "The dimension expressions that are used to correlate sequences."
+required = true
 
 [[plugins]]
 name = "narrow"
-docs = "Unpivot columns to name/value rows"
+signature = "narrow()"
+docs = "The narrow plugin \"unpivots\" a wide table into a table with three columns:."
 citation = "https://learn.microsoft.com/kusto/query/narrow-plugin"
 
 [[plugins]]
 name = "preview"
-docs = "Preview plugin output"
+signature = "preview(NumberOfRows)"
+docs = "Returns a table with up to the specified number of rows from the input record set, and the total number of records in the input record set."
 citation = "https://learn.microsoft.com/kusto/query/preview-plugin"
+
+[[plugins.parameters]]
+name = "NumberOfRows"
+docs = "The number of rows to preview from the table."
+required = true
 
 [[plugins]]
 name = "rolling_percentile"
-docs = "Rolling percentile over a window"
+signature = "rolling_percentile(ValueColumn, Percentile, IndexColumn, BinSize, BinsPerWindow [, dim1, dim2, ...])"
+docs = "Returns an estimate for the specified percentile of the ValueColumn population in a rolling (sliding) BinsPerWindow size window per BinSize."
 citation = "https://learn.microsoft.com/kusto/query/rolling-percentile-plugin"
+
+[[plugins.parameters]]
+name = "ValueColumn"
+docs = "The name of the column used to calculate the percentiles."
+required = true
+
+[[plugins.parameters]]
+name = "Percentile"
+docs = "Scalar with the percentile to calculate."
+required = true
+
+[[plugins.parameters]]
+name = "IndexColumn"
+docs = "The name of the column over which to run the rolling window."
+required = true
+
+[[plugins.parameters]]
+name = "BinSize"
+docs = "Scalar with size of the bins to apply over the IndexColumn."
+required = true
+
+[[plugins.parameters]]
+name = "BinsPerWindow"
+docs = "The number of bins included in each window."
+required = true
+
+[[plugins.parameters]]
+name = "dim1, dim2, ..."
+docs = "A list of the dimensions columns to slice by."
+required = false
 
 [[plugins]]
 name = "rows_near"
-docs = "Rows near matching rows"
+signature = "rows_near(Condition, NumRows, [, RowsAfter])"
+docs = "Finds rows near a specified condition."
 citation = "https://learn.microsoft.com/kusto/query/rows-near-plugin"
+
+[[plugins.parameters]]
+name = "Condition"
+docs = "Represents the condition to find rows around."
+required = true
+
+[[plugins.parameters]]
+name = "NumRows"
+docs = "The number of rows to find before and after the condition."
+required = true
+
+[[plugins.parameters]]
+name = "RowsAfter"
+docs = "When specified, overrides the number of rows to find after the condition."
+required = false
 
 [[plugins]]
 name = "dcount_intersect"
-docs = "Intersection of distinct counts / HLL sketches"
+signature = "dcount_intersect(hll_1, hll_2, [, hll_3, ...])"
+docs = "Calculates intersection between N sets based on hll values (N in range of [2..16]), and returns N dcount values."
 citation = "https://learn.microsoft.com/kusto/query/dcount-intersect-plugin"
+
+[[plugins.parameters]]
+name = "hll_i"
+required = false
 
 [[plugins]]
 name = "ipv4_lookup"
-docs = "Lookup IPs in a CIDR dimension table"
+signature = "ipv4_lookup(LookupTable, SourceIPv4Key, IPv4LookupKey [, ExtraKey1 [.., ExtraKeyN [, return_unmatched]]])"
+docs = "The ipv4_lookup plugin looks up an IPv4 value in a lookup table and returns rows with matched values."
 citation = "https://learn.microsoft.com/kusto/query/ipv4-lookup-plugin"
+
+[[plugins.parameters]]
+name = "LookupTable"
+docs = "Table or tabular expression with IPv4 lookup data, whose column LookupKey is used for IPv4 matching."
+required = true
+
+[[plugins.parameters]]
+name = "SourceIPv4Key"
+docs = "The column of T with IPv4 string to be looked up in LookupTable."
+required = true
+
+[[plugins.parameters]]
+name = "IPv4LookupKey"
+docs = "The column of LookupTable with IPv4 string that is matched against each SourceIPv4Key value."
+required = true
+
+[[plugins.parameters]]
+name = "ExtraKey1 .. ExtraKeyN"
+docs = "Additional column references that are used for lookup matches."
+required = false
+
+[[plugins.parameters]]
+name = "return_unmatched"
+docs = "A boolean flag that defines if the result should include all or only matching rows (default: false - only matching rows returned)."
+required = false
 
 [[plugins]]
 name = "ipv6_lookup"
-docs = "IPv6 variant of ipv4_lookup"
+signature = "ipv6_lookup(LookupTable, SourceIPv6Key, IPv6LookupKey [, return_unmatched])"
+docs = "The ipv6_lookup plugin looks up an IPv6 value in a lookup table and returns rows with matched values."
 citation = "https://learn.microsoft.com/kusto/query/ipv6-lookup-plugin"
+
+[[plugins.parameters]]
+name = "LookupTable"
+docs = "Table or tabular expression with IPv6 lookup data, whose column LookupKey is used for IPv6 matching."
+required = true
+
+[[plugins.parameters]]
+name = "SourceIPv6Key"
+docs = "The column of T with IPv6 string to be looked up in LookupTable."
+required = true
+
+[[plugins.parameters]]
+name = "IPv6LookupKey"
+docs = "The column of LookupTable with IPv6 string that is matched against each SourceIPv6Key value."
+required = true
+
+[[plugins.parameters]]
+name = "return_unmatched"
+docs = "A boolean flag that defines if the result should include all or only matching rows (default: false - only matching rows returned)."
+required = false
 
 [[plugins]]
 name = "schema_merge"
-docs = "Merge schemas"
+signature = "schema_merge(PreserveOrder)"
+docs = "Merges tabular schema definitions into a unified schema."
 citation = "https://learn.microsoft.com/kusto/query/schema-merge-plugin"
+
+[[plugins.parameters]]
+name = "PreserveOrder"
+docs = "When set to true, directs the plugin to validate the column order as defined by the first tabular schema that is kept."
+required = false
 
 [[plugins]]
 name = "infer_storage_schema"
-docs = "Infer schema from storage"
+signature = "infer_storage_schema(Options)"
+docs = "This plugin infers the schema of external data, and returns it as CSL schema string."
 citation = "https://learn.microsoft.com/kusto/query/infer-storage-schema-plugin"
 warning = "am_no"
 
+[[plugins.parameters]]
+name = "Options"
+docs = "A property bag specifying the properties of the request."
+required = true
+
 [[plugins]]
 name = "sql_request"
-docs = "Query an external SQL database"
+signature = "sql_request(ConnectionString, SqlQuery [, SqlParameters [, Options]])[: OutputSchema]"
+docs = "The sql_request plugin sends a SQL query to an Azure SQL Server network endpoint and returns the results."
 citation = "https://learn.microsoft.com/kusto/query/sql-request-plugin"
 warning = "am_no"
 
+[[plugins.parameters]]
+name = "ConnectionString"
+docs = "The connection string that points at the SQL Server network endpoint."
+required = true
+
+[[plugins.parameters]]
+name = "SqlQuery"
+docs = "The query that is to be executed against the SQL endpoint."
+required = true
+
+[[plugins.parameters]]
+name = "SqlParameters"
+docs = "A property bag of key-value pairs to pass as parameters along with the query."
+required = false
+
+[[plugins.parameters]]
+name = "Options"
+docs = "A property bag of key-value pairs to pass more advanced settings along with the query."
+required = false
+
+[[plugins.parameters]]
+name = "OutputSchema"
+docs = "The names and types for the expected columns of the sql_request plugin output."
+required = false
+
 [[plugins]]
 name = "mysql_request"
-docs = "Query MySQL"
+signature = "mysql_request(ConnectionString, SqlQuery [, SqlParameters])[: OutputSchema]"
+docs = "The mysql_request plugin sends a SQL query to an Azure MySQL Server network endpoint and returns the first rowset in the results."
 citation = "https://learn.microsoft.com/kusto/query/mysql-request-plugin"
 warning = "am_no"
 
+[[plugins.parameters]]
+name = "ConnectionString"
+docs = "The connection string that points at the MySQL Server network endpoint."
+required = true
+
+[[plugins.parameters]]
+name = "SqlQuery"
+docs = "The query that is to be executed against the SQL endpoint."
+required = true
+
+[[plugins.parameters]]
+name = "SqlParameters"
+docs = "A property bag object that holds key-value pairs to pass as parameters along with the query."
+required = false
+
+[[plugins.parameters]]
+name = "OutputSchema"
+docs = "The names and types for the expected columns of the mysql_request plugin output."
+required = false
+
 [[plugins]]
 name = "cosmosdb_sql_request"
-docs = "Query Cosmos DB"
+signature = "cosmosdb_sql_request(ConnectionString, SqlQuery [, SqlParameters [, Options]])[: OutputSchema]"
+docs = "The cosmosdb_sql_request plugin sends a SQL query to an Azure Cosmos DB SQL network endpoint and returns the results of the query."
 citation = "https://learn.microsoft.com/kusto/query/cosmosdb-plugin"
 warning = "am_no"
 
+[[plugins.parameters]]
+name = "ConnectionString"
+docs = "The connection string that points to the Azure Cosmos DB collection to query."
+required = true
+
+[[plugins.parameters]]
+name = "SqlQuery"
+docs = "The query to execute."
+required = true
+
+[[plugins.parameters]]
+name = "SqlParameters"
+docs = "The property bag object to pass as parameters along with the query."
+required = false
+
+[[plugins.parameters]]
+name = "OutputSchema"
+docs = "The names and types of the expected columns of the cosmosdb_sql_request plugin output."
+required = false
+
+[[plugins.parameters]]
+name = "Options"
+docs = "A property bag object of advanced settings."
+required = false
+
 [[plugins]]
 name = "azure_digital_twins_query_request"
-docs = "Query Azure Digital Twins"
+signature = "azure_digital_twins_query_request(AdtInstanceEndpoint, AdtQuery)"
+docs = "The azure_digital_twins_query_request plugin runs an Azure Digital Twins query as part of a Kusto Query Language (KQL) query."
 citation = "https://learn.microsoft.com/kusto/query/azure-digital-twins-query-request-plugin"
 warning = "am_no"
 
+[[plugins.parameters]]
+name = "AdtInstanceEndpoint"
+docs = "The Azure Digital Twins instance endpoint to be queried."
+required = true
+
+[[plugins.parameters]]
+name = "AdtQuery"
+docs = "The query to run against the Azure Digital Twins endpoint."
+required = true
+
 [[plugins]]
 name = "python"
-docs = "Sandboxed Python plugin"
+signature = "python(output_schema, script [, script_parameters] [, external_artifacts] [, spill_to_disk])"
+docs = "The Python plugin runs a user-defined function (UDF) using a Python script."
 citation = "https://learn.microsoft.com/kusto/query/python-plugin"
 warning = "am_no"
 
+[[plugins.parameters]]
+name = "output_schema"
+docs = "A type literal that defines the output schema of the tabular data, returned by the Python code."
+required = true
+
+[[plugins.parameters]]
+name = "script"
+docs = "The valid Python script to execute."
+required = true
+
+[[plugins.parameters]]
+name = "script_parameters"
+docs = "A property bag of name value pairs to be passed to the Python script as the reserved kargs dictionary."
+required = false
+
+[[plugins.parameters]]
+name = "external_artifacts"
+docs = "A property bag of name and URL pairs for artifacts that are accessible from cloud storage."
+required = false
+
+[[plugins.parameters]]
+name = "spill_to_disk"
+docs = "Specifies an alternative method for serializing the input table to the Python sandbox."
+required = false
+
 [[plugins]]
 name = "R"
-docs = "Sandboxed R plugin"
+signature = "R(output_schema, script [, script_parameters] [, external_artifacts])"
+docs = "The R plugin runs a user-defined function (UDF) using an R script."
 citation = "https://learn.microsoft.com/kusto/query/r-plugin"
 warning = "am_no"
 
+[[plugins.parameters]]
+name = "output_schema"
+docs = "A type literal that defines the output schema of the tabular data, returned by the R code."
+required = true
+
+[[plugins.parameters]]
+name = "script"
+docs = "The valid R script to be executed."
+required = true
+
+[[plugins.parameters]]
+name = "script_parameters"
+docs = "A property bag of name and value pairs to be passed to the R script as the reserved kargs dictionary."
+required = false
+
+[[plugins.parameters]]
+name = "hint.distribution"
+docs = "Hint for the plugin's execution to be distributed across multiple cluster nodes."
+required = false
+
+[[plugins.parameters]]
+name = "external_artifacts"
+docs = "A property bag of name and URL pairs for artifacts that are accessible from cloud storage."
+required = false

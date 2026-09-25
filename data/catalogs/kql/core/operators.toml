@@ -1,316 +1,1189 @@
-# KQL tabular operators. Generated from docs/kql/operators.md — edit the inventory, then re-run
-# scripts/generate_catalogs_from_docs.py
+# KQL tabular operators.
+# Signatures are the Learn syntax, wrapped as name(...) so signature help has an argument list.
+# Blurbs are the article's opening sentence (pipe characters inside signatures are not split).
 
 [[operators]]
 name = "where"
 kind = "tabular"
-docs = "Keep rows whose predicate is true."
+signature = "where(Predicate)"
+docs = "Filters a table to the subset of rows that satisfy a predicate."
 citation = "https://learn.microsoft.com/kusto/query/where-operator"
+
+[[operators.parameters]]
+name = "Predicate"
+docs = "Expression that evaluates to a bool for each row in T."
+required = true
 
 [[operators]]
 name = "filter"
 kind = "tabular"
+signature = "filter(Predicate)"
 docs = "Alias of where."
+citation = "https://learn.microsoft.com/kusto/query/where-operator"
 alias_of = "where"
+
+[[operators.parameters]]
+name = "Predicate"
+docs = "Expression that evaluates to a bool for each row in T."
+required = true
 
 [[operators]]
 name = "search"
 kind = "tabular"
-docs = "Full-text search across columns/tables."
+signature = "search([kind= CaseSensitivity] [in(TableSources)] SearchPredicate)"
+docs = "Searches a text pattern in multiple tables and columns."
+citation = "https://learn.microsoft.com/kusto/query/search-operator"
 warning = "sentinel_star_restricted"
+
+[[operators.parameters]]
+name = "CaseSensitivity"
+docs = "A flag that controls the behavior of all string scalar operators, such as has, with respect to case sensitivity."
+required = false
+
+[[operators.parameters]]
+name = "TableSources"
+docs = "A comma-separated list of \"wildcarded\" table names to take part in the search."
+required = false
+
+[[operators.parameters]]
+name = "SearchPredicate"
+docs = "A boolean expression to be evaluated for every record in the input."
+required = true
 
 [[operators]]
 name = "find"
 kind = "tabular"
-docs = "Find rows matching a predicate across a set of tables; adds source_ column."
+signature = "find([withsource= ColumnName] [in(Tables)] where Predicate [project-smart | project ColumnName[: ColumnType, ...] [, pack_all()]])"
+docs = "Finds rows that match a predicate across a set of tables."
 citation = "https://learn.microsoft.com/kusto/query/find-operator"
+
+[[operators.parameters]]
+name = "ColumnName"
+docs = "By default, the output includes a column called source_ whose values indicate which source table contributed to each row."
+required = false
+
+[[operators.parameters]]
+name = "Predicate"
+docs = "This boolean expression is evaluated for each row in each input table."
+required = true
+
+[[operators.parameters]]
+name = "Tables"
+docs = "Zero or more comma-separated table references."
+required = false
+
+[[operators.parameters]]
+name = "project-smart | project"
+docs = "If not specified, project-smart is used by default."
+required = false
 
 [[operators]]
 name = "take"
 kind = "tabular"
-docs = "Return the first *N* rows (not a statistical sample; order undefined unless sort/serialize first)."
+signature = "take(NumberOfRows)"
+docs = "Return up to the specified number of rows."
 citation = "https://learn.microsoft.com/kusto/query/take-operator"
+
+[[operators.parameters]]
+name = "NumberOfRows"
+docs = "The number of rows to return."
+required = true
 
 [[operators]]
 name = "limit"
 kind = "tabular"
+signature = "limit(NumberOfRows)"
 docs = "Alias of take."
+citation = "https://learn.microsoft.com/kusto/query/take-operator"
 alias_of = "take"
+
+[[operators.parameters]]
+name = "NumberOfRows"
+docs = "The number of rows to return."
+required = true
 
 [[operators]]
 name = "top"
 kind = "tabular"
-docs = "top N by expr [asc"
+signature = "top(NumberOfRows by Expression [asc | desc] [nulls first | nulls last])"
+docs = "Returns the first N records sorted by the specified column."
+citation = "https://learn.microsoft.com/kusto/query/top-operator"
+
+[[operators.parameters]]
+name = "NumberOfRows"
+docs = "The number of rows of T to return."
+required = true
+
+[[operators.parameters]]
+name = "Expression"
+docs = "The scalar expression by which to sort."
+required = true
+
+[[operators.parameters]]
+name = "asc | desc"
+docs = "Controls whether the selection is from the \"bottom\" or \"top\" of the range."
+required = false
+
+[[operators.parameters]]
+name = "nulls first | nulls last"
+docs = "Controls whether null values appear at the \"bottom\" or \"top\" of the range."
+required = false
 
 [[operators]]
 name = "top-hitters"
 kind = "tabular"
-docs = "Approximate most frequent values of an expression (performance over fairness)."
+signature = "top-hitters(NumberOfValues of ValueExpression [by SummingExpression])"
+docs = "Returns an approximation for the most popular distinct values, or the values with the largest sum, in the input."
 citation = "https://learn.microsoft.com/kusto/query/top-hitters-operator"
+
+[[operators.parameters]]
+name = "NumberOfValues"
+docs = "The number of distinct values of ValueExpression."
+required = true
+
+[[operators.parameters]]
+name = "ValueExpression"
+docs = "An expression over the input table T whose distinct values are returned."
+required = true
+
+[[operators.parameters]]
+name = "SummingExpression"
+docs = "If specified, a numeric expression over the input table T whose sum per distinct value of ValueExpression establishes which values to emit."
+required = false
 
 [[operators]]
 name = "top-nested"
 kind = "tabular"
-docs = "Nested “top N of X by agg, top M of Y by agg” hierarchies."
+signature = "top-nested([N] of Expr [with others = ConstExpr] by Aggregation [asc | desc] [, ...])"
+docs = "The top-nested operator performs hierarchical aggregation and value selection."
 citation = "https://learn.microsoft.com/kusto/query/top-nested-operator"
+
+[[operators.parameters]]
+name = "N"
+docs = "The number of top values to be returned for this hierarchy level."
+required = false
+
+[[operators.parameters]]
+name = "Expr"
+docs = "An expression over the input record indicating which value to return for this hierarchy level."
+required = true
+
+[[operators.parameters]]
+name = "ConstExpr"
+docs = "If specified, for each hierarchy level, one record is added with the value that is the aggregation over all records that didn't make it to the top."
+required = false
+
+[[operators.parameters]]
+name = "Aggregation"
+docs = "The aggregation function applied to records with the same Expr value."
+required = false
 
 [[operators]]
 name = "sample"
 kind = "tabular"
-docs = "Random sample of *N* rows (biased; not statistically fair)."
+signature = "sample(NumberOfRows)"
+docs = "Returns up to the specified number of random rows from the input table."
 citation = "https://learn.microsoft.com/kusto/query/sample-operator"
+
+[[operators.parameters]]
+name = "NumberOfRows"
+docs = "The number of rows to return."
+required = true
 
 [[operators]]
 name = "sample-distinct"
 kind = "tabular"
-docs = "Up to *N* distinct values of one column (biased)."
+signature = "sample-distinct(NumberOfValues of ColumnName)"
+docs = "Returns a single column that contains up to the specified number of distinct values of the requested column."
 citation = "https://learn.microsoft.com/kusto/query/sample-distinct-operator"
+
+[[operators.parameters]]
+name = "NumberOfValues"
+docs = "The number distinct values of T to return."
+required = true
+
+[[operators.parameters]]
+name = "ColumnName"
+docs = "The name of the column from which to sample."
+required = true
 
 [[operators]]
 name = "project"
 kind = "tabular"
-docs = "Select, rename, and compute columns; drops unspecified columns."
+signature = "project(ColumnName [= Expression] [, ...])"
+docs = "Select the columns to include, rename or drop, and insert new computed columns."
 citation = "https://learn.microsoft.com/kusto/query/project-operator"
+
+[[operators.parameters]]
+name = "ColumnName"
+docs = "A column name or comma-separated list of column names to appear in the output."
+required = false
+
+[[operators.parameters]]
+name = "Expression"
+docs = "The scalar expression to perform over the input."
+required = false
 
 [[operators]]
 name = "project-away"
 kind = "tabular"
-docs = "Drop named columns; keep the rest."
+signature = "project-away(ColumnNameOrPattern [, ...])"
+docs = "Select what columns from the input table to exclude from the output table."
 citation = "https://learn.microsoft.com/kusto/query/project-away-operator"
+
+[[operators.parameters]]
+name = "ColumnNameOrPattern"
+docs = "One or more column names or column wildcard-patterns to be removed from the output."
+required = true
 
 [[operators]]
 name = "project-keep"
 kind = "tabular"
-docs = "Keep columns matching wildcards; drop the rest."
+signature = "project-keep(ColumnNameOrPattern [, ...])"
+docs = "Select what columns from the input to keep in the output."
 citation = "https://learn.microsoft.com/kusto/query/project-keep-operator"
+
+[[operators.parameters]]
+name = "ColumnNameOrPattern"
+docs = "One or more column names or column wildcard-patterns to be kept in the output."
+required = true
 
 [[operators]]
 name = "project-rename"
 kind = "tabular"
-docs = "Rename columns; keep others."
+signature = "project-rename(NewColumnName = ExistingColumnName [, ...])"
+docs = "Renames columns in the output table."
 citation = "https://learn.microsoft.com/kusto/query/project-rename-operator"
+
+[[operators.parameters]]
+name = "NewColumnName"
+docs = "The new column name."
+required = true
+
+[[operators.parameters]]
+name = "ExistingColumnName"
+docs = "The name of the existing column to rename."
+required = true
 
 [[operators]]
 name = "project-reorder"
 kind = "tabular"
-docs = "Reorder columns (asc, desc, wildcards)."
+signature = "project-reorder(ColumnNameOrPattern [asc | desc | granny-asc | granny-desc] [, ...])"
+docs = "Reorders columns in the output table."
 citation = "https://learn.microsoft.com/kusto/query/project-reorder-operator"
+
+[[operators.parameters]]
+name = "ColumnNameOrPattern"
+docs = "The name of the column or column wildcard pattern by which to order the columns."
+required = true
+
+[[operators.parameters]]
+name = "asc, desc, granny-asc, granny-desc"
+docs = "Indicates how to order the columns when a wildcard pattern is used."
+required = false
 
 [[operators]]
 name = "extend"
 kind = "tabular"
-docs = "Append calculated columns; original columns remain."
+signature = "extend([ColumnName | (ColumnName[, ...]) =] Expression [, ...])"
+docs = "Creates calculated columns and append them to the result set."
 citation = "https://learn.microsoft.com/kusto/query/extend-operator"
+
+[[operators.parameters]]
+name = "ColumnName"
+docs = "Name of the column to add or update."
+required = false
+
+[[operators.parameters]]
+name = "Expression"
+docs = "Calculation to perform over the input."
+required = true
 
 [[operators]]
 name = "distinct"
 kind = "tabular"
-docs = "Distinct combinations of the listed columns (equivalent to summarize by … with no aggregates)."
+signature = "distinct(ColumnName[, ColumnName2, ...])"
+docs = "Produces a table with the distinct combination of the provided columns of the input table."
 citation = "https://learn.microsoft.com/kusto/query/distinct-operator"
+
+[[operators.parameters]]
+name = "ColumnName"
+docs = "The column name to search for distinct values."
+required = true
 
 [[operators]]
 name = "summarize"
 kind = "tabular"
-docs = "Group by expressions; compute aggregation functions."
+signature = "summarize([SummarizeParameters] [[Column =] Aggregation [, ...]] [by [Column =] GroupExpression [, ...]])"
+docs = "Produces a table that aggregates the content of the input table."
 citation = "https://learn.microsoft.com/kusto/query/summarize-operator"
+
+[[operators.parameters]]
+name = "Column"
+docs = "The name for the result column."
+required = false
+
+[[operators.parameters]]
+name = "Aggregation"
+docs = "A call to an aggregation function such as count() or avg(), with column names as arguments."
+required = true
+
+[[operators.parameters]]
+name = "GroupExpression"
+docs = "A scalar expression that can reference the input data."
+required = true
+
+[[operators.parameters]]
+name = "SummarizeParameters"
+docs = "Zero or more space-separated parameters in the form of Name = Value that control the behavior."
+required = false
 
 [[operators]]
 name = "count"
 kind = "tabular"
-docs = "Shorthand for summarize count()."
+signature = "count()"
+docs = "Calculates the number of records in the input record set."
 citation = "https://learn.microsoft.com/kusto/query/count-operator"
 
 [[operators]]
 name = "make-series"
 kind = "tabular"
-docs = "Build arrays of aggregated values along a timeline (from/to/step, by)."
+signature = "make-series([MakeSeriesParameters] [Column =] Aggregation [default = DefaultValue] [, ...] on AxisColumn [from start] [to end] step step [by [Column =] GroupExpression [, ...]])"
+docs = "Create series of specified aggregated values along a specified axis."
 citation = "https://learn.microsoft.com/kusto/query/make-series-operator"
+
+[[operators.parameters]]
+name = "Column"
+docs = "The name for the result column."
+required = false
+
+[[operators.parameters]]
+name = "DefaultValue"
+docs = "A default value to use instead of absent values."
+required = false
+
+[[operators.parameters]]
+name = "Aggregation"
+docs = "A call to an aggregation function, such as count() or avg(), with column names as arguments."
+required = true
+
+[[operators.parameters]]
+name = "AxisColumn"
+docs = "The column by which the series is ordered."
+required = true
+
+[[operators.parameters]]
+name = "start"
+docs = "The low bound value of the AxisColumn for each of the series to be built."
+required = true
+
+[[operators.parameters]]
+name = "end"
+docs = "The high bound non-inclusive value of the AxisColumn."
+required = true
+
+[[operators.parameters]]
+name = "step"
+docs = "The difference, or bin size, between two consecutive elements of the AxisColumn array."
+required = true
+
+[[operators.parameters]]
+name = "GroupExpression"
+docs = "An expression over the columns that provides a set of distinct values."
+required = false
+
+[[operators.parameters]]
+name = "MakeSeriesParameters"
+docs = "Zero or more space-separated parameters in the form of Name = Value that control the behavior."
+required = false
 
 [[operators]]
 name = "serialize"
 kind = "tabular"
-docs = "Order rows and enable window functions (next, prev, row_number, row_cumsum)."
+signature = "serialize([Name1 = Expr1 [, Name2 = Expr2]...])"
+docs = "Marks that the order of the input row set is safe to use for window functions."
 citation = "https://learn.microsoft.com/kusto/query/serialize-operator"
+
+[[operators.parameters]]
+name = "Expr"
+docs = "The calculation to perform over the input."
+required = true
 
 [[operators]]
 name = "scan"
 kind = "tabular"
-docs = "Stateful scan of ordered rows (declare/step/output) for sequences and sessionization."
+signature = "scan([with_match_id = MatchIdColumnName] [declare(ColumnDeclarations)] with(StepDefinitions))"
+docs = "Scans data, matches, and builds sequences based on the predicates."
 citation = "https://learn.microsoft.com/kusto/query/scan-operator"
+
+[[operators.parameters]]
+name = "MatchIdColumnName"
+docs = "The name of a column of type long that is appended to the output as part of the scan execution."
+required = false
+
+[[operators.parameters]]
+name = "ColumnDeclarations"
+docs = "Declares an extension to the schema of T."
+required = false
+
+[[operators.parameters]]
+name = "StepName"
+docs = "Used to reference values in the state of scan for conditions and assignments."
+required = true
+
+[[operators.parameters]]
+name = "Condition"
+docs = "An expression that evaluates to true or false that defines which records from the input match the step."
+required = true
+
+[[operators.parameters]]
+name = "Assignment"
+docs = "A scalar expression that is assigned to the corresponding column when a record matches a step."
+required = false
+
+[[operators.parameters]]
+name = "output"
+docs = "Controls the output logic of the step on repeated matches."
+required = false
 
 [[operators]]
 name = "join"
 kind = "tabular"
-docs = "Join two tabular expressions."
+signature = "join([kind = JoinFlavor] [Hints](RightTable) on Conditions)"
+docs = "Merge the rows of two tables to form a new table by matching values of the specified columns from each table."
+citation = "https://learn.microsoft.com/kusto/query/join-operator"
+
+[[operators.parameters]]
+name = "JoinFlavor"
+docs = "The type of join to perform: innerunique, inner, leftouter, rightouter, fullouter, leftanti, rightanti, leftsemi, rightsemi."
+required = false
+
+[[operators.parameters]]
+name = "Hints"
+docs = "Zero or more space-separated join hints in the form of Name = Value that control the behavior of the row-match operation and execution plan."
+required = false
+
+[[operators.parameters]]
+name = "RightTable"
+docs = "The right table or tabular expression, sometimes called the inner table, whose rows are to be merged."
+required = true
+
+[[operators.parameters]]
+name = "Conditions"
+docs = "Determines how rows from LeftTable are matched with rows from RightTable."
+required = true
 
 [[operators]]
 name = "union"
 kind = "tabular"
-docs = "Concatenate rows from tables/expressions."
+signature = "union([kind= inner | outer] [withsource= ColumnName] [isfuzzy= true | false] Tables)"
+docs = "Takes two or more tables and returns the rows of all of them."
+citation = "https://learn.microsoft.com/kusto/query/union-operator"
+
+[[operators.parameters]]
+name = "UnionParameters"
+docs = "Zero or more space-separated parameters in the form of Name = Value that control the behavior of the row-match operation and execution plan."
+required = false
+
+[[operators.parameters]]
+name = "kind"
+docs = "Either inner or outer."
+required = false
+
+[[operators.parameters]]
+name = "withsource=ColumnName"
+docs = "If specified, the output includes a column called ColumnName whose value indicates which source table has contributed each row."
+required = false
+
+[[operators.parameters]]
+name = "isfuzzy"
+docs = "If set to true, allows fuzzy resolution of union legs."
+required = false
+
+[[operators.parameters]]
+name = "Tables"
+docs = "One or more comma-separated table references, a query expression enclosed with parenthesis, or a set of tables specified with a wildcard."
+required = false
 
 [[operators]]
 name = "lookup"
 kind = "tabular"
-docs = "Fact-table left lookup of a small dimension table (kind=leftouter"
+signature = "lookup([kind =(leftouter | inner)](RightTable) on Attributes)"
+docs = "Extends the columns of a fact table with values looked-up in a dimension table."
+citation = "https://learn.microsoft.com/kusto/query/lookup-operator"
+
+[[operators.parameters]]
+name = "RightTable"
+docs = "The table or tabular expression that is used to \"populate\" new columns in the fact table."
+required = true
+
+[[operators.parameters]]
+name = "Attributes"
+docs = "A comma-delimited list of one or more rules that describe how rows from LeftTable are matched to rows from RightTable."
+required = true
+
+[[operators.parameters]]
+name = "kind"
+docs = "Determines how to treat rows in LeftTable that have no match in RightTable."
+required = false
 
 [[operators]]
 name = "parse"
 kind = "tabular"
-docs = "Parse a string into typed columns (kind=simple"
+signature = "parse([kind=kind [flags=regexFlags]] expression with [*] stringConstant columnName [: columnType] [*], ...)"
+docs = "Evaluates a string expression and parses its value into one or more calculated columns."
+citation = "https://learn.microsoft.com/kusto/query/parse-operator"
+
+[[operators.parameters]]
+name = "kind"
+docs = "One of the supported kind values."
+required = true
+
+[[operators.parameters]]
+name = "regexFlags"
+docs = "If kind is regex, then you can specify regex flags to be used like U for ungreedy, m for multi-line mode, s for match new line \\n, and i for case-insensitive."
+required = false
+
+[[operators.parameters]]
+name = "expression"
+docs = "An expression that evaluates to a string."
+required = true
+
+[[operators.parameters]]
+name = "stringConstant"
+docs = "A string constant for which to search and parse."
+required = true
+
+[[operators.parameters]]
+name = "columnName"
+docs = "The name of a column to assign a value to, extracted from the string expression."
+required = true
+
+[[operators.parameters]]
+name = "columnType"
+docs = "The scalar value that indicates the type to convert the value to."
+required = false
 
 [[operators]]
 name = "parse-where"
 kind = "tabular"
-docs = "Like parse but **drops** rows that fail to match."
+signature = "parse-where([kind=kind [flags= regexFlags]] expression with *(stringConstant columnName [: columnType]) *...)"
+docs = "Evaluates a string expression, and parses its value into one or more calculated columns."
 citation = "https://learn.microsoft.com/kusto/query/parse-where-operator"
+
+[[operators.parameters]]
+name = "kind"
+docs = "One of the supported kind values."
+required = true
+
+[[operators.parameters]]
+name = "regexFlags"
+docs = "If kind is regex, then you can specify regex flags to be used like U for ungreedy, m for multi-line mode, s for match new line \\n, and i for case-insensitive."
+required = false
+
+[[operators.parameters]]
+name = "expression"
+docs = "An expression that evaluates to a string."
+required = true
+
+[[operators.parameters]]
+name = "stringConstant"
+docs = "A string constant for which to search and parse."
+required = true
+
+[[operators.parameters]]
+name = "columnName"
+docs = "The name of a column to assign a value to, extracted from the string expression."
+required = true
+
+[[operators.parameters]]
+name = "columnType"
+docs = "The scalar value that indicates the type to convert the value to."
+required = false
 
 [[operators]]
 name = "parse-kv"
 kind = "tabular"
-docs = "Extract key/value pairs (delimiters or regex) into typed columns."
+signature = "parse-kv(Expression as(KeysList) with(pair_delimiter = PairDelimiter, kv_delimiter = KvDelimiter [, quote = QuoteChars ... [, escape = EscapeChar ...]] [, greedy = true]))"
+docs = "Extracts structured information from a string expression and represents the information in a key/value form."
 citation = "https://learn.microsoft.com/kusto/query/parse-kv-operator"
+
+[[operators.parameters]]
+name = "Expression"
+docs = "The expression from which to extract key values."
+required = true
+
+[[operators.parameters]]
+name = "KeysList"
+docs = "A comma-separated list of key names and their value data types."
+required = true
+
+[[operators.parameters]]
+name = "PairDelimiter"
+docs = "A delimiter that separates key value pairs from each other."
+required = false
+
+[[operators.parameters]]
+name = "KvDelimiter"
+docs = "A delimiter that separates keys from values."
+required = false
+
+[[operators.parameters]]
+name = "QuoteChars"
+docs = "A one- or two-character string literal representing opening and closing quotes that key name or the extracted value may be wrapped with."
+required = false
+
+[[operators.parameters]]
+name = "EscapeChar"
+docs = "A one-character string literal describing a character that may be used for escaping special characters in a quoted value."
+required = false
+
+[[operators.parameters]]
+name = "RegexPattern"
+docs = "A regular expression containing two capturing groups exactly."
+required = false
 
 [[operators]]
 name = "mv-expand"
 kind = "tabular"
-docs = "Expand dynamic arrays/bags to rows (bagexpansion, with_itemindex, limit)."
+signature = "mv-expand([kind=(bag | array)] [with_itemindex= IndexColumnName] ColumnName [to typeof(Typename)] [, ColumnName ...] [limit Rowlimit])"
+docs = "Expands multi-value dynamic arrays or property bags into multiple records."
 citation = "https://learn.microsoft.com/kusto/query/mv-expand-operator"
+
+[[operators.parameters]]
+name = "ColumnName, ArrayExpression"
+docs = "A column reference, or a scalar expression with a value of type dynamic that holds an array or a property bag."
+required = true
+
+[[operators.parameters]]
+name = "Typename"
+docs = "Indicates the underlying type of the array's elements, which becomes the type of the column produced by the mv-expand operator."
+required = true
+
+[[operators.parameters]]
+name = "RowLimit"
+docs = "The maximum number of rows generated from each original row."
+required = false
+
+[[operators.parameters]]
+name = "IndexColumnName"
+docs = "If with_itemindex is specified, the output includes another column named IndexColumnName that contains the index starting at 0 of the item in the original expanded collection."
+required = false
 
 [[operators]]
 name = "mvexpand"
 kind = "tabular"
+signature = "mvexpand([kind=(bag | array)] [with_itemindex= IndexColumnName] ColumnName [to typeof(Typename)] [, ColumnName ...] [limit Rowlimit])"
 docs = "Alias of mv-expand."
+citation = "https://learn.microsoft.com/kusto/query/mv-expand-operator"
 alias_of = "mv-expand"
+
+[[operators.parameters]]
+name = "ColumnName, ArrayExpression"
+docs = "A column reference, or a scalar expression with a value of type dynamic that holds an array or a property bag."
+required = true
+
+[[operators.parameters]]
+name = "Typename"
+docs = "Indicates the underlying type of the array's elements, which becomes the type of the column produced by the mv-expand operator."
+required = true
+
+[[operators.parameters]]
+name = "RowLimit"
+docs = "The maximum number of rows generated from each original row."
+required = false
+
+[[operators.parameters]]
+name = "IndexColumnName"
+docs = "If with_itemindex is specified, the output includes another column named IndexColumnName that contains the index starting at 0 of the item in the original expanded collection."
+required = false
 
 [[operators]]
 name = "mv-apply"
 kind = "tabular"
-docs = "Expand arrays and run a **subquery per element**; union results."
+signature = "mv-apply([ItemIndex] ColumnsToExpand [to typeof(Typename)] [limit RowLimit] on (SubQuery))"
+docs = "Applies a subquery to each record, and returns the union of the results of all subqueries."
 citation = "https://learn.microsoft.com/kusto/query/mv-apply-operator"
+
+[[operators.parameters]]
+name = "ItemIndex"
+docs = "Indicates the name of a column of type long that's appended to the input as part of the array-expansion phase and indicates the 0-based array index of the expanded value."
+required = false
+
+[[operators.parameters]]
+name = "ArrayExpression"
+docs = "The array whose values are array-expanded."
+required = true
+
+[[operators.parameters]]
+name = "Typename"
+docs = "The name of the type that the individual elements of the dynamic array ArrayExpression take."
+required = false
+
+[[operators.parameters]]
+name = "RowLimit"
+docs = "A limit on the number of records to generate from each record of the input."
+required = false
+
+[[operators.parameters]]
+name = "SubQuery"
+docs = "A tabular query expression with an implicit tabular source that gets applied to each array-expanded subtable."
+required = false
 
 [[operators]]
 name = "sort"
 kind = "tabular"
-docs = "sort by expr [asc"
+signature = "sort(by column [asc | desc] [nulls first | nulls last] [, ...])"
+docs = "Sorts the rows of the input table into order by one or more columns."
+citation = "https://learn.microsoft.com/kusto/query/sort-operator"
+
+[[operators.parameters]]
+name = "column"
+docs = "The column of T by which to sort."
+required = true
+
+[[operators.parameters]]
+name = "asc | desc"
+docs = "asc sorts into ascending order, low to high."
+required = false
+
+[[operators.parameters]]
+name = "nulls first | nulls last"
+docs = "nulls first will place the null values at the beginning and nulls last will place the null values at the end."
+required = false
 
 [[operators]]
 name = "order"
 kind = "tabular"
+signature = "order(by column [asc | desc] [nulls first | nulls last] [, ...])"
 docs = "Alias of sort."
+citation = "https://learn.microsoft.com/kusto/query/sort-operator"
 alias_of = "sort"
+
+[[operators.parameters]]
+name = "column"
+docs = "The column of T by which to sort."
+required = true
+
+[[operators.parameters]]
+name = "asc | desc"
+docs = "asc sorts into ascending order, low to high."
+required = false
+
+[[operators.parameters]]
+name = "nulls first | nulls last"
+docs = "nulls first will place the null values at the beginning and nulls last will place the null values at the end."
+required = false
 
 [[operators]]
 name = "print"
 kind = "tabular"
-docs = "One row of scalar expressions."
+signature = "print([ColumnName =] ScalarExpression [, ...])"
+docs = "Outputs a single row with one or more scalar expression results as columns."
 citation = "https://learn.microsoft.com/kusto/query/print-operator"
+
+[[operators.parameters]]
+name = "ColumnName"
+docs = "The name to assign to the output column."
+required = false
+
+[[operators.parameters]]
+name = "ScalarExpression"
+docs = "The expression to evaluate."
+required = true
 
 [[operators]]
 name = "datatable"
 kind = "tabular"
-docs = "Inline literal table."
+signature = "datatable(ColumnName : ColumnType [, ...])[ScalarValue [, ...]]"
+docs = "Creates a table whose schema and values are defined in the query itself."
 citation = "https://learn.microsoft.com/kusto/query/datatable-operator"
+
+[[operators.parameters]]
+name = "ColumnName"
+docs = "The name for a column."
+required = true
+
+[[operators.parameters]]
+name = "ColumnType"
+docs = "The type of data in the column."
+required = true
+
+[[operators.parameters]]
+name = "ScalarValue"
+docs = "The value to insert into the table."
+required = true
 
 [[operators]]
 name = "range"
 kind = "tabular"
-docs = "Arithmetic series table: range col from a to b step s."
+signature = "range(columnName from start to stop step step)"
+docs = "Generates a single-column table of values."
 citation = "https://learn.microsoft.com/kusto/query/range-operator"
+
+[[operators.parameters]]
+name = "columnName"
+docs = "The name of the single column in the output table."
+required = true
+
+[[operators.parameters]]
+name = "start"
+docs = "The smallest value in the output."
+required = true
+
+[[operators.parameters]]
+name = "stop"
+docs = "The highest value being generated in the output or a bound on the highest value if step is over this value."
+required = true
+
+[[operators.parameters]]
+name = "step"
+docs = "The difference between two consecutive values."
+required = true
 
 [[operators]]
 name = "externaldata"
 kind = "tabular"
-docs = "Read a schema from an **external** URI (blob/HTTP) into a table."
+signature = "externaldata(columnName:columnType [, ...])[storageConnectionString [, ...]][with(propertyName = propertyValue [, ...])]"
+docs = "The externaldata operator returns a table whose schema is defined in the query itself, and whose data is read from an external storage artifact, such as a blob in Azure Blob Storage or a file in Azure Data Lake Storage Gen2."
 citation = "https://learn.microsoft.com/kusto/query/externaldata-operator"
 warning = "nrt_unsupported"
+
+[[operators.parameters]]
+name = "columnName, columnType"
+docs = "A list of column names and their types."
+required = true
+
+[[operators.parameters]]
+name = "storageConnectionString"
+docs = "A storage connection string of the storage artifact to query."
+required = true
+
+[[operators.parameters]]
+name = "propertyName, propertyValue"
+docs = "A list of optional supported properties that determines how to interpret the data retrieved from storage."
+required = false
 
 [[operators]]
 name = "invoke"
 kind = "tabular"
-docs = "T"
+signature = "invoke(function([param1, param2]))"
+docs = "Invokes a lambda expression that receives the source of invoke as a tabular argument."
+citation = "https://learn.microsoft.com/kusto/query/invoke-operator"
+
+[[operators.parameters]]
+name = "function"
+docs = "The name of the lambda let expression or stored function name to be evaluated."
+required = true
+
+[[operators.parameters]]
+name = "param1, param2 ..."
+docs = "Any additional lambda arguments to pass to the function."
+required = false
 
 [[operators]]
 name = "evaluate"
 kind = "tabular"
-docs = "Invoke a service plugin (bag_unpack, autocluster, …)."
+signature = "evaluate([evaluateParameters] PluginName([PluginArgs]))"
+docs = "Invokes a service-side query extension (plugin)."
 citation = "https://learn.microsoft.com/kusto/query/evaluate-operator"
+
+[[operators.parameters]]
+name = "evaluateParameters"
+docs = "Zero or more space-separated evaluate parameters in the form of Name = Value that control the behavior of the evaluate operation and execution plan."
+required = false
+
+[[operators.parameters]]
+name = "PluginName"
+docs = "The mandatory name of the plugin being invoked."
+required = true
+
+[[operators.parameters]]
+name = "PluginArgs"
+docs = "Zero or more comma-separated arguments to provide to the plugin."
+required = false
 
 [[operators]]
 name = "getschema"
 kind = "tabular"
-docs = "One row per input column (ColumnName, DataType, ColumnType)."
+signature = "getschema()"
+docs = "Produce a table that represents a tabular schema of the input."
 citation = "https://learn.microsoft.com/kusto/query/getschema-operator"
 
 [[operators]]
 name = "as"
 kind = "tabular"
-docs = "Bind a name to the current tabular result (hint.materialized=true wraps materialize())."
+signature = "as([hint.materialized = Materialized] Name)"
+docs = "Binds a name to the operator's input tabular expression."
 citation = "https://learn.microsoft.com/kusto/query/as-operator"
+
+[[operators.parameters]]
+name = "hint.materialized"
+docs = "If Materialized is set to true, the value of the tabular expression output is wrapped by a materialize() function call."
+required = false
 
 [[operators]]
 name = "partition"
 kind = "tabular"
-docs = "Run a subquery per distinct value (by Col, strategies native/shuffle/legacy)."
+signature = "partition([hint.strategy=Strategy] [Hints] by Column(TransformationSubQuery))"
+docs = "The partition operator partitions the records of its input table into multiple subtables according to values in a key column."
 citation = "https://learn.microsoft.com/kusto/query/partition-operator"
+
+[[operators.parameters]]
+name = "Strategy"
+docs = "The value legacy, shuffle, or native."
+required = false
+
+[[operators.parameters]]
+name = "Column"
+docs = "The name of a column in T whose values determine how to partition the input tabular source."
+required = true
+
+[[operators.parameters]]
+name = "TransformationSubQuery"
+docs = "A tabular transformation expression."
+required = true
+
+[[operators.parameters]]
+name = "SubQueryWithSource"
+docs = "A tabular expression that includes its own tabular source, such as a table reference."
+required = true
+
+[[operators.parameters]]
+name = "Hints"
+docs = "Zero or more space-separated parameters in the form of: HintName = Value that control the behavior of the operator."
+required = false
 
 [[operators]]
 name = "fork"
 kind = "tabular"
-docs = "Run several subqueries in parallel; **multiple result tables**."
+signature = "fork([name=](subquery) [name=](subquery) ...)"
+docs = "Runs multiple consumer operators in parallel."
 citation = "https://learn.microsoft.com/kusto/query/fork-operator"
+
+[[operators.parameters]]
+name = "subquery"
+docs = "A downstream pipeline of supported query operators."
+required = true
 
 [[operators]]
 name = "facet"
 kind = "tabular"
-docs = "One summary table per listed column (+ optional with pipe)."
+signature = "facet(by ColumnName [, ColumnName2, ...] [with(filterPipe)])"
+docs = "Returns a set of tables, one for each column specified in the facet clause."
 citation = "https://learn.microsoft.com/kusto/query/facet-operator"
+
+[[operators.parameters]]
+name = "ColumnName"
+docs = "The column name, or list of column names, to be summarized."
+required = true
+
+[[operators.parameters]]
+name = "filterPipe"
+docs = "A query expression applied to the input table."
+required = false
 
 [[operators]]
 name = "consume"
 kind = "tabular"
-docs = "Consume (discard) the data; returns completion stats."
+signature = "consume([decodeblocks = DecodeBlocks])"
+docs = "Consumes the tabular data stream handed to the operator."
 citation = "https://learn.microsoft.com/kusto/query/consume-operator"
 warning = "not_valid_in_detections"
+
+[[operators.parameters]]
+name = "DecodeBlocks"
+docs = "If set to true, or if the request property perftrace is set to true, the consume operator won't just enumerate the records at its input, but actually force each value in those records to be decompressed and decoded."
+required = false
 
 [[operators]]
 name = "reduce"
 kind = "tabular"
-docs = "Group similar string values (reduce by col) for pattern hunting."
+signature = "reduce([kind = ReduceKind] by Expr [with [threshold = Threshold] [, characters = Characters]])"
+docs = "Groups a set of strings together based on value similarity."
 citation = "https://learn.microsoft.com/kusto/query/reduce-operator"
+
+[[operators.parameters]]
+name = "Expr"
+docs = "The value by which to reduce."
+required = true
+
+[[operators.parameters]]
+name = "Threshold"
+docs = "A value between 0 and 1 that determines the minimum fraction of rows required to match the grouping criteria in order to trigger a reduction operation."
+required = false
+
+[[operators.parameters]]
+name = "Characters"
+docs = "A list of characters that separate between terms."
+required = false
+
+[[operators.parameters]]
+name = "ReduceKind"
+docs = "The only valid value is source."
+required = false
 
 [[operators]]
 name = "make-graph"
 kind = "tabular"
-docs = "Build a graph from edges (source/target) and optional node tables; partitioned-by for per-tenant graphs."
+signature = "make-graph(SourceNodeId --> TargetNodeId [with Nodes1 on NodeId1 [, Nodes2 on NodeId2]] Edges)"
+docs = "The make-graph operator builds a graph structure from tabular inputs of edges and nodes."
 citation = "https://learn.microsoft.com/kusto/query/make-graph-operator"
+
+[[operators.parameters]]
+name = "SourceNodeId"
+docs = "The column in Edges with the source node IDs of the edges."
+required = true
+
+[[operators.parameters]]
+name = "TargetNodeId"
+docs = "The column in Edges with the target node IDs of the edges."
+required = true
+
+[[operators.parameters]]
+name = "Nodes1, Nodes2"
+docs = "The tabular expressions containing the properties of the nodes in the graph."
+required = false
+
+[[operators.parameters]]
+name = "NodesId1, NodesId2"
+docs = "The corresponding columns with the node IDs in Nodes1, Nodes2 respectively."
+required = false
+
+[[operators.parameters]]
+name = "NodeIdPropertyName"
+docs = "The name of the property for node ID on the nodes of the graph."
+required = false
+
+[[operators.parameters]]
+name = "PartitionColumn"
+docs = "The column to partition the graph by."
+required = false
+
+[[operators.parameters]]
+name = "GraphOperator"
+docs = "The graph operator to apply to each partitioned graph."
+required = false
 
 [[operators]]
 name = "graph-match"
 kind = "tabular"
-docs = "Pattern-match nodes/edges (where constraints, project)."
+signature = "graph-match([cycles = CyclesOption] Pattern [where Constraints] project [ColumnName =] Expression [, ...])"
+docs = "The graph-match operator searches for all occurrences of a graph pattern in an input graph source."
 citation = "https://learn.microsoft.com/kusto/query/graph-match-operator"
+
+[[operators.parameters]]
+name = "Pattern"
+docs = "One or more comma delimited sequences of graph node elements connected by graph edge elements using graph notations."
+required = true
+
+[[operators.parameters]]
+name = "Constraints"
+docs = "A Boolean expression composed of properties of named variables in the Pattern."
+required = false
+
+[[operators.parameters]]
+name = "Expression"
+docs = "The project clause converts each pattern to a row in a tabular result."
+required = true
+
+[[operators.parameters]]
+name = "CyclesOption"
+docs = "Controls whether cycles are matched in the Pattern, allowed values: all, none, unique_edges."
+required = false
 
 [[operators]]
 name = "graph-shortest-paths"
 kind = "tabular"
-docs = "Shortest paths in a graph source."
+signature = "graph-shortest-paths([output = OutputOption] Pattern where Predicate project [ColumnName =] Expression [, ...])"
+docs = "The graph-shortest-paths operator finds the shortest paths between a set of source nodes and a set of target nodes in a graph and returns a table with the results."
 citation = "https://learn.microsoft.com/kusto/query/graph-shortest-paths-operator"
+
+[[operators.parameters]]
+name = "Pattern"
+docs = "A path pattern that describes the path to find."
+required = true
+
+[[operators.parameters]]
+name = "Predicate"
+docs = "A boolean expression that consists of properties of named variables in the pattern and constants."
+required = false
+
+[[operators.parameters]]
+name = "Expression"
+docs = "A scalar expression that defines the output row for each found path, using constants and references to properties of named variables in the pattern."
+required = true
+
+[[operators.parameters]]
+name = "OutputOption"
+docs = "Specifies the search output as any (default) or all."
+required = false
 
 [[operators]]
 name = "graph-to-table"
 kind = "tabular"
-docs = "Emit nodes/edges of a graph as tables."
+signature = "graph-to-table(nodes [with_node_id=ColumnName])"
+docs = "The graph-to-table operator exports nodes or edges from a graph to tables."
 citation = "https://learn.microsoft.com/kusto/query/graph-to-table-operator"
+
+[[operators.parameters]]
+name = "NodesTableName"
+docs = "The name of the exported nodes table."
+required = false
+
+[[operators.parameters]]
+name = "EdgesTableName"
+docs = "The name of the exported edges table."
+required = false
+
+[[operators.parameters]]
+name = "ColumnName"
+docs = "Export the node hash ID, source node hash ID, or target node hash ID with the given column name."
+required = false
 
 [[operators]]
 name = "graph-mark-components"
 kind = "tabular"
-docs = "Mark connected components on a graph."
+signature = "graph-mark-components([kind = Kind] [with_component_id = ComponentId])"
+docs = "The graph-mark-components operator finds all connected components of a graph and marks each node with a component identifier."
 citation = "https://learn.microsoft.com/kusto/query/graph-mark-components-operator"
+
+[[operators.parameters]]
+name = "Kind"
+docs = "The connected component kind, either weak (default) or strong."
+required = false
+
+[[operators.parameters]]
+name = "ComponentId"
+docs = "The property name that denotes the component identifier."
+required = false
 
 [[operators]]
 name = "render"
 kind = "tabular"
-docs = "Render as table, timechart, barchart, piechart, areachart, scatterchart, pivotchart, …"
+signature = "render(visualization [with(propertyName = propertyValue [, ...])])"
+docs = "The render operator instructs the user agent to visualize query results."
 citation = "https://learn.microsoft.com/kusto/query/render-operator"
 warning = "not_valid_in_detections"
+
+[[operators.parameters]]
+name = "visualization"
+docs = "Indicates the kind of visualization to use."
+required = true
+
+[[operators.parameters]]
+name = "propertyName, propertyValue"
+docs = "A comma-separated list of key-value property pairs."
+required = false
+
+[[operators]]
+name = "project-by-names"
+kind = "tabular"
+signature = "project-by-names(ColumnSpecifier [, ...])"
+docs = "Select and reorder a subset of columns from the input table by their names, dynamic arrays, or name patterns."
+citation = "https://learn.microsoft.com/kusto/query/project-by-names-operator"
+
+[[operators.parameters]]
+name = "ColumnSpecifier"
+docs = "The name of the column, dynamic array of column names, or column wildcard pattern to keep and reorder."
+required = true
