@@ -47,9 +47,12 @@ def _chain(length: int) -> tuple[dict[bytes, Commit], Commit]:
         commit = Commit()
         commit.tree = empty_tree
         commit.parents = [] if previous is None else [previous.id]
-        stamp = b"Dev <dev@example.test> 1700000000 +0000"
-        commit.author = stamp
-        commit.committer = stamp
+        commit.author = b"Dev <dev@example.test>"
+        commit.author_time = 1_700_000_000
+        commit.author_timezone = 0
+        commit.committer = b"Dev <dev@example.test>"
+        commit.commit_time = 1_700_000_000
+        commit.commit_timezone = 0
         commit.message = f"commit {index}\n".encode()
         store[commit.id] = commit
         previous = commit
