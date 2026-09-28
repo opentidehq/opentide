@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+from dulwich.objects import Commit, Tree
 
-from opentide.deployment.git_backend import open_repo
+from opentide.deployment.git_backend import CommitInfo, open_repo
 
 
 def _git(cwd: Path, *args: str) -> None:
@@ -34,6 +36,59 @@ def test_resolve_sha_missing_ref_is_key_error(tmp_path: Path) -> None:
 
     with pytest.raises(KeyError, match="origin/main"):
         repo._resolve_sha("origin/main")
+
+
+def _chain(length: int) -> tuple[dict[bytes, Commit], Commit]:
+    empty_tree = Tree().id
+    store: dict[bytes, Commit] = {}
+    previous: Commit | None = None
+    tip: Commit | None = None
+    for index in range(length):
+        commit = Commit()
+        commit.tree = empty_tree
+        commit.parents = [] if previous is None else [previous.id]
+        stamp = b"Dev <dev@example.test> 1700000000 +0000"
+        commit.author = stamp
+        commit.committer = stamp
+        commit.message = f"commit {index}\n".encode()
+        store[commit.id] = commit
+        previous = commit
+        tip = commit
+    assert tip is not None
+    return store, tip
+
+
+def test_from_commit_stops_at_the_immediate_parent() -> None:
+    """A long history must not recurse until RecursionError aborts deploy."""
+    store, tip = _chain(200)
+    parent = store[tip.parents[0]]
+    limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(80)
+    try:
+        info = CommitInfo.from_commit(tip, store)  # type: ignore[arg-type]
+    finally:
+        sys.setrecursionlimit(limit)
+
+    assert info.hexsha == tip.id.decode("ascii")
+    assert info.message == "commit 199"
+    assert len(info.parents) == 1
+    assert info.parents[0].hexsha == parent.id.decode("ascii")
+    assert info.parents[0].message == "commit 198"
+    assert info.parents[0].parents == []
+
+
+def test_missing_parent_keeps_its_id() -> None:
+    """A shallow clone still names the parent that is not in the object store."""
+    store, tip = _chain(1)
+    missing = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    tip.parents = [missing]
+    store[tip.id] = tip
+
+    info = CommitInfo.from_commit(tip, store)  # type: ignore[arg-type]
+
+    assert info.parents[0].hexsha == missing.decode("ascii")
+    assert info.parents[0].message == ""
+    assert info.parents[0].parents == []
 
 
 def test_resolve_sha_reads_a_local_branch(tmp_path: Path) -> None:

@@ -64,25 +64,10 @@ class CommitInfo:
 
     @classmethod
     def from_commit(cls, commit: Commit, store: Repo) -> CommitInfo:
-        parents: list[CommitInfo] = []
-        for parent_id in commit.parents:
-            try:
-                loaded = store[parent_id]
-            except KeyError:
-                # A shallow clone has the parent id and not the parent object.
-                parents.append(
-                    cls(
-                        hexsha=_object_hex(parent_id),
-                        message="",
-                        author=Author(name=""),
-                        parents=[],
-                        _tree=b"",
-                        _store=store,
-                    )
-                )
-                continue
-            if isinstance(loaded, Commit):
-                parents.append(cls.from_commit(loaded, store))
+        # One level only. Recursing through every ancestor overflows the
+        # Python stack once history is deeper than the recursion limit, and
+        # ``repo.commit()`` / ``repo.head`` then abort the deploy.
+        parents = [cls._immediate_parent(parent_id, store) for parent_id in commit.parents]
         message = commit.message
         if isinstance(message, bytes):
             message = message.decode("utf-8", errors="replace")
@@ -92,6 +77,37 @@ class CommitInfo:
             author=Author(name=_parse_author_name(commit.author)),
             parents=parents,
             _tree=commit.tree,
+            _store=store,
+        )
+
+    @classmethod
+    def _immediate_parent(cls, parent_id: bytes, store: Repo) -> CommitInfo:
+        """Parent id, message, and tree, without that parent's own parents.
+
+        A shallow clone names the parent and does not contain its object.
+        The id is still recorded so callers can say which commit is missing.
+        """
+        try:
+            loaded = store[parent_id]
+        except KeyError:
+            loaded = None
+        if isinstance(loaded, Commit):
+            message = loaded.message
+            if isinstance(message, bytes):
+                message = message.decode("utf-8", errors="replace")
+            text = str(message).strip()
+            author = _parse_author_name(loaded.author)
+            tree = loaded.tree
+        else:
+            text = ""
+            author = ""
+            tree = b""
+        return cls(
+            hexsha=_object_hex(parent_id),
+            message=text,
+            author=Author(name=author),
+            parents=[],
+            _tree=tree,
             _store=store,
         )
 
