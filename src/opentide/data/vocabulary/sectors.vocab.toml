@@ -1,17 +1,18 @@
 name = "Victim Industry Sector"
 field = "sectors"
-version = "1.0"
 description = "Industry sector is an open vocabulary that describes industrial and commercial sectors. It is intended to be holistic; it has been derived from several other lists and is not limited to \"critical infrastructure\" sectors."
 stix = "industry-sector-ov"
 
 reference = "https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html#_oogrswk3onck"
 key = "name"
 [[keys]]
+version = "1.0"
 name = "Opportunitistic"
 
 description = "The attacker is not particularly focusing on a particular sector, and intel shows very varied targets which are not well defined."
 
 [[keys]]
+version = "1.0"
 name = "Agriculture"
 stix = "agriculture"
 
@@ -19,6 +20,7 @@ misp = "stix-ttp:victim-targeting=\"food-sector\""
 description = "The Agriculture sectors comprise establishments primarily engaged in growing crops, raising animals, and harvesting fish and other animals from a farm, ranch, or their natural habitats."
 
 [[keys]]
+version = "1.0"
 name = "Aerospace"
 stix = "aerospace"
 
@@ -26,6 +28,7 @@ misp = "stix-ttp:victim-targeting=\"aerospace-defence-sector\""
 description = "The aerospace industry is engaged in the research, development, and manufacture of flight vehicles, including unpowered gliders and sailplanes (see gliding), uncrewed aerial vehicles (UAVs), lighter-than-air craft (see balloon; airship), heavier-than-air craft (both fixed-wing and rotary-wing; see airplane; military aircraft), missiles (see rocket and missile system), space launch vehicles, and spacecraft (crewed and uncrewed)."
 
 [[keys]]
+version = "1.0"
 name = "Automotive"
 stix = "automotive"
 
@@ -33,6 +36,7 @@ misp = "stix-ttp:victim-targeting=\"other-sector\""
 description = "The automotive industry’s principal products are passenger automobiles and light trucks, including pickups, vans, and sport utility vehicles. Commercial vehicles (i.e., delivery trucks and large transport trucks, often called semis), though important to the industry, are secondary."
 
 [[keys]]
+version = "1.0"
 name = "Chemical"
 stix = "chemical"
 
@@ -40,6 +44,7 @@ misp = "stix-ttp:victim-targeting=\"other-sector\""
 description = "Complex of processes, operations, and organizations engaged in the manufacture of chemicals and their derivatives."
 
 [[keys]]
+version = "1.0"
 name = "Commercial Facilities"
 stix = "commercial"
 
@@ -47,6 +52,7 @@ misp = "stix-ttp:victim-targeting=\"other-sector\""
 description = "The Commercial Facilities Sector includes a diverse range of sites that draw large crowds of people for shopping, business, entertainment, or lodging."
 
 [[keys]]
+version = "1.0"
 name = "Medias & Public Communications"
 stix = "communications"
 
@@ -54,6 +60,7 @@ misp = "stix-ttp:victim-targeting=\"media-entertainment-sector\""
 description = "The media industry encompasses all businesses that allow information to be shared. The way that this information is shared varies massively, with some examples of media including radio, television, newspapers, social media, video games, film and music."
 
 [[keys]]
+version = "1.0"
 name = "Construction"
 stix = "construction"
 
@@ -61,6 +68,7 @@ misp = "stix-ttp:victim-targeting=\"construction-engineering-sector\""
 description = "The branch of manufacture and trade based on the building, maintaining, and repairing structures. This includes drilling and solid mineral exploration."
 
 [[keys]]
+version = "1.0"
 name = "Defense"
 stix = "defense"
 
@@ -68,6 +76,7 @@ misp = "stix-ttp:victim-targeting=\"aerospace-defence-sector\""
 description = "Public organization and private firms involved in research, development, production, and service of military materiel, equipment and facilities."
 
 [[keys]]
+version = "1.0"
 name = "Education"
 stix = "education"
 
@@ -75,6 +84,7 @@ misp = "stix-ttp:victim-targeting=\"other-sector\""
 description = "The education sector or education system is a group of institutions (ministries of education, local educational authorities, teacher training institutions, schools, universities, etc.) whose primary purpose is to provide education in educational settings."
 
 [[keys]]
+version = "1.0"
 name = "Energy"
 stix = "energy"
 
@@ -82,6 +92,7 @@ misp = "stix-ttp:victim-targeting=\"energy-sector\""
 description = "The energy industry is the totality of all of the industries involved in the production and sale of energy, including fuel extraction, manufacturing, refining and distribution."
 
 [[keys]]
+version = "1.0"
 name = "Entertainment"
 stix = "entertainment"
 
@@ -89,6 +100,7 @@ misp = "stix-ttp:victim-targeting=\"media-entertainment-sector\""
 description = "Entertainment Industry means an employer including but not limited to any organization, or individual using the services of any minor in: motion pictures of any type, using any format including theatrical film, commercial, documentary, and television program, or similar format by any medium including but not limited to photography; recording; modeling; theatrical productions; publicity; and any performances where minors perform or entertain."
 
 [[keys]]
+version = "1.0"
 name = "Financial Services"
 stix = "financial-services"
 
@@ -96,6 +108,7 @@ misp = "stix-ttp:victim-targeting=\"financial-sector\""
 description = "The financial services sector provides financial services to people and corporations. This segment of the economy is made up of a variety of financial firms including banks, investment houses, lenders, finance companies, real estate brokers, and insurance companies."
 
 [[keys]]
+version = "1.0"
 name = "Government Facilities"
 stix = "government"
 
@@ -103,6 +116,7 @@ misp = "stix-ttp:victim-targeting=\"government-international-organizations-secto
 description = "The Government Facilities Sector includes a wide variety of buildings, located in the United States and overseas, that are owned or leased by federal, state, local, and tribal governments."
 
 [[keys]]
+version = "1.0"
 name = "Emergency Services"
 stix = "emergency-services"
 
@@ -110,6 +124,7 @@ misp = "stix-ttp:victim-targeting=\"government-international-organizations-secto
 description = "The Emergency Services Sector (ESS) is a community of millions of highly-skilled, trained personnel, along with the physical and cyber resources, that provide a wide range of prevention, preparedness, response, and recovery services during both day-to-day operations and incident response."
 
 [[keys]]
+version = "1.0"
 name = "Local Government"
 stix = "government-local"
 
@@ -117,6 +132,7 @@ misp = "stix-ttp:victim-targeting=\"government-international-organizations-secto
 description = "The smallest or second largest geographical area into which the country as a whole may be divided for political or administrative purposes, such as a municipality or district. A local government often has the fiscal authority to raise taxes within its territory and should have the ability to spend at least some of its income according to its own policies, and appoint or elect its own officers."
 
 [[keys]]
+version = "1.0"
 name = "National Government"
 stix = "government-national"
 
@@ -124,6 +140,7 @@ misp = "stix-ttp:victim-targeting=\"government-international-organizations-secto
 description = "A central government is the government that is a controlling power over a unitary state."
 
 [[keys]]
+version = "1.0"
 name = "Public Government Services"
 stix = "government-public-services"
 
@@ -131,6 +148,7 @@ misp = "stix-ttp:victim-targeting=\"government-international-organizations-secto
 description = "A public service is something such as health care, transport, or the removal of waste which is organized by the government or an official body in order to benefit all the people in a particular society or community."
 
 [[keys]]
+version = "1.0"
 name = "Regional Government"
 stix = "government-regional"
 
@@ -138,6 +156,7 @@ misp = "stix-ttp:victim-targeting=\"government-international-organizations-secto
 description = "The largest geographical area into which the country as a whole may be divided for political or administrative purposes, such as a state, province, department or region. A regional government usually has the fiscal authority to raise taxes within its territory and should have the ability to spend at least some of its income according to its own policies, and appoint or elect its own officers."
 
 [[keys]]
+version = "1.0"
 name = "Healthcare"
 stix = "healthcare"
 
@@ -145,6 +164,7 @@ misp = "stix-ttp:victim-targeting=\"healthcare-sector\""
 description = "The Healthcare and Public Health Sector protects all sectors of the economy from hazards such as terrorism, infectious disease outbreaks, and natural disasters."
 
 [[keys]]
+version = "1.0"
 name = "Hospitality & Leisure"
 stix = "hospitality-leisure"
 
@@ -152,6 +172,7 @@ misp = "stix-ttp:victim-targeting=\"other-sector\""
 description = "The leisure and hospitality industry sector includes a broad category of fields within the service industry such as lodging, food services, event planning, theme parks, transportation and other tourism oriented products and services."
 
 [[keys]]
+version = "1.0"
 name = "Infrastructure"
 stix = "infrastructure"
 
@@ -159,6 +180,7 @@ misp = "stix-ttp:victim-targeting=\"other-sector\""
 description = "Infrastructure is the set of fundamental facilities and systems that support the sustainable functionality of households and firms."
 
 [[keys]]
+version = "1.0"
 name = "Dams"
 stix = "dams"
 
@@ -166,6 +188,7 @@ misp = "stix-ttp:victim-targeting=\"other-sector\""
 description = "The Dams Sector delivers critical water retention and control services in the United States, including hydroelectric power generation, municipal and industrial water supplies, agricultural irrigation, sediment and flood control, river navigation for inland bulk shipping, industrial waste management, and recreation."
 
 [[keys]]
+version = "1.0"
 name = "Nuclear"
 stix = "nuclear"
 
@@ -173,6 +196,7 @@ misp = "stix-ttp:victim-targeting=\"energy-sector\""
 description = "Nuclear power is the use of nuclear reactions to produce electricity. Nuclear power can be obtained from nuclear fission, nuclear decay and nuclear fusion reactions."
 
 [[keys]]
+version = "1.0"
 name = "Water"
 stix = "water"
 
@@ -180,6 +204,7 @@ misp = "stix-ttp:victim-targeting=\"natural-resources-sector\""
 description = "The water industry provides drinking water and wastewater services (including sewage treatment) to residential, commercial, and industrial sectors of the economy."
 
 [[keys]]
+version = "1.0"
 name = "Insurance"
 stix = "insurance"
 
@@ -187,6 +212,7 @@ misp = "stix-ttp:victim-targeting=\"financial-sector\""
 description = "The insurance sector is made up of companies that offer risk management in the form of insurance contracts. The basic concept of insurance is that one party, the insurer, will guarantee payment for an uncertain future event."
 
 [[keys]]
+version = "1.0"
 name = "Manufacturing"
 stix = "manufacturing"
 
@@ -194,6 +220,7 @@ misp = "stix-ttp:victim-targeting=\"construction-engineering-sector\""
 description = "Manufacturing industries are those that engage in the transformation of goods, materials or substances into new products. The transformational process can be physical, chemical or mechanical."
 
 [[keys]]
+version = "1.0"
 name = "Mining"
 stix = "mining"
 
@@ -201,12 +228,14 @@ misp = "stix-ttp:victim-targeting=\"natural-resources-sector\""
 description = "Mining industry indicates the cluster of process that are involved with extraction, management, and processing of naturally occurring solid minerals from the earth surface. As a product of mining, various economically valuable products might be obtained, that is, coal, diamond, metallic ores, oil, and so on."
 
 [[keys]]
+version = "1.0"
 name = "Non-Profit Organization"
 stix = "non-profit"
 
 description = "A nonprofit organization (NPO), also known as a non-business entity, not-for-profit organization, or nonprofit institution, is a legal entity organized and operated for a collective, public or social benefit, in contrast with an entity that operates as a business aiming to generate a profit for its owners."
 
 [[keys]]
+version = "1.0"
 name = "Pharmaceuticals"
 stix = "pharmaceuticals"
 
@@ -214,6 +243,7 @@ misp = "stix-ttp:victim-targeting=\"other-sector\""
 description = "The pharmaceutical industry discovers, develops, produces, and markets drugs or pharmaceutical drugs for use as medications to be administered to patients (or self-administered), with the aim to cure them, vaccinate them, or alleviate symptoms."
 
 [[keys]]
+version = "1.0"
 name = "Retail"
 stix = "retail"
 
@@ -221,6 +251,7 @@ misp = "stix-ttp:victim-targeting=\"retail-sector\""
 description = "Retail is the sale of goods and services to consumers, in contrast to wholesaling, which is sale to business or institutional customers."
 
 [[keys]]
+version = "1.0"
 name = "High tech"
 stix = "technology"
 
@@ -228,12 +259,14 @@ misp = "stix-ttp:victim-targeting=\"hightech-it-sector\""
 description = "High technology (high tech), also known as frontier technology (frontier tech), is technology that is at the cutting edge, the most advanced technology available."
 
 [[keys]]
+version = "1.0"
 name = "Telecommunications"
 stix = "telecommunications"
 
 description = "The telecommunications industry is made up of cable companies, internet service providers, satellite companies, and telephone companies. Telecommunications is defined as communicating over a distance."
 
 [[keys]]
+version = "1.0"
 name = "Transportation"
 stix = "transportation"
 
@@ -241,12 +274,14 @@ misp = "stix-ttp:victim-targeting=\"transportation-sector\""
 description = "The transportation sector is an important industry sector in the economy that deals with the movement of people and products. These include companies such as airlines, trucking, railroads, shipping, and logistics firms, as well as those that provide transportation infrastructure."
 
 [[keys]]
+version = "1.0"
 name = "Public Utilities"
 stix = "utilities"
 
 description = "Enterprise that provides certain classes of services to the public, including common carrier transportation (buses, airlines, railroads, motor freight carriers, pipelines, etc.); telephone and telegraph; power, heat, and light; and community facilities for water, sanitation, and similar services."
 
 [[keys]]
+version = "1.0"
 name = "Professional Services"
 
 description = "Professional services are occupations in the service sector requiring special training in the arts or sciences. Some professional services, such as architects, accountants, engineers, doctors, lawyers, and teachers, require the practitioner to hold professional degrees or licenses and possess specific skills. Other professional services involve providing specialist business support to businesses of all sizes and in all sectors; this can include tax advice, supporting a company with accounting, IT services or providing management advice."

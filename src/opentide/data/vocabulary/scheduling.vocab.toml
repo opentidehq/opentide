@@ -1,93 +1,114 @@
 name = "Rule Scheduling"
 field = "scheduling"
-version = "1.0"
 description = "The frequency at which the rule should be executed on the detection system, when it is not real-time"
 
 key = "name"
 [[keys]]
+version = "1.0"
 name = "Real-time"
 description = "The rule is continuously (or near continuously) ran on incoming logs"
 
 [[keys]]
+version = "1.0"
 name = "5m"
 description = "Rule is scheduled to run every 5m"
 
 [[keys]]
+version = "1.0"
 name = "10m"
 description = "Rule is scheduled to run every 10m"
 
 [[keys]]
+version = "1.0"
 name = "15m"
 description = "Rule is scheduled to run every 15m"
 
 [[keys]]
+version = "1.0"
 name = "30m"
 description = "Rule is scheduled to run every 30m"
 
 [[keys]]
+version = "1.0"
 name = "1h"
 description = "Rule is scheduled to run every 1h"
 
 [[keys]]
+version = "1.0"
 name = "2h"
 description = "Rule is scheduled to run every 2h"
 
 [[keys]]
+version = "1.0"
 name = "3h"
 description = "Rule is scheduled to run every 3h"
 
 [[keys]]
+version = "1.0"
 name = "4h"
 description = "Rule is scheduled to run every 4h"
 
 [[keys]]
+version = "1.0"
 name = "5h"
 description = "Rule is scheduled to run every 5h"
 
 [[keys]]
+version = "1.0"
 name = "6h"
 description = "Rule is scheduled to run every 6h"
 
 [[keys]]
+version = "1.0"
 name = "7h"
 description = "Rule is scheduled to run every 7h"
 
 [[keys]]
+version = "1.0"
 name = "8h"
 description = "Rule is scheduled to run every 8h"
 
 [[keys]]
+version = "1.0"
 name = "9h"
 description = "Rule is scheduled to run every 9h"
 
 [[keys]]
+version = "1.0"
 name = "10h"
 description = "Rule is scheduled to run every 10h"
 
 [[keys]]
+version = "1.0"
 name = "12h"
 description = "Rule is scheduled to run every 12h"
 
 [[keys]]
+version = "1.0"
 name = "24h"
 description = "Rule is scheduled to run every 24h"
 
 [[keys]]
+version = "1.0"
 name = "48h"
 description = "Rule is scheduled to run every 48h"
 
 [[keys]]
+version = "1.0"
 name = "72h"
 description = "Rule is scheduled to run every 72h"
 
 [[keys]]
+version = "1.0"
 name = "168h"
 description = "Rule is scheduled to run every 168h"
 
 [[keys]]
+version = "1.0"
 name = "336h"
 description = "Rule is scheduled to run every 336h"
 
 [[keys]]
+version = "1.0"
 name = "720h"
 description = "Rule is scheduled to run every 720h"
