@@ -30,6 +30,8 @@ jobs:
         run: bash scripts/check-io-free.sh
       - name: names
         run: bash scripts/check-names.sh
+      - name: skills
+        run: bash scripts/validate-skills.sh
       - name: test
         run: cargo test --workspace
       - name: generate-highlights --check

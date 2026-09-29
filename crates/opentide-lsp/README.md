@@ -50,6 +50,10 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 
 Samples in `editors/{helix,nvim,zed}`. VS Code lives in a **different repository**.
 
+## Agent skills
+
+Coding agents start at [`AGENTS.md`](AGENTS.md). Procedures for the Rust workspace, tree-sitter 0.25, the stdio host, WASM, and catalogs live in [`skills/`](skills/README.md). Detection-authoring skills stay in `OpenTideHQ/skills`.
+
 ## License
 
 [EUPL-1.2](LICENSE)
