@@ -7,6 +7,33 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.7.0 — 29 September 2026
+
+Minor on 0.6.4. **Upgrade to publish Tide objects to MISP, or regenerate CI** so a GitHub production job compares `github.ref` to a literal branch ref. The share stage is off until you pass `--sharing`.
+
+**Install**
+
+```bash
+pip install opentide==0.7.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+If you already generated a workflow, run `opentide setup ci <github|gitlab|azure> --yes` again. Add `--sharing` only when that pipeline should run `opentide share push --changed` on the default branch.
+
+**What changes for authors and scripts**
+
+- `opentide share` creates one MISP Event per threat, objective, or rule. `preview` and `status` do not contact MISP. The API key is never printed ([#184](https://github.com/OpenTideHQ/opentide/issues/184), [#371](https://github.com/OpenTideHQ/opentide/issues/371), [#372](https://github.com/OpenTideHQ/opentide/issues/372)).
+- Destinations live in `.opentide/configurations/sharing.toml`. Blocks with the same `name` merge. Successes are recorded in `.opentide/states/sharing.jsonl` ([#370](https://github.com/OpenTideHQ/opentide/issues/370), [#373](https://github.com/OpenTideHQ/opentide/issues/373)).
+- Share exit `2` means every failure was authentication or connectivity. Exit `3` means the run both succeeded and failed.
+- `--sharing` adds the default-branch share job. Deploy does not wait for it ([#375](https://github.com/OpenTideHQ/opentide/issues/375)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.7.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.7.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.6.4 — 28 September 2026
 
 Patch on 0.6.3. **Upgrade if `generate` printed an empty error for a missing detection model, a GitHub production deploy never ran, setup rewrote a README or platform comments, or MCP `deploy_rule` crashed.** Regenerate a workflow with `opentide setup ci github` (or `gitlab` or `azure`) so production deploy and the checkout depth match this release.

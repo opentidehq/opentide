@@ -6,6 +6,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-09-29
+
+Minor on 0.6.4. Upgrade to publish Tide objects to MISP, or to regenerate CI so a GitHub production job compares `github.ref` to a literal ref. Sharing is a new command. The share stage stays off until `opentide setup ci` is run with `--sharing`.
+
+### Added
+
+- `opentide share` publishes a threat, objective, or rule to MISP as one Event. `push`, `preview`, `status`, `retract`, and `targets` share `.opentide/configurations/sharing.toml`. `preview` and `status` do not contact the destination. An API key is never printed ([#184](https://github.com/OpenTideHQ/opentide/issues/184), [#371](https://github.com/OpenTideHQ/opentide/issues/371)).
+- `sharing.toml` merges `[[misp]]` blocks by `name`. `opentide validate --check sharing-config` reports the sharing checker codes. The check is off unless requested, and it runs for `opentide share push` ([#370](https://github.com/OpenTideHQ/opentide/issues/370)).
+- Successful shares are recorded in `.opentide/states/sharing.jsonl`. A skip or a failure leaves that file unchanged. Setup gitignores `.opentide/states/` ([#373](https://github.com/OpenTideHQ/opentide/issues/373)).
+- The MISP connector wraps PyMISP. One Tide object is one Event, the object YAML is copied verbatim, and the Event UUID is assigned by MISP ([#372](https://github.com/OpenTideHQ/opentide/issues/372)).
+- `opentide setup` and `opentide setup ci` take `--sharing` / `--no-sharing`, default off. When selected, GitHub, GitLab, and Azure run `opentide share push --changed` after generate on a push to the default branch. Deploy still depends only on generate ([#375](https://github.com/OpenTideHQ/opentide/issues/375)).
+
+### Changed
+
+- A regenerated GitHub workflow compares `github.ref` with `'refs/heads/<branch>'`. `format()` with only the format string is not a valid Actions expression.
+- `opentide share preview` does not require the API key. `push` and `retract` still do.
+
+### Fixed
+
+- A create that fails after the remote lookup no longer deletes the matching ledger line.
+- Importing the CLI no longer imports PyMISP, so usage errors and `--json` stay free of the `pymisp loaded properly` line.
+
+### Install
+
+```bash
+pip install opentide==0.7.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.6.4] — 2026-09-28
 
 Patch on 0.6.3. Upgrade if `generate` printed an empty error for a missing detection model, a GitHub production deploy never ran, setup rewrote a README or platform comments, or MCP `deploy_rule` crashed. Regenerate a GitHub, GitLab, or Azure workflow with `opentide setup ci` so production deploy and the checkout depth match this release.
@@ -502,7 +532,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.6.4...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.7.0
 [0.6.4]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.4
 [0.6.3]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.3
 [0.6.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.2

@@ -8,7 +8,7 @@
 ## Install
 
 ```bash
-pip install opentide==0.6.4
+pip install opentide==0.7.0
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate
 ```
