@@ -150,6 +150,9 @@ Each language's own syntax is respected, so valid content is not rejected:
 | Language | Understood |
 |----------|------------|
 | KQL | `//` comments, `'`/`"` strings, verbatim `@"C:\dir\"`, multi-line ```` ``` ```` and `~~~` literals |
+| Kuery | Filter and free-text queries, `'`/`"` strings, wildcard matching |
+| EQL | `//` and `#` comments, sequence blocks `[...]`, event queries |
+| ES\|QL | `//` comments, `/* ... */` block comments, source commands (`FROM`, `ROW`, `SHOW`, `METRICS`), pipeline stages |
 | SPL | ```` ``` ```` comment blocks, generating commands that start with `\|` |
 | S1QL | `//` comments, `\|\|` as `OR` (with an operand on each side), a leading `\|` stage |
 | Lucene | backslash escapes (`iex\(`), mixed range ends (`[1 TO 5}`), whole-term `/regex/` (an unescaped path such as `/usr/bin/curl` stays data), apostrophes as data |
@@ -169,10 +172,11 @@ tenants.
 
 ### Supported platforms
 
-Query validation works on **five platforms** only:
+Query validation works on **six platforms** only:
 
 - `sentinel` (KQL)
 - `defender_for_endpoint` (KQL)
+- `elastic_security` (Kuery, Lucene, EQL, ES\|QL)
 - `splunk` (SPL)
 - `sentinel_one` (S1QL)
 - `carbon_black_cloud` (Lucene)

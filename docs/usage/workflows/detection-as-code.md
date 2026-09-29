@@ -97,12 +97,13 @@ See [`deploy`](../../cli/deploy.md) and [Configuration → promotion](../configu
 
 ## Platform queries
 
-Each rule carries per-platform query blocks under `configurations`. Five platforms support **query syntax validation**; two are deploy-only:
+Each rule carries per-platform query blocks under `configurations`. Six platforms support **query syntax validation**; two are deploy-only:
 
 | Platform | Query language | Query validate |
 |----------|----------------|:--------------:|
 | Sentinel | KQL | yes |
 | Defender for Endpoint | KQL | yes |
+| Elastic Security | Kuery / Lucene / EQL / ES\|QL | yes |
 | Splunk | SPL | yes |
 | SentinelOne | S1QL | yes |
 | Carbon Black Cloud | Lucene | yes |

@@ -26,7 +26,7 @@ The extra pins `mcp>=1.28.1,<2`. `mcp` 2.x replaced `mcp.server.fastmcp` with
 `MCPServer`; OpenTide has not migrated yet.
 </Callout>
 
-All seven platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
+All eight platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
 
 ## Verify
 

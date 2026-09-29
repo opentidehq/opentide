@@ -22,6 +22,7 @@ _PLATFORM_TOML: dict[DetectionPlatform, str] = {
     DetectionPlatform.sentinel_one: "sentinel_one.toml",
     DetectionPlatform.carbon_black: "carbon_black_cloud.toml",
     DetectionPlatform.harfanglab: "harfanglab.toml",
+    DetectionPlatform.elastic_security: "elastic_security.toml",
 }
 
 

@@ -13,6 +13,8 @@ class IndexManager:
     """Load and refresh the workspace registry in memory."""
 
     _cache: IndexSnapshot | None = None
+    _flat_cache: dict[str, Any] | None = None
+    _flat_cache_index_id: int | None = None
 
     @classmethod
     def load(cls) -> IndexSnapshot:
@@ -26,6 +28,8 @@ class IndexManager:
     def reload(cls) -> IndexSnapshot:
         """Drop cached index and rebuild."""
         cls._cache = None
+        cls._flat_cache = None
+        cls._flat_cache_index_id = None
         return cls.load()
 
     @classmethod

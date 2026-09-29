@@ -1,0 +1,9 @@
+[platform]
+enabled = true
+identifier = "elastic_security"
+name = "Elastic Security"
+subschema = "Elastic Security"
+description = """Elastic Security unifies SIEM and endpoint security to provide
+threat detection, investigation, and automated response capabilities across
+hybrid and multi-cloud environments."""
+flags = [""]

@@ -15,6 +15,13 @@ from opentide.models.platform_configs import (
     DefenderGroupScoping,
     DefenderImpactedEntities,
     DefenderResponseActions,
+    ElasticAction,
+    ElasticAlertSuppression,
+    ElasticExceptionList,
+    ElasticExceptionListRef,
+    ElasticResponseAction,
+    ElasticThreatMapping,
+    ElasticThreshold,
     HarfangLabSigma,
     HarfangLabYara,
     SentinelAlert,
@@ -169,6 +176,185 @@ class CarbonBlackConfig(PlatformConfigBase):
     rule_id_bundle: dict[str, str] | None = None
 
 
+class ElasticSecurityConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::elastic_security::1.0"
+
+    type: Literal[
+        "query",
+        "saved_query",
+        "eql",
+        "esql",
+        "threshold",
+        "threat_match",
+        "new_terms",
+        "machine_learning",
+    ] = "query"
+    saved_id: str | None = None
+    language: str | None = None
+    query: str | None = TideField(
+        None,
+        schema_extra={"tide.template.multiline": True, "tide.template.spacer": True},
+    )
+    index: list[str] | None = None
+    data_view_id: str | None = None
+
+    query_from: str | None = TideField(None, alias="from")
+    interval: str | None = None
+    to: str | None = None
+
+    severity: Literal["low", "medium", "high", "critical"] | None = None
+    risk_score: int | None = None
+    author: list[str] | None = None
+    note: str | None = None
+    setup: str | None = None
+    tags: list[str] | None = None
+    filters: list[dict[str, Any]] | None = None
+    max_signals: int | None = None
+    timestamp_override: str | None = None
+    timestamp_override_fallback_disabled: bool | None = None
+    building_block_type: str | None = None
+    rule_id: str | None = None
+
+    # Common fields added in P1
+    references: list[str] | None = None
+    false_positives: list[str] | None = None
+    risk_score_mapping: list[dict[str, Any]] | None = None
+    severity_mapping: list[dict[str, Any]] | None = None
+    rule_name_override: str | None = None
+    investigation_fields: dict[str, Any] | None = None
+    required_fields: list[dict[str, Any]] | None = None
+    license: str | None = None
+    output_index: str | None = None
+    namespace: str | None = None
+    version: int | None = None
+
+    # Exception lists (shared / inline container definitions)
+    exception_lists: list[ElasticExceptionList | dict[str, Any]] | None = None
+
+    # EQL specific
+    timestamp_field: str | None = None
+    event_category_override: str | None = None
+    tiebreaker_field: str | None = None
+
+    # Threshold specific
+    threshold: ElasticThreshold | None = None
+
+    # Threat match specific
+    threat_index: list[str] | None = None
+    threat_mapping: list[ElasticThreatMapping | dict[str, Any]] | None = None
+    threat_query: str | None = None
+    threat_language: str | None = None
+    threat_indicator_path: str | None = None
+    threat_filters: list[dict[str, Any]] | None = None
+    concurrent_searches: int | None = None
+    items_per_search: int | None = None
+
+    # New terms specific
+    new_terms_fields: list[str] | None = None
+    history_window_start: str | None = None
+
+    # Machine learning specific
+    machine_learning_job_id: str | list[str] | None = None
+    anomaly_threshold: int | None = None
+
+    # Suppression & references
+    alert_suppression: ElasticAlertSuppression | None = None
+    exceptions_list: list[ElasticExceptionListRef | dict[str, Any]] | None = None
+    actions: list[ElasticAction | dict[str, Any]] | None = None
+    response_actions: list[ElasticResponseAction | dict[str, Any]] | None = None
+    threat: list[dict[str, Any]] | None = None
+    meta: dict[str, Any] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _set_elastic_defaults(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            rule_type = data.get("type", "query")
+            if "language" not in data or data["language"] is None:
+                if rule_type in ("query", "saved_query"):
+                    data["language"] = "kuery"
+                elif rule_type == "eql":
+                    data["language"] = "eql"
+                elif rule_type == "esql":
+                    data["language"] = "esql"
+        return data
+
+    @model_validator(mode="after")
+    def _validate_elastic_security_fields(self) -> ElasticSecurityConfig:
+        if self.index is not None and self.data_view_id is not None:
+            raise ValueError("index and data_view_id are mutually exclusive")
+
+        rule_type = self.type
+
+        if rule_type == "machine_learning":
+            if not self.machine_learning_job_id:
+                raise ValueError("machine_learning rules require 'machine_learning_job_id'")
+            if self.anomaly_threshold is None:
+                raise ValueError("machine_learning rules require 'anomaly_threshold'")
+            if self.query is not None and self.query.strip():
+                raise ValueError("machine_learning rules must not specify 'query'")
+            if self.index is not None or self.data_view_id is not None:
+                raise ValueError(
+                    "machine_learning rules must not specify 'index' or 'data_view_id'"
+                )
+            return self
+
+        if rule_type == "saved_query":
+            if not self.saved_id:
+                raise ValueError("saved_query rules require 'saved_id'")
+            if self.language is not None and self.language not in ("kuery", "lucene"):
+                raise ValueError("saved_query rules must use language 'kuery' or 'lucene'")
+        else:
+            if not self.query or not self.query.strip():
+                raise ValueError(f"query must not be empty for {rule_type} rules")
+
+        if rule_type == "esql":
+            if self.index is not None or self.data_view_id is not None:
+                raise ValueError(
+                    "esql rules must not specify 'index' or 'data_view_id' (index is in query)"
+                )
+            if self.language is not None and self.language != "esql":
+                raise ValueError("esql rules must use language 'esql'")
+
+        elif rule_type == "eql":
+            if self.language is not None and self.language != "eql":
+                raise ValueError("eql rules must use language 'eql'")
+
+        elif rule_type in ("query", "threshold", "threat_match", "new_terms"):
+            if self.language is not None and self.language not in ("kuery", "lucene"):
+                raise ValueError(f"{rule_type} rules must use language 'kuery' or 'lucene'")
+
+        if rule_type == "threshold":
+            if self.threshold is None:
+                raise ValueError("threshold rules require 'threshold' configuration (field and value)")
+            if self.alert_suppression is not None and self.alert_suppression.group_by:
+                raise ValueError("threshold rules with alert_suppression do not allow 'group_by'")
+
+        elif rule_type == "threat_match":
+            if not self.threat_index:
+                raise ValueError("threat_match rules require 'threat_index'")
+            if not self.threat_mapping:
+                raise ValueError("threat_match rules require 'threat_mapping'")
+            if self.threat_language is not None and self.threat_language not in (
+                "kuery",
+                "lucene",
+            ):
+                raise ValueError(
+                    "threat_language for threat_match rules must be 'kuery' or 'lucene'"
+                )
+
+        elif rule_type == "new_terms":
+            if not self.new_terms_fields:
+                raise ValueError("new_terms rules require 'new_terms_fields'")
+            if not self.history_window_start:
+                raise ValueError("new_terms rules require 'history_window_start'")
+
+        if self.alert_suppression is not None and not self.alert_suppression.duration:
+            raise ValueError("alert_suppression requires 'duration'")
+
+        return self
+
+
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "sentinel": SentinelConfig,
     "defender_for_endpoint": DefenderConfig,
@@ -177,6 +363,7 @@ PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "crowdstrike": CrowdstrikeConfig,
     "harfanglab": HarfangLabConfig,
     "carbon_black_cloud": CarbonBlackConfig,
+    "elastic_security": ElasticSecurityConfig,
 }
 
 
@@ -197,6 +384,7 @@ class RuleConfigurations(TideModel):
     crowdstrike: CrowdstrikeConfig | None = None
     harfanglab: HarfangLabConfig | None = None
     carbon_black_cloud: CarbonBlackConfig | None = None
+    elastic_security: ElasticSecurityConfig | None = None
 
     @classmethod
     def from_platforms_dict(cls, platforms: dict[str, dict[str, Any]]) -> RuleConfigurations:

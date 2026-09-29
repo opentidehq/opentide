@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from pydantic import ConfigDict
+
 from opentide.models.base import TideField, TideModel
 
 
@@ -319,3 +321,99 @@ class SplunkActions(TideModel):
     notable: SplunkNotable | None = None
     risk: SplunkRisk | None = None
     email: SplunkEmail | None = None
+
+
+class ElasticThreshold(TideModel):
+    field: str | list[str] = []
+    value: int
+    cardinality: list[dict[str, Any]] | None = None
+
+
+class ElasticAlertSuppression(TideModel):
+    group_by: list[str] | None = None
+    duration: dict[str, Any] | None = None
+    missing_fields_strategy: Literal["doNotSuppress", "suppress"] | None = None
+
+
+class ElasticThreatMapping(TideModel):
+    entries: list[dict[str, Any]]
+
+
+class ElasticAction(TideModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    id: str
+    action_type_id: str
+    group: str = "default"
+    params: dict[str, Any] | None = None
+    frequency: dict[str, Any] | None = None
+
+
+class ElasticResponseAction(TideModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    action_type_id: str | None = None
+    params: dict[str, Any] | None = None
+
+
+ElasticExceptionListType = Literal[
+    "detection",
+    "rule_default",
+    "endpoint",
+    "endpoint_trusted_apps",
+    "endpoint_trusted_devices",
+    "endpoint_events",
+    "endpoint_host_isolation_exceptions",
+    "endpoint_blocklists",
+    "endpoint_custom_yara_signatures",
+]
+
+ElasticNamespaceType = Literal["single", "agnostic"]
+
+
+class ElasticExceptionListRef(TideModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    list_id: str
+    type: ElasticExceptionListType
+    id: str | None = None
+    namespace_type: ElasticNamespaceType = "single"
+
+
+class ElasticExceptionListItemEntry(TideModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    field: str | None = None
+    type: Literal["match", "match_any", "exists", "list", "nested", "wildcard"] | str
+    operator: Literal["included", "excluded"] | str = "included"
+    value: Any | None = None
+    entries: list[dict[str, Any]] | None = None
+
+
+class ElasticExceptionListItem(TideModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    item_id: str | None = None
+    name: str | None = None
+    description: str | None = None
+    type: str = "simple"
+    entries: list[ElasticExceptionListItemEntry | dict[str, Any]] = []
+    os_types: list[str] | None = None
+    expire_time: str | None = None
+    comments: list[dict[str, Any]] | None = None
+    tags: list[str] | None = None
+    namespace_type: ElasticNamespaceType = "single"
+
+
+class ElasticExceptionList(TideModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    list_id: str
+    name: str
+    description: str | None = None
+    type: ElasticExceptionListType = "detection"
+    namespace_type: ElasticNamespaceType = "single"
+    tags: list[str] | None = None
+    os_types: list[str] | None = None
+    meta: dict[str, Any] | None = None
+    items: list[ElasticExceptionListItem | dict[str, Any]] | None = None

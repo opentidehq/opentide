@@ -314,3 +314,114 @@ def test_validate_platform_queries_honours_a_uuid_scope() -> None:
 def test_validate_platform_queries_rejects_a_platform_without_a_language() -> None:
     with pytest.raises(ValueError, match="crowdstrike"):
         validate_platform_queries("crowdstrike", {})
+
+
+# --------------------------------------------------------------------------
+# Elastic Security queries: Kuery, EQL, ES|QL, Lucene
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("query", "language"),
+    [
+        ("event.category:process and process.name:whoami", "kuery"),
+        ("error or failure or critical", "kuery"),
+        ('user.name:"admin" and not host.name:"prod-*"', "kuery"),
+        (r"file.path:C\:\\Windows\\System32\\*.exe", "kuery"),
+        ('process where process.name == "whoami.exe"', "eql"),
+        ("sequence with maxspan=1h [process where true] [file where true]", "eql"),
+        ('process where process.name == "test" // a comment\n', "eql"),
+        ('FROM logs-* | WHERE process.name == "whoami" | LIMIT 5', "esql"),
+        ('ROW a = 1, b = "hello" | KEEP a', "esql"),
+        ("SHOW info | LIMIT 1", "esql"),
+        ("| FROM logs-* | KEEP host.name", "esql"),
+        ("/* block comment */ FROM logs-* | KEEP host.name", "esql"),
+        ("FROM logs-* /* inline comment */ | LIMIT 5", "esql"),
+    ],
+)
+def test_elastic_security_valid_queries(query: str, language: str) -> None:
+    assert codes(query, language) == []
+
+
+def test_esql_rejects_invalid_source_command() -> None:
+    assert "invalid_source_command" in codes("SELECT * FROM logs-*", "esql")
+    assert "invalid_source_command" in codes("WHERE x == 1", "esql")
+
+
+def test_kuery_rejects_pipeline_and_differs_from_microsoft_kql() -> None:
+    ms_kql = "SecurityEvent | where EventID == 4688"
+    assert codes(ms_kql, "kql") == []
+    assert "unexpected_pipe" in codes(ms_kql, "kuery")
+
+
+def test_eql_requires_where_clause() -> None:
+    assert "missing_where_clause" in codes("process.name == 'cmd.exe'", "eql")
+    assert codes("process where process.name == 'cmd.exe'", "eql") == []
+
+
+def test_elastic_security_extracts_typed_queries_and_threat_query() -> None:
+    body = {
+        "name": "Elastic Threat Match",
+        "configurations": {
+            "elastic_security": {
+                "type": "threat_match",
+                "query": "event.category:process",
+                "language": "kuery",
+                "threat_query": 'process where process.name == "malware.exe"',
+                "threat_language": "eql",
+            }
+        },
+    }
+    specs = extract_queries("elastic_security", "uuid-elastic-1", body)
+    assert len(specs) == 2
+    assert specs[0].field == "configurations.elastic_security.query"
+    assert specs[0].language == "kuery"
+    assert specs[1].field == "configurations.elastic_security.threat_query"
+    assert specs[1].language == "eql"
+
+
+def test_elastic_security_ignores_machine_learning_rules() -> None:
+    body = {
+        "configurations": {
+            "elastic_security": {
+                "type": "machine_learning",
+                "machine_learning_job_id": "v1_job",
+                "anomaly_threshold": 75,
+            }
+        }
+    }
+    specs = extract_queries("elastic_security", "uuid-ml", body)
+    assert specs == []
+
+
+def test_elastic_security_validation_aggregates_mixed_languages() -> None:
+    rules = {
+        "uuid-kuery": {
+            "name": "KQL Rule",
+            "configurations": {
+                "elastic_security": {
+                    "type": "query",
+                    "query": "event.category:process",
+                }
+            },
+        },
+        "uuid-esql-bad": {
+            "name": "Bad ES|QL",
+            "configurations": {
+                "elastic_security": {
+                    "type": "esql",
+                    "query": "SELECT * FROM logs",
+                }
+            },
+        },
+    }
+    report = validate_platform_queries("elastic_security", rules)
+    assert report.language == "mixed"
+    assert report.rules == 2
+    assert report.checked == 2
+    assert report.ok is False
+    assert len(report.findings) == 1
+    finding = report.findings[0]
+    assert finding["uuid"] == "uuid-esql-bad"
+    assert finding["language"] == "esql"
+    assert finding["code"] == "invalid_source_command"

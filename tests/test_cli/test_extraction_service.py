@@ -27,6 +27,14 @@ def test_run_extract_import_defender() -> None:
     mock_run.assert_called_once_with("opentide.extraction.mde_importer", ExtractImport.defender)
 
 
+def test_run_extract_import_elastic_security() -> None:
+    with patch.object(extraction_service, "_run_engine_module") as mock_run:
+        extraction_service.run_extract_import(ExtractImport.elastic_security)
+    mock_run.assert_called_once_with(
+        "opentide.extraction.elastic_security_importer", ExtractImport.elastic_security
+    )
+
+
 def test_run_extract_entrypoint() -> None:
     ctx = CliContext(json_output=True)
     with patch.object(extraction_service, "run_extract_import") as mock_import:

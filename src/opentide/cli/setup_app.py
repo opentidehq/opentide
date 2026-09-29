@@ -448,6 +448,7 @@ def setup_platforms_cmd(
     sentinel_one: bool = typer.Option(False, "--sentinel-one"),
     carbon_black_cloud: bool = typer.Option(False, "--carbon-black-cloud"),
     harfanglab: bool = typer.Option(False, "--harfanglab"),
+    elastic_security: bool = typer.Option(False, "--elastic-security"),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Create and enable platform configuration files under ``.opentide/configurations/platforms/``."""
@@ -469,6 +470,8 @@ def setup_platforms_cmd(
         platforms.append(DetectionPlatform.carbon_black)
     if harfanglab:
         platforms.append(DetectionPlatform.harfanglab)
+    if elastic_security:
+        platforms.append(DetectionPlatform.elastic_security)
     if not platforms:
         raise typer.BadParameter("Choose at least one platform flag (e.g. --sentinel --splunk)")
     if not _confirm_write(cli, base, "Write these platform configurations?", yes=yes):

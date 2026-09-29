@@ -1,0 +1,31 @@
+[platform]
+enabled = false
+identifier = "elastic_security"
+name = "Elastic Security"
+subschema = "Elastic Security"
+description = """Elastic Security unifies SIEM and endpoint security to provide
+threat detection, investigation, and automated response capabilities across
+hybrid and multi-cloud environments."""
+flags = [""]
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#severity = "low"
+
+#[[tenants]]
+#name = "Tenant"
+#description = "Default Elastic Security deployment target"
+#deployment = "ALWAYS" #STAGING, PRODUCTION, MANUAL (only when defined in MDR) or ALWAYS
+#[tenants.setup]
+#proxy = false
+#ssl = true
+#kibana_url = "$KIBANA_URL"
+#api_key = "$ELASTIC_API_KEY"
+#space = "default"
+#overwrite_exceptions = false
+#overwrite_action_connectors = false
+#min_version = "8.14.0"

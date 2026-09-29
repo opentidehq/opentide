@@ -1,0 +1,142 @@
+  #enabled: false
+  #name: 
+  schema: platform::elastic_security::1.0
+  #status: 
+  #flags:
+    #- 
+  #tenants:
+    #- 
+  #contributors:
+    #- 
+  #type: query
+  #saved_id: 
+  #language: 
+
+  #query: |
+    #...
+  #index:
+    #- 
+  #data_view_id: 
+  #from: 
+  #interval: 
+  #to: 
+  #severity: low
+  #risk_score: 3
+  #author:
+    #- 
+  #note: 
+  #setup: 
+  #tags:
+    #- 
+  #filters:
+    #- key: 
+  #max_signals: 3
+  #timestamp_override: 
+  #timestamp_override_fallback_disabled: false
+  #building_block_type: 
+  #rule_id: 
+  #references:
+    #- 
+  #false_positives:
+    #- 
+  #risk_score_mapping:
+    #- key: 
+  #severity_mapping:
+    #- key: 
+  #rule_name_override: 
+  #investigation_fields:
+    #key: 
+  #required_fields:
+    #- key: 
+  #license: 
+  #output_index: 
+  #namespace: 
+  #version: 3
+  #exception_lists:
+    #- list_id: 
+      #name: 
+      #description: |
+        #...
+      #type: detection
+      #namespace_type: single
+      #tags:
+        #- 
+      #os_types:
+        #- 
+      #meta:
+        #key: 
+      #items:
+        #- item_id: 
+          #name: 
+          #description: |
+            #...
+          #type: simple
+          #entries:
+            #- field: 
+              #type: match
+              #operator: included
+              #value: 
+              #entries:
+                #- key: 
+          #os_types:
+            #- 
+          #expire_time: 
+          #comments:
+            #- key: 
+          #tags:
+            #- 
+          #namespace_type: single
+  #timestamp_field: 
+  #event_category_override: 
+  #tiebreaker_field: 
+  #threshold:
+    #field:
+      #- 
+    #value: 3
+    #cardinality:
+      #- key: 
+  #threat_index:
+    #- 
+  #threat_mapping:
+    #- entries:
+        #- key: 
+  #threat_query: 
+  #threat_language: 
+  #threat_indicator_path: 
+  #threat_filters:
+    #- key: 
+  #concurrent_searches: 3
+  #items_per_search: 3
+  #new_terms_fields:
+    #- 
+  #history_window_start: 
+  #machine_learning_job_id:
+    #- 
+  #anomaly_threshold: 3
+  #alert_suppression:
+    #group_by:
+      #- 
+    #duration:
+      #key: 
+    #missing_fields_strategy: doNotSuppress
+  #exceptions_list:
+    #- list_id: 
+      #type: detection
+      #id: 
+      #namespace_type: single
+  #actions:
+    #- id: 
+      #action_type_id: 
+      #group: default
+      #params:
+        #key: 
+      #frequency:
+        #key: 
+  #response_actions:
+    #- action_type_id: 
+      #params:
+        #key: 
+  #threat:
+    #- key: 
+  #meta:
+    #key: 

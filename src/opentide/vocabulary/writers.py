@@ -13,10 +13,7 @@ _AOT_ARRAY_FIELDS = frozenset({"entries", "keys"})
 def _dump_aot_table(section: str, item: Mapping[str, Any]) -> str:
     lines = [f"[[{section}]]"]
     for key, value in item.items():
-        if isinstance(value, list):
-            lines.append(f"{key} = {tomli_w.dumps({key: value}).split('=', 1)[1].strip()}")
-        else:
-            lines.append(tomli_w.dumps({key: value}).strip())
+        lines.append(tomli_w.dumps({key: value}).strip())
     return "\n".join(lines)
 
 

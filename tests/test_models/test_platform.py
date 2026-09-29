@@ -64,5 +64,27 @@ def test_rule_configurations_from_platforms_dict() -> None:
     assert configs.crowdstrike is not None
 
 
-def test_platform_config_models_cover_seven_platforms() -> None:
-    assert len(PLATFORM_CONFIG_MODELS) == 7
+def test_parse_platform_config_elastic_security() -> None:
+    config = parse_platform_config(
+        "elastic_security",
+        {
+            "enabled": True,
+            "name": "Elastic Rule",
+            "type": "query",
+            "language": "kuery",
+            "query": "event.category:process and process.name:whoami",
+            "index": ["logs-*"],
+            "severity": "high",
+            "risk_score": 73,
+        },
+    )
+    from opentide.models.platform import ElasticSecurityConfig
+
+    assert isinstance(config, ElasticSecurityConfig)
+    assert config.enabled is True
+    assert config.type == "query"
+    assert config.language == "kuery"
+
+
+def test_platform_config_models_cover_eight_platforms() -> None:
+    assert len(PLATFORM_CONFIG_MODELS) == 8

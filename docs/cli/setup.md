@@ -68,9 +68,10 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | Flag | Platform |
 |------|----------|
 | `--sentinel` | Microsoft Sentinel |
+| `--defender-for-endpoint` | Microsoft Defender for Endpoint |
+| `--elastic-security` | Elastic Security |
 | `--splunk` | Splunk |
 | `--crowdstrike` | CrowdStrike |
-| `--defender-for-endpoint` | Microsoft Defender for Endpoint |
 | `--sentinel-one` | SentinelOne |
 | `--carbon-black-cloud` | Carbon Black Cloud |
 | `--harfanglab` | HarfangLab |

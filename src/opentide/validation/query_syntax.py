@@ -25,6 +25,10 @@ KQL = "kql"
 SPL = "spl"
 S1QL = "s1ql"
 LUCENE = "lucene"
+KUERY = "kuery"
+EQL = "eql"
+ESQL = "esql"
+MIXED = "mixed"
 
 PLATFORM_QUERY_LANGUAGES: dict[str, str] = {
     "sentinel": KQL,
@@ -32,15 +36,25 @@ PLATFORM_QUERY_LANGUAGES: dict[str, str] = {
     "splunk": SPL,
     "sentinel_one": S1QL,
     "carbon_black_cloud": LUCENE,
+    "elastic_security": MIXED,
 }
 
 #: The platforms whose queries can be checked at all. CrowdStrike and HarfangLab
 #: expose no query language, so their capability entry is ``can_validate False``.
 QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(PLATFORM_QUERY_LANGUAGES)
 
-LANGUAGE_LABELS = {KQL: "KQL", SPL: "SPL", S1QL: "S1QL", LUCENE: "Lucene"}
+LANGUAGE_LABELS = {
+    KQL: "KQL",
+    SPL: "SPL",
+    S1QL: "S1QL",
+    LUCENE: "Lucene",
+    KUERY: "Kuery",
+    EQL: "EQL",
+    ESQL: "ES|QL",
+    MIXED: "Mixed",
+}
 
-_PIPELINE_LANGUAGES = frozenset({KQL, SPL, S1QL})
+_PIPELINE_LANGUAGES = frozenset({KQL, SPL, S1QL, ESQL})
 #: Only KQL forbids a leading ``|``. SPL generating commands (``| tstats``,
 #: ``| inputlookup``, ``| makeresults``, ``| from``) *must* start with one, and
 #: S1QL accepts a leading stage too, so flagging those is a false positive on
@@ -48,8 +62,17 @@ _PIPELINE_LANGUAGES = frozenset({KQL, SPL, S1QL})
 _LEADING_PIPE_LANGUAGES = frozenset({KQL})
 _BRACKET_PAIRS = {"(": ")", "[": "]", "{": "}"}
 _CLOSING_BRACKETS = {value: key for key, value in _BRACKET_PAIRS.items()}
-_LINE_COMMENTS: dict[str, tuple[str, ...]] = {KQL: ("//",), S1QL: ("//",)}
-_BLOCK_COMMENTS: dict[str, tuple[str, str]] = {SPL: ("```", "```")}
+_LINE_COMMENTS: dict[str, tuple[str, ...]] = {
+    KQL: ("//",),
+    S1QL: ("//",),
+    EQL: ("//",),
+    ESQL: ("//",),
+}
+_BLOCK_COMMENTS: dict[str, tuple[str, str]] = {
+    SPL: ("```", "```"),
+    EQL: ("/*", "*/"),
+    ESQL: ("/*", "*/"),
+}
 #: Lucene's standard parser only knows the double-quoted phrase, so an
 #: apostrophe inside a Carbon Black value is data, not an unterminated literal.
 _STRING_DELIMITERS: dict[str, tuple[str, ...]] = {
@@ -57,6 +80,9 @@ _STRING_DELIMITERS: dict[str, tuple[str, ...]] = {
     SPL: ('"', "'"),
     S1QL: ('"', "'"),
     LUCENE: ('"',),
+    KUERY: ('"', "'"),
+    EQL: ('"', "'"),
+    ESQL: ('"', "'"),
 }
 #: KQL verbatim literals (``@"C:\dir\"``) take the backslash literally and
 #: escape a quote by doubling it.
@@ -65,7 +91,7 @@ _VERBATIM_PREFIX_LANGUAGES = frozenset({KQL})
 _MULTILINE_STRINGS: dict[str, tuple[str, ...]] = {KQL: ("```", "~~~")}
 #: Lucene escapes any special character with a backslash outside a phrase, so
 #: ``process_cmdline:*iex\(*`` holds no bracket and ``*\"http*`` no string.
-_BARE_ESCAPE_LANGUAGES = frozenset({LUCENE})
+_BARE_ESCAPE_LANGUAGES = frozenset({LUCENE, KUERY})
 #: A terminated Lucene ``/regex/`` holds brackets and quotes as pattern. An
 #: unterminated ``/`` is left as data, so ``process_name:/usr/bin/bash`` passes.
 _REGEX_DELIMITERS: dict[str, str] = {LUCENE: "/"}
@@ -428,10 +454,93 @@ def _check_dangling_operator(masked: str) -> list[SyntaxFinding]:
     return [_finding("dangling_operator", f"Query ends with the operator '{tail}'", masked, index)]
 
 
+ESQL_SOURCE_COMMANDS = frozenset({"FROM", "ROW", "SHOW", "METRICS", "TS"})
+
+
+def _check_esql_source_command(masked: str) -> list[SyntaxFinding]:
+    """Check that an ES|QL query starts with an allowed source command."""
+    tokens = masked.strip().split()
+    if not tokens:
+        return []
+    first = tokens[0].lstrip("|").strip().upper()
+    if not first and len(tokens) > 1:
+        first = tokens[1].upper()
+    if first and first not in ESQL_SOURCE_COMMANDS:
+        allowed = ", ".join(sorted(ESQL_SOURCE_COMMANDS))
+        return [
+            SyntaxFinding(
+                "invalid_source_command",
+                f"ES|QL query must begin with a source command ({allowed}), found {first!r}",
+                1,
+                1,
+            )
+        ]
+    return []
+
+
+_EQL_KEYWORDS = frozenset({"where", "sequence", "sample", "join"})
+
+
+def _check_kuery_syntax(masked: str) -> list[SyntaxFinding]:
+    """Kuery does not support pipeline syntax '|'."""
+    findings: list[SyntaxFinding] = []
+    index = masked.find("|")
+    while index != -1:
+        findings.append(
+            _finding(
+                "unexpected_pipe",
+                "Kuery does not support pipeline operator '|'",
+                masked,
+                index,
+            )
+        )
+        index = masked.find("|", index + 1)
+    return findings
+
+
+def _check_eql_syntax(masked: str) -> list[SyntaxFinding]:
+    """EQL queries require a 'where' condition or a sequence block."""
+    stripped = masked.strip()
+    if not stripped:
+        return []
+    tokens = [t.lower() for t in stripped.split()]
+    if not any(kw in tokens for kw in _EQL_KEYWORDS) and not ("[" in masked and "]" in masked):
+        return [
+            SyntaxFinding(
+                "missing_where_clause",
+                "EQL query must contain a 'where' condition or sequence construct",
+                1,
+                1,
+            )
+        ]
+    return []
+
+
+def _detect_elastic_language(query: str) -> str:
+    """Best-effort language detection for standalone Elastic Security queries."""
+    stripped = query.strip()
+    if not stripped:
+        return KUERY
+    first_token = stripped.split()[0].lstrip("|").upper()
+    if first_token in ESQL_SOURCE_COMMANDS or stripped.startswith("|"):
+        return ESQL
+    first_word = stripped.split()[0].lower()
+    is_eql = (
+        first_word in _EQL_KEYWORDS
+        or " where " in stripped.lower()
+        or (stripped.startswith("[") and "]" in stripped)
+    )
+    if is_eql:
+        return EQL
+    return KUERY
+
+
 def check_query(query: str, language: str) -> list[SyntaxFinding]:
     """Structural findings for *query* in *language*; empty means it parses."""
     if not query or not query.strip():
         return [SyntaxFinding("empty_query", "Query is empty", 1, 1)]
+    if language == MIXED:
+        return check_query(query, _detect_elastic_language(query))
     masked, findings = _mask(query, language)
     if findings:
         # Masking blanks everything after an unterminated literal, so structural
@@ -442,6 +551,12 @@ def check_query(query: str, language: str) -> list[SyntaxFinding]:
         findings.extend(_check_pipeline(masked, language))
     if language in _DOUBLE_PIPE_OR_LANGUAGES:
         findings.extend(_check_or_operands(masked))
+    if language == ESQL:
+        findings.extend(_check_esql_source_command(masked))
+    elif language == KUERY:
+        findings.extend(_check_kuery_syntax(masked))
+    elif language == EQL:
+        findings.extend(_check_eql_syntax(masked))
     findings.extend(_check_dangling_operator(masked))
     return findings
 
@@ -498,6 +613,55 @@ def _sentinel_one_specs(
     return specs
 
 
+def _elastic_security_specs(config: Mapping[str, Any], *, uuid: str, rule: str) -> list[QuerySpec]:
+    """Elastic Security holds query (kuery, eql, esql, lucene) and optional threat_query."""
+    rule_type = config.get("type", "query")
+    if rule_type == "machine_learning":
+        return []
+
+    specs: list[QuerySpec] = []
+    base = "configurations.elastic_security"
+
+    query = config.get("query")
+    if isinstance(query, str) and query.strip():
+        lang = config.get("language")
+        if not lang:
+            if rule_type == "query":
+                lang = KUERY
+            elif rule_type == "eql":
+                lang = EQL
+            elif rule_type == "esql":
+                lang = ESQL
+            else:
+                lang = KUERY
+        specs.append(
+            _spec(
+                uuid=uuid,
+                rule=rule,
+                platform="elastic_security",
+                language=str(lang).lower(),
+                field_path=f"{base}.query",
+                query=query,
+            )
+        )
+
+    threat_query = config.get("threat_query")
+    if isinstance(threat_query, str) and threat_query.strip():
+        threat_lang = config.get("threat_language") or KUERY
+        specs.append(
+            _spec(
+                uuid=uuid,
+                rule=rule,
+                platform="elastic_security",
+                language=str(threat_lang).lower(),
+                field_path=f"{base}.threat_query",
+                query=threat_query,
+            )
+        )
+
+    return specs
+
+
 def extract_queries(platform: str, uuid: str, body: Any) -> list[QuerySpec]:
     """Every query string *platform* would deploy from one rule body."""
     language = query_language(platform)
@@ -511,6 +675,8 @@ def extract_queries(platform: str, uuid: str, body: Any) -> list[QuerySpec]:
     if not isinstance(config, Mapping):
         return []
     rule = str(resolved.get("name") or resolved.get("title") or uuid)
+    if platform == "elastic_security":
+        return _elastic_security_specs(config, uuid=uuid, rule=rule)
     if platform == "sentinel_one":
         return _sentinel_one_specs(config, uuid=uuid, rule=rule, language=language)
     # Splunk accepts the legacy flat `search` field alongside `query`.
@@ -550,12 +716,13 @@ def validate_platform_queries(
         report.rules += 1
         for spec in specs:
             report.checked += 1
-            for finding in check_query(spec.query, language):
+            for finding in check_query(spec.query, spec.language):
                 report.findings.append(
                     {
                         "uuid": spec.uuid,
                         "rule": spec.rule,
                         "field": spec.field,
+                        "language": spec.language,
                         **finding.to_dict(),
                     }
                 )

@@ -1,0 +1,201 @@
+# serializer version: 1
+# name: test_compile_eql_rule[compile_eql]
+  dict({
+    'author': list([
+      'Security Engineer',
+      'Alice',
+      'Bob',
+    ]),
+    'description': 'Rule description',
+    'enabled': False,
+    'event_category_override': 'process',
+    'from': 'now-6m',
+    'index': list([
+      'winlogbeat-*',
+    ]),
+    'interval': '5m',
+    'language': 'eql',
+    'name': 'Test Rule',
+    'note': 'Investigate immediately',
+    'query': "process where process.name == 'whoami.exe'",
+    'risk_score': 73,
+    'rule_id': '00000000-0000-4000-8003-000000000001',
+    'severity': 'high',
+    'tiebreaker_field': 'event.sequence',
+    'timestamp_field': '@timestamp',
+    'to': 'now',
+    'type': 'eql',
+  })
+# ---
+# name: test_compile_esql_rule[compile_esql]
+  dict({
+    'author': list([
+      'Security Engineer',
+      'Alice',
+      'Bob',
+    ]),
+    'description': 'Rule description',
+    'enabled': False,
+    'from': 'now-6m',
+    'interval': '5m',
+    'language': 'esql',
+    'name': 'Test Rule',
+    'note': 'Investigate immediately',
+    'query': "FROM logs-* | WHERE process.name == 'powershell.exe' | STATS count() BY user.name",
+    'risk_score': 73,
+    'rule_id': '00000000-0000-4000-8003-000000000001',
+    'severity': 'high',
+    'to': 'now',
+    'type': 'esql',
+  })
+# ---
+# name: test_compile_machine_learning_rule[compile_machine_learning]
+  dict({
+    'anomaly_threshold': 75,
+    'author': list([
+      'Security Engineer',
+      'Alice',
+      'Bob',
+    ]),
+    'description': 'Rule description',
+    'enabled': False,
+    'from': 'now-6m',
+    'interval': '5m',
+    'machine_learning_job_id': 'v3_rare_process_by_user',
+    'name': 'Test Rule',
+    'note': 'Investigate immediately',
+    'risk_score': 73,
+    'rule_id': '00000000-0000-4000-8003-000000000001',
+    'severity': 'high',
+    'to': 'now',
+    'type': 'machine_learning',
+  })
+# ---
+# name: test_compile_new_terms_rule[compile_new_terms]
+  dict({
+    'author': list([
+      'Security Engineer',
+      'Alice',
+      'Bob',
+    ]),
+    'description': 'Rule description',
+    'enabled': False,
+    'from': 'now-6m',
+    'history_window_start': 'now-7d',
+    'index': list([
+      'logs-endpoint.*',
+    ]),
+    'interval': '5m',
+    'name': 'Test Rule',
+    'new_terms_fields': list([
+      'user.name',
+      'process.name',
+    ]),
+    'note': 'Investigate immediately',
+    'query': 'process.name: *',
+    'risk_score': 73,
+    'rule_id': '00000000-0000-4000-8003-000000000001',
+    'severity': 'high',
+    'to': 'now',
+    'type': 'new_terms',
+  })
+# ---
+# name: test_compile_query_rule[compile_query]
+  dict({
+    'author': list([
+      'Security Engineer',
+      'Alice',
+      'Bob',
+    ]),
+    'description': 'Rule description',
+    'enabled': True,
+    'from': 'now-6m',
+    'index': list([
+      'logs-endpoint.events.*',
+    ]),
+    'interval': '5m',
+    'language': 'kuery',
+    'name': 'Test Rule',
+    'note': 'Investigate immediately',
+    'query': 'process.name: cmd.exe',
+    'risk_score': 73,
+    'rule_id': '00000000-0000-4000-8003-000000000001',
+    'severity': 'high',
+    'to': 'now',
+    'type': 'query',
+  })
+# ---
+# name: test_compile_threat_match_rule[compile_threat_match]
+  dict({
+    'author': list([
+      'Security Engineer',
+      'Alice',
+      'Bob',
+    ]),
+    'description': 'Rule description',
+    'enabled': False,
+    'from': 'now-6m',
+    'index': list([
+      'logs-endpoint.*',
+    ]),
+    'interval': '5m',
+    'name': 'Test Rule',
+    'note': 'Investigate immediately',
+    'query': 'file.hash.sha256: *',
+    'risk_score': 73,
+    'rule_id': '00000000-0000-4000-8003-000000000001',
+    'severity': 'high',
+    'threat_index': list([
+      'threat-intel-*',
+    ]),
+    'threat_language': 'kuery',
+    'threat_mapping': list([
+      dict({
+        'entries': list([
+          dict({
+            'field': 'file.hash.sha256',
+            'type': 'mapping',
+            'value': 'threat.indicator.file.hash.sha256',
+          }),
+        ]),
+      }),
+    ]),
+    'threat_query': 'threat.indicator.type: hash',
+    'to': 'now',
+    'type': 'threat_match',
+  })
+# ---
+# name: test_compile_threshold_rule[compile_threshold]
+  dict({
+    'author': list([
+      'Security Engineer',
+      'Alice',
+      'Bob',
+    ]),
+    'description': 'Rule description',
+    'enabled': False,
+    'from': 'now-6m',
+    'index': list([
+      'logs-auth.*',
+    ]),
+    'interval': '5m',
+    'name': 'Test Rule',
+    'note': 'Investigate immediately',
+    'query': 'event.category: authentication',
+    'risk_score': 73,
+    'rule_id': '00000000-0000-4000-8003-000000000001',
+    'severity': 'high',
+    'threshold': dict({
+      'cardinality': list([
+        dict({
+          'field': 'source.ip',
+          'value': 3,
+        }),
+      ]),
+      'field': 'user.name',
+      'value': 5,
+    }),
+    'to': 'now',
+    'type': 'threshold',
+  })
+# ---

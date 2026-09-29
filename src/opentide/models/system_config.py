@@ -201,6 +201,23 @@ class ConfigurationModels:
 
             tenants: Sequence[Tenant] | None
 
+        @dataclass
+        class ElasticSecurity(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    kibana_url: str
+                    api_key: str = ""
+                    space: str = "default"
+                    overwrite_exceptions: bool = False
+                    overwrite_action_connectors: bool = False
+                    min_version: str = "8.14.0"
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
 
 @dataclass
 class DeploymentBatch:
@@ -236,3 +253,7 @@ class TenantDeployment:
     @dataclass
     class HarfangLab(DeploymentBatch):
         tenant: ConfigurationModels.Systems.HarfangLab.Tenant
+
+    @dataclass
+    class ElasticSecurity(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.ElasticSecurity.Tenant

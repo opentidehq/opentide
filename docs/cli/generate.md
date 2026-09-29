@@ -172,6 +172,7 @@ Import detection rules from external platforms (credential-heavy, experimental f
 ```bash
 opentide generate extract sentinel
 opentide generate extract defender
+opentide generate extract elastic_security
 ```
 
 Configure tenant credentials under `.opentide/configurations/platforms/` before running.

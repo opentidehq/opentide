@@ -39,7 +39,7 @@ def test_bundled_data_via_importlib_resources() -> None:
     data_path = Path(str(files("opentide.data")))
     assert data_path.is_dir()
     platforms = list((data_path / "configurations" / "platforms").glob("*.toml"))
-    assert len(platforms) == 7
+    assert len(platforms) == 8
     skills = data_path / "skills"
     assert not (skills / "manifest.json").is_file()
     assert not (skills / "opentide-detection-rule" / "SKILL.md").is_file()

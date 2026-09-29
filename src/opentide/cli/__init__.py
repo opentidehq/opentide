@@ -294,11 +294,11 @@ def generate_exports_revisions(ctx: typer.Context) -> None:
     emit_success(cli, run_export(cli, target=ExportTarget.revisions))
 
 
-def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
+def _run_extract_command(ctx: typer.Context, target: ExtractImport, **kwargs: object) -> None:
     """Run one importer, turning every failure into a single result document."""
     cli = get_context(ctx)
     try:
-        result = run_extract(cli, import_target=target)
+        result = run_extract(cli, import_target=target, **kwargs)
     except Exception as exc:  # noqa: BLE001 - one JSON document is the contract
         # Enumerating exception types is how #242 escaped: the importers reach
         # vendor SDKs and half-typed config, so anything they raise has to come
@@ -325,6 +325,28 @@ def generate_extract_sentinel(ctx: typer.Context) -> None:
 def generate_extract_defender(ctx: typer.Context) -> None:
     """Import Defender custom detections (needs tenant credentials)."""
     _run_extract_command(ctx, ExtractImport.defender)
+
+
+@extract_app.command("elastic_security")
+def generate_extract_elastic_security(
+    ctx: typer.Context,
+    tenant: str | None = typer.Option(None, "--tenant", "-t", help="Tenant name to import from"),
+    space: str | None = typer.Option(None, "--space", "-s", help="Kibana space to import from"),
+    include_prebuilt: bool = typer.Option(
+        True,
+        "--include-prebuilt/--custom-only",
+        help="Include prebuilt and immutable Elastic rules (default: include)",
+    ),
+) -> None:
+    """Import Elastic Security detection rules (needs tenant credentials)."""
+    kwargs: dict[str, object] = {
+        "include_prebuilt": include_prebuilt,
+    }
+    if tenant is not None:
+        kwargs["tenant"] = tenant
+    if space is not None:
+        kwargs["space"] = space
+    _run_extract_command(ctx, ExtractImport.elastic_security, **kwargs)
 
 
 validate_app = typer.Typer(help="Object and query validation")
@@ -564,6 +586,34 @@ def import_defender(ctx: typer.Context) -> None:
         result = run_extract(cli, import_target=ExtractImport.defender)
     except (FileNotFoundError, RuntimeError) as exc:
         emit_error(cli, str(exc))
+    emit_success(cli, result)
+
+
+@extract_legacy_app.command("elastic_security")
+def import_elastic_security(
+    ctx: typer.Context,
+    tenant: str | None = typer.Option(None, "--tenant", "-t", help="Tenant name to import from"),
+    space: str | None = typer.Option(None, "--space", "-s", help="Kibana space to import from"),
+    include_prebuilt: bool = typer.Option(
+        True,
+        "--include-prebuilt/--custom-only",
+        help="Include prebuilt and immutable Elastic rules (default: include)",
+    ),
+) -> None:
+    _deprecate("opentide extract elastic_security", "opentide generate extract elastic_security")
+    cli = get_context(ctx)
+    kwargs: dict[str, object] = {
+        "include_prebuilt": include_prebuilt,
+    }
+    if tenant is not None:
+        kwargs["tenant"] = tenant
+    if space is not None:
+        kwargs["space"] = space
+    try:
+        result = run_extract(cli, import_target=ExtractImport.elastic_security, **kwargs)
+    except (FileNotFoundError, RuntimeError) as exc:
+        emit_error(cli, str(exc))
+        return
     emit_success(cli, result)
 
 

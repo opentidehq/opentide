@@ -1,6 +1,6 @@
 ---
 title: OpenTide
-description: DetectionOps engine — validate, generate, deploy, and document detection rules across seven security platforms.
+description: DetectionOps engine — validate, generate, deploy, and document detection rules across eight security platforms.
 ---
 
 # OpenTide
@@ -32,7 +32,7 @@ opentide deploy --platform sentinel --dry-run
 
 ## Platform coverage
 
-OpenTide supports **seven deployment platforms** and **five query validators**. CrowdStrike and HarfangLab deploy but do not support query syntax validation — OpenTide never fakes validation for those platforms.
+OpenTide supports **eight deployment platforms** and **six query validators**. CrowdStrike and HarfangLab deploy but do not support query syntax validation — OpenTide never fakes validation for those platforms.
 
 See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 

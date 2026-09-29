@@ -1,11 +1,11 @@
 ---
 title: Platforms
-description: Seven deployment platforms and five query validators — capability matrix and CLI identifiers.
+description: Eight deployment platforms and six query validators — capability matrix and CLI identifiers.
 ---
 
 # Platforms
 
-OpenTide integrates with **seven detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
+OpenTide integrates with **eight detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
 
 ## Capability matrix
 
@@ -13,6 +13,7 @@ OpenTide integrates with **seven detection platforms** through built-in adapters
 |----------|------------------|:------:|:--------------:|----------------|
 | Microsoft Sentinel | `sentinel` | yes | yes | KQL |
 | Defender for Endpoint | `defender_for_endpoint` | yes | yes | KQL |
+| Elastic Security | `elastic_security` | yes | yes | Kuery / Lucene / EQL / ES\|QL |
 | Splunk Enterprise Security | `splunk` | yes | yes | SPL |
 | SentinelOne | `sentinel_one` | yes | yes | S1QL |
 | Carbon Black Cloud | `carbon_black_cloud` | yes | yes | Lucene |
@@ -47,7 +48,7 @@ Only platforms with `can_validate=True` run syntax validation. For CrowdStrike a
 opentide validate query --platform crowdstrike   # reports unsupported
 ```
 
-For the five that can, validation is **offline by default**: a structural check
+For the six that can, validation is **offline by default**: a structural check
 of the query language that needs no vendor SDK and no tenant. Pass `--live` to
 submit the query to the platform instead, which requires the matching extra and
 credentials. Only the requested platform's engine is imported, so a Sentinel run
@@ -56,7 +57,7 @@ never loads the CrowdStrike or HarfangLab modules. See
 
 ## The `query` field
 
-The five platforms that carry a query string — Sentinel, Defender for Endpoint, Splunk, CrowdStrike, and Carbon Black Cloud — all declare `query` **required and non-blank**. Templates show it uncommented for each of them.
+The platforms that carry a query string — Sentinel, Defender for Endpoint, Splunk, CrowdStrike, Carbon Black Cloud, and Elastic Security — declare `query` as their primary query expression (with Elastic Security supporting `kuery`, `eql`, `esql`, and `lucene`, and allowing `query` to be omitted when `type: saved_query`). Templates show it for each of them.
 
 Splunk `splunk::2.x` objects used a flat layout: `search` for the search string, `cron_schedule` for the schedule, and top-level `throttling`, `threshold`, `notable`, `risk`, and `email`, with `frequency` / `lookback` directly under `scheduling`. All of these are still accepted. `opentide validate` and `opentide deploy` map them onto the v3 layout with the same function, so a 2.x rule validates exactly when it deploys. `search` and `cron_schedule` stay on the object so it round-trips unchanged. A `query` or `scheduling.schedule` set explicitly wins over the legacy key.
 

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "opentide"
 dynamic = ["version"]
-description = "DetectionOps engine: validate, generate, deploy, and document detection-as-code across seven security platforms."
+description = "DetectionOps engine: validate, generate, deploy, and document detection-as-code across eight security platforms."
 readme = "README.md"
 license = "EUPL-1.2"
 license-files = ["LICENSE"]
@@ -123,6 +123,7 @@ carbon_black_cloud = "opentide.platforms.carbon_black:declare"
 defender_for_endpoint = "opentide.platforms.defender_for_endpoint:declare"
 sentinel_one = "opentide.platforms.sentinel_one:declare"
 harfanglab = "opentide.platforms.harfanglab:declare"
+elastic_security = "opentide.platforms.elastic_security:declare"
 
 [tool.hatch.version]
 source = "vcs"
@@ -197,6 +198,7 @@ exclude = [
     "src/opentide/platforms/harfanglab",
     "src/opentide/platforms/sentinel",
     "src/opentide/platforms/sentinel_one",
+    "src/opentide/platforms/elastic_security",
     "src/opentide/platforms/kql.py",
     "src/opentide/platforms/plugins.py",
     "src/opentide/core/debug.py",
@@ -230,14 +232,25 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "src/opentide/cli/services/*.py" = ["E501", "SIM"]
 "tests/test_cli/*.py" = ["E501"]
 "tests/test_generation/*.py" = ["E501"]
+"tests/test_platforms/*.py" = ["E501"]
+"src/opentide/extraction/elastic_security_importer.py" = ["E501"]
+"tests/test_extraction/*.py" = ["E501"]
+"tests/test_validation/*.py" = ["E501"]
 "src/opentide/platforms/splunk/deployer.py" = ["E501", "B024"]
 "src/opentide/platforms/splunk/client.py" = ["E501", "B024"]
 "src/opentide/platforms/splunk/validator.py" = ["E501", "SIM102"]
 "src/opentide/platforms/carbon_black/deployer.py" = ["E501", "B024"]
 "src/opentide/platforms/carbon_black/client.py" = ["E501", "B024"]
-"src/opentide/platforms/carbon_black/validator.py" = ["E501"]
+"src/opentide/platforms/carbon_black/*.py" = ["E501"]
+"src/opentide/platforms/elastic_security/deployer.py" = ["E501"]
+"src/opentide/platforms/elastic_security/compile.py" = ["E501"]
+"src/opentide/platforms/elastic_security/client.py" = ["E501"]
+"src/opentide/platforms/elastic_security/validator.py" = ["E501"]
+"src/opentide/platforms/elastic_security/attack.py" = ["E501"]
 "src/opentide/platforms/config.py" = ["E501"]
 "src/opentide/deployment/planning.py" = ["E501", "SIM102"]
+"src/opentide/models/platform_configs.py" = ["E501"]
+"src/opentide/models/platform.py" = ["E501"]
 "src/opentide/mcp_server/server.py" = ["B008", "E501"]
 "src/opentide/mcp_server/*.py" = ["E501"]
 
@@ -257,6 +270,7 @@ exclude = [
     "src/opentide/platforms/sentinel_one",
     "src/opentide/platforms/splunk",
     "src/opentide/platforms/carbon_black",
+    "src/opentide/platforms/elastic_security",
     "src/opentide/platforms/kql.py",
     "src/opentide/platforms/plugins.py",
     "src/opentide/platforms/config.py",

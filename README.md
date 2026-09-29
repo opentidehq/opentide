@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/opentide.svg)](https://pypi.org/project/opentide/)
 [![Coverage](https://raw.githubusercontent.com/OpenTideHQ/opentide/python-coverage-comment-action-data/badge.svg)](https://github.com/OpenTideHQ/opentide/actions/workflows/ci.yml)
 
-**OpenTide** — the DetectionOps engine for detection-as-code: validate, generate schemas, deploy rules, and document content across seven security platforms.
+**OpenTide** — the DetectionOps engine for detection-as-code: validate, generate schemas, deploy rules, and document content across eight security platforms.
 
 ## Install
 

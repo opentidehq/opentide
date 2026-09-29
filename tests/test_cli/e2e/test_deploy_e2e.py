@@ -345,14 +345,14 @@ def test_deploy_dry_run_with_rules_only_in_subfolders_is_skipped_with_the_warnin
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     assert refuse_deployment_engines == []
-    warning = f"8 {SUBFOLDER_RULES_LEAD}" + ", ".join(
+    warning = f"9 {SUBFOLDER_RULES_LEAD}" + ", ".join(
         [
             "objects/rules/team-a/rule-0001-sentinel-kql.yaml",
             "objects/rules/team-a/rule-0002-defender-kql.yaml",
             "objects/rules/team-a/rule-0003-splunk-spl.yaml",
             "objects/rules/team-a/rule-0004-sentinel-one-s1ql.yaml",
             "objects/rules/team-a/rule-0005-carbon-black-lucene.yaml",
-            "+3 more",
+            "+4 more",
         ]
     )
     if not json_output:

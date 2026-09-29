@@ -45,6 +45,8 @@ def _typed_platform_config_roots(system_identifier: str) -> set[str]:
 
 
 class TideDeployment:
+    rule_deployment: Sequence[Any]
+
     def __init__(self, deployment, system: DetectionPlatforms, strategy):
         match system:
             case DetectionPlatforms.SPLUNK:
@@ -75,6 +77,10 @@ class TideDeployment:
                 self.rule_deployment: Sequence[TenantDeployment.HarfangLab] = (
                     self.deployment_resolver(deployment, system, strategy)  # type:ignore
                 )
+            case DetectionPlatforms.ELASTIC_SECURITY:
+                self.rule_deployment: Sequence[TenantDeployment.ElasticSecurity] = (
+                    self.deployment_resolver(deployment, system, strategy)  # type:ignore
+                )
             case _:
                 raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
 
@@ -94,6 +100,8 @@ class TideDeployment:
                 return OpenTide.Configurations.Systems.Crowdstrike
             case DetectionPlatforms.HARFANGLAB:
                 return OpenTide.Configurations.Systems.HarfangLab
+            case DetectionPlatforms.ELASTIC_SECURITY:
+                return OpenTide.Configurations.Systems.ElasticSecurity
             # case _:
             # raise NotImplementedError
         return None
@@ -116,6 +124,8 @@ class TideDeployment:
                 mdr_config = data.configurations.splunk
             case DetectionPlatforms.CARBON_BLACK_CLOUD:
                 mdr_config = data.configurations.carbon_black_cloud
+            case DetectionPlatforms.ELASTIC_SECURITY:
+                mdr_config = data.configurations.elastic_security
             case _:
                 logger.critical(
                     "could_not_resolve_mdr_configuration_for_system", detail=str(system)

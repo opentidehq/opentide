@@ -113,6 +113,8 @@ def test_models_accessor_schema_keys() -> None:
     assert models.signals["s1"]["name"] == "Signal"
     flat = models.FlatIndex
     assert set(flat) == {"r1", "o1", "t1", "s1"}
+    # Memoisation test: second access returns identical cached object
+    assert OpenTide.Models.FlatIndex is flat
 
 
 def test_configuration_visibility_properties() -> None:

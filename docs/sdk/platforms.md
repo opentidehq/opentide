@@ -40,10 +40,11 @@ for name, platform in OpenTide.Platforms.items():
 
 ## Query validators
 
-Five platforms register validators (see `QUERY_VALIDATION_PLATFORMS` in `opentide.cli.enums`):
+Six platforms register validators (see `QUERY_VALIDATION_PLATFORMS` in `opentide.cli.enums`):
 
 - `sentinel` → KQL
 - `defender_for_endpoint` → KQL
+- `elastic_security` → Kuery, Lucene, EQL, ES\|QL
 - `splunk` → SPL
 - `sentinel_one` → S1QL
 - `carbon_black_cloud` → Lucene

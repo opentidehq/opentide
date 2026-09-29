@@ -16,8 +16,9 @@ GARBAGE = 'SecurityEvent | where Account == "unterminated'
 
 
 def test_query_validation_platform_count() -> None:
-    assert len(QUERY_VALIDATION_PLATFORMS) == 5
+    assert len(QUERY_VALIDATION_PLATFORMS) == 6
     assert "crowdstrike" not in QUERY_VALIDATION_PLATFORMS
+    assert "harfanglab" not in QUERY_VALIDATION_PLATFORMS
 
 
 @pytest.mark.parametrize("platform", sorted(QUERY_VALIDATION_PLATFORMS))

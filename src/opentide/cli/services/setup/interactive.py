@@ -113,6 +113,8 @@ def parse_platform_tokens(raw: str) -> list[DetectionPlatform]:
             platforms.append(DetectionPlatform.carbon_black)
         elif token == "defender":
             platforms.append(DetectionPlatform.defender)
+        elif token in ("elastic", "kibana", "elastic_security"):
+            platforms.append(DetectionPlatform.elastic_security)
         elif token:
             try:
                 platforms.append(DetectionPlatform(token))

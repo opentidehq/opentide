@@ -18,7 +18,9 @@ def _load_response(response_config: dict[str, Any]) -> RuleResponse:
     payload = deepcopy(response_config)
     procedure_raw = payload.pop("procedure", None)
     procedure = None
-    if procedure_raw:
+    if isinstance(procedure_raw, str):
+        procedure = ResponseProcedure(analysis=procedure_raw)
+    elif isinstance(procedure_raw, dict):
         searches_raw = procedure_raw.pop("searches", None)
         searches = (
             [ResponseSearch.model_validate(search) for search in searches_raw]

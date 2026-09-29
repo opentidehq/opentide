@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 _IMPORT_MODULES: dict[ExtractImport, str] = {
     ExtractImport.sentinel: "opentide.extraction.sentinel_importer",
     ExtractImport.defender: "opentide.extraction.mde_importer",
+    ExtractImport.elastic_security: "opentide.extraction.elastic_security_importer",
 }
 
 #: Extra that provides the vendor SDK each importer needs, keyed by target.
@@ -38,7 +39,7 @@ def _root_package(exc: ModuleNotFoundError) -> str:
     return (exc.name or "").split(".", 1)[0]
 
 
-def _run_engine_module(module_name: str, target: ExtractImport) -> None:
+def _run_engine_module(module_name: str, target: ExtractImport, **kwargs: object) -> None:
     """Import the packaged extraction module and run it."""
     try:
         module = importlib.import_module(module_name)
@@ -53,27 +54,33 @@ def _run_engine_module(module_name: str, target: ExtractImport) -> None:
     runner = getattr(module, "run", None)
     if runner is None:
         raise FileNotFoundError(f"Extraction module has no run(): {module_name}")
-    runner()
+    try:
+        runner(**kwargs)
+    except TypeError as exc:
+        raise TypeError(
+            f"Extraction module runner in {module_name} failed with arguments {list(kwargs.keys())}: {exc}"
+        ) from exc
 
 
-def run_extract_import(target: ExtractImport) -> None:
+def run_extract_import(target: ExtractImport, **kwargs: object) -> None:
     """Run a platform import module from the installed package."""
-    _run_engine_module(_IMPORT_MODULES[target], target)
+    _run_engine_module(_IMPORT_MODULES[target], target, **kwargs)
 
 
 def run_extract(
     ctx: CliContext,
     *,
     import_target: ExtractImport,
+    **kwargs: object,
 ) -> dict[str, object]:
     """Entry point for extract import command."""
     ctx.apply_environment()
     captured = StringIO()
     if ctx.json_output:
         with redirect_stdout(captured):
-            run_extract_import(import_target)
+            run_extract_import(import_target, **kwargs)
     else:
-        run_extract_import(import_target)
+        run_extract_import(import_target, **kwargs)
     result: dict[str, object] = {
         "message": f"Imported {import_target.value}",
         "import": import_target.value,

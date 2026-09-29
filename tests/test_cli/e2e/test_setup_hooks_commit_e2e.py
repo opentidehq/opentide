@@ -37,6 +37,7 @@ BROKEN_RELPATH = "objects/rules/not-yaml.yaml"
 def _clean_env(**overrides: str) -> dict[str, str]:
     """The environment a developer commits in: no OpenTide exports."""
     env = os.environ.copy()
+    env["COLUMNS"] = "500"
     for name in (
         "OPENTIDE_REPO_ROOT",
         "OPENTIDE_TIDE_WORKSPACE",

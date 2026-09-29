@@ -32,6 +32,7 @@ Epic: [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) · Agent guide: [`
 |----------|:------:|:--------:|
 | sentinel | ✅ | ✅ |
 | defender_for_endpoint | ✅ | ✅ |
+| elastic_security | ✅ | ✅ |
 | splunk | ✅ | ✅ |
 | sentinel_one | ✅ | ✅ |
 | carbon_black_cloud | ✅ | ✅ |

@@ -28,6 +28,7 @@ _SYSTEM_MODELS: dict[str, Any] = {
     "defender_for_endpoint": ConfigurationModels.Systems.DefenderForEndpoint,
     "crowdstrike": ConfigurationModels.Systems.Crowdstrike,
     "harfanglab": ConfigurationModels.Systems.HarfangLab,
+    "elastic_security": ConfigurationModels.Systems.ElasticSecurity,
 }
 
 #: ``SystemConfig.Tenant.Setup`` declares these without defaults, but every
