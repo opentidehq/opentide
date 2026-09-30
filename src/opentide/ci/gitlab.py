@@ -7,6 +7,7 @@ from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     document_steps,
     header_comment,
+    object_validate_commands,
     pip_install,
     production_deploy_steps,
     staging_deploy_steps,
@@ -128,7 +129,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
             "validate",
             options=options,
             stage="validate",
-            script=["opentide validate"],
+            script=object_validate_commands(),
         )
         + "\n\n"
         + _gitlab_job(

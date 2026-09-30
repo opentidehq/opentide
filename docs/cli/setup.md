@@ -83,6 +83,8 @@ Run `setup platforms` before `setup ci` so `validate query` jobs are included. I
 
 Generated pipelines set `OPENTIDE_REPO_ROOT` at workflow (GitHub), `variables` (GitLab), or pipeline (Azure) scope so `opentide` commands resolve the detection repository in CI. Re-run `setup ci` to refresh existing pipeline files.
 
+The validate job runs `opentide validate --strict` and `opentide lint --strict`, then `opentide validate query` for each enabled platform that supports it. Staging and production jobs run a dry-run and then `opentide deploy --plan … --skip-unconfigured`. That flag exits 0 when every platform in the plan still has the commented-out `[[tenants]]` block `setup` writes. The file header lists the credential variables from the bundled platform files. GitHub deploy jobs map each of those names to `secrets.<NAME>`.
+
 ```bash
 opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --path . --yes
