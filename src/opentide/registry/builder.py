@@ -289,9 +289,20 @@ class RegistryBuilder:
         objects_index: dict[str, Any],
         files_index: dict[str, str],
     ) -> None:
-        identifier = body.get("uuid") or body.get("metadata", {}).get("uuid")
+        metadata = body.get("metadata")
+        meta_uuid = metadata.get("uuid") if isinstance(metadata, dict) else None
+        identifier = body.get("uuid") or meta_uuid
         if not identifier:
-            logger.error("missing_identifier_from_model", file=model_path.name)
+            logger.error("missing_identifier_from_model", file=str(model_path))
+            self.parse_errors.append(
+                {
+                    "path": str(model_path),
+                    "object_type": meta_name,
+                    "error": "object YAML has no uuid",
+                    "code": "missing_uuid",
+                    "message": f"Object YAML has no uuid: {model_path.name}",
+                }
+            )
             return
         model_cat = objects_index[meta_name]
         model_cat[identifier] = body
