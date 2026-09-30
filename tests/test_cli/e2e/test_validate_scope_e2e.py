@@ -169,6 +169,8 @@ def test_object_yaml_without_uuid_fails_validation(invoke_cli, tide_corpus_repo:
     payload = parse_cli_json(result)
     assert payload["status"] == "failed"
     assert payload["message"] == "Validation failed"
+    assert payload["checks"]["schema"]["status"] == "failed"
+    assert payload["checks"]["uuid-format"]["status"] == "passed"
     codes = _issue_codes(payload)
     assert "missing_uuid" in codes
     named = [issue for issue in payload["report"]["issues"] if issue["code"] == "missing_uuid"]
