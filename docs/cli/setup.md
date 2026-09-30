@@ -85,6 +85,8 @@ Generated pipelines set `OPENTIDE_REPO_ROOT` at workflow (GitHub), `variables` (
 
 The validate job runs `opentide validate --strict` and `opentide lint --strict`, then `opentide validate query` for each enabled platform that supports it. Staging and production jobs run a dry-run and then `opentide deploy --plan … --skip-unconfigured`. That flag exits 0 when every platform in the plan still has the commented-out `[[tenants]]` block `setup` writes. The file header lists the credential variables from the bundled platform files. GitHub deploy jobs map each of those names to `secrets.<NAME>`.
 
+The Azure pipeline sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. `pr:` is kept for Azure Pipelines hosted on GitHub or Bitbucket. Azure Repos Git ignores `pr:`; add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason.
+
 ```bash
 opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --path . --yes
