@@ -88,6 +88,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
         {
             "schema_validation",
             "yaml_parse",
+            "missing_uuid",
             "invalid_ref",
             "vocab_unknown",
             "chaining_relation_unknown",
