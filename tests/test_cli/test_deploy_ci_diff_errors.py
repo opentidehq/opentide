@@ -230,6 +230,68 @@ def test_staging_missing_origin_ref_names_the_ref(
     _assert_failure(result, "Could not find git ref origin/also-missing", json_output=json_output)
 
 
+@pytest.mark.parametrize(
+    ("marker", "workspace", "tip_name"),
+    [
+        ("GITHUB_ACTIONS", "GITHUB_WORKSPACE", "GITHUB_SHA"),
+        ("TF_BUILD", "BUILD_SOURCESDIRECTORY", "BUILD_SOURCEVERSION"),
+    ],
+    ids=["github", "azure"],
+)
+@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
+def test_staging_detached_head_fetches_origin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    git_home: Path,
+    marker: str,
+    workspace: str,
+    tip_name: str,
+    json_output: bool,
+) -> None:
+    """A pull-request checkout is detached. Fetch must not ask for the branch.
+
+    GitHub (#402) and Azure (#415) both crashed in ``porcelain.fetch`` with
+    ``list index out of range`` before merge-base ran.
+    """
+    del git_home
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo, commits=2)
+    _git(repo, "checkout", "-q", "-b", "feature")
+    (repo / "README.md").write_text("feature\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-q", "-m", "feature")
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "push", "-q", "origin", "feature")
+    tip = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "--detach", tip)
+    detached = subprocess.run(
+        ["git", "symbolic-ref", "-q", "HEAD"], cwd=repo, capture_output=True, text=True
+    )
+    assert detached.returncode != 0
+    monkeypatch.chdir(repo)
+    extra: dict[str, str | None] = {marker: "true", workspace: str(repo), tip_name: tip}
+    if marker == "GITHUB_ACTIONS":
+        extra["GITHUB_HEAD_REF"] = "feature"
+        extra["GITHUB_BASE_REF"] = "main"
+    else:
+        extra["SYSTEM_PULLREQUEST_SOURCEBRANCH"] = "refs/heads/feature"
+        extra["SYSTEM_PULLREQUEST_TARGETBRANCHNAME"] = "main"
+    result = runner.invoke(
+        app,
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", "STAGING"],
+        env=_env(repo, **extra),
+    )
+    rendered = result.stdout + result.stderr
+    for leak in _LEAKS:
+        assert leak not in rendered
+    assert "Traceback" not in rendered
+    assert result.exit_code == 0, rendered
+
+
 @pytest.mark.parametrize("plan", ["DEBUG", "MANUAL", "ALWAYS"])
 @pytest.mark.parametrize(
     "platform",
