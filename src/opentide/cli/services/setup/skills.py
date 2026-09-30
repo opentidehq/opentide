@@ -21,14 +21,27 @@ from opentide.cli.services.setup.interactive import (
 from opentide.cli.services.setup.skills_registry import (
     fetch_github_bytes,
     known_skill_slugs,
+    list_github_paths,
     load_manifest,
 )
-from opentide.cli.services.setup.templates import render_agent_entrypoint
+from opentide.cli.services.setup.templates import render_agent_entrypoint, setup_data_root
 from opentide.core.logging.config import get_stdout_console
 
 logger = structlog.get_logger("opentide.cli.services.setup.skills")
 
 _STARTER_SKILLS = ("opentide-detection-rule", "detection-engineering")
+
+#: Authoring skills ship with the package. The public skills repository still
+#: describes CoreTide layouts (``mdr::2.1``, ``Schemas/Templates``), and this
+#: install cannot update that repository.
+BUNDLED_AUTHORING_SKILLS = frozenset(
+    {
+        "opentide-detection-rule",
+        "opentide-detection-objective",
+        "opentide-threat-vector",
+        "detection-engineering",
+    }
+)
 
 
 class SkillsDownloadError(RuntimeError):
@@ -65,30 +78,52 @@ def _download_error(slug: str, *, source: str, ref: str) -> str:
 
 
 def _skill_reachable(slug: str, *, source: str, ref: str) -> bool:
+    if slug in BUNDLED_AUTHORING_SKILLS:
+        return (setup_data_root() / "skills" / "authoring" / slug / "SKILL.md").is_file()
     return fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref) is not None
 
 
-def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
-    """Download skill tree from GitHub raw. No packaged snapshot fallback."""
-    skill_md = fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref)
-    if skill_md is None:
-        raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
-    dest.mkdir(parents=True, exist_ok=True)
+def _install_bundled_skill(slug: str, dest: Path) -> list[str]:
+    src = setup_data_root() / "skills" / "authoring" / slug
+    skill_md = src / "SKILL.md"
+    if not skill_md.is_file():
+        raise SkillsDownloadError(f"Bundled authoring skill '{slug}' is missing from the package")
     written: list[str] = []
-    skill_path = dest / "SKILL.md"
-    skill_path.write_bytes(skill_md)
-    written.append(str(skill_path.name))
-    for ref_name in ("Best-Practices.md", "Anti-Patterns.md"):
-        payload = fetch_github_bytes(
-            f"skills/{slug}/references/{ref_name}",
-            source=source,
-            ref=ref,
-        )
-        if payload:
-            ref_dir = dest / "references"
-            ref_dir.mkdir(exist_ok=True)
-            (ref_dir / ref_name).write_bytes(payload)
-            written.append(f"references/{ref_name}")
+    for path in sorted(src.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(src).as_posix()
+        out = dest / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(path.read_bytes())
+        written.append(rel)
+    return written
+
+
+def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
+    """Install one skill tree.
+
+    The four authoring skills come from the package. Every other skill is the
+    full git tree under ``skills/<slug>/``, not a fixed pair of reference files.
+    """
+    if slug in BUNDLED_AUTHORING_SKILLS:
+        return _install_bundled_skill(slug, dest)
+    paths = list_github_paths(f"skills/{slug}", source=source, ref=ref)
+    if not paths:
+        raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
+    prefix = f"skills/{slug}/"
+    written: list[str] = []
+    for path in paths:
+        payload = fetch_github_bytes(path, source=source, ref=ref)
+        if payload is None or not path.startswith(prefix):
+            raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
+        rel = path[len(prefix) :]
+        out = dest / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(payload)
+        written.append(rel)
+    if "SKILL.md" not in written:
+        raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
     return written
 
 
@@ -163,18 +198,11 @@ def _install_claude_code(target: Path, slugs: list[str], context: dict[str, str]
 
 
 def _install_generic(target: Path, slugs: list[str], context: dict[str, str]) -> list[str]:
-    written: list[str] = []
-    manifest = load_manifest()
-    agents_payload = fetch_github_bytes("AGENTS.md", source=manifest.source, ref=manifest.ref)
-    if agents_payload:
-        (target / "AGENTS.md").write_bytes(agents_payload)
-    else:
-        (target / "AGENTS.md").write_text(
-            render_agent_entrypoint("AGENTS.md.template", context), encoding="utf-8"
-        )
-    written.append("AGENTS.md")
-    written.extend(f".agents/skills/{slug}/SKILL.md" for slug in slugs)
-    return written
+    del slugs
+    (target / "AGENTS.md").write_text(
+        render_agent_entrypoint("AGENTS.md.template", context), encoding="utf-8"
+    )
+    return ["AGENTS.md"]
 
 
 def _install_github_copilot(target: Path, context: dict[str, str]) -> list[str]:

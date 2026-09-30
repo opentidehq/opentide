@@ -61,11 +61,11 @@ opentide setup skills discover
 opentide setup skills --generic --yes
 ```
 
-Use `--path` / `-C` for the repository root. Skills are discovered and installed from the live [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) catalogue; GitHub must be reachable.
+Use `--path` / `-C` for the repository root. Catalogue discovery reads the live [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) `manifest.json`. The four authoring skills are then copied from the package; other skills need the GitHub tree.
 
 ### `setup skills` warns that the remote catalogue is unavailable
 
-`opentide setup skills` fetches `manifest.json` from GitHub, then downloads each requested skill. It does not install a packaged snapshot. If you see `Could not fetch skills catalogue from OpenTideHQ/skills@main`, check network access and that [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) is publicly reachable, then retry:
+`opentide setup skills` fetches `manifest.json` from GitHub. The four authoring skills are copied from the package. Other skills are the full tree under `skills/<slug>/`. `AGENTS.md` is rendered from the package template. If you see `Could not fetch skills catalogue from OpenTideHQ/skills@main`, check network access and that [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) is publicly reachable, then retry:
 
 ```bash
 opentide setup skills discover --refresh
