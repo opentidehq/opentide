@@ -29,6 +29,9 @@ def test_tool_coverage_matches_cli_info_coverage(tide_corpus_repo: Path) -> None
 def test_tool_get_chaining_resolves_corpus_threat(tide_corpus_repo: Path) -> None:
     payload = tools.tool_get_chaining(CORPUS_THREAT_UUID)
     assert payload["found"] is True
+    assert CORPUS_THREAT_UUID in payload["lineage"]["threats"]
+    assert payload["lineage"]["objectives"]
+    assert CORPUS_RULE_UUIDS["sentinel"] in payload["lineage"]["rules"]
 
 
 @pytest.mark.parametrize("platform", sorted(CORPUS_RULE_UUIDS))
