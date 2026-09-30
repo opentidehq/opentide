@@ -418,7 +418,7 @@ def deploy_cmd(
     skip_unconfigured: bool = typer.Option(
         False,
         "--skip-unconfigured",
-        help="Exit 0 when every platform in the plan has no [[tenants]] block",
+        help="Exit 0 when every platform in the plan has no \\[\\[tenants]] block",
     ),
 ) -> None:
     """Deploy detection rules to configured platforms."""
