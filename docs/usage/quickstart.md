@@ -16,7 +16,7 @@ Want to author objects from scratch and understand each step? Do the [Tutorial](
 ### Install and point at your repo
 
 ```bash
-pip install 'opentide==0.7.0'
+pip install 'opentide==0.8.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 ```
 
