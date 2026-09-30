@@ -40,9 +40,16 @@ def _commit_and_push(*, message: str, empty_note: str, push: str, fetch: str) ->
     Every caller emits this as a YAML block scalar. A commit message contains
     ``": "``, which a plain ``- git commit -m "ci: ..."`` sequence item parses
     as a mapping instead of a string, and GitLab then rejects the pipeline.
+
+    The inflight directory is created first. ``git add`` of a path that was
+    never committed exits 128, which fails the prune job on a repository that
+    has not published shards yet (#403).
     """
     return "\n".join(
         [
+            # ``git add`` exits 128 when the path was never committed (#403).
+            # An empty directory stages nothing, so the guard below exits 0.
+            "mkdir -p .opentide/inflight",
             "git add .opentide/inflight/",
             "if git diff --staged --quiet; then",
             f'  echo "{empty_note}"',
