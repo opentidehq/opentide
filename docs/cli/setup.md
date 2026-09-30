@@ -220,7 +220,7 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | `--name`, `--org`, `--description` | Entrypoint metadata |
 | `--refresh` | Re-fetch `manifest.json` from GitHub (`discover` / `show`) |
 
-Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) on `main`. Default install pulls the starter slugs (`opentide-detection-rule`, `detection-engineering`) from that catalogue; `--install` / `--all` select other live entries. GitHub must be reachable — the wheel does not ship skill trees that can go stale.
+Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
 
 The full wizard checks skill availability before writing repository files. If the catalogue or a requested slug cannot be fetched, the standalone skills command fails without installing a partial tree. The full `opentide setup` wizard omits the skills step with a warning so the rest of the scaffold can still apply.
 
