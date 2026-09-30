@@ -7,6 +7,7 @@ from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     document_steps,
     header_comment,
+    object_validate_commands,
     pip_install,
     production_deploy_steps,
     staging_deploy_steps,
@@ -106,7 +107,7 @@ def render_azure(options: CiRenderOptions) -> str:
         _azure_job(
             "validate",
             display_name="Validate objects",
-            steps=_job_steps(options, ["opentide validate"]),
+            steps=_job_steps(options, object_validate_commands()),
         ),
         *query_jobs,
     ]

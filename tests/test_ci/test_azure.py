@@ -21,6 +21,11 @@ def test_render_azure_includes_validate_stage() -> None:
     content = render_azure(options)
     assert "trigger:" in content
     assert "Validate" in content
+    assert "opentide validate --strict" in content
+    assert "opentide lint --strict" in content
+    assert "opentide deploy --plan PRODUCTION --skip-unconfigured" in content
+    assert "OPENTIDE_SECRETS" not in content
+    assert "#   AZURE_CLIENT_SECRET" in content
 
 
 def test_render_azure_has_no_promote_stage() -> None:

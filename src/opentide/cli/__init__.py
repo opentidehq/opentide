@@ -415,6 +415,11 @@ def deploy_cmd(
     dry_run: bool = typer.Option(False, "--dry-run"),
     keep_deprecated: bool = typer.Option(False, "--keep-deprecated"),
     skip_promotion: bool = typer.Option(False, "--skip-promotion"),
+    skip_unconfigured: bool = typer.Option(
+        False,
+        "--skip-unconfigured",
+        help="Exit 0 when every platform in the plan has no [[tenants]] block",
+    ),
 ) -> None:
     """Deploy detection rules to configured platforms."""
     if ctx.invoked_subcommand is not None:
@@ -428,6 +433,7 @@ def deploy_cmd(
         skip_promotion=skip_promotion,
         keep_deprecated=keep_deprecated,
         wide=wide,
+        skip_unconfigured=skip_unconfigured,
     )
     emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 
