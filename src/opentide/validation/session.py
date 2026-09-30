@@ -277,13 +277,17 @@ def _yaml_parse_issues(
                 continue
             if scope.targets and not scope.matches_file(path.name if path else None, path):
                 continue
+        code = entry.get("code") or "yaml_parse"
+        message = entry.get("message") or (
+            f"Could not parse object YAML: {entry.get('error', 'unknown error')}"
+        )
         issues.append(
             ValidationIssue(
-                code="yaml_parse",
+                code=code,
                 severity="error",
                 object_type=entry.get("object_type"),
                 file_path=path,
-                message=f"Could not parse object YAML: {entry.get('error', 'unknown error')}",
+                message=message,
             )
         )
     return issues
