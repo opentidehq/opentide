@@ -48,6 +48,28 @@ rule.configurations.sentinel.query
 
 `ObjectMetadata.schema_id` is the field. Validation accepts it under the YAML key `schema` or as `schema_id`, and `model_dump(by_alias=True)["schema"]` writes it back under `schema`. Platform blocks follow the same pattern: `platform_schema` is the field, and `rule.configurations.sentinel.schema` reads it (`None` when the block declares no `schema`). In 0.5.0 and earlier, `.schema` on either model returned Pydantic's deprecated `BaseModel.schema` method, not the identifier; read `schema_id` if your code must support those releases.
 
+## Platform configuration models
+
+`rule.configurations` is a `RuleConfigurations` (`opentide.models.platform`). Each block subclasses `PlatformConfigBase` (`enabled`, `name`, `platform_schema`, `status`, `flags`, `tenants`, `contributors`). Nested objects live in `opentide.models.platform_configs`. The normative field contract is the platform spec, not this table.
+
+| Model | YAML key | Schema ID | Spec |
+|-------|----------|-----------|------|
+| `SentinelConfig` | `sentinel` | `platform::sentinel::1.0` | [sentinel-1.0](/docs/specifications/specs/platforms/sentinel-1.0/) |
+| `DefenderConfig` | `defender_for_endpoint` | `platform::defender_for_endpoint::1.0` | [defender-for-endpoint-1.0](/docs/specifications/specs/platforms/defender-for-endpoint-1.0/) |
+| `SplunkConfig` | `splunk` | `platform::splunk::1.0` | [splunk-1.0](/docs/specifications/specs/platforms/splunk-1.0/) |
+| `SentinelOneConfig` | `sentinel_one` | `platform::sentinel_one::1.0` | [sentinel-one-1.0](/docs/specifications/specs/platforms/sentinel-one-1.0/) |
+| `CrowdstrikeConfig` | `crowdstrike` | `platform::crowdstrike::1.0` | [crowdstrike-1.0](/docs/specifications/specs/platforms/crowdstrike-1.0/) |
+| `HarfangLabConfig` | `harfanglab` | `platform::harfanglab::1.0` | [harfanglab-1.0](/docs/specifications/specs/platforms/harfanglab-1.0/) |
+| `CarbonBlackConfig` | `carbon_black_cloud` | `platform::carbon_black_cloud::1.0` | [carbon-black-cloud-1.0](/docs/specifications/specs/platforms/carbon-black-cloud-1.0/) |
+
+```python
+rule.configurations.sentinel.query
+rule.configurations.sentinel.schema          # YAML `schema`, or None
+rule.configurations.crowdstrike.schedule.frequency
+```
+
+Static validation uses these models directly. Deploy loads the same YAML through `opentide.loading.platform_loader`, which accepts a few aliases the models reject (`rule_id::<tenant>`, Defender `scope` required, Splunk legacy keys). Both paths are specified per platform. A short authoring summary is on [Usage: Platforms](../usage/concepts/platforms.md#platform-block-schemas).
+
 ## DetectionObjective — key fields
 
 | Attribute | Type | Notes |

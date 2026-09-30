@@ -177,8 +177,9 @@ Query validation works on **five platforms** only:
 - `sentinel_one` (S1QL)
 - `carbon_black_cloud` (Lucene)
 
-CrowdStrike and HarfangLab return unsupported — never fake validation. The
-result is a normal failure envelope, so `--json` shape does not change between
+CrowdStrike (correlation filter) and HarfangLab (Sigma or YARA) return unsupported — never fake validation. The fields on each `configurations` block, including what deploy requires beyond this command, are the [platform specs](/docs/specifications/specs/platforms/). A short required-field table is on [Platforms](../usage/concepts/platforms.md#platform-block-schemas).
+
+The result is a normal failure envelope, so `--json` shape does not change between
 supported and unsupported platforms:
 
 ```bash

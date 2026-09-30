@@ -1,6 +1,6 @@
 ---
 title: Platforms
-description: Seven deployment platforms and five query validators — capability matrix and CLI identifiers.
+description: Seven deployment platforms, five query validators, and where each platform block schema is specified.
 ---
 
 # Platforms
@@ -16,12 +16,41 @@ OpenTide integrates with **seven detection platforms** through built-in adapters
 | Splunk Enterprise Security | `splunk` | yes | yes | SPL |
 | SentinelOne | `sentinel_one` | yes | yes | S1QL |
 | Carbon Black Cloud | `carbon_black_cloud` | yes | yes | Lucene |
-| CrowdStrike Falcon | `crowdstrike` | yes | no | — |
-| HarfangLab | `harfanglab` | yes | no | — |
+| CrowdStrike Falcon | `crowdstrike` | yes | no | correlation filter |
+| HarfangLab | `harfanglab` | yes | no | Sigma or YARA |
 
 CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers — not pip install extras.
 
-Normative capability flags: [Platforms spec](/docs/specifications/specs/platforms/).
+CrowdStrike stores a correlation filter. HarfangLab stores a Sigma rule or a YARA rule. Neither language is syntax-checked: `opentide validate query` reports `supported: false`.
+
+Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
+
+## Platform block schemas
+
+`configurations.<platform>` is a typed block. The field list — types, defaults, loader aliases, and what deploy requires beyond `opentide validate` — lives in the platform spec. This table is only what must be present for the block to validate.
+
+| Platform | Required on the block |
+|----------|------------------------|
+| `sentinel` | `query`, `scheduling`, `alert` |
+| `defender_for_endpoint` | `query`, `alert` (with `category`), `impacted_entities`, `scheduling` (`NRT`, `1H`, `3H`, `12H`, or `24H`) |
+| `splunk` | `query`, or a legacy `search` that fills `query` |
+| `sentinel_one` | `condition` (with `type` `Single Event` or `Correlation`) |
+| `carbon_black_cloud` | `query` |
+| `crowdstrike` | `query`, `details` (`trigger`, `outcome`), `schedule` (`frequency`, `lookback`) |
+| `harfanglab` | nothing beyond the shared fields. Deploy still requires `sigma` or `yara` |
+
+A block that validates can still fail at deploy. Sentinel deploy requires `grouping` and `grouping.alert`, and a scheduled rule needs `scheduling.frequency` and `scheduling.lookback`. Defender's registry loader requires `scope` even though validation does not. Each spec's Deploy section is that list. Generated JSON Schema is a build artifact; where it disagrees with the spec, the spec wins.
+
+<Cards>
+  <Card title="Platforms" href="/docs/specifications/specs/platforms/" description="Shared fields, external rule ids, and the three checks: validate, load, deploy." />
+  <Card title="Sentinel" href="/docs/specifications/specs/platforms/sentinel-1.0/" description="KQL analytics rule. Grouping is optional at validate and required at deploy." />
+  <Card title="Defender for Endpoint" href="/docs/specifications/specs/platforms/defender-for-endpoint-1.0/" description="KQL custom detection, response actions, and the scope the loader requires." />
+  <Card title="Splunk" href="/docs/specifications/specs/platforms/splunk-1.0/" description="SPL saved search, including the splunk::2.x keys that still normalise." />
+  <Card title="SentinelOne" href="/docs/specifications/specs/platforms/sentinel-one-1.0/" description="STAR rule: one S1QL query or a correlation of sub-queries." />
+  <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
+  <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Correlation filter. No query validator." />
+  <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA. No query validator. Sigma wins when both are set." />
+</Cards>
 
 ## Inspecting capabilities at runtime
 

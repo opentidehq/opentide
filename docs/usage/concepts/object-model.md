@@ -213,6 +213,6 @@ After `opentide generate`:
 ## Further reading
 
 - [Schema revision](./schema-revision.md) — `metadata.schema` vs `metadata.version`.
-- [Platforms](./platforms.md) — where rules deploy and validate.
+- [Platforms](./platforms.md#platform-block-schemas) — what each `configurations` block must contain, and links to the field specs.
 - [Tutorial](../tutorial.md) — author this exact chain yourself, end to end.
 - Normative specs: [Threat](/docs/specifications/specs/objects/threat-1.0/) · [Objective](/docs/specifications/specs/objects/objective-1.0/) · [Rule](/docs/specifications/specs/objects/rule-1.0/) · [Metadata](/docs/specifications/specs/metadata/).
