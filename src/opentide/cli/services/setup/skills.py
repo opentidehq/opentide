@@ -84,12 +84,38 @@ def _skill_reachable(slug: str, *, source: str, ref: str) -> bool:
 
 
 def _replace_tree(dest: Path, files: dict[str, bytes]) -> list[str]:
-    if dest.exists():
-        shutil.rmtree(dest)
-    for rel, payload in files.items():
-        out = dest / rel
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(payload)
+    """Swap *dest* for *files* only after every byte is on disk.
+
+    A failed download must not delete the previous tree or leave a partial one
+    beside it. The incoming directory is renamed into place, which replaces the
+    old tree in one step on the same filesystem.
+    """
+    parent = dest.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    staging = parent / f".{dest.name}.incoming"
+    backup = parent / f".{dest.name}.previous"
+    if staging.exists():
+        shutil.rmtree(staging)
+    try:
+        for rel, payload in files.items():
+            out = staging / rel
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(payload)
+        if backup.exists():
+            shutil.rmtree(backup)
+        if dest.exists():
+            dest.rename(backup)
+        try:
+            staging.rename(dest)
+        except OSError:
+            if backup.exists() and not dest.exists():
+                backup.rename(dest)
+            raise
+        if backup.exists():
+            shutil.rmtree(backup)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
     return list(files)
 
 

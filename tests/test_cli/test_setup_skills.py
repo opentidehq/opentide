@@ -301,6 +301,48 @@ def test_download_skill_writes_every_file_in_the_github_tree(
     assert (dest / "references" / "Examples.md").read_text(encoding="utf-8") == "# Examples.md\n"
 
 
+def test_download_skill_keeps_the_previous_tree_when_a_later_file_is_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dest = tmp_path / "downloaded"
+    (dest / "references").mkdir(parents=True)
+    (dest / "SKILL.md").write_text("previous\n", encoding="utf-8")
+    (dest / "references" / "Old.md").write_text("old\n", encoding="utf-8")
+
+    def _fetch(path: str, **_: object) -> bytes | None:
+        if path.endswith("SKILL.md"):
+            return b"new\n"
+        return None
+
+    monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
+    monkeypatch.setattr(skills_mod, "fetch_github_bytes", _fetch)
+    monkeypatch.setattr(
+        skills_mod,
+        "list_github_paths",
+        lambda prefix, **_: [f"{prefix}/SKILL.md", f"{prefix}/references/Examples.md"],
+    )
+    with pytest.raises(SkillsDownloadError, match="network access"):
+        skills_mod._download_skill("demo-skill", dest, source="OpenTideHQ/skills", ref="main")
+    assert (dest / "SKILL.md").read_text(encoding="utf-8") == "previous\n"
+    assert (dest / "references" / "Old.md").read_text(encoding="utf-8") == "old\n"
+    assert not (dest / "references" / "Examples.md").exists()
+    assert not (tmp_path / ".downloaded.incoming").exists()
+
+
+def test_bundled_reinstall_drops_stale_reference_files(tmp_path: Path) -> None:
+    dest = tmp_path / "opentide-detection-rule"
+    (dest / "references").mkdir(parents=True)
+    (dest / "SKILL.md").write_text("stale remote skill\n", encoding="utf-8")
+    (dest / "references" / "Best-Practices.md").write_text("coretide\n", encoding="utf-8")
+    written = skills_mod._install_bundled_skill("opentide-detection-rule", dest)
+    text = (dest / "SKILL.md").read_text(encoding="utf-8")
+    assert "rule::1.0" in text
+    assert "SKILL.md" in written
+    assert not (dest / "references").exists()
+    assert not (tmp_path / ".opentide-detection-rule.incoming").exists()
+    assert not (tmp_path / ".opentide-detection-rule.previous").exists()
+
+
 def test_install_cursor_replaces_existing_destination(tmp_path: Path) -> None:
     options = SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.cursor], yes=True)
     run_skills_setup(options)
