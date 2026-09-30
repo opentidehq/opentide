@@ -1,6 +1,6 @@
 ---
 title: Platforms
-description: Seven deployment platforms and five query validators — capability matrix and CLI identifiers.
+description: Seven deployment platforms, five query validators, and where each platform block schema is specified.
 ---
 
 # Platforms
@@ -16,12 +16,29 @@ OpenTide integrates with **seven detection platforms** through built-in adapters
 | Splunk Enterprise Security | `splunk` | yes | yes | SPL |
 | SentinelOne | `sentinel_one` | yes | yes | S1QL |
 | Carbon Black Cloud | `carbon_black_cloud` | yes | yes | Lucene |
-| CrowdStrike Falcon | `crowdstrike` | yes | no | — |
-| HarfangLab | `harfanglab` | yes | no | — |
+| CrowdStrike Falcon | `crowdstrike` | yes | no | correlation filter |
+| HarfangLab | `harfanglab` | yes | no | Sigma or YARA |
 
 CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers — not pip install extras.
 
-Normative capability flags: [Platforms spec](/docs/specifications/specs/platforms/).
+CrowdStrike stores a correlation filter. HarfangLab stores a Sigma rule or a YARA rule. Neither language is syntax-checked: `opentide validate query` reports `supported: false`.
+
+Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
+
+## Platform block schemas
+
+Every key on `configurations.<platform>`, required and optional, is specified under [Platforms](/docs/specifications/specs/platforms/). That directory is the contract. This page does not restate the fields. A block that passes `opentide validate` can still fail at deploy; each spec's Deploy section is that list.
+
+<Cards>
+  <Card title="Platforms" href="/docs/specifications/specs/platforms/" description="Shared fields, external rule ids, and the three checks: validate, load, deploy." />
+  <Card title="Sentinel" href="/docs/specifications/specs/platforms/sentinel-1.0/" description="KQL analytics rule. Grouping is optional at validate and required at deploy." />
+  <Card title="Defender for Endpoint" href="/docs/specifications/specs/platforms/defender-for-endpoint-1.0/" description="KQL custom detection, response actions, and the scope the loader requires." />
+  <Card title="Splunk" href="/docs/specifications/specs/platforms/splunk-1.0/" description="SPL saved search, including the splunk::2.x keys that still normalise." />
+  <Card title="SentinelOne" href="/docs/specifications/specs/platforms/sentinel-one-1.0/" description="STAR rule: one S1QL query or a correlation of sub-queries." />
+  <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
+  <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Correlation filter. No query validator." />
+  <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA. No query validator. Sigma wins when both are set." />
+</Cards>
 
 ## Inspecting capabilities at runtime
 
@@ -56,11 +73,7 @@ never loads the CrowdStrike or HarfangLab modules. See
 
 ## The `query` field
 
-The five platforms that carry a query string — Sentinel, Defender for Endpoint, Splunk, CrowdStrike, and Carbon Black Cloud — all declare `query` **required and non-blank**. Templates show it uncommented for each of them.
-
-Splunk `splunk::2.x` objects used a flat layout: `search` for the search string, `cron_schedule` for the schedule, and top-level `throttling`, `threshold`, `notable`, `risk`, and `email`, with `frequency` / `lookback` directly under `scheduling`. All of these are still accepted. `opentide validate` and `opentide deploy` map them onto the v3 layout with the same function, so a 2.x rule validates exactly when it deploys. `search` and `cron_schedule` stay on the object so it round-trips unchanged. A `query` or `scheduling.schedule` set explicitly wins over the legacy key.
-
-A Splunk `scheduling.schedule` is deployed as a scheduled search whether or not `scheduling.type` is set; only `type: Real Time` opts out.
+Where a platform spec marks `query` required, the value is a non-blank string. Splunk still accepts the `splunk::2.x` layout and normalises it before validation; the mapping is [splunk-1.0](/docs/specifications/specs/platforms/splunk-1.0/).
 
 ### Upgrading to 0.4.0
 
