@@ -125,7 +125,11 @@ class _OriginRemote:
         self._repo = repo
 
     def fetch(self) -> None:
-        porcelain.fetch(self._repo._repo, quiet=True)
+        # ``porcelain.fetch`` with no remote asks for the active branch. A
+        # pull-request checkout is detached, and Dulwich then indexes
+        # ``follow(HEAD)[0][1]`` which is only ``[HEAD]`` — ``IndexError:
+        # list index out of range`` (#402, #415). Name origin explicitly.
+        porcelain.fetch(self._repo._repo, remote_location=b"origin", quiet=True)
 
 
 @dataclass(frozen=True)
