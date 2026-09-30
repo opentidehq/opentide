@@ -65,7 +65,7 @@ rule.configurations.sentinel.query
 ```python
 rule.configurations.sentinel.query
 rule.configurations.sentinel.schema          # YAML `schema`, or None
-rule.configurations.crowdstrike.schedule.frequency
+rule.configurations.sentinel.scheduling.frequency  # "PT1H"
 ```
 
 These classes implement the [platform specs](/docs/specifications/specs/platforms/). The specs list every key. This page only names the class that holds each block.
