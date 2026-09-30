@@ -61,7 +61,8 @@ When modifying source, update docs in the **same PR**:
 | `src/opentide/mcp_server/tools.py` | `docs/mcp/tools.md` |
 | `src/opentide/core/registry.py` | `docs/sdk/registry.md` |
 | `src/opentide/__init__.py` | `docs/sdk/index.md` |
-| `src/opentide/cli/enums.py` (platforms) | `docs/usage/concepts/platforms.md` |
+| `src/opentide/cli/enums.py` (platforms) | `docs/usage/concepts/platforms.md` (capability matrix only) |
+| `src/opentide/models/platform.py`, `platform_configs.py` | Do not restate keys under `docs/`. Change `specs/platforms/` in [OpenTideHQ/specifications](https://github.com/OpenTideHQ/specifications) first. Usage and SDK pages only link there. |
 | `src/opentide/data/setup/skills/` | `docs/usage/workflows/agentic-setup.md` |
 
 ## Verify CLI accuracy

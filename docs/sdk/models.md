@@ -68,7 +68,7 @@ rule.configurations.sentinel.schema          # YAML `schema`, or None
 rule.configurations.crowdstrike.schedule.frequency
 ```
 
-Static validation uses these models directly. Deploy loads the same YAML through `opentide.loading.platform_loader`, which accepts a few aliases the models reject (`rule_id::<tenant>`, Defender `scope` required, Splunk legacy keys). Both paths are specified per platform. A short authoring summary is on [Usage: Platforms](../usage/concepts/platforms.md#platform-block-schemas).
+These classes implement the [platform specs](/docs/specifications/specs/platforms/). The specs list every key. This page only names the class that holds each block.
 
 ## DetectionObjective — key fields
 

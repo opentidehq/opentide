@@ -27,19 +27,7 @@ Normative capability flags and the shared block: [Platforms spec](/docs/specific
 
 ## Platform block schemas
 
-`configurations.<platform>` is a typed block. The field list — types, defaults, loader aliases, and what deploy requires beyond `opentide validate` — lives in the platform spec. This table is only what must be present for the block to validate.
-
-| Platform | Required on the block |
-|----------|------------------------|
-| `sentinel` | `query`, `scheduling`, `alert` |
-| `defender_for_endpoint` | `query`, `alert` (with `category`), `impacted_entities`, `scheduling` (`NRT`, `1H`, `3H`, `12H`, or `24H`) |
-| `splunk` | `query`, or a legacy `search` that fills `query` |
-| `sentinel_one` | `condition` (with `type` `Single Event` or `Correlation`) |
-| `carbon_black_cloud` | `query` |
-| `crowdstrike` | `query`, `details` (`trigger`, `outcome`), `schedule` (`frequency`, `lookback`) |
-| `harfanglab` | nothing beyond the shared fields. Deploy still requires `sigma` or `yara` |
-
-A block that validates can still fail at deploy. Sentinel deploy requires `grouping` and `grouping.alert`, and a scheduled rule needs `scheduling.frequency` and `scheduling.lookback`. Defender's registry loader requires `scope` even though validation does not. Each spec's Deploy section is that list. Generated JSON Schema is a build artifact; where it disagrees with the spec, the spec wins.
+Every key on `configurations.<platform>`, required and optional, is specified under [Platforms](/docs/specifications/specs/platforms/). That directory is the contract. This page does not restate the fields. A block that passes `opentide validate` can still fail at deploy; each spec's Deploy section is that list.
 
 <Cards>
   <Card title="Platforms" href="/docs/specifications/specs/platforms/" description="Shared fields, external rule ids, and the three checks: validate, load, deploy." />
@@ -85,11 +73,7 @@ never loads the CrowdStrike or HarfangLab modules. See
 
 ## The `query` field
 
-The five platforms that carry a query string — Sentinel, Defender for Endpoint, Splunk, CrowdStrike, and Carbon Black Cloud — all declare `query` **required and non-blank**. Templates show it uncommented for each of them.
-
-Splunk `splunk::2.x` objects used a flat layout: `search` for the search string, `cron_schedule` for the schedule, and top-level `throttling`, `threshold`, `notable`, `risk`, and `email`, with `frequency` / `lookback` directly under `scheduling`. All of these are still accepted. `opentide validate` and `opentide deploy` map them onto the v3 layout with the same function, so a 2.x rule validates exactly when it deploys. `search` and `cron_schedule` stay on the object so it round-trips unchanged. A `query` or `scheduling.schedule` set explicitly wins over the legacy key.
-
-A Splunk `scheduling.schedule` is deployed as a scheduled search whether or not `scheduling.type` is set; only `type: Real Time` opts out.
+Where a platform spec marks `query` required, the value is a non-blank string. Splunk still accepts the `splunk::2.x` layout and normalises it before validation; the mapping is [splunk-1.0](/docs/specifications/specs/platforms/splunk-1.0/).
 
 ### Upgrading to 0.4.0
 
