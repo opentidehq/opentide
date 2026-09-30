@@ -83,21 +83,27 @@ def _skill_reachable(slug: str, *, source: str, ref: str) -> bool:
     return fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref) is not None
 
 
+def _replace_tree(dest: Path, files: dict[str, bytes]) -> list[str]:
+    if dest.exists():
+        shutil.rmtree(dest)
+    for rel, payload in files.items():
+        out = dest / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(payload)
+    return list(files)
+
+
 def _install_bundled_skill(slug: str, dest: Path) -> list[str]:
     src = setup_data_root() / "skills" / "authoring" / slug
     skill_md = src / "SKILL.md"
     if not skill_md.is_file():
         raise SkillsDownloadError(f"Bundled authoring skill '{slug}' is missing from the package")
-    written: list[str] = []
-    for path in sorted(src.rglob("*")):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(src).as_posix()
-        out = dest / rel
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(path.read_bytes())
-        written.append(rel)
-    return written
+    files = {
+        path.relative_to(src).as_posix(): path.read_bytes()
+        for path in sorted(src.rglob("*"))
+        if path.is_file()
+    }
+    return _replace_tree(dest, files)
 
 
 def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
@@ -112,19 +118,15 @@ def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str
     if not paths:
         raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
     prefix = f"skills/{slug}/"
-    written: list[str] = []
+    files: dict[str, bytes] = {}
     for path in paths:
         payload = fetch_github_bytes(path, source=source, ref=ref)
         if payload is None or not path.startswith(prefix):
             raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
-        rel = path[len(prefix) :]
-        out = dest / rel
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(payload)
-        written.append(rel)
-    if "SKILL.md" not in written:
+        files[path[len(prefix) :]] = payload
+    if "SKILL.md" not in files:
         raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
-    return written
+    return _replace_tree(dest, files)
 
 
 def _resolve_skill_slugs(options: SkillsSetupOptions) -> list[str]:
