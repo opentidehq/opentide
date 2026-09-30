@@ -55,33 +55,46 @@ Filter semantics:
 
 ## get_chaining
 
-Return chaining data for a UUID from `OpenTide.Models.chaining`. Use it to understand how an object connects before editing.
+Return the threat → objective → rule lineage for a UUID, plus threat-to-threat links from `threat.chaining`. Use it to see which objects belong together before editing.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `uuid` | string | Any object UUID in the chain |
+| `uuid` | string | Threat, objective, or rule UUID |
 
 ```json
-// call
-{ "uuid": "00000000-0000-4000-8001-000000000001" }
+// call — objective that lists a threat and is the detection_model of a rule
+{ "uuid": "00000000-0000-4000-8002-000000000001" }
 
-// returns (threat UUID — chaining index is threat→threat via relation)
+// returns
 {
-  "uuid": "00000000-0000-4000-8001-000000000001",
+  "uuid": "00000000-0000-4000-8002-000000000001",
   "found": true,
-  "type": "threat",
+  "type": "objective",
   "graph": {
-    "preceeds": ["00000000-0000-4000-8001-000000000002"]
+    "threats": ["00000000-0000-4000-8001-000000000001"],
+    "objectives": ["00000000-0000-4000-8002-000000000001"],
+    "rules": ["00000000-0000-4000-8003-000000000001"]
+  },
+  "lineage": {
+    "threats": ["00000000-0000-4000-8001-000000000001"],
+    "objectives": ["00000000-0000-4000-8002-000000000001"],
+    "rules": ["00000000-0000-4000-8003-000000000001"]
   },
   "chaining_index": {
-    "00000000-0000-4000-8001-000000000001": {
-      "preceeds": ["00000000-0000-4000-8001-000000000002"]
+    "00000000-0000-4000-8002-000000000001": {
+      "threats": ["00000000-0000-4000-8001-000000000001"],
+      "objectives": ["00000000-0000-4000-8002-000000000001"],
+      "rules": ["00000000-0000-4000-8003-000000000001"]
     }
   }
 }
 ```
 
-The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository. When the UUID is missing: `{ "uuid": "…", "found": false, "graph": {} }`. The registry chaining index is `{threat_uuid: {relation: [vector_uuid, …]}}` — not a top-level `nodes`/`edges` graph. Non-threat UUIDs return `found: true` with an empty `graph` when they are not keys in that index.
+`rules` lists every rule in the connected set. A repository with several rules on one objective returns all of those UUIDs; the snippet above shows the shape with one rule.
+
+When this threat has `threat.chaining` entries, `graph` stays `{relation: [vector_uuid, …]}` (for example `{"preceeds": ["…"]}`). `lineage` is still present and lists the threats, objectives, and rules reached through `objective.threats`, `rule.detection_model`, and those threat-to-threat links. `chaining_index` maps every participating UUID to that UUID's `graph`. An empty `graph` means the object has no lineage. A missing UUID returns `{ "uuid": "…", "found": false, "graph": {} }`.
+
+The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository. `OpenTide.Models.chaining` remains the threat-to-threat map only. This tool does not write objective or rule lineage into that registry index.
 
 ## coverage
 
