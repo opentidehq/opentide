@@ -637,7 +637,10 @@ def test_pipeline_targets_the_detected_default_branch(
     if ci == "github":
         triggers = parsed[True]["push"]["branches"]
     else:
-        triggers = parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+        assert parsed["pool"]["vmImage"] == "ubuntu-latest"
+        assert parsed["trigger"]["branches"]["include"] == ["*"]
+        assert "build validation policy" in rendered
+        triggers = parsed["pr"]["branches"]["include"]
     assert set(triggers) == {"development"}
     assert "refs/heads/development" in rendered and "refs/heads/main" not in rendered
 
