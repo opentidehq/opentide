@@ -147,6 +147,7 @@ addopts = [
 markers = [
     "cli_e2e: in-process Typer CliRunner end-to-end tests (separate CI job, Python 3.14)",
     "cli_smoke: subprocess console-script smoke (same CI job as cli_e2e)",
+    "gitlab_ci_lint: glint and gitlab-ci-verify on generated GitLab CI (CI job, needs the binaries)",
 ]
 
 [tool.coverage.run]

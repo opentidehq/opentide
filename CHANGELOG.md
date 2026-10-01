@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- Generated GitLab pipelines start `generate` only after object validation and every `validate query` job. A failed query check no longer starts deploy. Regenerate with `opentide setup ci gitlab` ([#429](https://github.com/OpenTideHQ/opentide/issues/429)).
+- Inflight shell quotes `$CI_DEFAULT_BRANCH` and exits if `cd` into the worktree fails. A document job with no commands is omitted, instead of an empty `script` GitLab rejects. `gitlab-ci-verify` (ShellCheck) and glint both accept the file ([#430](https://github.com/OpenTideHQ/opentide/issues/430)).
+
 ## [0.8.0] — 2026-09-30
 
 Minor on 0.7.0. Upgrade and regenerate CI with `opentide setup ci` so validation and lint are strict, deploy skips a plan whose platforms have no tenants, and an Azure pipeline has a pool. An object file with no `uuid` now fails validation. `get_chaining` returns the threat, objective, and rule lineage.
