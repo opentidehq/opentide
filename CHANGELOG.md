@@ -6,10 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-10-01
+
+Patch on 0.8.0. Upgrade and regenerate GitLab CI with `opentide setup ci gitlab` so query validation gates generate and deploy, and the inflight shell matches ShellCheck. This restores the documented gate that GitHub and Azure already enforced. It does not change accepted input, CLI output, or exit codes.
+
 ### Fixed
 
 - Generated GitLab pipelines start `generate` only after object validation and every `validate query` job. A failed query check no longer starts deploy. Regenerate with `opentide setup ci gitlab` ([#429](https://github.com/OpenTideHQ/opentide/issues/429)).
 - Inflight shell quotes `$CI_DEFAULT_BRANCH` and exits if `cd` into the worktree fails. A document job with no commands is omitted, instead of an empty `script` GitLab rejects. `gitlab-ci-verify` (ShellCheck) and glint both accept the file ([#430](https://github.com/OpenTideHQ/opentide/issues/430)).
+
+### Install
+
+```bash
+pip install opentide==0.8.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.8.0] — 2026-09-30
 
@@ -571,7 +583,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.1
 [0.8.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.0
 [0.7.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.7.0
 [0.6.4]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.4
