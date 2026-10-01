@@ -115,7 +115,9 @@ def _publish_on_default_branch(*, push: str, fetch: str) -> str:
             'rm -rf "$shards_base/.opentide/inflight"',
             'mkdir -p "$shards_base/.opentide"',
             'cp -R .opentide/inflight "$shards_base/.opentide/inflight"',
-            'cd "$shards_base"',
+            # ``set -e`` is not visible to ShellCheck. A failed ``cd`` must
+            # exit the script (#430).
+            'cd "$shards_base" || exit',
             _commit_and_push(
                 message="ci: update inflight preview shards [skip ci]",
                 empty_note="No inflight shard changes",
@@ -266,7 +268,7 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
         f"    - {GITLAB_INSTALL_GIT}\n"
         f"    - {pip_install(opts)}\n"
         "  script:\n"
-        "    - git fetch origin $CI_DEFAULT_BRANCH\n"
+        '    - git fetch origin "$CI_DEFAULT_BRANCH"\n'
         f"{checkout_inflight}"
         '    - export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"\n'
         "    - export DEPLOYMENT_PLAN=STAGING\n"
