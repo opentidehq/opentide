@@ -6,6 +6,7 @@ from pathlib import Path
 
 import typer
 from rich.markup import escape
+from typer._types import TyperChoice
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
@@ -197,7 +198,58 @@ def _should_run_repo(
 ) -> bool:
     if interactive or has_repo_flags:
         return True
-    return yes and ci is None and not vscode_setup
+    # ``--ci none`` means "configure CI later", the same as omitting ``--ci``.
+    ci_requested = ci is not None and ci is not CiPlatform.none
+    return yes and not ci_requested and not vscode_setup
+
+
+def _ignored_ci_flag_warnings(
+    *,
+    ci: CiPlatform | None,
+    staging: bool,
+    inflight: bool,
+    sharing: bool,
+    explorer_pages: bool,
+    default_branch: str | None,
+    python_version: str,
+) -> list[str]:
+    """Name CI-only flags that were passed without a pipeline to write."""
+    if ci is not None and ci is not CiPlatform.none:
+        return []
+    ignored: list[str] = []
+    if default_branch is not None:
+        ignored.append("--default-branch")
+    if staging is False:
+        ignored.append("--no-staging")
+    if inflight is False:
+        ignored.append("--no-inflight")
+    if sharing:
+        ignored.append("--sharing")
+    if explorer_pages:
+        ignored.append("--explorer-pages")
+    if python_version != "3.12":
+        ignored.append("--python-version")
+    if not ignored:
+        return []
+    return [
+        f"CI flags {', '.join(ignored)} were ignored because no CI platform was selected. "
+        "Re-run with --ci github, --ci gitlab, or --ci azure."
+    ]
+
+
+class _CiProvider(TyperChoice[str]):
+    """``setup ci`` providers. ``none`` stays on the wizard, not this argument.
+
+    Typer vendors Click. A ``click.Choice`` is not a parameter type there, so
+    Click wrapped it as a function parser and the docs harness never saw
+    ``github``, ``gitlab``, and ``azure``.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(["github", "gitlab", "azure"], case_sensitive=False)
+
+    def get_invalid_choice_message(self, value: object, ctx: object) -> str:
+        return "Choose github, gitlab, or azure"
 
 
 def _require_scripted_for_json(cli: CliContext, command: str, flags: str) -> None:
@@ -221,7 +273,11 @@ def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) ->
     if yes:
         return True
     if cli.json_output:
-        emit_error(cli, f"--json cannot prompt for confirmation. Add --yes to write to {target}.")
+        shown = target.as_posix() if isinstance(target, Path) else str(target)
+        emit_error(
+            cli,
+            f"--json cannot prompt for confirmation. Add --yes to write to '{shown}'.",
+        )
     try:
         require_interactive()
     except InteractiveRequiredError as exc:
@@ -248,6 +304,11 @@ def setup_cmd(
         True,
         "--inflight/--no-inflight",
         help="Update .opentide/inflight/ preview shards on pull requests",
+    ),
+    sharing: bool = typer.Option(
+        False,
+        "--sharing/--no-sharing",
+        help="Share changed objects on the default branch (off unless selected)",
     ),
     promotion: bool | None = typer.Option(
         None,
@@ -295,6 +356,7 @@ def setup_cmd(
             ci=ci,
             staging=staging,
             inflight=inflight,
+            sharing=sharing,
             promotion=promotion,
             promotion_target=promotion_target,
             python_version=python_version,
@@ -311,6 +373,15 @@ def setup_cmd(
             ),
             run_ci=ci is not None and ci is not CiPlatform.none,
             run_platforms=bool(platform),
+            warnings=_ignored_ci_flag_warnings(
+                ci=ci,
+                staging=staging,
+                inflight=inflight,
+                sharing=sharing,
+                explorer_pages=explorer_pages,
+                default_branch=default_branch,
+                python_version=python_version,
+            ),
         )
         cli.apply_environment()
         result = run_setup(options)
@@ -413,13 +484,22 @@ def setup_platforms_cmd(
 @setup_app.command("ci")
 def setup_ci_cmd(
     ctx: typer.Context,
-    ci_platform: CiPlatform = typer.Argument(..., help="github, gitlab, or azure"),
+    ci_platform: str = typer.Argument(
+        ...,
+        help="github, gitlab, or azure",
+        click_type=_CiProvider(),
+    ),
     path: str = PATH_OPTION,
     staging: bool = typer.Option(True, "--staging/--no-staging"),
     inflight: bool = typer.Option(
         True,
         "--inflight/--no-inflight",
         help="Update .opentide/inflight/ preview shards on pull requests",
+    ),
+    sharing: bool = typer.Option(
+        False,
+        "--sharing/--no-sharing",
+        help="Share changed objects on the default branch (off unless selected)",
     ),
     promotion: bool | None = typer.Option(
         None,
@@ -442,8 +522,7 @@ def setup_ci_cmd(
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
     cli = get_context(ctx)
-    if ci_platform is CiPlatform.none:
-        raise typer.BadParameter("Choose github, gitlab, or azure")
+    provider = CiPlatform(ci_platform)
     target = _option_path(ctx, cli, path)
     yes = _consented(ctx, yes)
     if not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
@@ -451,9 +530,10 @@ def setup_ci_cmd(
         return
     options = CiSetupOptions(
         path=target,
-        ci=ci_platform,
+        ci=provider,
         staging=staging,
         inflight=inflight,
+        sharing=sharing,
         promotion=promotion,
         promotion_target=promotion_target,
         python_version=python_version,

@@ -147,6 +147,11 @@ def run_validation(
 
         issues.extend(check_cve_issues(index, scope))
 
+    if ValidateCheck.sharing_config in checks:
+        sharing_issues, sharing_warnings = _sharing_config_issues()
+        issues.extend(sharing_issues)
+        warnings.extend(sharing_warnings)
+
     if object_checks:
         if object_workers > 0:
             from concurrent.futures import ThreadPoolExecutor
@@ -186,6 +191,33 @@ def run_validation(
         os.environ["VALIDATION_WARNING_RAISED"] = "1"
 
     return ValidationReport(ok=not issues, issues=issues, warnings=warnings, stats=stats)
+
+
+def _sharing_config_issues() -> tuple[list[ValidationIssue], list[ValidationIssue]]:
+    """Check merged ``sharing.toml``. Off unless ``sharing-config`` was requested."""
+    from opentide.sharing.config import load_sharing
+
+    loaded = load_sharing()
+    errors: list[ValidationIssue] = []
+    warnings: list[ValidationIssue] = []
+    for finding in loaded.issues:
+        field_path = tuple(
+            part
+            for part in (finding.integration, finding.block, finding.field_name)
+            if part is not None
+        )
+        issue = ValidationIssue(
+            code=finding.code,
+            severity=finding.severity,
+            file_path=loaded.source,
+            field_path=field_path,
+            message=finding.message,
+        )
+        if finding.severity == "warning":
+            warnings.append(issue)
+        else:
+            errors.append(issue)
+    return errors, warnings
 
 
 def _collect_work_items(
@@ -245,13 +277,17 @@ def _yaml_parse_issues(
                 continue
             if scope.targets and not scope.matches_file(path.name if path else None, path):
                 continue
+        code = entry.get("code") or "yaml_parse"
+        message = entry.get("message") or (
+            f"Could not parse object YAML: {entry.get('error', 'unknown error')}"
+        )
         issues.append(
             ValidationIssue(
-                code="yaml_parse",
+                code=code,
                 severity="error",
                 object_type=entry.get("object_type"),
                 file_path=path,
-                message=f"Could not parse object YAML: {entry.get('error', 'unknown error')}",
+                message=message,
             )
         )
     return issues

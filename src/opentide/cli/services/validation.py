@@ -88,12 +88,29 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
         {
             "schema_validation",
             "yaml_parse",
+            "missing_uuid",
             "invalid_ref",
             "vocab_unknown",
             "chaining_relation_unknown",
         }
     ),
     ValidateCheck.cve.value: frozenset({"invalid_cve"}),
+    ValidateCheck.sharing_config.value: frozenset(
+        {
+            "missing_field",
+            "duplicate_name",
+            "name_invalid",
+            "unknown_key",
+            "max_tlp_unknown",
+            "organisation_uuid_invalid",
+            "object_type_unknown",
+            "sharing_directory",
+            "config_parse",
+            "url_invalid",
+            "invalid_value",
+            "rule_status_unknown",
+        }
+    ),
 }
 
 _OBJECT_CHECKS = frozenset({ValidateCheck.uuid_format.value, ValidateCheck.schema.value})

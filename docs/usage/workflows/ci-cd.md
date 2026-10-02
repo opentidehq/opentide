@@ -26,21 +26,34 @@ opentide setup ci gitlab --yes
 opentide setup ci azure --python-version 3.12 --yes
 ```
 
-`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines install **`opentide>=`** the version that generated them (`opentide>=0.6.1` from 0.6.1) and set `OPENTIDE_REPO_ROOT` for every job (GitHub workflow `env`, GitLab `variables`, Azure pipeline `variables`). Re-run `opentide setup ci` after you upgrade to raise the floor.
+`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines install **`opentide>=`** the version that generated them (`opentide>=0.6.1` from 0.6.1) and set `OPENTIDE_REPO_ROOT` for every job (GitHub workflow `env`, GitLab `variables`, Azure pipeline `variables`). Re-run `opentide setup ci github --yes` (or `gitlab` or `azure`) after you upgrade to raise the floor.
 
 <Callout type="info">
-Hand-written examples below pin `pip install 'opentide==0.6.3'` so a pipeline cannot float onto an accidental `0.x.dev…` local build. `opentide setup ci` is the source of truth.
+Hand-written examples below pin `pip install 'opentide==0.8.1'` so a pipeline cannot float onto an accidental `0.x.dev…` local build. `opentide setup ci` is the source of truth.
 </Callout>
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--staging` / `--no-staging` | staging on | Include the staging deploy stage |
+| `--sharing` / `--no-sharing` | sharing off | On the default branch, after generate, run `opentide share push --changed` |
 | `--promotion` / `--no-promotion` | omit (keep the repository's setting) | Whether `opentide deploy` promotes rules; `--no-promotion` writes `[promotion] enabled = false` to `.opentide/configurations/deployment.toml` |
 | `--promotion-target` | omit (keep the repository's setting) | Status `deploy` promotes rules to; another status is written to the same `[promotion]` table |
 | `--python-version` | `3.12` | CI Python version |
 | `--default-branch` | `origin/HEAD`, then the checked-out branch, then `init.defaultBranch`, then `main` | Branch that deploys and receives inflight shards (GitHub, Azure; GitLab uses `$CI_DEFAULT_BRANCH`) |
 
 The one-shot `opentide setup --ci <github|gitlab|azure>` accepts the same flags. On a repository without `origin/HEAD` whose deploying branch is not checked out, pass `--default-branch`; the result warns when the detected branch is only a guess.
+
+`--sharing` is off unless you pass it or tick "Sharing on the default branch" in the wizard. The generated job checks out full history and runs only:
+
+```bash
+opentide share push --changed
+```
+
+GitHub runs that job when `github.event_name == 'push'` and the ref is the default branch. GitLab runs it when `CI_COMMIT_BRANCH` is `CI_DEFAULT_BRANCH` and the pipeline is not a merge request. Azure runs it when `Build.SourceBranch` is the default branch and `Build.Reason` is not `PullRequest`. The job needs generate. Deploy still needs only generate, so a share failure does not block deploy and deploy does not block share. Setup does not write `.opentide/configurations/sharing.toml`.
+
+`opentide setup ci` writes the gate from the diagram: `opentide validate --strict`, `opentide lint --strict`, and query validation for each supported platform. On GitLab, `generate` needs the object validate job and every query-validation job, so deploy cannot start after a failed `opentide validate query`. Deploy jobs preview with `--dry-run`, then run `opentide deploy --plan STAGING` or `PRODUCTION` with `--skip-unconfigured`, so a repository whose `[[tenants]]` block is still commented out exits 0 instead of failing the pipeline. The header lists every credential variable the bundled platform files reference. GitHub deploy jobs map those names from `secrets`. GitLab and Azure read the same names from the project variable store. There is no `OPENTIDE_SECRETS` variable.
+
+An Azure pipeline from **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch, so a topic-branch push still validates. Azure Repos Git ignores `pr:`. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy.
 
 ## Stage 1 — validate every PR
 
@@ -59,7 +72,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.6.3'
+      - run: pip install 'opentide==0.8.1'
       - run: opentide generate
       - run: opentide validate --strict
       - run: opentide validate query --platform sentinel
@@ -90,7 +103,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.6.3'
+      - run: pip install 'opentide==0.8.1'
       - run: opentide generate
       - run: opentide deploy --platform sentinel --dry-run   # preview in logs
       - run: opentide deploy --platform sentinel
@@ -116,7 +129,7 @@ Promotion is a deliberate step — gate it behind a protected environment or man
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.6.3'
+      - run: pip install 'opentide==0.8.1'
       - run: opentide deploy --platform sentinel
 ```
 
@@ -144,7 +157,7 @@ validate:
   variables:
     OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
   script:
-    - pip install 'opentide==0.6.3'
+    - pip install 'opentide==0.8.1'
     - opentide generate
     - opentide validate --strict
     - opentide validate query --platform sentinel
@@ -158,7 +171,7 @@ deploy-staging:
     OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
     DEPLOYMENT_PLAN: staging
   script:
-    - pip install 'opentide==0.6.3'
+    - pip install 'opentide==0.8.1'
     - opentide generate
     - opentide deploy --platform sentinel
 ```
@@ -174,7 +187,7 @@ variables:
 steps:
   - task: UsePythonVersion@0
     inputs: { versionSpec: '3.12' }
-  - script: pip install 'opentide==0.6.3'
+  - script: pip install 'opentide==0.8.1'
   - script: opentide generate && opentide validate --strict
   - script: opentide validate query --platform sentinel
 ```

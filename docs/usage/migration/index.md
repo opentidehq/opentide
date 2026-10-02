@@ -25,7 +25,7 @@ python Orchestration/validate.py
 ### After (pip package)
 
 ```toml
-dependencies = ["opentide==0.6.3"]
+dependencies = ["opentide==0.8.1"]
 ```
 
 ```python
@@ -48,7 +48,7 @@ Use `--platform`, not legacy `--system`.
 ### 1. Install
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.1'
 ```
 
 Enable platforms in the repo (not at pip install time):
@@ -57,7 +57,7 @@ Enable platforms in the repo (not at pip install time):
 opentide setup platforms --sentinel --splunk --yes
 ```
 
-Optional MCP server setup: `opentide setup mcp --cursor --yes` (after `pip install 'opentide==0.6.3'`).
+Optional MCP server setup: `opentide setup mcp --cursor --yes` (after `pip install 'opentide==0.8.1'`).
 
 ### 2. Remove submodule
 
@@ -94,7 +94,7 @@ v0.x: legacy imports warn via `DeprecationWarning`. **v1.0 removes shims.**
 | `Orchestration/generate.py` | `opentide generate` |
 | `Orchestration/document.py` | `opentide generate docs` |
 | (repository onboarding) | `opentide setup` |
-| (CI pipeline files) | `opentide setup ci` |
+| (CI pipeline files) | `opentide setup ci github` |
 
 Query validation: **five platforms only** (no CrowdStrike/HarfangLab).
 
@@ -103,7 +103,7 @@ Query validation: **five platforms only** (no CrowdStrike/HarfangLab).
 Remove `submodules: recursive`. Add:
 
 ```yaml
-- run: pip install 'opentide==0.6.3'
+- run: pip install 'opentide==0.8.1'
 - run: opentide validate --strict
   env:
     OPENTIDE_REPO_ROOT: ${{ github.workspace }}
@@ -148,7 +148,7 @@ Replacing a CoreTide **git submodule**, Orchestration scripts, and Python import
 
 ## Verification checklist
 
-- [ ] `pip install 'opentide==0.6.3'` succeeds
+- [ ] `pip install 'opentide==0.8.1'` succeeds
 - [ ] `OPENTIDE_REPO_ROOT` set
 - [ ] `opentide validate --strict` passes
 - [ ] CI no longer uses submodule

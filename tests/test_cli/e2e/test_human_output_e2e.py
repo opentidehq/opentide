@@ -222,6 +222,9 @@ class Case:
     prepare: Callable[[Path], None] | None = None
     context: Callable[[], AbstractContextManager[None]] = nullcontext
     marks: tuple[pytest.MarkDecorator, ...] = ()
+    #: Run the human form on a copy. A second ``setup platforms`` reports files
+    #: already present (#350), so the two forms must start from the same tree.
+    separate_trees: bool = False
 
 
 _CASES = {
@@ -256,7 +259,7 @@ _CASES = {
     "setup-mcp-generic": Case(("setup", "mcp", "--generic", "--yes")),
     "setup-mcp-no-host": Case(("setup", "mcp", "--yes")),
     "setup-skills": Case(("setup", "skills", "--generic", "--yes")),
-    "setup-platforms": Case(("setup", "platforms", "--splunk", "--yes")),
+    "setup-platforms": Case(("setup", "platforms", "--splunk", "--yes"), separate_trees=True),
 }
 
 
@@ -327,9 +330,13 @@ def _missing(expected: list[Expectation], human: str) -> list[Expectation]:
 def test_human_output_carries_the_json_payload(tutorial: Path, case: Case) -> None:
     if case.prepare is not None:
         case.prepare(tutorial)
+    human_repo = tutorial
+    if case.separate_trees:
+        human_repo = tutorial.parent / "human"
+        shutil.copytree(tutorial, human_repo)
     with case.context():
         machine = _run(tutorial, *case.argv, json_output=True)
-        human = _run(tutorial, *case.argv, json_output=False)
+        human = _run(human_repo, *case.argv, json_output=False)
     payload = json.loads(machine.stdout)
     expected = _load_bearing(payload)
     assert expected, f"{case.argv} carries nothing to compare"

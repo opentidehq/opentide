@@ -270,6 +270,14 @@ def parents(id: str) -> list:
         parents = model_data.get(parent_loc["parent"]) or []
     if type(parents) is str:
         parents = [parents]
+    if model_type == "rule":
+        missing = [
+            parent for parent in parents if parent and parent not in OpenTide.Models.FlatIndex
+        ]
+        if missing:
+            raise Exception(
+                f"detection_model {', '.join(missing)} does not exist in the catalogue"
+            )
     return parents
 
 
@@ -341,7 +349,7 @@ def get_type(model_uuid: str, mute: bool = False):
             return None
         else:
             logger.critical("uuid_does_not_exist_in_the_index_of_tide_objects", detail=model_uuid)
-            raise Exception
+            raise Exception(f"UUID {model_uuid} does not exist in the catalogue")
     schema = model_body.get("metadata", {}).get("schema")
     if not schema:
         if model_uuid in OpenTide.Models.signals:
@@ -351,11 +359,9 @@ def get_type(model_uuid: str, mute: bool = False):
         if mute:
             return None
         else:
-            logger.critical(
-                "missing_schema_identifier_in_object",
-                detail=model_body.get("name", "NAME NOT FOUND"),
-            )
-            raise Exception
+            name = model_body.get("name", "NAME NOT FOUND")
+            logger.critical("missing_schema_identifier_in_object", detail=name)
+            raise Exception(f"Object {name} is missing a schema identifier")
     return schema.split("::")[0]
 
 

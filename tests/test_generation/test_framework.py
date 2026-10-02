@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from opentide.generation import framework as fw
 
 
@@ -50,6 +52,35 @@ def test_get_type_mute_returns_none_for_missing() -> None:
     with patch("opentide.generation.framework.OpenTide") as mock_ot:
         mock_ot.Models.FlatIndex.get.return_value = {}
         assert fw.get_type("missing", mute=True) is None
+
+
+def test_get_type_missing_uuid_names_it() -> None:
+    with (
+        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        pytest.raises(Exception, match="UUID missing-uuid does not exist in the catalogue"),
+    ):
+        mock_ot.Models.FlatIndex.get.return_value = {}
+        fw.get_type("missing-uuid")
+
+
+def test_parents_missing_detection_model_names_the_uuid() -> None:
+    rule_uuid = "00000000-0000-4000-8003-000000000099"
+    missing = "00000000-0000-4000-8002-000000000099"
+    rule = {
+        "name": "Dangling",
+        "metadata": {"schema": "rule::1.0", "uuid": rule_uuid},
+        "detection_model": missing,
+    }
+    flat = {rule_uuid: rule}
+    with (
+        patch.object(fw, "MODELS_INDEX", {"rule": {rule_uuid: rule}}),
+        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        pytest.raises(
+            Exception, match=f"detection_model {missing} does not exist in the catalogue"
+        ),
+    ):
+        mock_ot.Models.FlatIndex = flat
+        fw.parents(rule_uuid)
 
 
 def test_parents_for_objective(rule_payload: dict) -> None:

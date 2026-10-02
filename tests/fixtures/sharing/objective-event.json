@@ -1,0 +1,91 @@
+{
+  "Event": {
+    "info": "Credential Access Objective",
+    "date": "2026-01-01",
+    "distribution": 1,
+    "sharing_group_id": 0,
+    "threat_level_id": 4,
+    "analysis": 2,
+    "published": false,
+    "Attribute": [],
+    "Tag": [
+      {
+        "name": "tlp:clear"
+      }
+    ],
+    "Object": [
+      {
+        "name": "opentide",
+        "meta-category": "misc",
+        "template_uuid": "892fd46a-f69e-455c-8c4f-843a4b8f4295",
+        "template_version": 5,
+        "distribution": 5,
+        "Attribute": [
+          {
+            "object_relation": "name",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "Credential Access Objective"
+          },
+          {
+            "object_relation": "uuid",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "00000000-0000-4000-8002-000000000001"
+          },
+          {
+            "object_relation": "version",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": true,
+            "value": "1"
+          },
+          {
+            "object_relation": "opentide-type",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": true,
+            "value": "objective"
+          },
+          {
+            "object_relation": "schema",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": true,
+            "value": "objective::1.0"
+          },
+          {
+            "object_relation": "opentide-object",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "name: Credential Access Objective\n\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  schema: objective::1.0\n  version: 1\n  created: \"2026-01-01\"\n  modified: \"2026-01-02\"\n  tlp: clear\n\ncomposition:\n  strategy: synergetic\n  description: Compose signals for credential access detection\n\nobjective:\n  priority: High\n  type: Threat\n  description: Detect credential access techniques\n  composition:\n    strategy: synergetic\n    description: Compose signals for credential access detection\n  threats:\n    - 00000000-0000-4000-8001-000000000001\n  signals:\n    - name: Suspicious logon signal\n      uuid: 00000000-0000-4000-8099-000000000001\n      description: Suspicious authentication activity\n      severity: Medium\n      methodology: analytics\n      entities:\n        - host\n      data:\n        availability: Complete\n        requirements: Security event logs\n"
+          },
+          {
+            "object_relation": "opentide-relation",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "00000000-0000-4000-8001-000000000001"
+          }
+        ]
+      }
+    ]
+  }
+}

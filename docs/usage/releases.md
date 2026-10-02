@@ -7,6 +7,117 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.8.1 — 1 October 2026
+
+Patch on 0.8.0. **Upgrade and regenerate GitLab CI** with `opentide setup ci gitlab --yes` so query validation gates generate and deploy. GitHub and Azure already waited for those checks. This patch restores that gate on GitLab. It does not change accepted input, CLI output, or exit codes.
+
+**Install**
+
+```bash
+pip install opentide==0.8.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- A generated GitLab `generate` job needs `validate` and every `validate_query_*` job. A failed `opentide validate query` no longer starts deploy ([#429](https://github.com/OpenTideHQ/opentide/issues/429)).
+- The inflight shell quotes `$CI_DEFAULT_BRANCH` and exits if `cd` into the worktree fails. A document job with no commands is omitted, along with the `document` stage ([#430](https://github.com/OpenTideHQ/opentide/issues/430)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.8.1/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.1)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
+## 0.8.0 — 30 September 2026
+
+Minor on 0.7.0. **Upgrade and regenerate CI** with `opentide setup ci <github|gitlab|azure> --yes`. Validation and lint are now strict, deploy skips a plan whose platforms have no tenants, and an Azure pipeline declares `ubuntu-latest`. An object file with no `uuid` fails validation. `get_chaining` returns threat, objective, and rule lineage.
+
+**Install**
+
+```bash
+pip install opentide==0.8.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- `opentide validate` fails an object YAML file that has no `uuid`. The schema check reports `missing_uuid`. An empty catalogue still exits 0 ([#397](https://github.com/OpenTideHQ/opentide/issues/397)).
+- `deploy --plan STAGING` on a detached pull-request checkout fetches `origin`. It no longer dies with `list index out of range` ([#402](https://github.com/OpenTideHQ/opentide/issues/402), [#415](https://github.com/OpenTideHQ/opentide/issues/415)).
+- The inflight prune job creates `.opentide/inflight` before `git add` ([#403](https://github.com/OpenTideHQ/opentide/issues/403)).
+- Generated gates are `opentide validate --strict` and `opentide lint --strict`. Deploy runs `--dry-run`, then `opentide deploy --plan <PLAN> --skip-unconfigured`. `--skip-unconfigured` exits 0 only when every platform in the plan has no `[[tenants]]` block ([#408](https://github.com/OpenTideHQ/opentide/issues/408), [#409](https://github.com/OpenTideHQ/opentide/issues/409)).
+- Azure pipelines set `pool.vmImage` to `ubuntu-latest`. Azure Repos Git ignores `pr:`. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging stays gated on that reason ([#398](https://github.com/OpenTideHQ/opentide/issues/398)).
+- `setup skills` installs the full GitHub tree, renders package `AGENTS.md`, and ships four authoring skills for `rule::1.0`, `objective::1.0`, and `threat::1.0` ([#399](https://github.com/OpenTideHQ/opentide/issues/399), [#405](https://github.com/OpenTideHQ/opentide/issues/405)).
+- `setup repo` keeps empty scaffold directories in git, does not hardcode Sentinel, and warns when `--name`, `--org`, or `--description` are ignored because `README.md` already exists ([#400](https://github.com/OpenTideHQ/opentide/issues/400), [#404](https://github.com/OpenTideHQ/opentide/issues/404)).
+- `generate docs` writes the three section indexes even when a folder is empty ([#401](https://github.com/OpenTideHQ/opentide/issues/401)).
+- MCP `get_chaining` returns lineage for a threat linked from an objective and a rule. A non-empty `threat.chaining` map stays in `graph` ([#407](https://github.com/OpenTideHQ/opentide/issues/407)).
+- `lint` prints `ISSUES` when findings exist. Exit code stays 0 unless `--strict`.
+- Installation pages name 0.8.0 as the latest release ([#406](https://github.com/OpenTideHQ/opentide/issues/406)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.8.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
+## 0.7.0 — 29 September 2026
+
+Minor on 0.6.4. **Upgrade to publish Tide objects to MISP, or regenerate CI** so a GitHub production job compares `github.ref` to a literal branch ref. The share stage is off until you pass `--sharing`.
+
+**Install**
+
+```bash
+pip install opentide==0.7.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+If you already generated a workflow, run `opentide setup ci <github|gitlab|azure> --yes` again. Add `--sharing` only when that pipeline should run `opentide share push --changed` on the default branch.
+
+**What changes for authors and scripts**
+
+- `opentide share` creates one MISP Event per threat, objective, or rule. `preview` and `status` do not contact MISP. The API key is never printed ([#184](https://github.com/OpenTideHQ/opentide/issues/184), [#371](https://github.com/OpenTideHQ/opentide/issues/371), [#372](https://github.com/OpenTideHQ/opentide/issues/372)).
+- Destinations live in `.opentide/configurations/sharing.toml`. Blocks with the same `name` merge. Successes are recorded in `.opentide/states/sharing.jsonl` ([#370](https://github.com/OpenTideHQ/opentide/issues/370), [#373](https://github.com/OpenTideHQ/opentide/issues/373)).
+- Share exit `2` means every failure was authentication or connectivity. Exit `3` means the run both succeeded and failed.
+- `--sharing` adds the default-branch share job. Deploy does not wait for it ([#375](https://github.com/OpenTideHQ/opentide/issues/375)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.7.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.7.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
+## 0.6.4 — 28 September 2026
+
+Patch on 0.6.3. **Upgrade if `generate` printed an empty error for a missing detection model, a GitHub production deploy never ran, setup rewrote a README or platform comments, or MCP `deploy_rule` crashed.** Regenerate a workflow with `opentide setup ci github` (or `gitlab` or `azure`) so production deploy and the checkout depth match this release.
+
+**Install**
+
+```bash
+pip install opentide==0.6.4
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- `generate` exits `1` with a JSON `message` that names the missing `detection_model` UUID, instead of empty stdout ([#352](https://github.com/OpenTideHQ/opentide/issues/352)).
+- MCP `deploy_rule` returns a structured failure for an unknown platform or a platform with no tenants. `deployment_status` is `deployed: false` when the config has no `external_id` and no tenants ([#345](https://github.com/OpenTideHQ/opentide/issues/345)).
+- `--json setup` quotes the path it would write ([#346](https://github.com/OpenTideHQ/opentide/issues/346)).
+- Explorer pages are offered only for GitHub. GitLab and Azure warn and write no Explorer job ([#347](https://github.com/OpenTideHQ/opentide/issues/347)).
+- GitHub production deploy needs `generate`, so a push to the default branch still deploys. Deploy jobs fetch full history ([#348](https://github.com/OpenTideHQ/opentide/issues/348)).
+- `setup --yes --ci none` scaffolds the repository and writes no pipeline ([#349](https://github.com/OpenTideHQ/opentide/issues/349)).
+- Re-running setup keeps an edited README, `.gitignore`, and platform comments ([#350](https://github.com/OpenTideHQ/opentide/issues/350)).
+- `lint --fix` reports metadata on the renamed path ([#353](https://github.com/OpenTideHQ/opentide/issues/353)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.6.4/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.6.4)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.6.3 — 24 September 2026
 
 Patch on 0.6.2. **Upgrade if a CI diff plan still crashed after 0.6.2** with `encode`, `KeyError`, `Invalid object name`, or `list index out of range`. Each of those cases still exits `1`, with a sentence instead of the exception. `FULL` is unchanged.
@@ -100,7 +211,7 @@ If you generated CI with `opentide setup ci`, regenerate it so `--default-branch
 
 **What changes for authors and scripts**
 
-- `validate --json` names the directory it read under `workspace`. A full run that finds no objects still exits `0`, and its message names that directory ([#294](https://github.com/OpenTideHQ/opentide/issues/294)).
+- `opentide --json validate` names the directory it read under `workspace`. A full run that finds no objects still exits `0`, and its message names that directory ([#294](https://github.com/OpenTideHQ/opentide/issues/294)).
 - `setup mcp --generic` returns its copy-the-file instruction as `advice` instead of `note` ([#292](https://github.com/OpenTideHQ/opentide/issues/292)).
 - SDK: the registry index has a `file_paths` map. `ValidationScope.path_basenames` is removed; a path target matches only the object's own file ([#297](https://github.com/OpenTideHQ/opentide/issues/297)).
 - An unset Splunk `frequency_scheduling` keeps the mode it deployed with before: `current` for a legacy `[setup]` table, `random` for a `[[tenants]]` entry ([#295](https://github.com/OpenTideHQ/opentide/issues/295)).

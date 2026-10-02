@@ -40,9 +40,16 @@ def _commit_and_push(*, message: str, empty_note: str, push: str, fetch: str) ->
     Every caller emits this as a YAML block scalar. A commit message contains
     ``": "``, which a plain ``- git commit -m "ci: ..."`` sequence item parses
     as a mapping instead of a string, and GitLab then rejects the pipeline.
+
+    The inflight directory is created first. ``git add`` of a path that was
+    never committed exits 128, which fails the prune job on a repository that
+    has not published shards yet (#403).
     """
     return "\n".join(
         [
+            # ``git add`` exits 128 when the path was never committed (#403).
+            # An empty directory stages nothing, so the guard below exits 0.
+            "mkdir -p .opentide/inflight",
             "git add .opentide/inflight/",
             "if git diff --staged --quiet; then",
             f'  echo "{empty_note}"',
@@ -108,7 +115,9 @@ def _publish_on_default_branch(*, push: str, fetch: str) -> str:
             'rm -rf "$shards_base/.opentide/inflight"',
             'mkdir -p "$shards_base/.opentide"',
             'cp -R .opentide/inflight "$shards_base/.opentide/inflight"',
-            'cd "$shards_base"',
+            # ``set -e`` is not visible to ShellCheck. A failed ``cd`` must
+            # exit the script (#430).
+            'cd "$shards_base" || exit',
             _commit_and_push(
                 message="ci: update inflight preview shards [skip ci]",
                 empty_note="No inflight shard changes",
@@ -194,7 +203,7 @@ def github_inflight_prune_job(
     )
     install = pip_install(opts)
     prune_cmd = inflight_prune_steps(opts)[0]
-    prod_if = f"github.event_name == 'push' && github.ref == format('refs/heads/{default_branch}')"
+    prod_if = f"github.event_name == 'push' && github.ref == 'refs/heads/{default_branch}'"
     commit_push = textwrap.indent(
         _commit_and_push(
             message="ci: prune inflight preview shards [skip ci]",
@@ -259,7 +268,7 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
         f"    - {GITLAB_INSTALL_GIT}\n"
         f"    - {pip_install(opts)}\n"
         "  script:\n"
-        "    - git fetch origin $CI_DEFAULT_BRANCH\n"
+        '    - git fetch origin "$CI_DEFAULT_BRANCH"\n'
         f"{checkout_inflight}"
         '    - export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"\n'
         "    - export DEPLOYMENT_PLAN=STAGING\n"

@@ -15,6 +15,7 @@
     "validate",
     "lint",
     "deploy",
+    "share",
     "info"
   ]
 }

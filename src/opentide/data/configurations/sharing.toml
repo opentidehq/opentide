@@ -1,0 +1,4 @@
+# Sharing destinations. Each [[misp]] block is one MISP instance.
+# This bundled file ships with no blocks. Declare destinations in
+# .opentide/configurations/sharing.toml. A later layer overrides a block
+# with the same name key by key; lists replace, and a new name is appended.

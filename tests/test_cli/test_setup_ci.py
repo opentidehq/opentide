@@ -151,7 +151,8 @@ def test_is_valid_branch_name_rejects(name: str) -> None:
 def _triggers(ci: CiPlatform, parsed: dict[Any, Any]) -> list[str]:
     if ci is CiPlatform.github:
         return parsed[True]["push"]["branches"]
-    return parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+    names = parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+    return [name for name in names if name != "*"]
 
 
 _RENDERED = [
@@ -287,6 +288,56 @@ def test_run_ci_setup_gitlab_keeps_ci_default_branch(tmp_path: Path, git_home: P
     assert any("--default-branch is ignored" in w for w in result["warnings"])
     rendered = (clone / ".gitlab-ci.yml").read_text(encoding="utf-8")
     assert "trunk" not in rendered and "development" not in rendered
+
+
+def test_explorer_pages_warn_instead_of_writing_a_job(tmp_path: Path) -> None:
+    """#347: GitLab and Azure accepted Explorer pages and wrote no job."""
+    from opentide.cli.services.setup.orchestrator import _DEFAULT_CI_FEATURES, _ci_feature_choices
+
+    github_keys = [key for _, key in _ci_feature_choices(CiPlatform.github)]
+    assert "explorer" in github_keys
+    for ci in (CiPlatform.gitlab, CiPlatform.azure, CiPlatform.none):
+        assert "explorer" not in [key for _, key in _ci_feature_choices(ci)]
+    assert "sharing" not in _DEFAULT_CI_FEATURES
+    for ci in (CiPlatform.github, CiPlatform.gitlab, CiPlatform.azure):
+        assert "sharing" in [key for _, key in _ci_feature_choices(ci)]
+    assert "sharing" not in [key for _, key in _ci_feature_choices(CiPlatform.none)]
+
+    for ci, filename in (
+        (CiPlatform.gitlab, ".gitlab-ci.yml"),
+        (CiPlatform.azure, "azure-pipelines.yml"),
+    ):
+        target = tmp_path / ci.value
+        result = run_ci_setup(
+            CiSetupOptions(
+                path=target,
+                ci=ci,
+                explorer_pages=True,
+                default_branch="main",
+                yes=True,
+            )
+        )
+        assert f"Explorer pages were not written for {ci.value}" in result["warnings"]
+        rendered = (target / filename).read_text(encoding="utf-8")
+        assert "Build explorer" not in rendered
+        assert "Deploy explorer" not in rendered
+
+    github = tmp_path / "github"
+    written = run_ci_setup(
+        CiSetupOptions(
+            path=github,
+            ci=CiPlatform.github,
+            explorer_pages=True,
+            default_branch="main",
+            yes=True,
+        )
+    )
+    workflow = (github / ".github" / "workflows" / "opentide.yml").read_text(encoding="utf-8")
+    assert "Build explorer" in workflow
+    assert "Deploy explorer" in workflow
+    assert not any(
+        "Explorer pages were not written" in item for item in written.get("warnings", [])
+    )
 
 
 def test_run_ci_setup_rejects_a_branch_it_cannot_render(tmp_path: Path) -> None:

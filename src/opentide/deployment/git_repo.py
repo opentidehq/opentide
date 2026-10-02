@@ -185,6 +185,27 @@ def _not_a_ci_diff_plan(plan: DeploymentStrategy) -> Exception:
     )
 
 
+def _production_base(repo: DulwichRepo) -> str | None:
+    """The parent of HEAD when that object is in the checkout.
+
+    ``None`` means HEAD is the first commit, so a production diff is empty.
+    A shallow clone still names the parent and does not contain its object;
+    treating that as an empty diff would skip the deploy and exit 0.
+    """
+    head = repo.head
+    if not head.parents:
+        return None
+    parent = head.parents[0].hexsha
+    try:
+        repo._repo[parent.encode("ascii")]
+    except KeyError:
+        raise Exception(f"Could not find git commit {parent}") from None
+    commits = list(repo.iter_commits("HEAD", max_count=2))
+    if len(commits) > 1:
+        return commits[1].hexsha
+    return parent
+
+
 def _require_origin_ref(repo: DulwichRepo, ref: str) -> None:
     try:
         repo._resolve_sha(ref)
@@ -225,11 +246,10 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
             LATEST_COMMIT = os.getenv("GITHUB_SHA")
 
             if plan is DeploymentStrategy.PRODUCTION:
-                commits = list(repo.iter_commits("HEAD", max_count=2))
-                if len(commits) > 1:
-                    BASE_COMMIT = commits[1].hexsha
-                else:
+                base = _production_base(repo)
+                if base is None:
                     return []
+                BASE_COMMIT = base
 
             elif plan is DeploymentStrategy.STAGING:
                 source_branch = os.getenv("GITHUB_HEAD_REF")
@@ -304,11 +324,10 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
             LATEST_COMMIT = os.getenv("BUILD_SOURCEVERSION")
 
             if plan is DeploymentStrategy.PRODUCTION:
-                commits = list(repo.iter_commits("HEAD", max_count=2))
-                if len(commits) > 1:
-                    BASE_COMMIT = commits[1].hexsha
-                else:
+                base = _production_base(repo)
+                if base is None:
                     return []
+                BASE_COMMIT = base
 
             elif plan is DeploymentStrategy.STAGING:
                 source_branch = os.getenv("SYSTEM_PULLREQUEST_SOURCEBRANCH")

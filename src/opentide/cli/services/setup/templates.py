@@ -57,7 +57,8 @@ def render_agent_entrypoint(template_name: str, context: dict[str, str]) -> str:
     if not path.is_file():
         raise SetupTemplateError(f"Entrypoint template missing: {template_name}")
     text = path.read_text(encoding="utf-8")
-    for key, value in context.items():
+    values = {"deploy": "opentide deploy --dry-run", **context}
+    for key, value in values.items():
         text = text.replace("{" + key + "}", value)
     return text
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -42,6 +43,7 @@ def test_lint_reports_filename_mismatch(tmp_path: Path) -> None:
     assert result["count"] == 1
     finding = result["findings"][0]
     assert finding["expected"] == "objects/threats/simulated-actor.yaml"
+    assert result["status"] == "issues"
     assert result["_exit_code"] == 0
 
 
@@ -61,6 +63,30 @@ def test_lint_fix_renames_file(tmp_path: Path) -> None:
     assert dest.is_file()
     second = run_lint(tmp_path, checks=[LintCheck.filenames], fix=True)
     assert second["count"] == 0
+
+
+def test_lint_fix_rewrites_metadata_path_when_the_filename_has_a_space(tmp_path: Path) -> None:
+    """#353: a metadata finding kept the pre-rename path, so a second --fix looked stale."""
+    body = """\
+name: Simulated Actor
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000001
+  schema: threat::1.0
+"""
+    src = _write_object(tmp_path, "threats", "Simulated Actor.yaml", body)
+    result = run_lint(tmp_path, fix=True)
+    metadata = [item for item in result["findings"] if item["check"] == "metadata"]
+    assert len(metadata) == 1
+    assert metadata[0]["path"] == "objects/threats/simulated-actor.yaml"
+    assert not src.exists()
+    renamed = tmp_path / "objects" / "threats" / "simulated-actor.yaml"
+    assert renamed.is_file()
+    second = run_lint(tmp_path, fix=True)
+    assert second["fixed"] == 0
+    assert not (tmp_path / "objects" / "threats" / "simulated-actor-00000000.yaml").exists()
+    assert all(
+        item["path"] == "objects/threats/simulated-actor.yaml" for item in second["findings"]
+    )
 
 
 def test_lint_fix_collision_uses_uuid_suffix(tmp_path: Path) -> None:
@@ -122,7 +148,10 @@ def test_lint_cli_json(tmp_path: Path) -> None:
         ["--json", "--repo", str(tmp_path), "lint", "--check", "filenames"],
     )
     assert result.exit_code == 0, result.stdout + result.stderr
-    assert '"count": 1' in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["count"] == 1
+    assert payload["ok"] is True
+    assert payload["status"] == "issues"
 
 
 def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
@@ -133,7 +162,7 @@ def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
         "[filenames] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml'"
         " does not match slugify(name)='simulated-actor'"
     ) in result.output
-    assert "OK Catalogue lint found issues" in result.output
+    assert "ISSUES Catalogue lint found issues" in result.output
 
 
 def test_lint_cli_human_names_the_renamed_file(tmp_path: Path) -> None:
