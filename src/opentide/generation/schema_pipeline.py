@@ -806,6 +806,21 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
     return dictionary
 
 
+def _legacy_alias_tracks_latest(filename: str, schema_id: str) -> bool:
+    """Copy latest schema bytes onto an alias only when the alias is unversioned.
+
+    ``rule.1.0.schema.json`` is the ``rule::1.0`` artifact. A newer revision must
+    not overwrite that file.
+    """
+    from opentide.registry.artifacts import parse_schema_artifact_name
+
+    try:
+        legacy_id = parse_schema_artifact_name(filename)
+    except ValueError:
+        return True
+    return legacy_id == schema_id
+
+
 def run():
     _refresh_runtime_context()
 
@@ -842,8 +857,9 @@ def run():
         logger.info("correctly_exported", detail=artifact_name)
 
         if family in legacy_schema_map and schema_id == latest_identifier(family):
-            legacy_output = JSON_SCHEMA_FOLDER / legacy_schema_map[family]
-            if legacy_output != json_output:
+            legacy_name = legacy_schema_map[family]
+            legacy_output = JSON_SCHEMA_FOLDER / legacy_name
+            if legacy_output != json_output and _legacy_alias_tracks_latest(legacy_name, schema_id):
                 with open(legacy_output, "w", encoding="utf-8") as legacy_file:
                     legacy_file.write(output)
                 logger.info("exported_legacy_schema_alias", path=str(legacy_output))

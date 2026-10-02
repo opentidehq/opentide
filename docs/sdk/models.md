@@ -12,6 +12,7 @@ Core objects are Pydantic v2 models with explicit schema identifiers. This page 
 | Model | Schema ID | Module | Spec |
 |-------|-----------|--------|------|
 | `DetectionRule` | `rule::1.0` | `opentide.models.rule` | [rule-1.0](/docs/specifications/specs/objects/rule-1.0/) |
+| `DetectionRule_v1_1` | `rule::1.1` | `opentide.models.rule` | [rule-1.1](/docs/specifications/specs/objects/rule-1.1/) |
 | `DetectionObjective` | `objective::1.0` | `opentide.models.objective` | [objective-1.0](/docs/specifications/specs/objects/objective-1.0/) |
 | `ThreatVector` | `threat::1.0` | `opentide.models.threat` | [threat-1.0](/docs/specifications/specs/objects/threat-1.0/) |
 
