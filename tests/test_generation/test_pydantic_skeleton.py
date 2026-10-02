@@ -23,7 +23,7 @@ from opentide.models.metadata import ObjectMetadata
 from opentide.models.objective import DetectionObjective
 from opentide.models.platform import RuleConfigurations, SentinelConfig
 from opentide.models.response import RuleResponse
-from opentide.models.rule import DetectionRule
+from opentide.models.rule import DetectionRule, DetectionRule_v1_1
 from opentide.models.threat import ThreatVector
 
 _FILE_KEY = re.compile(r"(?m)^[ ]*#?file:")
@@ -262,7 +262,7 @@ def test_generate_core_templates_match_renderer(tmp_path: Path) -> None:
     for key, model, schema in (
         ("threat", ThreatVector, "threat::1.0"),
         ("objective", DetectionObjective, "objective::1.0"),
-        ("rule", DetectionRule, "rule::1.0"),
+        ("rule", DetectionRule_v1_1, "rule::1.1"),
     ):
         path = tmp_path / f"{key}.yaml"
         generate_core_template(key, path)

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- `rule::1.1` accepts optional `metadata.reviewed` (ISO 8601 date or datetime). `rule::1.0` stays normative and rejects the field. `opentide rules unreviewed --older-than 90d` lists rules with no review, or a review older than the window ([#437](https://github.com/OpenTideHQ/opentide/issues/437), [specifications#29](https://github.com/OpenTideHQ/specifications/pull/29)).
+
 ## [0.8.1] — 2026-10-01
 
 Patch on 0.8.0. Upgrade and regenerate GitLab CI with `opentide setup ci gitlab` so query validation gates generate and deploy, and the inflight shell matches ShellCheck. This restores the documented gate that GitHub and Azure already enforced. It does not change accepted input, CLI output, or exit codes.

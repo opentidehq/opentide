@@ -125,11 +125,17 @@ def _bootstrap() -> None:
     if _BOOTSTRAPPED:
         return
     from opentide.models.objective import DetectionObjective
-    from opentide.models.rule import DetectionRule
+    from opentide.models.rule import DetectionRule, DetectionRule_v1_1
     from opentide.models.threat import ThreatVector
     from opentide.models.visibility import VisibilityConfig
 
-    for model_cls in (DetectionRule, ThreatVector, DetectionObjective, VisibilityConfig):
+    for model_cls in (
+        DetectionRule,
+        DetectionRule_v1_1,
+        ThreatVector,
+        DetectionObjective,
+        VisibilityConfig,
+    ):
         register_model(model_cls)
     _BOOTSTRAPPED = True
 

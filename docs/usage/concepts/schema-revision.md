@@ -45,6 +45,8 @@ Schema revisions are additive. When a new revision such as `rule::1.1` ships, bo
 
 This means a schema upgrade never forces a big-bang migration — you move objects over at your own pace. For CoreTide-era repos, see the [migration guide](../migration/index.md).
 
+`rule::1.1` is that kind of revision. It adds optional `metadata.reviewed` and changes nothing else. `rule::1.0` stays valid and rejects the field. `opentide generate schemas` writes both `rule.1.0.schema.json` and `rule.1.1.schema.json`. `opentide generate templates` writes both templates and leaves `reviewed` commented out, so a new file does not invent a review date. List stale rules with [`opentide rules unreviewed`](../../cli/rules.md).
+
 ## What to do when
 
 | Situation | Action |

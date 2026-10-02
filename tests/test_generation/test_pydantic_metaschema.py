@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from opentide.generation import pydantic_metaschema as meta
 from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule
+from opentide.models.rule import DetectionRule, DetectionRule_v1_1
 from opentide.models.threat import ThreatVector
 
 
@@ -36,6 +36,6 @@ def test_lookup_schema_extra_missing_returns_none() -> None:
 def test_core_schema_models_keys() -> None:
     models = meta.core_schema_models()
     assert set(models) == {"rule", "objective", "threat"}
-    assert models["rule"] is DetectionRule
+    assert models["rule"] is DetectionRule_v1_1
     assert models["objective"] is DetectionObjective
     assert models["threat"] is ThreatVector

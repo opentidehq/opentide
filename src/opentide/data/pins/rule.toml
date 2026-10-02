@@ -8,3 +8,10 @@
 "techniques" = "att&ck::1.0"
 "response.alert_severity" = "alert_severity::1.0"
 "response.responders" = "responders::1.0"
+
+["rule::1.1"]
+"metadata.tlp" = "tlp::1.0"
+"severity" = "severity::1.0"
+"techniques" = "att&ck::1.0"
+"response.alert_severity" = "alert_severity::1.0"
+"response.responders" = "responders::1.0"
