@@ -48,7 +48,7 @@ A file that fails them is printed as `[check] path: message` before that summary
 ```text illustrative
 [metadata] objects/threats/Simulated Actor.yaml: Recommended metadata missing: author, organisation
 [filenames] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml' does not match slugify(name)='simulated-actor'
-OK Catalogue lint found issues
+ISSUES Catalogue lint found issues
 ```
 
 A file renamed by `--fix` gets `(renamed from <old path>)`. `--json` returns the same findings under `findings`, with `count` and `fixed` totals.

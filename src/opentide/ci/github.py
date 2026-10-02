@@ -8,13 +8,18 @@ from opentide.ci.inflight import github_inflight_job, github_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     document_steps,
+    github_deploy_env,
     header_comment,
     pip_install,
     production_deploy_steps,
-    query_platforms,
     staging_deploy_steps,
+    validate_commands,
 )
 from opentide.ci.text import indent, join_blocks
+
+_SHARE_STEPS_NOTE = (
+    "# API key environment variables named in sharing.toml come from the CI secret store."
+)
 
 
 def _setup_steps(options: CiRenderOptions, *, full_history: bool = False) -> str:
@@ -43,12 +48,15 @@ def _github_job(
     steps: str,
     needs: str | None = None,
     if_cond: str | None = None,
+    env: str | None = None,
 ) -> str:
     lines = [f"{job_id}:", f"  name: {name}", "  runs-on: ubuntu-latest"]
     if needs:
         lines.append(f"  needs: {needs}")
     if if_cond:
         lines.append(f"  if: {if_cond}")
+    if env:
+        lines.append(indent(env, 2))
     lines.append("  steps:")
     lines.append(indent(steps, 4))
     return "\n".join(lines)
@@ -134,7 +142,7 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
           name: Deploy explorer to GitHub Pages
           runs-on: ubuntu-latest
           needs: explorer
-          if: github.event_name == 'push' && github.ref == format('refs/heads/{branch}')
+          if: github.event_name == 'push' && github.ref == 'refs/heads/{branch}'
           permissions:
             pages: write
             id-token: write
@@ -153,19 +161,34 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
 def render_github(options: CiRenderOptions) -> str:
     branch = options.default_branch
     setup = _setup_steps(options)
-    validate_steps = join_blocks(
-        setup,
-        _run_steps(
-            ["opentide validate"]
-            + [f"opentide validate query --platform {p}" for p in query_platforms(options)]
-        ),
-    )
+    validate_steps = join_blocks(setup, _run_steps(validate_commands(options)))
+    deploy_env = github_deploy_env()
     generate_steps = join_blocks(setup, _run_steps(["opentide generate"]))
 
     jobs: list[str] = [
         _github_job("validate", name="Validate", steps=validate_steps),
         _github_job("generate", name="Generate", needs="validate", steps=generate_steps),
     ]
+
+    prod_if = f"github.event_name == 'push' && github.ref == 'refs/heads/{branch}'"
+    if options.sharing:
+        jobs.append(
+            _github_job(
+                "share",
+                name="Share",
+                needs="generate",
+                if_cond=prod_if,
+                steps=join_blocks(
+                    _setup_steps(options, full_history=True),
+                    "\n".join(
+                        [
+                            _SHARE_STEPS_NOTE,
+                            _run_steps(["opentide share push --changed"]),
+                        ]
+                    ),
+                ),
+            )
+        )
 
     if options.staging:
         jobs.append(
@@ -174,6 +197,7 @@ def render_github(options: CiRenderOptions) -> str:
                 name="Deploy Staging",
                 needs="generate",
                 if_cond="github.event_name == 'pull_request'",
+                env=deploy_env,
                 steps=join_blocks(
                     _setup_steps(options, full_history=True),
                     _run_steps(staging_deploy_steps(options)),
@@ -199,13 +223,14 @@ def render_github(options: CiRenderOptions) -> str:
 
     # Staging runs only on pull requests. Production runs on push to the default
     # branch, so it cannot ``needs`` the staging job: a skipped need skips it too.
-    prod_if = f"github.event_name == 'push' && github.ref == format('refs/heads/{branch}')"
+    # Share uses the same push condition and also needs only generate.
     jobs.append(
         _github_job(
             "deploy_production",
             name="Deploy Production",
             needs="generate",
             if_cond=prod_if,
+            env=deploy_env,
             steps=join_blocks(
                 _setup_steps(options, full_history=True),
                 _run_steps(production_deploy_steps(options)),

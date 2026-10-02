@@ -26,6 +26,7 @@ class CiRenderOptions:
     docs_enabled: bool = True
     explorer_pages: bool = False
     inflight: bool = True
+    sharing: bool = False
 
     @classmethod
     def from_init(
@@ -66,6 +67,7 @@ class CiRenderOptions:
             opentide_version=__version__,
             explorer_pages=repo.explorer_pages,
             inflight=repo.inflight,
+            sharing=repo.sharing,
             default_branch=repo.default_branch or "main",
         )
 

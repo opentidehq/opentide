@@ -86,3 +86,37 @@ def test_path_that_exists_but_is_not_a_directory_logs_error(
     assert events
     assert events[0][0] == "error"
     assert events[0][1].get("reason") == "not_a_directory"
+
+
+def test_object_without_uuid_is_recorded_as_a_parse_error(tmp_path: Path) -> None:
+    path = tmp_path / "no-uuid.yaml"
+    path.write_text("name: orphan\n", encoding="utf-8")
+    builder = RegistryBuilder()
+    objects: dict[str, Any] = {"rule": {}}
+    builder._ingest_object("rule", path, {"name": "orphan"}, objects, {})
+    assert objects["rule"] == {}
+    assert builder.parse_errors == [
+        {
+            "path": str(path),
+            "object_type": "rule",
+            "error": "object YAML has no uuid",
+            "code": "missing_uuid",
+            "message": "Object YAML has no uuid: no-uuid.yaml",
+        }
+    ]
+
+
+def test_object_with_metadata_uuid_is_indexed(tmp_path: Path) -> None:
+    path = tmp_path / "has-uuid.yaml"
+    builder = RegistryBuilder()
+    objects: dict[str, Any] = {"rule": {}}
+    files: dict[str, str] = {}
+    builder._ingest_object(
+        "rule",
+        path,
+        {"metadata": {"uuid": "00000000-0000-4000-8000-000000000099"}, "name": "kept"},
+        objects,
+        files,
+    )
+    assert "00000000-0000-4000-8000-000000000099" in objects["rule"]
+    assert builder.parse_errors == []

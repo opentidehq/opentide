@@ -239,6 +239,53 @@ def test_fetch_remote_manifest_returns_none_on_invalid_json(
     assert registry._fetch_remote_manifest() is None
 
 
+def test_list_github_paths_returns_blobs_under_the_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    body = {
+        "truncated": False,
+        "tree": [
+            {"path": "skills/demo/references/Examples.md", "type": "blob"},
+            {"path": "skills/demo/SKILL.md", "type": "blob"},
+            {"path": "skills/demo/references", "type": "tree"},
+            {"path": "skills/other/SKILL.md", "type": "blob"},
+            {"path": 12, "type": "blob"},
+            "not-a-dict",
+        ],
+    }
+
+    class _Response:
+        def read(self) -> bytes:
+            return json.dumps(body).encode("utf-8")
+
+    monkeypatch.setattr(registry.urllib.request, "urlopen", lambda *_a, **_k: _Response())
+    assert registry.list_github_paths("skills/demo", ref="pin") == [
+        "skills/demo/SKILL.md",
+        "skills/demo/references/Examples.md",
+    ]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b"not-json{", b"[]", b'{"truncated": true, "tree": []}', b'{"tree": "nope"}'],
+)
+def test_list_github_paths_returns_none_when_the_tree_is_unusable(
+    monkeypatch: pytest.MonkeyPatch, payload: bytes
+) -> None:
+    class _Response:
+        def read(self) -> bytes:
+            return payload
+
+    monkeypatch.setattr(registry.urllib.request, "urlopen", lambda *_a, **_k: _Response())
+    assert registry.list_github_paths("skills/demo") is None
+
+
+def test_list_github_paths_returns_none_on_network_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*_: object, **__: object) -> None:
+        raise urllib.error.URLError("offline")
+
+    monkeypatch.setattr(registry.urllib.request, "urlopen", _boom)
+    assert registry.list_github_paths("skills/demo") is None
+
+
 def test_known_skill_slugs_come_from_live_catalogue(monkeypatch: pytest.MonkeyPatch) -> None:
     stub_remote_skills_manifest(
         monkeypatch,

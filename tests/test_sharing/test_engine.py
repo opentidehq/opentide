@@ -538,6 +538,50 @@ def test_delete_without_confirmation_and_unset_key_are_preflight(tmp_path: Path)
         clock=lambda: CLOCK,
     )
     assert unset.preflight == "api_key_unset"
+    preview = run_misp(
+        [_load("rule.yaml")],
+        [_block(api_key=None, api_key_unset=True, max_tlp="red", rule_statuses=("STAGING",))],
+        mode="preview",
+        ledger=ShareLedger.load(tmp_path / "sharing.jsonl"),
+        clock=lambda: CLOCK,
+    )
+    assert preview.preflight is None
+    assert preview.exit_code == 0
+    assert fake.calls == []
+
+
+def test_failed_create_keeps_the_ledger_line(tmp_path: Path) -> None:
+    document = _load("rule.yaml")
+    assert document.uuid is not None
+    path = tmp_path / "sharing.jsonl"
+    ledger = ShareLedger.load(path)
+    ledger.put(
+        {
+            "state": "synced",
+            "object_uuid": document.uuid,
+            "integration": "misp",
+            "target": "misp-internal",
+            "content_hash": "stale",
+            "remote_event_id": 7,
+        }
+    )
+    ledger.save()
+    fake = FakeMisp()
+    fake.fail_add = MispCallError("connectivity", "connectivity_failed")
+    result = run_misp(
+        [document],
+        [_block(max_tlp="red", rule_statuses=("STAGING",))],
+        mode="push",
+        ledger=ShareLedger.load(path),
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert result.records[0].action == "failed"
+    kept = ShareLedger.load(path)
+    line = kept.get(document.uuid, "misp", "misp-internal")
+    assert line is not None
+    assert line["content_hash"] == "stale"
+    assert line["remote_event_id"] == 7
 
 
 def test_workers_do_not_change_the_outcome(tmp_path: Path) -> None:

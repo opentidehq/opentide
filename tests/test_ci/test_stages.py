@@ -30,17 +30,36 @@ def test_query_platforms_filters_supported() -> None:
 def test_core_cli_steps_include_validate_and_generate() -> None:
     options = CiRenderOptions(ci="github", platforms=["sentinel"])
     steps = core_cli_steps(options)
-    assert steps[0] == "opentide validate"
+    assert steps[0] == "opentide validate --strict"
+    assert steps[1] == "opentide lint --strict"
     assert "opentide validate query --platform sentinel" in steps
     assert steps[-1] == "opentide generate"
+
+
+def test_platform_credentials_are_the_variables_bundled_platform_files_reference() -> None:
+    from opentide.ci.stages import header_comment, platform_credential_names
+
+    names = platform_credential_names()
+    assert "AZURE_CLIENT_SECRET" in names
+    assert "OPENTIDE_SECRETS" not in names
+    header = header_comment(CiRenderOptions(ci="github"))
+    assert "OPENTIDE_SECRETS" not in header
+    for name in names:
+        assert f"#   {name}" in header
 
 
 def test_staging_and_production_steps() -> None:
     enabled = CiRenderOptions(ci="github", staging=True)
     disabled = CiRenderOptions(ci="github", staging=False)
-    assert staging_deploy_steps(enabled) == ["opentide deploy --plan STAGING"]
+    assert staging_deploy_steps(enabled) == [
+        "opentide deploy --dry-run --plan STAGING",
+        "opentide deploy --plan STAGING --skip-unconfigured",
+    ]
     assert staging_deploy_steps(disabled) == []
-    assert production_deploy_steps(enabled) == ["opentide deploy --plan PRODUCTION"]
+    assert production_deploy_steps(enabled) == [
+        "opentide deploy --dry-run --plan PRODUCTION",
+        "opentide deploy --plan PRODUCTION --skip-unconfigured",
+    ]
     assert document_steps(enabled) == ["opentide generate docs --output docs"]
     assert document_steps(CiRenderOptions(ci="github", docs_enabled=False)) == []
 

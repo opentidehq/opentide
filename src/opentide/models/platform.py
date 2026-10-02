@@ -1,4 +1,9 @@
-"""Per-platform configuration Pydantic models — schema ``platform::<name>::1.0``."""
+"""Per-platform configuration Pydantic models — schema ``platform::<name>::1.0``.
+
+The field contract, including every optional key, is ``specs/platforms/`` in the
+specifications repository. This module implements that contract. Do not document
+the keys anywhere else.
+"""
 
 from __future__ import annotations
 

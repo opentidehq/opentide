@@ -84,7 +84,12 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
     if not result.ok:
         emit_fatal(result.message, **remediation)
     else:
-        label = "[yellow]SKIPPED[/]" if result.status == "skipped" else "[bold green]OK[/]"
+        if result.status == "issues":
+            label = "[yellow]ISSUES[/]"
+        elif result.status == "skipped":
+            label = "[yellow]SKIPPED[/]"
+        else:
+            label = "[bold green]OK[/]"
         console.print(f"{label} {escape(result.message)}")
         for name, value in remediation.items():
             console.print(f"  [cyan]{name}:[/] {escape(value)}")

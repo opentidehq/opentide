@@ -79,7 +79,9 @@ def run_misp(
     selected = _selected(documents, filters)
     if mode != "retract" and not selected:
         return ShareRun((), "scope_no_match")
-    needs_key = mode in {"push", "preview", "retract"}
+    # Preview is a local dry run. It does not contact the destination, so an
+    # unset key is not a preflight failure. Push and retract need the key.
+    needs_key = mode in {"push", "retract"}
     if needs_key and any(block.resolved_api_key() is None for block in active):
         return ShareRun((), "api_key_unset")
     if mode == "retract" and not selected and not _ledger_uuids(ledger, active, filters):
@@ -250,7 +252,8 @@ def _upsert(
             notes=tuple(notes),
         )
     if not matched:
-        _discard(ledger, lock, document.uuid, block.name)
+        # A failed create must leave the ledger unchanged. The synced line, if
+        # any, is replaced only after the event exists.
         try:
             remote = client.add_event(built.event)
         except MispCallError as exc:

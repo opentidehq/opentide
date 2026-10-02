@@ -30,6 +30,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |
 | `--staging` / `--no-staging` | CI staging stage (default: on) |
 | `--inflight` / `--no-inflight` | Update pull-request preview shards (default: on) |
+| `--sharing` / `--no-sharing` | Share changed objects on the default branch (default: off) |
 | `--promotion` / `--no-promotion` | Status promotion in `opentide deploy`. Omit the flag to keep the repository's setting; `--no-promotion` writes `[promotion] enabled = false` (see [setup ci](#setup-ci)) |
 | `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs |
 | `--promotion-target` | Status `deploy` promotes rules to. Omit the flag to keep the repository's setting; another status is written as `[promotion] promotion_target` |
@@ -82,6 +83,10 @@ Run `setup platforms` before `setup ci` so `validate query` jobs are included. I
 
 Generated pipelines set `OPENTIDE_REPO_ROOT` at workflow (GitHub), `variables` (GitLab), or pipeline (Azure) scope so `opentide` commands resolve the detection repository in CI. Re-run `setup ci` to refresh existing pipeline files.
 
+The validate job runs `opentide validate --strict` and `opentide lint --strict`. Each enabled platform that supports query validation also runs `opentide validate query`. GitHub runs those checks in the validate job. GitLab and Azure run one job per platform in that stage, and generate does not start until they succeed. CrowdStrike and HarfangLab have no query job. Staging and production jobs run a dry-run and then `opentide deploy --plan … --skip-unconfigured`. That flag exits 0 when every platform in the plan still has the commented-out `[[tenants]]` block `setup` writes. The file header lists the credential variables from the bundled platform files. GitHub deploy jobs map each of those names to `secrets.<NAME>`.
+
+The Azure pipeline sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. `pr:` is kept for Azure Pipelines hosted on GitHub or Bitbucket. Azure Repos Git ignores `pr:`; add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason.
+
 ```bash
 opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --path . --yes
@@ -92,7 +97,9 @@ opentide setup --ci azure --default-branch development --yes
 
 Positional argument: `github`, `gitlab`, or `azure` (CI **provider**, not Sentinel/Splunk/etc.).
 
-`setup ci` accepts the same CI flags as the [default callback](#default-callback-flags) (`--staging`, `--inflight`, `--promotion`, `--promotion-target`, `--python-version`, `--explorer-pages`, `--default-branch`, `--path`, `--yes`), so `opentide setup --ci github --default-branch trunk --yes` and `opentide setup ci github --default-branch trunk --yes` write the same pipeline and print the same `WARNING` lines. The one-shot JSON result lists each step's warnings under `steps[].warnings` and again in the top-level `warnings`.
+`setup ci` accepts the same CI flags as the [default callback](#default-callback-flags) (`--staging`, `--inflight`, `--sharing`, `--promotion`, `--promotion-target`, `--python-version`, `--explorer-pages`, `--default-branch`, `--path`, `--yes`), so `opentide setup --ci github --default-branch trunk --yes` and `opentide setup ci github --default-branch trunk --yes` write the same pipeline and print the same `WARNING` lines. The one-shot JSON result lists each step's warnings under `steps[].warnings` and again in the top-level `warnings`.
+
+`--sharing` adds one job, `share`, that runs `opentide share push --changed` after generate on a push to the default branch. Deploy does not wait for it. The flag does not write `sharing.toml` and does not ask for a URL, API key, or block name. The wizard checkbox is "Sharing on the default branch", and it stays unchecked. `--sharing` with `--ci none`, or with no `--ci`, warns and writes no pipeline. A later `setup ci` that leaves the flag off removes the job when it rewrites the pipeline.
 
 `--default-branch` names the branch that triggers deploys and receives inflight shards. It applies to GitHub and Azure; GitLab pipelines always use `$CI_DEFAULT_BRANCH` and warn that the flag is ignored.
 
@@ -215,7 +222,7 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | `--name`, `--org`, `--description` | Entrypoint metadata |
 | `--refresh` | Re-fetch `manifest.json` from GitHub (`discover` / `show`) |
 
-Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) on `main`. Default install pulls the starter slugs (`opentide-detection-rule`, `detection-engineering`) from that catalogue; `--install` / `--all` select other live entries. GitHub must be reachable — the wheel does not ship skill trees that can go stale.
+Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
 
 The full wizard checks skill availability before writing repository files. If the catalogue or a requested slug cannot be fetched, the standalone skills command fails without installing a partial tree. The full `opentide setup` wizard omits the skills step with a warning so the rest of the scaffold can still apply.
 

@@ -7,6 +7,7 @@ from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     document_steps,
     header_comment,
+    object_validate_commands,
     pip_install,
     production_deploy_steps,
     staging_deploy_steps,
@@ -106,7 +107,7 @@ def render_azure(options: CiRenderOptions) -> str:
         _azure_job(
             "validate",
             display_name="Validate objects",
-            steps=_job_steps(options, ["opentide validate"]),
+            steps=_job_steps(options, object_validate_commands()),
         ),
         *query_jobs,
     ]
@@ -151,6 +152,30 @@ def render_azure(options: CiRenderOptions) -> str:
         )
     )
 
+    share_stage = ""
+    if options.sharing:
+        share_stage = (
+            "- stage: Share\n"
+            "  displayName: Share\n"
+            "  dependsOn: Generate\n"
+            "  condition: and("
+            f"eq(variables['Build.SourceBranch'], 'refs/heads/{branch}'), "
+            "ne(variables['Build.Reason'], 'PullRequest'))\n"
+            "  jobs:\n"
+            + indent(
+                _azure_job(
+                    "share",
+                    display_name="Share changed objects",
+                    steps=_job_steps(
+                        options,
+                        ["opentide share push --changed"],
+                        full_history=True,
+                    ),
+                ),
+                4,
+            )
+        )
+
     document_stage = (
         "- stage: Document\n"
         "  displayName: Document\n"
@@ -170,18 +195,29 @@ def render_azure(options: CiRenderOptions) -> str:
     validate_jobs_yaml = indent("\n".join(validate_jobs), 6)
     generate_job_yaml = indent(generate_job, 6)
     deploy_jobs_yaml = indent("\n".join(deploy_jobs), 6)
+    share_stage_yaml = indent(share_stage, 2) if share_stage else ""
+    # indent() drops the trailing newline, so a share stage must be followed by
+    # a blank line or its last job line glues onto Deploy.
+    share_block = f"{share_stage_yaml}\n\n" if share_stage_yaml else ""
     document_stage_yaml = indent(document_stage, 2)
 
     body = (
         "trigger:\n"
         "  branches:\n"
         "    include:\n"
-        f"      - {branch}\n"
+        "      - '*'\n"
         "\n"
+        "# Azure Repos Git ignores pr:. Add a build validation policy on the\n"
+        "# default branch so pull requests set Build.Reason to PullRequest.\n"
+        "# Staging deploy stays gated on that reason. Hosted Azure Pipelines\n"
+        "# (GitHub or Bitbucket) honor pr: as written.\n"
         "pr:\n"
         "  branches:\n"
         "    include:\n"
         f"      - {branch}\n"
+        "\n"
+        "pool:\n"
+        "  vmImage: ubuntu-latest\n"
         "\n"
         "variables:\n"
         "  OPENTIDE_REPO_ROOT: $(Build.SourcesDirectory)\n"
@@ -198,6 +234,7 @@ def render_azure(options: CiRenderOptions) -> str:
         "    jobs:\n"
         f"{generate_job_yaml}\n"
         "\n"
+        f"{share_block}"
         "  - stage: Deploy\n"
         "    displayName: Deploy\n"
         "    dependsOn: Generate\n"
