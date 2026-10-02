@@ -17,5 +17,5 @@ Read [`AGENTS.md`](AGENTS.md) for detection-as-code workflows with OpenTide.
 ```bash
 opentide validate
 opentide generate
-opentide deploy --platform sentinel --dry-run
+{deploy}
 ```

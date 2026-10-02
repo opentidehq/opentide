@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -42,6 +43,7 @@ def test_lint_reports_filename_mismatch(tmp_path: Path) -> None:
     assert result["count"] == 1
     finding = result["findings"][0]
     assert finding["expected"] == "objects/threats/simulated-actor.yaml"
+    assert result["status"] == "issues"
     assert result["_exit_code"] == 0
 
 
@@ -146,7 +148,10 @@ def test_lint_cli_json(tmp_path: Path) -> None:
         ["--json", "--repo", str(tmp_path), "lint", "--check", "filenames"],
     )
     assert result.exit_code == 0, result.stdout + result.stderr
-    assert '"count": 1' in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["count"] == 1
+    assert payload["ok"] is True
+    assert payload["status"] == "issues"
 
 
 def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
@@ -157,7 +162,7 @@ def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
         "[filenames] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml'"
         " does not match slugify(name)='simulated-actor'"
     ) in result.output
-    assert "OK Catalogue lint found issues" in result.output
+    assert "ISSUES Catalogue lint found issues" in result.output
 
 
 def test_lint_cli_human_names_the_renamed_file(tmp_path: Path) -> None:

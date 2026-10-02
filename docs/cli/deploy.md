@@ -38,6 +38,7 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | `--dry-run` | — | Simulate deployment without writes |
 | `--keep-deprecated` | — | Include deprecated rules |
 | `--skip-promotion` | — | Skip promotion step |
+| `--skip-unconfigured` | — | Exit 0 when every platform in the plan has no `[[tenants]]` block |
 
 ## Output
 

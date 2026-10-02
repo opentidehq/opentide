@@ -20,6 +20,12 @@ _INDEX_ICON_BY_SCOPE = {
     "threats": ":warning:",
 }
 
+_SCOPE_BY_FOLDER = {
+    "rules": DocumentScope.rules,
+    "objectives": DocumentScope.objectives,
+    "threats": DocumentScope.threats,
+}
+
 
 def _render_name(record: DocumentRecord, ctx: DocumentationContext) -> str:
     if not ctx.index_icons:
@@ -89,7 +95,7 @@ def render_index(
     ctx: DocumentationContext,
 ) -> str:
     """Render a folder index page."""
-    scope = records[0].object_type if records else None
+    scope = records[0].object_type if records else _SCOPE_BY_FOLDER.get(folder)
     extra_headers = _extra_headers(scope)
     from_folder = ""
     if scope is not None:
@@ -141,8 +147,6 @@ def write_index(
         (catalog_targets.threats_dir, "threats", "Threat Vectors", threats),
     )
     for folder_path, folder_name, title, records in folders:
-        if not records:
-            continue
         content = render_index(
             ctx.formatter,
             title=title,

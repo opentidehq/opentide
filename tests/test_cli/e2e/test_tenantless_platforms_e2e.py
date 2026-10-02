@@ -153,6 +153,56 @@ def test_deploy_without_tenants_fails_before_loading_an_engine(
 
 
 @pytest.mark.parametrize("json_output", OUTPUT_MODES)
+def test_skip_unconfigured_exits_zero_when_every_platform_lacks_tenants(
+    invoke_cli,
+    tenantless_repo,
+    engine_imports: list[str],
+    json_output: bool,
+) -> None:
+    repo = tenantless_repo(["sentinel"])
+    config = _config_path("sentinel")
+
+    result, output = _run(
+        invoke_cli,
+        repo,
+        json_output,
+        "deploy",
+        "--platform",
+        "sentinel",
+        "--skip-unconfigured",
+    )
+
+    assert result.exit_code == 0, output
+    if json_output:
+        payload = parse_cli_json(result)
+        assert payload["ok"] is True
+        assert payload["status"] == "skipped"
+        assert payload["message"] == (
+            f"Skipped deploy: sentinel has no tenants configured in {config}"
+        )
+        assert payload["missing_tenants"] == {"sentinel": config}
+    else:
+        assert "SKIPPED Skipped deploy:" in output
+    assert engine_imports == []
+
+
+def test_skip_unconfigured_still_fails_when_another_platform_has_tenants(
+    invoke_cli, tenantless_repo, engine_imports: list[str]
+) -> None:
+    repo = tenantless_repo(["sentinel", "splunk"])
+    uncomment_tenants(repo / _config_path("sentinel"))
+
+    result, output = _run(invoke_cli, repo, True, "deploy", "--skip-unconfigured")
+
+    assert result.exit_code == 1, output
+    payload = parse_cli_json(result)
+    assert payload["status"] == "failed"
+    assert "splunk has no tenants" in payload["message"]
+    assert "Cannot deploy:" in payload["message"]
+    assert engine_imports == []
+
+
+@pytest.mark.parametrize("json_output", OUTPUT_MODES)
 @pytest.mark.parametrize("platform", PLATFORMS)
 def test_deploy_dry_run_without_tenants_previews_but_does_not_claim_the_platform(
     invoke_cli,

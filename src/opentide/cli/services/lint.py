@@ -225,7 +225,12 @@ def run_lint(
         findings=len(findings),
         fix=fix,
     )
-    failed = bool(strict and findings)
+    if findings and strict:
+        status = "failed"
+    elif findings:
+        status = "issues"
+    else:
+        status = "completed"
     return {
         "message": ("Catalogue lint found issues" if findings else "Catalogue lint passed"),
         "path": str(target),
@@ -233,8 +238,8 @@ def run_lint(
         "findings": findings,
         "count": len(findings),
         "fixed": sum(1 for item in findings if item.get("fixed") is True),
-        "status": "failed" if failed else "completed",
-        "_exit_code": 1 if failed else 0,
+        "status": status,
+        "_exit_code": 1 if status == "failed" else 0,
     }
 
 

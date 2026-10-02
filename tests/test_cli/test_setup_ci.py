@@ -151,7 +151,8 @@ def test_is_valid_branch_name_rejects(name: str) -> None:
 def _triggers(ci: CiPlatform, parsed: dict[Any, Any]) -> list[str]:
     if ci is CiPlatform.github:
         return parsed[True]["push"]["branches"]
-    return parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+    names = parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+    return [name for name in names if name != "*"]
 
 
 _RENDERED = [

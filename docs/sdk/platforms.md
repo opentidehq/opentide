@@ -131,7 +131,7 @@ Honesty is a hard requirement: a platform with no real query validator MUST repo
 
 ## Capability matrix
 
-Human-readable table: [Usage: Platforms](../usage/concepts/platforms.md).
+Human-readable table and the fields each block must contain: [Usage: Platforms](../usage/concepts/platforms.md). The normative field contracts are the [platform specs](/docs/specifications/specs/platforms/) (`platform::<identifier>::1.0`). Python models are listed on [Models](./models.md#platform-configuration-models).
 
 ## Source
 
