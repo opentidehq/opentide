@@ -57,6 +57,34 @@ def _reprs(page: Path) -> list[str]:
     return found
 
 
+def test_generate_docs_writes_section_indexes_for_an_empty_repository(
+    invoke_cli, tmp_path: Path
+) -> None:
+    """#401: root README links to rules, objectives, and threats indexes at count 0."""
+    assert_json_ok(
+        invoke_cli(
+            "setup",
+            "repo",
+            "--yes",
+            "--name",
+            "demo",
+            "--platform",
+            "sentinel",
+            "--path",
+            str(tmp_path),
+            repo=tmp_path,
+        )
+    )
+    assert_json_ok(invoke_cli("generate", repo=tmp_path))
+    assert_json_ok(invoke_cli("generate", "docs", "--output", "docs", repo=tmp_path))
+    docs = tmp_path / "docs"
+    root = (docs / "README.md").read_text(encoding="utf-8")
+    for folder in ("rules", "objectives", "threats"):
+        assert (docs / folder / "README.md").is_file()
+        assert f"{folder}/README.md" in root
+    assert '"c":"0"' in root or "| 0 |" in root
+
+
 def test_generate_docs_writes_the_tutorial_actor_source_as_its_stage(
     invoke_cli, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

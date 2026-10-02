@@ -45,6 +45,8 @@ class CiSetupOptions:
     python_version: str = "3.12"
     explorer_pages: bool = False
     inflight: bool = True
+    #: Off unless setup is asked to publish changed objects on the default branch.
+    sharing: bool = False
     #: ``None`` detects it from the target repository.
     default_branch: str | None = None
     yes: bool = False

@@ -127,7 +127,7 @@ relation_counts = true
 icons = false
 ```
 
-- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root.
+- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root. Empty sections are still written, so the root index does not link to a missing file.
 - `index.relation_counts`: include relation counts (or object counts on root index table).
 - `index.icons`: prefix section/object labels with emoji markers.
 

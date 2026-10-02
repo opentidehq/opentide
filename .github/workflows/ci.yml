@@ -118,13 +118,13 @@ jobs:
 
       - name: Pytest
         if: matrix.python-version != env.COVERAGE_PYTHON
-        run: uv run pytest tests/ --no-cov -q -m "not cli_e2e and not cli_smoke"
+        run: uv run pytest tests/ --no-cov -q -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
 
       - name: Pytest with coverage
         if: matrix.python-version == env.COVERAGE_PYTHON
         run: |
           uv run pytest tests/ \
-            -m "not cli_e2e and not cli_smoke" \
+            -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint" \
             --cov-report=xml:coverage.xml \
             --cov-report=html:htmlcov \
             --junitxml=pytest-results.xml
@@ -183,6 +183,16 @@ jobs:
 
       - name: E2E pytest (CLI + MCP stdio)
         run: uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov
+
+      - name: Install GitLab CI linters
+        run: |
+          bash scripts/install-gitlab-ci-linters.sh "${RUNNER_TEMP}/gitlab-ci-linters"
+          echo "${RUNNER_TEMP}/gitlab-ci-linters" >> "$GITHUB_PATH"
+
+      - name: Lint generated GitLab CI
+        run: uv run pytest tests/test_ci/test_gitlab_pipeline_lint.py -m gitlab_ci_lint -q --no-cov
+        env:
+          OPENTIDE_GITLAB_CI_LINT: "1"
 
   cli-windows-smoke:
     name: CLI Windows smoke

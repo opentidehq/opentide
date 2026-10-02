@@ -41,6 +41,7 @@ def run_deploy(
     skip_promotion: bool = False,
     keep_deprecated: bool = False,
     wide: bool = False,
+    skip_unconfigured: bool = False,
 ) -> dict[str, object]:
     """Deploy detection rules (Orchestration/deploy.py parity)."""
     plan_warnings: list[str] = []
@@ -53,6 +54,7 @@ def run_deploy(
         skip_promotion=skip_promotion,
         keep_deprecated=keep_deprecated,
         wide=wide,
+        skip_unconfigured=skip_unconfigured,
     )
     if plan_warnings:
         result["warnings"] = [*plan_warnings, *cast(list[str], result.get("warnings", []))]
@@ -69,6 +71,7 @@ def _deploy(
     skip_promotion: bool,
     keep_deprecated: bool,
     wide: bool,
+    skip_unconfigured: bool = False,
 ) -> dict[str, object]:
     ctx.apply_environment()
     os.environ["INDEX_OUTPUT"] = "cache"
@@ -146,9 +149,20 @@ def _deploy(
     missing_tenants = {error.system: error.config_path for error in tenantless}
     tenants_advice = "; ".join(error.advice for error in tenantless)
     if tenantless and not dry_run:
+        detail = "; ".join(str(error) for error in tenantless)
+        if skip_unconfigured and len(tenantless) == len(deployment_list):
+            return {
+                "status": "skipped",
+                "message": f"Skipped deploy: {detail}",
+                "advice": tenants_advice,
+                "missing_tenants": missing_tenants,
+                "deployed": deployed,
+                "dry_run": False,
+                "plan": plan_payload,
+            }
         return {
             "status": "failed",
-            "message": "Cannot deploy: " + "; ".join(str(error) for error in tenantless),
+            "message": f"Cannot deploy: {detail}",
             "advice": tenants_advice,
             "missing_tenants": missing_tenants,
             "deployed": deployed,

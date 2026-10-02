@@ -21,6 +21,8 @@ def test_render_github_includes_core_jobs() -> None:
     assert "document:" in workflow
     assert "branches:" in workflow
     assert "- development" in workflow
+    assert "github.ref == 'refs/heads/development'" in workflow
+    assert "format(" not in workflow
 
 
 def test_render_github_validate_includes_query_platforms() -> None:
@@ -34,7 +36,12 @@ def test_render_github_staging_job_when_enabled() -> None:
     options = CiRenderOptions(ci="github", staging=True)
     workflow = render_github(options)
     assert "deploy_staging:" in workflow
-    assert "opentide deploy --plan STAGING" in workflow
+    assert "opentide deploy --dry-run --plan STAGING" in workflow
+    assert "opentide deploy --plan STAGING --skip-unconfigured" in workflow
+    assert "opentide validate --strict" in workflow
+    assert "opentide lint --strict" in workflow
+    assert "AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}" in workflow
+    assert "OPENTIDE_SECRETS" not in workflow
     production = workflow.split("  deploy_production:", 1)[1].split("  document:", 1)[0]
     assert "needs: generate" in production
     assert "needs: deploy_staging" not in production

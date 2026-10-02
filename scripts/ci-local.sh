@@ -18,7 +18,7 @@ Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 Options:
   --quick       Lint + type-check + package build (ruff, ty, uv build)
   --test        Lint + unit pytest (excludes cli_e2e/cli_smoke) — default
-  --full        Lint + unit pytest + coverage gate + CLI E2E (3.14) — pre-push
+  --full        Lint + unit pytest + coverage gate + CLI E2E + GitLab CI lint — pre-push
   --coverage    Alias for --full
   -h, --help    Show this help
 
@@ -64,12 +64,17 @@ if [[ "$mode" == "quick" ]]; then
 fi
 
 echo "==> Pytest"
-unit_marker='not cli_e2e and not cli_smoke'
+unit_marker='not cli_e2e and not cli_smoke and not gitlab_ci_lint'
 if [[ "$mode" == "full" ]]; then
   uv run pytest tests/ -q -m "$unit_marker"
   uv run coverage report
   echo "==> E2E pytest (CLI + MCP stdio)"
   uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov
+  echo "==> Generated GitLab CI lint (glint + gitlab-ci-verify)"
+  linters="$ROOT/.cache/gitlab-ci-linters"
+  bash scripts/install-gitlab-ci-linters.sh "$linters"
+  PATH="$linters:$PATH" OPENTIDE_GITLAB_CI_LINT=1 \
+    uv run pytest tests/test_ci/test_gitlab_pipeline_lint.py -m gitlab_ci_lint -q --no-cov
 else
   uv run pytest tests/ --no-cov -q -m "$unit_marker"
 fi

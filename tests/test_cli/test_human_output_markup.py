@@ -62,7 +62,7 @@ def _field_texts(text: str) -> dict[str, str]:
 
 
 @pytest.mark.parametrize("text", MARKUP_LOOKALIKES)
-@pytest.mark.parametrize("status", ["completed", "skipped", "failed"])
+@pytest.mark.parametrize("status", ["completed", "skipped", "failed", "issues"])
 def test_emit_result_prints_every_field_verbatim(
     rendered: StringIO, status: str, text: str
 ) -> None:
@@ -80,7 +80,7 @@ def test_emit_result_prints_every_field_verbatim(
         assert value in output, f"{status} {name} lost: {output!r}"
 
 
-@pytest.mark.parametrize("status", ["completed", "skipped", "failed"])
+@pytest.mark.parametrize("status", ["completed", "skipped", "failed", "issues"])
 def test_emit_result_prints_advice_json_carries(rendered: StringIO, status: str) -> None:
     """``--live`` without the SDK printed the FATAL line and dropped the extra (#292)."""
     payload = {

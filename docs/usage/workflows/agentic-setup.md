@@ -24,7 +24,7 @@ OpenTide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## Install and configure the server
 
 ```bash
-pip install 'opentide==0.6.4'
+pip install 'opentide==0.8.1'
 opentide setup mcp --cursor --yes
 ```
 
@@ -56,7 +56,7 @@ The server uses **stdio transport**. It must know where your content lives, so s
 
 Skills give the agent durable, project-specific instructions (object layout, commands, the validate-before-deploy rule):
 
-Browse the catalogue, then install selected skills from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills). Discovery and install always use the live `manifest.json` and skill trees from GitHub — OpenTide does not ship a packaged snapshot that can go stale. If GitHub is unreachable, the command fails with an actionable error.
+Browse the catalogue with `discover` and `show`. Those commands read the live `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills). If that catalogue cannot be fetched, the command fails with an actionable error. `AGENTS.md` is rendered from the package template. The four authoring skills are copied from the package. Every other skill is the full tree under `skills/<slug>/`, including its reference files; an unreadable or truncated tree fails the install instead of writing a partial skill.
 
 ```bash
 opentide setup skills discover
@@ -78,7 +78,9 @@ opentide setup skills --yes --install opentide-detection-rule --install detectio
 | `--claude-code` | `CLAUDE.md`, `.claude/skills/` |
 | `--github-copilot` | `.github/copilot-instructions.md` (also applies `--generic` unless already selected) |
 
-After setup, point your agent at the generated `AGENTS.md` at the repo root — it is the entry point for detection work in your repository.
+After setup, point your agent at the generated `AGENTS.md` at the repo root — it is rendered from the package template for this repository, not copied from the skills catalogue.
+
+`opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package so they match `rule::1.0`, `objective::1.0`, and `threat::1.0` under `objects/`. Other skills are downloaded as the full tree under `skills/<slug>/` from OpenTideHQ/skills.
 
 ## A safe agent workflow
 

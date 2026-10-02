@@ -17,8 +17,6 @@ from typing import Any, Protocol
 from urllib.parse import urlparse
 
 import requests
-from pymisp import PyMISP
-from pymisp import __version__ as pymisp_version
 
 from opentide.sharing.constants import (
     OPENTIDE_TEMPLATE_UUID,
@@ -254,8 +252,27 @@ class PyMispClient:
         return _decode(response)
 
 
-def _open_pymisp(url: str, api_key: str, *, verify_ssl: bool) -> PyMISP:
+def _load_pymisp() -> tuple[Any, str]:
+    """Import PyMISP only when a destination is contacted.
+
+    Importing ``pymisp`` logs ``pymisp loaded properly`` at debug. Doing that
+    from the CLI package paints ANSI onto ``--help``, usage errors, and JSON.
+    """
+    pymisp_logger = logging.getLogger("pymisp")
+    previous = pymisp_logger.level
+    # The package logs "loaded properly" at import. Silence that line only.
+    pymisp_logger.setLevel(logging.WARNING)
+    try:
+        from pymisp import PyMISP
+        from pymisp import __version__ as pymisp_version
+    finally:
+        pymisp_logger.setLevel(previous)
+    return PyMISP, pymisp_version
+
+
+def _open_pymisp(url: str, api_key: str, *, verify_ssl: bool) -> Any:
     """Session setup from ``PyMISP.__init__`` without its connectivity probe."""
+    PyMISP, pymisp_version = _load_pymisp()
     api = PyMISP.__new__(PyMISP)
     root = url if url.endswith("/") else f"{url}/"
     api.root_url = root

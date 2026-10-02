@@ -53,6 +53,9 @@ def test_run_skills_setup_generic(tmp_path: Path) -> None:
     assert (tmp_path / "AGENTS.md").is_file()
     assert (tmp_path / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md").is_file()
     assert "AGENTS.md" in result["files"]
+    files = result["files"]
+    assert isinstance(files, list)
+    assert files.count(".agents/skills/opentide-detection-rule/SKILL.md") == 1
 
 
 def test_run_skills_setup_cursor(tmp_path: Path) -> None:
@@ -133,11 +136,16 @@ def test_download_skill_uses_manifest_ref(monkeypatch: pytest.MonkeyPatch, tmp_p
         _real_download_skill,
     )
     monkeypatch.setattr("opentide.cli.services.setup.skills.fetch_github_bytes", _capture)
+    monkeypatch.setattr(
+        skills_mod,
+        "list_github_paths",
+        lambda prefix, **_: [f"{prefix}/SKILL.md"],
+    )
     run_skills_setup(
         SkillsSetupOptions(
             path=tmp_path,
             targets=[SkillTarget.generic],
-            skill_slugs=["detection-engineering"],
+            skill_slugs=["kusto-query-language"],
             yes=True,
         )
     )
@@ -148,9 +156,14 @@ def test_download_skill_uses_manifest_ref(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert ref == "pin-ref"
 
 
-def test_download_skill_does_not_fall_back_to_packaged_tree(
+def test_authoring_skills_install_from_the_package_when_github_is_down(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """The skills repository still describes CoreTide. These four must not.
+
+    #405: installing the remote text taught agents ``mdr::2.1`` and
+    ``Schemas/Templates``.
+    """
     monkeypatch.setattr(
         "opentide.cli.services.setup.skills._download_skill",
         _real_download_skill,
@@ -159,19 +172,31 @@ def test_download_skill_does_not_fall_back_to_packaged_tree(
         "opentide.cli.services.setup.skills.fetch_github_bytes",
         lambda *_, **__: None,
     )
-    with pytest.raises(SkillsDownloadError, match="network access"):
-        run_skills_setup(
-            SkillsSetupOptions(
-                path=tmp_path,
-                targets=[SkillTarget.generic],
-                skill_slugs=["detection-engineering"],
-                yes=True,
-            )
+    monkeypatch.setattr(skills_mod, "list_github_paths", lambda *_, **__: None)
+    run_skills_setup(
+        SkillsSetupOptions(
+            path=tmp_path,
+            targets=[SkillTarget.generic],
+            skill_slugs=["detection-engineering", "opentide-detection-rule"],
+            yes=True,
         )
-    assert not (tmp_path / ".agents" / "skills" / "detection-engineering" / "SKILL.md").exists()
+    )
+    engineering = (
+        tmp_path / ".agents" / "skills" / "detection-engineering" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    rule = (tmp_path / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "rule::1.0" in engineering
+    assert "objects/rules/" in rule
+    # The retired schema may appear only as a prohibition, not as the layout to author.
+    assert "schema: mdr::" not in engineering
+    assert "Do not create" in engineering
+    assert "`mdr::2.1`" in engineering
+    assert "Schemas/Templates" not in rule
 
 
-def test_unavailable_skills_reports_starters_when_github_is_down(
+def test_unavailable_skills_keeps_bundled_starters_when_github_is_down(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -181,8 +206,7 @@ def test_unavailable_skills_reports_starters_when_github_is_down(
     missing = skills_mod.unavailable_skills(
         SkillsSetupOptions(targets=[SkillTarget.generic], yes=True)
     )
-    assert "opentide-detection-rule" in missing
-    assert "detection-engineering" in missing
+    assert missing == []
 
 
 def test_unavailable_skills_reports_unreachable_catalogue_slugs(
@@ -195,8 +219,8 @@ def test_unavailable_skills_reports_unreachable_catalogue_slugs(
     missing = skills_mod.unavailable_skills(
         SkillsSetupOptions(targets=[SkillTarget.generic], install_all=True, yes=True)
     )
-    assert "opentide-detection-rule" in missing
-    assert "detection-engineering" in missing
+    assert "opentide-detection-rule" not in missing
+    assert "detection-engineering" not in missing
     assert "kusto-query-language" in missing
 
 
@@ -218,6 +242,7 @@ def test_download_skill_actionable_error(monkeypatch: pytest.MonkeyPatch, tmp_pa
         "opentide.cli.services.setup.skills.fetch_github_bytes",
         lambda *_, **__: None,
     )
+    monkeypatch.setattr(skills_mod, "list_github_paths", lambda *_, **__: None)
     with pytest.raises(SkillsDownloadError, match="network access"):
         run_skills_setup(
             SkillsSetupOptions(
@@ -244,30 +269,78 @@ def test_skill_reachable_when_github_returns_skill_md(monkeypatch: pytest.Monkey
     assert missing == []
 
 
-def test_download_skill_writes_github_reference_files(
+def test_download_skill_writes_every_file_in_the_github_tree(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Only Best-Practices.md and Anti-Patterns.md used to be fetched (#399)."""
+
     def _fetch(path: str, **_: object) -> bytes | None:
-        if path.endswith("SKILL.md"):
-            return b"# remote skill\n"
-        if path.endswith("Best-Practices.md"):
-            return b"# best\n"
-        if path.endswith("Anti-Patterns.md"):
-            return b"# anti\n"
-        return None
+        name = path.rsplit("/", 1)[-1]
+        return f"# {name}\n".encode()
 
     monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
     monkeypatch.setattr(skills_mod, "fetch_github_bytes", _fetch)
+    monkeypatch.setattr(
+        skills_mod,
+        "list_github_paths",
+        lambda prefix, **_: [
+            f"{prefix}/SKILL.md",
+            f"{prefix}/references/Best-Practices.md",
+            f"{prefix}/references/Anti-Patterns.md",
+            f"{prefix}/references/Examples.md",
+        ],
+    )
     dest = tmp_path / "downloaded"
     written = skills_mod._download_skill("demo-skill", dest, source="OpenTideHQ/skills", ref="main")
     assert written == [
         "SKILL.md",
         "references/Best-Practices.md",
         "references/Anti-Patterns.md",
+        "references/Examples.md",
     ]
-    assert (dest / "SKILL.md").read_text(encoding="utf-8") == "# remote skill\n"
-    assert (dest / "references" / "Best-Practices.md").read_text(encoding="utf-8") == "# best\n"
-    assert (dest / "references" / "Anti-Patterns.md").read_text(encoding="utf-8") == "# anti\n"
+    assert (dest / "references" / "Examples.md").read_text(encoding="utf-8") == "# Examples.md\n"
+
+
+def test_download_skill_keeps_the_previous_tree_when_a_later_file_is_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dest = tmp_path / "downloaded"
+    (dest / "references").mkdir(parents=True)
+    (dest / "SKILL.md").write_text("previous\n", encoding="utf-8")
+    (dest / "references" / "Old.md").write_text("old\n", encoding="utf-8")
+
+    def _fetch(path: str, **_: object) -> bytes | None:
+        if path.endswith("SKILL.md"):
+            return b"new\n"
+        return None
+
+    monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
+    monkeypatch.setattr(skills_mod, "fetch_github_bytes", _fetch)
+    monkeypatch.setattr(
+        skills_mod,
+        "list_github_paths",
+        lambda prefix, **_: [f"{prefix}/SKILL.md", f"{prefix}/references/Examples.md"],
+    )
+    with pytest.raises(SkillsDownloadError, match="network access"):
+        skills_mod._download_skill("demo-skill", dest, source="OpenTideHQ/skills", ref="main")
+    assert (dest / "SKILL.md").read_text(encoding="utf-8") == "previous\n"
+    assert (dest / "references" / "Old.md").read_text(encoding="utf-8") == "old\n"
+    assert not (dest / "references" / "Examples.md").exists()
+    assert not (tmp_path / ".downloaded.incoming").exists()
+
+
+def test_bundled_reinstall_drops_stale_reference_files(tmp_path: Path) -> None:
+    dest = tmp_path / "opentide-detection-rule"
+    (dest / "references").mkdir(parents=True)
+    (dest / "SKILL.md").write_text("stale remote skill\n", encoding="utf-8")
+    (dest / "references" / "Best-Practices.md").write_text("coretide\n", encoding="utf-8")
+    written = skills_mod._install_bundled_skill("opentide-detection-rule", dest)
+    text = (dest / "SKILL.md").read_text(encoding="utf-8")
+    assert "rule::1.0" in text
+    assert "SKILL.md" in written
+    assert not (dest / "references").exists()
+    assert not (tmp_path / ".opentide-detection-rule.incoming").exists()
+    assert not (tmp_path / ".opentide-detection-rule.previous").exists()
 
 
 def test_install_cursor_replaces_existing_destination(tmp_path: Path) -> None:
@@ -294,13 +367,23 @@ def test_install_claude_replaces_existing_destination(tmp_path: Path) -> None:
     assert not stale.exists()
 
 
-def test_install_generic_uses_github_agents_md(
+def test_install_generic_renders_the_package_agents_template(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """The skills-repo AGENTS.md is not this repository's entrypoint (#399)."""
     monkeypatch.setattr(
         skills_mod,
         "fetch_github_bytes",
         lambda path, **_: b"# remote agents\n" if path == "AGENTS.md" else None,
     )
-    run_skills_setup(SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.generic], yes=True))
-    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "# remote agents\n"
+    run_skills_setup(
+        SkillsSetupOptions(
+            path=tmp_path,
+            targets=[SkillTarget.generic],
+            name="SOC Detections",
+            yes=True,
+        )
+    )
+    text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert "# remote agents" not in text
+    assert "SOC Detections" in text

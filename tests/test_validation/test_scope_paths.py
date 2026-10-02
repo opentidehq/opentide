@@ -164,6 +164,24 @@ def test_a_bare_basename_matches_by_the_path_when_no_name_is_given(tmp_path: Pat
     assert not scope.matches_file(None, None)
 
 
+def test_yaml_parse_issues_honor_an_explicit_code_and_message() -> None:
+    issues = _yaml_parse_issues(
+        [
+            {
+                "path": "/repo/objects/rules/no-uuid.yaml",
+                "object_type": "rule",
+                "error": "object YAML has no uuid",
+                "code": "missing_uuid",
+                "message": "Object YAML has no uuid: no-uuid.yaml",
+            }
+        ],
+        ValidationScope.full(),
+    )
+    assert [issue.code for issue in issues] == ["missing_uuid"]
+    assert issues[0].message == "Object YAML has no uuid: no-uuid.yaml"
+    assert issues[0].file_path == Path("/repo/objects/rules/no-uuid.yaml")
+
+
 def test_yaml_parse_issues_reported_for_full_scope() -> None:
     issues = _yaml_parse_issues(
         [{"path": "/repo/objects/rules/broken.yaml", "object_type": "rule", "error": "boom"}],
