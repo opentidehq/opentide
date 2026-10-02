@@ -29,7 +29,7 @@ env:
 jobs:
   ingest:
     name: Ingest ATT&CK and MISP
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # `secrets` is not an allowed context in `steps.if`; GitHub rejects the
     # whole file, so no trigger (schedule, dispatch) ever registers.
     env:
