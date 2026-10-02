@@ -10,6 +10,6 @@
 "objective.signals.severity" = "severity::1.0"
 "objective.signals.methodology" = "detection.methodology::1.0"
 "objective.signals.entities" = "signal.entities::1.0"
-"objective.signals.data.logsources" = "datasources::1.0"
+"objective.signals.data.logsources" = "datasources::1.1"
 "objective.signals.effort" = "efforts::1.0"
-"objective.attack" = "att&ck::1.0"
+"objective.attack" = "att&ck::1.1"
