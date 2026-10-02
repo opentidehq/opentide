@@ -6,9 +6,17 @@ import re
 from pathlib import Path
 
 from opentide.generation.pydantic_skeleton import render_model_template, write_model_template
-from opentide.generation.pydantic_templates import core_schema_models, generate_core_template
+from opentide.models.objective import DetectionObjective
 from opentide.models.platform import PLATFORM_CONFIG_MODELS
 from opentide.models.platform_schema import platform_model_for_key
+from opentide.models.rule import DetectionRule
+from opentide.models.threat import ThreatVector
+
+_PINNED_MODELS = {
+    "threat": ThreatVector,
+    "objective": DetectionObjective,
+    "rule": DetectionRule,
+}
 
 ROOT = Path(__file__).resolve().parents[2]
 CORE_GOLDENS = ROOT / "tests/fixtures/generation/tide_workspace/.opentide/templates"
@@ -46,9 +54,8 @@ PLATFORM_FILES = {
 
 
 def test_core_template_goldens_match_renderer() -> None:
-    models = core_schema_models()
     for key, filename in CORE_FILES.items():
-        model = models[key]
+        model = _PINNED_MODELS[key]
         rendered = render_model_template(model, schema_id=model.schema_identifier())
         expected = (CORE_GOLDENS / filename).read_text(encoding="utf-8")
         assert rendered == expected, filename
@@ -70,9 +77,10 @@ def test_platform_models_cover_golden_files() -> None:
 
 
 def test_generate_core_template_writes_golden_bytes(tmp_path: Path) -> None:
+    """Pinned 1.0 skeletons stay byte-stable. ``rule::1.1`` is a separate template."""
     for key, filename in CORE_FILES.items():
         path = tmp_path / filename
-        generate_core_template(key, path)
+        write_model_template(path, _PINNED_MODELS[key])
         assert path.read_text(encoding="utf-8") == (CORE_GOLDENS / filename).read_text(
             encoding="utf-8"
         )

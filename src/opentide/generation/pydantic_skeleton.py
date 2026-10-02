@@ -24,7 +24,7 @@ from opentide.models.base import TideModel, field_json_schema_extra
 _YAML_UNQUOTED = re.compile(r"^[A-Za-z0-9_./:+-]+$")
 _YAML_RESERVED = frozenset({"true", "false", "null", "yes", "no", "on", "off", "y", "n", "~"})
 _MULTILINE_NAMES = frozenset({"description", "query", "analysis", "sighting"})
-_DATE_NAMES = frozenset({"created", "modified"})
+_DATE_NAMES = frozenset({"created", "modified", "reviewed"})
 _URI_NAMES = frozenset({"link", "url", "uri", "href"})
 _MAX_DEPTH = 24
 

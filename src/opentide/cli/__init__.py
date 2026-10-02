@@ -24,6 +24,7 @@ from opentide.cli.output import (
     emit_result,
     emit_success,
 )
+from opentide.cli.rules_app import rules_app
 from opentide.cli.services.deploy import run_deploy
 from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
@@ -105,6 +106,7 @@ def main_callback(
 
 app.add_typer(setup_app, name="setup")
 app.add_typer(share_app, name="share")
+app.add_typer(rules_app, name="rules")
 
 generate_app = typer.Typer(help="Framework generation and documentation pipeline")
 app.add_typer(generate_app, name="generate")

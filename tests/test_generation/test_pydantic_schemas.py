@@ -14,4 +14,4 @@ def test_generate_core_model_schema_returns_object_schema() -> None:
     schema = generate_core_model_schema("rule", enrich=False)
     assert schema["type"] == "object"
     assert "properties" in schema
-    assert schema["properties"]["metadata"]["properties"]["schema"]["const"] == "rule::1.0"
+    assert schema["properties"]["metadata"]["properties"]["schema"]["const"] == "rule::1.1"

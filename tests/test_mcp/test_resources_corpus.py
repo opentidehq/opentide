@@ -21,6 +21,7 @@ from tests.corpus_support import (
 from opentide.cli.services.generation import run_generate_phase
 from opentide.core.registry import OpenTide
 from opentide.mcp_server import resources
+from opentide.models.schema_registry import latest_identifier
 
 
 @pytest.fixture
@@ -78,7 +79,7 @@ def test_resource_template_accepts_the_schema_id_the_schema_resource_accepts(
 ) -> None:
     """``schemas/rule::1.0`` resolved while ``templates/rule::1.0`` did not."""
     OpenTide.initialise()
-    schema_id = next(key for key in OpenTide.MetaSchemas.Index if key.startswith(f"{family}::"))
+    schema_id = latest_identifier(family)
     bare = json.loads(resources.resource_template(family))
     for requested in (schema_id, schema_id.replace("::", "."), f"{family}s"):
         payload = json.loads(resources.resource_template(requested))
