@@ -45,6 +45,8 @@ class CiSetupOptions:
     python_version: str = "3.12"
     explorer_pages: bool = False
     inflight: bool = True
+    #: Off unless setup is asked to publish changed objects on the default branch.
+    sharing: bool = False
     #: ``None`` detects it from the target repository.
     default_branch: str | None = None
     yes: bool = False
@@ -143,6 +145,9 @@ def run_ci_setup(options: CiSetupOptions) -> dict[str, object]:
     if not platform_ids:
         warnings.append(_NO_PLATFORMS_WARNING)
         logger.warning("ci_platforms_missing", detail=str(target), warnings=warnings)
+    if options.explorer_pages and options.ci in (CiPlatform.gitlab, CiPlatform.azure):
+        warnings.append(f"Explorer pages were not written for {options.ci.value}")
+        logger.warning("explorer_pages_unsupported", ci=options.ci.value)
     if options.ci is CiPlatform.gitlab:
         branch = GITLAB_DEFAULT_BRANCH
         if options.default_branch is not None:

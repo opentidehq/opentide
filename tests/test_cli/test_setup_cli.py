@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -305,6 +306,155 @@ def test_setup_vscode_snippets_command_fails_without_templates(tmp_path) -> None
     assert '"status": "failed"' in result.stdout
     assert '"ok": false' in result.stdout
     assert '"files": []' in result.stdout
+
+
+def test_setup_yes_ci_none_still_scaffolds(tmp_path: Path) -> None:
+    """#349: ``--yes --ci none`` exited 0 with ``steps: []`` and wrote nothing."""
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "--yes", "--ci", "none", "--path", str(tmp_path)],
+        env={"OPENTIDE_REPO_ROOT": None, "OPENTIDE_TIDE_WORKSPACE": None},
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["message"] == "Setup complete"
+    assert any(step["step"] == "repo" for step in payload["steps"])
+    assert (tmp_path / "README.md").is_file()
+    assert not (tmp_path / ".github" / "workflows" / "opentide.yml").exists()
+    assert not (tmp_path / ".gitlab-ci.yml").exists()
+    assert not (tmp_path / "azure-pipelines.yml").exists()
+    assert payload.get("warnings", []) == []
+
+
+def test_ci_only_flags_without_a_platform_are_named(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "--yes",
+            "--path",
+            str(tmp_path),
+            "--no-staging",
+            "--no-inflight",
+            "--explorer-pages",
+            "--default-branch",
+            "trunk",
+            "--python-version",
+            "3.11",
+        ],
+        env={"OPENTIDE_REPO_ROOT": None, "OPENTIDE_TIDE_WORKSPACE": None},
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    warning = " ".join(payload["warnings"])
+    for flag in (
+        "--default-branch",
+        "--no-staging",
+        "--no-inflight",
+        "--explorer-pages",
+        "--python-version",
+    ):
+        assert flag in warning
+    assert (tmp_path / "README.md").is_file()
+    assert not (tmp_path / ".github" / "workflows" / "opentide.yml").exists()
+
+
+def test_sharing_without_a_platform_warns_and_writes_no_pipeline(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "--yes", "--sharing", "--ci", "none", "--path", str(tmp_path)],
+        env={"OPENTIDE_REPO_ROOT": None, "OPENTIDE_TIDE_WORKSPACE": None},
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    warning = " ".join(payload.get("warnings", []))
+    assert "--sharing" in warning
+    assert (tmp_path / "README.md").is_file()
+    assert not (tmp_path / ".github" / "workflows" / "opentide.yml").exists()
+
+
+def test_setup_ci_sharing_writes_and_can_remove_the_share_job(tmp_path: Path) -> None:
+    env = {"OPENTIDE_REPO_ROOT": None, "OPENTIDE_TIDE_WORKSPACE": None}
+    written = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "ci",
+            "github",
+            "--yes",
+            "--sharing",
+            "--default-branch",
+            "main",
+            "--path",
+            str(tmp_path),
+        ],
+        env=env,
+    )
+    assert written.exit_code == 0, written.stdout + written.stderr
+    workflow = tmp_path / ".github" / "workflows" / "opentide.yml"
+    rendered = workflow.read_text(encoding="utf-8")
+    assert rendered.count("opentide share push --changed") == 1
+    removed = runner.invoke(
+        app,
+        [
+            "--json",
+            "setup",
+            "ci",
+            "github",
+            "--yes",
+            "--no-sharing",
+            "--default-branch",
+            "main",
+            "--path",
+            str(tmp_path),
+        ],
+        env=env,
+    )
+    assert removed.exit_code == 0, removed.stdout + removed.stderr
+    assert "opentide share" not in workflow.read_text(encoding="utf-8")
+
+
+def test_setup_ci_help_does_not_offer_none() -> None:
+    result = runner.invoke(app, ["setup", "ci", "--help"])
+    assert result.exit_code == 0, result.stdout
+    arguments = result.stdout.split("Arguments", 1)[1].split("Options", 1)[0]
+    assert "none" not in arguments
+    assert "github" in arguments
+    assert "gitlab" in arguments
+    assert "azure" in arguments
+
+
+def test_setup_ci_none_is_rejected(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["setup", "ci", "none", "--yes", "--path", str(tmp_path)],
+    )
+    assert result.exit_code == 2
+    assert "Choose github, gitlab, or azure" in result.stdout + result.stderr
+    assert not (tmp_path / ".github").exists()
+
+
+def test_json_setup_quotes_a_dot_target(tmp_path: Path, monkeypatch) -> None:
+    """#346: ``Path('.')`` plus the sentence period rendered the target as ``..``."""
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "--platform", "sentinel"],
+        env={"OPENTIDE_REPO_ROOT": None, "OPENTIDE_TIDE_WORKSPACE": None},
+    )
+    assert result.exit_code != 0, result.stdout + result.stderr
+    assert "write to '.'" in result.stdout
+    assert "write to .." not in result.stdout
+    absolute = tmp_path / "empty"
+    named = runner.invoke(
+        app,
+        ["--json", "setup", "--path", str(absolute), "--platform", "sentinel"],
+        env={"OPENTIDE_REPO_ROOT": None, "OPENTIDE_TIDE_WORKSPACE": None},
+    )
+    assert named.exit_code != 0
+    assert f"write to '{absolute.as_posix()}'" in named.stdout
 
 
 def test_setup_ci_none_alone_is_not_noop(tmp_path, monkeypatch) -> None:

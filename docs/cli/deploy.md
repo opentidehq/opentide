@@ -38,6 +38,7 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | `--dry-run` | — | Simulate deployment without writes |
 | `--keep-deprecated` | — | Include deprecated rules |
 | `--skip-promotion` | — | Skip promotion step |
+| `--skip-unconfigured` | — | Exit 0 when every platform in the plan has no `[[tenants]]` block |
 
 ## Output
 
@@ -128,6 +129,8 @@ FATAL: Metadata deployment is not implemented for splunk
 - **GitLab `No Source Commit Found`** — a `STAGING` or `PRODUCTION` plan whose base SHA is unset or not in the checkout exits `1` with that sentence. Through 0.6.1 the same case crashed with `'Repo' object has no attribute 'lookup_ref'`.
 - **GitHub `STAGING` without pull-request refs** — the failure names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`. Through 0.6.1 it asked for Azure `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME`, then `KeyError`.
 - **Other CI diff failures** — a missing tip SHA names `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION`. Azure `STAGING` without its pull-request variables names those variables before fetching. A ref that is not on `origin` names `origin/<name>`. `DEBUG`, `MANUAL`, and `ALWAYS` say they are not a CI diff plan. A one-parent GitLab merged result keeps the tip SHA.
+- **GitHub production deploy skipped** — through 0.6.3 the generated production job needed `deploy_staging`, which runs only on a pull request, so a push to the default branch skipped production. 0.6.4 needs `generate` and still runs only on that push. Regenerate with `opentide setup ci github --yes`.
+- **Shallow checkout** — deploy jobs fetch full history. A missing parent commit is named. Through 0.6.3 a depth-1 checkout exited `1` with the parent SHA and no sentence.
 
 ## Per-rule deployment via SDK or MCP
 

@@ -65,7 +65,10 @@ class DetectionRule(TideModel):
     def deploy(self, platform: str, dry_run: bool = False) -> DeploymentResult:
         if self._registry is None:
             raise RuntimeError("DetectionRule.deploy() requires a bound registry")
-        entry = self._registry.Platforms[platform]
+        platforms = self._registry.Platforms
+        if platform not in platforms:
+            raise ValueError(f"Unknown platform {platform!r}")
+        entry = platforms[platform]
         deployer = getattr(entry, "deployer", None)
         if deployer is None:
             raise ValueError(f"Platform {platform!r} has no deployer")
@@ -74,7 +77,9 @@ class DetectionRule(TideModel):
             return DeploymentResult(
                 platform=platform, uuids=[uuid], dry_run=True, message="dry-run"
             )
-        deployer.deploy([uuid])
+        from opentide.models.deployment_enums import DeploymentStrategy
+
+        deployer.deploy([uuid], DeploymentStrategy.load_from_environment())
         return DeploymentResult(platform=platform, uuids=[uuid], dry_run=False)
 
     def validate(self) -> ValidationResult:  # ty: ignore[invalid-method-override]

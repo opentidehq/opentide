@@ -23,7 +23,7 @@ Use this skill when authoring or reviewing detection content in an OpenTide repo
 opentide validate
 opentide generate
 opentide validate query --platform sentinel
-opentide deploy --platform sentinel --dry-run
+opentide deploy --dry-run
 ```
 
 ## Platform capabilities

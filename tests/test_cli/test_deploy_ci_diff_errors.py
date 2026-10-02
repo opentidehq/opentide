@@ -230,6 +230,68 @@ def test_staging_missing_origin_ref_names_the_ref(
     _assert_failure(result, "Could not find git ref origin/also-missing", json_output=json_output)
 
 
+@pytest.mark.parametrize(
+    ("marker", "workspace", "tip_name"),
+    [
+        ("GITHUB_ACTIONS", "GITHUB_WORKSPACE", "GITHUB_SHA"),
+        ("TF_BUILD", "BUILD_SOURCESDIRECTORY", "BUILD_SOURCEVERSION"),
+    ],
+    ids=["github", "azure"],
+)
+@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
+def test_staging_detached_head_fetches_origin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    git_home: Path,
+    marker: str,
+    workspace: str,
+    tip_name: str,
+    json_output: bool,
+) -> None:
+    """A pull-request checkout is detached. Fetch must not ask for the branch.
+
+    GitHub (#402) and Azure (#415) both crashed in ``porcelain.fetch`` with
+    ``list index out of range`` before merge-base ran.
+    """
+    del git_home
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo, commits=2)
+    _git(repo, "checkout", "-q", "-b", "feature")
+    (repo / "README.md").write_text("feature\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-q", "-m", "feature")
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "push", "-q", "origin", "feature")
+    tip = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "--detach", tip)
+    detached = subprocess.run(
+        ["git", "symbolic-ref", "-q", "HEAD"], cwd=repo, capture_output=True, text=True
+    )
+    assert detached.returncode != 0
+    monkeypatch.chdir(repo)
+    extra: dict[str, str | None] = {marker: "true", workspace: str(repo), tip_name: tip}
+    if marker == "GITHUB_ACTIONS":
+        extra["GITHUB_HEAD_REF"] = "feature"
+        extra["GITHUB_BASE_REF"] = "main"
+    else:
+        extra["SYSTEM_PULLREQUEST_SOURCEBRANCH"] = "refs/heads/feature"
+        extra["SYSTEM_PULLREQUEST_TARGETBRANCHNAME"] = "main"
+    result = runner.invoke(
+        app,
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", "STAGING"],
+        env=_env(repo, **extra),
+    )
+    rendered = result.stdout + result.stderr
+    for leak in _LEAKS:
+        assert leak not in rendered
+    assert "Traceback" not in rendered
+    assert result.exit_code == 0, rendered
+
+
 @pytest.mark.parametrize("plan", ["DEBUG", "MANUAL", "ALWAYS"])
 @pytest.mark.parametrize(
     "platform",
@@ -272,6 +334,51 @@ def test_non_diff_ci_plan_names_the_plan(
         f"Deployment plan {plan} is not a CI diff plan. Use STAGING, PRODUCTION, or FULL.",
         json_output=json_output,
     )
+
+
+def _shallow_clone(tmp_path: Path) -> tuple[Path, str, str]:
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    _init_repo(origin, commits=2)
+    parent = _git(origin, "rev-parse", "HEAD^")
+    head = _git(origin, "rev-parse", "HEAD")
+    clone = tmp_path / "clone"
+    subprocess.run(
+        ["git", "clone", "--depth", "1", "--no-local", "--quiet", str(origin), str(clone)],
+        check=True,
+        capture_output=True,
+    )
+    return clone, head, parent
+
+
+@pytest.mark.parametrize("plan", ["STAGING", "PRODUCTION"])
+def test_shallow_checkout_names_the_missing_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path, plan: str
+) -> None:
+    """#348: a depth-1 clone of two commits crashed with ``b'<parent sha>'``."""
+    del git_home
+    repo, head, parent = _shallow_clone(tmp_path)
+    monkeypatch.chdir(repo)
+    result = runner.invoke(
+        app,
+        ["--json", "deploy", "--dry-run", "--plan", plan],
+        env=_env(
+            repo,
+            GITHUB_ACTIONS="true",
+            GITHUB_WORKSPACE=str(repo),
+            GITHUB_SHA=head,
+        ),
+    )
+    rendered = result.stdout + result.stderr
+    assert result.exit_code == 1, rendered
+    assert f"b'{parent}'" not in rendered
+    assert "Traceback" not in rendered
+    payload = json.loads(result.stdout)
+    if plan == "PRODUCTION":
+        assert payload["message"] == f"Could not find git commit {parent}"
+    else:
+        assert "GITHUB_HEAD_REF" in payload["message"]
+        assert "GITHUB_BASE_REF" in payload["message"]
 
 
 def test_gitlab_merged_result_with_one_parent_keeps_the_tip(

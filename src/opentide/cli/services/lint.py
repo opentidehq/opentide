@@ -186,6 +186,21 @@ def _metadata_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
     return findings
 
 
+def _rewrite_renamed_paths(findings: list[dict[str, object]]) -> None:
+    """Point earlier findings at the path ``--fix`` just renamed the file to."""
+    renamed = {
+        str(item["from"]): str(item["path"])
+        for item in findings
+        if item.get("fixed") is True and item.get("from") and item.get("path")
+    }
+    if not renamed:
+        return
+    for finding in findings:
+        path = finding.get("path")
+        if isinstance(path, str) and path in renamed:
+            finding["path"] = renamed[path]
+
+
 def run_lint(
     root: Path,
     *,
@@ -202,6 +217,7 @@ def run_lint(
         findings.extend(_metadata_findings(records))
     if LintCheck.filenames in selected:
         findings.extend(_filename_findings(target, records, fix=fix))
+        _rewrite_renamed_paths(findings)
     logger.debug(
         "lint_complete",
         path=str(target),
@@ -209,7 +225,12 @@ def run_lint(
         findings=len(findings),
         fix=fix,
     )
-    failed = bool(strict and findings)
+    if findings and strict:
+        status = "failed"
+    elif findings:
+        status = "issues"
+    else:
+        status = "completed"
     return {
         "message": ("Catalogue lint found issues" if findings else "Catalogue lint passed"),
         "path": str(target),
@@ -217,8 +238,8 @@ def run_lint(
         "findings": findings,
         "count": len(findings),
         "fixed": sum(1 for item in findings if item.get("fixed") is True),
-        "status": "failed" if failed else "completed",
-        "_exit_code": 1 if failed else 0,
+        "status": status,
+        "_exit_code": 1 if status == "failed" else 0,
     }
 
 

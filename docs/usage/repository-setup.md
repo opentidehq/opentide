@@ -52,11 +52,11 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 |------------|--------|
 | `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore`; `--platform` also writes enabled platform TOML |
 | `setup platforms` | Enabled `.opentide/configurations/platforms/*.toml` |
-| `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms; sets `OPENTIDE_REPO_ROOT`) |
+| `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms; sets `OPENTIDE_REPO_ROOT`). A share stage is written only with `--sharing` |
 | `setup env` | `.env.example` with `OPENTIDE_REPO_ROOT`; ignores `.env` |
 | `setup hooks` | `.pre-commit-config.yaml` plus validate-on-commit Git hook |
 | `setup mcp` | Editor MCP config pointing at `opentide-mcp` |
-| `setup skills` | Agent skills from the live OpenTideHQ/skills catalogue (`discover`, `show`, install) |
+| `setup skills` | Agent skills: four authoring skills from the package, other slugs as the full OpenTideHQ/skills tree (`discover`, `show`, install) |
 
 ### Expected layout after setup + generate
 

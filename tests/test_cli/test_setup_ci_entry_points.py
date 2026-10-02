@@ -103,9 +103,8 @@ def _branches_named(ci: str, rendered: str) -> set[str]:
     if ci == "github":
         named.update(parsed[True]["push"]["branches"])
     elif ci == "azure":
-        named.update(parsed["trigger"]["branches"]["include"])
         named.update(parsed["pr"]["branches"]["include"])
-    return named
+    return {name for name in named if name != "*"}
 
 
 @pytest.mark.parametrize("entry", ENTRY_POINTS)

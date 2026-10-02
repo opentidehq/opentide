@@ -72,6 +72,44 @@ def fetch_github_bytes(
         return None
 
 
+def list_github_paths(
+    prefix: str,
+    *,
+    source: str = _DEFAULT_SOURCE,
+    ref: str = _DEFAULT_REF,
+) -> list[str] | None:
+    """List blob paths under *prefix* in a public GitHub tree.
+
+    ``None`` means the tree could not be read. An empty list means the prefix
+    has no blobs. A truncated tree is treated as unreadable so a skill is not
+    installed with files missing.
+    """
+    folder = prefix if prefix.endswith("/") else f"{prefix}/"
+    url = f"https://api.github.com/repos/{source}/git/trees/{ref}?recursive=1"
+    request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+    try:
+        payload = urllib.request.urlopen(request, timeout=15).read()
+    except (urllib.error.URLError, OSError):
+        return None
+    try:
+        data = json.loads(payload.decode("utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict) or data.get("truncated") is True:
+        return None
+    tree = data.get("tree")
+    if not isinstance(tree, list):
+        return None
+    paths: list[str] = []
+    for item in tree:
+        if not isinstance(item, dict) or item.get("type") != "blob":
+            continue
+        path = item.get("path")
+        if isinstance(path, str) and path.startswith(folder):
+            paths.append(path)
+    return sorted(paths)
+
+
 def clear_manifest_cache() -> None:
     """Clear the in-process manifest TTL cache (for tests)."""
     _MANIFEST_CACHE.item = None

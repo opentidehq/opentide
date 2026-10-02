@@ -33,6 +33,7 @@ from opentide.cli.services.info import collect_info, render_info
 from opentide.cli.services.lint import render_findings, run_lint
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
+from opentide.cli.share_app import share_app
 from opentide.core.logging import LoggingConfig, init_logging
 from opentide.core.logging import print_banner as print_banner  # noqa: F401
 from opentide.core.root import get_repo_root
@@ -103,6 +104,7 @@ def main_callback(
 
 
 app.add_typer(setup_app, name="setup")
+app.add_typer(share_app, name="share")
 
 generate_app = typer.Typer(help="Framework generation and documentation pipeline")
 app.add_typer(generate_app, name="generate")
@@ -413,6 +415,11 @@ def deploy_cmd(
     dry_run: bool = typer.Option(False, "--dry-run"),
     keep_deprecated: bool = typer.Option(False, "--keep-deprecated"),
     skip_promotion: bool = typer.Option(False, "--skip-promotion"),
+    skip_unconfigured: bool = typer.Option(
+        False,
+        "--skip-unconfigured",
+        help="Exit 0 when every platform in the plan has no \\[\\[tenants]] block",
+    ),
 ) -> None:
     """Deploy detection rules to configured platforms."""
     if ctx.invoked_subcommand is not None:
@@ -426,6 +433,7 @@ def deploy_cmd(
         skip_promotion=skip_promotion,
         keep_deprecated=keep_deprecated,
         wide=wide,
+        skip_unconfigured=skip_unconfigured,
     )
     emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 

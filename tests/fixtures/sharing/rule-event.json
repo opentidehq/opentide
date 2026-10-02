@@ -1,0 +1,91 @@
+{
+  "Event": {
+    "info": "Sentinel KQL Rule",
+    "date": "2026-01-01",
+    "distribution": 1,
+    "sharing_group_id": 0,
+    "threat_level_id": 1,
+    "analysis": 2,
+    "published": false,
+    "Attribute": [],
+    "Tag": [
+      {
+        "name": "tlp:clear"
+      }
+    ],
+    "Object": [
+      {
+        "name": "opentide",
+        "meta-category": "misc",
+        "template_uuid": "892fd46a-f69e-455c-8c4f-843a4b8f4295",
+        "template_version": 5,
+        "distribution": 5,
+        "Attribute": [
+          {
+            "object_relation": "name",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "Sentinel KQL Rule"
+          },
+          {
+            "object_relation": "uuid",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "00000000-0000-4000-8003-000000000001"
+          },
+          {
+            "object_relation": "version",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": true,
+            "value": "1"
+          },
+          {
+            "object_relation": "opentide-type",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": true,
+            "value": "rule"
+          },
+          {
+            "object_relation": "schema",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": true,
+            "value": "rule::1.0"
+          },
+          {
+            "object_relation": "opentide-object",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "name: Sentinel KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  version: 1\n  created: \"2026-01-01\"\n  modified: \"2026-01-02\"\n  tlp: clear\n\ndescription: |\n  Minimal valid detection rule with Sentinel platform configuration.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  sentinel:\n    enabled: true\n    name: Sentinel KQL Rule\n    status: STAGING\n    query: |\n      SecurityEvent\n      | where EventID == 4688\n      | take 1\n    scheduling:\n      frequency: PT1H\n      lookback: PT2H\n    alert:\n      title: Sentinel KQL Rule\n      suppression: false\n    grouping:\n      event: SingleAlert\n      alert:\n        enabled: false\n"
+          },
+          {
+            "object_relation": "opentide-relation",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "00000000-0000-4000-8002-000000000001"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -64,7 +64,25 @@ class CommitInfo:
 
     @classmethod
     def from_commit(cls, commit: Commit, store: Repo) -> CommitInfo:
-        parents = [cls.from_commit(store[parent], store) for parent in commit.parents]
+        parents: list[CommitInfo] = []
+        for parent_id in commit.parents:
+            try:
+                loaded = store[parent_id]
+            except KeyError:
+                # A shallow clone has the parent id and not the parent object.
+                parents.append(
+                    cls(
+                        hexsha=_object_hex(parent_id),
+                        message="",
+                        author=Author(name=""),
+                        parents=[],
+                        _tree=b"",
+                        _store=store,
+                    )
+                )
+                continue
+            if isinstance(loaded, Commit):
+                parents.append(cls.from_commit(loaded, store))
         message = commit.message
         if isinstance(message, bytes):
             message = message.decode("utf-8", errors="replace")
@@ -107,7 +125,11 @@ class _OriginRemote:
         self._repo = repo
 
     def fetch(self) -> None:
-        porcelain.fetch(self._repo._repo, quiet=True)
+        # ``porcelain.fetch`` with no remote asks for the active branch. A
+        # pull-request checkout is detached, and Dulwich then indexes
+        # ``follow(HEAD)[0][1]`` which is only ``[HEAD]`` — ``IndexError:
+        # list index out of range`` (#402, #415). Name origin explicitly.
+        porcelain.fetch(self._repo._repo, remote_location=b"origin", quiet=True)
 
 
 @dataclass(frozen=True)
@@ -162,7 +184,10 @@ class DulwichRepo:
     def commit(self, sha: str | CommitInfo) -> CommitInfo:
         if isinstance(sha, CommitInfo):
             return sha
-        commit = self._repo[sha.encode("ascii")]
+        try:
+            commit = self._repo[sha.encode("ascii")]
+        except KeyError:
+            raise Exception(f"Could not find git commit {sha}") from None
         if not isinstance(commit, Commit):
             raise TypeError(f"Object {sha} is not a commit")
         return CommitInfo.from_commit(commit, self._repo)
@@ -187,8 +212,14 @@ class DulwichRepo:
         kwargs: dict[str, int] = {}
         if max_count is not None:
             kwargs["max_entries"] = max_count
-        for entry in Walker(self._repo, start, **kwargs):
-            yield CommitInfo.from_commit(self._repo[entry.commit.id], self._repo)
+        walker = Walker(self._repo, start, **kwargs)
+        try:
+            for entry in walker:
+                yield CommitInfo.from_commit(self._repo[entry.commit.id], self._repo)
+        except KeyError as exc:
+            missing = exc.args[0] if exc.args else None
+            if not isinstance(missing, bytes):
+                raise
 
     def merge_base(self, *refs: str) -> list[CommitInfo]:
         shas = porcelain.merge_base(self._repo, list(refs))

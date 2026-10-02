@@ -35,6 +35,11 @@ def _load_toml(path: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
+# ``sharing.toml`` merges arrays of tables by block name. ``_deep_merge``
+# replaces lists wholesale, so the sharing loader owns that file.
+_SKIPPED_CONFIG_FILES = frozenset({"sharing.toml"})
+
+
 def _is_skipped_config_dir(name: str) -> bool:
     """Skip hidden and dunder names (``__pycache__``, ``.DS_Store``, …)."""
     return name.startswith(".") or name.startswith("__")
@@ -63,6 +68,8 @@ def _fetch_configs(configuration_path: Path) -> dict[str, dict]:
 
     for entry_path in sorted(configuration_path.iterdir(), key=lambda path: path.name):
         if entry_path.is_file() and entry_path.name.endswith(".toml"):
+            if entry_path.name in _SKIPPED_CONFIG_FILES:
+                continue
             config_index[entry_path.name.removesuffix(".toml")] = _load_toml(entry_path)
             continue
         if not entry_path.is_dir() or _is_skipped_config_dir(entry_path.name):

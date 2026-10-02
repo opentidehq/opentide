@@ -22,13 +22,15 @@ opentide validate --check schema
 
 | Flag | Purpose |
 |------|---------|
-| `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `cve` |
+| `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `cve`, `sharing-config` |
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)) |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`) |
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Validation failures in `--json` mode include the complete report before the process exits.
+
+`sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
 Without `--json`, issues are listed in a **Validation issues** panel, grouped by file, one `[severity] field: message` line each — for example `[error] detection_model: Unknown objective reference '…'`.
 
@@ -175,8 +177,9 @@ Query validation works on **five platforms** only:
 - `sentinel_one` (S1QL)
 - `carbon_black_cloud` (Lucene)
 
-CrowdStrike and HarfangLab return unsupported — never fake validation. The
-result is a normal failure envelope, so `--json` shape does not change between
+CrowdStrike (correlation filter) and HarfangLab (Sigma or YARA) return unsupported — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
+
+The result is a normal failure envelope, so `--json` shape does not change between
 supported and unsupported platforms:
 
 ```bash

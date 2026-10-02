@@ -71,4 +71,10 @@ def test_detection_rule_deploy_and_validate_query_success(metadata: dict[str, An
     result = bound.deploy("sentinel", dry_run=False)
     assert result.dry_run is False
     assert bound.validate_query("sentinel").ok is True
-    registry.Platforms["sentinel"].deployer.deploy.assert_called_once()
+    from opentide.models.deployment_enums import DeploymentStrategy
+
+    deployer = registry.Platforms["sentinel"].deployer.deploy
+    deployer.assert_called_once()
+    assert isinstance(deployer.call_args.args[1], DeploymentStrategy)
+    with pytest.raises(ValueError, match="not_a_platform"):
+        bound.deploy("not_a_platform", dry_run=True)

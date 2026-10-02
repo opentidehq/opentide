@@ -1,0 +1,82 @@
+{
+  "Event": {
+    "info": "Simulated Actor",
+    "date": "2026-01-01",
+    "distribution": 1,
+    "sharing_group_id": 0,
+    "threat_level_id": 1,
+    "analysis": 2,
+    "published": false,
+    "Attribute": [],
+    "Tag": [
+      {
+        "name": "tlp:clear"
+      }
+    ],
+    "Object": [
+      {
+        "name": "opentide",
+        "meta-category": "misc",
+        "template_uuid": "892fd46a-f69e-455c-8c4f-843a4b8f4295",
+        "template_version": 5,
+        "distribution": 5,
+        "Attribute": [
+          {
+            "object_relation": "name",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "Simulated Actor"
+          },
+          {
+            "object_relation": "uuid",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "00000000-0000-4000-8001-000000000001"
+          },
+          {
+            "object_relation": "version",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": true,
+            "value": "1"
+          },
+          {
+            "object_relation": "opentide-type",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": true,
+            "value": "threat"
+          },
+          {
+            "object_relation": "schema",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": true,
+            "value": "threat::1.0"
+          },
+          {
+            "object_relation": "opentide-object",
+            "type": "text",
+            "category": "Other",
+            "to_ids": false,
+            "distribution": 5,
+            "disable_correlation": false,
+            "value": "name: Simulated Actor\ncriticality: High\n\nmetadata:\n  uuid: 00000000-0000-4000-8001-000000000001\n  schema: threat::1.0\n  version: 1\n  created: \"2026-01-01\"\n  modified: \"2026-01-02\"\n  tlp: clear\n\nthreat:\n  description: Simulated threat actor for conformance fixtures\n  severity: Significant incident\n  impact:\n    - Data Breach\n    - Identity Theft\n  leverage:\n    - Elevation of privilege\n    - Repudiation\n  viability: Likely\n  terrain: Endpoint workstations and user devices.\n  surface:\n    - Windows::Desktop\n  att&ck:\n    - T1059\n  actors:\n    - name: att&ck::G0007\n    - name: misp::5b4ee3ea-eee3-4c8e-8323-85ae32658754\n      sighting: \"2024-11-02\"\n      references:\n        - https://attack.mitre.org/groups/G0007\n"
+          }
+        ]
+      }
+    ]
+  }
+}

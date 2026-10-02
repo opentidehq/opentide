@@ -10,7 +10,7 @@
 opentide setup          # interactive repository onboarding
 opentide validate
 opentide generate
-opentide deploy --platform sentinel --dry-run
+{deploy}
 ```
 
 ## Object layout

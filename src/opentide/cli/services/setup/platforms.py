@@ -51,6 +51,8 @@ def run_platforms_setup(options: PlatformsSetupOptions) -> dict[str, object]:
     dest.mkdir(parents=True, exist_ok=True)
     template_root = bundled_configurations_root() / "platforms"
     written: list[str] = []
+    updated: list[str] = []
+    skipped: list[str] = []
     for platform in options.platforms:
         template_name = _PLATFORM_TOML[platform]
         template_path = template_root / template_name
@@ -59,16 +61,37 @@ def run_platforms_setup(options: PlatformsSetupOptions) -> dict[str, object]:
                 "platform_template_missing", platform=platform.value, path=str(template_path)
             )
             continue
-        content = _enable_platform_toml(template_path.read_text(encoding="utf-8"))
         out_path = dest / template_name
+        relative = str(out_path.relative_to(target))
+        if out_path.is_file():
+            current = out_path.read_text(encoding="utf-8")
+            enabled = _enable_platform_toml(current)
+            if enabled == current:
+                skipped.append(relative)
+            else:
+                out_path.write_text(enabled, encoding="utf-8")
+                updated.append(relative)
+            continue
+        content = _enable_platform_toml(template_path.read_text(encoding="utf-8"))
         out_path.write_text(content, encoding="utf-8")
-        written.append(str(out_path.relative_to(target)))
+        written.append(relative)
+    if written:
+        message = "Platform configuration files created"
+    elif updated:
+        message = "Platform enabled flags updated"
+    else:
+        message = "Platform configuration files already present"
     logger.debug(
         "platform_configs_created", path=str(target), platforms=[p.value for p in options.platforms]
     )
-    return {
-        "message": "Platform configuration files created",
+    result: dict[str, object] = {
+        "message": message,
         "path": str(target),
         "platforms": [p.value for p in options.platforms],
         "files": written,
     }
+    if updated:
+        result["updated"] = updated
+    if skipped:
+        result["skipped"] = skipped
+    return result

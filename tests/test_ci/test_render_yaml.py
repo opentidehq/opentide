@@ -79,7 +79,10 @@ def test_render_gitlab_is_parseable_yaml(options: CiRenderOptions) -> None:
     assert "validate" in parsed["stages"]
     assert "generate" in parsed["stages"]
     assert "validate" in parsed
-    assert parsed["validate"]["script"] == ["opentide validate"]
+    assert parsed["validate"]["script"] == [
+        "opentide validate --strict",
+        "opentide lint --strict",
+    ]
     if options.inflight:
         assert "inflight_shards" in parsed
     if "sentinel" in options.platforms:

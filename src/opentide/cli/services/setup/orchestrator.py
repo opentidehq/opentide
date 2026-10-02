@@ -70,6 +70,7 @@ class SetupOptions:
     promotion_target: str | None = None
     python_version: str = "3.12"
     explorer_pages: bool = False
+    sharing: bool = False
     #: ``None`` detects it from the target repository.
     default_branch: str | None = None
     vscode_setup: bool = False
@@ -106,6 +107,7 @@ def _ci_options(options: SetupOptions) -> CiSetupOptions:
         promotion_target=options.promotion_target,
         python_version=options.python_version,
         explorer_pages=options.explorer_pages,
+        sharing=options.sharing,
         default_branch=options.default_branch,
         yes=options.yes,
     )
@@ -244,6 +246,24 @@ def _print_setup_plan(options: SetupOptions) -> None:
     get_stdout_console().print(table)
 
 
+#: Checked when the wizard opens. Sharing stays off until someone selects it.
+_DEFAULT_CI_FEATURES = ("staging", "inflight")
+
+
+def _ci_feature_choices(ci: CiPlatform | None) -> list[tuple[str, str]]:
+    """Wizard checkboxes. Explorer pages are only written for GitHub Actions."""
+    choices = [
+        ("Staging deployments on pull requests", "staging"),
+        ("Inflight preview shards", "inflight"),
+        ("Automatic status promotion", "promotion"),
+    ]
+    if ci is not None and ci is not CiPlatform.none:
+        choices.append(("Sharing on the default branch", "sharing"))
+    if ci is CiPlatform.github:
+        choices.append(("Explorer pages", "explorer"))
+    return choices
+
+
 def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]:
     """Launch the full interactive setup wizard."""
     from rich.panel import Panel
@@ -279,16 +299,12 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
         promoting = effective_promotion(base_path).get("enabled") is True
         features = ask_checkbox(
             "CI workflow features",
-            [
-                ("Staging deployments on pull requests", "staging"),
-                ("Inflight preview shards", "inflight"),
-                ("Automatic status promotion", "promotion"),
-                ("Explorer pages", "explorer"),
-            ],
-            defaults=("staging", "inflight", *(("promotion",) if promoting else ())),
+            _ci_feature_choices(options.ci),
+            defaults=(*_DEFAULT_CI_FEATURES, *(("promotion",) if promoting else ())),
         )
         options.staging = "staging" in features
         options.inflight = "inflight" in features
+        options.sharing = "sharing" in features
         # Leaving the checkbox where the repository already has it writes nothing.
         chosen = "promotion" in features
         options.promotion = None if chosen is promoting else chosen

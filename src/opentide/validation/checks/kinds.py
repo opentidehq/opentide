@@ -12,3 +12,4 @@ class ValidateCheck(str, Enum):
     uuid_format = "uuid-format"
     schema = "schema"
     cve = "cve"
+    sharing_config = "sharing-config"

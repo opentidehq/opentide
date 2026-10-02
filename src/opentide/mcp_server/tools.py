@@ -131,6 +131,37 @@ def tool_run_query(query: str, platform: str, tenant: str = "") -> dict[str, Any
     }
 
 
+def _unknown_platform(uuid: str, platform: str, *, dry_run: bool) -> dict[str, Any]:
+    return {
+        "action": "error",
+        "tenant": None,
+        "rule_id": uuid,
+        "status": "unknown_platform",
+        "dry_run": dry_run,
+        "platform": platform,
+        "message": f"Unknown platform {platform!r}",
+    }
+
+
+def _missing_tenants(uuid: str, platform: str) -> dict[str, Any] | None:
+    from opentide.platforms.enabled import MissingTenantsError, systems_without_tenants
+
+    if platform not in systems_without_tenants([platform]):
+        return None
+    error = MissingTenantsError(platform)
+    return {
+        "action": "error",
+        "tenant": None,
+        "rule_id": uuid,
+        "status": "failed",
+        "dry_run": False,
+        "platform": platform,
+        "message": f"Cannot deploy: {error}",
+        "advice": error.advice,
+        "missing_tenants": {error.system: error.config_path},
+    }
+
+
 def tool_deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict[str, Any]:
     ensure_initialised()
     _ = OpenTide.Rules
@@ -143,7 +174,24 @@ def tool_deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict[str
             "status": "not_found",
             "dry_run": dry_run,
         }
-    result = rule.deploy(platform, dry_run=dry_run)
+    if platform not in OpenTide.Platforms:
+        return _unknown_platform(uuid, platform, dry_run=dry_run)
+    if not dry_run:
+        missing = _missing_tenants(uuid, platform)
+        if missing is not None:
+            return missing
+    try:
+        result = rule.deploy(platform, dry_run=dry_run)
+    except ValueError as exc:
+        return {
+            "action": "error",
+            "tenant": None,
+            "rule_id": uuid,
+            "status": "error",
+            "dry_run": dry_run,
+            "platform": platform,
+            "message": str(exc),
+        }
     return {
         "action": "dry-run" if dry_run else "deploy",
         "tenant": None,
@@ -153,6 +201,21 @@ def tool_deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict[str
         "platform": platform,
         "message": result.message,
     }
+
+
+def _platform_deployment_state(cfg: Any) -> dict[str, Any]:
+    """A configuration block is not a completed deploy until an id or tenant is recorded."""
+    if isinstance(cfg, dict):
+        rule_id = cfg.get("external_id")
+        tenants = cfg.get("tenants") or []
+        if not isinstance(tenants, list):
+            tenants = []
+        deployed = rule_id is not None or bool(tenants)
+    else:
+        rule_id = None
+        tenants = []
+        deployed = False
+    return {"deployed": deployed, "rule_id": rule_id, "tenants": tenants}
 
 
 def tool_deployment_status(uuid: str) -> dict[str, Any]:
@@ -166,9 +229,5 @@ def tool_deployment_status(uuid: str) -> dict[str, Any]:
     configs = body.get("configurations", {}) or body.get("platforms", {})
     if isinstance(configs, dict):
         for name, cfg in configs.items():
-            platforms_state[name] = {
-                "deployed": bool(cfg),
-                "rule_id": cfg.get("external_id") if isinstance(cfg, dict) else None,
-                "tenants": cfg.get("tenants", []) if isinstance(cfg, dict) else [],
-            }
+            platforms_state[name] = _platform_deployment_state(cfg)
     return {"platforms": platforms_state, "uuid": uuid, "found": True}
