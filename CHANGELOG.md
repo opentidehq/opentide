@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-10-02
+
+Patch on 0.8.1. Upgrade for a memoised object index and vocabulary files that keep dotted keys quoted. It does not change accepted input, CLI output, or exit codes, and it does not require regenerating CI.
+
+### Changed
+
+- `OpenTide.Models.FlatIndex` is memoised for the current registry snapshot. Clearing `IndexManager._cache` drops that memo with the snapshot, so a rebuilt index cannot return the previous object map ([#436](https://github.com/OpenTideHQ/opentide/pull/436)).
+- `run_extract` and `run_extract_import` forward keyword arguments to the extraction runner. The CLI passes none, so an existing `run()` still works. Unexpected keywords raise `TypeError` with the module name ([#436](https://github.com/OpenTideHQ/opentide/pull/436)).
+
+### Fixed
+
+- Vocabulary writers quote dotted list keys (`"tide.vocab.stages"`) instead of emitting a bare dotted key that TOML reads as nested tables. An entry that already stores stages under the nested table is still read ([#436](https://github.com/OpenTideHQ/opentide/pull/436)).
+
+### Install
+
+```bash
+pip install opentide==0.8.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.8.1] — 2026-10-01
 
 Patch on 0.8.0. Upgrade and regenerate GitLab CI with `opentide setup ci gitlab` so query validation gates generate and deploy, and the inflight shell matches ShellCheck. This restores the documented gate that GitHub and Azure already enforced. It does not change accepted input, CLI output, or exit codes.
@@ -583,7 +604,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.2
 [0.8.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.1
 [0.8.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.0
 [0.7.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.7.0
