@@ -516,6 +516,61 @@ def test_retract_unpublish_then_delete(tmp_path: Path) -> None:
     assert ledger.get(document.uuid, "misp", "misp-internal") is None
 
 
+def test_push_after_retract_restores_the_same_content(tmp_path: Path) -> None:
+    """Retract leaves the bytes unchanged. The next push must still restore it."""
+    fake = FakeMisp()
+    ledger = ShareLedger.load(tmp_path / "sharing.jsonl")
+    document = _load("objective.yaml")
+    assert document.uuid is not None
+    block = _block(max_tlp="red", publish=True)
+    created = run_misp(
+        [document],
+        [block],
+        mode="push",
+        ledger=ledger,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert created.records[0].action == "created"
+    retracted = run_misp(
+        [document],
+        [block],
+        mode="retract",
+        ledger=ledger,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert retracted.records[0].action == "retracted"
+    assert ledger.get(document.uuid, "misp", "misp-internal")["state"] == "retracted"
+    assert fake.events[0].published is False
+    preview = run_misp(
+        [document],
+        [block],
+        mode="preview",
+        ledger=ledger,
+        clock=lambda: CLOCK,
+    )
+    assert preview.records[0].action == "updated"
+    fake.calls.clear()
+    restored = run_misp(
+        [document],
+        [block],
+        mode="push",
+        ledger=ledger,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert restored.records[0].action == "updated"
+    assert not any(call == "add" for call in fake.calls)
+    assert any(call.startswith("edit:") for call in fake.calls)
+    assert any(call.startswith("publish:") for call in fake.calls)
+    line = ledger.get(document.uuid, "misp", "misp-internal")
+    assert line is not None
+    assert line["state"] == "synced"
+    assert line["published"] is True
+    assert fake.events[0].published is True
+
+
 def test_delete_without_confirmation_and_unset_key_are_preflight(tmp_path: Path) -> None:
     fake = FakeMisp()
     unconfirmed = run_misp(
