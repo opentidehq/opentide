@@ -394,7 +394,10 @@ def _build_metadata(
 
 def _build_entry(entry_data: Mapping[str, Any], *, fallback_name: str) -> VocabularyEntry:
     reserved = {"name", "version", "removed", "description", "icon", "link", "tide.vocab.stages"}
-    stages = normalize_stages(entry_data.get("tide.vocab.stages"))
+    raw_stages = entry_data.get("tide.vocab.stages")
+    if raw_stages is None and isinstance(entry_data.get("tide"), Mapping):
+        raw_stages = entry_data.get("tide", {}).get("vocab", {}).get("stages")
+    stages = normalize_stages(raw_stages)
     extra = {key: value for key, value in entry_data.items() if key not in reserved}
     removed = entry_data.get("removed")
     return VocabularyEntry.model_validate(

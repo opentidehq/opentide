@@ -113,6 +113,49 @@ def test_models_accessor_schema_keys() -> None:
     assert models.signals["s1"]["name"] == "Signal"
     flat = models.FlatIndex
     assert set(flat) == {"r1", "o1", "t1", "s1"}
+    # Memoisation test: second access returns identical cached object
+    assert OpenTide.Models.FlatIndex is flat
+
+
+def test_flat_index_not_stale_after_cache_drop() -> None:
+    """A cache drop, not reload(), must not serve the previous object map."""
+    OpenTide._rules = {}
+    OpenTide._threats = {}
+    OpenTide._objectives = {}
+    OpenTide._initialised = True
+    OpenTide._index = {
+        "objects": {
+            "rule": {"old-rule": {"name": "Old"}},
+            "objective": {},
+            "threat": {},
+            "signal": {},
+        },
+        "files": {},
+        "configurations": {},
+    }
+    index_mod.IndexManager._cache = OpenTide._index
+    assert OpenTide.Models.FlatIndex["old-rule"]["name"] == "Old"
+
+    # Same drop the CLI and corpus helpers use. This is not IndexManager.reload().
+    OpenTide._index = None
+    index_mod.IndexManager._cache = None
+    assert index_mod.IndexManager._flat_cache is None
+    assert index_mod.IndexManager._flat_cache_index is None
+
+    OpenTide._index = {
+        "objects": {
+            "rule": {"new-rule": {"name": "New"}},
+            "objective": {},
+            "threat": {},
+            "signal": {},
+        },
+        "files": {},
+        "configurations": {},
+    }
+    index_mod.IndexManager._cache = OpenTide._index
+    flat = OpenTide.Models.FlatIndex
+    assert set(flat) == {"new-rule"}
+    assert flat["new-rule"]["name"] == "New"
 
 
 def test_configuration_visibility_properties() -> None:
