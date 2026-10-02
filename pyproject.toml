@@ -73,7 +73,7 @@ dev = [
     # Drives the setup wizard on a real PTY; CliRunner never presents a TTY, so
     # the interactive path had no e2e coverage (#260).
     "pexpect>=4.9",
-    "syrupy>=5.5.3,<6",
+    "syrupy>=5.5.3,<7",
     "ruff>=0.16.1",
     "ty>=0.0.65",
     "pre-commit>=4.0",
@@ -93,7 +93,7 @@ dev = [
     # Drives the setup wizard on a real PTY; CliRunner never presents a TTY, so
     # the interactive path had no e2e coverage (#260).
     "pexpect>=4.9",
-    "syrupy>=5.5.3,<6",
+    "syrupy>=5.5.3,<7",
     "ruff>=0.16.1",
     "ty>=0.0.65",
     "pre-commit>=4.0",
