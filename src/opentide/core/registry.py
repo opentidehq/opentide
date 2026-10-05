@@ -529,7 +529,13 @@ class _ModelsAccessor:
 
     @property
     def FlatIndex(self) -> dict[str, Any]:
-        return {**self.threats, **self.objectives, **self.signals, **self.rules}
+        index = self._index
+        if IndexManager._flat_cache_index is index and IndexManager._flat_cache is not None:
+            return IndexManager._flat_cache
+        flat = {**self.threats, **self.objectives, **self.signals, **self.rules}
+        IndexManager._flat_cache = flat
+        IndexManager._flat_cache_index = index
+        return flat
 
     @property
     def Rules(self) -> dict[str, DetectionRule]:

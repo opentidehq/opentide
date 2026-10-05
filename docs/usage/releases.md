@@ -7,6 +7,30 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.8.2 — 2 October 2026
+
+Patch on 0.8.1. **Upgrade for a memoised object index** and vocabulary files that keep dotted keys quoted. It does not change accepted input, CLI output, or exit codes, and it does not require regenerating CI.
+
+**Install**
+
+```bash
+pip install opentide==0.8.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- `OpenTide.Models.FlatIndex` is built once per registry snapshot. Dropping the registry cache drops that map too, so a rebuilt index cannot serve the previous objects ([#436](https://github.com/OpenTideHQ/opentide/pull/436)).
+- Extraction runners can take keyword arguments. The CLI still calls them with none ([#436](https://github.com/OpenTideHQ/opentide/pull/436)).
+- A vocabulary writer quotes a dotted list key such as `"tide.vocab.stages"`. A file that already nests those stages under `tide.vocab` is still read ([#436](https://github.com/OpenTideHQ/opentide/pull/436)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.8.2/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.2)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.8.1 — 1 October 2026
 
 Patch on 0.8.0. **Upgrade and regenerate GitLab CI** with `opentide setup ci gitlab --yes` so query validation gates generate and deploy. GitHub and Azure already waited for those checks. This patch restores that gate on GitLab. It does not change accepted input, CLI output, or exit codes.

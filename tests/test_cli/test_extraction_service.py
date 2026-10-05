@@ -61,3 +61,17 @@ def test_run_engine_module_requires_a_run_entry_point(monkeypatch: pytest.Monkey
     monkeypatch.setitem(sys.modules, "opentide.extraction.no_run", module)
     with pytest.raises(FileNotFoundError, match="has no run\\(\\)"):
         extraction_service._run_engine_module("opentide.extraction.no_run", ExtractImport.defender)
+
+
+def test_run_engine_module_forwards_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+    module = types.ModuleType("opentide.extraction.with_run")
+    module.run = lambda **kwargs: calls.append(kwargs)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "opentide.extraction.with_run", module)
+    extraction_service._run_engine_module(
+        "opentide.extraction.with_run",
+        ExtractImport.sentinel,
+        space="default",
+        include_prebuilt=True,
+    )
+    assert calls == [{"space": "default", "include_prebuilt": True}]
