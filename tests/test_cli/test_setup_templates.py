@@ -84,6 +84,8 @@ def test_render_agent_entrypoint() -> None:
     assert ".opentide/schemas/" in text
     assert "Configurations/" not in text
     assert "Schemas/" not in text
+    assert "opentide deploy --dry-run" in text
+    assert "--platform sentinel" not in text
 
 
 def test_mcp_templates_are_valid_json() -> None:

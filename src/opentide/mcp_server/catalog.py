@@ -99,19 +99,126 @@ def search_catalog(
     return results
 
 
+def _string_ids(value: object) -> list[str]:
+    if isinstance(value, str):
+        text = value.strip()
+        return [text] if text else []
+    if isinstance(value, list):
+        return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+    return []
+
+
+def _catalogue_family(uuid: str) -> str | None:
+    if uuid in OpenTide.Models.threats:
+        return "threats"
+    if uuid in OpenTide.Models.objectives:
+        return "objectives"
+    if uuid in OpenTide.Models.rules:
+        return "rules"
+    return None
+
+
+def _lineage_block(members: list[str], families: dict[str, str]) -> dict[str, list[str]]:
+    return {
+        "threats": sorted(uuid for uuid in members if families[uuid] == "threats"),
+        "objectives": sorted(uuid for uuid in members if families[uuid] == "objectives"),
+        "rules": sorted(uuid for uuid in members if families[uuid] == "rules"),
+    }
+
+
+def _lineage_by_uuid(relations: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
+    """Connected sets reached through objective.threats, detection_model, and threat.chaining.
+
+    ``OpenTide.Models.chaining`` stays the threat-to-threat relation map. This
+    index is only for MCP responses.
+    """
+    parent: dict[str, str] = {}
+    families: dict[str, str] = {}
+
+    def find(node: str) -> str:
+        parent.setdefault(node, node)
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    def unite(left: str, left_family: str, right: str, right_family: str) -> None:
+        families[left] = _catalogue_family(left) or left_family
+        families[right] = _catalogue_family(right) or right_family
+        left_root, right_root = find(left), find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    for uuid, entry in OpenTide.Models.objectives.items():
+        nested = as_body(entry).get("objective")
+        threats = _string_ids(nested.get("threats")) if isinstance(nested, dict) else []
+        for threat in threats:
+            unite(str(uuid), "objectives", threat, "threats")
+
+    for uuid, entry in OpenTide.Models.rules.items():
+        for parent_id in _string_ids(as_body(entry).get("detection_model")):
+            unite(str(uuid), "rules", parent_id, "objectives")
+
+    for uuid, relation in relations.items():
+        if not isinstance(relation, dict):
+            continue
+        for vectors in relation.values():
+            for vector in _string_ids(vectors):
+                unite(str(uuid), "threats", vector, "threats")
+
+    groups: dict[str, list[str]] = {}
+    for node in families:
+        groups.setdefault(find(node), []).append(node)
+
+    lineage: dict[str, dict[str, list[str]]] = {}
+    for members in groups.values():
+        block = _lineage_block(members, families)
+        if not any(block.values()):
+            continue
+        for uuid in members:
+            lineage[uuid] = block
+    return lineage
+
+
+def _mcp_chaining_index(
+    relations: dict[str, Any],
+    lineages: dict[str, dict[str, list[str]]],
+) -> dict[str, Any]:
+    index: dict[str, Any] = {}
+    for uuid, relation in relations.items():
+        if isinstance(relation, dict) and relation:
+            index[str(uuid)] = relation
+    for uuid, lineage in lineages.items():
+        index.setdefault(uuid, lineage)
+    return index
+
+
 def get_chaining_graph(uuid: str) -> dict[str, Any]:
     ensure_initialised()
-    chains = OpenTide.Models.chaining
     node = get_object(uuid)
     if node is None:
         return {"uuid": uuid, "found": False, "graph": {}}
-    return {
-        "uuid": node["uuid"],
+    relations = OpenTide.Models.chaining
+    lineages = _lineage_by_uuid(relations if isinstance(relations, dict) else {})
+    node_uuid = node["uuid"]
+    relation = relations.get(node_uuid, {}) if isinstance(relations, dict) else {}
+    if not isinstance(relation, dict):
+        relation = {}
+    lineage = lineages.get(node_uuid)
+    graph: dict[str, Any] = relation if relation else (lineage or {})
+    payload: dict[str, Any] = {
+        "uuid": node_uuid,
         "found": True,
         "type": node["type"],
-        "graph": chains.get(node["uuid"], {}),
-        "chaining_index": chains,
+        "graph": graph,
+        "chaining_index": _mcp_chaining_index(
+            relations if isinstance(relations, dict) else {},
+            lineages,
+        ),
     }
+    if lineage:
+        payload["lineage"] = lineage
+    return payload
 
 
 def coverage_analysis(*, technique: str = "", tactic: str = "") -> dict[str, Any]:

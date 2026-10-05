@@ -66,7 +66,8 @@ def test_setup_ci_default_branch_option_sets_the_trunk(
         [payload] = [step for step in payload["steps"] if step["step"] == "ci"]
     assert payload["default_branch"] == "trunk"
     parsed = yaml.safe_load((fresh / "azure-pipelines.yml").read_text(encoding="utf-8"))
-    assert parsed["trigger"]["branches"]["include"] == ["trunk"]
+    assert parsed["pool"]["vmImage"] == "ubuntu-latest"
+    assert parsed["trigger"]["branches"]["include"] == ["*"]
     assert parsed["pr"]["branches"]["include"] == ["trunk"]
 
 

@@ -9,10 +9,29 @@ from opentide.registry.builder import build_registry
 from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
 
 
-class IndexManager:
+class _IndexCacheMeta(type):
+    """Drop the FlatIndex memo whenever the registry snapshot is discarded.
+
+    Call sites clear the registry with ``IndexManager._cache = None`` rather than
+    ``reload()``. The memo has to go with that snapshot. Keying it by ``id()``
+    is not enough: the id is not a strong reference, so a rebuilt index can reuse
+    it and serve the previous object map.
+    """
+
+    def __setattr__(cls, name: str, value: object) -> None:
+        super().__setattr__(name, value)
+        if name == "_cache" and value is None:
+            super().__setattr__("_flat_cache", None)
+            super().__setattr__("_flat_cache_index", None)
+
+
+class IndexManager(metaclass=_IndexCacheMeta):
     """Load and refresh the workspace registry in memory."""
 
     _cache: IndexSnapshot | None = None
+    _flat_cache: dict[str, Any] | None = None
+    #: Snapshot the memo belongs to. Identity, not ``id()``, so a recycled id cannot hit.
+    _flat_cache_index: IndexSnapshot | None = None
 
     @classmethod
     def load(cls) -> IndexSnapshot:

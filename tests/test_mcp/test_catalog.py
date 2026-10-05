@@ -131,6 +131,23 @@ def test_get_chaining_graph_found(tide_corpus_repo: Path) -> None:
     assert graph["type"] == "threat"
 
 
+def test_get_chaining_graph_links_threat_objective_and_rule(tide_corpus_repo: Path) -> None:
+    """#407: objective.threats and detection_model are lineage, not an empty graph."""
+    threat = get_chaining_graph(CORPUS_THREAT_UUID)
+    objective = get_chaining_graph(CORPUS_OBJECTIVE_UUID)
+    rule = get_chaining_graph(CORPUS_RULE_UUIDS["sentinel"])
+    for payload in (threat, objective, rule):
+        lineage = payload["lineage"]
+        assert CORPUS_THREAT_UUID in lineage["threats"]
+        assert CORPUS_OBJECTIVE_UUID in lineage["objectives"]
+        assert CORPUS_RULE_UUIDS["sentinel"] in lineage["rules"]
+        assert payload["graph"] == lineage
+        assert payload["graph"]
+        assert payload["uuid"] in payload["chaining_index"]
+    assert threat["lineage"] == objective["lineage"] == rule["lineage"]
+    assert CORPUS_THREAT_UUID not in OpenTide.Models.chaining
+
+
 CHAINED_THREAT_UUID = "0000abcd-0000-4000-8001-00000000000f"
 
 
