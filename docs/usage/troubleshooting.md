@@ -34,7 +34,7 @@ opentide --repo /path/to/detections validate --strict
 The CLI ships as an extra. Install it:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at the venv's `opentide-mcp` — see [MCP configuration](../mcp/configuration.md).
@@ -46,7 +46,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 Upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 ```
 
 `0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
@@ -56,16 +56,16 @@ pip install 'opentide==0.6.3'
 `0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide setup skills discover
 opentide setup skills --generic --yes
 ```
 
-Use `--path` / `-C` for the repository root. Skills are discovered and installed from the live [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) catalogue; GitHub must be reachable.
+Use `--path` / `-C` for the repository root. Catalogue discovery reads the live [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) `manifest.json`. The four authoring skills are then copied from the package; other skills need the GitHub tree.
 
 ### `setup skills` warns that the remote catalogue is unavailable
 
-`opentide setup skills` fetches `manifest.json` from GitHub, then downloads each requested skill. It does not install a packaged snapshot. If you see `Could not fetch skills catalogue from OpenTideHQ/skills@main`, check network access and that [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) is publicly reachable, then retry:
+`opentide setup skills` fetches `manifest.json` from GitHub. The four authoring skills are copied from the package. Other skills are the full tree under `skills/<slug>/`. `AGENTS.md` is rendered from the package template. If you see `Could not fetch skills catalogue from OpenTideHQ/skills@main`, check network access and that [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) is publicly reachable, then retry:
 
 ```bash
 opentide setup skills discover --refresh
@@ -83,7 +83,7 @@ ValueError: validate must be callable
 `0.1.5` passed `validate=None` into Questionary for optional checkboxes. **0.1.6** omits the argument when a selection is optional. Non-interactive `opentide setup --ci github` was already fine. Upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide setup
 ```
 
@@ -92,7 +92,7 @@ opentide setup
 Generate-first `opentide setup vscode` `chdir`s into the target before writing files. **0.1.6** raised `FileNotFoundError` when that path did not exist yet. **0.1.7** creates the directory first (same as other setup commands). Upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide setup vscode
 ```
 
@@ -101,7 +101,7 @@ opentide setup vscode
 `0.1.6` wrote `.vscode/settings.json` even when templates (and therefore snippets) were missing. **0.1.7** generates templates and schemas first, then fails (`status: failed`) if snippets were requested but could not be written. Re-run:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide setup vscode
 ```
 
@@ -112,7 +112,7 @@ Pass `--no-generate` only when `.opentide/templates` already exist. A missing ta
 `0.1.7` logged missing `objects/{threats,objectives,rules}` at **error** during generate-first `setup vscode` or `generate` on a brand-new scaffold. Those folders are empty until you author YAML. **0.1.8** logs absence at **debug** (once per path). A path that exists but is not a directory still logs at error. Upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide generate
 ```
 
@@ -121,7 +121,7 @@ opentide generate
 `0.1.7` accepted `--platform sentinel` on `opentide setup repo` but did not write `.opentide/configurations/platforms/sentinel.toml`. The parent `opentide setup --platform` path already did. **0.1.8** runs platform setup from `setup repo --platform` as well, so `generate` emits `#sentinel:` configuration stubs. Upgrade and re-run:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide setup repo --yes --name SOC --platform sentinel
 opentide generate
 ```
@@ -131,7 +131,7 @@ opentide generate
 `0.1.7` dumped `default: None` as YAML `null`, and commented `#organisation:` without commenting nested `uuid` / `name`, so those keys parsed as children of `metadata.tlp`. **0.1.8** patched the legacy JSON Schema walker. **0.2.0** replaces that walker: templates come from Pydantic `FieldInfo`, optional sections are commented as whole blocks with `#` hugging each key (nested optionals are not commented again), and there are no `null` tokens. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide generate templates
 ```
 
@@ -201,7 +201,7 @@ opentide --json setup --yes --platform sentinel --ci github
 Unquoted `metadata.created` / `modified` values (`created: 2026-09-11`) are valid Tide YAML. PyYAML loads them as `datetime.date`, and `0.1.5` crashed when writing `.opentide/exports/objects.export.json`. **0.1.6** stringifies those timestamps at YAML load. Upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide generate
 ```
 
@@ -212,7 +212,7 @@ Quoted dates (`created: "2026-09-11"`) already worked; you do not need to quote 
 `0.1.6` expanded `$ref` / `$defs` in templates but nested objects still inherited a shallow parent `required` list, so required fields under array items were commented out. **0.1.7** uses each nested object's own required list. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide generate
 ```
 
@@ -221,7 +221,7 @@ opentide generate
 `0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the CoreTide object form (`name`, optional `sighting` / `references`). Upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 ```
 
 Write actors as objects, not bare IDs:
@@ -251,7 +251,7 @@ Run [`generate`](../cli/generate.md) after cloning a repo, after upgrading the O
 `0.1.6` mapped the bundled `opentide.schema.json` router against `objects/**/*.yaml`. The Red Hat YAML extension cannot narrow that `oneOf` router, so it reports **Matches multiple schemas** and disables autocompletion. **0.1.7** maps each object folder recursively (`objects/threats/**/*.yaml` → `threat.1.0.schema.json`, and the same for objectives and rules). Nested files under those folders stay associated.
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide setup vscode
 ```
 
@@ -268,7 +268,7 @@ opentide generate schemas
 `0.2.0` and earlier scraped NVD through `mitrecve`. **0.2.1** looks up `threat.cve` on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu). Generated threat pages link to `https://vulnerability.circl.lu/vuln/{id}` and can enrich published date, severity, and aliases. Upgrade, regenerate docs, and (optionally) run the opt-in check:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide generate docs
 opentide validate --check cve
 ```
@@ -280,7 +280,7 @@ Default `opentide validate` does not call the network. Empty JSON from CIRCL mea
 `0.1.7` applied GitLab `uuid_permalinks` to every flavour and built index links from the UUID while page files used slugify. GitHub pages were therefore `simulated-actor.md` while indexes linked to `{uuid}.md`, and folders used Title Case (`docs/Threats`). **0.1.8** scopes UUID permalinks to GitLab and writes lowercase `docs/{rules,objectives,threats}/<slug>.md`. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide generate docs
 ```
 
@@ -289,7 +289,7 @@ opentide generate docs
 Objective `priority` is an unconstrained alert-style string (High / Critical), not an incident `criticality::1.0` token. **0.1.7** looked it up in that vocab. **0.1.8** renders the author value as-is. Threat `criticality` and impact vocab spelling (including `Impairement`) are unchanged. Upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide generate docs
 ```
 
@@ -300,7 +300,7 @@ opentide generate docs
 `0.1.6` attributed `invalid_ref` to the nested object that contained the UUID. **0.1.7** reports the leaf field (`detection_model`, `objective.threats`, …). Vocabulary names also skip YAML list indices (`[0]`). Upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide validate --strict
 ```
 
@@ -309,7 +309,7 @@ opentide validate --strict
 `--json` used a single repo-wide `valid`/`invalid` for every check name. A vocab failure then looked like a failing `uuid` or `metadata` check. **0.1.7** emits per-check `status`. Upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide --json validate
 ```
 
@@ -334,7 +334,7 @@ threat:
 If your CI patches the installed `opentide` model to accept lists, drop that step once you upgrade:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 opentide validate --strict
 ```
 
@@ -465,6 +465,109 @@ FATAL: Metadata deployment is not implemented for splunk
 ```
 
 With `--json` it prints one document with `"ok": false` and the same message. Remove the step from your pipeline; lookup tables are not deployed by OpenTide yet. See [`deploy metadata`](../cli/deploy.md#deploy-metadata).
+
+### `generate` exits 1 with an empty JSON body
+
+Through **0.6.3** a rule whose `detection_model` UUID is not in the catalogue made `generate` exit `1` with empty stdout and a traceback ending in a bare `Exception`. **0.6.4** still exits `1`. `--json` returns one document whose `message` names the missing UUID and `detection_model` ([#352](https://github.com/OpenTideHQ/opentide/issues/352)). Add the objective (and its threat) to the catalogue, or point `detection_model` at one that exists. `generate inflight` on that tree still exits `0`.
+
+### MCP `deploy_rule` crashes or marks an undeployed rule deployed
+
+Through **0.6.3** an unknown platform crashed with `KeyError`, and a config with no `external_id` and no tenants was reported as deployed. **0.6.4** returns a structured failure for an unknown platform and for a platform with no tenants. `deployment_status` sets `deployed` to false in that case ([#345](https://github.com/OpenTideHQ/opentide/issues/345)).
+
+### `--json setup` says it would write to `..`
+
+Through **0.6.3** a target of `.` was printed without quotes, so the trailing period made the path look like `..`. **0.6.4** quotes the path ([#346](https://github.com/OpenTideHQ/opentide/issues/346)).
+
+### GitHub production deploy is skipped
+
+Through **0.6.3** the generated production job needed `deploy_staging`, and staging runs only on a pull request, so a push to the default branch skipped production. **0.6.4** needs `generate` and still runs only on a push to the default branch ([#348](https://github.com/OpenTideHQ/opentide/issues/348)). Deploy jobs also fetch full history, so a depth-1 checkout no longer exits `1` with a bare parent SHA. Regenerate:
+
+```bash
+pip install 'opentide==0.8.2'
+opentide setup ci github --yes
+```
+
+GitLab and Azure use the same full-history checkout on their deploy jobs. The GitLab `No Source Commit Found` sentence is unchanged.
+
+### Explorer pages on GitLab or Azure write no job
+
+Through **0.6.3** setup accepted Explorer pages for GitLab and Azure, wrote no job, and printed no warning. **0.6.4** offers that choice only for GitHub. On GitLab or Azure the command exits `0` and warns that Explorer pages were not written ([#347](https://github.com/OpenTideHQ/opentide/issues/347)).
+
+### `setup --ci none` reports success and writes nothing
+
+Through **0.6.3** `setup --yes --ci none` exited `0` with `Setup complete` and an empty `steps` list. **0.6.4** scaffolds the repository and writes no pipeline ([#349](https://github.com/OpenTideHQ/opentide/issues/349)). `setup ci` accepts `github`, `gitlab`, or `azure`. CI-only flags without one of those platforms are named in warnings.
+
+### Re-running setup replaces README, gitignore, or platform comments
+
+Through **0.6.3** `setup --platform` replaced `README.md` and `.gitignore`, and `setup platforms` rewrote an existing platform toml and dropped comments. **0.6.4** keeps those files when they already exist ([#350](https://github.com/OpenTideHQ/opentide/issues/350)). The first scaffold still creates them. `setup ci` still replaces the workflow.
+
+### `lint --fix` reports metadata on the old filename
+
+Through **0.6.3** `lint --fix` renamed a threat file and the metadata finding in the same run still named the old path. **0.6.4** rewrites that finding onto the new path. A second `--fix` does not rename the file again ([#353](https://github.com/OpenTideHQ/opentide/issues/353)).
+
+### `validate` exits 0 when an object YAML has no `uuid`
+
+Through **0.7.0** a rule, objective, or threat file with no `uuid` did not fail the schema check, so `opentide validate` exited 0. **0.8.0** fails that file. The schema check reports `missing_uuid`. An empty catalogue still exits 0 ([#397](https://github.com/OpenTideHQ/opentide/issues/397)). Add a uuid and re-run `opentide validate --strict`.
+
+### `deploy --plan STAGING` crashes with `list index out of range`
+
+Through **0.7.0** a GitHub or Azure pull-request checkout (detached `HEAD`) died inside the git fetch with `list index out of range` ([#402](https://github.com/OpenTideHQ/opentide/issues/402), [#415](https://github.com/OpenTideHQ/opentide/issues/415)). **0.8.0** fetches `origin` by name. A missing ref still exits 1 with `Could not find git ref`.
+
+### The inflight prune job fails because `.opentide/inflight` was never committed
+
+Through **0.7.0** the generated prune job ran `git add .opentide/inflight/` and exited 128 when that directory was absent. **0.8.0** creates the directory first ([#403](https://github.com/OpenTideHQ/opentide/issues/403)). Regenerate:
+
+```bash
+pip install 'opentide==0.8.2'
+opentide setup ci github --yes
+```
+
+GitLab and Azure use the same step.
+
+### Generated CI stays green when lint fails, or fails with no tenants
+
+Through **0.7.0** generated validate did not pass `--strict`, and lint was not a gate, so a misnamed file stayed green. Deploy also failed while every `[[tenants]]` block was still commented out ([#408](https://github.com/OpenTideHQ/opentide/issues/408), [#409](https://github.com/OpenTideHQ/opentide/issues/409)). **0.8.0** runs `opentide validate --strict` and `opentide lint --strict`. Deploy previews with `--dry-run`, then runs `opentide deploy --plan <PLAN> --skip-unconfigured`. That flag exits 0 only when every platform in the plan has no tenants. A mix still fails with `Cannot deploy:`. Regenerate the pipeline. GitHub deploy jobs map each bundled credential name from `secrets`.
+
+### Azure Pipelines reports `No pool was specified`
+
+Through **0.7.0** `opentide setup ci azure` wrote no `pool`, so Azure Repos refused the file. `pr:` is ignored on Azure Repos Git, so a pull request never set `Build.Reason` ([#398](https://github.com/OpenTideHQ/opentide/issues/398)). **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy. Regenerate with `opentide setup ci azure --yes`.
+
+### `setup skills` installs a short tree or CoreTide authoring instructions
+
+Through **0.7.0** a skill install copied the skills-repository `AGENTS.md`, dropped files under `references/`, and the four authoring skills still described CoreTide schemas ([#399](https://github.com/OpenTideHQ/opentide/issues/399), [#405](https://github.com/OpenTideHQ/opentide/issues/405)). **0.8.0** downloads every file under `skills/<slug>/`, renders `AGENTS.md` from the package, and installs `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` from the package. Those skills describe `rule::1.0`, `objective::1.0`, and `threat::1.0`. Re-run `opentide setup skills`.
+
+### `setup repo` hardcodes Sentinel or ignores `--name`
+
+Through **0.7.0** the scaffold README always showed a Sentinel dry-run, empty directories were not kept by git, and `--name`, `--org`, and `--description` left an existing README unchanged with no warning ([#400](https://github.com/OpenTideHQ/opentide/issues/400), [#404](https://github.com/OpenTideHQ/opentide/issues/404)). **0.8.0** writes `.gitkeep` in empty scaffold directories, lists one dry-run per enabled platform, and warns when those flags are ignored because `README.md` already exists.
+
+### `generate docs` links to section READMEs that were not written
+
+Through **0.7.0** an empty `rules/`, `objectives/`, or `threats/` folder produced no `README.md`, so the root index linked to a missing page ([#401](https://github.com/OpenTideHQ/opentide/issues/401)). **0.8.0** writes those indexes, including a zero count.
+
+### MCP `get_chaining` returns an empty graph for a linked threat
+
+Through **0.7.0** `get_chaining` returned an empty graph unless the threat itself had `threat.chaining`, so a threat listed on an objective and used by a rule looked unconnected ([#407](https://github.com/OpenTideHQ/opentide/issues/407)). **0.8.0** returns that lineage under `lineage` and, when the node has no relation map, under `graph`. When `threat.chaining` is set, `graph` stays the relation map. `OpenTide.Models.chaining` is unchanged.
+
+### `lint` prints `OK` while findings are listed
+
+Through **0.7.0** human `lint` printed `OK` when findings existed, and the exit code stayed 0. **0.8.0** prints `ISSUES` in that case. The exit code stays 0 unless you pass `--strict`. JSON keeps `"ok": true`.
+
+### Installation pages name 0.6.1 as the latest release
+
+Through **0.7.0** the docs home and installation page said the latest release was 0.6.1 while the install block pinned 0.7.0 ([#406](https://github.com/OpenTideHQ/opentide/issues/406)). **0.8.0** names 0.8.0 in both places. **0.8.1** names 0.8.1. **0.8.2** names 0.8.2. Pin `opentide==0.8.2`.
+
+### GitLab deploy runs after `validate query` fails
+
+Through **0.8.0** a generated GitLab pipeline started `generate` as soon as the object `validate` job finished. Query checks are separate jobs in the same stage, and GitLab starts a job when its `needs` finish, so a failed `opentide validate query` did not stop deploy ([#429](https://github.com/OpenTideHQ/opentide/issues/429)). **0.8.1** lists every query-validation job in `generate`'s `needs`. GitHub and Azure already gated generate this way. Regenerate:
+
+```bash
+pip install 'opentide==0.8.2'
+opentide setup ci gitlab --yes
+```
+
+### GitLab CI rejects an empty document job, or ShellCheck fails the inflight script
+
+Through **0.8.0** a document job with no commands was written with an empty `script`, which GitLab rejects, and the inflight job fetched `origin $CI_DEFAULT_BRANCH` unquoted ([#430](https://github.com/OpenTideHQ/opentide/issues/430)). **0.8.1** omits that job and the `document` stage when there is nothing to run, quotes the branch, and exits if `cd` into the worktree fails. Regenerate with `opentide setup ci gitlab --yes`.
 
 ## Still stuck?
 

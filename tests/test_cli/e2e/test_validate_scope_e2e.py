@@ -156,6 +156,30 @@ def test_validate_file_scopes_out_other_objects(
     assert_issues_point_at_their_objects(report)
 
 
+def test_object_yaml_without_uuid_fails_validation(invoke_cli, tide_corpus_repo: Path) -> None:
+    """A mapping with no uuid used to be logged and dropped, so validate exited 0.
+
+    The file never entered the registry, ``objects_checked`` ignored it, and an
+    otherwise valid catalogue looked clean (issue #397).
+    """
+    missing = tide_corpus_repo / "Objects" / "Detection Rules" / "no-uuid.yaml"
+    missing.write_text("name: orphan\n", encoding="utf-8")
+    result = invoke_cli("validate")
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["status"] == "failed"
+    assert payload["message"] == "Validation failed"
+    assert payload["checks"]["schema"]["status"] == "failed"
+    assert payload["checks"]["uuid-format"]["status"] == "passed"
+    codes = _issue_codes(payload)
+    assert "missing_uuid" in codes
+    named = [issue for issue in payload["report"]["issues"] if issue["code"] == "missing_uuid"]
+    assert len(named) == 1
+    assert str(named[0]["file_path"]).endswith("no-uuid.yaml")
+    assert "no-uuid.yaml" in named[0]["message"]
+    assert_issues_point_at_their_objects(payload["report"])
+
+
 def test_unparseable_object_yaml_is_a_validation_issue(invoke_cli, tide_corpus_repo: Path) -> None:
     broken = tide_corpus_repo / "Objects" / "Detection Rules" / "broken.yaml"
     broken.write_text("name: [\n", encoding="utf-8")

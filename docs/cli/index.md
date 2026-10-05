@@ -9,7 +9,7 @@ icon: Terminal
 The `opentide` command is a [Typer](https://typer.tiangolo.com/) application included in the core package:
 
 ```bash
-pip install 'opentide==0.6.3'
+pip install 'opentide==0.8.2'
 ```
 
 Run `opentide --help` for the live command tree.
@@ -24,6 +24,7 @@ Run `opentide --help` for the live command tree.
 | [`validate`](./validate.md) | Object and query validation |
 | [`lint`](./lint.md) | Catalogue hygiene (filename slugs, recommended metadata) |
 | [`deploy`](./deploy.md) | Platform rule deployment |
+| [`share`](./share.md) | Publish objects to a MISP destination |
 | [`info`](./info.md) | Repository and platform statistics |
 
 <Callout type="info">
@@ -77,4 +78,4 @@ opentide --show-completion
 
 ## Source
 
-Command definitions: `src/opentide/cli/__init__.py`, `src/opentide/cli/setup_app.py`.
+Command definitions: `src/opentide/cli/__init__.py`, `src/opentide/cli/setup_app.py`, `src/opentide/cli/share_app.py`.

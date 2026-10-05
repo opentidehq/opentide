@@ -13,7 +13,7 @@ This repository uses [OpenTide](https://pypi.org/project/opentide/) for detectio
 ```bash
 opentide validate
 opentide generate
-opentide deploy --platform sentinel --dry-run
+{deploy}
 ```
 
 ### Layout

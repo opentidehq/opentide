@@ -128,10 +128,10 @@ def malapi_module(tmp_path_factory):
 
     requests_mod = types.ModuleType("requests")
     requests_mod.get = lambda url, timeout=30: responses[url]
-    sys.modules["requests"] = requests_mod
-
     bs4_mod = types.ModuleType("bs4")
     bs4_mod.BeautifulSoup = _FakeSoup
+    saved_modules = {name: sys.modules.get(name) for name in ("requests", "bs4")}
+    sys.modules["requests"] = requests_mod
     sys.modules["bs4"] = bs4_mod
 
     mock_opentide = MagicMock()
@@ -139,11 +139,20 @@ def malapi_module(tmp_path_factory):
     mock_configs.Global.Paths.Core.vocabularies = str(tmp_path)
     mock_opentide.Configurations = mock_configs
 
-    with patch.dict("sys.modules", {"opentide.core.registry": MagicMock(OpenTide=mock_opentide)}):
-        import opentide.extraction.malapi as malapi
+    try:
+        with patch.dict(
+            "sys.modules", {"opentide.core.registry": MagicMock(OpenTide=mock_opentide)}
+        ):
+            import opentide.extraction.malapi as malapi
 
-        malapi.VOCAB_FILE_PATH = export_path
-        yield malapi
+            malapi.VOCAB_FILE_PATH = export_path
+            yield malapi
+    finally:
+        for name, module in saved_modules.items():
+            if module is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = module
 
 
 def test_fetch_win_api_details_parses_fields(malapi_module) -> None:

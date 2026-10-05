@@ -151,7 +151,8 @@ def test_is_valid_branch_name_rejects(name: str) -> None:
 def _triggers(ci: CiPlatform, parsed: dict[Any, Any]) -> list[str]:
     if ci is CiPlatform.github:
         return parsed[True]["push"]["branches"]
-    return parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+    names = parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+    return [name for name in names if name != "*"]
 
 
 _RENDERED = [
@@ -291,12 +292,16 @@ def test_run_ci_setup_gitlab_keeps_ci_default_branch(tmp_path: Path, git_home: P
 
 def test_explorer_pages_warn_instead_of_writing_a_job(tmp_path: Path) -> None:
     """#347: GitLab and Azure accepted Explorer pages and wrote no job."""
-    from opentide.cli.services.setup.orchestrator import _ci_feature_choices
+    from opentide.cli.services.setup.orchestrator import _DEFAULT_CI_FEATURES, _ci_feature_choices
 
     github_keys = [key for _, key in _ci_feature_choices(CiPlatform.github)]
     assert "explorer" in github_keys
     for ci in (CiPlatform.gitlab, CiPlatform.azure, CiPlatform.none):
         assert "explorer" not in [key for _, key in _ci_feature_choices(ci)]
+    assert "sharing" not in _DEFAULT_CI_FEATURES
+    for ci in (CiPlatform.github, CiPlatform.gitlab, CiPlatform.azure):
+        assert "sharing" in [key for _, key in _ci_feature_choices(ci)]
+    assert "sharing" not in [key for _, key in _ci_feature_choices(CiPlatform.none)]
 
     for ci, filename in (
         (CiPlatform.gitlab, ".gitlab-ci.yml"),

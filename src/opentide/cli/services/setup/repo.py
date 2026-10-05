@@ -36,7 +36,6 @@ SCAFFOLD_DIRS = (
     "docs/rules",
     "docs/threats",
     "docs/objectives",
-    ".github/workflows",
 )
 
 
@@ -50,6 +49,14 @@ class RepoSetupOptions:
     description: str | None = None
     platforms: list[DetectionPlatform] = field(default_factory=list)
     yes: bool = False
+
+
+def _deploy_commands(options: RepoSetupOptions) -> str:
+    if not options.platforms:
+        return "opentide deploy --dry-run"
+    return "\n".join(
+        f"opentide deploy --platform {platform.value} --dry-run" for platform in options.platforms
+    )
 
 
 def _write_readme(target: Path, options: RepoSetupOptions) -> None:
@@ -66,10 +73,21 @@ def _write_readme(target: Path, options: RepoSetupOptions) -> None:
     content = (
         f"# {name}\n{metadata}\n"
         "## Quick start\n\n```bash\nopentide setup\nopentide validate\n"
-        "opentide generate\nopentide deploy --platform sentinel --dry-run\n```\n\n"
+        f"opentide generate\n{_deploy_commands(options)}\n```\n\n"
         f"## Platforms\n\n{platforms}\n"
     )
     (target / "README.md").write_text(content, encoding="utf-8")
+
+
+def _ignored_readme_flags(options: RepoSetupOptions) -> list[str]:
+    ignored: list[str] = []
+    if options.name:
+        ignored.append("--name")
+    if options.org:
+        ignored.append("--org")
+    if options.description:
+        ignored.append("--description")
+    return ignored
 
 
 def _write_gitignore(target: Path) -> None:
@@ -84,6 +102,7 @@ def _write_gitignore(target: Path) -> None:
                 "*.egg-info/",
                 ".pytest_cache/",
                 f"{OPENTIDE_DIR}/exports/*.export.json",
+                f"{OPENTIDE_DIR}/states/",
             ]
         )
         + "\n",
@@ -96,11 +115,22 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
     target = options.path.resolve()
     target.mkdir(parents=True, exist_ok=True)
     for rel in SCAFFOLD_DIRS:
-        (target / rel).mkdir(parents=True, exist_ok=True)
+        directory = target / rel
+        directory.mkdir(parents=True, exist_ok=True)
+        if not any(directory.iterdir()):
+            (directory / ".gitkeep").write_text("", encoding="utf-8")
     skipped: list[str] = []
+    warnings: list[str] = []
     readme = target / "README.md"
     if readme.is_file():
         skipped.append("README.md")
+        ignored = _ignored_readme_flags(options)
+        if ignored:
+            warnings.append(
+                "Left README.md unchanged; ignored "
+                + ", ".join(ignored)
+                + " because the file already exists"
+            )
     else:
         _write_readme(target, options)
     gitignore = target / ".gitignore"
@@ -116,6 +146,8 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
     }
     if skipped:
         result["skipped"] = skipped
+    if warnings:
+        result["warnings"] = warnings
     if options.platforms:
         plat = run_platforms_setup(
             PlatformsSetupOptions(path=target, platforms=options.platforms, yes=options.yes)

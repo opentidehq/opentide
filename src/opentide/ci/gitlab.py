@@ -7,11 +7,21 @@ from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     document_steps,
     header_comment,
+    object_validate_commands,
     pip_install,
     production_deploy_steps,
     staging_deploy_steps,
 )
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
+
+
+def _need_lines(needs: str | list[str] | None) -> list[str]:
+    if needs is None:
+        return []
+    names = [needs] if isinstance(needs, str) else list(needs)
+    if not names:
+        return []
+    return ["  needs:", *(f"    - {name}" for name in names)]
 
 
 def _gitlab_job(
@@ -20,7 +30,7 @@ def _gitlab_job(
     options: CiRenderOptions,
     stage: str,
     script: list[str],
-    needs: str | None = None,
+    needs: str | list[str] | None = None,
     rules: str | None = None,
     extra_lines: list[str] | None = None,
 ) -> str:
@@ -38,23 +48,32 @@ def _gitlab_job(
     lines.append(f"    - {pip_install(options)}")
     lines.append("  script:")
     lines.extend(f"    - {cmd}" for cmd in script)
-    if needs:
-        lines.append("  needs:")
-        lines.append(f"    - {needs}")
+    lines.extend(_need_lines(needs))
     return "\n".join(lines)
 
 
 def render_gitlab(options: CiRenderOptions) -> str:
-    stages = ["validate", "generate", "deploy", "document"]
+    # An empty ``script:`` is null YAML. GitLab rejects the pipeline (GL003, #430).
+    doc_commands = document_steps(options)
+    stages = ["validate", "generate", "deploy"]
+    if doc_commands:
+        stages.append("document")
+    if options.sharing:
+        stages.insert(2, "share")
 
+    # Query jobs share the validate stage. ``needs: validate`` alone lets
+    # generate, then deploy, start while a query job is still running or after
+    # it has failed (#429).
+    query_job_names: list[str] = []
     query_jobs: list[str] = []
     for platform in options.platforms:
         if platform not in QUERY_VALIDATION_PLATFORMS:
             continue
-        job_name = platform.replace("_", "-")
+        job_name = f"validate_query_{platform.replace('_', '-')}"
+        query_job_names.append(job_name)
         query_jobs.append(
             _gitlab_job(
-                f"validate_query_{job_name}",
+                job_name,
                 options=options,
                 stage="validate",
                 script=[f"opentide validate query --platform {platform}"],
@@ -102,14 +121,16 @@ def render_gitlab(options: CiRenderOptions) -> str:
             )
         )
 
-    document_job = _gitlab_job(
-        "document",
-        options=options,
-        stage="document",
-        script=document_steps(options),
-        needs="generate",
-        rules="$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH",
-    )
+    document_job = ""
+    if doc_commands:
+        document_job = _gitlab_job(
+            "document",
+            options=options,
+            stage="document",
+            script=doc_commands,
+            needs="generate",
+            rules="$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH",
+        )
 
     stage_lines = "\n".join(f"  - {stage}" for stage in stages)
     core = (
@@ -126,7 +147,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
             "validate",
             options=options,
             stage="validate",
-            script=["opentide validate"],
+            script=object_validate_commands(),
         )
         + "\n\n"
         + _gitlab_job(
@@ -134,12 +155,28 @@ def render_gitlab(options: CiRenderOptions) -> str:
             options=options,
             stage="generate",
             script=["opentide generate"],
-            needs="validate",
+            needs=["validate", *query_job_names],
         )
     )
 
     parts = [header_comment(options), core]
     parts.extend(query_jobs)
+    if options.sharing:
+        parts.append(
+            _gitlab_job(
+                "share",
+                options=options,
+                stage="share",
+                script=["opentide share push --changed"],
+                needs="generate",
+                rules=(
+                    "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "
+                    '$CI_PIPELINE_SOURCE != "merge_request_event"'
+                ),
+                extra_lines=["  variables:", '    GIT_DEPTH: "0"'],
+            )
+        )
     parts.extend(deploy_jobs)
-    parts.append(document_job)
+    if document_job:
+        parts.append(document_job)
     return "\n".join(parts) + "\n"

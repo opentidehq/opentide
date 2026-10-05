@@ -279,6 +279,30 @@ def _commit(repo: Path, message: str, files: dict[str, str | None]) -> None:
     _git(repo, "commit", "-q", "-m", message)
 
 
+_PRUNE = "opentide generate inflight prune"
+
+
+def _prune_job_script(ci: str, parsed: dict[str, Any]) -> str:
+    """The shell the default-branch prune job runs, minus install steps."""
+    if ci == "github":
+        steps = parsed["jobs"]["inflight_prune"]["steps"]
+        runs = [str(step["run"]) for step in steps if "run" in step]
+        script = "\n".join(run for run in runs if "pip install" not in run)
+    elif ci == "gitlab":
+        script = "\n".join(_script_lines("inflight_prune", parsed["inflight_prune"]["script"]))
+    else:
+        steps = _azure_jobs(parsed)["inflight_prune"]["steps"]
+        script = next(
+            str(step["script"]) for step in steps if "git add" in str(step.get("script", ""))
+        )
+    kept = [
+        line for line in script.splitlines() if "pip install" not in line and "apt-get" not in line
+    ]
+    script = "\n".join(kept)
+    assert _PRUNE in script, script
+    return script.replace(_PRUNE, "true")
+
+
 def _pr_job_script(ci: str, parsed: dict[str, Any], generate: str | None = None) -> str:
     """The shell the PR-triggered shard job runs, minus the package install.
 
@@ -397,6 +421,33 @@ def _seed_pr(ci_git: dict[str, Any]) -> str:
     _git(dev, "push", "-q", "origin", "feature")
     _git(dev, "checkout", "-q", "main")
     return _git(origin, "rev-parse", "main")
+
+
+@pytest.mark.parametrize("ci", sorted(_PIPELINES))
+def test_prune_job_succeeds_when_inflight_was_never_committed(
+    invoke_cli, tmp_path: Path, ci_git: dict[str, Any], ci: str
+) -> None:
+    """``git add .opentide/inflight/`` exits 128 when that path was never committed.
+
+    The prune job runs on the default branch. A repository that has not
+    published shards yet must exit 0 instead of failing the pipeline (#403).
+    """
+    _, parsed = _render(invoke_cli, tmp_path, ci, _PIPELINES[ci])
+    script = _prune_job_script(ci, parsed)
+    dev, origin = ci_git["dev"], ci_git["origin"]
+    _commit(dev, "seed", {"README.md": "detections\n"})
+    _git(dev, "push", "-q", "origin", "main")
+    main_before = _git(origin, "rev-parse", "main")
+    work = ci_git["tmp"] / f"prune-{ci}"
+    _git(ci_git["tmp"], "clone", "-q", str(origin), str(work))
+
+    done = _run_job(script, work)
+
+    assert done.returncode == 0, f"{ci} prune failed\n{done.stdout}\n{done.stderr}"
+    assert "pathspec" not in done.stderr
+    assert "No inflight prune changes" in done.stdout
+    assert _git(origin, "rev-parse", "main") == main_before
+    assert ".opentide/inflight" not in _main_tree(origin)
 
 
 @pytest.mark.parametrize("ci", sorted(_PIPELINES))
@@ -586,7 +637,10 @@ def test_pipeline_targets_the_detected_default_branch(
     if ci == "github":
         triggers = parsed[True]["push"]["branches"]
     else:
-        triggers = parsed["trigger"]["branches"]["include"] + parsed["pr"]["branches"]["include"]
+        assert parsed["pool"]["vmImage"] == "ubuntu-latest"
+        assert parsed["trigger"]["branches"]["include"] == ["*"]
+        assert "build validation policy" in rendered
+        triggers = parsed["pr"]["branches"]["include"]
     assert set(triggers) == {"development"}
     assert "refs/heads/development" in rendered and "refs/heads/main" not in rendered
 

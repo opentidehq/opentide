@@ -208,6 +208,7 @@ def _ignored_ci_flag_warnings(
     ci: CiPlatform | None,
     staging: bool,
     inflight: bool,
+    sharing: bool,
     explorer_pages: bool,
     default_branch: str | None,
     python_version: str,
@@ -222,6 +223,8 @@ def _ignored_ci_flag_warnings(
         ignored.append("--no-staging")
     if inflight is False:
         ignored.append("--no-inflight")
+    if sharing:
+        ignored.append("--sharing")
     if explorer_pages:
         ignored.append("--explorer-pages")
     if python_version != "3.12":
@@ -302,6 +305,11 @@ def setup_cmd(
         "--inflight/--no-inflight",
         help="Update .opentide/inflight/ preview shards on pull requests",
     ),
+    sharing: bool = typer.Option(
+        False,
+        "--sharing/--no-sharing",
+        help="Share changed objects on the default branch (off unless selected)",
+    ),
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
@@ -348,6 +356,7 @@ def setup_cmd(
             ci=ci,
             staging=staging,
             inflight=inflight,
+            sharing=sharing,
             promotion=promotion,
             promotion_target=promotion_target,
             python_version=python_version,
@@ -368,6 +377,7 @@ def setup_cmd(
                 ci=ci,
                 staging=staging,
                 inflight=inflight,
+                sharing=sharing,
                 explorer_pages=explorer_pages,
                 default_branch=default_branch,
                 python_version=python_version,
@@ -486,6 +496,11 @@ def setup_ci_cmd(
         "--inflight/--no-inflight",
         help="Update .opentide/inflight/ preview shards on pull requests",
     ),
+    sharing: bool = typer.Option(
+        False,
+        "--sharing/--no-sharing",
+        help="Share changed objects on the default branch (off unless selected)",
+    ),
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
@@ -518,6 +533,7 @@ def setup_ci_cmd(
         ci=provider,
         staging=staging,
         inflight=inflight,
+        sharing=sharing,
         promotion=promotion,
         promotion_target=promotion_target,
         python_version=python_version,
