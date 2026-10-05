@@ -7,6 +7,33 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.9.0 — 5 October 2026
+
+Minor on 0.8.2. **Upgrade and regenerate schemas** with `opentide generate` so `rule::1.1` can record `metadata.reviewed` and technique and logsource checks use `att&ck::1.1` and `datasources::1.1`. `opentide rules unreviewed` lists rules with no review, or a review older than the window. It does not require regenerating CI.
+
+**Install**
+
+```bash
+pip install opentide==0.9.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- `rule::1.1` accepts optional `metadata.reviewed` (ISO 8601 date or datetime). `rule::1.0`, threats, and objectives still reject the field. Nothing in validate, deploy, share, or template generation writes the date ([#437](https://github.com/OpenTideHQ/opentide/issues/437), [#438](https://github.com/OpenTideHQ/opentide/pull/438)).
+- `opentide rules unreviewed --older-than 90d` lists `rule::1.0` as `schema`, a missing review as `absent`, and a review older than the window as `stale`. Exit code is 0 when the window parses ([#437](https://github.com/OpenTideHQ/opentide/issues/437)).
+- Techniques validate against `att&ck::1.1`. Objective logsources validate against `datasources::1.1`. The bundled catalogues match ATT&CK 19.2 ([#392](https://github.com/OpenTideHQ/opentide/issues/392), [#445](https://github.com/OpenTideHQ/opentide/pull/445)).
+- CrowdStrike and Defender auth logs no longer include the bearer token or a client-secret prefix ([#441](https://github.com/OpenTideHQ/opentide/pull/441)).
+- `share push` publishes a retracted object again ([#385](https://github.com/OpenTideHQ/opentide/pull/385)).
+- Deploy on a deep git history records the immediate parent instead of raising `RecursionError` ([#369](https://github.com/OpenTideHQ/opentide/pull/369)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.9.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.9.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.8.2 — 2 October 2026
 
 Patch on 0.8.1. **Upgrade for a memoised object index** and vocabulary files that keep dotted keys quoted. It does not change accepted input, CLI output, or exit codes, and it does not require regenerating CI.

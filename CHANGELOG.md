@@ -6,9 +6,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-05
+
+Minor on 0.8.2. Upgrade and regenerate schemas with `opentide generate` so `rule::1.1` can record `metadata.reviewed` and technique and logsource checks use `att&ck::1.1` and `datasources::1.1`. `opentide rules unreviewed` lists rules with no review, or a review older than the window. It does not require regenerating CI.
+
 ### Added
 
-- `rule::1.1` accepts optional `metadata.reviewed` (ISO 8601 date or datetime). `rule::1.0` stays normative and rejects the field. `opentide rules unreviewed --older-than 90d` lists rules with no review, or a review older than the window ([#437](https://github.com/OpenTideHQ/opentide/issues/437), [specifications#29](https://github.com/OpenTideHQ/specifications/pull/29)).
+- `rule::1.1` accepts optional `metadata.reviewed` (ISO 8601 date or datetime). `rule::1.0`, threats, and objectives still reject the field. Validate, deploy, share, and template generation do not write it. `opentide rules unreviewed --older-than 90d` (also `12h`, `30m`, or a bare positive day count) lists `rule::1.0` as `schema`, a `rule::1.1` with no review as `absent`, and a review strictly earlier than now minus the window as `stale`. A review equal to the window boundary is fresh. Exit code is 0 when the window parses, including when rules are listed ([#437](https://github.com/OpenTideHQ/opentide/issues/437), [#438](https://github.com/OpenTideHQ/opentide/pull/438), [specifications#29](https://github.com/OpenTideHQ/specifications/pull/29)).
+
+### Changed
+
+- Technique pins are `att&ck::1.1` on threats, objectives, `rule::1.0`, and `rule::1.1`. Objective logsources pin `datasources::1.1`. Bundled ATT&CK, groups, datasources, and mitigations match upstream 19.2 ([#392](https://github.com/OpenTideHQ/opentide/issues/392), [#445](https://github.com/OpenTideHQ/opentide/pull/445)).
+- Production dependencies: `orjson` 3.12.0 ([#443](https://github.com/OpenTideHQ/opentide/pull/443)) and `azure-identity` 1.26.0 ([#444](https://github.com/OpenTideHQ/opentide/pull/444)). The `mcp` extra stays below 2 and is 1.30.0 ([#442](https://github.com/OpenTideHQ/opentide/pull/442)). Transitive `oauthlib` 4.0.0, `urllib3` 2.8.0, and `virtualenv` 21.14.5 ([#435](https://github.com/OpenTideHQ/opentide/pull/435)).
+
+### Fixed
+
+- CrowdStrike auth no longer logs the token response. Defender no longer logs the bearer token or a client-secret prefix. `--json` and the MCP server emit those logs to stderr, so a CI reader could reuse the credential ([#441](https://github.com/OpenTideHQ/opentide/pull/441)).
+- `share push` publishes a retracted object again. A matching content hash skips the push only when the ledger line is `synced`. Preview no longer reports an update that push then skips ([#385](https://github.com/OpenTideHQ/opentide/pull/385)).
+- Deploy commit loading records the immediate parent. Walking every ancestor raised `RecursionError` on a history deeper than the Python recursion limit and aborted the diff ([#369](https://github.com/OpenTideHQ/opentide/pull/369)).
+
+### Install
+
+```bash
+pip install opentide==0.9.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.8.2] — 2026-10-02
 
@@ -608,7 +631,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.9.0
 [0.8.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.2
 [0.8.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.1
 [0.8.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.0
