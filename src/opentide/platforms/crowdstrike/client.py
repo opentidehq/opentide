@@ -99,11 +99,27 @@ class CrowdstrikeService:
         data = {'client_id': client_id, 'client_secret': client_secret}
         response = requests.post(data=data, url=self.OAUTH_TOKEN_ENDPOINT, verify=self.tenant_config.setup.ssl)
         if response.status_code == 201:
-            logger.info('event', detail=f'Successfully authenticated against {self.tenant_config.name}', context=str(response.json()))
-            return response.json()['access_token']
-        else:
-            logger.critical('fatal_error', detail=f'Cannot authenticate against {self.tenant_config.name} - Error Code {response.status_code}', context=str(response.json()), advice=f'client_id: {client_id}, client_secret: {client_secret[:10]}...')
-            raise Errors.TenantConnectionError('Cannot authenticate with the tenant configuration')
+            # The token response is a bearer credential. `--json` raises the log
+            # level to INFO, and CI captures stderr, so the body must not be logged.
+            token = response.json().get('access_token')
+            if not isinstance(token, str) or not token:
+                logger.critical(
+                    'fatal_error',
+                    detail=f'CrowdStrike authentication for {self.tenant_config.name} returned no access token',
+                    status_code=response.status_code,
+                )
+                raise Errors.TenantConnectionError('Cannot authenticate with the tenant configuration')
+            logger.info(
+                'event',
+                detail=f'Successfully authenticated against {self.tenant_config.name}',
+            )
+            return token
+        logger.critical(
+            'fatal_error',
+            detail=f'Cannot authenticate against {self.tenant_config.name}',
+            status_code=response.status_code,
+        )
+        raise Errors.TenantConnectionError('Cannot authenticate with the tenant configuration')
 
     def create_detection_rule(self, rule: DetectionRule) -> str:
         rule_body = remove_none_values(asdict(rule))

@@ -107,11 +107,27 @@ class DefenderForEndpointService:
         data = {'client_id': client_id, 'client_secret': client_secret, 'grant_type': 'client_credentials', 'scope': 'https://graph.microsoft.com/.default'}
         response = requests.post(data=data, url=self.OAUTH_TOKEN_ENDPOINT.format(tenant_id=tenant_id))
         if response.status_code == 200:
-            logger.debug('event', detail=f'Successfully authenticated against {self.tenant_config.name}', context=str(response.json()))
-            return response.json()['access_token']
-        else:
-            logger.critical('fatal_error', detail=f'Cannot authenticate against {self.tenant_config.name}', context=str(response.json()), advice=f'client_id: {client_id}, tenant_id: {tenant_id}, client_secret: {client_secret[:10]}...')
-            raise Errors.TenantConnectionError('Cannot authenticate with the tenant configuration')
+            # `--debug` logs at DEBUG and CI log readers are not the secret store.
+            # Keep the bearer token and client secret out of the record.
+            token = response.json().get('access_token')
+            if not isinstance(token, str) or not token:
+                logger.critical(
+                    'fatal_error',
+                    detail=f'Microsoft Graph authentication for {self.tenant_config.name} returned no access token',
+                    status_code=response.status_code,
+                )
+                raise Errors.TenantConnectionError('Cannot authenticate with the tenant configuration')
+            logger.debug(
+                'event',
+                detail=f'Successfully authenticated against {self.tenant_config.name}',
+            )
+            return token
+        logger.critical(
+            'fatal_error',
+            detail=f'Cannot authenticate against {self.tenant_config.name}',
+            status_code=response.status_code,
+        )
+        raise Errors.TenantConnectionError('Cannot authenticate with the tenant configuration')
 
     def _safer_configuation(self, rule: DetectionRule) -> DetectionRule:
         """
