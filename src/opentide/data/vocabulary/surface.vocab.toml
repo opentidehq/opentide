@@ -1,6 +1,5 @@
 name = "Threat Surface"
 field = "surface"
-version = "1.0"
 description = "Hierarchical scoping of the technologies, systems and environments applicable to a threat vector. Uses scoped '::' delimited categories via stages. Replaces the deprecated targets, platforms and domains vocabularies."
 
 key = "name"
@@ -53,4476 +52,5371 @@ name = "Protocols"
 description = "Network, communication and authentication protocols where the threat targets the protocol itself"
 
 [[keys]]
+version = "1.0"
 name = "Windows"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows operating systems (all versions)"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Desktop"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows desktop editions"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Desktop::11"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows 11"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Desktop::10"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows 10"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Desktop::8"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows 8 / 8.1"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Server"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows Server editions"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Server::2025"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows Server 2025"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Server::2022"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows Server 2022"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Server::2019"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows Server 2019"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Server::2016"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows Server 2016"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Server::2012"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows Server 2012 / 2012 R2"
 
 [[keys]]
+version = "1.0"
 name = "macOS"
 "tide.vocab.stages" = "OS"
 description = "Apple macOS operating systems (all versions)"
 
 [[keys]]
+version = "1.0"
 name = "macOS::15"
 "tide.vocab.stages" = "OS"
 description = "Apple macOS 15 (Sequoia)"
 
 [[keys]]
+version = "1.0"
 name = "macOS::14"
 "tide.vocab.stages" = "OS"
 description = "Apple macOS 14 (Sonoma)"
 
 [[keys]]
+version = "1.0"
 name = "macOS::13"
 "tide.vocab.stages" = "OS"
 description = "Apple macOS 13 (Ventura)"
 
 [[keys]]
+version = "1.0"
 name = "macOS::12"
 "tide.vocab.stages" = "OS"
 description = "Apple macOS 12 (Monterey)"
 
 [[keys]]
+version = "1.0"
 name = "macOS::11"
 "tide.vocab.stages" = "OS"
 description = "Apple macOS 11 (Big Sur)"
 
 [[keys]]
+version = "1.0"
 name = "macOS::10.15"
 "tide.vocab.stages" = "OS"
 description = "Apple macOS 10.15 (Catalina)"
 
 [[keys]]
+version = "1.0"
 name = "Linux"
 "tide.vocab.stages" = "OS"
 description = "Linux-based operating systems (all distributions)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::RHEL"
 "tide.vocab.stages" = "OS"
 description = "Red Hat Enterprise Linux (all versions)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::RHEL::9"
 "tide.vocab.stages" = "OS"
 description = "Red Hat Enterprise Linux 9"
 
 [[keys]]
+version = "1.0"
 name = "Linux::RHEL::8"
 "tide.vocab.stages" = "OS"
 description = "Red Hat Enterprise Linux 8"
 
 [[keys]]
+version = "1.0"
 name = "Linux::RHEL::7"
 "tide.vocab.stages" = "OS"
 description = "Red Hat Enterprise Linux 7"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Ubuntu"
 "tide.vocab.stages" = "OS"
 description = "Canonical Ubuntu Linux (all versions)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Ubuntu::24.04 LTS"
 "tide.vocab.stages" = "OS"
 description = "Ubuntu 24.04 LTS (Noble Numbat)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Ubuntu::22.04 LTS"
 "tide.vocab.stages" = "OS"
 description = "Ubuntu 22.04 LTS (Jammy Jellyfish)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Ubuntu::20.04 LTS"
 "tide.vocab.stages" = "OS"
 description = "Ubuntu 20.04 LTS (Focal Fossa)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Debian"
 "tide.vocab.stages" = "OS"
 description = "Debian GNU/Linux (all versions)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Debian::12"
 "tide.vocab.stages" = "OS"
 description = "Debian 12 (Bookworm)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Debian::11"
 "tide.vocab.stages" = "OS"
 description = "Debian 11 (Bullseye)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Fedora"
 "tide.vocab.stages" = "OS"
 description = "Fedora Linux (all versions)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::CentOS"
 "tide.vocab.stages" = "OS"
 description = "CentOS Linux (end-of-life; see Rocky Linux / AlmaLinux for successors, CentOS Stream for rolling variant)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Rocky Linux"
 "tide.vocab.stages" = "OS"
 description = "Rocky Linux (CentOS replacement)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::AlmaLinux"
 "tide.vocab.stages" = "OS"
 description = "AlmaLinux (CentOS replacement)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Amazon Linux"
 "tide.vocab.stages" = "OS"
 description = "Amazon Linux (optimised for AWS)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Oracle Linux"
 "tide.vocab.stages" = "OS"
 description = "Oracle Linux enterprise distribution (RHEL-compatible with Unbreakable Enterprise Kernel)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::SUSE"
 "tide.vocab.stages" = "OS"
 description = "SUSE Linux Enterprise (all versions)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::openSUSE"
 "tide.vocab.stages" = "OS"
 description = "openSUSE community distribution"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Arch Linux"
 "tide.vocab.stages" = "OS"
 description = "Arch Linux rolling-release distribution"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Alpine Linux"
 "tide.vocab.stages" = "OS"
 description = "Alpine Linux (minimal, commonly used in containers)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Kali Linux"
 "tide.vocab.stages" = "OS"
 description = "Kali Linux (penetration testing distribution)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Gentoo"
 "tide.vocab.stages" = "OS"
 description = "Gentoo Linux (source-based distribution)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Manjaro"
 "tide.vocab.stages" = "OS"
 description = "Manjaro Linux (Arch-based distribution)"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Slackware"
 "tide.vocab.stages" = "OS"
 description = "Slackware Linux"
 
 [[keys]]
+version = "1.0"
 name = "Container Runtime"
 "tide.vocab.stages" = "OS"
 description = "Container runtime environments providing process-level isolation"
 
 [[keys]]
+version = "1.0"
 name = "Container Runtime::Docker"
 "tide.vocab.stages" = "OS"
 description = "Docker Engine container runtime"
 
 [[keys]]
+version = "1.0"
 name = "Container Runtime::containerd"
 "tide.vocab.stages" = "OS"
 description = "containerd industry-standard container runtime"
 
 [[keys]]
+version = "1.0"
 name = "Container Runtime::Podman"
 "tide.vocab.stages" = "OS"
 description = "Podman daemonless container runtime"
 
 [[keys]]
+version = "1.0"
 name = "Container Runtime::CRI-O"
 "tide.vocab.stages" = "OS"
 description = "CRI-O lightweight container runtime for Kubernetes"
 
 [[keys]]
+version = "1.0"
 name = "BSD"
 "tide.vocab.stages" = "OS"
 description = "BSD-family operating systems"
 
 [[keys]]
+version = "1.0"
 name = "BSD::FreeBSD"
 "tide.vocab.stages" = "OS"
 description = "FreeBSD operating system"
 
 [[keys]]
+version = "1.0"
 name = "BSD::OpenBSD"
 "tide.vocab.stages" = "OS"
 description = "OpenBSD security-focused operating system"
 
 [[keys]]
+version = "1.0"
 name = "BSD::NetBSD"
 "tide.vocab.stages" = "OS"
 description = "NetBSD portable operating system"
 
 [[keys]]
+version = "1.0"
 name = "Solaris"
 "tide.vocab.stages" = "OS"
 description = "Oracle Solaris operating system"
 
 [[keys]]
+version = "1.0"
 name = "Solaris::11"
 "tide.vocab.stages" = "OS"
 description = "Oracle Solaris 11"
 
 [[keys]]
+version = "1.0"
 name = "Mobile"
 "tide.vocab.stages" = "OS"
 description = "Mobile operating systems (Android, iOS)"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::Android"
 "tide.vocab.stages" = "OS"
 description = "Google Android mobile operating system (all versions)"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::Android::15"
 "tide.vocab.stages" = "OS"
 description = "Google Android 15 mobile operating system"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::Android::14"
 "tide.vocab.stages" = "OS"
 description = "Google Android 14 mobile operating system"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::Android::13"
 "tide.vocab.stages" = "OS"
 description = "Google Android 13 mobile operating system"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::iOS"
 "tide.vocab.stages" = "OS"
 description = "Apple iOS mobile operating system (all versions)"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::iOS::18"
 "tide.vocab.stages" = "OS"
 description = "Apple iOS 18 mobile operating system for iPhone"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::iOS::17"
 "tide.vocab.stages" = "OS"
 description = "Apple iOS 17 mobile operating system for iPhone"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::iOS::16"
 "tide.vocab.stages" = "OS"
 description = "Apple iOS 16 mobile operating system for iPhone"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::iPadOS"
 "tide.vocab.stages" = "OS"
 description = "Apple iPadOS (distinct from iOS for tablet devices)"
 
 [[keys]]
+version = "1.0"
 name = "ChromeOS"
 "tide.vocab.stages" = "OS"
 description = "Google ChromeOS (Chromebook operating system)"
 
 [[keys]]
+version = "1.0"
 name = "Embedded"
 "tide.vocab.stages" = "OS"
 description = "Embedded and real-time operating systems"
 
 [[keys]]
+version = "1.0"
 name = "Embedded::Windows IoT"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows IoT editions"
 
 [[keys]]
+version = "1.0"
 name = "Embedded::FreeRTOS"
 "tide.vocab.stages" = "OS"
 description = "FreeRTOS real-time operating system"
 
 [[keys]]
+version = "1.0"
 name = "Embedded::VxWorks"
 "tide.vocab.stages" = "OS"
 description = "Wind River VxWorks real-time operating system"
 
 [[keys]]
+version = "1.0"
 name = "Embedded::Yocto"
 "tide.vocab.stages" = "OS"
 description = "Yocto Project embedded Linux build system"
 
 [[keys]]
+version = "1.0"
 name = "Embedded::Raspberry Pi OS"
 "tide.vocab.stages" = "OS"
 description = "Raspberry Pi OS (formerly Raspbian)"
 
 [[keys]]
+version = "1.0"
 name = "Embedded::QNX"
 "tide.vocab.stages" = "OS"
 description = "BlackBerry QNX real-time operating system"
 
 [[keys]]
+version = "1.0"
 name = "Embedded::Tizen"
 "tide.vocab.stages" = "OS"
 description = "Samsung Tizen operating system"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Desktop::XP"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows XP (end-of-life)"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Desktop::Vista"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows Vista (end-of-life)"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Desktop::7"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows 7 (end-of-life)"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Desktop::2000"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows 2000 (end-of-life)"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Server::2008"
 "tide.vocab.stages" = "OS"
 description = "Microsoft Windows Server 2008 / 2008 R2 (end-of-life)"
 
 [[keys]]
+version = "1.0"
 name = "Miscellaneous"
 "tide.vocab.stages" = "OS"
 description = "Miscellaneous and proprietary Unix-family operating systems"
 
 [[keys]]
+version = "1.0"
 name = "Miscellaneous::IBM AIX"
 "tide.vocab.stages" = "OS"
 description = "IBM AIX Unix operating system for Power Systems"
 
 [[keys]]
+version = "1.0"
 name = "Miscellaneous::HP-UX"
 "tide.vocab.stages" = "OS"
 description = "Hewlett Packard Enterprise HP-UX Unix operating system"
 
 [[keys]]
+version = "1.0"
 name = "Windows::Subsystem for Linux"
 "tide.vocab.stages" = "OS"
 description = "Windows Subsystem for Linux (WSL) cross-OS execution environment"
 
 [[keys]]
+version = "1.0"
 name = "Linux::Photon OS"
 "tide.vocab.stages" = "OS"
 description = "VMware Photon OS minimal container-optimised Linux"
 
 [[keys]]
+version = "1.0"
 name = "Embedded::Zephyr"
 "tide.vocab.stages" = "OS"
 description = "Zephyr Project RTOS by Linux Foundation for IoT and embedded devices"
 
 [[keys]]
+version = "1.0"
 name = "Mobile::Android::12"
 "tide.vocab.stages" = "OS"
 description = "Google Android 12 mobile operating system"
 
 [[keys]]
+version = "1.0"
 name = "Embedded::ThreadX"
 "tide.vocab.stages" = "OS"
 description = "Azure RTOS (ThreadX) real-time operating system deployed in billions of devices"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft"
 "tide.vocab.stages" = "Application"
 description = "Microsoft application ecosystem"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Office Suite"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Office productivity applications (Word, Excel, PowerPoint, etc.)"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Microsoft 365"
 "tide.vocab.stages" = "Application"
 description = "Microsoft 365 cloud-based productivity suite (formerly Office 365)"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Word"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Word document editor"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Excel"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Excel spreadsheet application"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::PowerPoint"
 "tide.vocab.stages" = "Application"
 description = "Microsoft PowerPoint presentation software"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Teams"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Teams communication and collaboration platform"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::SharePoint"
 "tide.vocab.stages" = "Application"
 description = "Microsoft SharePoint document management and collaboration"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Outlook"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Outlook email client"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::OneDrive"
 "tide.vocab.stages" = "Application"
 description = "Microsoft OneDrive cloud file storage"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Intune"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Intune endpoint management"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Power Platform"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Power Platform (Power Apps, Power Automate, Power BI)"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Dynamics 365"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Dynamics 365 ERP and CRM platform"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::System Center"
 "tide.vocab.stages" = "Application"
 description = "Microsoft System Center enterprise management suite"
 
 [[keys]]
+version = "1.0"
 name = "Microsoft::Exchange"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Exchange email and calendaring platform"
 
 [[keys]]
+version = "1.0"
 name = "Google Workspace"
 "tide.vocab.stages" = "Application"
 description = "Google Workspace (Gmail, Docs, Drive, Calendar, Meet)"
 
 [[keys]]
+version = "1.0"
 name = "Google Analytics"
 "tide.vocab.stages" = "Application"
 description = "Google Analytics web analytics platform"
 
 [[keys]]
+version = "1.0"
 name = "Atlassian"
 "tide.vocab.stages" = "Application"
 description = "Atlassian product suite"
 
 [[keys]]
+version = "1.0"
 name = "Atlassian::Jira"
 "tide.vocab.stages" = "Application"
 description = "Atlassian Jira issue and project tracking"
 
 [[keys]]
+version = "1.0"
 name = "Atlassian::Confluence"
 "tide.vocab.stages" = "Application"
 description = "Atlassian Confluence team wiki and documentation"
 
 [[keys]]
+version = "1.0"
 name = "Atlassian::Bitbucket"
 "tide.vocab.stages" = "Application"
 description = "Atlassian Bitbucket (see also Code Repositories::Bitbucket for repository-focused context)"
 
 [[keys]]
+version = "1.0"
 name = "Communication"
 "tide.vocab.stages" = "Application"
 description = "Communication and collaboration applications"
 
 [[keys]]
+version = "1.0"
 name = "Communication::Slack"
 "tide.vocab.stages" = "Application"
 description = "Slack team messaging platform"
 
 [[keys]]
+version = "1.0"
 name = "Communication::Zoom"
 "tide.vocab.stages" = "Application"
 description = "Zoom video conferencing"
 
 [[keys]]
+version = "1.0"
 name = "Communication::Discord"
 "tide.vocab.stages" = "Application"
 description = "Discord messaging and voice platform"
 
 [[keys]]
+version = "1.0"
 name = "Communication::Signal"
 "tide.vocab.stages" = "Application"
 description = "Signal encrypted messaging"
 
 [[keys]]
+version = "1.0"
 name = "Communication::Webex"
 "tide.vocab.stages" = "Application"
 description = "Cisco Webex conferencing and collaboration"
 
 [[keys]]
+version = "1.0"
 name = "Code Repositories"
 "tide.vocab.stages" = "Application"
 description = "Source code hosting and version control platforms"
 
 [[keys]]
+version = "1.0"
 name = "Code Repositories::GitHub"
 "tide.vocab.stages" = "Application"
 description = "GitHub source code hosting and collaboration"
 
 [[keys]]
+version = "1.0"
 name = "Code Repositories::GitHub Enterprise"
 "tide.vocab.stages" = "Application"
 description = "GitHub Enterprise Server (self-hosted)"
 
 [[keys]]
+version = "1.0"
 name = "Code Repositories::GitLab"
 "tide.vocab.stages" = "Application"
 description = "GitLab DevOps lifecycle tool"
 
 [[keys]]
+version = "1.0"
 name = "Code Repositories::GitLab Self-Managed"
 "tide.vocab.stages" = "Application"
 description = "GitLab Self-Managed (on-premises)"
 
 [[keys]]
+version = "1.0"
 name = "Code Repositories::Bitbucket"
 "tide.vocab.stages" = "Application"
 description = "Atlassian Bitbucket as a code repository and source control platform"
 
 [[keys]]
+version = "1.0"
 name = "Code Repositories::Azure DevOps"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Azure DevOps source control and pipelines"
 
 [[keys]]
+version = "1.0"
 name = "CRM"
 "tide.vocab.stages" = "Application"
 description = "Customer Relationship Management platforms"
 
 [[keys]]
+version = "1.0"
 name = "CRM::Salesforce"
 "tide.vocab.stages" = "Application"
 description = "Salesforce CRM platform"
 
 [[keys]]
+version = "1.0"
 name = "CRM::HubSpot"
 "tide.vocab.stages" = "Application"
 description = "HubSpot CRM and marketing platform"
 
 [[keys]]
+version = "1.0"
 name = "CRM::Zoho CRM"
 "tide.vocab.stages" = "Application"
 description = "Zoho CRM platform"
 
 [[keys]]
+version = "1.0"
 name = "ERP"
 "tide.vocab.stages" = "Application"
 description = "Enterprise Resource Planning systems"
 
 [[keys]]
+version = "1.0"
 name = "ERP::SAP"
 "tide.vocab.stages" = "Application"
 description = "SAP ERP platform"
 
 [[keys]]
+version = "1.0"
 name = "ERP::Oracle ERP"
 "tide.vocab.stages" = "Application"
 description = "Oracle ERP Cloud / E-Business Suite"
 
 [[keys]]
+version = "1.0"
 name = "ERP::NetSuite"
 "tide.vocab.stages" = "Application"
 description = "Oracle NetSuite cloud ERP"
 
 [[keys]]
+version = "1.0"
 name = "Database Management"
 "tide.vocab.stages" = "Application"
 description = "Database management systems"
 
 [[keys]]
+version = "1.0"
 name = "Database Management::MySQL"
 "tide.vocab.stages" = "Application"
 description = "MySQL relational database"
 
 [[keys]]
+version = "1.0"
 name = "Database Management::PostgreSQL"
 "tide.vocab.stages" = "Application"
 description = "PostgreSQL open-source relational database"
 
 [[keys]]
+version = "1.0"
 name = "Database Management::Oracle Database"
 "tide.vocab.stages" = "Application"
 description = "Oracle Database management system"
 
 [[keys]]
+version = "1.0"
 name = "Database Management::MongoDB"
 "tide.vocab.stages" = "Application"
 description = "MongoDB NoSQL document database"
 
 [[keys]]
+version = "1.0"
 name = "Database Management::Microsoft SQL Server"
 "tide.vocab.stages" = "Application"
 description = "Microsoft SQL Server relational database"
 
 [[keys]]
+version = "1.0"
 name = "Database Management::MariaDB"
 "tide.vocab.stages" = "Application"
 description = "MariaDB open-source relational database"
 
 [[keys]]
+version = "1.0"
 name = "Database Management::Cassandra"
 "tide.vocab.stages" = "Application"
 description = "Apache Cassandra distributed database"
 
 [[keys]]
+version = "1.0"
 name = "Database Management::Redis"
 "tide.vocab.stages" = "Application"
 description = "Redis in-memory data store"
 
 [[keys]]
+version = "1.0"
 name = "Database Management::Elasticsearch"
 "tide.vocab.stages" = "Application"
 description = "Elasticsearch distributed search and analytics engine"
 
 [[keys]]
+version = "1.0"
 name = "Web Servers"
 "tide.vocab.stages" = "Application"
 description = "HTTP servers and reverse proxies"
 
 [[keys]]
+version = "1.0"
 name = "Web Servers::Apache HTTP"
 "tide.vocab.stages" = "Application"
 description = "Apache HTTP Server"
 
 [[keys]]
+version = "1.0"
 name = "Web Servers::NGINX"
 "tide.vocab.stages" = "Application"
 description = "NGINX web server and reverse proxy"
 
 [[keys]]
+version = "1.0"
 name = "Web Servers::IIS"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Internet Information Services"
 
 [[keys]]
+version = "1.0"
 name = "Web Servers::Caddy"
 "tide.vocab.stages" = "Application"
 description = "Caddy automatic HTTPS web server"
 
 [[keys]]
+version = "1.0"
 name = "Web Servers::Traefik"
 "tide.vocab.stages" = "Application"
 description = "Traefik cloud-native reverse proxy and load balancer"
 
 [[keys]]
+version = "1.0"
 name = "ServiceNow"
 "tide.vocab.stages" = "Application"
 description = "ServiceNow IT service management and workflow platform"
 
 [[keys]]
+version = "1.0"
 name = "File Sharing"
 "tide.vocab.stages" = "Application"
 description = "Cloud file sharing and storage services"
 
 [[keys]]
+version = "1.0"
 name = "File Sharing::Dropbox"
 "tide.vocab.stages" = "Application"
 description = "Dropbox cloud file storage"
 
 [[keys]]
+version = "1.0"
 name = "File Sharing::Box"
 "tide.vocab.stages" = "Application"
 description = "Box cloud content management"
 
 [[keys]]
+version = "1.0"
 name = "File Sharing::Google Drive"
 "tide.vocab.stages" = "Application"
 description = "Google Drive cloud file storage"
 
 [[keys]]
+version = "1.0"
 name = "BI"
 "tide.vocab.stages" = "Application"
 description = "Business intelligence and analytics platforms"
 
 [[keys]]
+version = "1.0"
 name = "BI::Tableau"
 "tide.vocab.stages" = "Application"
 description = "Salesforce Tableau data visualisation"
 
 [[keys]]
+version = "1.0"
 name = "BI::Power BI"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Power BI business analytics"
 
 [[keys]]
+version = "1.0"
 name = "BI::Looker"
 "tide.vocab.stages" = "Application"
 description = "Google Looker data analytics platform"
 
 [[keys]]
+version = "1.0"
 name = "Development"
 "tide.vocab.stages" = "Application"
 description = "Software development tools and platforms"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD"
 "tide.vocab.stages" = "Application"
 description = "Continuous integration and continuous delivery platforms"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD::Jenkins"
 "tide.vocab.stages" = "Application"
 description = "Jenkins open-source automation server"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD::GitHub Actions"
 "tide.vocab.stages" = "Application"
 description = "GitHub Actions CI/CD workflow automation"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD::GitLab CI/CD"
 "tide.vocab.stages" = "Application"
 description = "GitLab CI/CD integrated pipeline engine"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD::Azure Pipelines"
 "tide.vocab.stages" = "Application"
 description = "Azure DevOps Pipelines CI/CD service"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD::CircleCI"
 "tide.vocab.stages" = "Application"
 description = "CircleCI cloud-based CI/CD platform"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD::Travis CI"
 "tide.vocab.stages" = "Application"
 description = "Travis CI hosted CI/CD service"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD::TeamCity"
 "tide.vocab.stages" = "Application"
 description = "JetBrains TeamCity build management and CI server"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD::ArgoCD"
 "tide.vocab.stages" = "Application"
 description = "ArgoCD declarative GitOps continuous delivery for Kubernetes"
 
 [[keys]]
+version = "1.0"
 name = "Development::CI/CD::Tekton"
 "tide.vocab.stages" = "Application"
 description = "Tekton cloud-native CI/CD pipeline framework"
 
 [[keys]]
+version = "1.0"
 name = "Development::IDEs"
 "tide.vocab.stages" = "Application"
 description = "Integrated development environments"
 
 [[keys]]
+version = "1.0"
 name = "Development::IDEs::Visual Studio Code"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Visual Studio Code editor"
 
 [[keys]]
+version = "1.0"
 name = "Development::IDEs::IntelliJ IDEA"
 "tide.vocab.stages" = "Application"
 description = "JetBrains IntelliJ IDEA Java/polyglot IDE"
 
 [[keys]]
+version = "1.0"
 name = "Development::IDEs::Eclipse"
 "tide.vocab.stages" = "Application"
 description = "Eclipse Foundation IDE"
 
 [[keys]]
+version = "1.0"
 name = "Development::IDEs::Xcode"
 "tide.vocab.stages" = "Application"
 description = "Apple Xcode IDE for macOS/iOS development"
 
 [[keys]]
+version = "1.0"
 name = "Development::IDEs::Android Studio"
 "tide.vocab.stages" = "Application"
 description = "Google Android Studio IDE"
 
 [[keys]]
+version = "1.0"
 name = "Development::Package Management"
 "tide.vocab.stages" = "Application"
 description = "Software package managers and registries"
 
 [[keys]]
+version = "1.0"
 name = "Development::Package Management::npm"
 "tide.vocab.stages" = "Application"
 description = "npm JavaScript package manager"
 
 [[keys]]
+version = "1.0"
 name = "Development::Package Management::PyPI"
 "tide.vocab.stages" = "Application"
 description = "Python Package Index (pip)"
 
 [[keys]]
+version = "1.0"
 name = "Development::Package Management::Maven"
 "tide.vocab.stages" = "Application"
 description = "Apache Maven Java build and dependency management"
 
 [[keys]]
+version = "1.0"
 name = "Development::Package Management::NuGet"
 "tide.vocab.stages" = "Application"
 description = "NuGet .NET package manager"
 
 [[keys]]
+version = "1.0"
 name = "Development::Package Management::Cargo"
 "tide.vocab.stages" = "Application"
 description = "Cargo Rust package manager"
 
 [[keys]]
+version = "1.0"
 name = "Development::Package Management::Go Modules"
 "tide.vocab.stages" = "Application"
 description = "Go Modules dependency management"
 
 [[keys]]
+version = "1.0"
 name = "Development::Package Management::Helm"
 "tide.vocab.stages" = "Application"
 description = "Helm Kubernetes package manager"
 
 [[keys]]
+version = "1.0"
 name = "Development::Artefact Registries"
 "tide.vocab.stages" = "Application"
 description = "Container image and artefact registries"
 
 [[keys]]
+version = "1.0"
 name = "Development::Artefact Registries::Docker Hub"
 "tide.vocab.stages" = "Application"
 description = "Docker Hub container image registry"
 
 [[keys]]
+version = "1.0"
 name = "Development::Artefact Registries::JFrog Artifactory"
 "tide.vocab.stages" = "Application"
 description = "JFrog Artifactory universal artefact repository"
 
 [[keys]]
+version = "1.0"
 name = "Development::Artefact Registries::Nexus Repository"
 "tide.vocab.stages" = "Application"
 description = "Sonatype Nexus Repository manager"
 
 [[keys]]
+version = "1.0"
 name = "Development::Artefact Registries::GitHub Packages"
 "tide.vocab.stages" = "Application"
 description = "GitHub Packages package and container registry"
 
 [[keys]]
+version = "1.0"
 name = "Development::Code Analysis"
 "tide.vocab.stages" = "Application"
 description = "Static analysis, SAST and software composition analysis tools"
 
 [[keys]]
+version = "1.0"
 name = "Development::Code Analysis::SonarQube"
 "tide.vocab.stages" = "Application"
 description = "SonarQube code quality and security analysis"
 
 [[keys]]
+version = "1.0"
 name = "Development::Code Analysis::Snyk"
 "tide.vocab.stages" = "Application"
 description = "Snyk developer security platform"
 
 [[keys]]
+version = "1.0"
 name = "Development::Code Analysis::Checkmarx"
 "tide.vocab.stages" = "Application"
 description = "Checkmarx application security testing"
 
 [[keys]]
+version = "1.0"
 name = "Development::Code Analysis::Semgrep"
 "tide.vocab.stages" = "Application"
 description = "Semgrep lightweight static analysis"
 
 [[keys]]
+version = "1.0"
 name = "Development::Code Analysis::CodeQL"
 "tide.vocab.stages" = "Application"
 description = "GitHub CodeQL semantic code analysis"
 
 [[keys]]
+version = "1.0"
 name = "Development::Code Analysis::Trivy"
 "tide.vocab.stages" = "Application"
 description = "Aqua Trivy vulnerability scanner for containers and IaC"
 
 [[keys]]
+version = "1.0"
 name = "Development::Version Control"
 "tide.vocab.stages" = "Application"
 description = "Version control systems"
 
 [[keys]]
+version = "1.0"
 name = "Development::Version Control::Git"
 "tide.vocab.stages" = "Application"
 description = "Git distributed version control system"
 
 [[keys]]
+version = "1.0"
 name = "Development::Version Control::Subversion"
 "tide.vocab.stages" = "Application"
 description = "Apache Subversion centralised version control"
 
 [[keys]]
+version = "1.0"
 name = "Infrastructure as Code"
 "tide.vocab.stages" = "Application"
 description = "Infrastructure as Code tools and configuration management"
 
 [[keys]]
+version = "1.0"
 name = "Infrastructure as Code::Terraform"
 "tide.vocab.stages" = "Application"
 description = "HashiCorp Terraform infrastructure provisioning"
 
 [[keys]]
+version = "1.0"
 name = "Infrastructure as Code::Pulumi"
 "tide.vocab.stages" = "Application"
 description = "Pulumi cloud infrastructure as code"
 
 [[keys]]
+version = "1.0"
 name = "Infrastructure as Code::Ansible"
 "tide.vocab.stages" = "Application"
 description = "Red Hat Ansible automation and configuration management"
 
 [[keys]]
+version = "1.0"
 name = "Infrastructure as Code::Chef"
 "tide.vocab.stages" = "Application"
 description = "Chef infrastructure automation"
 
 [[keys]]
+version = "1.0"
 name = "Infrastructure as Code::Puppet"
 "tide.vocab.stages" = "Application"
 description = "Puppet infrastructure and configuration management"
 
 [[keys]]
+version = "1.0"
 name = "AI"
 "tide.vocab.stages" = "Application"
 description = "Artificial intelligence and machine learning applications"
 
 [[keys]]
+version = "1.0"
 name = "AI::ChatGPT"
 "tide.vocab.stages" = "Application"
 description = "OpenAI ChatGPT conversational AI"
 
 [[keys]]
+version = "1.0"
 name = "AI::GitHub Copilot"
 "tide.vocab.stages" = "Application"
 description = "GitHub Copilot AI code assistant"
 
 [[keys]]
+version = "1.0"
 name = "AI::Amazon Bedrock"
 "tide.vocab.stages" = "Application"
 description = "Amazon Bedrock foundation model service"
 
 [[keys]]
+version = "1.0"
 name = "AI::Google Vertex AI"
 "tide.vocab.stages" = "Application"
 description = "Google Cloud Vertex AI machine learning platform"
 
 [[keys]]
+version = "1.0"
 name = "HRM"
 "tide.vocab.stages" = "Application"
 description = "Human resource management systems"
 
 [[keys]]
+version = "1.0"
 name = "HRM::Workday"
 "tide.vocab.stages" = "Application"
 description = "Workday cloud-based HRM and finance"
 
 [[keys]]
+version = "1.0"
 name = "HRM::SAP SuccessFactors"
 "tide.vocab.stages" = "Application"
 description = "SAP SuccessFactors human capital management"
 
 [[keys]]
+version = "1.0"
 name = "Customer Support"
 "tide.vocab.stages" = "Application"
 description = "Customer support and helpdesk platforms"
 
 [[keys]]
+version = "1.0"
 name = "Customer Support::Zendesk"
 "tide.vocab.stages" = "Application"
 description = "Zendesk customer service software"
 
 [[keys]]
+version = "1.0"
 name = "Customer Support::Freshdesk"
 "tide.vocab.stages" = "Application"
 description = "Freshworks Freshdesk customer support"
 
 [[keys]]
+version = "1.0"
 name = "Finance"
 "tide.vocab.stages" = "Application"
 description = "Finance and accounting applications"
 
 [[keys]]
+version = "1.0"
 name = "Finance::SAP"
 "tide.vocab.stages" = "Application"
 description = "SAP Financial Accounting modules"
 
 [[keys]]
+version = "1.0"
 name = "Finance::QuickBooks"
 "tide.vocab.stages" = "Application"
 description = "Intuit QuickBooks accounting software"
 
 [[keys]]
+version = "1.0"
 name = "Entra ID"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Entra ID (formerly Azure Active Directory)"
 
 [[keys]]
+version = "1.0"
 name = "Entra ID::Single Sign-On"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Entra ID SSO capability"
 
 [[keys]]
+version = "1.0"
 name = "Entra ID::Multi-Factor Authentication"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Entra ID MFA"
 
 [[keys]]
+version = "1.0"
 name = "Entra ID::Conditional Access"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Entra ID Conditional Access policies"
 
 [[keys]]
+version = "1.0"
 name = "Entra ID::Privileged Identity Management"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Entra ID PIM for just-in-time privileged access"
 
 [[keys]]
+version = "1.0"
 name = "Entra ID::B2C"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Entra ID B2C (Business to Consumer identity)"
 
 [[keys]]
+version = "1.0"
 name = "Entra ID::B2B"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Entra ID B2B (Business to Business identity)"
 
 [[keys]]
+version = "1.0"
 name = "Active Directory"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Active Directory on-premises directory services"
 
 [[keys]]
+version = "1.0"
 name = "Active Directory::Domain Services"
 "tide.vocab.stages" = "Authentication"
 description = "Active Directory Domain Services (AD DS)"
 
 [[keys]]
+version = "1.0"
 name = "Active Directory::Federation Services"
 "tide.vocab.stages" = "Authentication"
 description = "Active Directory Federation Services (AD FS)"
 
 [[keys]]
+version = "1.0"
 name = "Active Directory::Certificate Services"
 "tide.vocab.stages" = "Authentication"
 description = "Active Directory Certificate Services (AD CS)"
 
 [[keys]]
+version = "1.0"
 name = "Active Directory::Group Policy"
 "tide.vocab.stages" = "Authentication"
 description = "Active Directory Group Policy Objects (GPO)"
 
 [[keys]]
+version = "1.0"
 name = "Active Directory::Lightweight Directory Services"
 "tide.vocab.stages" = "Authentication"
 description = "Active Directory Lightweight Directory Services (AD LDS)"
 
 [[keys]]
+version = "1.0"
 name = "Okta"
 "tide.vocab.stages" = "Authentication"
 description = "Okta identity and access management platform"
 
 [[keys]]
+version = "1.0"
 name = "Okta::Single Sign-On"
 "tide.vocab.stages" = "Authentication"
 description = "Okta SSO capability"
 
 [[keys]]
+version = "1.0"
 name = "Okta::Multi-Factor Authentication"
 "tide.vocab.stages" = "Authentication"
 description = "Okta Verify and push-based multi-factor authentication service"
 
 [[keys]]
+version = "1.0"
 name = "Okta::Advanced Server Access"
 "tide.vocab.stages" = "Authentication"
 description = "Okta Advanced Server Access (zero-trust server access)"
 
 [[keys]]
+version = "1.0"
 name = "Ping Identity"
 "tide.vocab.stages" = "Authentication"
 description = "Ping Identity federation and access management"
 
 [[keys]]
+version = "1.0"
 name = "Ping Identity::PingFederate"
 "tide.vocab.stages" = "Authentication"
 description = "PingFederate enterprise federation server"
 
 [[keys]]
+version = "1.0"
 name = "Auth0"
 "tide.vocab.stages" = "Authentication"
 description = "Okta Auth0 (developer-focused identity platform)"
 
 [[keys]]
+version = "1.0"
 name = "Auth0::Universal Login"
 "tide.vocab.stages" = "Authentication"
 description = "Auth0 Universal Login"
 
 [[keys]]
+version = "1.0"
 name = "Duo Security"
 "tide.vocab.stages" = "Authentication"
 description = "Cisco Duo Security multi-factor authentication"
 
 [[keys]]
+version = "1.0"
 name = "Duo Security::Duo Mobile"
 "tide.vocab.stages" = "Authentication"
 description = "Duo Mobile authenticator application"
 
 [[keys]]
+version = "1.0"
 name = "Duo Security::Device Trust"
 "tide.vocab.stages" = "Authentication"
 description = "Duo Security Device Trust endpoint verification"
 
 [[keys]]
+version = "1.0"
 name = "CyberArk"
 "tide.vocab.stages" = "Authentication"
 description = "CyberArk privileged access management"
 
 [[keys]]
+version = "1.0"
 name = "CyberArk::Enterprise Password Vault"
 "tide.vocab.stages" = "Authentication"
 description = "CyberArk Enterprise Password Vault"
 
 [[keys]]
+version = "1.0"
 name = "CyberArk::Privileged Access Security"
 "tide.vocab.stages" = "Authentication"
 description = "CyberArk Privileged Access Security solution"
 
 [[keys]]
+version = "1.0"
 name = "CyberArk::Secrets Manager"
 "tide.vocab.stages" = "Authentication"
 description = "CyberArk Secrets Manager (application credentials)"
 
 [[keys]]
+version = "1.0"
 name = "BeyondTrust"
 "tide.vocab.stages" = "Authentication"
 description = "BeyondTrust privileged access management"
 
 [[keys]]
+version = "1.0"
 name = "BeyondTrust::Password Safe"
 "tide.vocab.stages" = "Authentication"
 description = "BeyondTrust Password Safe credential management"
 
 [[keys]]
+version = "1.0"
 name = "BeyondTrust::Privileged Remote Access"
 "tide.vocab.stages" = "Authentication"
 description = "BeyondTrust Privileged Remote Access"
 
 [[keys]]
+version = "1.0"
 name = "Wallix"
 "tide.vocab.stages" = "Authentication"
 description = "Wallix privileged access management"
 
 [[keys]]
+version = "1.0"
 name = "Wallix::Bastion"
 "tide.vocab.stages" = "Authentication"
 description = "Wallix Bastion PAM gateway"
 
 [[keys]]
+version = "1.0"
 name = "Thales"
 "tide.vocab.stages" = "Authentication"
 description = "Thales identity and access management solutions"
 
 [[keys]]
+version = "1.0"
 name = "Thales::SafeNet Trusted Access"
 "tide.vocab.stages" = "Authentication"
 description = "Thales SafeNet Trusted Access cloud IAM"
 
 [[keys]]
+version = "1.0"
 name = "HashiCorp Vault"
 "tide.vocab.stages" = "Authentication"
 description = "HashiCorp Vault secrets management and data protection"
 
 [[keys]]
+version = "1.0"
 name = "Google Identity"
 "tide.vocab.stages" = "Authentication"
 description = "Google Cloud Identity platform"
 
 [[keys]]
+version = "1.0"
 name = "Google Identity::Cloud Identity"
 "tide.vocab.stages" = "Authentication"
 description = "Google Cloud Identity directory and device management"
 
 [[keys]]
+version = "1.0"
 name = "RSA SecurID"
 "tide.vocab.stages" = "Authentication"
 description = "RSA SecurID multi-factor authentication"
 
 [[keys]]
+version = "1.0"
 name = "OneLogin"
 "tide.vocab.stages" = "Authentication"
 description = "OneLogin cloud-based identity and access management platform"
 
 [[keys]]
+version = "1.0"
 name = "ForgeRock"
 "tide.vocab.stages" = "Authentication"
 description = "ForgeRock identity platform for consumer and workforce IAM"
 
 [[keys]]
+version = "1.0"
 name = "SailPoint"
 "tide.vocab.stages" = "Authentication"
 description = "SailPoint identity governance and administration (IGA) platform"
 
 [[keys]]
+version = "1.0"
 name = "SailPoint::IdentityNow"
 "tide.vocab.stages" = "Authentication"
 description = "SailPoint IdentityNow cloud identity governance"
 
 [[keys]]
+version = "1.0"
 name = "Delinea"
 "tide.vocab.stages" = "Authentication"
 description = "Delinea privileged access management (formerly Thycotic and Centrify)"
 
 [[keys]]
+version = "1.0"
 name = "Delinea::Secret Server"
 "tide.vocab.stages" = "Authentication"
 description = "Delinea Secret Server enterprise password vault"
 
 [[keys]]
+version = "1.0"
 name = "Delinea::Privilege Manager"
 "tide.vocab.stages" = "Authentication"
 description = "Delinea Privilege Manager endpoint least-privilege and application control"
 
 [[keys]]
+version = "1.0"
 name = "AWS IAM Identity Center"
 "tide.vocab.stages" = "Authentication"
 description = "AWS IAM Identity Center single sign-on for AWS accounts (formerly AWS SSO)"
 
 [[keys]]
+version = "1.0"
 name = "SAML"
 "tide.vocab.stages" = "Authentication"
 description = "Security Assertion Markup Language federation protocol"
 
 [[keys]]
+version = "1.0"
 name = "OAuth / OIDC"
 "tide.vocab.stages" = "Authentication"
 description = "OAuth 2.0 and OpenID Connect authorisation/authentication protocols"
 
 [[keys]]
+version = "1.0"
 name = "LDAP"
 "tide.vocab.stages" = "Authentication"
 description = "Lightweight Directory Access Protocol"
 
 [[keys]]
+version = "1.0"
 name = "RADIUS"
 "tide.vocab.stages" = "Authentication"
 description = "Remote Authentication Dial-In User Service"
 
 [[keys]]
+version = "1.0"
 name = "Kerberos"
 "tide.vocab.stages" = "Authentication"
 description = "Kerberos network authentication protocol"
 
 [[keys]]
+version = "1.0"
 name = "FIDO2 / WebAuthn"
 "tide.vocab.stages" = "Authentication"
 description = "FIDO2 and WebAuthn passwordless authentication standards"
 
 [[keys]]
+version = "1.0"
 name = "NTLM"
 "tide.vocab.stages" = "Authentication"
 description = "NT LAN Manager authentication protocol (legacy)"
 
 [[keys]]
+version = "1.0"
 name = "AWS"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Web Services cloud platform"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute"
 "tide.vocab.stages" = "Cloud"
 description = "AWS compute services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute::EC2"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Elastic Compute Cloud (virtual servers)"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute::Lambda"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Lambda serverless compute"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute::ECS"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Elastic Container Service"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute::EKS"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Elastic Kubernetes Service"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute::Fargate"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Fargate serverless compute for containers"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute::Lightsail"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Lightsail simplified virtual servers"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute::Batch"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Batch managed batch processing"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Storage"
 "tide.vocab.stages" = "Cloud"
 description = "AWS storage services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Storage::S3"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Simple Storage Service (object storage)"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Storage::EBS"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Elastic Block Store (block storage)"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Storage::EFS"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Elastic File System (managed NFS)"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Storage::Glacier"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon S3 Glacier archival storage"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Database"
 "tide.vocab.stages" = "Cloud"
 description = "AWS database services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Database::RDS"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Relational Database Service"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Database::DynamoDB"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon DynamoDB NoSQL database"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Database::Aurora"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Aurora MySQL/PostgreSQL-compatible database"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Database::Redshift"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Redshift data warehouse"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Database::ElastiCache"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon ElastiCache in-memory caching"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Database::DocumentDB"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon DocumentDB (MongoDB-compatible)"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking"
 "tide.vocab.stages" = "Cloud"
 description = "AWS networking services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking::VPC"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Virtual Private Cloud"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking::Route 53"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Route 53 DNS and domain registration"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking::CloudFront"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon CloudFront content delivery network"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking::API Gateway"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon API Gateway"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking::Elastic Load Balancing"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Elastic Load Balancing"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking::Direct Connect"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Direct Connect dedicated network connection"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking::Transit Gateway"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Transit Gateway central network hub"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security"
 "tide.vocab.stages" = "Cloud"
 description = "AWS security services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::IAM"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Identity and Access Management"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::GuardDuty"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon GuardDuty threat detection"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Security Hub"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Security Hub centralised security findings"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::CloudTrail"
 "tide.vocab.stages" = "Cloud"
 description = "AWS CloudTrail API activity logging"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::KMS"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Key Management Service"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Secrets Manager"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Secrets Manager credential storage"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::WAF"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Web Application Firewall"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Shield"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Shield DDoS protection"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Cognito"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Cognito user identity and access"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Inspector"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Inspector automated vulnerability management"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Macie"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Macie sensitive data discovery"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Security Lake"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Security Lake centralised security data lake"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Management"
 "tide.vocab.stages" = "Cloud"
 description = "AWS management and governance services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Management::CloudWatch"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon CloudWatch monitoring and observability"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Management::Systems Manager"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Systems Manager operations management"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Management::Config"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Config resource configuration tracking"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Management::Organizations"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Organizations multi-account management"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Containers"
 "tide.vocab.stages" = "Cloud"
 description = "AWS container services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Containers::ECR"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Elastic Container Registry"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Analytics"
 "tide.vocab.stages" = "Cloud"
 description = "AWS analytics services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Analytics::Athena"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Athena serverless query service"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Analytics::Kinesis"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Kinesis real-time data streaming"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Analytics::Glue"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Glue serverless data integration"
 
 [[keys]]
+version = "1.0"
 name = "AWS::IoT"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Internet of Things services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::IoT::IoT Core"
 "tide.vocab.stages" = "Cloud"
 description = "AWS IoT Core managed MQTT broker"
 
 [[keys]]
+version = "1.0"
 name = "AWS::IoT::Greengrass"
 "tide.vocab.stages" = "Cloud"
 description = "AWS IoT Greengrass edge computing"
 
 [[keys]]
+version = "1.0"
 name = "Azure"
 "tide.vocab.stages" = "Cloud"
 description = "Microsoft Azure cloud platform"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute"
 "tide.vocab.stages" = "Cloud"
 description = "Azure compute services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute::Virtual Machines"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Virtual Machines"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute::App Services"
 "tide.vocab.stages" = "Cloud"
 description = "Azure App Services web application hosting"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute::Azure Functions"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Functions serverless compute"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute::Container Instances"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Container Instances"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute::Container Apps"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Container Apps managed containers"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute::Kubernetes Service"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Kubernetes Service (AKS)"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute::Service Fabric"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Service Fabric distributed systems platform"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute::Azure Arc"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Arc hybrid and multi-cloud management"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Storage"
 "tide.vocab.stages" = "Cloud"
 description = "Azure storage services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Storage::Blob Storage"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Blob Storage (object storage)"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Storage::File Storage"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Files managed file shares"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Storage::Data Lake Storage"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Data Lake Storage for big data analytics"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Database"
 "tide.vocab.stages" = "Cloud"
 description = "Azure database services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Database::SQL Database"
 "tide.vocab.stages" = "Cloud"
 description = "Azure SQL Database"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Database::Cosmos DB"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Cosmos DB globally distributed multi-model database"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Database::SQL Managed Instance"
 "tide.vocab.stages" = "Cloud"
 description = "Azure SQL Managed Instance"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking"
 "tide.vocab.stages" = "Cloud"
 description = "Azure networking services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::Virtual Network"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Virtual Network (VNet)"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::Application Gateway"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Application Gateway and WAF"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::Load Balancer"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Load Balancer"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::ExpressRoute"
 "tide.vocab.stages" = "Cloud"
 description = "Azure ExpressRoute dedicated private connection"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::Azure DNS"
 "tide.vocab.stages" = "Cloud"
 description = "Azure DNS hosting"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::Azure Bastion"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Bastion secure RDP/SSH access"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::Azure Firewall"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Firewall network security"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security"
 "tide.vocab.stages" = "Cloud"
 description = "Azure security services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security::Entra ID"
 "tide.vocab.stages" = "Cloud"
 description = "Microsoft Entra ID in Azure (cloud identity)"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security::Key Vault"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Key Vault secrets and key management"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security::Sentinel"
 "tide.vocab.stages" = "Cloud"
 description = "Microsoft Sentinel cloud-native SIEM and SOAR"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security::Defender for Cloud"
 "tide.vocab.stages" = "Cloud"
 description = "Microsoft Defender for Cloud multi-cloud security posture"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security::Purview"
 "tide.vocab.stages" = "Cloud"
 description = "Microsoft Purview data governance and compliance"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security::Azure Policy"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Policy governance and compliance enforcement"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security::DDoS Protection"
 "tide.vocab.stages" = "Cloud"
 description = "Azure DDoS Protection"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Management"
 "tide.vocab.stages" = "Cloud"
 description = "Azure management and governance"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Management::Monitor"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Monitor observability platform"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Management::Automation"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Automation runbooks and DSC"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Management::Resource Manager"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Resource Manager (ARM) deployment and management"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Analytics"
 "tide.vocab.stages" = "Cloud"
 description = "Azure analytics services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Analytics::Synapse Analytics"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Synapse Analytics integrated analytics"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Analytics::Data Factory"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Data Factory data integration"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Analytics::Log Analytics"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Log Analytics workspace"
 
 [[keys]]
+version = "1.0"
 name = "Azure::IoT"
 "tide.vocab.stages" = "Cloud"
 description = "Azure IoT services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::IoT::IoT Hub"
 "tide.vocab.stages" = "Cloud"
 description = "Azure IoT Hub device connectivity"
 
 [[keys]]
+version = "1.0"
 name = "Azure::IoT::IoT Edge"
 "tide.vocab.stages" = "Cloud"
 description = "Azure IoT Edge device intelligence"
 
 [[keys]]
+version = "1.0"
 name = "Azure::IoT::Digital Twins"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Digital Twins modelling service"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Platform (GCP)"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Compute"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud compute services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Compute::Compute Engine"
 "tide.vocab.stages" = "Cloud"
 description = "Google Compute Engine virtual machines"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Compute::App Engine"
 "tide.vocab.stages" = "Cloud"
 description = "Google App Engine managed application hosting"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Compute::Cloud Functions"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Functions serverless compute"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Compute::Cloud Run"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Run serverless containers"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Compute::Kubernetes Engine"
 "tide.vocab.stages" = "Cloud"
 description = "Google Kubernetes Engine (GKE)"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Storage"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud storage services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Storage::Cloud Storage"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Storage (object storage)"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Storage::Filestore"
 "tide.vocab.stages" = "Cloud"
 description = "Google Filestore managed NFS"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Database"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud database services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Database::Cloud SQL"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud SQL managed relational databases"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Database::Cloud Spanner"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Spanner globally distributed database"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Database::Firestore"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Firestore NoSQL document database"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Database::Bigtable"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Bigtable NoSQL wide-column database"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Networking"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud networking services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Networking::VPC"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Virtual Private Cloud"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Networking::Cloud Load Balancing"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Load Balancing"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Networking::Cloud CDN"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud CDN content delivery"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Networking::Cloud DNS"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud DNS"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Security"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud security services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Security::Cloud IAM"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud IAM identity and access management"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Security::Security Command Center"
 "tide.vocab.stages" = "Cloud"
 description = "Google Security Command Center"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Security::Cloud Armor"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Armor DDoS and WAF"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Security::Chronicle"
 "tide.vocab.stages" = "Cloud"
 description = "Google Chronicle security analytics (SIEM)"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Security::BeyondCorp Enterprise"
 "tide.vocab.stages" = "Cloud"
 description = "Google BeyondCorp zero-trust access"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Security::Key Management"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Key Management Service"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Analytics"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud analytics services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Analytics::BigQuery"
 "tide.vocab.stages" = "Cloud"
 description = "Google BigQuery serverless data warehouse"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Analytics::Dataflow"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Dataflow stream and batch processing"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Management"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud management services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Management::Cloud Monitoring"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Monitoring"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Management::Cloud Logging"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Logging"
 
 [[keys]]
+version = "1.0"
 name = "OCI"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Cloud Infrastructure"
 
 [[keys]]
+version = "1.0"
 name = "OCI::Compute"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Cloud Compute services"
 
 [[keys]]
+version = "1.0"
 name = "OCI::Object Storage"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Cloud Object Storage"
 
 [[keys]]
+version = "1.0"
 name = "OCI::Autonomous Database"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Autonomous Database"
 
 [[keys]]
+version = "1.0"
 name = "OCI::Networking"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Cloud networking services (VCN, load balancers, DNS)"
 
 [[keys]]
+version = "1.0"
 name = "OCI::Identity"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Cloud Identity and Access Management"
 
 [[keys]]
+version = "1.0"
 name = "OCI::Container Engine"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Container Engine for Kubernetes (OKE)"
 
 [[keys]]
+version = "1.0"
 name = "OCI::Functions"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Cloud Functions serverless compute"
 
 [[keys]]
+version = "1.0"
 name = "OCI::Cloud Guard"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Cloud Guard security posture management"
 
 [[keys]]
+version = "1.0"
 name = "OCI::Logging"
 "tide.vocab.stages" = "Cloud"
 description = "Oracle Cloud Logging and log analytics"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Containers"
 "tide.vocab.stages" = "Cloud"
 description = "Azure container services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Containers::Container Registry"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Container Registry (ACR) container image registry"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Containers"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud container services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Containers::Artifact Registry"
 "tide.vocab.stages" = "Cloud"
 description = "Google Artifact Registry container and package repository"
 
 [[keys]]
+version = "1.0"
 name = "Serverless"
 "tide.vocab.stages" = "Cloud"
 description = "Cloud-agnostic serverless compute (when not provider-specific)"
 
 [[keys]]
+version = "1.0"
 name = "CDN"
 "tide.vocab.stages" = "Cloud"
 description = "Cloud-agnostic content delivery network"
 
 [[keys]]
+version = "1.0"
 name = "Object Storage"
 "tide.vocab.stages" = "Cloud"
 description = "Cloud-agnostic object storage"
 
 [[keys]]
+version = "1.0"
 name = "Firewalls"
 "tide.vocab.stages" = "Infrastructure"
 description = "Network firewall appliances and software"
 
 [[keys]]
+version = "1.0"
 name = "Firewalls::Palo Alto Networks"
 "tide.vocab.stages" = "Infrastructure"
 description = "Palo Alto Networks next-generation firewalls"
 
 [[keys]]
+version = "1.0"
 name = "Firewalls::Cisco ASA"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cisco ASA firewall appliance"
 
 [[keys]]
+version = "1.0"
 name = "Firewalls::Fortinet FortiGate"
 "tide.vocab.stages" = "Infrastructure"
 description = "Fortinet FortiGate next-generation firewall"
 
 [[keys]]
+version = "1.0"
 name = "Firewalls::Check Point"
 "tide.vocab.stages" = "Infrastructure"
 description = "Check Point firewall and security gateway"
 
 [[keys]]
+version = "1.0"
 name = "Firewalls::SonicWall"
 "tide.vocab.stages" = "Infrastructure"
 description = "SonicWall network security appliance"
 
 [[keys]]
+version = "1.0"
 name = "Firewalls::Juniper SRX"
 "tide.vocab.stages" = "Infrastructure"
 description = "Juniper SRX Series firewall"
 
 [[keys]]
+version = "1.0"
 name = "VPN"
 "tide.vocab.stages" = [ "Infrastructure", "Protocol",]
 description = "Virtual Private Network solutions and tunnelling protocols"
 
 [[keys]]
+version = "1.0"
 name = "VPN::OpenVPN"
 "tide.vocab.stages" = [ "Infrastructure", "Protocol",]
 description = "OpenVPN open-source VPN solution and protocol"
 
 [[keys]]
+version = "1.0"
 name = "VPN::Cisco AnyConnect"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cisco AnyConnect Secure Mobility Client"
 
 [[keys]]
+version = "1.0"
 name = "VPN::Palo Alto GlobalProtect"
 "tide.vocab.stages" = "Infrastructure"
 description = "Palo Alto Networks GlobalProtect VPN"
 
 [[keys]]
+version = "1.0"
 name = "VPN::Fortinet FortiClient"
 "tide.vocab.stages" = "Infrastructure"
 description = "Fortinet FortiClient VPN"
 
 [[keys]]
+version = "1.0"
 name = "VPN::Ivanti Connect Secure"
 "tide.vocab.stages" = "Infrastructure"
 description = "Ivanti Connect Secure (formerly Pulse Secure) VPN"
 
 [[keys]]
+version = "1.0"
 name = "VPN::WireGuard"
 "tide.vocab.stages" = [ "Infrastructure", "Protocol",]
 description = "WireGuard modern VPN protocol and implementation"
 
 [[keys]]
+version = "1.0"
 name = "Proxy"
 "tide.vocab.stages" = "Infrastructure"
 description = "Web proxy and content filtering solutions"
 
 [[keys]]
+version = "1.0"
 name = "Proxy::Squid"
 "tide.vocab.stages" = "Infrastructure"
 description = "Squid caching web proxy"
 
 [[keys]]
+version = "1.0"
 name = "Proxy::Zscaler"
 "tide.vocab.stages" = "Infrastructure"
 description = "Zscaler cloud security proxy"
 
 [[keys]]
+version = "1.0"
 name = "Proxy::Blue Coat"
 "tide.vocab.stages" = "Infrastructure"
 description = "Broadcom (Blue Coat) ProxySG web security"
 
 [[keys]]
+version = "1.0"
 name = "Remote Access"
 "tide.vocab.stages" = "Infrastructure"
 description = "Remote access solutions (non-VPN)"
 
 [[keys]]
+version = "1.0"
 name = "Remote Access::Citrix"
 "tide.vocab.stages" = "Infrastructure"
 description = "Citrix Virtual Apps and Desktops"
 
 [[keys]]
+version = "1.0"
 name = "Remote Access::RDP"
 "tide.vocab.stages" = "Infrastructure"
 description = "Microsoft Remote Desktop Protocol gateway/service"
 
 [[keys]]
+version = "1.0"
 name = "Remote Access::TeamViewer"
 "tide.vocab.stages" = "Infrastructure"
 description = "TeamViewer remote access and support"
 
 [[keys]]
+version = "1.0"
 name = "Remote Access::AnyDesk"
 "tide.vocab.stages" = "Infrastructure"
 description = "AnyDesk remote desktop software"
 
 [[keys]]
+version = "1.0"
 name = "Orchestration"
 "tide.vocab.stages" = "Infrastructure"
 description = "Container orchestration and workload management platforms"
 
 [[keys]]
+version = "1.0"
 name = "Orchestration::Kubernetes"
 "tide.vocab.stages" = "Infrastructure"
 description = "Kubernetes container orchestration platform"
 
 [[keys]]
+version = "1.0"
 name = "Orchestration::OpenShift"
 "tide.vocab.stages" = "Infrastructure"
 description = "Red Hat OpenShift Kubernetes platform"
 
 [[keys]]
+version = "1.0"
 name = "Orchestration::Docker Swarm"
 "tide.vocab.stages" = "Infrastructure"
 description = "Docker Swarm container orchestration"
 
 [[keys]]
+version = "1.0"
 name = "Orchestration::Nomad"
 "tide.vocab.stages" = "Infrastructure"
 description = "HashiCorp Nomad workload orchestrator"
 
 [[keys]]
+version = "1.0"
 name = "Orchestration::Rancher"
 "tide.vocab.stages" = "Infrastructure"
 description = "SUSE Rancher Kubernetes management"
 
 [[keys]]
+version = "1.0"
 name = "Virtualisation"
 "tide.vocab.stages" = "Infrastructure"
 description = "Virtualisation hypervisors and platforms"
 
 [[keys]]
+version = "1.0"
 name = "Virtualisation::VMware ESXi"
 "tide.vocab.stages" = "Infrastructure"
 description = "Broadcom VMware ESXi bare-metal Type 1 hypervisor"
 
 [[keys]]
+version = "1.0"
 name = "Virtualisation::Microsoft Hyper-V"
 "tide.vocab.stages" = "Infrastructure"
 description = "Microsoft Hyper-V hypervisor"
 
 [[keys]]
+version = "1.0"
 name = "Virtualisation::KVM"
 "tide.vocab.stages" = "Infrastructure"
 description = "Kernel-based Virtual Machine (KVM) Linux hypervisor"
 
 [[keys]]
+version = "1.0"
 name = "Virtualisation::Xen"
 "tide.vocab.stages" = "Infrastructure"
 description = "Xen open-source hypervisor"
 
 [[keys]]
+version = "1.0"
 name = "Virtualisation::Proxmox VE"
 "tide.vocab.stages" = "Infrastructure"
 description = "Proxmox Virtual Environment"
 
 [[keys]]
+version = "1.0"
 name = "Routers"
 "tide.vocab.stages" = "Infrastructure"
 description = "Network routers"
 
 [[keys]]
+version = "1.0"
 name = "Routers::Cisco"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cisco IOS/IOS-XE based routers"
 
 [[keys]]
+version = "1.0"
 name = "Routers::Juniper"
 "tide.vocab.stages" = "Infrastructure"
 description = "Juniper Networks routers"
 
 [[keys]]
+version = "1.0"
 name = "Routers::MikroTik"
 "tide.vocab.stages" = "Infrastructure"
 description = "MikroTik RouterOS routers"
 
 [[keys]]
+version = "1.0"
 name = "Routers::Arista"
 "tide.vocab.stages" = "Infrastructure"
 description = "Arista Networks routers"
 
 [[keys]]
+version = "1.0"
 name = "Switches"
 "tide.vocab.stages" = "Infrastructure"
 description = "Network switches"
 
 [[keys]]
+version = "1.0"
 name = "Switches::Cisco"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cisco Catalyst and Nexus switches"
 
 [[keys]]
+version = "1.0"
 name = "Switches::Juniper"
 "tide.vocab.stages" = "Infrastructure"
 description = "Juniper Networks switches"
 
 [[keys]]
+version = "1.0"
 name = "Switches::Aruba"
 "tide.vocab.stages" = "Infrastructure"
 description = "HPE Aruba network switches"
 
 [[keys]]
+version = "1.0"
 name = "Load Balancers"
 "tide.vocab.stages" = "Infrastructure"
 description = "Application and network load balancers"
 
 [[keys]]
+version = "1.0"
 name = "Load Balancers::F5 BIG-IP"
 "tide.vocab.stages" = "Infrastructure"
 description = "F5 BIG-IP application delivery controller"
 
 [[keys]]
+version = "1.0"
 name = "Load Balancers::HAProxy"
 "tide.vocab.stages" = "Infrastructure"
 description = "HAProxy open-source load balancer"
 
 [[keys]]
+version = "1.0"
 name = "Load Balancers::Citrix ADC"
 "tide.vocab.stages" = "Infrastructure"
 description = "Citrix ADC (formerly NetScaler) application delivery"
 
 [[keys]]
+version = "1.0"
 name = "DNS"
 "tide.vocab.stages" = "Infrastructure"
 description = "DNS infrastructure and services"
 
 [[keys]]
+version = "1.0"
 name = "DNS::BIND"
 "tide.vocab.stages" = "Infrastructure"
 description = "ISC BIND DNS server"
 
 [[keys]]
+version = "1.0"
 name = "DNS::Microsoft DNS"
 "tide.vocab.stages" = "Infrastructure"
 description = "Microsoft Windows DNS Server"
 
 [[keys]]
+version = "1.0"
 name = "DNS::Infoblox"
 "tide.vocab.stages" = "Infrastructure"
 description = "Infoblox DDI (DNS, DHCP, IPAM)"
 
 [[keys]]
+version = "1.0"
 name = "DNS::Cloudflare DNS"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cloudflare DNS services"
 
 [[keys]]
+version = "1.0"
 name = "Email"
 "tide.vocab.stages" = "Infrastructure"
 description = "Email infrastructure and services"
 
 [[keys]]
+version = "1.0"
 name = "Email::Exchange Server"
 "tide.vocab.stages" = "Infrastructure"
 description = "Microsoft Exchange Server (on-premises)"
 
 [[keys]]
+version = "1.0"
 name = "Email::Exchange Online"
 "tide.vocab.stages" = "Infrastructure"
 description = "Microsoft Exchange Online (cloud-hosted)"
 
 [[keys]]
+version = "1.0"
 name = "Email::Postfix"
 "tide.vocab.stages" = "Infrastructure"
 description = "Postfix open-source mail transfer agent"
 
 [[keys]]
+version = "1.0"
 name = "Email::Proofpoint"
 "tide.vocab.stages" = "Infrastructure"
 description = "Proofpoint email security gateway"
 
 [[keys]]
+version = "1.0"
 name = "Email::Mimecast"
 "tide.vocab.stages" = "Infrastructure"
 description = "Mimecast email security and resilience"
 
 [[keys]]
+version = "1.0"
 name = "Storage"
 "tide.vocab.stages" = "Infrastructure"
 description = "Enterprise storage systems"
 
 [[keys]]
+version = "1.0"
 name = "Storage::Dell EMC"
 "tide.vocab.stages" = "Infrastructure"
 description = "Dell EMC storage arrays"
 
 [[keys]]
+version = "1.0"
 name = "Storage::NetApp"
 "tide.vocab.stages" = "Infrastructure"
 description = "NetApp storage systems"
 
 [[keys]]
+version = "1.0"
 name = "Storage::Pure Storage"
 "tide.vocab.stages" = "Infrastructure"
 description = "Pure Storage all-flash arrays"
 
 [[keys]]
+version = "1.0"
 name = "Wireless"
 "tide.vocab.stages" = [ "Infrastructure", "Protocol",]
 description = "Wireless networking infrastructure and communication protocols"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::Wi-Fi Access Points"
 "tide.vocab.stages" = "Infrastructure"
 description = "Wi-Fi access points and controllers"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::Wireless Controllers"
 "tide.vocab.stages" = "Infrastructure"
 description = "Wireless LAN controllers"
 
 [[keys]]
+version = "1.0"
 name = "Monitoring"
 "tide.vocab.stages" = "Infrastructure"
 description = "Infrastructure monitoring and observability"
 
 [[keys]]
+version = "1.0"
 name = "Monitoring::Prometheus"
 "tide.vocab.stages" = "Infrastructure"
 description = "Prometheus open-source monitoring"
 
 [[keys]]
+version = "1.0"
 name = "Monitoring::Grafana"
 "tide.vocab.stages" = "Infrastructure"
 description = "Grafana observability and dashboards"
 
 [[keys]]
+version = "1.0"
 name = "Monitoring::Datadog"
 "tide.vocab.stages" = "Infrastructure"
 description = "Datadog cloud monitoring platform"
 
 [[keys]]
+version = "1.0"
 name = "Monitoring::Nagios"
 "tide.vocab.stages" = "Infrastructure"
 description = "Nagios infrastructure monitoring"
 
 [[keys]]
+version = "1.0"
 name = "Monitoring::Zabbix"
 "tide.vocab.stages" = "Infrastructure"
 description = "Zabbix enterprise monitoring solution"
 
 [[keys]]
+version = "1.0"
 name = "Monitoring::SolarWinds"
 "tide.vocab.stages" = "Infrastructure"
 description = "SolarWinds IT management and monitoring"
 
 [[keys]]
+version = "1.0"
 name = "Backup and Recovery"
 "tide.vocab.stages" = "Infrastructure"
 description = "Data backup and disaster recovery solutions"
 
 [[keys]]
+version = "1.0"
 name = "Backup and Recovery::Veeam"
 "tide.vocab.stages" = "Infrastructure"
 description = "Veeam Backup & Replication"
 
 [[keys]]
+version = "1.0"
 name = "Backup and Recovery::Commvault"
 "tide.vocab.stages" = "Infrastructure"
 description = "Commvault data protection"
 
 [[keys]]
+version = "1.0"
 name = "Backup and Recovery::Veritas NetBackup"
 "tide.vocab.stages" = "Infrastructure"
 description = "Veritas NetBackup enterprise backup"
 
 [[keys]]
+version = "1.0"
 name = "Backup and Recovery::Rubrik"
 "tide.vocab.stages" = "Infrastructure"
 description = "Rubrik cloud data management"
 
 [[keys]]
+version = "1.0"
 name = "Certificate"
 "tide.vocab.stages" = "Infrastructure"
 description = "Certificate and PKI infrastructure"
 
 [[keys]]
+version = "1.0"
 name = "Certificate::AD CS"
 "tide.vocab.stages" = "Infrastructure"
 description = "Active Directory Certificate Services"
 
 [[keys]]
+version = "1.0"
 name = "Certificate::Let's Encrypt"
 "tide.vocab.stages" = "Infrastructure"
 description = "Let's Encrypt automated certificate authority"
 
 [[keys]]
+version = "1.0"
 name = "Certificate::DigiCert"
 "tide.vocab.stages" = "Infrastructure"
 description = "DigiCert TLS/SSL certificate authority"
 
 [[keys]]
+version = "1.0"
 name = "Industrial"
 "tide.vocab.stages" = [ "Infrastructure", "Protocol",]
 description = "Industrial control systems, operational technology and automation protocols"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::SCADA"
 "tide.vocab.stages" = "Infrastructure"
 description = "Supervisory Control and Data Acquisition systems"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::SCADA::Siemens SIMATIC"
 "tide.vocab.stages" = "Infrastructure"
 description = "Siemens SIMATIC SCADA platform"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::SCADA::Schneider Electric EcoStruxure"
 "tide.vocab.stages" = "Infrastructure"
 description = "Schneider Electric EcoStruxure SCADA"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::SCADA::Rockwell Automation FactoryTalk"
 "tide.vocab.stages" = "Infrastructure"
 description = "Rockwell Automation FactoryTalk SCADA"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::PLC"
 "tide.vocab.stages" = "Infrastructure"
 description = "Programmable Logic Controllers"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::PLC::Siemens S7"
 "tide.vocab.stages" = "Infrastructure"
 description = "Siemens S7 series PLC"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::PLC::Allen-Bradley ControlLogix"
 "tide.vocab.stages" = "Infrastructure"
 description = "Rockwell Allen-Bradley ControlLogix PLC"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::PLC::Schneider Electric Modicon"
 "tide.vocab.stages" = "Infrastructure"
 description = "Schneider Electric Modicon PLC"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::DCS"
 "tide.vocab.stages" = "Infrastructure"
 description = "Distributed Control Systems"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::DCS::Honeywell Experion"
 "tide.vocab.stages" = "Infrastructure"
 description = "Honeywell Experion DCS"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::DCS::Emerson DeltaV"
 "tide.vocab.stages" = "Infrastructure"
 description = "Emerson DeltaV DCS"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::DCS::ABB 800xA"
 "tide.vocab.stages" = "Infrastructure"
 description = "ABB System 800xA DCS"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::HMI"
 "tide.vocab.stages" = "Infrastructure"
 description = "Human Machine Interface systems"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::HMI::Siemens WinCC"
 "tide.vocab.stages" = "Infrastructure"
 description = "Siemens WinCC HMI/SCADA"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::BMS"
 "tide.vocab.stages" = "Infrastructure"
 description = "Building Management Systems"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::Energy Management"
 "tide.vocab.stages" = "Infrastructure"
 description = "Industrial energy management systems"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::Safety Instrumented Systems"
 "tide.vocab.stages" = "Infrastructure"
 description = "Safety Instrumented Systems (SIS) for process safety"
 
 [[keys]]
+version = "1.0"
 name = "Data Centre"
 "tide.vocab.stages" = "Infrastructure"
 description = "Data centre infrastructure"
 
 [[keys]]
+version = "1.0"
 name = "Data Centre::Cisco UCS"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cisco Unified Computing System"
 
 [[keys]]
+version = "1.0"
 name = "Data Centre::Dell VxRail"
 "tide.vocab.stages" = "Infrastructure"
 description = "Dell VxRail hyperconverged infrastructure"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection"
 "tide.vocab.stages" = "Security"
 description = "Endpoint detection and response / anti-malware solutions"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::CrowdStrike Falcon"
 "tide.vocab.stages" = "Security"
 description = "CrowdStrike Falcon endpoint protection platform"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Microsoft Defender for Endpoint"
 "tide.vocab.stages" = "Security"
 description = "Microsoft Defender for Endpoint EDR/antivirus"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::SentinelOne"
 "tide.vocab.stages" = "Security"
 description = "SentinelOne Singularity endpoint protection"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Sophos Intercept X"
 "tide.vocab.stages" = "Security"
 description = "Sophos Intercept X endpoint protection"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Trend Micro Apex One"
 "tide.vocab.stages" = "Security"
 description = "Trend Micro Apex One endpoint security"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Symantec Endpoint Protection"
 "tide.vocab.stages" = "Security"
 description = "Broadcom Symantec Endpoint Protection"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Kaspersky Endpoint Security"
 "tide.vocab.stages" = "Security"
 description = "Kaspersky Endpoint Security"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Bitdefender GravityZone"
 "tide.vocab.stages" = "Security"
 description = "Bitdefender GravityZone endpoint security"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Carbon Black"
 "tide.vocab.stages" = "Security"
 description = "Broadcom Carbon Black endpoint detection and response (formerly VMware Carbon Black)"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::ESET"
 "tide.vocab.stages" = "Security"
 description = "ESET Endpoint Security"
 
 [[keys]]
+version = "1.0"
 name = "SIEM"
 "tide.vocab.stages" = "Security"
 description = "Security Information and Event Management platforms"
 
 [[keys]]
+version = "1.0"
 name = "SIEM::Splunk"
 "tide.vocab.stages" = "Security"
 description = "Cisco Splunk Enterprise / Splunk Cloud SIEM platform"
 
 [[keys]]
+version = "1.0"
 name = "SIEM::Microsoft Sentinel"
 "tide.vocab.stages" = "Security"
 description = "Microsoft Sentinel cloud-native SIEM"
 
 [[keys]]
+version = "1.0"
 name = "SIEM::IBM QRadar"
 "tide.vocab.stages" = "Security"
 description = "IBM QRadar SIEM"
 
 [[keys]]
+version = "1.0"
 name = "SIEM::Elastic Security"
 "tide.vocab.stages" = "Security"
 description = "Elastic Security SIEM"
 
 [[keys]]
+version = "1.0"
 name = "SIEM::LogRhythm"
 "tide.vocab.stages" = "Security"
 description = "LogRhythm SIEM platform"
 
 [[keys]]
+version = "1.0"
 name = "SIEM::Google Chronicle"
 "tide.vocab.stages" = "Security"
 description = "Google Chronicle security analytics SIEM"
 
 [[keys]]
+version = "1.0"
 name = "SOAR"
 "tide.vocab.stages" = "Security"
 description = "Security Orchestration, Automation and Response"
 
 [[keys]]
+version = "1.0"
 name = "SOAR::Cortex XSOAR"
 "tide.vocab.stages" = "Security"
 description = "Palo Alto Cortex XSOAR (formerly Demisto)"
 
 [[keys]]
+version = "1.0"
 name = "SOAR::Splunk SOAR"
 "tide.vocab.stages" = "Security"
 description = "Cisco Splunk SOAR security orchestration and automation (formerly Phantom)"
 
 [[keys]]
+version = "1.0"
 name = "SOAR::Tines"
 "tide.vocab.stages" = "Security"
 description = "Tines no-code security automation"
 
 [[keys]]
+version = "1.0"
 name = "SOAR::Shuffle"
 "tide.vocab.stages" = "Security"
 description = "Shuffle open-source SOAR"
 
 [[keys]]
+version = "1.0"
 name = "NDR"
 "tide.vocab.stages" = "Security"
 description = "Network Detection and Response solutions"
 
 [[keys]]
+version = "1.0"
 name = "NDR::Vectra"
 "tide.vocab.stages" = "Security"
 description = "Vectra AI network detection and response"
 
 [[keys]]
+version = "1.0"
 name = "NDR::Darktrace"
 "tide.vocab.stages" = "Security"
 description = "Darktrace AI-powered network defence"
 
 [[keys]]
+version = "1.0"
 name = "NDR::ExtraHop"
 "tide.vocab.stages" = "Security"
 description = "ExtraHop Reveal(x) network detection"
 
 [[keys]]
+version = "1.0"
 name = "Vulnerability Management"
 "tide.vocab.stages" = "Security"
 description = "Vulnerability scanning and management tools"
 
 [[keys]]
+version = "1.0"
 name = "Vulnerability Management::Qualys"
 "tide.vocab.stages" = "Security"
 description = "Qualys vulnerability management platform"
 
 [[keys]]
+version = "1.0"
 name = "Vulnerability Management::Tenable"
 "tide.vocab.stages" = "Security"
 description = "Tenable Nessus / Tenable.io vulnerability scanner"
 
 [[keys]]
+version = "1.0"
 name = "Vulnerability Management::Rapid7 InsightVM"
 "tide.vocab.stages" = "Security"
 description = "Rapid7 InsightVM vulnerability management"
 
 [[keys]]
+version = "1.0"
 name = "Cloud Security"
 "tide.vocab.stages" = "Security"
 description = "Cloud security posture management and workload protection"
 
 [[keys]]
+version = "1.0"
 name = "Cloud Security::Wiz"
 "tide.vocab.stages" = "Security"
 description = "Wiz cloud security platform"
 
 [[keys]]
+version = "1.0"
 name = "Cloud Security::Prisma Cloud"
 "tide.vocab.stages" = "Security"
 description = "Palo Alto Prisma Cloud CNAPP"
 
 [[keys]]
+version = "1.0"
 name = "Cloud Security::Orca Security"
 "tide.vocab.stages" = "Security"
 description = "Orca Security agentless cloud security"
 
 [[keys]]
+version = "1.0"
 name = "Email Security"
 "tide.vocab.stages" = "Security"
 description = "Email security and anti-phishing solutions"
 
 [[keys]]
+version = "1.0"
 name = "Email Security::Proofpoint"
 "tide.vocab.stages" = "Security"
 description = "Proofpoint email security"
 
 [[keys]]
+version = "1.0"
 name = "Email Security::Mimecast"
 "tide.vocab.stages" = "Security"
 description = "Mimecast email security"
 
 [[keys]]
+version = "1.0"
 name = "Email Security::Microsoft Defender for Office 365"
 "tide.vocab.stages" = "Security"
 description = "Microsoft Defender for Office 365 email protection"
 
 [[keys]]
+version = "1.0"
 name = "Forensic Analysis"
 "tide.vocab.stages" = "Security"
 description = "Digital forensics and investigation tools"
 
 [[keys]]
+version = "1.0"
 name = "Forensic Analysis::Autopsy"
 "tide.vocab.stages" = "Security"
 description = "Autopsy open-source digital forensics platform"
 
 [[keys]]
+version = "1.0"
 name = "Forensic Analysis::Magnet AXIOM"
 "tide.vocab.stages" = "Security"
 description = "Magnet AXIOM digital forensics and incident response"
 
 [[keys]]
+version = "1.0"
 name = "Forensic Analysis::Cellebrite"
 "tide.vocab.stages" = "Security"
 description = "Cellebrite mobile forensics"
 
 [[keys]]
+version = "1.0"
 name = "Threat Intelligence"
 "tide.vocab.stages" = "Security"
 description = "Threat intelligence platforms and feeds"
 
 [[keys]]
+version = "1.0"
 name = "Threat Intelligence::MISP"
 "tide.vocab.stages" = "Security"
 description = "MISP open-source threat intelligence platform"
 
 [[keys]]
+version = "1.0"
 name = "Threat Intelligence::Recorded Future"
 "tide.vocab.stages" = "Security"
 description = "Recorded Future intelligence platform"
 
 [[keys]]
+version = "1.0"
 name = "Threat Intelligence::Mandiant"
 "tide.vocab.stages" = "Security"
 description = "Mandiant (Google) threat intelligence"
 
 [[keys]]
+version = "1.0"
 name = "Data Protection"
 "tide.vocab.stages" = "Security"
 description = "Data loss prevention and encryption solutions"
 
 [[keys]]
+version = "1.0"
 name = "Data Protection::DLP"
 "tide.vocab.stages" = "Security"
 description = "Data Loss Prevention solutions"
 
 [[keys]]
+version = "1.0"
 name = "Data Protection::Encryption"
 "tide.vocab.stages" = "Security"
 description = "Disk and data encryption technologies"
 
 [[keys]]
+version = "1.0"
 name = "Data Protection::Encryption::BitLocker"
 "tide.vocab.stages" = "Security"
 description = "Microsoft BitLocker full-disk and volume encryption"
 
 [[keys]]
+version = "1.0"
 name = "Data Protection::Encryption::VeraCrypt"
 "tide.vocab.stages" = "Security"
 description = "VeraCrypt open-source disk encryption software (TrueCrypt successor)"
 
 [[keys]]
+version = "1.0"
 name = "Network Security"
 "tide.vocab.stages" = "Security"
 description = "Network-layer security appliances and solutions"
 
 [[keys]]
+version = "1.0"
 name = "Network Security::IDS"
 "tide.vocab.stages" = "Security"
 description = "Intrusion detection and prevention systems"
 
 [[keys]]
+version = "1.0"
 name = "Network Security::IDS::Snort"
 "tide.vocab.stages" = "Security"
 description = "Cisco Snort open-source intrusion detection system"
 
 [[keys]]
+version = "1.0"
 name = "Network Security::IDS::Suricata"
 "tide.vocab.stages" = "Security"
 description = "Suricata open-source network threat detection engine (IDS/IPS)"
 
 [[keys]]
+version = "1.0"
 name = "Network Security::WAF"
 "tide.vocab.stages" = "Security"
 description = "Web Application Firewalls (generic)"
 
 [[keys]]
+version = "1.0"
 name = "Network Security::WAF::Cloudflare WAF"
 "tide.vocab.stages" = "Security"
 description = "Cloudflare Web Application Firewall"
 
 [[keys]]
+version = "1.0"
 name = "Network Security::WAF::Imperva"
 "tide.vocab.stages" = "Security"
 description = "Imperva Web Application Firewall"
 
 [[keys]]
+version = "1.0"
 name = "Deception"
 "tide.vocab.stages" = "Security"
 description = "Deception technology and honeypots"
 
 [[keys]]
+version = "1.0"
 name = "XDR"
 "tide.vocab.stages" = "Security"
 description = "Extended Detection and Response platforms unifying endpoint, network and cloud telemetry"
 
 [[keys]]
+version = "1.0"
 name = "XDR::Palo Alto Cortex XDR"
 "tide.vocab.stages" = "Security"
 description = "Palo Alto Networks Cortex XDR extended detection and response"
 
 [[keys]]
+version = "1.0"
 name = "XDR::Microsoft Defender XDR"
 "tide.vocab.stages" = "Security"
 description = "Microsoft Defender XDR (formerly Microsoft 365 Defender)"
 
 [[keys]]
+version = "1.0"
 name = "XDR::Trend Micro Vision One"
 "tide.vocab.stages" = "Security"
 description = "Trend Micro Vision One XDR platform"
 
 [[keys]]
+version = "1.0"
 name = "CASB"
 "tide.vocab.stages" = "Security"
 description = "Cloud Access Security Broker solutions for cloud application visibility and control"
 
 [[keys]]
+version = "1.0"
 name = "CASB::Microsoft Defender for Cloud Apps"
 "tide.vocab.stages" = "Security"
 description = "Microsoft Defender for Cloud Apps CASB (formerly MCAS)"
 
 [[keys]]
+version = "1.0"
 name = "CASB::Netskope"
 "tide.vocab.stages" = "Security"
 description = "Netskope cloud security and CASB platform"
 
 [[keys]]
+version = "1.0"
 name = "CASB::Zscaler CASB"
 "tide.vocab.stages" = "Security"
 description = "Zscaler cloud access security broker"
 
 [[keys]]
+version = "1.0"
 name = "Attack Surface Management"
 "tide.vocab.stages" = "Security"
 description = "External attack surface management and internet exposure discovery"
 
 [[keys]]
+version = "1.0"
 name = "Attack Surface Management::Censys"
 "tide.vocab.stages" = "Security"
 description = "Censys internet-wide scanning and attack surface management"
 
 [[keys]]
+version = "1.0"
 name = "Attack Surface Management::Shodan"
 "tide.vocab.stages" = "Security"
 description = "Shodan internet-connected device search engine"
 
 [[keys]]
+version = "1.0"
 name = "Smart Home"
 "tide.vocab.stages" = "IoT"
 description = "Consumer smart home devices and ecosystems"
 
 [[keys]]
+version = "1.0"
 name = "Smart Home::Amazon Echo"
 "tide.vocab.stages" = "IoT"
 description = "Amazon Echo smart speaker and Alexa ecosystem"
 
 [[keys]]
+version = "1.0"
 name = "Smart Home::Google Home"
 "tide.vocab.stages" = "IoT"
 description = "Google Home / Nest smart devices"
 
 [[keys]]
+version = "1.0"
 name = "Smart Home::Apple HomeKit"
 "tide.vocab.stages" = "IoT"
 description = "Apple HomeKit smart home ecosystem"
 
 [[keys]]
+version = "1.0"
 name = "Smart Home::Smart Locks"
 "tide.vocab.stages" = "IoT"
 description = "IoT-connected smart locks"
 
 [[keys]]
+version = "1.0"
 name = "Smart Home::Smart Cameras"
 "tide.vocab.stages" = "IoT"
 description = "IoT-connected security cameras"
 
 [[keys]]
+version = "1.0"
 name = "Wearables"
 "tide.vocab.stages" = "IoT"
 description = "Wearable connected devices"
 
 [[keys]]
+version = "1.0"
 name = "Wearables::Apple Watch"
 "tide.vocab.stages" = "IoT"
 description = "Apple Watch smartwatch"
 
 [[keys]]
+version = "1.0"
 name = "Wearables::Fitbit"
 "tide.vocab.stages" = "IoT"
 description = "Fitbit fitness trackers"
 
 [[keys]]
+version = "1.0"
 name = "Cameras"
 "tide.vocab.stages" = "IoT"
 description = "Network-connected cameras and surveillance systems"
 
 [[keys]]
+version = "1.0"
 name = "Cameras::CCTV"
 "tide.vocab.stages" = "IoT"
 description = "Closed-circuit television surveillance systems"
 
 [[keys]]
+version = "1.0"
 name = "Cameras::IP Cameras"
 "tide.vocab.stages" = "IoT"
 description = "Internet Protocol cameras"
 
 [[keys]]
+version = "1.0"
 name = "Medical Devices"
 "tide.vocab.stages" = "IoT"
 description = "Connected medical and healthcare devices"
 
 [[keys]]
+version = "1.0"
 name = "Medical Devices::Infusion Pumps"
 "tide.vocab.stages" = "IoT"
 description = "Network-connected infusion pump systems"
 
 [[keys]]
+version = "1.0"
 name = "Medical Devices::Patient Monitors"
 "tide.vocab.stages" = "IoT"
 description = "IoT-connected patient monitoring systems"
 
 [[keys]]
+version = "1.0"
 name = "Medical Devices::MRI/CT Systems"
 "tide.vocab.stages" = "IoT"
 description = "Connected MRI and CT imaging systems"
 
 [[keys]]
+version = "1.0"
 name = "Automotive"
 "tide.vocab.stages" = "IoT"
 description = "Connected vehicle and automotive IoT systems"
 
 [[keys]]
+version = "1.0"
 name = "Automotive::Connected Cars"
 "tide.vocab.stages" = "IoT"
 description = "Internet-connected vehicle systems"
 
 [[keys]]
+version = "1.0"
 name = "Automotive::Vehicle Telematics"
 "tide.vocab.stages" = "IoT"
 description = "Vehicle telematics and fleet management"
 
 [[keys]]
+version = "1.0"
 name = "Automotive::V2X Communication"
 "tide.vocab.stages" = "IoT"
 description = "Vehicle-to-Everything communication"
 
 [[keys]]
+version = "1.0"
 name = "Smart Building"
 "tide.vocab.stages" = "IoT"
 description = "Smart building automation and management"
 
 [[keys]]
+version = "1.0"
 name = "Smart Building::HVAC"
 "tide.vocab.stages" = "IoT"
 description = "Connected HVAC systems"
 
 [[keys]]
+version = "1.0"
 name = "Smart Building::Access Control"
 "tide.vocab.stages" = "IoT"
 description = "IoT-connected physical access control"
 
 [[keys]]
+version = "1.0"
 name = "Smart Building::Lighting Systems"
 "tide.vocab.stages" = "IoT"
 description = "Smart lighting and management systems"
 
 [[keys]]
+version = "1.0"
 name = "Consumer Electronics"
 "tide.vocab.stages" = "IoT"
 description = "Connected consumer electronic devices"
 
 [[keys]]
+version = "1.0"
 name = "Consumer Electronics::Smart TV"
 "tide.vocab.stages" = "IoT"
 description = "Internet-connected smart televisions"
 
 [[keys]]
+version = "1.0"
 name = "Consumer Electronics::Gaming Consoles"
 "tide.vocab.stages" = "IoT"
 description = "Network-connected gaming consoles"
 
 [[keys]]
+version = "1.0"
 name = "Consumer Electronics::Smart Speakers"
 "tide.vocab.stages" = "IoT"
 description = "IoT-connected smart speakers"
 
 [[keys]]
+version = "1.0"
 name = "Embedded Systems"
 "tide.vocab.stages" = "IoT"
 description = "Embedded hardware platforms and microcontrollers"
 
 [[keys]]
+version = "1.0"
 name = "Embedded Systems::Arduino"
 "tide.vocab.stages" = "IoT"
 description = "Arduino microcontroller platform"
 
 [[keys]]
+version = "1.0"
 name = "Embedded Systems::Raspberry Pi"
 "tide.vocab.stages" = "IoT"
 description = "Raspberry Pi single-board computer"
 
 [[keys]]
+version = "1.0"
 name = "Embedded Systems::ESP8266"
 "tide.vocab.stages" = "IoT"
 description = "Espressif ESP8266 Wi-Fi microcontroller"
 
 [[keys]]
+version = "1.0"
 name = "Industrial IoT"
 "tide.vocab.stages" = "IoT"
 description = "Industrial Internet of Things devices and gateways"
 
 [[keys]]
+version = "1.0"
 name = "Industrial IoT::IoT Gateways"
 "tide.vocab.stages" = "IoT"
 description = "Industrial IoT edge gateways"
 
 [[keys]]
+version = "1.0"
 name = "Industrial IoT::Smart Sensors"
 "tide.vocab.stages" = "IoT"
 description = "Industrial smart sensors and instrumentation"
 
 [[keys]]
+version = "1.0"
 name = "Agriculture"
 "tide.vocab.stages" = "IoT"
 description = "Agricultural IoT and precision farming devices"
 
 [[keys]]
+version = "1.0"
 name = "Agriculture::Precision Farming"
 "tide.vocab.stages" = "IoT"
 description = "IoT-enabled precision farming systems"
 
 [[keys]]
+version = "1.0"
 name = "Agriculture::Smart Irrigation"
 "tide.vocab.stages" = "IoT"
 description = "IoT-connected smart irrigation systems"
 
 [[keys]]
+version = "1.0"
 name = "Printers"
 "tide.vocab.stages" = "IoT"
 description = "Network-connected printers and multi-function peripherals"
 
 [[keys]]
+version = "1.0"
 name = "Printers::Network Printers"
 "tide.vocab.stages" = "IoT"
 description = "Enterprise network-connected printers (often exposing print protocols and web interfaces)"
 
 [[keys]]
+version = "1.0"
 name = "Printers::Multi-Function Peripherals"
 "tide.vocab.stages" = "IoT"
 description = "Multi-function devices combining print, scan, fax and copy capabilities"
 
 [[keys]]
+version = "1.0"
 name = "Point of Sale"
 "tide.vocab.stages" = "IoT"
 description = "Point-of-sale terminals and payment processing devices"
 
 [[keys]]
+version = "1.0"
 name = "Point of Sale::Payment Terminals"
 "tide.vocab.stages" = "IoT"
 description = "Card payment terminals and chip readers"
 
 [[keys]]
+version = "1.0"
 name = "Point of Sale::Self-Service Kiosks"
 "tide.vocab.stages" = "IoT"
 description = "Self-service kiosks with payment and interaction capabilities"
 
 [[keys]]
+version = "1.0"
 name = "Drones"
 "tide.vocab.stages" = "IoT"
 description = "Unmanned aerial vehicles and drone systems"
 
 [[keys]]
+version = "1.0"
 name = "Drones::Commercial UAV"
 "tide.vocab.stages" = "IoT"
 description = "Commercial and enterprise unmanned aerial vehicles"
 
 [[keys]]
+version = "1.0"
 name = "Drones::Drone Controllers"
 "tide.vocab.stages" = "IoT"
 description = "Ground control stations and drone management software"
 
 [[keys]]
+version = "1.0"
 name = "Smart Grid"
 "tide.vocab.stages" = "IoT"
 description = "Smart grid and energy metering infrastructure"
 
 [[keys]]
+version = "1.0"
 name = "Smart Grid::Smart Meters"
 "tide.vocab.stages" = "IoT"
 description = "IoT-connected smart electricity and utility meters"
 
 [[keys]]
+version = "1.0"
 name = "Smart Grid::Energy Management"
 "tide.vocab.stages" = "IoT"
 description = "Energy distribution and demand management systems"
 
 [[keys]]
+version = "1.0"
 name = "NAS"
 "tide.vocab.stages" = "IoT"
 description = "Network Attached Storage devices"
 
 [[keys]]
+version = "1.0"
 name = "NAS::QNAP"
 "tide.vocab.stages" = "IoT"
 description = "QNAP NAS devices"
 
 [[keys]]
+version = "1.0"
 name = "NAS::Synology"
 "tide.vocab.stages" = "IoT"
 description = "Synology NAS devices"
 
 [[keys]]
+version = "1.0"
 name = "NAS::Western Digital"
 "tide.vocab.stages" = "IoT"
 description = "Western Digital My Cloud NAS devices"
 
 [[keys]]
+version = "1.0"
 name = "VoIP"
 "tide.vocab.stages" = "IoT"
 description = "Voice over IP hardware devices and telephony endpoints"
 
 [[keys]]
+version = "1.0"
 name = "VoIP::Cisco IP Phones"
 "tide.vocab.stages" = "IoT"
 description = "Cisco IP Phone series"
 
 [[keys]]
+version = "1.0"
 name = "VoIP::Polycom"
 "tide.vocab.stages" = "IoT"
 description = "Poly (Polycom) VoIP endpoints and conference phones"
 
 [[keys]]
+version = "1.0"
 name = "UPS"
 "tide.vocab.stages" = "IoT"
 description = "Uninterruptible Power Supply network-managed devices"
 
 [[keys]]
+version = "1.0"
 name = "UPS::APC"
 "tide.vocab.stages" = "IoT"
 description = "APC (Schneider Electric) network-managed UPS"
 
 [[keys]]
+version = "1.0"
 name = "Embedded Systems::ESP32"
 "tide.vocab.stages" = "IoT"
 description = "Espressif ESP32 Wi-Fi/Bluetooth SoC (successor to ESP8266)"
 
 [[keys]]
+version = "1.0"
 name = "Medical Devices::PACS"
 "tide.vocab.stages" = "IoT"
 description = "Picture Archiving and Communication System (DICOM protocol)"
 
 [[keys]]
+version = "1.0"
 name = "Video Conferencing Hardware"
 "tide.vocab.stages" = "IoT"
 description = "Conference room video endpoints and collaboration hardware"
 
 [[keys]]
+version = "1.0"
 name = "Smart Home::Ring"
 "tide.vocab.stages" = "IoT"
 description = "Amazon Ring doorbell and security cameras"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer"
 "tide.vocab.stages" = "Protocol"
 description = "Application-layer network protocols"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::HTTP"
 "tide.vocab.stages" = "Protocol"
 description = "Hypertext Transfer Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::HTTPS"
 "tide.vocab.stages" = "Protocol"
 description = "HTTP over TLS (secure)"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::FTP"
 "tide.vocab.stages" = "Protocol"
 description = "File Transfer Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::SSH"
 "tide.vocab.stages" = "Protocol"
 description = "Secure Shell protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::SMTP"
 "tide.vocab.stages" = "Protocol"
 description = "Simple Mail Transfer Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::IMAP"
 "tide.vocab.stages" = "Protocol"
 description = "Internet Message Access Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::POP3"
 "tide.vocab.stages" = "Protocol"
 description = "Post Office Protocol v3"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::LDAP"
 "tide.vocab.stages" = "Protocol"
 description = "Lightweight Directory Access Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::RDP"
 "tide.vocab.stages" = "Protocol"
 description = "Remote Desktop Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::SNMP"
 "tide.vocab.stages" = "Protocol"
 description = "Simple Network Management Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::Telnet"
 "tide.vocab.stages" = "Protocol"
 description = "Telnet remote terminal protocol (unencrypted)"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::NFS"
 "tide.vocab.stages" = "Protocol"
 description = "Network File System protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::SMB"
 "tide.vocab.stages" = "Protocol"
 description = "Server Message Block file sharing protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::WebSocket"
 "tide.vocab.stages" = "Protocol"
 description = "WebSocket full-duplex communication protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::gRPC"
 "tide.vocab.stages" = "Protocol"
 description = "gRPC remote procedure call framework"
 
 [[keys]]
+version = "1.0"
 name = "Transport Layer"
 "tide.vocab.stages" = "Protocol"
 description = "Transport-layer network protocols"
 
 [[keys]]
+version = "1.0"
 name = "Transport Layer::TCP"
 "tide.vocab.stages" = "Protocol"
 description = "Transmission Control Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Transport Layer::UDP"
 "tide.vocab.stages" = "Protocol"
 description = "User Datagram Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Transport Layer::QUIC"
 "tide.vocab.stages" = "Protocol"
 description = "QUIC transport protocol (HTTP/3 transport)"
 
 [[keys]]
+version = "1.0"
 name = "Network Layer"
 "tide.vocab.stages" = "Protocol"
 description = "Network-layer protocols"
 
 [[keys]]
+version = "1.0"
 name = "Network Layer::IPv4"
 "tide.vocab.stages" = "Protocol"
 description = "Internet Protocol version 4"
 
 [[keys]]
+version = "1.0"
 name = "Network Layer::IPv6"
 "tide.vocab.stages" = "Protocol"
 description = "Internet Protocol version 6"
 
 [[keys]]
+version = "1.0"
 name = "Network Layer::ICMP"
 "tide.vocab.stages" = "Protocol"
 description = "Internet Control Message Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Network Layer::IPsec"
 "tide.vocab.stages" = "Protocol"
 description = "Internet Protocol Security suite"
 
 [[keys]]
+version = "1.0"
 name = "Network Layer::GRE"
 "tide.vocab.stages" = "Protocol"
 description = "Generic Routing Encapsulation tunnelling"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::Modbus"
 "tide.vocab.stages" = "Protocol"
 description = "Modbus serial and TCP communication protocol"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::OPC UA"
 "tide.vocab.stages" = "Protocol"
 description = "OPC Unified Architecture machine-to-machine protocol"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::DNP3"
 "tide.vocab.stages" = "Protocol"
 description = "Distributed Network Protocol 3 (SCADA communications)"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::PROFINET"
 "tide.vocab.stages" = "Protocol"
 description = "PROFINET industrial Ethernet standard"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::EtherNet/IP"
 "tide.vocab.stages" = "Protocol"
 description = "EtherNet/IP industrial network protocol"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::BACnet"
 "tide.vocab.stages" = "Protocol"
 description = "BACnet building automation and control protocol"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::IEC 61850"
 "tide.vocab.stages" = "Protocol"
 description = "IEC 61850 power utility automation standard"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::CAN"
 "tide.vocab.stages" = "Protocol"
 description = "Controller Area Network vehicle/industrial bus"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::Wi-Fi"
 "tide.vocab.stages" = "Protocol"
 description = "IEEE 802.11 wireless networking"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::Bluetooth"
 "tide.vocab.stages" = "Protocol"
 description = "Bluetooth short-range wireless protocol"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::Zigbee"
 "tide.vocab.stages" = "Protocol"
 description = "Zigbee low-power wireless mesh networking"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::LoRaWAN"
 "tide.vocab.stages" = "Protocol"
 description = "LoRaWAN long-range low-power wireless"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::NFC"
 "tide.vocab.stages" = "Protocol"
 description = "Near Field Communication"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::Z-Wave"
 "tide.vocab.stages" = "Protocol"
 description = "Z-Wave home automation wireless protocol"
 
 [[keys]]
+version = "1.0"
 name = "Domain Name System"
 "tide.vocab.stages" = "Protocol"
 description = "DNS protocol family"
 
 [[keys]]
+version = "1.0"
 name = "Domain Name System::DNS"
 "tide.vocab.stages" = "Protocol"
 description = "Domain Name System resolution protocol"
 
 [[keys]]
+version = "1.0"
 name = "Domain Name System::DNSSEC"
 "tide.vocab.stages" = "Protocol"
 description = "DNS Security Extensions"
 
 [[keys]]
+version = "1.0"
 name = "Domain Name System::DoH"
 "tide.vocab.stages" = "Protocol"
 description = "DNS over HTTPS"
 
 [[keys]]
+version = "1.0"
 name = "Domain Name System::DoT"
 "tide.vocab.stages" = "Protocol"
 description = "DNS over TLS"
 
 [[keys]]
+version = "1.0"
 name = "VPN::IPsec"
 "tide.vocab.stages" = "Protocol"
 description = "IPsec VPN tunnel protocol"
 
 [[keys]]
+version = "1.0"
 name = "VPN::SSL VPN"
 "tide.vocab.stages" = "Protocol"
 description = "SSL/TLS-based VPN protocol"
 
 [[keys]]
+version = "1.0"
 name = "Security"
 "tide.vocab.stages" = "Protocol"
 description = "Cryptographic and security protocols"
 
 [[keys]]
+version = "1.0"
 name = "Security::TLS"
 "tide.vocab.stages" = "Protocol"
 description = "Transport Layer Security protocol"
 
 [[keys]]
+version = "1.0"
 name = "Security::Kerberos"
 "tide.vocab.stages" = "Protocol"
 description = "Kerberos authentication protocol"
 
 [[keys]]
+version = "1.0"
 name = "Security::NTLM"
 "tide.vocab.stages" = "Protocol"
 description = "NT LAN Manager authentication protocol"
 
 [[keys]]
+version = "1.0"
 name = "Security::OAuth"
 "tide.vocab.stages" = "Protocol"
 description = "OAuth authorisation protocol"
 
 [[keys]]
+version = "1.0"
 name = "Security::SAML"
 "tide.vocab.stages" = "Protocol"
 description = "Security Assertion Markup Language protocol"
 
 [[keys]]
+version = "1.0"
 name = "Security::OpenID Connect"
 "tide.vocab.stages" = "Protocol"
 description = "OpenID Connect identity protocol"
 
 [[keys]]
+version = "1.0"
 name = "Messaging"
 "tide.vocab.stages" = "Protocol"
 description = "Message queuing and pub/sub protocols"
 
 [[keys]]
+version = "1.0"
 name = "Messaging::MQTT"
 "tide.vocab.stages" = "Protocol"
 description = "Message Queuing Telemetry Transport (IoT messaging)"
 
 [[keys]]
+version = "1.0"
 name = "Messaging::AMQP"
 "tide.vocab.stages" = "Protocol"
 description = "Advanced Message Queuing Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Messaging::Kafka"
 "tide.vocab.stages" = "Protocol"
 description = "Apache Kafka distributed event streaming"
 
 [[keys]]
+version = "1.0"
 name = "Routing"
 "tide.vocab.stages" = "Protocol"
 description = "Network routing protocols"
 
 [[keys]]
+version = "1.0"
 name = "Routing::BGP"
 "tide.vocab.stages" = "Protocol"
 description = "Border Gateway Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Routing::OSPF"
 "tide.vocab.stages" = "Protocol"
 description = "Open Shortest Path First routing"
 
 [[keys]]
+version = "1.0"
 name = "Routing::RIP"
 "tide.vocab.stages" = "Protocol"
 description = "Routing Information Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::DHCP"
 "tide.vocab.stages" = "Protocol"
 description = "Dynamic Host Configuration Protocol for automatic IP address assignment"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::SIP"
 "tide.vocab.stages" = "Protocol"
 description = "Session Initiation Protocol for VoIP and multimedia sessions"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::RADIUS"
 "tide.vocab.stages" = "Protocol"
 description = "Remote Authentication Dial-In User Service network access protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::TFTP"
 "tide.vocab.stages" = "Protocol"
 description = "Trivial File Transfer Protocol (lightweight, no authentication)"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::WinRM"
 "tide.vocab.stages" = "Protocol"
 description = "Windows Remote Management protocol (WS-Management based)"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::WMI"
 "tide.vocab.stages" = "Protocol"
 description = "Windows Management Instrumentation remote management protocol"
 
 [[keys]]
+version = "1.0"
 name = "Domain Name System::mDNS"
 "tide.vocab.stages" = "Protocol"
 description = "Multicast DNS zero-configuration name resolution (frequently abused for lateral movement)"
 
 [[keys]]
+version = "1.0"
 name = "Domain Name System::LLMNR"
 "tide.vocab.stages" = "Protocol"
 description = "Link-Local Multicast Name Resolution (commonly exploited for credential interception)"
 
 [[keys]]
+version = "1.0"
 name = "Transport Layer::SCTP"
 "tide.vocab.stages" = "Protocol"
 description = "Stream Control Transmission Protocol (multi-homing capable transport)"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Messaging"
 "tide.vocab.stages" = "Cloud"
 description = "AWS messaging and application integration services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Messaging::SQS"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Simple Queue Service for managed message queuing"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Messaging::SNS"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Simple Notification Service for pub/sub messaging"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Messaging::EventBridge"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon EventBridge serverless event bus for routing events between services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Messaging::Step Functions"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Step Functions for serverless workflow orchestration"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Developer Tools"
 "tide.vocab.stages" = "Cloud"
 description = "AWS developer and DevOps tooling services"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Developer Tools::CodePipeline"
 "tide.vocab.stages" = "Cloud"
 description = "AWS CodePipeline for continuous delivery pipelines"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Developer Tools::CodeBuild"
 "tide.vocab.stages" = "Cloud"
 description = "AWS CodeBuild for managed build service"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Developer Tools::CodeDeploy"
 "tide.vocab.stages" = "Cloud"
 description = "AWS CodeDeploy for automated application deployment"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute::App Runner"
 "tide.vocab.stages" = "Cloud"
 description = "AWS App Runner for deploying containerised web applications and APIs"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking::Network Firewall"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Network Firewall managed network firewall and IPS service"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Networking::PrivateLink"
 "tide.vocab.stages" = "Cloud"
 description = "AWS PrivateLink for private connectivity to services within VPC"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Detective"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Detective for security investigation and root cause analysis"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Verified Access"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Verified Access for zero-trust network access to applications"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Database::MemoryDB"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon MemoryDB for Redis-compatible in-memory database"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Database::Neptune"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon Neptune managed graph database service"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Integration"
 "tide.vocab.stages" = "Cloud"
 description = "Azure integration and messaging services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Integration::Service Bus"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Service Bus enterprise messaging broker"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Integration::Event Grid"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Event Grid for reactive event-driven architectures"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Integration::Event Hubs"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Event Hubs for big data streaming and event ingestion"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Integration::Logic Apps"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Logic Apps for automated workflow integration"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::Front Door"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Front Door global CDN, load balancer and WAF service"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::Private Link"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Private Link for private connectivity to Azure services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Management::Advisor"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Advisor personalised best practices and recommendations engine"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Database::Cache for Redis"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Cache for Redis in-memory data store"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Database::Database for PostgreSQL"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Database for PostgreSQL managed service"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Database::Database for MySQL"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Database for MySQL managed service"
 
 [[keys]]
+version = "1.0"
 name = "Azure::AI"
 "tide.vocab.stages" = "Cloud"
 description = "Azure AI and machine learning services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::AI::OpenAI Service"
 "tide.vocab.stages" = "Cloud"
 description = "Azure OpenAI Service for managed access to GPT and other foundation models"
 
 [[keys]]
+version = "1.0"
 name = "Azure::AI::Machine Learning"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Machine Learning platform for training and deploying ML models"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Storage::Queue Storage"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Queue Storage for message-based communication between services"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security::Microsoft Fabric"
 "tide.vocab.stages" = "Cloud"
 description = "Microsoft Fabric unified analytics platform for data engineering and science"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Analytics::Dataproc"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Dataproc managed Spark and Hadoop service"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Analytics::Looker"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Looker business intelligence and data analytics platform"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Developer Tools"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud developer tooling and CI/CD services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Developer Tools::Cloud Build"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Build serverless CI/CD platform"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Networking::Cloud Interconnect"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Interconnect for dedicated and partner connectivity"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Database::AlloyDB"
 "tide.vocab.stages" = "Cloud"
 description = "Google AlloyDB PostgreSQL-compatible database for demanding enterprise workloads"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::AI"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud AI and machine learning services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Messaging"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud messaging and event services"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Messaging::Pub/Sub"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Pub/Sub asynchronous messaging and event streaming"
 
 [[keys]]
+version = "1.0"
 name = "Alibaba Cloud"
 "tide.vocab.stages" = "Cloud"
 description = "Alibaba Cloud (Aliyun) cloud platform"
 
 [[keys]]
+version = "1.0"
 name = "Alibaba Cloud::ECS"
 "tide.vocab.stages" = "Cloud"
 description = "Alibaba Cloud Elastic Compute Service"
 
 [[keys]]
+version = "1.0"
 name = "Alibaba Cloud::OSS"
 "tide.vocab.stages" = "Cloud"
 description = "Alibaba Cloud Object Storage Service"
 
 [[keys]]
+version = "1.0"
 name = "IBM Cloud"
 "tide.vocab.stages" = "Cloud"
 description = "IBM Cloud platform"
 
 [[keys]]
+version = "1.0"
 name = "DigitalOcean"
 "tide.vocab.stages" = "Cloud"
 description = "DigitalOcean cloud platform"
 
 [[keys]]
+version = "1.0"
 name = "DigitalOcean::Droplets"
 "tide.vocab.stages" = "Cloud"
 description = "DigitalOcean Droplets compute instances"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Management::CloudFormation"
 "tide.vocab.stages" = "Cloud"
 description = "AWS CloudFormation infrastructure-as-code service"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Management::Control Tower"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Control Tower multi-account governance and landing zone"
 
 [[keys]]
+version = "1.0"
 name = "AWS::AI::SageMaker"
 "tide.vocab.stages" = "Cloud"
 description = "Amazon SageMaker managed machine learning platform"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Security::Certificate Manager"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Certificate Manager (ACM) for provisioning and managing TLS certificates"
 
 [[keys]]
+version = "1.0"
 name = "AWS::Compute::Elastic Beanstalk"
 "tide.vocab.stages" = "Cloud"
 description = "AWS Elastic Beanstalk PaaS for application deployment"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Compute::Virtual Desktop"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Virtual Desktop (AVD) for VDI workloads"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::VPN Gateway"
 "tide.vocab.stages" = "Cloud"
 description = "Azure VPN Gateway for site-to-site and point-to-site VPN connectivity"
 
 [[keys]]
+version = "1.0"
 name = "Azure::DevOps"
 "tide.vocab.stages" = "Cloud"
 description = "Azure DevOps cloud service (boards, pipelines, repos, artifacts)"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Security::Secret Manager"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud Secret Manager for storing API keys, passwords and certificates"
 
 [[keys]]
+version = "1.0"
 name = "Google Cloud::Networking::Cloud NAT"
 "tide.vocab.stages" = "Cloud"
 description = "Google Cloud NAT for outbound connectivity from private instances"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Security::Entra ID Protection"
 "tide.vocab.stages" = "Cloud"
 description = "Microsoft Entra ID Protection for risk-based conditional access and identity threat detection"
 
 [[keys]]
+version = "1.0"
 name = "Azure::Networking::Traffic Manager"
 "tide.vocab.stages" = "Cloud"
 description = "Azure Traffic Manager DNS-based traffic load balancing"
 
 [[keys]]
+version = "1.0"
 name = "Container Security::Aqua Security"
 "tide.vocab.stages" = "Security"
 description = "Aqua Security cloud-native and container security platform"
 
 [[keys]]
+version = "1.0"
 name = "CNAPP::Lacework"
 "tide.vocab.stages" = "Security"
 description = "Lacework (Fortinet) cloud-native application protection platform"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Tanium"
 "tide.vocab.stages" = "Security"
 description = "Tanium converged endpoint management and security platform"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Cybereason"
 "tide.vocab.stages" = "Security"
 description = "Cybereason endpoint detection and response platform"
 
 [[keys]]
+version = "1.0"
 name = "Data Security::Varonis"
 "tide.vocab.stages" = "Security"
 description = "Varonis data security and insider threat detection platform"
 
 [[keys]]
+version = "1.0"
 name = "CNAPP"
 "tide.vocab.stages" = "Security"
 description = "Cloud-Native Application Protection Platforms combining CSPM, CWPP and CIEM"
 
 [[keys]]
+version = "1.0"
 name = "DSPM"
 "tide.vocab.stages" = "Security"
 description = "Data Security Posture Management tools for discovering and protecting sensitive data"
 
 [[keys]]
+version = "1.0"
 name = "SSPM"
 "tide.vocab.stages" = "Security"
 description = "SaaS Security Posture Management tools for monitoring SaaS application configurations"
 
 [[keys]]
+version = "1.0"
 name = "Deception::Attivo Networks"
 "tide.vocab.stages" = "Security"
 description = "Attivo Networks (SentinelOne) identity-centric deception and detection"
 
 [[keys]]
+version = "1.0"
 name = "SIEM::ArcSight"
 "tide.vocab.stages" = "Security"
 description = "OpenText (Micro Focus) ArcSight SIEM"
 
 [[keys]]
+version = "1.0"
 name = "SIEM::Sumo Logic"
 "tide.vocab.stages" = "Security"
 description = "Sumo Logic cloud-native SIEM and log analytics"
 
 [[keys]]
+version = "1.0"
 name = "NDR::Corelight"
 "tide.vocab.stages" = "Security"
 description = "Corelight Zeek-based network detection and response"
 
 [[keys]]
+version = "1.0"
 name = "NDR::Zeek"
 "tide.vocab.stages" = "Security"
 description = "Zeek (formerly Bro) open-source network security monitoring framework"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Trellix"
 "tide.vocab.stages" = "Security"
 description = "Trellix endpoint security (formerly McAfee Enterprise and FireEye)"
 
 [[keys]]
+version = "1.0"
 name = "Endpoint Protection::Fortinet FortiEDR"
 "tide.vocab.stages" = "Security"
 description = "Fortinet FortiEDR endpoint detection and response"
 
 [[keys]]
+version = "1.0"
 name = "Email Security::Barracuda"
 "tide.vocab.stages" = "Security"
 description = "Barracuda Email Security Gateway"
 
 [[keys]]
+version = "1.0"
 name = "ZTNA"
 "tide.vocab.stages" = "Security"
 description = "Zero Trust Network Access solutions"
 
 [[keys]]
+version = "1.0"
 name = "ZTNA::Zscaler Private Access"
 "tide.vocab.stages" = "Security"
 description = "Zscaler Private Access (ZPA) zero-trust application access"
 
 [[keys]]
+version = "1.0"
 name = "ZTNA::Cloudflare Access"
 "tide.vocab.stages" = "Security"
 description = "Cloudflare Access zero-trust access proxy"
 
 [[keys]]
+version = "1.0"
 name = "SWG"
 "tide.vocab.stages" = "Security"
 description = "Secure Web Gateway solutions"
 
 [[keys]]
+version = "1.0"
 name = "Forensic Analysis::Volatility"
 "tide.vocab.stages" = "Security"
 description = "Volatility open-source memory forensics framework"
 
 [[keys]]
+version = "1.0"
 name = "Forensic Analysis::Velociraptor"
 "tide.vocab.stages" = "Security"
 description = "Velociraptor endpoint visibility and DFIR tool"
 
 [[keys]]
+version = "1.0"
 name = "Threat Intelligence::VirusTotal"
 "tide.vocab.stages" = "Security"
 description = "VirusTotal malware intelligence and file/URL analysis platform"
 
 [[keys]]
+version = "1.0"
 name = "Vulnerability Management::OpenVAS"
 "tide.vocab.stages" = "Security"
 description = "OpenVAS (Greenbone) open-source vulnerability scanner"
 
 [[keys]]
+version = "1.0"
 name = "Log Management"
 "tide.vocab.stages" = "Security"
 description = "Dedicated log management and log aggregation solutions"
 
 [[keys]]
+version = "1.0"
 name = "Log Management::Graylog"
 "tide.vocab.stages" = "Security"
 description = "Graylog log management and security analytics"
 
 [[keys]]
+version = "1.0"
 name = "Monitoring::New Relic"
 "tide.vocab.stages" = "Infrastructure"
 description = "New Relic full-stack observability and application performance monitoring platform"
 
 [[keys]]
+version = "1.0"
 name = "Monitoring::Dynatrace"
 "tide.vocab.stages" = "Infrastructure"
 description = "Dynatrace software intelligence and observability platform"
 
 [[keys]]
+version = "1.0"
 name = "CDN::Akamai"
 "tide.vocab.stages" = "Infrastructure"
 description = "Akamai content delivery network and edge security platform"
 
 [[keys]]
+version = "1.0"
 name = "CDN::Cloudflare"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cloudflare content delivery network, DDoS protection and edge services"
 
 [[keys]]
+version = "1.0"
 name = "HashiCorp::Consul"
 "tide.vocab.stages" = "Infrastructure"
 description = "HashiCorp Consul service mesh and service discovery tool"
 
 [[keys]]
+version = "1.0"
 name = "HashiCorp::Boundary"
 "tide.vocab.stages" = "Infrastructure"
 description = "HashiCorp Boundary identity-based secure remote access"
 
 [[keys]]
+version = "1.0"
 name = "Service Mesh::Istio"
 "tide.vocab.stages" = "Infrastructure"
 description = "Istio open-source service mesh for microservices networking and security"
 
 [[keys]]
+version = "1.0"
 name = "Service Mesh::Linkerd"
 "tide.vocab.stages" = "Infrastructure"
 description = "Linkerd lightweight service mesh for Kubernetes"
 
 [[keys]]
+version = "1.0"
 name = "Service Mesh"
 "tide.vocab.stages" = "Infrastructure"
 description = "Service mesh infrastructure layer for managing service-to-service communication"
 
 [[keys]]
+version = "1.0"
 name = "Virtualisation::VMware vCenter"
 "tide.vocab.stages" = "Infrastructure"
 description = "VMware vCenter Server management platform"
 
 [[keys]]
+version = "1.0"
 name = "Virtualisation::VMware vSphere Client"
 "tide.vocab.stages" = "Infrastructure"
 description = "VMware vSphere web client interface"
 
 [[keys]]
+version = "1.0"
 name = "NAC"
 "tide.vocab.stages" = "Infrastructure"
 description = "Network Access Control solutions"
 
 [[keys]]
+version = "1.0"
 name = "NAC::Cisco ISE"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cisco Identity Services Engine 802.1X/RADIUS policy engine"
 
 [[keys]]
+version = "1.0"
 name = "NAC::Aruba ClearPass"
 "tide.vocab.stages" = "Infrastructure"
 description = "HPE Aruba ClearPass network access control"
 
 [[keys]]
+version = "1.0"
 name = "NAC::FortiNAC"
 "tide.vocab.stages" = "Infrastructure"
 description = "Fortinet FortiNAC network access control"
 
 [[keys]]
+version = "1.0"
 name = "SD-WAN"
 "tide.vocab.stages" = "Infrastructure"
 description = "Software-Defined Wide Area Network solutions"
 
 [[keys]]
+version = "1.0"
 name = "SD-WAN::Cisco SD-WAN"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cisco SD-WAN (Viptela) software-defined WAN"
 
 [[keys]]
+version = "1.0"
 name = "SD-WAN::Fortinet SD-WAN"
 "tide.vocab.stages" = "Infrastructure"
 description = "Fortinet SD-WAN integrated into FortiGate appliances"
 
 [[keys]]
+version = "1.0"
 name = "SD-WAN::VMware SD-WAN"
 "tide.vocab.stages" = "Infrastructure"
 description = "VMware SD-WAN (VeloCloud) edge computing"
 
 [[keys]]
+version = "1.0"
 name = "Firewalls::Cisco Firepower"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cisco Firepower Threat Defence next-generation firewall"
 
 [[keys]]
+version = "1.0"
 name = "Firewalls::pfSense"
 "tide.vocab.stages" = "Infrastructure"
 description = "pfSense open-source firewall and router"
 
 [[keys]]
+version = "1.0"
 name = "Remote Access::ConnectWise ScreenConnect"
 "tide.vocab.stages" = "Infrastructure"
 description = "ConnectWise ScreenConnect remote support (formerly ConnectWise Control)"
 
 [[keys]]
+version = "1.0"
 name = "Remote Access::BeyondTrust Remote Support"
 "tide.vocab.stages" = "Infrastructure"
 description = "BeyondTrust Remote Support appliance"
 
 [[keys]]
+version = "1.0"
 name = "Routers::Ubiquiti"
 "tide.vocab.stages" = "Infrastructure"
 description = "Ubiquiti Networks routers and gateways (EdgeRouter, UniFi Gateway)"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::Cisco Meraki"
 "tide.vocab.stages" = "Infrastructure"
 description = "Cisco Meraki cloud-managed wireless and networking"
 
 [[keys]]
+version = "1.0"
 name = "NTP"
 "tide.vocab.stages" = "Infrastructure"
 description = "Network Time Protocol infrastructure and servers"
 
 [[keys]]
+version = "1.0"
 name = "Cloudflare::Workers"
 "tide.vocab.stages" = "Application"
 description = "Cloudflare Workers serverless compute platform at the edge"
 
 [[keys]]
+version = "1.0"
 name = "Cloudflare::R2"
 "tide.vocab.stages" = "Application"
 description = "Cloudflare R2 S3-compatible object storage with zero egress fees"
 
 [[keys]]
+version = "1.0"
 name = "Cloudflare::Pages"
 "tide.vocab.stages" = "Application"
 description = "Cloudflare Pages JAMstack deployment and hosting platform"
 
 [[keys]]
+version = "1.0"
 name = "Vercel"
 "tide.vocab.stages" = "Application"
 description = "Vercel frontend cloud platform for deploying web applications"
 
 [[keys]]
+version = "1.0"
 name = "Netlify"
 "tide.vocab.stages" = "Application"
 description = "Netlify web development platform for deploying and managing modern web projects"
 
 [[keys]]
+version = "1.0"
 name = "Browsers"
 "tide.vocab.stages" = "Application"
 description = "Web browser applications"
 
 [[keys]]
+version = "1.0"
 name = "Browsers::Google Chrome"
 "tide.vocab.stages" = "Application"
 description = "Google Chrome web browser"
 
 [[keys]]
+version = "1.0"
 name = "Browsers::Mozilla Firefox"
 "tide.vocab.stages" = "Application"
 description = "Mozilla Firefox web browser"
 
 [[keys]]
+version = "1.0"
 name = "Browsers::Microsoft Edge"
 "tide.vocab.stages" = "Application"
 description = "Microsoft Edge Chromium-based web browser"
 
 [[keys]]
+version = "1.0"
 name = "Browsers::Safari"
 "tide.vocab.stages" = "Application"
 description = "Apple Safari web browser (macOS and iOS)"
 
 [[keys]]
+version = "1.0"
 name = "CMS"
 "tide.vocab.stages" = "Application"
 description = "Content management systems"
 
 [[keys]]
+version = "1.0"
 name = "CMS::WordPress"
 "tide.vocab.stages" = "Application"
 description = "WordPress open-source content management system"
 
 [[keys]]
+version = "1.0"
 name = "CMS::Drupal"
 "tide.vocab.stages" = "Application"
 description = "Drupal content management system"
 
 [[keys]]
+version = "1.0"
 name = "CMS::Joomla"
 "tide.vocab.stages" = "Application"
 description = "Joomla content management system"
 
 [[keys]]
+version = "1.0"
 name = "Web Servers::Apache Tomcat"
 "tide.vocab.stages" = "Application"
 description = "Apache Tomcat Java servlet container"
 
 [[keys]]
+version = "1.0"
 name = "File Transfer"
 "tide.vocab.stages" = "Application"
 description = "Managed file transfer applications"
 
 [[keys]]
+version = "1.0"
 name = "File Transfer::MOVEit"
 "tide.vocab.stages" = "Application"
 description = "Progress MOVEit Transfer managed file transfer"
 
 [[keys]]
+version = "1.0"
 name = "File Transfer::GoAnywhere"
 "tide.vocab.stages" = "Application"
 description = "Fortra GoAnywhere MFT managed file transfer"
 
 [[keys]]
+version = "1.0"
 name = "Runtime Environments"
 "tide.vocab.stages" = "Application"
 description = "Application runtime environments and language platforms"
 
 [[keys]]
+version = "1.0"
 name = "Runtime Environments::Java"
 "tide.vocab.stages" = "Application"
 description = "Java Runtime Environment and JDK"
 
 [[keys]]
+version = "1.0"
 name = "Runtime Environments::.NET"
 "tide.vocab.stages" = "Application"
 description = "Microsoft .NET runtime (CLR, ASP.NET)"
 
 [[keys]]
+version = "1.0"
 name = "Runtime Environments::Node.js"
 "tide.vocab.stages" = "Application"
 description = "Node.js JavaScript runtime"
 
 [[keys]]
+version = "1.0"
 name = "Runtime Environments::Python"
 "tide.vocab.stages" = "Application"
 description = "Python runtime environment"
 
 [[keys]]
+version = "1.0"
 name = "Password Managers"
 "tide.vocab.stages" = "Application"
 description = "Enterprise and consumer password management applications"
 
 [[keys]]
+version = "1.0"
 name = "Password Managers::1Password"
 "tide.vocab.stages" = "Application"
 description = "1Password credential management"
 
 [[keys]]
+version = "1.0"
 name = "Password Managers::LastPass"
 "tide.vocab.stages" = "Application"
 description = "LastPass password manager"
 
 [[keys]]
+version = "1.0"
 name = "Password Managers::KeePass"
 "tide.vocab.stages" = "Application"
 description = "KeePass open-source password manager"
 
 [[keys]]
+version = "1.0"
 name = "Communication::Telegram"
 "tide.vocab.stages" = "Application"
 description = "Telegram messaging platform"
 
 [[keys]]
+version = "1.0"
 name = "Duo Security::Multi-Factor Authentication"
 "tide.vocab.stages" = "Authentication"
 description = "Duo Security MFA for verifying user identities at application access"
 
 [[keys]]
+version = "1.0"
 name = "Entra ID::Workload Identities"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Entra Workload Identities for managing non-human identities (apps, services)"
 
 [[keys]]
+version = "1.0"
 name = "Entra ID::External ID"
 "tide.vocab.stages" = "Authentication"
 description = "Microsoft Entra External ID for customer and partner identity management"
 
 [[keys]]
+version = "1.0"
 name = "Keycloak"
 "tide.vocab.stages" = "Authentication"
 description = "Red Hat Keycloak open-source identity and access management"
 
 [[keys]]
+version = "1.0"
 name = "FreeIPA"
 "tide.vocab.stages" = "Authentication"
 description = "FreeIPA integrated Linux identity management (Kerberos, LDAP, DNS, CA)"
 
 [[keys]]
+version = "1.0"
 name = "JumpCloud"
 "tide.vocab.stages" = "Authentication"
 description = "JumpCloud cloud directory platform for cross-platform identity management"
 
 [[keys]]
+version = "1.0"
 name = "TACACS+"
 "tide.vocab.stages" = "Authentication"
 description = "Terminal Access Controller Access Control System Plus for network device authentication"
 
 [[keys]]
+version = "1.0"
 name = "Certificate-based Authentication"
 "tide.vocab.stages" = "Authentication"
 description = "X.509 certificate-based authentication (smart cards, PIV, mutual TLS)"
 
 [[keys]]
+version = "1.0"
 name = "AWS::STS"
 "tide.vocab.stages" = "Authentication"
 description = "AWS Security Token Service for temporary credentials"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::GraphQL"
 "tide.vocab.stages" = "Protocol"
 description = "GraphQL API query language and runtime for flexible data retrieval"
 
 [[keys]]
+version = "1.0"
 name = "Data Link Layer"
 "tide.vocab.stages" = "Protocol"
 description = "Data link layer (Layer 2) protocols"
 
 [[keys]]
+version = "1.0"
 name = "Data Link Layer::ARP"
 "tide.vocab.stages" = "Protocol"
 description = "Address Resolution Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Data Link Layer::802.1X"
 "tide.vocab.stages" = "Protocol"
 description = "IEEE 802.1X port-based network access control protocol"
 
 [[keys]]
+version = "1.0"
 name = "Data Link Layer::STP"
 "tide.vocab.stages" = "Protocol"
 description = "Spanning Tree Protocol"
 
 [[keys]]
+version = "1.0"
 name = "Data Link Layer::VLAN"
 "tide.vocab.stages" = "Protocol"
 description = "IEEE 802.1Q VLAN tagging"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::VNC"
 "tide.vocab.stages" = "Protocol"
 description = "Virtual Network Computing remote framebuffer protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::Syslog"
 "tide.vocab.stages" = "Protocol"
 description = "Syslog log transport protocol (RFC 5424)"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::NetBIOS"
 "tide.vocab.stages" = "Protocol"
 description = "NetBIOS Network Basic Input/Output System (name service and session service)"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::DCOM"
 "tide.vocab.stages" = "Protocol"
 description = "Distributed Component Object Model remote protocol"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::RTSP"
 "tide.vocab.stages" = "Protocol"
 description = "Real Time Streaming Protocol for media streaming"
 
 [[keys]]
+version = "1.0"
 name = "Application Layer::SOCKS"
 "tide.vocab.stages" = "Protocol"
 description = "SOCKS proxy protocol for traffic tunnelling"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::LTE"
 "tide.vocab.stages" = "Protocol"
 description = "4G Long-Term Evolution wireless protocol"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::5G NR"
 "tide.vocab.stages" = "Protocol"
 description = "5G New Radio mobile network protocol"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::Thread"
 "tide.vocab.stages" = "Protocol"
 description = "Thread low-power mesh networking protocol for IoT"
 
 [[keys]]
+version = "1.0"
 name = "Wireless::Matter"
 "tide.vocab.stages" = "Protocol"
 description = "Matter smart home interoperability standard"
 
 [[keys]]
+version = "1.0"
 name = "Industrial::S7comm"
 "tide.vocab.stages" = "Protocol"
 description = "Siemens S7 communication protocol for PLC programming and monitoring"
 
 [[keys]]
+version = "1.0"
 name = "Routing::MPLS"
 "tide.vocab.stages" = "Protocol"
 description = "Multiprotocol Label Switching for traffic engineering and VPN services"
 
 [[keys]]
+version = "1.0"
 name = "Routing::IS-IS"
 "tide.vocab.stages" = "Protocol"
 description = "Intermediate System to Intermediate System routing protocol"

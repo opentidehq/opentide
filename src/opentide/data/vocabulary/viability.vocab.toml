@@ -1,52 +1,59 @@
 name = "Vector Viability"
 field = "viability"
-version = "1.0"
 description = "Described with estimative language (likelyhood probability), describes how likely the analyst believes the vector to actually be realized on the organization infrastructure. Estimative language describes quality and credibility of underlying sources, data, and methodologies based Intelligence Community Directive 203 (ICD 203) and JP 2-0, Joint Intelligence."
 reference = "https://www.dni.gov/files/documents/ICD/ICD%20203%20Analytic%20Standards.pdf"
 
 key = "name"
 [[keys]]
+version = "1.0"
 name = "Environment dependent"
 
 description = "Depends"
 
 [[keys]]
+version = "1.0"
 name = "Almost no chance"
 
 misp = "estimative-language:likelihood-probability=\"almost-no-chance\""
 description = "Remote - 01-05%"
 
 [[keys]]
+version = "1.0"
 name = "Very Unlikely"
 
 misp = "estimative-language:likelihood-probability=\"very-unlikely\""
 description = "Highly improbable - 05-20%"
 
 [[keys]]
+version = "1.0"
 name = "Unlikely"
 
 misp = "estimative-language:likelihood-probability=\"unlikely\""
 description = "Improbable (improbably) - 20-45%"
 
 [[keys]]
+version = "1.0"
 name = "Roughly even chance"
 
 misp = "estimative-language:likelihood-probability=\"roughly-even-chance\""
 description = "Roughly even odds - 45-55%"
 
 [[keys]]
+version = "1.0"
 name = "Likely"
 
 misp = "estimative-language:likelihood-probability=\"likely\""
 description = "Probable (probably) - 55-80%"
 
 [[keys]]
+version = "1.0"
 name = "Very Likely"
 
 misp = "estimative-language:likelihood-probability=\"very-likely\""
 description = "Highly probable - 80-95%"
 
 [[keys]]
+version = "1.0"
 name = "Almost certain"
 
 misp = "estimative-language:likelihood-probability=\"almost-certain\""

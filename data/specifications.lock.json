@@ -1,5 +1,5 @@
 {
-  "bundled_vocabulary_sha256": "b294ad604e2cd131f7c79ab552ccc6e015a252704cdf84a0b8ed666e9a698a2f",
+  "bundled_vocabulary_sha256": "a49777f3224bc8ca74d51812573a8975ad69d953b6db2b3b86e718244818bbaa",
   "lock_version": 1,
   "managed_files": [
     "actors.vocab.toml",
@@ -40,6 +40,6 @@
     "violation.vocab.toml"
   ],
   "source_glob": "vocabularies/*.vocab.toml",
-  "specifications_git_sha": "fe45f6650f20a3e366b7d99ca41da337f8484c99",
+  "specifications_git_sha": "b48e7767f98dea9ffe7459ce020bec5d6ab635d5",
   "specifications_repo": "OpenTideHQ/specifications"
 }

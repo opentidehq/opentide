@@ -1,28 +1,31 @@
 name = "Permissible Action Protocol"
 field = "pap"
-version = "1.0"
 description = "The Permissible Actions Protocol - or short: PAP - was designed to indicate how the received information can be used."
 reference = "https://www.misp-project.org/taxonomies.html#_pap"
 key = "name"
 [[keys]]
+version = "1.0"
 id = "PAP:WHITE"
 name = "white"
 misp = "PAP:WHITE"
 description = "No restrictions in using this information."
 
 [[keys]]
+version = "1.0"
 id = "PAP:GREEN"
 name = "green"
 misp = "PAP:GREEN"
 description = "Active actions allowed. Recipients may use PAP:GREEN information to ping the target, block incoming/outgoing traffic from/to the target or specifically configure honeypots to interact with the target."
 
 [[keys]]
+version = "1.0"
 id = "PAP:AMBER"
 name = "amber"
 misp = "PAP:AMBER"
 description = "Passive cross check. Recipients may use PAP:AMBER information for conducting online checks, like using services provided by third parties (e.g. VirusTotal), or set up a monitoring honeypot."
 
 [[keys]]
+version = "1.0"
 id = "PAP:RED"
 name = "red"
 misp = "PAP:RED"

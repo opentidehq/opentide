@@ -1,11 +1,11 @@
 name = "Traffic Light Protocol"
 field = "tlp"
-version = "1.0"
 description = "The Traffic Light Protocol - or short: TLP - was designed with the objective to create a favorable classification scheme for sharing sensitive information while keeping the control over its distribution at the same time."
 reference = "https://www.first.org/tlp/"
 
 key = "name"
 [[keys]]
+version = "1.0"
 id = "TLP:CLEAR"
 name = "clear"
 
@@ -13,6 +13,7 @@ misp = "tlp:clear"
 description = "Recipients can spread this to the world, there is no limit on disclosure."
 
 [[keys]]
+version = "1.0"
 id = "TLP:GREEN"
 name = "green"
 misp = "tlp:green"
@@ -20,6 +21,7 @@ misp = "tlp:green"
 description = "Limited disclosure, recipients can spread this within their community. Sources may use TLP:GREEN when information is useful to increase awareness within their wider community."
 
 [[keys]]
+version = "1.0"
 id = "TLP:AMBER"
 name = "amber"
 
@@ -27,6 +29,7 @@ misp = "tlp:amber"
 description = "Limited disclosure, recipients can only spread this on a need-to-know basis within their organization and its clients."
 
 [[keys]]
+version = "1.0"
 id = "TLP:AMBER+STRICT"
 name = "amber+strict"
 
@@ -34,6 +37,7 @@ misp = "tlp:amber+strict"
 description = "Similar to TLP:AMBER, but restricts sharing to the organization only."
 
 [[keys]]
+version = "1.0"
 id = "TLP:RED"
 name = "red"
 
