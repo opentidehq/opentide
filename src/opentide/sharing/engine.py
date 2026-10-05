@@ -241,7 +241,15 @@ def _upsert(
         return _failed(document, block, "ambiguous_remote_event", "other", tuple(notes))
     line = ledger.get(document.uuid, INTEGRATION_MISP, block.name)
     stored = line.get("content_hash") if line else None
-    if len(matched) == 1 and stored == document.content_hash:
+    # Preview and status treat only a synced line with the same bytes as
+    # unchanged. A retracted line must be written again, or the event stays
+    # unpublished while push reports success.
+    if (
+        len(matched) == 1
+        and line is not None
+        and line.get("state") == "synced"
+        and stored == document.content_hash
+    ):
         remote = matched[0]
         return _record(
             document,
