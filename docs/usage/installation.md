@@ -23,8 +23,7 @@ Install OpenTide into a virtual environment so its dependencies never collide wi
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install 'opentide==0.9.0'
+source .venv/bin/activate        # Windows: .venv\Scripts\activate.ps1
 ```
 
 </Tab>
@@ -33,14 +32,11 @@ pip install 'opentide==0.9.0'
 
 ```bash
 uv venv
-uv pip install 'opentide==0.9.0'
 ```
 
 </Tab>
 
 </Tabs>
-
-For agent/MCP hosts, install `'opentide[mcp]'` and remember the path to this environment's `opentide-mcp` binary — you point the host at it in [MCP configuration](../mcp/configuration.md).
 
 ## PyPI install
 
@@ -48,16 +44,48 @@ The latest release is **0.9.0** (5 October 2026). The first public release was *
 
 ```bash
 pip install opentide              # latest on PyPI
+# python -m pip install opentide  # in constrained environments
 pip install 'opentide==0.9.0'     # pin the current release
 ```
 
+</Tab>
+
+<Tab value="uv">
+
+```bash
+uv pip install opentide              # latest on PyPI
+uv pip install 'opentide==0.9.0'     # pin the current release
+```
+
+</Tab>
+
+</Tabs>
+
 That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
-The MCP server needs one extra:
+### opentide-mcp
+
+The MCP server needs one extra step:
+
+<Tabs items={['venv + pip', 'uv']}>
+
+<Tab value="venv + pip">
 
 ```bash
 pip install 'opentide[mcp]'       # adds mcp (>=1.28.1,<2) for `opentide-mcp`
 ```
+
+</Tab>
+
+<Tab value="uv">
+
+```bash
+uv pip install 'opentide[mcp]'       # adds mcp (>=1.28.1,<2) for `opentide-mcp`
+```
+
+</Tab>
+
+</Tabs>
 
 The `opentide-mcp` script is on `PATH` either way; without the extra it prints the install command and exits 1. See [MCP installation](../mcp/installation.md).
 
@@ -65,13 +93,55 @@ The `opentide-mcp` script is on `PATH` either way; without the extra it prints t
 
 `pip` and `uv` create the `opentide` console launcher in the active environment's `Scripts` directory. Ensure that directory is on `PATH`, then run the package directly:
 
+1. Find the path of opentide binaries:
+
 ```powershell
-opentide setup
 Get-Command opentide -All
 where.exe opentide
 ```
 
 OpenTide does not ship or generate `opentide.bat`. Inspect any bat wrapper reported by these commands before using it; it may have been created by local tooling or an agent.
+
+2. check the path is on:
+
+```powershell
+Get-ChildItem Env:PATH    # via the Env: drive
+```
+
+3. use the binary
+
+```powershell
+opentide --help
+```
+
+in constrained environment you may create a PS function
+
+```powershell
+function opentide { python -c "from opentide.cli import main; main()" @args }
+opentide --help
+```
+
+## Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENTIDE_REPO_ROOT` | Root of the detection content repository (objects, configurations). See [Repository setup](./repository-setup/) |
+| `OPENTIDE_DATA_ROOT` | Override bundled package data (advanced; defaults to wheel contents) |
+| `DEPLOYMENT_PLAN` | Default deployment plan for `deploy` and `validate query --live` |
+| `DEBUG` | Enable debug logging when set |
+
+## Verify installation
+
+```bash
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo     # see Repository setup for other ways
+opentide validate          # should return OK
+opentide generate
+opentide --json info | python -c "import sys,json; print(json.load(sys.stdin)['version'])"
+opentide --json info
+opentide info         # concise tabular view
+```
+
+Expected: package version, rule/threat/objective counts, and per-platform capability flags.
 
 ### Live deploy SDKs (when needed)
 
@@ -116,31 +186,6 @@ cd opentide
 uv sync --group dev
 uv run pre-commit install --install-hooks
 ```
-
-## Environment variables
-
-| Variable | Purpose |
-|----------|---------|
-| `OPENTIDE_REPO_ROOT` | Root of the detection content repository (objects, configurations) |
-| `OPENTIDE_DATA_ROOT` | Override bundled package data (advanced; defaults to wheel contents) |
-| `DEPLOYMENT_PLAN` | Default deployment plan for `deploy` and `validate query --live` |
-| `DEBUG` | Enable debug logging when set |
-
-Set the repo root before every command, or pass `--repo`. `opentide setup env --yes` writes `.env.example` with `OPENTIDE_REPO_ROOT` (copy to `.env`; OpenTide does not load dotenv automatically):
-
-```bash
-export OPENTIDE_REPO_ROOT=/path/to/detection-repo
-opentide validate
-```
-
-## Verify installation
-
-```bash
-opentide --json info | python -c "import sys,json; print(json.load(sys.stdin)['version'])"
-opentide --json info
-```
-
-Expected: package version, rule/threat/objective counts, and per-platform capability flags.
 
 ## Normative reference
 
