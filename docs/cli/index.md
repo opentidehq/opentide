@@ -23,6 +23,7 @@ Run `opentide --help` for the live command tree.
 | [`generate`](./generate.md) | Documentation, exports, framework artifacts, optional platform import |
 | [`validate`](./validate.md) | Object and query validation |
 | [`lint`](./lint.md) | Catalogue hygiene (filename slugs, recommended metadata) |
+| [`rules`](./rules.md) | Review staleness for detection rules |
 | [`deploy`](./deploy.md) | Platform rule deployment |
 | [`share`](./share.md) | Publish objects to a MISP destination |
 | [`info`](./info.md) | Repository and platform statistics |

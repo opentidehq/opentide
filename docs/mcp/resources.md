@@ -77,10 +77,10 @@ resolves them to the highest matching version:
 
 | Requested | Resolves to |
 |-----------|-------------|
-| `rule` | `rule::1.0` |
-| `rules` | `rule::1.0` |
-| `rule.1.0` | `rule::1.0` |
-| `rule::1.0` | `rule::1.0` |
+| `rule` | `rule::1.1` (highest registered rule schema) |
+| `rules` | `rule::1.1` |
+| `rule.1.1` | `rule::1.1` |
+| `rule::1.0` | `rule::1.0` when that schema file is in the index |
 
 When nothing matches, the resource returns a diagnostic rather than an empty object:
 
@@ -96,9 +96,10 @@ Resources reflect the runtime index after `OpenTide.initialise()` — run `opent
 
 `opentide://templates/{object_type}` accepts the same forms. Templates are
 rendered from the current model, so a versioned id resolves only when it names
-the current schema version: `rule::1.0` returns the rule template, `rule::9.9`
-returns an `error` with the `available` templates. Run
-`opentide generate templates` if the template list is empty.
+the current schema version: `rule::1.1` returns the rule template, `rule::1.0`
+and `rule::9.9` return an `error` with the `available` templates. Run
+`opentide generate templates` if the template list is empty. Generated files
+still include `rule.1.0.template.yaml` for objects that stay on `rule::1.0`.
 
 ## Vocabulary resources
 

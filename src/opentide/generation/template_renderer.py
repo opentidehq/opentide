@@ -14,6 +14,8 @@ from opentide.generation.pydantic_templates import (
     generate_core_template,
 )
 from opentide.models.platform_schema import platform_model_for_key
+from opentide.models.schema_registry import identifiers_for_families, is_registered, resolve_model
+from opentide.registry.artifacts import template_artifact_name
 
 logger = get_logger(__name__)
 
@@ -21,6 +23,17 @@ CONFIG_INDEX: dict[str, Any] = {}
 PATHS: dict[str, Any] = {}
 PLATFORM_TEMPLATES_FOLDER: Path = Path(".")
 RECOMPOSITION: Any = {}
+
+
+def _schema_id_from_template_filename(filename: str) -> str | None:
+    """Map ``rule.1.0.template.yaml`` to ``rule::1.0``. Unversioned names return None."""
+    stem = filename.removesuffix(".template.yaml")
+    if stem == filename:
+        return None
+    parts = stem.split(".")
+    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].isdigit():
+        return None
+    return f"{parts[0]}::{int(parts[1])}.{int(parts[2])}"
 
 
 def _platform_section(entry: dict[str, Any]) -> dict[str, Any]:
@@ -47,15 +60,26 @@ def run() -> None:
     )
 
     templates = OpenTide.Configurations.Global.templates
+    templates_dir = Path(PATHS["templates"])
     for meta in OpenTide.Configurations.Global.metaschemas:
-        if meta not in templates:
+        if meta not in templates or meta not in core_template_model_keys():
             continue
-        template_path = Path(PATHS["templates"]) / templates[meta]
+        written: set[Path] = set()
+        for schema_id in identifiers_for_families((meta,)):
+            model = resolve_model(schema_id)
+            versioned = templates_dir / template_artifact_name(schema_id)
+            logger.info("generating_template", detail=schema_id)
+            write_model_template(versioned, model, schema_id=schema_id)
+            written.add(versioned.resolve())
+        configured = templates_dir / templates[meta]
+        if configured.resolve() in written:
+            continue
+        pinned = _schema_id_from_template_filename(str(templates[meta]))
         logger.info("generating_template", detail=str(meta))
-
-        if meta in core_template_model_keys():
-            generate_core_template(meta, template_path)
-            continue
+        if pinned and is_registered(pinned):
+            write_model_template(configured, resolve_model(pinned), schema_id=pinned)
+        else:
+            generate_core_template(meta, configured)
 
     for recomp in RECOMPOSITION:
         subschema_type_folder = RECOMPOSITION[recomp]

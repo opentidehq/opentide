@@ -8,7 +8,7 @@ from typing import Any, ClassVar, Protocol, cast
 from pydantic import Field, PrivateAttr
 
 from opentide.models.base import TideField, TideModel
-from opentide.models.metadata import ObjectMetadata, ObjectReferences
+from opentide.models.metadata import ObjectMetadata, ObjectReferences, RuleMetadata
 from opentide.models.platform import RuleConfigurations
 from opentide.models.response import RuleResponse
 from opentide.models.results import DeploymentResult, ValidationResult
@@ -125,3 +125,10 @@ class DetectionRule(TideModel):
         if file is not None:
             return cast(DetectionRule, rule.model_copy(update={"file": file}))
         return cast(DetectionRule, rule)
+
+
+class DetectionRule_v1_1(DetectionRule):
+    """Detection rule schema ``rule::1.1`` with optional ``metadata.reviewed``."""
+
+    __schema_identifier__: ClassVar[str] = "rule::1.1"
+    metadata: RuleMetadata = TideField(schema_extra={"tide.template.spacer": True})
