@@ -104,7 +104,7 @@ def test_techniques_resolver_threat() -> None:
     threat = {
         "name": "Threat",
         "metadata": {"schema": "threat::1.0", "uuid": threat_uuid},
-        "threat": {"att&ck": ["T1059", "T1003"]},
+        "threat": {"mitre_attack": ["T1059", "T1003"]},
     }
     with (
         patch.object(fw, "MODELS_INDEX", {"threat": {threat_uuid: threat}}),

@@ -29,7 +29,7 @@ def _setup_opentide_for_table(monkeypatch) -> None:
                     },
                     "threat": {
                         "description": "Threat desc",
-                        "att&ck": ["T1059"],
+                        "mitre_attack": ["T1059"],
                         "actors": [{"name": "actor::evil-actor #hint"}],
                         "chaining": [{"relation": "follows", "vector": "other"}],
                     },

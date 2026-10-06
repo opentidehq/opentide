@@ -28,7 +28,7 @@
   ### Unusual cloud directory enumeration
   Enumerations from anomalous identities and hosts.
   
-  - **Severity**: Moderate incident
+  - **Severity**: Medium
   - **Methodology**: Behavioural
   - **Effort**: 3
   #### Data

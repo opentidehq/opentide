@@ -7,7 +7,6 @@ description = """Splunk Enterprise enables you to search, analyze and
 visualize your data to quickly act on insights from across your technology landscape."""
 
 [setup]
-proxy = false
 ssl = false #Disable SSL in case of connectivity issues (only in trusted environment)
 url = "$SPLUNK_URL"
 port = "$SPLUNK_PORT"

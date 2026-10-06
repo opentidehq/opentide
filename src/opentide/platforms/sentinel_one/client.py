@@ -9,7 +9,6 @@ from opentide.core.time import format_utc_z, utc_now
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
 from opentide.models.system_config import ConfigurationModels
-from opentide.deployment import Proxy
 from opentide.core.errors import Errors
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel_one.client')
@@ -81,10 +80,6 @@ class SentinelOneService:
         self.CREATE_QUERY_ENDPOINT = self.tenant_config.setup.url + '/web/api/v2.1/dv/events/pq'
         self.session = requests.Session()
         self.session.headers.update({'Authorization': f'ApiToken {self.tenant_config.setup.api_token}', 'Content-Type': 'application/json'})
-        if tenant_config.setup.proxy:
-            Proxy.set_proxy()
-        else:
-            Proxy.unset_proxy()
 
     def _http_errors(self, response: requests.Response, error) -> NoReturn:
         match response.status_code:

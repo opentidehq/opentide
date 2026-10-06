@@ -114,10 +114,9 @@ def test_the_promotion_target_is_checked_against_the_repository_statuses(
 def test_an_existing_override_keeps_its_content(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     existing = (
-        "# Proxy for the SOC network\n"
-        "[proxy]\n"
-        'proxy_host = "proxy.internal"  # outbound only\n'
-        "proxy_port = 8080\n"
+        "# Notes for the SOC network\n"
+        "[notes]\n"
+        'contact = "soc@example"  # outbound only\n'
     )
     (repo / OVERRIDE).write_text(existing, encoding="utf-8")
 

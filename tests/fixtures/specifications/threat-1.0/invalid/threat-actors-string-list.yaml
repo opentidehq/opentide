@@ -20,7 +20,7 @@ threat:
   terrain: Endpoint workstations and user devices.
   surface:
     - Windows::Desktop
-  att&ck:
+  mitre_attack:
     - T1059
   actors:
     - att&ck::G0007

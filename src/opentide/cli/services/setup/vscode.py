@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 import sys
 import warnings
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -18,6 +20,56 @@ from opentide.core.files import resolve_configurations
 from opentide.registry.discovery import OPENTIDE_DIR
 
 logger = structlog.get_logger("opentide.cli.services.setup.vscode")
+
+_TRAILING_COMMA = re.compile(r",(\s*[}\]])")
+
+
+def _strip_jsonc(text: str) -> str:
+    """Drop comments and trailing commas so VS Code JSONC settings parse."""
+    out: list[str] = []
+    index = 0
+    length = len(text)
+    in_string = False
+    escape = False
+    while index < length:
+        char = text[index]
+        if in_string:
+            out.append(char)
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            out.append(char)
+            index += 1
+            continue
+        if char == "/" and index + 1 < length and text[index + 1] == "/":
+            index += 2
+            while index < length and text[index] not in "\r\n":
+                index += 1
+            continue
+        if char == "/" and index + 1 < length and text[index + 1] == "*":
+            index += 2
+            while index + 1 < length and not (text[index] == "*" and text[index + 1] == "/"):
+                index += 1
+            index = min(index + 2, length)
+            continue
+        out.append(char)
+        index += 1
+    return _TRAILING_COMMA.sub(r"\1", "".join(out))
+
+
+def _load_jsonc(path: Path) -> Any:
+    try:
+        return json.loads(_strip_jsonc(path.read_text(encoding="utf-8")))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Could not read {path}: {exc}") from exc
+
 
 DEPRECATION_MESSAGE = (
     "opentide setup vscode is deprecated and will be removed when the OpenTide "
@@ -88,7 +140,7 @@ def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
     settings_path = vscode_dir / "settings.json"
     mappings = build_yaml_schema_mappings(workspace=target.resolve())
     if merge and settings_path.is_file():
-        existing = json.loads(settings_path.read_text(encoding="utf-8"))
+        existing = _load_jsonc(settings_path)
     else:
         existing = {}
     yaml_schemas = existing.get("yaml.schemas", {})
@@ -107,7 +159,7 @@ def write_vscode_extensions(target: Path, *, merge: bool = True) -> str:
     vscode_dir.mkdir(parents=True, exist_ok=True)
     extensions_path = vscode_dir / "extensions.json"
     if merge and extensions_path.is_file():
-        existing = json.loads(extensions_path.read_text(encoding="utf-8"))
+        existing = _load_jsonc(extensions_path)
     else:
         existing = {}
     recommendations = existing.get("recommendations", [])

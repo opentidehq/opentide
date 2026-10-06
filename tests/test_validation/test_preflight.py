@@ -25,7 +25,7 @@ def _minimal_index() -> dict:
                 threat_uuid: {
                     "name": "Sample Threat",
                     "metadata": {"uuid": threat_uuid, "tlp": "clear"},
-                    "threat": {"att&ck": ["T1059"], "chaining": []},
+                    "threat": {"mitre_attack": ["T1059"], "chaining": []},
                 }
             },
             "objective": {},

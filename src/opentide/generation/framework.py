@@ -416,8 +416,8 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
         else:
             return techniques
     if model_type == "objective":
-        if "att&ck" in model_body["objective"]:
-            techniques = model_body["objective"]["att&ck"]
+        if model_body["objective"].get("mitre_attack"):
+            techniques = model_body["objective"]["mitre_attack"]
         else:
             parent_ids = model_body["objective"].get("threats")
             if recursive:
@@ -427,7 +427,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
             else:
                 return techniques
     if model_type == "threat":
-        techniques = model_body["threat"]["att&ck"]
+        techniques = model_body["threat"]["mitre_attack"]
     techniques = list(dict.fromkeys(techniques))
     return techniques
 

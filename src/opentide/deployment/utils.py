@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import os
-
-from opentide.core.debug import DebugEnvironment
 from opentide.core.io import load_yaml
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
-from opentide.core.registry import DebugHelpers, OpenTide
+from opentide.core.registry import OpenTide
 from opentide.deployment.git_repo import local_rule_scope, modified_rule_scope, rules_folder_in_repo
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.platforms.enabled import enabled_systems
@@ -183,36 +180,13 @@ class Proxy:
 
     @staticmethod
     def set_proxy() -> None:
-        if DebugEnvironment.ENABLED and not DebugEnvironment.PROXY_ENABLED:
-            return
-
-        logger.info("setting_proxy_from_ci_variables")
-        proxy_config = DebugHelpers.fetch_config_envvar(OpenTide.Configurations.Deployment.proxy)
-        proxy_user = proxy_config.get("proxy_user")
-        proxy_pass = proxy_config.get("proxy_password")
-        proxy_host = proxy_config.get("proxy_host")
-        proxy_port = proxy_config.get("proxy_port")
-
-        if proxy_host and proxy_port:
-            if proxy_user and proxy_pass:
-                proxy = f"http://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}"
-            else:
-                proxy = f"http://{proxy_host}:{proxy_port}"
-
-            os.environ["HTTP_PROXY"] = proxy
-            os.environ["HTTPS_PROXY"] = proxy
-            logger.info("proxy_setup_successful")
-        else:
-            logger.error(
-                "proxy_setup_failed",
-                detail="proxy_host and proxy_port are required in CI variables",
-            )
+        """Retired. Proxy configuration is ``opentide --proxy``."""
+        return
 
     @staticmethod
     def unset_proxy() -> None:
-        os.environ["HTTP_PROXY"] = ""
-        os.environ["HTTPS_PROXY"] = ""
-        logger.info("proxy_reset")
+        """Retired. An omitted ``--proxy`` leaves the process environment alone."""
+        return
 
 
 class ExternalIdHelper:

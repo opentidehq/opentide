@@ -113,7 +113,7 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
         },
     },
     SentinelConfig: {
-        "required": ["status", "query", "scheduling", "alert", "grouping", "entities"],
+        "required": ["status", "query", "scheduling", "alert"],
         "property_extras": {
             **_COMMON_PLATFORM_EXTRAS["property_extras"],
             "platform_schema": {"default": "sentinel::2.4"},

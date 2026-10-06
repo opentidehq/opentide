@@ -63,9 +63,34 @@ def json_timestamp_default(value: Any) -> str:
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
+def _reject_duplicate_keys(node: yaml.Node) -> None:
+    """Reject repeated mapping keys, naming the key and its line."""
+    if isinstance(node, yaml.MappingNode):
+        seen: set[str] = set()
+        for key_node, value_node in node.value:
+            key = key_node.value if isinstance(key_node, yaml.ScalarNode) else repr(key_node)
+            if key in seen:
+                line = key_node.start_mark.line + 1
+                raise yaml.YAMLError(f"duplicate key {key!r} at line {line}")
+            seen.add(str(key))
+            _reject_duplicate_keys(value_node)
+        return
+    if isinstance(node, yaml.SequenceNode):
+        for item in node.value:
+            _reject_duplicate_keys(item)
+
+
 def parse_yaml(text: str) -> Any:
     """Parse YAML text using the fast safe loader when available."""
-    return stringify_yaml_temporals(yaml.load(text, Loader=YamlLoader))
+    loader = YamlLoader(text)
+    try:
+        node = loader.get_single_node()
+        if node is not None:
+            _reject_duplicate_keys(node)
+        document = loader.construct_document(node)
+    finally:
+        loader.dispose()
+    return stringify_yaml_temporals(document)
 
 
 def load_yaml(path: Path) -> Any:

@@ -29,7 +29,6 @@ name = "Default"
 description = "Default Splunk deployment target"
 deployment = "ALWAYS"
 [tenants.setup]
-proxy = false
 ssl = false
 url = "https://splunk.example"
 port = "8089"

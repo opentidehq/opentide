@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 import structlog
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 logger = structlog.get_logger("opentide.cli.services.migrate_objects")
 
@@ -30,7 +36,20 @@ LAYOUT_MAPPINGS: tuple[LayoutMapping, ...] = (
     LayoutMapping("Objects/Threat Vectors", "objects/threats"),
     LayoutMapping("Objects/Detection Objectives", "objects/objectives"),
     LayoutMapping("Objects/Detection Rules", "objects/rules"),
+    LayoutMapping("Models Library/Threat Vector Models", "objects/threats"),
+    LayoutMapping("Models Library/Detection Objectives", "objects/objectives"),
+    LayoutMapping("Models Library/Managed Detection Rules", "objects/rules"),
 )
+
+_PATH_DESTINATIONS = {
+    "threat": "objects/threats",
+    "tvm": "objects/threats",
+    "objective": "objects/objectives",
+    "dom": "objects/objectives",
+    "rule": "objects/rules",
+    "mdr": "objects/rules",
+    "cdm": "objects/rules",
+}
 
 _EMPTY_PARENTS = ("Objects", ".opentide/framework")
 
@@ -96,6 +115,45 @@ def _cleanup_empty_parents(root: Path) -> list[str]:
     return removed
 
 
+def _global_toml_mappings(root: Path) -> list[LayoutMapping]:
+    """Object folders named by a legacy ``Configurations/global.toml``."""
+    path = root / "Configurations" / "global.toml"
+    if not path.is_file():
+        return []
+    try:
+        document = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError:
+        logger.warning("migrate_global_toml_unreadable", path=str(path))
+        return []
+    tide_paths = document.get("paths", {})
+    if isinstance(tide_paths, dict):
+        nested = tide_paths.get("tide")
+        if isinstance(nested, dict):
+            tide_paths = nested
+    if not isinstance(tide_paths, dict):
+        return []
+    mappings: list[LayoutMapping] = []
+    for key, destination in _PATH_DESTINATIONS.items():
+        raw = tide_paths.get(key)
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        source = raw.strip().strip("/")
+        mappings.append(LayoutMapping(source, destination))
+    return mappings
+
+
+def _mappings_for(root: Path) -> list[LayoutMapping]:
+    seen: set[tuple[str, str]] = set()
+    ordered: list[LayoutMapping] = []
+    for mapping in (*LAYOUT_MAPPINGS, *_global_toml_mappings(root)):
+        identity = (mapping.source, mapping.destination)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        ordered.append(mapping)
+    return ordered
+
+
 def run_migrate_objects(
     root: Path,
     *,
@@ -104,7 +162,7 @@ def run_migrate_objects(
 ) -> dict[str, object]:
     """Plan or apply legacy layout migrations under *root*."""
     target = root.resolve()
-    operations = [_plan_operation(target, mapping, copy=copy) for mapping in LAYOUT_MAPPINGS]
+    operations = [_plan_operation(target, mapping, copy=copy) for mapping in _mappings_for(target)]
     actionable = [item for item in operations if item["action"] != "skip"]
     skipped = [item for item in operations if item["action"] == "skip"]
     removed: list[str] = []

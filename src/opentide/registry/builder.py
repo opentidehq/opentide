@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core.files import resolve_configurations
-from opentide.core.io import load_yaml, parse_json
+from opentide.core.io import parse_json
 from opentide.core.logging import get_logger
 from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
 
@@ -43,16 +43,26 @@ def _log_missing_object_folder(
         logger.debug("could_not_find_object_folder", **payload)
 
 
-def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | None]:
-    """Worker: return (path, body, error)."""
+def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | None, str]:
+    """Worker: return (path, body, error, kind).
+
+    ``kind`` is ``ok``, ``oserror`` for an unreadable file, or ``yaml`` for
+    malformed content.
+    """
     path = Path(path_str)
     try:
-        body = load_yaml(path)
-        if not isinstance(body, dict):
-            return path_str, None, "YAML root must be a mapping"
-        return path_str, body, None
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return path_str, None, str(exc), "oserror"
+    try:
+        from opentide.core.io import parse_yaml
+
+        body = parse_yaml(text)
     except Exception as exc:
-        return path_str, None, str(exc)
+        return path_str, None, str(exc), "yaml"
+    if not isinstance(body, dict):
+        return path_str, None, "YAML root must be a mapping", "yaml"
+    return path_str, body, None, "ok"
 
 
 class RegistryBuilder:
@@ -345,9 +355,10 @@ class RegistryBuilder:
         size up to 5k objects.
         """
         for meta_name, path_str in yaml_files:
-            _, body, error = _parse_yaml_file(path_str)
+            _, body, error, kind = _parse_yaml_file(path_str)
             if error or body is None:
-                logger.error("failed_to_parse_yaml", path=path_str, error=error or "")
+                event = "unreadable_object_file" if kind == "oserror" else "malformed_object_yaml"
+                logger.error(event, path=path_str, error=error or "")
                 self.parse_errors.append(
                     {
                         "path": path_str,

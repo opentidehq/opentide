@@ -24,7 +24,8 @@ def check_references_for_object(
 
     if object_type == "rule":
         parent = body.get("detection_model")
-        if parent and parent not in graph.enum_values("objective"):
+        known_parents = graph.enum_values("objective") | graph.enum_values("signal")
+        if parent and parent not in known_parents:
             issues.append(
                 ValidationIssue(
                     code="invalid_ref",

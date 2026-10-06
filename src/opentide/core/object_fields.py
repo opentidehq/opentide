@@ -2,7 +2,7 @@
 
 ATT&CK techniques, threat actors, and platform configurations live in more than
 one place depending on schema family and authoring era: rules carry top-level
-``techniques``, threats carry ``threat.att&ck`` / ``threat.actors``, and legacy
+``techniques``, threats carry ``threat.mitre_attack`` / ``threat.actors``, and legacy
 content uses a ``tags`` mapping. Consumers that read a single location silently
 miss content, so every reader goes through these helpers.
 """
@@ -12,10 +12,10 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from typing import Any
 
-_TECHNIQUE_KEYS = ("techniques", "attack", "att&ck")
+_TECHNIQUE_KEYS = ("techniques", "mitre_attack", "attack")
 _ACTOR_KEYS = ("actors",)
 _CONFIGURATION_KEYS = ("configurations", "platforms")
-_NESTED_SECTIONS = ("tags", "threat")
+_NESTED_SECTIONS = ("tags", "threat", "objective")
 
 
 def as_body(obj: Any) -> dict[str, Any]:

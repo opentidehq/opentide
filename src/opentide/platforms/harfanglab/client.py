@@ -6,7 +6,6 @@ from enum import Enum
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
 from opentide.models.system_config import ConfigurationModels
-from opentide.deployment import Proxy
 from opentide.core.errors import Errors
 import structlog
 logger = structlog.get_logger('opentide.platforms.harfanglab.client')
@@ -185,10 +184,6 @@ class HarfangLabService:
         self.YARA_RULES_ENDPOINT = f'{base_url}/api/data/threat_intelligence/YaraFile/'
         self.session = requests.Session()
         self.session.headers.update({'Authorization': f'Token {self.tenant_config.setup.api_token}', 'Content-Type': 'application/json'})
-        if tenant_config.setup.proxy:
-            Proxy.set_proxy()
-        else:
-            Proxy.unset_proxy()
 
     def _http_errors(self, response: requests.Response, error):
         """Handle HTTP errors from HarfangLab API"""

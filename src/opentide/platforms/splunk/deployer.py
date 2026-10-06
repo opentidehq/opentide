@@ -428,7 +428,6 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         if not deployment_plan:
             raise ValueError("deployment_plan is required for Splunk deployment")
 
-        self.configure_proxy()
         loaded_mdr: list[DetectionRule] = []
         for mdr in mdr_deployment:
             if isinstance(mdr, str):

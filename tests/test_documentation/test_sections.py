@@ -301,7 +301,7 @@ def test_render_threat_assessment_keeps_impact_vocab_spelling(
                 "viability": "High",
                 "terrain": "Endpoint workstations.",
                 "surface": ["Windows::Desktop"],
-                "att&ck": ["T1486"],
+                "mitre_attack": ["T1486"],
             },
         }
     )
@@ -326,7 +326,7 @@ def test_render_threat_assessment_lists_every_impact_and_leverage_name(
                 "viability": "Likely",
                 "terrain": "Endpoint workstations.",
                 "surface": ["Windows::Desktop"],
-                "att&ck": ["T1059"],
+                "mitre_attack": ["T1059"],
             },
         }
     )
@@ -358,7 +358,7 @@ def _actor_source_cells(metadata: dict[str, Any], *actors: str) -> dict[str, str
                 "terrain": "Endpoint workstations.",
                 "surface": ["Windows::Desktop"],
                 "actors": [{"name": actor} for actor in actors],
-                "att&ck": ["T1059"],
+                "mitre_attack": ["T1059"],
             },
         }
     )
@@ -457,7 +457,7 @@ def test_render_signals_and_threat_body(metadata: dict[str, Any]) -> None:
                 "viability": "High",
                 "terrain": "Endpoint workstations and user devices.",
                 "surface": ["Windows::Desktop"],
-                "att&ck": ["T1486"],
+                "mitre_attack": ["T1486"],
             },
         }
     )
@@ -487,7 +487,7 @@ def test_render_threat_sections_with_enrichment(metadata: dict[str, Any]) -> Non
                 "surface": ["Azure"],
                 "actors": [{"name": "att&ck::G1028"}],
                 "killchain": ["Reconnaissance"],
-                "att&ck": ["T1589"],
+                "mitre_attack": ["T1589"],
             },
         }
     )
@@ -497,7 +497,7 @@ def test_render_threat_sections_with_enrichment(metadata: dict[str, Any]) -> Non
     surface = render_surface(threat.threat, formatter)
     assessment = render_threat_assessment(threat.threat, formatter)
     actors = render_actors(threat.threat, formatter)
-    techniques = render_attack_techniques(threat.threat.att_ck, formatter)
+    techniques = render_attack_techniques(threat.threat.mitre_attack, formatter)
 
     assert "## Criticality" in criticality
     assert "## Terrain" in terrain
@@ -627,7 +627,7 @@ def test_render_threat_body_includes_cve_section(metadata: dict[str, Any]) -> No
                 "viability": "High",
                 "terrain": "Build infrastructure.",
                 "surface": ["Linux::Server"],
-                "att&ck": ["T1195"],
+                "mitre_attack": ["T1195"],
                 "cve": ["CVE-2024-3094"],
             },
         }

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from opentide.cli.enums import DetectionPlatform, platform_label
+from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.object_fields import as_body, matches_technique, object_platforms
 from opentide.core.registry import OpenTide
@@ -29,6 +30,7 @@ def collect_info(
     """Collect system information about the detection repository."""
     ctx.apply_environment()
     OpenTide.reload()
+    parse_errors = list(IndexManager.load().get("parse_errors") or [])
     enabled_platforms = set(enabled_systems())
     platforms_info = []
     for name, plat in OpenTide.Platforms.items():
@@ -50,6 +52,7 @@ def collect_info(
             "threats": len(OpenTide.Models.threats),
             "objectives": len(OpenTide.Models.objectives),
         },
+        "parse_error_count": len(parse_errors),
         "platforms": platforms_info,
     }
     if section == "rules":
@@ -95,6 +98,7 @@ def _summary_table(payload: dict[str, Any]) -> Table:
     table.add_row("Version", Text(str(payload["version"])))
     for family, title in _SECTION_TITLES.items():
         table.add_row(title, str(payload["counts"][family]))
+    table.add_row("Parse errors", str(payload.get("parse_error_count", 0)))
     for plat in payload["platforms"]:
         caps = []
         if plat["can_deploy"]:

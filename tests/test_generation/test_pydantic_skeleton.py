@@ -141,7 +141,7 @@ def test_threat_vector_nested_body_and_commented_optionals() -> None:
     assert "threat:" in text
     after_threat = text.split("\nthreat:", 1)[1]
     assert "description: |" in after_threat
-    assert "att&ck:" in after_threat
+    assert "mitre_attack:" in after_threat
     assert "surface:" in after_threat
     assert "#actors:" in after_threat
     assert "#killchain:" in after_threat

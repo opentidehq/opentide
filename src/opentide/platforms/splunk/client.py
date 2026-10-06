@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, OpenTide
-from opentide.deployment import Proxy
 from opentide.models.rule import DetectionRule
 
 logger = structlog.get_logger("opentide.platforms.splunk.client")
@@ -63,7 +62,6 @@ class SplunkConnection(ABC):
     def _init_from_tenants(self, splunk_config, first_tenant) -> None:
         setup = DebugHelpers.fetch_config_envvar(
             {
-                "proxy": first_tenant.setup.proxy,
                 "ssl": first_tenant.setup.ssl,
                 "url": first_tenant.setup.url,
                 "port": first_tenant.setup.port,
@@ -106,7 +104,6 @@ class SplunkConnection(ABC):
             self.SPLUNK_PORT = setup.get("port", 8089)
         self.SPLUNK_APP = setup.get("app", "search")
         self.SPLUNK_TOKEN = token
-        self.PROXY_ENABLED = setup.get("proxy", False)
         self.CORRELATION_SEARCHES = setup.get("correlation_searches", True)
         self.SPLUNK_ACTIONS = setup.get("actions_enabled") or []
         self.SPLUNK_DEFAULT_ACTIONS = setup.get("default_actions") or []
@@ -119,14 +116,6 @@ class SplunkConnection(ABC):
         else:
             self.SKEWING_VALUE = 0
         self.OFFSET = int(setup.get("schedule_offset", 0))
-
-    def configure_proxy(self):
-        """Applies the proxy configuration for this system."""
-        if self.PROXY_ENABLED:
-            Proxy.set_proxy()
-        else:
-            Proxy.unset_proxy()
-
 
 def correct_timerange_mode(
     timerange: str | None, *, unset: Literal["random", "current", "custom"] = "random"

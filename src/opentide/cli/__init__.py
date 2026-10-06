@@ -87,6 +87,11 @@ def main_callback(
         help="Disable Rich colour output",
     ),
     json_output: bool = typer.Option(False, "--json", help="Machine-readable JSON output"),
+    proxy: str | None = typer.Option(
+        None,
+        "--proxy",
+        help="HTTP(S) proxy URL (http://\\[user:pass@\\]host:port). Overrides HTTP_PROXY and HTTPS_PROXY.",
+    ),
 ) -> None:
     from pathlib import Path
 
@@ -97,6 +102,7 @@ def main_callback(
         debug=debug,
         no_color=no_color,
         repo_explicit=_came_from_command_line(ctx, "repo"),
+        proxy=proxy,
     )
     ctx.obj = cli_ctx
     cli_ctx.activate()
@@ -604,6 +610,9 @@ def info_cmd(
     platform: DetectionPlatform | None = typer.Option(None, "--platform"),
     section: str | None = typer.Argument(None),
     technique: str | None = typer.Option(None, "--technique"),
+    strict: bool = typer.Option(
+        False, "--strict", help="Exit non-zero when any object failed to load"
+    ),
 ) -> None:
     """Show repository and platform information."""
     cli = get_context(ctx)
@@ -617,6 +626,8 @@ def info_cmd(
         emit_success(cli, result)
     else:
         render_info(result, section=section)
+    if strict and int(result.get("parse_error_count") or 0) > 0:
+        raise typer.Exit(1)
 
 
 def main() -> None:

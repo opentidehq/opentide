@@ -206,7 +206,7 @@ def render_signals(objective: DetectionObjective, formatter: MarkdownFormatter) 
 
 def render_objective_meta(objective: DetectionObjective, formatter: MarkdownFormatter) -> str:
     body = objective.objective
-    composition = body.composition or objective.composition
+    composition = body.composition
     # objective.priority is an unconstrained alert-style string (High / Critical),
     # not a criticality::1.0 incident token. Do not enrich it against that vocab.
     priority = body.priority
@@ -314,8 +314,8 @@ def render_threat_body(threat: ThreatVector, formatter: MarkdownFormatter) -> st
         render_actors(body, formatter),
         render_cve(body.cve, formatter),
     ]
-    if body.att_ck:
-        chunks.append(render_attack_techniques(body.att_ck, formatter))
+    if body.mitre_attack:
+        chunks.append(render_attack_techniques(body.mitre_attack, formatter))
     return "".join(chunks)
 
 
@@ -636,7 +636,7 @@ def _table_cell(value: str) -> str:
 
 
 def _render_signal_meta(signal: DetectionSignal) -> list[str]:
-    severity = enrich("severity", signal.severity).label
+    severity = enrich("alert_severity", signal.severity).label
     methodology = enrich("detection.methodology", signal.methodology).label
     meta_lines = [
         f"- **Severity**: {severity}",

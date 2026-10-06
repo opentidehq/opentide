@@ -110,10 +110,10 @@ class TableExporter:
             actors_raw = object_data["threat"].get("actors") or ""
             if actors_raw:
                 actors = ", ".join(self._flatten_actors(actors_raw))
-            attack = ", ".join(object_data["threat"]["att&ck"])
+            attack = ", ".join(object_data["threat"]["mitre_attack"])
         elif object_type == "objective":
             description = str(object_data.get("objective", {}).get("description", ""))
-            if techniques := object_data["objective"].get("att&ck"):
+            if techniques := object_data["objective"].get("mitre_attack"):
                 attack = ", ".join(techniques)
         elif object_type == "rule":
             description = str(object_data.get("description", ""))

@@ -48,7 +48,7 @@ def test_as_body_rejects_scalars() -> None:
         pytest.param({"techniques": ["T1059"]}, id="top-level"),
         pytest.param({"tags": {"techniques": ["T1059"]}}, id="tags-techniques"),
         pytest.param({"tags": {"attack": ["T1059"]}}, id="tags-attack"),
-        pytest.param({"threat": {"att&ck": ["T1059"]}}, id="threat-attack"),
+        pytest.param({"threat": {"mitre_attack": ["T1059"]}}, id="threat-attack"),
     ],
 )
 def test_object_techniques_unions_every_location(body: dict[str, Any]) -> None:

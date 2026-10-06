@@ -54,12 +54,8 @@ objective:
   #investment: 
   #threats:
     #- 
-  #attack:
+  #mitre_attack:
     #- 
-composition:
-  strategy: 
-  description: |
-    ...
 #references:
   #public:
     #1: 

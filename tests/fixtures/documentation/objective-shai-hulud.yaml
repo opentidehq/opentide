@@ -26,7 +26,7 @@ objective:
     - name: Unusual cloud directory enumeration
       uuid: 00000000-0000-4000-8199-000000000001
       description: Enumerations from anomalous identities and hosts.
-      severity: Moderate incident
+      severity: Medium
       effort: 3
       methodology: Behavioural
       entities:

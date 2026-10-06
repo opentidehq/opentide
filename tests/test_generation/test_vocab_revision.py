@@ -15,7 +15,13 @@ from opentide.generation.vocabulary import (
     VocabularyRevisionResolver,
 )
 from opentide.models.schema_registry import register_model, unregister_model
-from opentide.models.threat import ThreatVector_v2_1
+from opentide.models.threat import ThreatVector
+
+
+class ThreatVector_v2_1(ThreatVector):
+    """Test-only registration. ``threat::2.1`` is not a shipped model."""
+
+    __schema_identifier__ = "threat::2.1"
 from opentide.models.vocab_pins import get_pins
 
 

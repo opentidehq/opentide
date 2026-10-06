@@ -8,7 +8,7 @@ from opentide.core.registry import OpenTide
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels, TenantDeployment
 from opentide.core.errors import Errors
-from opentide.deployment import DetectionPlatforms, DeploymentStrategy, Proxy
+from opentide.deployment import DetectionPlatforms, DeploymentStrategy
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel.validator')
 
@@ -68,10 +68,6 @@ class SentinelQueryValidator(QueryValidator):
         for tenant_deployment in deployment.rule_deployment:
             tenant_deployment: TenantDeployment.Sentinel
             tenant_setup = tenant_deployment.tenant.setup
-            if tenant_setup.proxy:
-                Proxy.set_proxy()
-            else:
-                Proxy.unset_proxy()
             logger.info('acquiring_azure_credentials_for_tenant', detail=tenant_deployment.tenant.name)
             credentials = ClientSecretCredential(tenant_setup.azure_tenant_id, tenant_setup.azure_client_id, tenant_setup.azure_client_secret)
             logger.info('azure_credentials_prepared_for_tenant', detail=tenant_deployment.tenant.name, advice='Note: credentials are validated lazily on first API call')

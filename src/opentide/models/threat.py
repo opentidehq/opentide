@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, cast
 
-from pydantic import AfterValidator, Field, ValidationInfo, field_validator, model_validator
+from pydantic import AfterValidator, Field, ValidationInfo, field_validator
 from pydantic_core import PydanticCustomError
 
 from opentide.models.base import TideField, TideModel, VocabField
@@ -44,19 +44,11 @@ class ThreatBody(TideModel):
     viability: str = VocabField(True)
     terrain: str
     surface: list[str] = VocabField(True)
-    att_ck: list[str] = Field(alias="att&ck", json_schema_extra={"tide.vocab": True})
+    mitre_attack: list[str] = VocabField(True)
     actors: list[ThreatActor] | None = None
     killchain: str | list[str] | None = VocabField(True, default=None)
     chaining: list[dict[str, str]] | None = None
     cve: list[str] | None = Field(default=None, title="CVE")
-
-    @model_validator(mode="before")
-    @classmethod
-    def _accept_attack_key(cls, data: Any) -> Any:
-        if isinstance(data, dict) and "att&ck" in data and ("att_ck" not in data):
-            data = dict(data)
-            data["att_ck"] = data.pop("att&ck")
-        return data
 
     @field_validator("impact", "leverage", mode="before")
     @classmethod
@@ -88,9 +80,3 @@ class ThreatVector(TideModel):
             payload = dict(payload)
             payload["references"] = ObjectReferences.coerce_public_keys(references)
         return cast(ThreatVector, cls.model_validate(payload))
-
-
-class ThreatVector_v2_1(ThreatVector):
-    """Threat vector schema revision ``threat::2.1`` (structure unchanged; pin bump only)."""
-
-    __schema_identifier__: ClassVar[str] = "threat::2.1"

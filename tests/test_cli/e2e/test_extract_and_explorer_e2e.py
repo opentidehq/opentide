@@ -73,7 +73,6 @@ name = "Contoso"
 description = "Test tenant"
 deployment = "ALWAYS"
 [tenants.setup]
-proxy = false
 ssl = true
 tenant_id = "tid"
 client_id = "cid"

@@ -26,7 +26,7 @@ threat:
   terrain: 
   surface:
     - 
-  att&ck:
+  mitre_attack:
     - 
   #actors:
     #- name: 

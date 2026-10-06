@@ -106,6 +106,26 @@ def test_migrate_objects_skips_missing_sources(tmp_path: Path) -> None:
     assert all(item["reason"] == "source missing" for item in result["operations"])
 
 
+def test_migrate_objects_moves_models_library_and_global_toml_paths(tmp_path: Path) -> None:
+    root = tmp_path / "legacy"
+    library = root / "Models Library" / "Threat Vector Models"
+    library.mkdir(parents=True)
+    (library / "threat.yaml").write_text("name: t\n", encoding="utf-8")
+    custom = root / "Catalogue" / "Rules"
+    custom.mkdir(parents=True)
+    (custom / "rule.yaml").write_text("name: r\n", encoding="utf-8")
+    (root / "Configurations").mkdir()
+    (root / "Configurations" / "global.toml").write_text(
+        '[paths.tide]\nrule = "Catalogue/Rules"\n',
+        encoding="utf-8",
+    )
+    result = run_migrate_objects(root, apply=True)
+    assert result["applied"] is True
+    assert (root / "objects" / "threats" / "threat.yaml").is_file()
+    assert (root / "objects" / "rules" / "rule.yaml").is_file()
+    assert not library.exists()
+
+
 def test_migrate_objects_cli_dry_run(tmp_path: Path) -> None:
     root = _legacy_repo(tmp_path)
     result = runner.invoke(

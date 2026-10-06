@@ -41,7 +41,7 @@ def test_template_renderer_run_writes_core_and_enabled_platform(
     assert "null" not in rule
     assert "configurations: {}" not in rule
     assert "#sentinel:" in rule
-    assert "att&ck:" in threat
+    assert "mitre_attack:" in threat
     sentinel = (
         recomposition_platforms_root()
         / "MDR Systems Deployment"

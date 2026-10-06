@@ -69,7 +69,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
     record = _ObjectRecord(path=path, relative=relative)
     try:
         data: Any = parse_yaml(path.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, UnicodeDecodeError) as exc:
+    except (yaml.YAMLError, UnicodeDecodeError, OSError) as exc:
         record.parse_error = str(exc)
         return record
     if not isinstance(data, dict):

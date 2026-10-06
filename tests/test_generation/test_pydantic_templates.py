@@ -49,7 +49,7 @@ def test_generate_core_template_threat_expands_body(tmp_path: Path) -> None:
     generate_core_template("threat", path)
     text = path.read_text(encoding="utf-8")
     assert "description:" in text
-    assert "att&ck:" in text
+    assert "mitre_attack:" in text
     after_org = text.split("#organisation:", 1)[1].split("threat:", 1)[0]
     assert re.search(r"(?m)^    #uuid:", after_org)
     assert re.search(r"(?m)^    #name:", after_org)
@@ -63,7 +63,7 @@ def test_generate_core_template_threat_expands_body(tmp_path: Path) -> None:
     assert "organisation" not in loaded["metadata"]
     after_threat = text.split("\nthreat:", 1)[1]
     assert "description:" in after_threat
-    assert "att&ck:" in after_threat
+    assert "mitre_attack:" in after_threat
     assert "cve:" in after_threat or "#cve:" in after_threat
 
 

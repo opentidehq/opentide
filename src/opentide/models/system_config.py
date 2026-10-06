@@ -50,7 +50,6 @@ class SystemConfig:
     class Tenant:
         @dataclass
         class Setup:
-            proxy: bool
             ssl: bool
 
         @dataclass

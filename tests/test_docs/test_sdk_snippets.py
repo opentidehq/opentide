@@ -194,7 +194,7 @@ def test_every_models_page_attribute_read_is_checked(sdk_namespace: dict[str, An
         "rule.metadata.schema",
         "rule.metadata.schema_id",
         "rule.configurations.sentinel.query",
-        "threat.threat.att_ck",
+        "threat.threat.mitre_attack",
         "[s.name for s in obj.objective.signals]",
         "DetectionRule.__schema_identifier__",
     ):
@@ -249,7 +249,7 @@ def test_calls_and_names_they_bind_are_skipped(sdk_namespace: dict[str, Any]) ->
     ("comment", "expected"),
     [
         ('# "rule::1.0"', "rule::1.0"),
-        ('# ["T1059"]  (YAML `att&ck`, aliased att_ck)', ["T1059"]),
+        ('# ["T1059"]  (YAML `mitre_attack`)', ["T1059"]),
         ('# ["…8001…"]  (threat UUIDs)', _UNDOCUMENTED),
         ("# objective UUID", _UNDOCUMENTED),
         ('# vocabulary list, e.g. ["Windows::Desktop"]', _UNDOCUMENTED),

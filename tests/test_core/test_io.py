@@ -28,6 +28,11 @@ def test_yaml_loader_is_csafe_or_safe() -> None:
     assert yaml_loader_name() in {"CSafeLoader", "SafeLoader"}
 
 
+def test_parse_yaml_rejects_duplicate_keys() -> None:
+    with pytest.raises(yaml.YAMLError, match="duplicate key 'name' at line 2"):
+        parse_yaml("name: one\nname: two\n")
+
+
 def test_load_yaml_roundtrip(tmp_path: Path) -> None:
     payload = {"name": "test", "nested": {"count": 2}}
     path = tmp_path / "data.yaml"

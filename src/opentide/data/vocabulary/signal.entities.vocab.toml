@@ -1,7 +1,7 @@
 name = "Signal Entities"
 field = "signal.entities"
 version = "1.0"
-description = "Represents the core objects or attributes that a detection signal focuses on.\nThese entities are critical for identifying, grouping, and analyzing security\nevents. They align with common detection methodologies and frameworks like\nMITRE ATT&CK.\n"
+description = "Core objects or attributes that a detection signal focuses on.\nStages group keys (for example host, network, and cloud). Authored values\nare the key names, such as Account or Hostname, and are not prefixed with\nthe stage id. These entities align with common detection methodologies and\nframeworks such as MITRE ATT&CK.\n"
 key = "name"
 [[stages]]
 id = "host"

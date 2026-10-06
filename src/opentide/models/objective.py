@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
+from pydantic import model_validator
+
 from opentide.models.base import TideField, TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 
@@ -12,7 +14,10 @@ from opentide.models.metadata import ObjectMetadata, ObjectReferences
 class SignalData(TideModel):
     availability: str
     requirements: str
-    logsources: list[str] | None = None
+    logsources: list[str] | None = TideField(
+        None,
+        schema_extra={"tide.config.visibility.logsources": True},
+    )
 
 
 class ExternalDetector(TideModel):
@@ -35,7 +40,7 @@ class DetectionSignal(TideModel):
     name: str
     uuid: str
     description: str = TideField(schema_extra={"tide.template.multiline": True})
-    severity: str = VocabField(True)
+    severity: str = VocabField("alert_severity")
     data: SignalData
     methodology: str = VocabField(True)
     entities: list[str] = VocabField(True)
@@ -58,7 +63,7 @@ class ObjectiveBody(TideModel):
     composition: ObjectiveComposition
     investment: str | None = None
     threats: list[str] | None = None
-    attack: list[str] | None = None
+    mitre_attack: list[str] | None = VocabField(True, default=None)
 
 
 class DetectionObjective(TideModel):
@@ -68,8 +73,16 @@ class DetectionObjective(TideModel):
     name: str
     metadata: ObjectMetadata = TideField(schema_extra={"tide.template.spacer": True})
     objective: ObjectiveBody
-    composition: ObjectiveComposition
     references: ObjectReferences | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_root_composition(cls, data: Any) -> Any:
+        """Ignore a root composition block. The required block is objective.composition."""
+        if isinstance(data, dict) and "composition" in data:
+            data = dict(data)
+            data.pop("composition")
+        return data
 
     @classmethod
     def from_yaml_dict(

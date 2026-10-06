@@ -25,7 +25,7 @@ def _setup_opentide_index(monkeypatch) -> None:
                 threat_uuid: {
                     "name": "Threat A",
                     "metadata": {"uuid": threat_uuid},
-                    "threat": {"att&ck": ["T1059"]},
+                    "threat": {"mitre_attack": ["T1059"]},
                 }
             },
             "rule": {

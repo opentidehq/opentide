@@ -13,7 +13,7 @@ _PLATFORMS_DIR = Path(__file__).resolve().parents[1] / "data" / "configurations"
 
 
 def pip_install(options: CiRenderOptions) -> str:
-    return f'pip install "opentide>={options.opentide_version}"'
+    return f'pip install "opentide=={options.opentide_version}"'
 
 
 def query_platforms(options: CiRenderOptions) -> list[str]:

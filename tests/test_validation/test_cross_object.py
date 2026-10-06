@@ -28,6 +28,26 @@ def test_check_references_invalid_detection_model() -> None:
     assert issues[0].code == "invalid_ref"
 
 
+def test_signal_and_objective_uuids_are_valid_detection_models() -> None:
+    graph = MagicMock()
+    graph.resolve.return_value = MagicMock(file_path=Path("rule.yaml"))
+
+    def values(kind: str) -> frozenset[str]:
+        if kind == "signal":
+            return frozenset({"sig-1"})
+        if kind == "objective":
+            return frozenset({"obj-1"})
+        return frozenset()
+
+    graph.enum_values.side_effect = values
+    assert (
+        check_references_for_object("rule-1", "rule", {"detection_model": "sig-1"}, graph) == []
+    )
+    assert (
+        check_references_for_object("rule-1", "rule", {"detection_model": "obj-1"}, graph) == []
+    )
+
+
 def test_check_references_unknown_type_returns_empty() -> None:
     graph = MagicMock()
     assert check_references_for_object("x", "unknown", {}, graph) == []
