@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from unittest.mock import MagicMock, patch
@@ -59,6 +60,37 @@ def test_info_json_output() -> None:
     assert result.exit_code == 0
     assert '"counts"' in result.stdout
     assert '"platforms"' in result.stdout
+
+
+def test_info_strict_json_reports_parse_errors() -> None:
+    payload = {
+        "version": "0",
+        "repo": "/tmp",
+        "counts": {"rules": 0, "threats": 0, "objectives": 0},
+        "parse_error_count": 2,
+        "platforms": [],
+    }
+    with patch("opentide.cli.collect_info", return_value=payload):
+        result = runner.invoke(app, ["--json", "info", "--strict"])
+    assert result.exit_code == 1
+    body = json.loads(result.stdout)
+    assert body["ok"] is False
+    assert body["status"] == "failed"
+    assert body["parse_error_count"] == 2
+    assert body["message"] == "Repository has objects that failed to load"
+
+
+def test_info_strict_human_exits_when_objects_fail_to_load() -> None:
+    payload = {
+        "version": "0",
+        "repo": "/tmp",
+        "counts": {"rules": 0, "threats": 0, "objectives": 0},
+        "parse_error_count": 1,
+        "platforms": [],
+    }
+    with patch("opentide.cli.collect_info", return_value=payload):
+        result = runner.invoke(app, ["info", "--strict"])
+    assert result.exit_code == 1
 
 
 def test_generate_subcommands_invoke_services() -> None:

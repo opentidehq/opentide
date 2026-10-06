@@ -16,7 +16,7 @@ class SignalData(TideModel):
     requirements: str
     logsources: list[str] | None = TideField(
         None,
-        schema_extra={"tide.config.visibility.logsources": True},
+        schema_extra={"tide.config.visibility.logsource-names": True},
     )
 
 

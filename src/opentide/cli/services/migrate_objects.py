@@ -51,7 +51,7 @@ _PATH_DESTINATIONS = {
     "cdm": "objects/rules",
 }
 
-_EMPTY_PARENTS = ("Objects", ".opentide/framework")
+_EMPTY_PARENTS = ("Objects", "Models Library", ".opentide/framework")
 
 
 def _is_empty_dir(path: Path) -> bool:
@@ -93,12 +93,45 @@ def _plan_operation(
     return base
 
 
+def _merge_into(src: Path, dest: Path, *, copy: bool) -> None:
+    """Place *src* children into an existing *dest* directory.
+
+    ``shutil.move`` of a directory onto an existing directory nests the source
+    inside the destination. A second legacy tree that shares ``objects/…`` has
+    to be merged instead.
+    """
+    for child in sorted(src.iterdir(), key=lambda path: path.name):
+        target = dest / child.name
+        if child.is_dir() and target.is_dir():
+            _merge_into(child, target, copy=copy)
+            continue
+        if target.exists():
+            logger.warning(
+                "migrate_destination_exists",
+                source=str(child),
+                destination=str(target),
+            )
+            continue
+        if copy:
+            if child.is_dir():
+                shutil.copytree(child, target)
+            else:
+                shutil.copy2(child, target)
+        else:
+            shutil.move(str(child), str(target))
+    if not copy and _is_empty_dir(src):
+        src.rmdir()
+
+
 def _apply_operation(root: Path, operation: dict[str, object], *, copy: bool) -> None:
     src = root / str(operation["from"])
     dest = root / str(operation["to"])
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and _is_empty_dir(dest):
         dest.rmdir()
+    if dest.exists() and dest.is_dir() and src.is_dir():
+        _merge_into(src, dest, copy=copy)
+        return
     if copy:
         shutil.copytree(src, dest)
         return

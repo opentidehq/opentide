@@ -289,6 +289,9 @@ class DocumentationCatalog:
             edges.append(CoverageEdge(source, target, label))
 
         def add_objective(obj_uuid: str) -> None:
+            signal = self.resolve_signal(obj_uuid)
+            if signal is not None:
+                obj_uuid = signal.parent_uuid
             obj_record = self.resolve_record(obj_uuid)
             if obj_record is None or obj_record.object_type != DocumentScope.objectives:
                 return
@@ -334,6 +337,8 @@ class DocumentationCatalog:
             detection_model = getattr(record.model, "detection_model", None)
             if isinstance(detection_model, str) and detection_model:
                 add_objective(detection_model)
+                if self.resolve_signal(detection_model) is not None:
+                    add_edge(detection_model, uuid, "implements")
 
         return CoverageGraph(nodes=list(nodes.values()), edges=edges)
 

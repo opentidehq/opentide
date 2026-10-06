@@ -26,6 +26,32 @@ def test_check_references_invalid_detection_model() -> None:
     )
     assert len(issues) == 1
     assert issues[0].code == "invalid_ref"
+    assert issues[0].message == "Unknown objective or signal reference 'missing-objective-uuid'"
+    assert issues[0].suggestion is None
+
+
+def test_invalid_detection_model_suggests_a_signal() -> None:
+    graph = MagicMock()
+    graph.resolve.return_value = MagicMock(file_path=Path("rule.yaml"))
+    graph.enum_values.return_value = frozenset()
+
+    def suggest(ref_type: str, _value: str) -> str | None:
+        if ref_type == "signal":
+            return "sig-1"
+        return None
+
+    graph.suggest_ref.side_effect = suggest
+    graph.format_invalid_ref.return_value = "Unknown signal reference 'sig'"
+
+    issues = check_references_for_object(
+        "rule-1",
+        "rule",
+        {"detection_model": "sig"},
+        graph,
+    )
+    assert issues[0].suggestion == "sig-1"
+    assert issues[0].message == "Unknown signal reference 'sig'"
+    graph.format_invalid_ref.assert_called_once_with("signal", "sig")
 
 
 def test_signal_and_objective_uuids_are_valid_detection_models() -> None:

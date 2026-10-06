@@ -149,7 +149,7 @@ def test_info_summary_lists_each_platform_capability(tutorial: Path) -> None:
 def test_failing_validate_keeps_the_severity_tag(tutorial: Path) -> None:
     """#292: the panel printed ` detection_model: …` with the `[error]` tag gone."""
     _break_objective_reference(tutorial)
-    assert "[error] detection_model: Unknown objective reference" in _human(
+    assert "[error] detection_model: Unknown objective or signal reference" in _human(
         tutorial, "validate", "--strict"
     )
 

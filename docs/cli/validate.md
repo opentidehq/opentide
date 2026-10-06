@@ -32,7 +32,7 @@ opentide validate --check schema
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
-Without `--json`, issues are listed in a **Validation issues** panel, grouped by file, one `[severity] field: message` line each — for example `[error] detection_model: Unknown objective reference '…'`.
+Without `--json`, issues are listed in a **Validation issues** panel, grouped by file, one `[severity] field: message` line each — for example `[error] detection_model: Unknown objective or signal reference '…'`.
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 

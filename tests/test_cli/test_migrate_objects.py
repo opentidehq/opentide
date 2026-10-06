@@ -126,6 +126,88 @@ def test_migrate_objects_moves_models_library_and_global_toml_paths(tmp_path: Pa
     assert not library.exists()
 
 
+def test_migrate_objects_merges_client_and_models_library(tmp_path: Path) -> None:
+    root = _legacy_repo(tmp_path)
+    library = root / "Models Library" / "Threat Vector Models"
+    library.mkdir(parents=True)
+    (library / "shared-threat.yaml").write_text("name: shared\n", encoding="utf-8")
+    (root / "Models Library" / "Detection Objectives").mkdir(parents=True)
+    (root / "Models Library" / "Detection Objectives" / "shared-objective.yaml").write_text(
+        "name: shared-o\n", encoding="utf-8"
+    )
+    (root / "Models Library" / "Managed Detection Rules").mkdir(parents=True)
+    (root / "Models Library" / "Managed Detection Rules" / "shared-rule.yaml").write_text(
+        "name: shared-r\n", encoding="utf-8"
+    )
+    result = run_migrate_objects(root, apply=True)
+    assert (root / "objects" / "threats" / "threat.yaml").is_file()
+    assert (root / "objects" / "threats" / "shared-threat.yaml").is_file()
+    assert not (root / "objects" / "threats" / "Threat Vector Models").exists()
+    assert (root / "objects" / "objectives" / "objective.yaml").is_file()
+    assert (root / "objects" / "objectives" / "shared-objective.yaml").is_file()
+    assert (root / "objects" / "rules" / "rule.yaml").is_file()
+    assert (root / "objects" / "rules" / "shared-rule.yaml").is_file()
+    assert not (root / "Objects").exists()
+    assert not (root / "Models Library").exists()
+    assert result["removed_empty"] == ["Objects", "Models Library", ".opentide/framework"]
+
+
+def test_migrate_objects_merge_keeps_the_first_file_on_collision(tmp_path: Path) -> None:
+    root = tmp_path / "legacy"
+    (root / "Objects" / "Threat Vectors").mkdir(parents=True)
+    (root / "Objects" / "Threat Vectors" / "threat.yaml").write_text("client\n", encoding="utf-8")
+    library = root / "Models Library" / "Threat Vector Models"
+    library.mkdir(parents=True)
+    (library / "threat.yaml").write_text("library\n", encoding="utf-8")
+    run_migrate_objects(root, apply=True)
+    assert (root / "objects" / "threats" / "threat.yaml").read_text(encoding="utf-8") == "client\n"
+    assert not (root / "objects" / "threats" / "Threat Vector Models").exists()
+    assert (library / "threat.yaml").is_file()
+
+
+def test_migrate_objects_copy_merges_second_tree(tmp_path: Path) -> None:
+    root = _legacy_repo(tmp_path)
+    library = root / "Models Library" / "Threat Vector Models"
+    library.mkdir(parents=True)
+    (library / "shared-threat.yaml").write_text("name: shared\n", encoding="utf-8")
+    result = run_migrate_objects(root, apply=True, copy=True)
+    assert result["copy"] is True
+    assert (root / "objects" / "threats" / "threat.yaml").is_file()
+    assert (root / "objects" / "threats" / "shared-threat.yaml").is_file()
+    assert (library / "shared-threat.yaml").is_file()
+    assert not (root / "objects" / "threats" / "Threat Vector Models").exists()
+
+
+def test_migrate_objects_merges_nested_directories(tmp_path: Path) -> None:
+    root = tmp_path / "legacy"
+    (root / "Objects" / "Threat Vectors" / "group").mkdir(parents=True)
+    (root / "Objects" / "Threat Vectors" / "group" / "a.yaml").write_text("a\n", encoding="utf-8")
+    library = root / "Models Library" / "Threat Vector Models"
+    (library / "group").mkdir(parents=True)
+    (library / "group" / "b.yaml").write_text("b\n", encoding="utf-8")
+    (library / "extra").mkdir()
+    (library / "extra" / "c.yaml").write_text("c\n", encoding="utf-8")
+    run_migrate_objects(root, apply=True)
+    assert (root / "objects" / "threats" / "group" / "a.yaml").read_text(encoding="utf-8") == "a\n"
+    assert (root / "objects" / "threats" / "group" / "b.yaml").read_text(encoding="utf-8") == "b\n"
+    assert (root / "objects" / "threats" / "extra" / "c.yaml").is_file()
+    assert not (root / "objects" / "threats" / "Threat Vector Models").exists()
+    assert not library.exists()
+
+
+def test_migrate_objects_copy_merges_a_new_directory(tmp_path: Path) -> None:
+    root = tmp_path / "legacy"
+    (root / "Objects" / "Threat Vectors").mkdir(parents=True)
+    (root / "Objects" / "Threat Vectors" / "a.yaml").write_text("a\n", encoding="utf-8")
+    extra = root / "Models Library" / "Threat Vector Models" / "extra"
+    extra.mkdir(parents=True)
+    (extra / "c.yaml").write_text("c\n", encoding="utf-8")
+    run_migrate_objects(root, apply=True, copy=True)
+    assert (root / "objects" / "threats" / "a.yaml").is_file()
+    assert (root / "objects" / "threats" / "extra" / "c.yaml").is_file()
+    assert (extra / "c.yaml").is_file()
+
+
 def test_migrate_objects_cli_dry_run(tmp_path: Path) -> None:
     root = _legacy_repo(tmp_path)
     result = runner.invoke(

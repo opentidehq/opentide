@@ -99,6 +99,49 @@ def test_parents_for_objective(rule_payload: dict) -> None:
         assert fw.parents(objective_uuid) == [threat_uuid]
 
 
+def test_techniques_resolver_signal_walks_parent_objective() -> None:
+    signal_uuid = "00000000-0000-4000-8000-000000000041"
+    objective_uuid = "00000000-0000-4000-8000-000000000042"
+    rule_uuid = "00000000-0000-4000-8000-000000000043"
+    signal = {"name": "Signal", "uuid": signal_uuid, "parent": objective_uuid}
+    objective = {
+        "name": "Objective",
+        "metadata": {"schema": "objective::1.0", "uuid": objective_uuid},
+        "objective": {"mitre_attack": ["T1059"]},
+    }
+    rule = {
+        "name": "Rule",
+        "metadata": {"schema": "rule::1.0", "uuid": rule_uuid},
+        "detection_model": signal_uuid,
+    }
+    index = {
+        "signal": {signal_uuid: signal},
+        "objective": {objective_uuid: objective},
+        "rule": {rule_uuid: rule},
+    }
+    bodies = {
+        signal_uuid: signal,
+        objective_uuid: objective,
+        rule_uuid: rule,
+    }
+
+    with (
+        patch.object(fw, "MODELS_INDEX", index),
+        patch("opentide.generation.framework.OpenTide") as mock_ot,
+    ):
+        mock_ot.Models.FlatIndex.get.side_effect = lambda model_uuid, default=None: bodies.get(
+            model_uuid, default
+        )
+        mock_ot.Models.signals = {signal_uuid: signal}
+        assert fw.techniques_resolver(rule_uuid) == ["T1059"]
+        assert fw.techniques_resolver(signal_uuid, recursive=False) == []
+        orphan = "00000000-0000-4000-8000-000000000044"
+        index["signal"][orphan] = {"name": "Orphan", "uuid": orphan}
+        bodies[orphan] = index["signal"][orphan]
+        mock_ot.Models.signals[orphan] = index["signal"][orphan]
+        assert fw.techniques_resolver(orphan) == []
+
+
 def test_techniques_resolver_threat() -> None:
     threat_uuid = "00000000-0000-4000-8000-000000000040"
     threat = {
