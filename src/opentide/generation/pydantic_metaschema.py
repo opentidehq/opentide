@@ -47,7 +47,7 @@ _CORE_ROOT_EXTRAS_BASE: dict[str, dict[str, Any]] = {
     OBJECTIVE: {
         "title": "Detection Objective Schema",
         "additionalProperties": False,
-        "required": ["name", "metadata", "objective", "composition"],
+        "required": ["name", "metadata", "objective"],
         "property_extras": {
             "metadata": {"tide.meta.definition": True},
             "references": {"tide.meta.definition": True},

@@ -46,16 +46,7 @@ strategy = "DELETION"
 enabled = true
 promotion_target = "PRODUCTION"
 
-[proxy]
-# proxy_user and proxy_password are optional: if both are present, auth is used,
-# otherwise the proxy is configured with host:port only
-proxy_user = "$PROXY_USER"
-proxy_password = "$PROXY_PASSWORD"
-proxy_host = "$PROXY_HOST"
-proxy_port = "$PROXY_PORT"
-
 [debug]
 mdr_test_uuids = [""] #UUID of MDRs that can be used for Debugging purposes
 
-proxy_enabled = false #Global flag to enable or disable proxy configuration when running in debug mode
-ssl_enabled = true #Global flag to enable or disable proxy configuration when running in debug mode
+ssl_enabled = true #Global flag to enable or disable TLS verification when running in debug mode

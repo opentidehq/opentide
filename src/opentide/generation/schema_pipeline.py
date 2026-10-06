@@ -393,7 +393,7 @@ _Vocabulary_ : `{source_vocab}`
     class Logsources:
         """Resolve log source entries from visibility configuration."""
 
-        def resolve(self) -> None | tuple[list[str], list[str]]:
+        def resolve(self, *, qualified: bool = True) -> None | tuple[list[str], list[str]]:
             visibility = VocabularyResolver._visibility()
             if not visibility or not visibility.logsources:
                 return None
@@ -409,6 +409,14 @@ _Vocabulary_ : `{source_vocab}`
                     base += "### Associated Assets:\n"
                     for a in ls.assets:
                         base += VocabularyResolver._format_asset(a, asset_map) + "\n"
+
+                # Signal logsources are authored as the visibility ``name``.
+                # Qualified ``system::name`` values stay for the visibility schema.
+                if not qualified:
+                    if ls.name not in enums:
+                        enums.append(ls.name)
+                        descriptions.append(base)
+                    continue
 
                 if ls.tenants:
                     for tenant in ls.tenants:
@@ -686,8 +694,11 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
                     dictionary[field]["properties"] = temp
 
                 # Handles retrieval of logsources
-                if dict_foo[field].get("tide.config.visibility.logsources"):
-                    logsources_result = VocabularyResolver.Logsources().resolve()
+                logsource_names = dict_foo[field].get("tide.config.visibility.logsource-names")
+                if dict_foo[field].get("tide.config.visibility.logsources") or logsource_names:
+                    logsources_result = VocabularyResolver.Logsources().resolve(
+                        qualified=not logsource_names
+                    )
                     if logsources_result:
                         enums, descriptions = logsources_result
                         dictionary[field]["items"] = {}

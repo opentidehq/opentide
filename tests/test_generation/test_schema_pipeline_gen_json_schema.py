@@ -13,9 +13,22 @@ def test_gen_json_schema_resolves_logsources_array() -> None:
         sp.VocabularyResolver.Logsources,
         "resolve",
         return_value=(["sentinel::logs"], ["Log source"]),
-    ):
+    ) as resolve:
         result = sp.gen_json_schema(schema)
     assert result["sources"]["items"]["enum"] == ["sentinel::logs"]
+    resolve.assert_called_once_with(qualified=True)
+
+
+def test_gen_json_schema_resolves_logsource_names() -> None:
+    schema = {"sources": {"type": "array", "tide.config.visibility.logsource-names": True}}
+    with patch.object(
+        sp.VocabularyResolver.Logsources,
+        "resolve",
+        return_value=(["Placeholder Logsource"], ["Log source"]),
+    ) as resolve:
+        result = sp.gen_json_schema(schema)
+    assert result["sources"]["items"]["enum"] == ["Placeholder Logsource"]
+    resolve.assert_called_once_with(qualified=False)
 
 
 def test_gen_json_schema_resolves_detectors_string() -> None:

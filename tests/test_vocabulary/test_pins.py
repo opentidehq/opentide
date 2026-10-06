@@ -90,8 +90,22 @@ def test_vocab_fields_in_pin_dir_skips_missing(tmp_path: Path) -> None:
     assert vocab_fields_in_pin_directories([pin_dir, tmp_path / "nope"]) == frozenset({"att&ck"})
 
 
+def test_bundled_object_pins_use_mitre_attack_and_alert_severity() -> None:
+    from opentide.models.vocab_pins import get_pins
+
+    threat = get_pins("threat::1.0")
+    objective = get_pins("objective::1.0")
+    assert threat["threat.mitre_attack"] == "att&ck::1.1"
+    assert objective["objective.mitre_attack"] == "att&ck::1.1"
+    assert objective["objective.signals.severity"] == "alert_severity::1.0"
+    assert "objective.signals.data.logsources" not in objective
+    assert "threat.att&ck" not in threat
+    assert "objective.attack" not in objective
+
+
 def test_bundled_pins_do_not_reference_catalog_only_vocabs() -> None:
     fields = vocab_fields_in_pin_dir(pin_data_dir())
-    assert {"att&ck", "actors", "datasources"} <= fields
+    assert {"att&ck", "actors", "alert_severity"} <= fields
+    assert "datasources" not in fields
     assert "att&ck.groups" not in fields
     assert "mitigations" not in fields

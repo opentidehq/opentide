@@ -4,7 +4,6 @@ import structlog
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, OpenTide
-from opentide.deployment import Proxy
 from opentide.models.system_config import ConfigurationModels
 
 logger = structlog.get_logger("opentide.platforms.carbon_black.client")
@@ -47,7 +46,6 @@ class CarbonBlackCloudConnection(ABC):
         self.DEFAULT_WATCHLIST = first_tenant.setup.watchlist or ""
         self.CBC_URL = first_tenant.setup.url
         self.SSL_ENABLED = first_tenant.setup.ssl
-        self.PROXY_ENABLED = first_tenant.setup.proxy
 
         secrets: dict[str, dict[str, str]] = {}
         organizations: list[str] = []
@@ -73,7 +71,6 @@ class CarbonBlackCloudConnection(ABC):
         self.DEFAULT_WATCHLIST = CBC_SETUP.get("watchlist", "")
         self.CBC_URL = CBC_SETUP.get("url", "")
         self.SSL_ENABLED = CBC_SETUP.get("ssl", True)
-        self.PROXY_ENABLED = CBC_SETUP.get("proxy", False)
 
         secrets: dict[str, dict[str, str]] = {}
         cbc_secrets_error_flag = False
@@ -109,13 +106,6 @@ class CarbonBlackCloudConnection(ABC):
         self.ORGANIZATIONS = CBC_SETUP.get("organizations", [])
         validation = getattr(cbc_config, "validation", {}) or {}
         self.VALIDATION_ORGANIZATION = validation.get("organization", "")
-
-    def configure_proxy(self):
-        """Applies the proxy configuration for this system."""
-        if self.PROXY_ENABLED:
-            Proxy.set_proxy()
-        else:
-            Proxy.unset_proxy()
 
 
 class CarbonBlackCloudService:

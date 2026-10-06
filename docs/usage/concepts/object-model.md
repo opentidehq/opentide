@@ -56,7 +56,7 @@ threat:
   terrain: Endpoint workstations and user devices.
   surface:
     - Windows::Desktop
-  att&ck:
+  mitre_attack:
     - T1059
   actors:
     - name: att&ck::G0006
@@ -97,7 +97,7 @@ objective:
     - name: Suspicious logon signal
       uuid: 00000000-0000-4000-8099-000000000001
       description: Suspicious authentication activity
-      severity: Moderate incident
+      severity: Medium
       methodology: Statistical
       entities: [Hostname]
       data:

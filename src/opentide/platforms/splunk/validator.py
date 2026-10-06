@@ -91,7 +91,6 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
             system=DetectionPlatforms.SPLUNK,
             strategy=deployment_plan,
         )
-        self.configure_proxy()
         for tenant_deployment in tide_deployment.rule_deployment:
             tenant = tenant_deployment.tenant
             service = connect_splunk(

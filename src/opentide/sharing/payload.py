@@ -266,10 +266,10 @@ def _techniques(document: TideDocument, family: str) -> tuple[str, ...]:
         raw = document.body.get("techniques")
     elif family == "objective":
         objective = document.body.get("objective")
-        raw = objective.get("attack") if isinstance(objective, Mapping) else None
+        raw = objective.get("mitre_attack") if isinstance(objective, Mapping) else None
     else:
         threat = document.body.get("threat")
-        raw = threat.get("att&ck") if isinstance(threat, Mapping) else None
+        raw = threat.get("mitre_attack") if isinstance(threat, Mapping) else None
     if not isinstance(raw, list):
         return ()
     found: list[str] = []

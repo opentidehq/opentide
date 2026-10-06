@@ -27,6 +27,6 @@
 #
 # Example:
 # [[vocabulary.surface]]
-# name = "cloud::OVHcloud"
+# name = "OVHcloud"
 # description = "OVHcloud public cloud services"
-# "tide.vocab.stages" = "cloud"
+# "tide.vocab.stages" = "Cloud"

@@ -71,7 +71,6 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
             system=DetectionPlatforms.CARBON_BLACK_CLOUD,
             strategy=deployment_plan,
         )
-        self.configure_proxy()
         for tenant_deployment in tide_deployment.rule_deployment:
             cbc_service = CarbonBlackCloudService(tenant_deployment.tenant)
             for mdr in tenant_deployment.rules:

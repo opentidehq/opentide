@@ -6,6 +6,48 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-06
+
+Minor on 0.9.0. Upgrade, rename technique lists to `mitre_attack`, and regenerate schemas with `opentide generate`. Regenerate CI with `opentide setup ci` so the install pin is exact. A root `composition` block is still accepted and is no longer required.
+
+### Added
+
+- `opentide --proxy http://[user:pass@]host:port` sets `HTTP_PROXY` and `HTTPS_PROXY` for that process. A passed flag wins over the existing environment. Omitting the flag leaves the environment as it is.
+- `python -m opentide` and `python -m opentide.mcp_server` start the CLI and the MCP server.
+- `opentide info` prints how many object files failed to load. `--strict` exits non-zero when that count is not zero.
+- `opentide migrate objects` moves `Models Library/Threat Vector Models`, `Models Library/Detection Objectives`, and `Models Library/Managed Detection Rules`, and object folders named in `Configurations/global.toml`.
+
+### Changed
+
+- Threat and objective technique lists are `mitre_attack`, pinned to `att&ck::1.1`. `att&ck` and `attack` are not accepted. Actor values stay scoped (`att&ck::G0007`).
+- `objective.composition` is required. A root `composition` block is accepted and ignored. Templates emit the block once, under `objective`.
+- `signals[].data.logsources` come from workspace `visibility.toml`. The `datasources` pin on that field is gone.
+- Signal `severity` uses `alert_severity::1.0` (`Informational` through `Critical`). Threat `severity` stays the incident vocabulary.
+- `detection_model` accepts an objective UUID or a signal UUID.
+- `VisibilityAsset.custom_details` accepts strings, booleans, and numbers.
+- Sentinel generated schema no longer requires `grouping` or `entities`.
+- `surface` and `signal.entities` descriptions say stages group keys. Authored values are not prefixed with the stage id.
+- `opentide setup ci` installs `opentide==<installed version>`.
+
+### Fixed
+
+- Vocabulary extensions are looked up by field name, so a `schema.toml` extension applies during validation.
+- `opentide lint` reports an unreadable file instead of crashing.
+- `opentide setup vscode` accepts JSONC comments and trailing commas, and names the file when the JSON is still invalid.
+- Duplicate YAML keys are rejected with the key and line.
+- An unreadable object file is logged separately from malformed YAML.
+- Legacy `tvm`, `dom`, `mdr`, and `cdm` object types in `Configurations/global.toml` raise an error that names the rename and tells you to delete that file.
+- Unknown vocabulary values that are a UUID or `misp::<uuid>` do not get a "did you mean" suggestion.
+- A leftover `[proxy]`, `[cve].proxy`, or tenant `setup.proxy` key is an error that names `--proxy`.
+
+### Install
+
+```bash
+pip install opentide==0.10.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.9.0] — 2026-10-05
 
 Minor on 0.8.2. Upgrade and regenerate schemas with `opentide generate` so `rule::1.1` can record `metadata.reviewed` and technique and logsource checks use `att&ck::1.1` and `datasources::1.1`. `opentide rules unreviewed` lists rules with no review, or a review older than the window. It does not require regenerating CI.
@@ -631,7 +673,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.10.0
 [0.9.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.9.0
 [0.8.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.2
 [0.8.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.1

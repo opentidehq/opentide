@@ -258,7 +258,7 @@ def test_objective_attack_list_becomes_technique_sources() -> None:
     text = (FIXTURES / "objective.yaml").read_text(encoding="utf-8")
     text = text.replace(
         "  threats:\n",
-        "  attack:\n    - T1110\n  threats:\n",
+        "  mitre_attack:\n    - T1110\n  threats:\n",
     )
     built = build_event(load_document(text))
     assert "technique:T1110" in built.cluster_sources

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import re
 from typing import Any
 
 from opentide.core.logging import get_logger
@@ -16,6 +17,17 @@ from opentide.generation.vocabulary import (
 from opentide.models.object_types import CORE_OBJECT_TYPES
 
 logger = get_logger(__name__)
+
+_OPAQUE_IDENTIFIER = re.compile(
+    r"^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"|misp::[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+)
+
+
+def _is_opaque_identifier(value: str) -> bool:
+    """UUIDs and ``misp::<uuid>`` actor ids are not vocabulary typos."""
+    return _OPAQUE_IDENTIFIER.fullmatch(value.strip()) is not None
+
 
 _STAGE_DESC_LIMIT = 300
 
@@ -101,7 +113,7 @@ class _VocabEnumBuilder:
         self._process(entries, is_model=is_model)
 
     def _ingest_extensions(self) -> None:
-        extension_rows = self.extensions.get(self.vocab, [])
+        extension_rows = self.extensions.get(self._field_name, [])
         if not extension_rows:
             return
         ext_vocab = self.vocab_index.get(self._field_name)
@@ -306,6 +318,8 @@ class RuntimeEnumResolver:
         no_wrap: bool = False,
         cutoff: float = 0.5,
     ) -> str | None:
+        if _is_opaque_identifier(value):
+            return None
         allowed = list(self.enum_values(vocab, stages=stages, scoped=scoped, no_wrap=no_wrap))
         if not allowed:
             return None

@@ -23,6 +23,25 @@ def _empty_model_vocabulary(
     }
 
 
+_LEGACY_OBJECT_TYPES = {
+    "tvm": "threat",
+    "dom": "objective",
+    "mdr": "rule",
+    "cdm": "rule",
+}
+
+
+def _reject_legacy_object_types(object_scope: list[str]) -> None:
+    found = [name for name in object_scope if name in _LEGACY_OBJECT_TYPES]
+    if not found:
+        return
+    renames = ", ".join(f"{name} → {_LEGACY_OBJECT_TYPES[name]}" for name in found)
+    raise ValueError(
+        "Legacy object type(s) in Configurations/global.toml "
+        f"({renames}). Delete Configurations/global.toml and use threat, objective, and rule."
+    )
+
+
 def build_object_vocabularies(
     *,
     object_scope: list[str],
@@ -31,6 +50,7 @@ def build_object_vocabularies(
     object_names: dict[str, str],
 ) -> dict[str, Any]:
     """Build inline model vocabularies from raw object index data."""
+    _reject_legacy_object_types(object_scope)
     object_index: dict[str, Any] = {}
 
     for object_type in object_scope:

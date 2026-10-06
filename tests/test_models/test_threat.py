@@ -23,12 +23,12 @@ def test_threat_vector_from_yaml_dict(metadata: dict[str, Any]) -> None:
             "viability": "High",
             "terrain": "Endpoint workstations and user devices.",
             "surface": ["Windows::Desktop"],
-            "att&ck": ["T1059"],
+            "mitre_attack": ["T1059"],
         },
     }
     tvm = ThreatVector.from_yaml_dict(payload)
     assert ThreatVector.schema_identifier() == "threat::1.0"
-    assert tvm.threat.att_ck == ["T1059"]
+    assert tvm.threat.mitre_attack == ["T1059"]
 
 
 def _threat_payload(metadata: dict[str, Any], *, actors: Any) -> dict[str, Any]:
@@ -44,7 +44,7 @@ def _threat_payload(metadata: dict[str, Any], *, actors: Any) -> dict[str, Any]:
             "viability": "High",
             "terrain": "Endpoint workstations and user devices.",
             "surface": ["Windows::Desktop"],
-            "att&ck": ["T1059"],
+            "mitre_attack": ["T1059"],
             "actors": actors,
         },
     }

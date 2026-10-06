@@ -11,7 +11,7 @@ class VisibilityAsset(TideModel):
     name: str
     description: str
     criticality: str
-    custom_details: dict[str, str] | None = None
+    custom_details: dict[str, str | bool | int | float] | None = None
     surface: list[str] | None = None
 
 

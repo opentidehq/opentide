@@ -13,5 +13,4 @@ class DebugEnvironment:
         ENABLED = True
         os.environ['DEBUG_ENABLED'] = 'True'
     MDR_DEPLOYMENT_TEST_UUIDS = list(OpenTide.Configurations.Deployment.debug['mdr_test_uuids'])
-    PROXY_ENABLED = OpenTide.Configurations.Deployment.debug['proxy_enabled']
     SSL_ENABLED = OpenTide.Configurations.Deployment.debug['ssl_enabled']

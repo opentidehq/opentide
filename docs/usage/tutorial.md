@@ -79,7 +79,7 @@ threat:
   terrain: Endpoint workstations and user devices.
   surface:
     - Windows::Desktop
-  att&ck:
+  mitre_attack:
     - T1059
   actors:
     - name: att&ck::G0006
@@ -126,7 +126,7 @@ objective:
     - name: Suspicious logon signal
       uuid: 00000000-0000-4000-8099-000000000001
       description: Suspicious authentication activity
-      severity: Moderate incident
+      severity: Medium
       methodology: Statistical
       entities: [Hostname]
       data:
@@ -228,7 +228,7 @@ Issues print in a "Validation issues" panel, grouped by file. A dangling `detect
 
 ```text
 ## objects/rules/sentinel-kql-rule.yaml
-  [error] detection_model: Unknown objective reference '00000000-0000-4000-8002-DEADBEEF0000'
+  [error] detection_model: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
 ```
 
 The process exits `1`. This is the **dangling reference** anti-pattern from the [object model](./concepts/object-model.md#anti-patterns-to-avoid). Restore the correct UUID and validation passes again.

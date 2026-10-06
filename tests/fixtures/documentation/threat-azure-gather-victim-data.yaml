@@ -24,7 +24,7 @@ threat:
     - name: att&ck::G1028
   killchain:
     - Reconnaissance
-  att&ck:
+  mitre_attack:
     - T1589
   chaining:
     - vector: 00000000-0000-4000-8101-000000000099

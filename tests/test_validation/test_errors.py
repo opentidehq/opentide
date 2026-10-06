@@ -117,7 +117,7 @@ def _threat_error(metadata: dict[str, Any], **threat: Any) -> ValidationError:
         "viability": "Likely",
         "terrain": "Endpoint workstations.",
         "surface": ["Windows::Desktop"],
-        "att&ck": ["T1059"],
+        "mitre_attack": ["T1059"],
     }
     payload = {
         "name": "Threat",

@@ -37,7 +37,6 @@ def test_build_splunk_config_v4_format() -> None:
                     "description": "Primary tenant",
                     "deployment": "ALWAYS",
                     "setup": {
-                        "proxy": False,
                         "ssl": True,
                         "url": "https://splunk.example",
                         "port": "8089",
@@ -75,7 +74,6 @@ def test_build_cbc_config_v4_format() -> None:
                     "description": "Org A",
                     "deployment": "ALWAYS",
                     "setup": {
-                        "proxy": False,
                         "ssl": True,
                         "url": "https://cbc.example",
                         "org_key": "key",

@@ -1,7 +1,7 @@
 name = "Threat Surface"
 field = "surface"
 version = "1.0"
-description = "Hierarchical scoping of the technologies, systems and environments applicable to a threat vector. Uses scoped '::' delimited categories via stages. Replaces the deprecated targets, platforms and domains vocabularies."
+description = "Hierarchical catalogue of the technologies, systems, and environments applicable to a threat vector. Stages group keys. Authored values are the key names and are not prefixed with the stage id. A name may contain '::' as hierarchy inside the key (for example Windows::Desktop under stage OS). Replaces the deprecated targets, platforms and domains vocabularies."
 
 key = "name"
 [[stages]]

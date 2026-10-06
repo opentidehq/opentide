@@ -24,7 +24,9 @@ def check_references_for_object(
 
     if object_type == "rule":
         parent = body.get("detection_model")
-        if parent and parent not in graph.enum_values("objective"):
+        known_parents = graph.enum_values("objective") | graph.enum_values("signal")
+        if parent and parent not in known_parents:
+            message, suggestion = _invalid_detection_model(graph, str(parent))
             issues.append(
                 ValidationIssue(
                     code="invalid_ref",
@@ -33,8 +35,8 @@ def check_references_for_object(
                     object_type=object_type,
                     file_path=file_path,
                     field_path=("detection_model",),
-                    message=graph.format_invalid_ref("objective", str(parent)),
-                    suggestion=graph.suggest_ref("objective", str(parent)),
+                    message=message,
+                    suggestion=suggestion,
                 )
             )
     if object_type == "objective":
@@ -72,6 +74,15 @@ def check_references_for_object(
                     )
                 )
     return issues
+
+
+def _invalid_detection_model(graph: PreflightGraph, parent: str) -> tuple[str, str | None]:
+    """Report a detection_model that is neither an objective nor a signal."""
+    for ref_type in ("objective", "signal"):
+        suggestion = graph.suggest_ref(ref_type, parent)
+        if suggestion:
+            return graph.format_invalid_ref(ref_type, parent), suggestion
+    return f"Unknown objective or signal reference {parent!r}", None
 
 
 def check_chaining_for_object(

@@ -7,6 +7,34 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.10.0 — 6 October 2026
+
+Minor on 0.9.0. **Upgrade and regenerate schemas** with `opentide generate`. Technique lists are `mitre_attack`. Signal log sources come from `visibility.toml`. Signal severity uses alert labels. Regenerate CI with `opentide setup ci` so the install pin is exact. A root `composition` block is still accepted and is no longer required.
+
+**Install**
+
+```bash
+pip install opentide==0.10.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- Threat and objective technique lists are `mitre_attack`, pinned to `att&ck::1.1`. Actor values stay scoped (`att&ck::G0007`).
+- `objective.composition` is the required composition block. Templates emit it once.
+- `signals[].data.logsources` are names from `visibility.toml`.
+- Signal `severity` is `Informational`, `Low`, `Medium`, `High`, or `Critical`.
+- `detection_model` may be an objective UUID or a signal UUID.
+- HTTP proxy configuration is `opentide --proxy http://[user:pass@]host:port`.
+- `opentide info --strict` exits non-zero when an object file failed to load.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.10.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.10.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.9.0 — 5 October 2026
 
 Minor on 0.8.2. **Upgrade and regenerate schemas** with `opentide generate` so `rule::1.1` can record `metadata.reviewed` and technique and logsource checks use `att&ck::1.1` and `datasources::1.1`. `opentide rules unreviewed` lists rules with no review, or a review older than the window. It does not require regenerating CI.

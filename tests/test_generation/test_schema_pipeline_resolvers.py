@@ -25,6 +25,28 @@ def test_logsources_resolver_with_tenants() -> None:
     assert "sentinel::tenant-a::Windows Events" in enums
 
 
+def test_logsources_resolver_names_are_unqualified() -> None:
+    logsource = MagicMock()
+    logsource.name = "Windows Events"
+    logsource.system = "sentinel"
+    logsource.description = "Endpoint logs"
+    logsource.assets = []
+    logsource.tenants = ["tenant-a", "tenant-b"]
+    duplicate = MagicMock()
+    duplicate.name = "Windows Events"
+    duplicate.system = "splunk"
+    duplicate.description = "Same name"
+    duplicate.assets = []
+    duplicate.tenants = []
+    visibility = MagicMock()
+    visibility.logsources = [logsource, duplicate]
+    with patch.object(sp.VocabularyResolver, "_visibility", return_value=visibility):
+        result = sp.VocabularyResolver.Logsources().resolve(qualified=False)
+    assert result is not None
+    enums, _descriptions = result
+    assert enums == ["Windows Events"]
+
+
 def test_logsources_resolver_without_tenants() -> None:
     logsource = MagicMock()
     logsource.name = "Sysmon"

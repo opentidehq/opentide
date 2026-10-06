@@ -45,7 +45,6 @@ def _tenant(
         description="Primary tenant",
         deployment="ALWAYS",
         setup=ConfigurationModels.Systems.Splunk.Tenant.Setup(
-            proxy=False,
             ssl=True,
             url="https://splunk.example",
             port=8089,

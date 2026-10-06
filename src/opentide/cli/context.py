@@ -28,6 +28,7 @@ class CliContext:
     #: from ``OPENTIDE_REPO_ROOT``. An explicit path has to win over a stale
     #: ``OPENTIDE_TIDE_WORKSPACE`` export, or ``--repo`` silently does nothing.
     repo_explicit: bool = False
+    proxy: str | None = None
 
     def apply_environment(self) -> None:
         """Push context flags into process environment for engine modules."""
@@ -42,6 +43,9 @@ class CliContext:
             os.environ["OPENTIDE_DATA_ROOT"] = str(self.data)
         elif "OPENTIDE_DATA_ROOT" not in os.environ:
             os.environ["OPENTIDE_DATA_ROOT"] = str(get_data_root())
+        if self.proxy:
+            os.environ["HTTP_PROXY"] = self.proxy
+            os.environ["HTTPS_PROXY"] = self.proxy
         if self.debug:
             os.environ["DEBUG"] = "True"
             os.environ["DEBUG_ENABLED"] = "1"

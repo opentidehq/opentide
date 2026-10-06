@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from tests.test_documentation._snapshot_helpers import (
     FOLLOW_UP_THREAT_UUID,
+    SIGNAL_UUID,
     load_documentation_bundle,
 )
 
@@ -83,6 +84,26 @@ def test_catalog_related_entries_merge_upstream_and_downstream_without_clobber()
     directions = {entry.uuid: entry.direction for entry in entries}
     assert directions["down-1"] == "downstream"
     assert directions["up-1"] == "upstream"
+
+
+def test_coverage_graph_signal_detection_model_keeps_parent() -> None:
+    bundle = load_documentation_bundle()
+    rule = bundle.rule.model_copy(update={"detection_model": SIGNAL_UUID})
+    catalog = DocumentationCatalog(
+        rules=[DocumentRecord(DocumentScope.rules, rule.metadata.uuid, rule.name, rule)],
+        objectives=bundle.catalog.objectives,
+        threats=bundle.catalog.threats,
+        signals=bundle.catalog.signals,
+    )
+    with patch.object(DocumentationCatalog, "rules_for_signal", return_value=[]):
+        graph = catalog.coverage_graph(rule.metadata.uuid)
+    assert {node.object_type for node in graph.nodes} >= {"threat", "objective", "signal", "rule"}
+    assert any(
+        edge.source == SIGNAL_UUID
+        and edge.target == rule.metadata.uuid
+        and edge.label == "implements"
+        for edge in graph.edges
+    )
 
 
 def test_coverage_graph_unknown_uuid_is_empty() -> None:

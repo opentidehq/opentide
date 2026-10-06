@@ -8,7 +8,6 @@ from enum import Enum
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide
 from opentide.models.system_config import ConfigurationModels
-from opentide.deployment import Proxy
 from opentide.core.errors import Errors
 import structlog
 logger = structlog.get_logger('opentide.platforms.defender_for_endpoint.client')
@@ -95,10 +94,6 @@ class DefenderForEndpointService:
         self.DETECTION_RULES_ENDPOINT = self.GRAPH_API_ENDPOINT + '/rules/detectionRules'
         self.HUNTING_QUERY_ENDPOINT = self.GRAPH_API_ENDPOINT + '/runHuntingQuery'
         self.tenant_config = tenant_config
-        if tenant_config.setup.proxy:
-            Proxy.set_proxy()
-        else:
-            Proxy.unset_proxy()
         self.access_token = self._connect_to_tenant(self.tenant_config.setup.client_id, self.tenant_config.setup.tenant_id, self.tenant_config.setup.client_secret)
         self.session = requests.Session()
         self.session.headers.update({'Authorization': f'Bearer {self.access_token}', 'Content-Type': 'application/json'})

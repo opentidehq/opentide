@@ -138,7 +138,6 @@ CVE sections on threat pages are controlled by the same file:
 base_url = "https://vulnerability.circl.lu"
 default_db_link = "https://vulnerability.circl.lu/vuln/"
 retrieve_details = true  # fetch title, published date, severity, aliases
-proxy = false
 ```
 
 Identifiers always link to Vulnerability-Lookup (`/vuln/{id}`). CVE, GHSA, and GCVE identifiers are accepted. GNA 0 GCVE ids map to the reserved CVE form (`GCVE-0-2024-3094` → `CVE-2024-3094`) for both API lookup and page links. Legacy NVD `default_db_link` values from older configs are remapped to CIRCL. Set `retrieve_details = false` to emit links only (no API calls).

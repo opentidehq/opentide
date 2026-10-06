@@ -149,7 +149,7 @@ class PreflightGraph:
         return dict(self._chaining_graph.get(tvm_uuid, {}))
 
     def suggest_ref(self, ref_type: str, bad_value: str) -> str | None:
-        if ref_type in CORE_OBJECT_TYPES:
+        if ref_type in CORE_OBJECT_TYPES or ref_type == "signal":
             allowed = [self._objects_by_uuid[u].name for u in self.enum_values(ref_type)]
             import difflib
 

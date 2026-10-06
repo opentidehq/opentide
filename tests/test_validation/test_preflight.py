@@ -25,7 +25,7 @@ def _minimal_index() -> dict:
                 threat_uuid: {
                     "name": "Sample Threat",
                     "metadata": {"uuid": threat_uuid, "tlp": "clear"},
-                    "threat": {"att&ck": ["T1059"], "chaining": []},
+                    "threat": {"mitre_attack": ["T1059"], "chaining": []},
                 }
             },
             "objective": {},
@@ -107,6 +107,21 @@ def test_preflight_graph_suggest_ref_for_object_type() -> None:
     with patch("difflib.get_close_matches", return_value=["Alpha Rule"]):
         suggestion = graph.suggest_ref("rule", "Alfa Rule")
     assert suggestion == "uuid-1"
+
+
+def test_preflight_graph_suggest_ref_for_signal() -> None:
+    graph = PreflightGraph(
+        objects_by_type={"signal": {"sig-1": {"name": "Cloud enumeration"}}},
+        objects_by_uuid={
+            "sig-1": ObjectRef(uuid="sig-1", name="Cloud enumeration", object_type="signal"),
+        },
+        files_index={},
+        chaining_graph={},
+        enum_resolver=_sample_vocab_resolver(),
+    )
+    with patch("difflib.get_close_matches", return_value=["Cloud enumeration"]):
+        suggestion = graph.suggest_ref("signal", "Cloud enum")
+    assert suggestion == "sig-1"
 
 
 def test_preflight_graph_format_invalid_ref_with_suggestion() -> None:

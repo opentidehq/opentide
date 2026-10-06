@@ -32,7 +32,11 @@ _SYSTEM_MODELS: dict[str, Any] = {
 
 #: ``SystemConfig.Tenant.Setup`` declares these without defaults, but every
 #: bundled TOML treats them as optional.
-_SETUP_DEFAULTS: dict[str, Any] = {"proxy": False, "ssl": True}
+_SETUP_DEFAULTS: dict[str, Any] = {"ssl": True}
+
+_PROXY_RETIRED = (
+    "The proxy key is retired. Pass the URL with `opentide --proxy http://[user:pass@]host:port`."
+)
 
 
 def _required_fields(cls: Any) -> list[str]:
@@ -74,8 +78,11 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
         where = f"{system} tenant {name!r}"
         if "name" not in data:
             raise ValueError(f"{where} is missing required key(s): name")
+        supplied_setup = dict(data.get("setup") or {})
+        if "proxy" in supplied_setup:
+            raise ValueError(f"{where}: {_PROXY_RETIRED}")
         setup_raw = dict(_SETUP_DEFAULTS)
-        setup_raw.update(DebugHelpers.fetch_config_envvar(dict(data.get("setup") or {})))
+        setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
         kwargs: dict[str, Any] = {
             "name": data["name"],
             "description": data.get("description", ""),
@@ -117,6 +124,11 @@ def _load_modifiers(
     return modifiers
 
 
+def _reject_setup_proxy(setup_raw: dict[str, Any], *, where: str) -> None:
+    if "proxy" in setup_raw:
+        raise ValueError(f"{where}: {_PROXY_RETIRED}")
+
+
 def _load_splunk_tenants(
     tenants_config: list[dict[str, Any]] | None,
 ) -> list[ConfigurationModels.Systems.Splunk.Tenant]:
@@ -128,8 +140,10 @@ def _load_splunk_tenants(
     for tenant in tenants_config:
         tenant_data = dict(tenant)
         setup_raw = DebugHelpers.fetch_config_envvar(dict(tenant_data.pop("setup", {})))
+        _reject_setup_proxy(
+            setup_raw, where=f"splunk tenant {tenant_data.get('name', '<unnamed>')!r}"
+        )
         setup = ConfigurationModels.Systems.Splunk.Tenant.Setup(
-            proxy=setup_raw.get("proxy", False),
             ssl=setup_raw.get("ssl", True),
             url=setup_raw["url"],
             port=setup_raw["port"],
@@ -165,8 +179,11 @@ def _load_cbc_tenants(
     for tenant in tenants_config:
         tenant_data = dict(tenant)
         setup_raw = DebugHelpers.fetch_config_envvar(dict(tenant_data.pop("setup", {})))
+        _reject_setup_proxy(
+            setup_raw,
+            where=f"carbon_black_cloud tenant {tenant_data.get('name', '<unnamed>')!r}",
+        )
         setup = ConfigurationModels.Systems.CarbonBlackCloud.Tenant.Setup(
-            proxy=setup_raw.get("proxy", False),
             ssl=setup_raw.get("ssl", True),
             url=setup_raw["url"],
             org_key=setup_raw["org_key"],

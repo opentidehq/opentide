@@ -73,7 +73,7 @@
             "to_ids": false,
             "distribution": 5,
             "disable_correlation": false,
-            "value": "name: Simulated Actor\ncriticality: High\n\nmetadata:\n  uuid: 00000000-0000-4000-8001-000000000001\n  schema: threat::1.0\n  version: 1\n  created: \"2026-01-01\"\n  modified: \"2026-01-02\"\n  tlp: clear\n\nthreat:\n  description: Simulated threat actor for conformance fixtures\n  severity: Significant incident\n  impact:\n    - Data Breach\n    - Identity Theft\n  leverage:\n    - Elevation of privilege\n    - Repudiation\n  viability: Likely\n  terrain: Endpoint workstations and user devices.\n  surface:\n    - Windows::Desktop\n  att&ck:\n    - T1059\n  actors:\n    - name: att&ck::G0007\n    - name: misp::5b4ee3ea-eee3-4c8e-8323-85ae32658754\n      sighting: \"2024-11-02\"\n      references:\n        - https://attack.mitre.org/groups/G0007\n"
+            "value": "name: Simulated Actor\ncriticality: High\n\nmetadata:\n  uuid: 00000000-0000-4000-8001-000000000001\n  schema: threat::1.0\n  version: 1\n  created: \"2026-01-01\"\n  modified: \"2026-01-02\"\n  tlp: clear\n\nthreat:\n  description: Simulated threat actor for conformance fixtures\n  severity: Significant incident\n  impact:\n    - Data Breach\n    - Identity Theft\n  leverage:\n    - Elevation of privilege\n    - Repudiation\n  viability: Likely\n  terrain: Endpoint workstations and user devices.\n  surface:\n    - Windows::Desktop\n  mitre_attack:\n    - T1059\n  actors:\n    - name: att&ck::G0007\n    - name: misp::5b4ee3ea-eee3-4c8e-8323-85ae32658754\n      sighting: \"2024-11-02\"\n      references:\n        - https://attack.mitre.org/groups/G0007\n"
           }
         ]
       }

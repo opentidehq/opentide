@@ -139,7 +139,21 @@ def resolve_configurations(workspace: Path | None = None) -> dict[str, dict]:
     ):
         _deep_merge(unified, _fetch_configs(parent_configs))
 
+    _reject_retired_proxy(unified)
     return unified
+
+
+def _reject_retired_proxy(unified: dict[str, dict]) -> None:
+    """A leftover proxy key names ``opentide --proxy`` instead of applying it."""
+    message = "Pass the proxy URL with `opentide --proxy http://[user:pass@]host:port`."
+    deployment = unified.get("deployment")
+    if isinstance(deployment, dict) and "proxy" in deployment:
+        raise ValueError(f"deployment.toml [proxy] is retired. {message}")
+    documentation = unified.get("documentation")
+    if isinstance(documentation, dict):
+        cve = documentation.get("cve")
+        if isinstance(cve, dict) and "proxy" in cve:
+            raise ValueError(f"[cve].proxy is retired. {message}")
 
 
 @overload

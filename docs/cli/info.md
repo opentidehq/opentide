@@ -21,6 +21,7 @@ opentide --json info --technique T1059 coverage
 | `[section]` | Optional section: `rules`, `threats`, `objectives`, or `coverage` (requires `--technique`) |
 | `--platform` | Filter platform table to one platform |
 | `--technique` | ATT&CK technique ID — use with positional `coverage` |
+| `--strict` | Exit non-zero when any object file failed to load |
 | `--json` | Structured output (**global flag** — place before `info`) |
 
 ### Coverage lookup
@@ -42,6 +43,7 @@ Without `--json`, `info` prints a Rich table:
 
 - Package version
 - Rule, threat, objective counts
+- How many object files failed to load
 - One row per platform: `enabled=True` or `enabled=False`, then its capabilities — `[deploy, validate]`, or `[deploy]` for CrowdStrike and HarfangLab
 
 With a section, the table for that section replaces the summary:
@@ -63,6 +65,7 @@ An empty section prints `No rules found` (or threats, objectives).
   "version": "...",
   "repo": "...",
   "counts": { "rules": 1, "threats": 1, "objectives": 1 },
+  "parse_error_count": 0,
   "platforms": [
     { "name": "sentinel", "enabled": true, "can_deploy": true, "can_validate": true }
   ],
