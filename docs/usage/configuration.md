@@ -83,14 +83,10 @@ azure_client_secret = "$AZURE_CLIENT_SECRET"
 Exact connection keys differ per platform. Use `opentide info --platform <name>` to see what a platform expects, and never commit real secrets — see [CI/CD](./workflows/ci-cd.md#secrets) for injecting them in pipelines.
 </Callout>
 
-If you sit behind an outbound proxy, configure it in `deployment.toml`:
+If you sit behind an outbound proxy, pass it on the command. A passed flag wins over `HTTP_PROXY` and `HTTPS_PROXY`. Omitting the flag leaves those variables as they are.
 
-```toml
-[proxy]
-proxy_host = "proxy.internal"
-proxy_port = 8080
-proxy_user = "${PROXY_USER}"          # optional; enables authenticated proxy
-proxy_password = "${PROXY_PASSWORD}"
+```bash
+opentide --proxy http://user:pass@proxy.internal:8080 validate --strict
 ```
 
 ## Deployment statuses and strategies

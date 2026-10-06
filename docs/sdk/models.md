@@ -97,7 +97,7 @@ obj.objective.threats           # ["…8001…"]  (threat UUIDs)
 
 ```python
 threat = OpenTide.Threats["00000000-0000-4000-8001-000000000001"]
-threat.threat.att_ck            # ["T1059"]  (YAML `att&ck`, aliased att_ck)
+threat.threat.mitre_attack      # ["T1059"]  (YAML `mitre_attack`)
 threat.threat.terrain           # free-form prose
 threat.threat.surface           # vocabulary list, e.g. ["Windows::Desktop"]
 threat.threat.impact            # vocabulary list, e.g. ["Data Breach", "Identity Theft"]

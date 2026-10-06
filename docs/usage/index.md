@@ -20,7 +20,7 @@ Detection content in OpenTide is a small graph of typed objects. Understanding t
   <Card title="How OpenTide works" href="./how-it-works.md" description="The full lifecycle: author → generate → validate → deploy → document." />
   <Card title="Object model" href="./concepts/object-model.md" description="Threats, objectives, and rules — and how they chain together." />
   <Card title="Platforms" href="./concepts/platforms.md" description="Which SIEM/EDR platforms deploy and which support query validation." />
-  <Card title="0.9.0 release" href="./releases.md" description="Current PyPI release — pin opentide==0.9.0 (optional rule review date; ATT&CK and datasources pins at 1.1)." />
+  <Card title="0.10.0 release" href="./releases.md" description="Current PyPI release — pin opentide==0.10.0 (mitre_attack technique lists; visibility log sources; CLI proxy)." />
 </Cards>
 
 ## Pick your path
