@@ -117,6 +117,7 @@ class SplunkConnection(ABC):
             self.SKEWING_VALUE = 0
         self.OFFSET = int(setup.get("schedule_offset", 0))
 
+
 def correct_timerange_mode(
     timerange: str | None, *, unset: Literal["random", "current", "custom"] = "random"
 ) -> Literal["random", "current", "custom"]:
