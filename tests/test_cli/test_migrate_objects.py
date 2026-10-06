@@ -195,6 +195,35 @@ def test_migrate_objects_merges_nested_directories(tmp_path: Path) -> None:
     assert not library.exists()
 
 
+def test_migrate_objects_merges_leftover_models_library_into_existing_objects(
+    tmp_path: Path,
+) -> None:
+    """A populated objects/ tree still absorbs a leftover Models Library."""
+    root = tmp_path / "repo"
+    threats = root / "objects" / "threats"
+    threats.mkdir(parents=True)
+    (threats / "threat.yaml").write_text("name: t\n", encoding="utf-8")
+    library = root / "Models Library" / "Threat Vector Models"
+    library.mkdir(parents=True)
+    (library / "shared-threat.yaml").write_text("name: shared\n", encoding="utf-8")
+
+    planned = run_migrate_objects(root, apply=False)
+    library_ops = [
+        item
+        for item in planned["operations"]
+        if item["from"] == "Models Library/Threat Vector Models"
+    ]
+    assert library_ops[0]["action"] == "move"
+    assert (library / "shared-threat.yaml").is_file()
+
+    applied = run_migrate_objects(root, apply=True)
+    assert applied["applied"] is True
+    assert (threats / "threat.yaml").read_text(encoding="utf-8") == "name: t\n"
+    assert (threats / "shared-threat.yaml").read_text(encoding="utf-8") == "name: shared\n"
+    assert not (threats / "Threat Vector Models").exists()
+    assert not (root / "Models Library").exists()
+
+
 def test_migrate_objects_copy_merges_a_new_directory(tmp_path: Path) -> None:
     root = tmp_path / "legacy"
     (root / "Objects" / "Threat Vectors").mkdir(parents=True)

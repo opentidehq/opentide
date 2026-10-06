@@ -51,6 +51,10 @@ _PATH_DESTINATIONS = {
     "cdm": "objects/rules",
 }
 
+# Shared by Objects/, Models Library/, and global.toml paths. A non-empty
+# directory is merged so a leftover tree is not skipped behind objects/.
+_MERGE_DESTINATIONS = frozenset(_PATH_DESTINATIONS.values())
+
 _EMPTY_PARENTS = ("Objects", "Models Library", ".opentide/framework")
 
 
@@ -88,7 +92,11 @@ def _plan_operation(
         return {**base, "action": "skip", "reason": "path escapes repository root"}
     if src.resolve() == dest.resolve():
         return {**base, "action": "skip", "reason": "source and destination are the same"}
-    if dest.exists() and not _is_empty_dir(dest):
+    if (
+        dest.exists()
+        and not _is_empty_dir(dest)
+        and not (dest.is_dir() and mapping.destination in _MERGE_DESTINATIONS)
+    ):
         return {**base, "action": "skip", "reason": "destination already exists"}
     return base
 
