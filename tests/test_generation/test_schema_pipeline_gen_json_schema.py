@@ -123,6 +123,30 @@ def test_gen_json_schema_stamps_items_enum_on_optional_vocab_list() -> None:
     assert result["mitre_attack"]["anyOf"][1] == {"type": "null"}
 
 
+def test_gen_json_schema_stamps_string_and_array_union() -> None:
+    schema = {
+        "killchain": {
+            "anyOf": [
+                {"type": "string"},
+                {"type": "array", "items": {"type": "string"}},
+                {"type": "null"},
+            ],
+            "tide.vocab": "killchain",
+        }
+    }
+    with patch.object(
+        sp.VocabularyResolver.Vocabulary,
+        "resolve",
+        return_value=(["Reconnaissance"], ["Reconnaissance"]),
+    ):
+        result = sp.gen_json_schema(schema)
+    assert "enum" not in result["killchain"]
+    assert result["killchain"]["anyOf"][0]["enum"] == ["Reconnaissance"]
+    assert result["killchain"]["anyOf"][1]["items"]["enum"] == ["Reconnaissance"]
+    assert result["killchain"]["anyOf"][1]["uniqueItems"] is True
+    assert result["killchain"]["anyOf"][2] == {"type": "null"}
+
+
 def test_gen_json_schema_stamps_items_enum_on_oneof_vocab_list() -> None:
     schema = {
         "mitre_attack": {

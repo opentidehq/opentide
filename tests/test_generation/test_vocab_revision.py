@@ -25,6 +25,22 @@ class ThreatVector_v2_1(ThreatVector):
     __schema_identifier__ = "threat::2.1"
 
 
+def _union_string_enum(node: dict) -> list:
+    if "enum" in node:
+        return node["enum"]
+    for alternative in node.get("anyOf") or node.get("oneOf") or []:
+        if alternative.get("type") == "string" and "enum" in alternative:
+            return alternative["enum"]
+    raise KeyError("enum")
+
+
+def _union_array_enum(node: dict) -> list:
+    for alternative in node.get("anyOf") or node.get("oneOf") or []:
+        if alternative.get("type") == "array":
+            return alternative["items"]["enum"]
+    return node["items"]["enum"]
+
+
 def _killchain_vocab() -> VocabularyDefinition:
     return VocabularyDefinition(
         metadata=VocabularyMetadata(name="Kill Chain", field="killchain", key="name"),
@@ -116,10 +132,12 @@ def test_threat_schema_identifiers_compile_different_killchain_enums() -> None:
             schema_10 = gen_json_schema(source_10, schema_id="threat::1.0")
             schema_21 = gen_json_schema(source_21, schema_id="threat::2.1")
 
-        enum_10 = schema_10["$defs"]["ThreatBody"]["properties"]["killchain"]["enum"]
-        enum_21 = schema_21["$defs"]["ThreatBody"]["properties"]["killchain"]["enum"]
+        enum_10 = _union_string_enum(schema_10["$defs"]["ThreatBody"]["properties"]["killchain"])
+        enum_21 = _union_string_enum(schema_21["$defs"]["ThreatBody"]["properties"]["killchain"])
         assert "NewStage" not in enum_10
         assert "NewStage" in enum_21
+        array_21 = _union_array_enum(schema_21["$defs"]["ThreatBody"]["properties"]["killchain"])
+        assert "NewStage" in array_21
     finally:
         unregister_model("threat::2.1")
 
@@ -139,8 +157,9 @@ def test_generate_schema_for_identifier_uses_registered_revision() -> None:
             patch.object(sp, "_runtime_ready", True),
         ):
             schema = generate_schema_for_identifier("threat::2.1")
-        killchain_enum = schema["$defs"]["ThreatBody"]["properties"]["killchain"]["enum"]
-        assert "NewStage" in killchain_enum
+        killchain = schema["$defs"]["ThreatBody"]["properties"]["killchain"]
+        assert "NewStage" in _union_string_enum(killchain)
+        assert "NewStage" in _union_array_enum(killchain)
         assert schema["properties"]["metadata"]["properties"]["schema"]["const"] == "threat::2.1"
     finally:
         unregister_model("threat::2.1")
