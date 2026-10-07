@@ -424,10 +424,10 @@ def validate_query_cmd(
     live: bool = typer.Option(
         False,
         "--live",
-        help="Run the query against the tenant (needs platform SDKs and credentials)",
+        help="Check the tenant (needs platform SDKs and credentials)",
     ),
 ) -> None:
-    """Offline query syntax validation (5 supported platforms); --live hits the tenant."""
+    """Query validation checks the tenant. Pass --live."""
     cli = get_context(ctx)
     result = validate_query_platform(cli, platform.value, plan=plan, wide=wide, live=live)
     emit_success(cli, result)

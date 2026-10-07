@@ -34,7 +34,7 @@ Transport: **stdio** (standard MCP over stdin/stdout).
 | Threat → objective → rule graph | `get_chaining` |
 | ATT&CK coverage gaps | `coverage` |
 | Validate a rule | `validate_rule`, `validation_report` |
-| Check query syntax offline | `validate_query` |
+| Check queries against the tenant | `validate_query` with `live: true` |
 | Run read-only query | `run_query` — **not implemented** |
 | Deploy (dry-run default) | `deploy_rule` |
 | Deployment state | `deployment_status` |
@@ -44,15 +44,15 @@ Transport: **stdio** (standard MCP over stdin/stdout).
 
 The server advertises this purpose to MCP hosts:
 
-> Detection engineering assistant. Search and analyse detection content, validate rules against their schema, check platform query syntax offline, and dry-run rule deployment. Query execution against live platforms is not implemented: run_query never contacts a tenant and never returns rows.
+> Detection engineering assistant. Search and analyse detection content, validate rules against their schema, check platform queries against the tenant when live is true, and dry-run rule deployment. Query execution against live platforms is not implemented: run_query never contacts a tenant and never returns rows.
 
 <Callout type="warn">
-`validate_query` is a structural check, not a grammar: it catches unbalanced
-delimiters, unterminated strings, broken pipelines, and dangling operators, but
-it cannot tell you whether a table or field exists. `run_query` returns
-`stub: true` and `rows: null` — it never contacted a platform. Everything else
-(search, `validate_rule` / `validation_report`, chaining, coverage, dry-run
-deploy) is fully functional.
+`validate_query` refuses unless you pass `live: true`. That call checks the
+catalogue rules for the platform against the tenant. It does not scan the
+`query` argument. A missing SDK or a missing plan is a failed live check.
+`run_query` returns `stub: true` and `rows: null` — it never contacted a
+platform. Everything else (search, `validate_rule` / `validation_report`,
+chaining, coverage, dry-run deploy) is fully functional.
 </Callout>
 
 ## Documentation map

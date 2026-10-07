@@ -184,7 +184,7 @@ opentide --json setup --yes --platform sentinel --ci github
 
 ### `deploy` or `validate query --live` crashes locally with `illegal_deployment_plan`
 
-`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly. Since **0.4.0** the default `validate query` is offline and never reads the plan, so only `--live` can reach this.
+`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly. A bare `validate query` refuses before it reads the plan, so only `--live` can reach this.
 
 ### Tutorial objects fail `validate --strict` or `lint --strict`
 
@@ -370,19 +370,18 @@ See [Exit codes](../cli/exit-codes.md).
 
 CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and OpenTide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
 
-### MCP `validate_query` passes a query the platform rejects
+### MCP `validate_query` refuses
 
-`validate_query` is a **structural** check: delimiters, string termination,
-pipeline shape, dangling operators. It does not resolve table or field names, so
-a well-formed query against a table that does not exist still reports
-`valid: true`. Only the tenant can prove a query runs. `run_query` cannot help —
-it is not implemented and returns `stub: true` with `rows: null`. See
-[Agentic setup](./workflows/agentic-setup.md).
+The default does not scan the query string. Pass `live: true` to check the
+catalogue rules against the tenant. A missing SDK or a missing plan fails that
+check. `run_query` is not implemented and returns `stub: true` with `rows: null`.
+See [Agentic setup](./workflows/agentic-setup.md).
 
-### `opentide validate query` fails with a missing SDK
+### `opentide validate query` fails before it reaches the tenant
 
-Only `--live` needs vendor SDKs. Drop the flag for the offline syntax check, or
-install the extra the error names (for example `pip install 'opentide[sentinel]'`).
+A bare `validate query` exits `1` and tells you to re-run with `--live`. That
+flag needs the vendor SDK and tenant credentials. Install the extra the error
+names (for example `pip install 'opentide[sentinel]'`).
 
 ## Platforms and deployment
 

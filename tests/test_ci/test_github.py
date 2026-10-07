@@ -28,8 +28,12 @@ def test_render_github_includes_core_jobs() -> None:
 def test_render_github_validate_includes_query_platforms() -> None:
     options = CiRenderOptions(ci="github", platforms=["sentinel", "splunk"])
     workflow = render_github(options)
-    assert "opentide validate query --platform sentinel" in workflow
-    assert "opentide validate query --platform splunk" in workflow
+    assert "opentide validate query --platform sentinel --live" in workflow
+    assert "opentide validate query --platform splunk --live" in workflow
+    assert "skip sentinel live query validation" in workflow
+    assert "skip splunk live query validation" in workflow
+    validate = workflow.split("  validate:", 1)[1].split("  generate:", 1)[0]
+    assert "AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}" in validate
 
 
 def test_render_github_staging_job_when_enabled() -> None:

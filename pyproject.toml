@@ -45,7 +45,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Live query validation and deployment against Azure Monitor / Sentinel.
-# Offline `validate query` needs none of these.
+# `validate query --live` needs these. A bare `validate query` refuses.
 sentinel = [
     "azure-identity>=1.17",
     "azure-monitor-query>=1.4",

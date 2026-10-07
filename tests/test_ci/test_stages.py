@@ -32,8 +32,39 @@ def test_core_cli_steps_include_validate_and_generate() -> None:
     steps = core_cli_steps(options)
     assert steps[0] == "opentide validate --strict"
     assert steps[1] == "opentide lint --strict"
-    assert "opentide validate query --platform sentinel" in steps
+    query = next(step for step in steps if "validate query" in step)
+    assert "opentide validate query --platform sentinel --live" in query
+    assert "skip sentinel live query validation" in query
     assert steps[-1] == "opentide generate"
+
+
+def test_query_validation_command_skips_when_that_platforms_credentials_are_empty() -> None:
+    from opentide.ci.azure import render_azure
+    from opentide.ci.gitlab import render_gitlab
+    from opentide.ci.stages import platform_credential_names_for, query_validation_command
+
+    names = platform_credential_names_for("sentinel")
+    assert names == [
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_SUBSCRIPTION_ID",
+        "AZURE_TENANT_ID",
+        "AZURE_WORKSPACE_ID",
+    ]
+    assert "SPLUNK_TOKEN" not in names
+    command = query_validation_command("sentinel")
+    assert ":" not in command
+    assert 'if [ -z "$AZURE_CLIENT_ID$AZURE_CLIENT_SECRET' in command
+    assert "echo skip sentinel live query validation" in command
+    assert command.endswith("else opentide validate query --platform sentinel --live; fi")
+
+    options = CiRenderOptions(ci="gitlab", platforms=["sentinel", "harfanglab"])
+    gitlab = render_gitlab(options)
+    azure = render_azure(CiRenderOptions(ci="azure", platforms=["sentinel"]))
+    assert command in gitlab
+    assert command in azure
+    assert "validate_query_harfanglab" not in gitlab
+    assert "validate_query_harfanglab" not in azure
 
 
 def test_platform_credentials_are_the_variables_bundled_platform_files_reference() -> None:

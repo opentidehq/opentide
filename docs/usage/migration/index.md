@@ -38,7 +38,7 @@ rule.deploy("sentinel")
 
 ```bash
 opentide validate --strict
-opentide validate query --platform sentinel
+opentide validate query --platform sentinel --live
 ```
 
 Use `--platform`, not legacy `--system`.

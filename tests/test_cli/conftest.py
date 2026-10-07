@@ -200,8 +200,8 @@ def refuse_deployment_engines(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 def mock_query_validators(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stand in for the vendor SDK on the ``--live`` path only.
 
-    The default ``validate query`` path is offline and must never be mocked:
-    doing so is what let #245 and #261 pass a broken query as valid.
+    A bare ``validate query`` refuses before any engine loads. This stand-in
+    covers ``--live`` only.
     """
 
     class _NoOpValidator:

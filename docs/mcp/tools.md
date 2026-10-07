@@ -170,33 +170,24 @@ Prefer this tool for agent workflows — returns `model_dump_json_ready()` issue
 
 ## validate_query
 
-Offline syntax check, the same engine as `opentide validate query`.
+Tenant query check, the same path as `opentide validate query --live`.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `query` | string | Query text |
-| `platform` | string | Platform key |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query` | string | | Unused. The live check reads catalogue rules, not this string |
+| `platform` | string | | Platform key |
+| `live` | boolean | `false` | `true` calls the tenant |
 
-Structural only — delimiter balance, string and comment termination, pipeline
-shape, dangling operators. `valid: true` means the query parses; it does not
-mean the fields exist or that the query returns rows. Nothing is sent to a
-tenant.
+The default refuses and does not scan `query`. Pass `live: true` to check the
+catalogue rules for `platform`. A missing SDK or a missing plan is a failed
+live check.
 
 ```json
 {
-  "valid": false,
+  "valid": null,
   "supported": true,
-  "mode": "offline-syntax",
-  "language": "kql",
-  "errors": [
-    {
-      "code": "unterminated_string",
-      "message": "Unterminated \" string literal",
-      "line": 1,
-      "column": 31
-    }
-  ],
-  "message": "KQL syntax check failed with 1 problem(s)",
+  "status": "failed",
+  "message": "Query validation checks the tenant. Pass live: true.",
   "query_preview": "SecurityEvent | where Account == \"oops"
 }
 ```
@@ -303,7 +294,7 @@ search(query="T1059")                     → find or confirm the objective
 get_chaining(uuid=<objective>)            → inspect graph + chaining_index
 # propose objects/rules/<name>.yaml with detection_model=<objective>
 validation_report(uuid=<new rule>)        → must pass before proposing as done
-# (real KQL check runs via CLI: opentide validate query --platform sentinel)
+# (tenant check: validate_query with live true, or opentide validate query --platform sentinel --live)
 deploy_rule(uuid=<new rule>, platform="sentinel", dry_run=true)   → preview
 ```
 
@@ -330,12 +321,12 @@ get_chaining(uuid=<rule>)                 → inspect related objects in chainin
 1. Call `validation_report` before suggesting YAML edits.
 2. Use `search` before `get_chaining` when the UUID is unknown.
 3. Default to `dry_run=true` for `deploy_rule`; require explicit human approval for a real deploy.
-4. Never claim query validation for unsupported platforms. `validate_query` is a real offline syntax check but proves nothing about results; `run_query` is not implemented at all.
+4. Never claim query validation for unsupported platforms. `validate_query` refuses unless `live` is true, and that call checks catalogue rules against the tenant; `run_query` is not implemented at all.
 5. Do not assume `coverage(tactic=…)` filters results — pass `technique` for a filtered answer.
 
 ## Troubleshooting
 
 - **Empty results everywhere** — the server likely started with the wrong `OPENTIDE_REPO_ROOT`, or schemas were never generated. See [Configuration](./configuration.md) and run `opentide generate` in the repo.
-- **`validate_query` passes on a query the platform rejects** — the check is structural. Field names, operators, and table names are not resolved; run the query in the tenant to prove it works.
+- **`validate_query` refuses** — the default does not scan. Pass `live: true` to check the catalogue rules against the tenant. A missing SDK or a missing plan fails that check.
 - **A resource returns `{"error": "… not found"}`** — the UUID is wrong or the object type does not match; confirm with `search`.
 - **`deploy_rule` crashes, or `deployment_status` says an undeployed rule is deployed** — through 0.6.3 an unknown platform raised `KeyError`, and any authoring config counted as deployed. 0.6.4 returns a structured failure for an unknown platform or a platform with no tenants. `deployed` is false when the config has no `external_id` and no tenants.

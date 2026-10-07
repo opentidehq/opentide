@@ -1,7 +1,8 @@
 """CLI E2E: first-user DetectionOps workflow without Python setup helpers.
 
 Replays the published tutorial console path in order, asserting each
-``opentide`` invocation exits 0 (or 1 on the intentional dangling-ref):
+``opentide`` invocation exits 0 (or 1 on the dangling reference and on a bare
+``validate query``, which names ``--live``):
 
 setup → generate (empty) → author → generate (populated) → validate → lint →
 dangling ``detection_model`` (must fail) → restore → info → coverage →
@@ -143,8 +144,10 @@ def test_first_user_cli_workflow(
         repo=fresh,
         extra_env={"DEPLOYMENT_PLAN": ""},
     )
-    query_payload = assert_json_ok(query)
+    assert query.exit_code == 1, query.stdout + query.stderr
+    query_payload = parse_cli_json(query)
     assert query_payload.get("supported") is True
+    assert "--live" in query_payload["message"]
 
     deployer = MagicMock()
 

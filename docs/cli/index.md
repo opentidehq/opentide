@@ -51,7 +51,7 @@ All commands inherit [global options](./global-options.md):
 ```bash
 opentide generate
 opentide --json validate --strict
-opentide validate query --platform sentinel
+opentide validate query --platform sentinel --live
 opentide lint --strict
 opentide deploy --platform sentinel --dry-run
 ```

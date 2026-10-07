@@ -22,7 +22,7 @@ Use this skill when authoring or reviewing detection content in an OpenTide repo
 ```bash
 opentide validate
 opentide generate
-opentide validate query --platform sentinel
+opentide validate query --platform sentinel --live
 opentide deploy --dry-run
 ```
 

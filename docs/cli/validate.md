@@ -92,80 +92,47 @@ CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI 
 
 ```bash
 opentide validate query --platform sentinel
-opentide validate query --platform splunk --plan STAGING --wide
 opentide validate query --platform sentinel --live
+opentide validate query --platform splunk --live --plan STAGING --wide
 ```
 
 | Flag | Purpose |
 |------|---------|
 | `--platform` | **Required.** Platform enum value |
-| `--live` | Validate against the tenant instead of offline (needs SDKs + credentials) |
+| `--live` | Check the catalogue queries against the tenant (needs SDKs + credentials) |
 | `--plan` | Deployment plan (`DEPLOYMENT_PLAN` env) — `--live` only |
 | `--wide` | Wide output format — `--live` only |
 
-### Offline is the default
+### The tenant check is `--live`
 
-Without `--live` the command reads every query out of the rules it can see and
-runs a **language-aware structural check** in-process: no vendor SDK, no
-credentials, no network. The JSON payload reports `"mode": "offline-syntax"`
-and a `findings` list. If the [tutorial](../usage/tutorial.md) rule's query
-opens a string it never closes (`| where EventID == "4688`), the command
-exits `1` and names the rule, line, and column:
+A bare `validate query` does not scan query text. It exits `1` and names `--live`:
 
 ```bash
 opentide --json validate query --platform sentinel
 ```
 
-```json output-of="opentide --json validate query --platform sentinel" exit=1 state=unterminated-string
+```json output-of="opentide --json validate query --platform sentinel" exit=1
 {
   "platform": "sentinel",
-  "mode": "offline-syntax",
-  "language": "kql",
   "supported": true,
-  "rules": 1,
-  "checked": 1,
-  "findings": [
-    {
-      "uuid": "00000000-0000-4000-8003-000000000001",
-      "rule": "Sentinel KQL Rule",
-      "field": "configurations.sentinel.query",
-      "code": "unterminated_string",
-      "message": "Unterminated \" string literal",
-      "line": 2,
-      "column": 20
-    }
-  ],
   "ok": false,
   "status": "failed",
-  "message": "Offline KQL syntax validation found 1 problem(s) for sentinel (1 query across 1 rule)"
+  "message": "Query validation checks the tenant. Re-run with --live."
 }
 ```
 
-The check covers delimiter balance, string and comment termination, pipeline
-shape, and dangling operators. It is not a grammar: `status: passed` means the
-query parses, not that the fields exist or that it returns rows.
-
-Each language's own syntax is respected, so valid content is not rejected:
-
-| Language | Understood |
-|----------|------------|
-| KQL | `//` comments, `'`/`"` strings, verbatim `@"C:\dir\"`, multi-line ```` ``` ```` and `~~~` literals |
-| SPL | ```` ``` ```` comment blocks, generating commands that start with `\|` |
-| S1QL | `//` comments, `\|\|` as `OR` (with an operand on each side), a leading `\|` stage |
-| Lucene | backslash escapes (`iex\(`), mixed range ends (`[1 TO 5}`), whole-term `/regex/` (an unescaped path such as `/usr/bin/curl` stays data), apostrophes as data |
-
 ### `--live`
 
-`--live` builds the platform client and submits the query, so it needs the
+`--live` builds the platform client and submits the catalogue queries, so it needs the
 matching extra (`pip install 'opentide[sentinel]'`) and tenant credentials. When
 the SDK is absent the command fails with the extra to install rather than a
 `ModuleNotFoundError` traceback: the `advice` field in `--json`, an
 `advice: install opentide[sentinel] …` line under the `FATAL` line otherwise.
+A missing SDK or a missing plan is a failed live check.
 Only the requested platform's engine is
 loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
 modules. A platform with no `[[tenants]]` entry fails the same way, before the
-client is built, and names the file to edit. Offline validation does not need
-tenants.
+client is built, and names the file to edit.
 
 ### Supported platforms
 

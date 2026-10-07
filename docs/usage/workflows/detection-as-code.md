@@ -24,7 +24,7 @@ flowchart LR
 opentide generate                          # only when schemas/templates changed
 opentide validate --strict                 # schema, UUID, uniqueness, chaining
 opentide lint --strict                     # filename slugs and recommended metadata
-opentide validate query --platform sentinel
+opentide validate query --platform sentinel --live
 opentide deploy --platform sentinel --dry-run
 opentide generate docs                          # refresh wiki pages
 ```
@@ -109,7 +109,7 @@ Each rule carries per-platform query blocks under `configurations`. Five platfor
 | CrowdStrike | — | no (deploy only) |
 | HarfangLab | — | no (deploy only) |
 
-Always run `opentide validate query --platform <name>` for supporting platforms before deploy. OpenTide reports `supported: false` for CrowdStrike/HarfangLab rather than faking a pass — see [Platforms](../concepts/platforms.md).
+Always run `opentide validate query --platform <name> --live` for supporting platforms before deploy. A bare command refuses. OpenTide reports `supported: false` for CrowdStrike/HarfangLab rather than faking a pass — see [Platforms](../concepts/platforms.md).
 
 ## Review checklist
 

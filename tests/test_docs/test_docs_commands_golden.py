@@ -114,10 +114,6 @@ REPO_STATES: dict[str, Callable[[Path], None]] = {
         "detection_model: 00000000-0000-4000-8002-000000000001",
         "detection_model: 00000000-0000-4000-8002-DEADBEEF0000",
     ),
-    # The query's second line opens a string literal it never closes.
-    "unterminated-string": _edit_tutorial_rule(
-        "| where EventID == 4688", '| where EventID == "4688'
-    ),
 }
 
 

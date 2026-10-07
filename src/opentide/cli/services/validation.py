@@ -273,63 +273,15 @@ def _missing_sdk_result(platform: str, exc: ModuleNotFoundError) -> dict[str, ob
     }
 
 
-def _offline_query_result(
-    platform: str, *, uuids: frozenset[str] | None = None
-) -> dict[str, object]:
-    """Language-aware syntax check that needs no SDK, credentials, or network."""
-    from opentide.core.registry import OpenTide
-    from opentide.platforms.enabled import enabled_systems
-    from opentide.validation.query_syntax import language_label, validate_platform_queries
-
-    OpenTide.reload()
-    report = validate_platform_queries(platform, OpenTide.Models.rules, uuids=uuids)
-    label = language_label(report.language)
-    result: dict[str, object] = {
+def _live_required_result(platform: str) -> dict[str, object]:
+    """Bare ``validate query`` does not scan. The tenant check is ``--live``."""
+    return {
         "platform": platform,
-        "mode": "offline-syntax",
-        "language": report.language,
         "supported": True,
-        "rules": report.rules,
-        "checked": report.checked,
-        "findings": report.findings,
+        "status": "failed",
+        "message": "Query validation checks the tenant. Re-run with --live.",
+        "_exit_code": 1,
     }
-    warnings: list[str] = []
-    if platform not in set(enabled_systems()):
-        result["platform_enabled"] = False
-        warnings.append(
-            f"Platform {platform} is disabled in configurations; "
-            "checked query syntax only, nothing would deploy"
-        )
-    if report.checked == 0:
-        result["status"] = "skipped"
-        result["message"] = f"No {platform} queries found to validate"
-        if warnings:
-            result["warnings"] = warnings
-        return result
-    scope = (
-        f"{report.checked} quer{'y' if report.checked == 1 else 'ies'} across "
-        f"{report.rules} rule{'' if report.rules == 1 else 's'}"
-    )
-    if report.ok:
-        result["status"] = "passed"
-        result["message"] = f"Offline {label} syntax validation passed for {platform} ({scope})"
-    else:
-        result["status"] = "failed"
-        result["message"] = (
-            f"Offline {label} syntax validation found {len(report.findings)} "
-            f"problem(s) for {platform} ({scope})"
-        )
-        result["_exit_code"] = 1
-        for finding in report.findings:
-            logger.error(
-                "query_syntax_error",
-                detail=f"{finding['rule']} ({finding['uuid']})",
-                context=f"{finding['field']}:{finding['line']}:{finding['column']}",
-                advice=finding["message"],
-            )
-    if warnings:
-        result["warnings"] = warnings
-    return result
 
 
 def validate_query_platform(
@@ -342,8 +294,8 @@ def validate_query_platform(
 ) -> dict[str, object]:
     """Validate queries for a single platform.
 
-    Offline by default: the tutorial and generated CI pipelines must not require
-    tenant credentials. ``live=True`` runs the platform engine against the tenant.
+    Without ``live`` the command refuses and names ``--live``. ``live=True``
+    runs the platform engine against the tenant.
     """
     ctx.apply_environment()
     if plan is not None:
@@ -361,7 +313,7 @@ def validate_query_platform(
             "_exit_code": 1,
         }
     if not live:
-        return _offline_query_result(platform)
+        return _live_required_result(platform)
     from opentide.core.registry import OpenTide as LegacyOpenTide
     from opentide.deployment import DeploymentStrategy, make_deploy_plan
     from opentide.platforms.plugins import DeployTide

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opentide.validation.query_syntax import QUERY_VALIDATION_PLATFORMS
+from opentide.validation.query_platforms import QUERY_VALIDATION_PLATFORMS
 
 MAX_QUERY_ROWS = 100
 

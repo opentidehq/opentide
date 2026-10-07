@@ -10,6 +10,7 @@ from opentide.ci.stages import (
     object_validate_commands,
     pip_install,
     production_deploy_steps,
+    query_validation_command,
     staging_deploy_steps,
 )
 from opentide.ci.text import indent
@@ -99,7 +100,7 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 f"validate_query_{safe}",
                 display_name=f"Validate query ({platform})",
-                steps=_job_steps(options, [f"opentide validate query --platform {platform}"]),
+                steps=_job_steps(options, [query_validation_command(platform)]),
             )
         )
 

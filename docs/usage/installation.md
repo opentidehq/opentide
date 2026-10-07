@@ -86,9 +86,9 @@ OpenTide ships platform logic in the wheel. **Third-party SDKs** are only requir
 Defender, CrowdStrike, SentinelOne, and HarfangLab use HTTP clients bundled with opentide.
 
 Extras are only needed for live API calls — live deploy, and `opentide validate
-query --live`. The default `opentide validate query` is offline and works on a
-stock install, as do `generate`, `validate`, and dry-run deploy. If you hit a
-missing SDK, the command names the extra to install.
+query --live`. A bare `opentide validate query` refuses and names `--live`.
+`generate`, `validate`, and dry-run deploy work on a stock install. If a live
+check hits a missing SDK, the command names the extra to install.
 
 ### Platform identifiers
 

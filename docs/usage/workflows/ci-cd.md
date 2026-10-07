@@ -75,7 +75,7 @@ jobs:
       - run: pip install 'opentide==0.10.0'
       - run: opentide generate
       - run: opentide validate --strict
-      - run: opentide validate query --platform sentinel
+      - run: opentide validate query --platform sentinel --live
 ```
 
 ## Stage 2 — deploy on merge (staging)
@@ -160,7 +160,7 @@ validate:
     - pip install 'opentide==0.10.0'
     - opentide generate
     - opentide validate --strict
-    - opentide validate query --platform sentinel
+    - opentide validate query --platform sentinel --live
 
 deploy-staging:
   stage: deploy
@@ -189,7 +189,7 @@ steps:
     inputs: { versionSpec: '3.12' }
   - script: pip install 'opentide==0.10.0'
   - script: opentide generate && opentide validate --strict
-  - script: opentide validate query --platform sentinel
+  - script: opentide validate query --platform sentinel --live
 ```
 
 ## JSON output for gates
