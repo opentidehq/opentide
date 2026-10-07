@@ -98,6 +98,12 @@ def test_checker_codes(document: dict[str, object], code: str) -> None:
     assert merged.blocks == ()
 
 
+def test_unknown_top_level_key_names_the_misp_integration() -> None:
+    merged = _merge({"organisation": {"name": "Acme"}})
+    messages = [issue.message for issue in merged.errors if issue.code == "unknown_key"]
+    assert messages == ["Unknown key 'organisation'. The only sharing integration is [[misp]]."]
+
+
 def test_duplicate_name_across_integrations() -> None:
     merged = _merge(
         {

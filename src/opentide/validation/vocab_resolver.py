@@ -323,6 +323,11 @@ class RuntimeEnumResolver:
         allowed = list(self.enum_values(vocab, stages=stages, scoped=scoped, no_wrap=no_wrap))
         if not allowed:
             return None
+        from opentide.generation.framework import strip_vocab_stage_prefix
+
+        stripped = strip_vocab_stage_prefix(vocab, value)
+        if stripped in allowed:
+            return stripped
         matches = difflib.get_close_matches(value, allowed, n=1, cutoff=cutoff)
         return matches[0] if matches else None
 
