@@ -606,6 +606,39 @@ def recomposition_handler(entry_point):
     return recomposition
 
 
+def _apply_vocab_enum(field_schema: dict, temp: dict) -> None:
+    """Attach a vocabulary enum to a field, including ``anyOf`` / ``oneOf`` branches.
+
+    Optional lists are array-or-null and have no top-level ``type``. String-or-list
+    unions (``str | list[str] | None``) need the enum on the string branch and
+    ``items.enum`` on the array branch. A parent ``enum`` would reject arrays.
+    """
+    alternatives = field_schema.get("anyOf") or field_schema.get("oneOf")
+    if isinstance(alternatives, list):
+        stamped = False
+        for alternative in alternatives:
+            if not isinstance(alternative, dict):
+                continue
+            if alternative.get("type") == "array":
+                alternative["items"] = dict(temp)
+                alternative["uniqueItems"] = True
+                stamped = True
+            elif alternative.get("type") == "string":
+                alternative.update(temp)
+                stamped = True
+        if stamped:
+            return
+
+    field_types = field_schema.get("type")
+    if field_types:
+        field_types = [field_types] if isinstance(field_types, str) else list(field_types)
+    if field_types is None or (field_types and "string" in field_types):
+        field_schema.update(temp)
+    elif field_types and "array" in field_types:
+        field_schema["items"] = dict(temp)
+        field_schema["uniqueItems"] = True
+
+
 def gen_json_schema(dictionary, *, schema_id: str | None = None):
     """Recursively resolve OpenTide metaschema keywords into JSON Schema.
 
@@ -799,17 +832,9 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
                     temp["enum"] = enum
                     temp["markdownEnumDescriptions"] = markdown_enum
 
-                    # When no field type is present, assume it's a direct string
-                    # When the type is set to string, oneOf allows only one value
-                    # to be selected
-                    field_types = dict_foo[field].get("type")
-                    if field_types:
-                        field_types = [field_types] if isinstance(field_types, str) else field_types
-                    if field_types is None or "string" in field_types:
-                        dictionary[field].update(temp)
-                    elif "array" in field_types:
-                        dictionary[field]["items"] = temp
-                        dictionary[field]["uniqueItems"] = True
+                    # Plain string and array fields keep a top-level enum. Unions
+                    # (optional lists, string-or-list) stamp each alternative.
+                    _apply_vocab_enum(dictionary[field], temp)
 
                 else:
                     gen_json_schema(dictionary[field], schema_id=schema_id)
