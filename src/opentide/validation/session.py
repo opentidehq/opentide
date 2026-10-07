@@ -120,9 +120,12 @@ def run_validation(
 
     parse_errors = index.get("parse_errors", [])
     # yaml_parse belongs to schema. A named check such as cve must not fail
-    # because an unrelated object file failed to parse.
-    parse_issues = _yaml_parse_issues(parse_errors, scope) if ValidateCheck.schema in checks else []
-    issues.extend(parse_issues)
+    # because an unrelated object file failed to parse. The scoped list is
+    # still computed: it is the signal that a narrow filter matched an
+    # unparseable file, so uuid-format does not report scope_no_match.
+    parse_issues = _yaml_parse_issues(parse_errors, scope)
+    if ValidateCheck.schema in checks:
+        issues.extend(parse_issues)
     indexed_parse_failures = frozenset(
         _resolved_str(entry["path"]) for entry in parse_errors if entry.get("path")
     )

@@ -62,6 +62,39 @@ def test_parse_issues_attach_only_when_schema_is_selected(
     assert any(issue.code == "yaml_parse" for issue in schema.issues)
 
 
+def test_scoped_uuid_format_on_unparseable_file_stays_silent(
+    validation_session_mocks: MagicMock,
+) -> None:
+    """A broken file matched the filter; uuid-format has nothing to say about it.
+
+    Reporting scope_no_match would blame --file/--type for a YAML the indexer
+    could not read. yaml_parse belongs to schema, so this check stays quiet.
+    """
+    del validation_session_mocks
+    index = {
+        "objects": {"rule": {}, "objective": {}, "threat": {}},
+        "metaschemas": {},
+        "files": {},
+        "vocabs": {},
+        "parse_errors": [
+            {
+                "path": "/tmp/broken.yaml",
+                "object_type": "rule",
+                "message": "Could not parse object YAML",
+            }
+        ],
+    }
+    scope = ValidationScope.narrow(files=frozenset({"broken.yaml"}))
+    report = run_validation(
+        scope=scope,
+        checks=frozenset({ValidateCheck.uuid_format}),
+        index=index,
+        workers=0,
+    )
+    assert report.ok
+    assert report.issues == []
+
+
 def test_run_validation_empty_narrow_scope_fails(validation_session_mocks: MagicMock) -> None:
     del validation_session_mocks
     index = {
