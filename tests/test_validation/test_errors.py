@@ -286,7 +286,23 @@ def test_format_issues_for_console_groups_by_file() -> None:
     output = format_issues_for_console(issues)
     assert "## u1" in output
     assert "## /tmp/rule.yaml" in output
+    assert "  [error] global issue" in output
     assert "suggestion: Better Name" in output
+
+
+def test_format_issues_for_console_prints_file_line_when_yaml_line_is_set() -> None:
+    issues = [
+        ValidationIssue(
+            code="x",
+            file_path=Path("/tmp/rule.yaml"),
+            field_path=("metadata", "name"),
+            message="bad name",
+            yaml_line=0,
+        ),
+    ]
+    output = format_issues_for_console(issues)
+    assert "## /tmp/rule.yaml" in output
+    assert "  [error] /tmp/rule.yaml:1: metadata.name: bad name" in output
 
 
 def test_attach_yaml_lines_without_ruamel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

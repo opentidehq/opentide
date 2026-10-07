@@ -114,6 +114,8 @@ def format_issues_for_console(issues: list[ValidationIssue]) -> str:
         for issue in bucket:
             loc = ".".join(issue.field_path)
             prefix = f"{loc}: " if loc else ""
+            if issue.file_path is not None and issue.yaml_line is not None:
+                prefix = f"{issue.file_path}:{issue.yaml_line + 1}: {prefix}"
             hint = f" (suggestion: {issue.suggestion})" if issue.suggestion else ""
             lines.append(f"  [{issue.severity}] {prefix}{issue.message}{hint}")
     return "\n".join(lines)

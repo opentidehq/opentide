@@ -27,6 +27,41 @@ def validation_session_mocks() -> MagicMock:
         yield graph
 
 
+def test_parse_issues_attach_only_when_schema_is_selected(
+    validation_session_mocks: MagicMock,
+) -> None:
+    del validation_session_mocks
+    index = {
+        "objects": {"rule": {}, "objective": {}, "threat": {}},
+        "metaschemas": {},
+        "files": {},
+        "vocabs": {},
+        "parse_errors": [
+            {
+                "path": "/tmp/broken.yaml",
+                "object_type": "rule",
+                "message": "Could not parse object YAML",
+            }
+        ],
+    }
+    with patch(
+        "opentide.validation.session._sharing_config_issues",
+        return_value=([], []),
+    ):
+        cve = run_validation(checks=frozenset({ValidateCheck.cve}), index=index, workers=0)
+        sharing = run_validation(
+            checks=frozenset({ValidateCheck.sharing_config}),
+            index=index,
+            workers=0,
+        )
+    schema = run_validation(checks=frozenset({ValidateCheck.schema}), index=index, workers=0)
+    assert cve.ok
+    assert [issue.code for issue in cve.issues] == []
+    assert sharing.ok
+    assert [issue.code for issue in sharing.issues] == []
+    assert any(issue.code == "yaml_parse" for issue in schema.issues)
+
+
 def test_run_validation_empty_narrow_scope_fails(validation_session_mocks: MagicMock) -> None:
     del validation_session_mocks
     index = {
