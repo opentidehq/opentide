@@ -10,6 +10,7 @@ from opentide.ci.stages import (
     object_validate_commands,
     pip_install,
     production_deploy_steps,
+    query_validation_command,
     staging_deploy_steps,
 )
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
@@ -76,7 +77,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 job_name,
                 options=options,
                 stage="validate",
-                script=[f"opentide validate query --platform {platform}"],
+                script=[query_validation_command(platform)],
             )
         )
 

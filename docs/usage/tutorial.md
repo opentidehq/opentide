@@ -256,17 +256,17 @@ Coverage counts rules only; the objective and threat your rule links to are not 
 
 ## 9. Validate the query and dry-run the deploy
 
-Sentinel supports query validation, so check the KQL before deploying. `validate query` parses the query offline by default — no Azure SDK and no credentials:
+Sentinel supports query validation. A bare `validate query` does not scan the KQL. It exits `1` and names `--live`:
 
 ```bash
 opentide validate query --platform sentinel
 ```
 
-```text output-of="opentide validate query --platform sentinel"
-OK Offline KQL syntax validation passed for sentinel (1 query across 1 rule)
+```text output-of="opentide validate query --platform sentinel" exit=1
+FATAL: Query validation checks the tenant. Re-run with --live.
 ```
 
-Add `--live` to send the query to Azure Monitor for a real round-trip; that needs `opentide[sentinel]` and credentials. Then dry-run the deploy:
+`--live` sends the catalogue queries to Azure Monitor. That needs `opentide[sentinel]` and credentials. Then dry-run the deploy:
 
 ```bash
 opentide deploy --platform sentinel --dry-run

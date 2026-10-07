@@ -21,28 +21,41 @@ def test_query_validation_platform_count() -> None:
 
 
 @pytest.mark.parametrize("platform", sorted(QUERY_VALIDATION_PLATFORMS))
-def test_validate_query_reports_offline_mode(platform: str) -> None:
+def test_validate_query_refuses_without_live(platform: str) -> None:
     result = tools.tool_validate_query("DeviceProcessEvents", platform)
     assert result["supported"] is True
-    assert result["valid"] is True
-    assert result["mode"] == "offline-syntax"
-    assert "not executed" in result["message"]
+    assert result["valid"] is None
+    assert result.get("mode") != "offline-syntax"
+    assert "live: true" in result["message"]
 
 
-def test_validate_query_rejects_a_broken_query() -> None:
+def test_validate_query_does_not_scan_a_broken_query() -> None:
     result = tools.tool_validate_query(GARBAGE, "sentinel")
-    assert result["valid"] is False
+    assert result["valid"] is None
     assert result["supported"] is True
-    (error,) = result["errors"]
-    assert error["code"] == "unterminated_string"
-    assert error["line"] == 1
+    assert "errors" not in result
+    assert "live: true" in result["message"]
 
 
 @pytest.mark.parametrize("query", ["", "   "])
-def test_validate_query_rejects_an_empty_query(query: str) -> None:
+def test_validate_query_refuses_an_empty_query_without_scanning(query: str) -> None:
     result = tools.tool_validate_query(query, "splunk")
-    assert result["valid"] is False
-    assert result["errors"][0]["code"] == "empty_query"
+    assert result["valid"] is None
+    assert "live: true" in result["message"]
+
+
+def test_validate_query_live_calls_the_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def _fake(ctx: object, platform: str, *, live: bool = False) -> dict[str, object]:
+        seen["platform"] = platform
+        seen["live"] = live
+        return {"platform": platform, "mode": "live", "status": "passed", "supported": True}
+
+    monkeypatch.setattr("opentide.cli.services.validation.validate_query_platform", _fake)
+    result = tools.tool_validate_query("DeviceProcessEvents", "sentinel", live=True)
+    assert seen == {"platform": "sentinel", "live": True}
+    assert result["mode"] == "live"
 
 
 @pytest.mark.parametrize("platform", ["crowdstrike", "harfanglab"])

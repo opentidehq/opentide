@@ -6,7 +6,7 @@ from enum import Enum
 
 from opentide.documentation.types import DocumentScope
 from opentide.validation.checks.kinds import ValidateCheck
-from opentide.validation.query_syntax import (
+from opentide.validation.query_platforms import (
     QUERY_VALIDATION_PLATFORMS as _QUERY_VALIDATION_PLATFORMS,
 )
 

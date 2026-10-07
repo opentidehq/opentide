@@ -10,7 +10,7 @@ OpenTide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## What agents can and cannot do today
 
 <Callout type="warn">
-`validate_query` runs a real offline syntax check, but a structural one: it will not catch a misspelled table or field, so a `valid: true` is not proof the query runs. `run_query` is **not implemented** — it returns `stub: true` with `rows: null` and never contacts a platform. Use `validation_report` for structured object validation an agent can act on.
+`validate_query` refuses unless you pass `live: true`. That call checks the catalogue rules against the tenant. It does not scan the `query` argument. A missing SDK or a missing plan is a failed live check. `run_query` is **not implemented** — it returns `stub: true` with `rows: null` and never contacts a platform. Use `validation_report` for structured object validation an agent can act on.
 </Callout>
 
 | Capability | Status |
@@ -18,7 +18,7 @@ OpenTide exposes the engine to AI agents through an [MCP server](../../mcp/index
 | Search catalogue, read objects, inspect chaining | Supported |
 | Validate objects (`validate_rule`, `validation_report`) | Supported |
 | Dry-run deploy (`deploy_rule`, `dry_run=true`) | Supported |
-| Offline query syntax check via MCP (`validate_query`) | Supported — structure only |
+| Tenant query check via MCP (`validate_query`, `live: true`) | Supported — catalogue rules, not the `query` string |
 | Live query execution via MCP (`run_query`) | Not implemented |
 
 ## Install and configure the server
@@ -103,7 +103,7 @@ flowchart LR
 > `get_chaining(uuid="…8002…0001")` → confirms it covers the *Simulated Actor* threat and has no rule yet.
 > Proposes `objects/rules/sentinel-t1059.yaml` with `detection_model` pointing at the objective.
 > `validation_report()` → passes schema, uuid, chaining.
-> Runs `opentide validate query --platform sentinel` (CLI) for real KQL syntax.
+> Runs `opentide validate query --platform sentinel --live` (CLI) against the tenant.
 > `deploy_rule(uuid=…, platform="sentinel", dry_run=true)` → shows the planned change.
 >
 > **You:** review the diff, then deploy for real.

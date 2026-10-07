@@ -37,7 +37,7 @@ Steps:
    - Orchestration/generate.py → opentide generate
    - Orchestration/document.py → opentide generate docs [--output docs] [--flavor github]
    - Orchestration/deploy.py → opentide deploy
-   - Query validation: opentide validate query --platform <sentinel|defender_for_endpoint|splunk|sentinel_one|carbon_black_cloud>
+   - Query validation: opentide validate query --live --platform <sentinel|defender_for_endpoint|splunk|sentinel_one|carbon_black_cloud>
 
 4. Repository layout
    - Run `opentide migrate objects` (dry-run) then `opentide migrate objects --apply` when Configurations/ or Objects/ still use CoreTide names.

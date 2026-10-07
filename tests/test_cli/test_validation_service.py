@@ -269,24 +269,19 @@ def test_validate_query_platform_runs_validator(monkeypatch) -> None:
     assert result["mode"] == "live"
 
 
-def test_validate_query_platform_is_offline_by_default(monkeypatch) -> None:
-    """Issue #239: the default path must not touch the deployment plan at all."""
+def test_validate_query_platform_refuses_without_live() -> None:
+    """A bare call names ``--live`` and does not build a deployment plan."""
     ctx = CliContext(json_output=True)
 
     def _explode(*args: object, **kwargs: object) -> None:
-        raise AssertionError("offline validation must not build a deployment plan")
+        raise AssertionError("a bare validate query must not build a deployment plan")
 
-    with (
-        patch("opentide.deployment.make_deploy_plan", side_effect=_explode),
-        patch.object(
-            validation_service,
-            "_offline_query_result",
-            return_value={"status": "passed", "mode": "offline-syntax"},
-        ) as offline,
-    ):
+    with patch("opentide.deployment.make_deploy_plan", side_effect=_explode):
         result = validation_service.validate_query_platform(ctx, "sentinel")
-    offline.assert_called_once_with("sentinel")
-    assert result["mode"] == "offline-syntax"
+    assert result["status"] == "failed"
+    assert result["supported"] is True
+    assert "--live" in str(result["message"])
+    assert "mode" not in result
 
 
 def test_validate_query_live_without_tenants_fails_before_loading_a_validator(

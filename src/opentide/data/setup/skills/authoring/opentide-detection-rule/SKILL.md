@@ -14,8 +14,8 @@ Author rules as `rule::1.0` YAML under `objects/rules/`.
 ```bash
 opentide validate --strict
 opentide lint --strict
-opentide validate query --platform <platform>
+opentide validate query --platform <platform> --live
 opentide deploy --dry-run
 ```
 
-`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation is offline syntax for the platforms that support it.
+`validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it. A bare command refuses.

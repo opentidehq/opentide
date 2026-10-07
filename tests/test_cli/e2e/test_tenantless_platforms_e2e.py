@@ -313,16 +313,18 @@ def test_live_query_validation_stays_unsupported_without_tenants(
 
 
 @pytest.mark.parametrize("platform", LIVE_PLATFORMS)
-def test_offline_query_validation_does_not_need_tenants(
-    invoke_cli, tenantless_repo, platform: DetectionPlatform
+def test_bare_query_validation_refuses_without_tenants(
+    invoke_cli, tenantless_repo, engine_imports: list[str], platform: DetectionPlatform
 ) -> None:
     repo = tenantless_repo([platform.value])
 
     result, output = _run(invoke_cli, repo, True, "validate", "query", "--platform", platform.value)
 
-    assert result.exit_code == 0, output
+    assert result.exit_code == 1, output
     payload = parse_cli_json(result)
-    assert payload["ok"] is True
-    assert payload["status"] == "passed"
-    assert payload["mode"] == "offline-syntax"
-    assert payload["checked"] == 1
+    assert payload["ok"] is False
+    assert payload["status"] == "failed"
+    assert payload["supported"] is True
+    assert "--live" in payload["message"]
+    assert "missing_tenants" not in payload
+    assert engine_imports == []

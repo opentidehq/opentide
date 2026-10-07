@@ -166,7 +166,7 @@ def render_github(options: CiRenderOptions) -> str:
     generate_steps = join_blocks(setup, _run_steps(["opentide generate"]))
 
     jobs: list[str] = [
-        _github_job("validate", name="Validate", steps=validate_steps),
+        _github_job("validate", name="Validate", env=deploy_env, steps=validate_steps),
         _github_job("generate", name="Generate", needs="validate", steps=generate_steps),
     ]
 

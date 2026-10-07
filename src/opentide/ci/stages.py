@@ -32,6 +32,24 @@ def platform_credential_names() -> list[str]:
     return sorted(names)
 
 
+def platform_credential_names_for(platform: str) -> list[str]:
+    """Environment variables referenced by one bundled platform file."""
+    path = _PLATFORMS_DIR / f"{platform}.toml"
+    if not path.is_file():
+        return []
+    return sorted(set(_ENV_REF.findall(path.read_text(encoding="utf-8"))))
+
+
+def query_validation_command(platform: str) -> str:
+    """Tenant query check, skipped when every credential variable is empty."""
+    live = f"opentide validate query --platform {platform} --live"
+    names = platform_credential_names_for(platform)
+    if not names:
+        return live
+    joined = "".join(f"${name}" for name in names)
+    return f'if [ -z "{joined}" ]; then echo skip {platform} live query validation; else {live}; fi'
+
+
 def object_validate_commands() -> list[str]:
     """The catalogue gate. Warnings fail, and a misnamed file fails too."""
     return ["opentide validate --strict", "opentide lint --strict"]
@@ -40,7 +58,7 @@ def object_validate_commands() -> list[str]:
 def validate_commands(options: CiRenderOptions) -> list[str]:
     steps = object_validate_commands()
     for platform in query_platforms(options):
-        steps.append(f"opentide validate query --platform {platform}")
+        steps.append(query_validation_command(platform))
     return steps
 
 

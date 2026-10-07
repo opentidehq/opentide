@@ -89,19 +89,9 @@ if OpenTide.Platforms["sentinel"].can_validate:
     result = rule.validate_query("sentinel")
 ```
 
-### Offline syntax validation
+### The tenant check
 
-`opentide.validation.query_syntax` parses a query structurally — delimiter balance, string termination, pipeline shape, dangling operators — with no SDK and no tenant:
-
-```python
-from opentide.validation.query_syntax import check_query, query_language
-
-language = query_language("sentinel")            # "kql"
-findings = check_query('SecurityEvent | where Account == "oops', language)
-print([finding.code for finding in findings])    # ['unterminated_string']
-```
-
-It is deliberately not a full grammar: an empty finding list means the query *parses*, never that it *runs*.
+There is no in-process query scanner. A bare `opentide validate query` refuses and names `--live`. `--live` and `rule.validate_query(platform)` both call the tenant. A missing SDK or a missing plan fails that check.
 
 <Callout type="info">
 Three entry points, three behaviours — pick deliberately:
@@ -109,10 +99,10 @@ Three entry points, three behaviours — pick deliberately:
 | Entry point | Behaviour |
 |---|---|
 | `rule.validate_query(platform)` | Live vendor call. Needs the extra and a tenant. |
-| `opentide validate query` | Offline syntax by default (`mode: offline-syntax`); `--live` for the vendor call. |
-| MCP `validate_query` | Offline syntax, same engine as the CLI default. |
+| `opentide validate query` | Refuses until you pass `--live`. |
+| MCP `validate_query` | Refuses until you pass `live: true`, which calls the tenant. |
 
-The MCP tool used to return `valid: true` unconditionally; since 0.4.0 it returns a real verdict. See [MCP tools](../mcp/tools.md).
+See [MCP tools](../mcp/tools.md).
 </Callout>
 
 A failed query validation may raise `Errors.TideQueryValidationError` for exceptional cases; expected pass/fail is returned in the `ValidationResult`. See [Models → errors](./models.md#errors).

@@ -94,7 +94,6 @@ A sample of a failure the finished tutorial does not produce names the edit it n
 | `state=` | Edit to `objects/rules/sentinel-kql-rule.yaml` |
 |----------|------------------------------------------------|
 | `dangling-reference` | `detection_model` names an objective that does not exist, as in tutorial step 7 |
-| `unterminated-string` | The query's second line opens a string it never closes: `\| where EventID == "4688` |
 
 The edits live in `REPO_STATES` in the golden test. Add one there instead of leaving a failure sample unchecked.
 

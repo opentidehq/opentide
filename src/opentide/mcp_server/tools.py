@@ -75,10 +75,11 @@ def tool_validation_report(
     return report.model_dump_json_ready()
 
 
-def tool_validate_query(query: str, platform: str) -> dict[str, Any]:
-    """Offline syntax check — the same engine as ``opentide validate query``."""
-    from opentide.validation.query_syntax import check_query, language_label, query_language
+def tool_validate_query(query: str, platform: str, live: bool = False) -> dict[str, Any]:
+    """Tenant query check. The default refuses; ``live=True`` calls the tenant.
 
+    ``live=True`` validates the catalogue rules for ``platform``, not ``query``.
+    """
     if platform not in QUERY_VALIDATION_PLATFORMS:
         return {
             "valid": None,
@@ -87,22 +88,18 @@ def tool_validate_query(query: str, platform: str) -> dict[str, Any]:
             "message": f"query validation not supported for {platform}",
             "errors": [],
         }
-    language = query_language(platform) or ""
-    findings = check_query(query, language)
-    label = language_label(language)
-    return {
-        "valid": not findings,
-        "supported": True,
-        "mode": "offline-syntax",
-        "language": language,
-        "errors": [finding.to_dict() for finding in findings],
-        "message": (
-            f"{label} syntax check failed with {len(findings)} problem(s)"
-            if findings
-            else f"{label} syntax check passed (structure only, not executed)"
-        ),
-        "query_preview": query[:200],
-    }
+    if not live:
+        return {
+            "valid": None,
+            "supported": True,
+            "status": "failed",
+            "message": "Query validation checks the tenant. Pass live: true.",
+            "query_preview": query[:200],
+        }
+    from opentide.cli.context import CliContext
+    from opentide.cli.services.validation import validate_query_platform
+
+    return validate_query_platform(CliContext(), platform, live=True)
 
 
 def tool_run_query(query: str, platform: str, tenant: str = "") -> dict[str, Any]:
