@@ -606,6 +606,18 @@ def recomposition_handler(entry_point):
     return recomposition
 
 
+def _vocab_array_alternatives(field_schema: dict) -> list[dict]:
+    """Return array branches of an ``anyOf`` / ``oneOf`` vocabulary field."""
+    alternatives = field_schema.get("anyOf") or field_schema.get("oneOf")
+    if not isinstance(alternatives, list):
+        return []
+    return [
+        alternative
+        for alternative in alternatives
+        if isinstance(alternative, dict) and alternative.get("type") == "array"
+    ]
+
+
 def gen_json_schema(dictionary, *, schema_id: str | None = None):
     """Recursively resolve OpenTide metaschema keywords into JSON Schema.
 
@@ -801,11 +813,17 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
 
                     # When no field type is present, assume it's a direct string
                     # When the type is set to string, oneOf allows only one value
-                    # to be selected
+                    # to be selected. Optional lists are anyOf/oneOf array-or-null
+                    # with no top-level type; stamp the array alternative only.
                     field_types = dict_foo[field].get("type")
                     if field_types:
                         field_types = [field_types] if isinstance(field_types, str) else field_types
-                    if field_types is None or "string" in field_types:
+                    array_alternatives = _vocab_array_alternatives(dict_foo[field])
+                    if field_types is None and array_alternatives:
+                        for alternative in array_alternatives:
+                            alternative["items"] = temp
+                            alternative["uniqueItems"] = True
+                    elif field_types is None or "string" in field_types:
                         dictionary[field].update(temp)
                     elif "array" in field_types:
                         dictionary[field]["items"] = temp
