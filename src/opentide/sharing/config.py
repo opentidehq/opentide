@@ -142,8 +142,8 @@ def merge_sharing_documents(
                     SharingIssue(
                         code="unknown_key",
                         message=(
-                            f"Top-level key {key!r} must be an array of tables. "
-                            "sharing.toml has no global tables."
+                            f"Unknown key {key!r}. "
+                            f"The only sharing integration is [[{INTEGRATION_MISP}]]."
                         ),
                         field_name=str(key),
                     )
