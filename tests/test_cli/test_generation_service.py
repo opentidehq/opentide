@@ -86,6 +86,15 @@ def test_run_generate_single_phase(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["phase"] == "schemas"
 
 
+def test_run_generate_named_phases_keep_the_given_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = MagicMock()
+    called: list[str] = []
+    monkeypatch.setattr(generation, "run_generate_phase", lambda phase: called.append(phase))
+    result = generation.run_generate(ctx, phases=["schemas", "templates", "vocabs", "snippets"])
+    assert called == ["schemas", "templates", "vocabs", "snippets"]
+    assert result["phases"] == called
+
+
 def test_run_generate_full_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     ctx = MagicMock()
     monkeypatch.setattr(generation, "run_generate_all", MagicMock())

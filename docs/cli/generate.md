@@ -10,6 +10,7 @@ Builds client-visible outputs first, then framework internals from Pydantic mode
 ```bash
 opentide generate                    # full pipeline (no extract)
 opentide generate schemas            # single phase
+opentide generate schemas templates vocabs snippets
 opentide generate docs --output docs
 opentide generate exports navigator
 opentide generate inflight
