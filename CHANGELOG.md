@@ -6,6 +6,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-07
+
+Minor on 0.10.0. Bare `validate query` no longer scans. `--live` is the tenant check. Regenerate CI with `opentide setup ci` so generated pipelines pass `--live` and pin this release. Regenerate schemas with `opentide generate` so optional vocabulary lists include `items.enum`.
+
+### Added
+
+- `opentide generate` accepts `schemas`, `templates`, `vocabs`, and `snippets` together and runs them in that order. `docs`, `exports`, `extract`, and `inflight` stay subcommands ([#455](https://github.com/OpenTideHQ/opentide/issues/455)).
+- The bundled actors vocabulary matches the specifications snapshot refreshed from the live MISP galaxy ([specifications#34](https://github.com/OpenTideHQ/specifications/issues/34)).
+
+### Changed
+
+- Bare `opentide validate query` refuses and names `--live`. It does not scan query text. `--live` checks the tenant. A missing SDK or plan fails that check. CrowdStrike and HarfangLab stay `supported: false` ([#456](https://github.com/OpenTideHQ/opentide/issues/456)).
+- Generated GitHub, GitLab, and Azure pipelines pass `--live` and skip a platform when every credential variable for that platform is empty ([#456](https://github.com/OpenTideHQ/opentide/issues/456)).
+- MCP `validate_query` refuses unless `live` is true. `live: true` checks the catalogue rules for the platform against the tenant ([#456](https://github.com/OpenTideHQ/opentide/issues/456)).
+- Generated schemas stamp `items.enum` on optional vocabulary lists and on each branch of a string-or-list union ([#450](https://github.com/OpenTideHQ/opentide/issues/450)).
+
+### Fixed
+
+- Validation findings print `file:line` when `yaml_line` is set ([#451](https://github.com/OpenTideHQ/opentide/issues/451)).
+- `validate --check` returns only that check's issues. Parse findings belong to the schema check ([#452](https://github.com/OpenTideHQ/opentide/issues/452)).
+- Unknown `sharing.toml` keys name `[[misp]]` ([#453](https://github.com/OpenTideHQ/opentide/issues/453)).
+- Surface suggestions try the exact de-prefixed key before difflib ([#454](https://github.com/OpenTideHQ/opentide/issues/454)).
+
+### Install
+
+```bash
+pip install opentide==0.11.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.10.0] — 2026-10-06
 
 Minor on 0.9.0. Upgrade, rename technique lists to `mitre_attack`, and regenerate schemas with `opentide generate`. Regenerate CI with `opentide setup ci` so the install pin is exact. A root `composition` block is still accepted and is no longer required.
@@ -673,7 +704,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.11.0
 [0.10.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.10.0
 [0.9.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.9.0
 [0.8.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.8.2

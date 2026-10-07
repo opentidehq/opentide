@@ -7,6 +7,33 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.11.0 — 7 October 2026
+
+Minor on 0.10.0. **Bare `validate query` no longer scans.** `--live` is the tenant check. Regenerate CI with `opentide setup ci` so generated pipelines pass `--live` and pin this release. Regenerate schemas with `opentide generate` so optional vocabulary lists include `items.enum`.
+
+**Install**
+
+```bash
+pip install opentide==0.11.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- Bare `opentide validate query` exits 1 and tells you to re-run with `--live`. It does not scan query text ([#456](https://github.com/OpenTideHQ/opentide/issues/456)).
+- `--live` checks the tenant. A missing SDK or plan is a failed live check. CrowdStrike and HarfangLab stay unsupported.
+- Generated CI passes `--live` and skips a platform when its credential variables are empty. Re-run `opentide setup ci`.
+- MCP `validate_query` refuses unless `live` is true.
+- Optional vocabulary lists in generated schemas include `items.enum` ([#450](https://github.com/OpenTideHQ/opentide/issues/450)).
+- `opentide generate schemas templates vocabs snippets` runs those phases in one invocation ([#455](https://github.com/OpenTideHQ/opentide/issues/455)).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.11.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.11.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.10.0 — 6 October 2026
 
 Minor on 0.9.0. **Upgrade and regenerate schemas** with `opentide generate`. Technique lists are `mitre_attack`. Signal log sources come from `visibility.toml`. Signal severity uses alert labels. Regenerate CI with `opentide setup ci` so the install pin is exact. A root `composition` block is still accepted and is no longer required.
