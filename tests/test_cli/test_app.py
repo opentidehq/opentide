@@ -95,17 +95,40 @@ def test_info_strict_human_exits_when_objects_fail_to_load() -> None:
 
 def test_generate_subcommands_invoke_services() -> None:
     with patch("opentide.cli.run_generate", return_value={"status": "ok"}) as mock_run:
-        for phase in ("schemas", "templates", "vocabs", "snippets", "exports"):
+        for phase in ("schemas", "templates", "vocabs", "snippets"):
             result = runner.invoke(app, ["--json", "generate", phase])
-            assert result.exit_code == 0, result.stdout
-        assert mock_run.call_count == 5
-        assert {call.kwargs["phase"] for call in mock_run.call_args_list} == {
-            "schemas",
-            "templates",
-            "vocabs",
-            "snippets",
-            "exports",
-        }
+            assert result.exit_code == 0, result.stdout + result.stderr
+            assert mock_run.call_args.kwargs["phases"] == [phase]
+        result = runner.invoke(app, ["--json", "generate", "exports"])
+        assert result.exit_code == 0, result.stdout + result.stderr
+        assert mock_run.call_args.kwargs["phase"] == "exports"
+
+
+def test_generate_runs_several_phases_in_the_given_order() -> None:
+    with patch("opentide.cli.run_generate", return_value={"status": "ok"}) as mock_run:
+        result = runner.invoke(
+            app,
+            ["--json", "generate", "schemas", "templates", "vocabs", "snippets"],
+        )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert mock_run.call_args.kwargs["phases"] == [
+        "schemas",
+        "templates",
+        "vocabs",
+        "snippets",
+    ]
+
+
+def test_nested_generate_commands_stay_commands() -> None:
+    for argv in (
+        ["generate", "docs", "--help"],
+        ["generate", "exports", "--help"],
+        ["generate", "extract", "--help"],
+        ["generate", "inflight", "--help"],
+        ["generate", "explorer", "--help"],
+    ):
+        result = runner.invoke(app, argv)
+        assert result.exit_code == 0, result.stdout + result.stderr
 
 
 def test_generate_docs_group_invokes_service() -> None:

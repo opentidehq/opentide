@@ -187,10 +187,19 @@ def run_generate_all() -> None:
         run_generate_phase(phase)
 
 
-def run_generate(ctx: CliContext, *, phase: str | None = None) -> dict[str, object]:
+def run_generate(
+    ctx: CliContext,
+    *,
+    phase: str | None = None,
+    phases: Sequence[str] | None = None,
+) -> dict[str, object]:
     """Entry point for generate command."""
     ctx.apply_environment()
     try:
+        if phases:
+            for name in phases:
+                run_generate_phase(name)
+            return {"message": "Generation phases completed", "phases": list(phases)}
         if phase is None:
             run_generate_all()
             return {"message": "Full generation pipeline completed", "phases": list(_PHASE_ORDER)}

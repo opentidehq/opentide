@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import Any
 
 import structlog
 import typer
+from typer.core import TyperGroup
 
 from opentide.cli.context import CliContext, get_context, sync_typer_rendering
 from opentide.cli.enums import (
@@ -114,7 +116,34 @@ app.add_typer(setup_app, name="setup")
 app.add_typer(share_app, name="share")
 app.add_typer(rules_app, name="rules")
 
-generate_app = typer.Typer(help="Framework generation and documentation pipeline")
+
+class GeneratePhaseGroup(TyperGroup):
+    """Accept phase names on the group without hiding real subcommands.
+
+    ``schemas``, ``templates``, ``vocabs``, and ``snippets`` are arguments of
+    ``generate``. ``docs``, ``exports``, ``extract``, ``inflight``, and
+    ``explorer`` stay commands. Click would otherwise treat the first token as
+    a subcommand, or an argument list would swallow those commands.
+    """
+
+    def parse_args(self, ctx: Any, args: list[str]) -> list[str]:
+        if args and not args[0].startswith("-") and self.get_command(ctx, args[0]) is None:
+            phases: list[str] = []
+            index = 0
+            for token in args:
+                if token.startswith("-"):
+                    break
+                phases.append(token)
+                index += 1
+            ctx.meta["generate_phases"] = phases
+            return super().parse_args(ctx, args[index:])
+        return super().parse_args(ctx, args)
+
+
+generate_app = typer.Typer(
+    cls=GeneratePhaseGroup,
+    help="Framework generation and documentation pipeline",
+)
 app.add_typer(generate_app, name="generate")
 
 docs_app = typer.Typer(help="Generate markdown documentation for detection objects")
@@ -125,38 +154,32 @@ generate_app.add_typer(exports_app, name="exports")
 generate_app.add_typer(extract_app, name="extract")
 
 
+_NAMED_GENERATE_PHASES = frozenset({"schemas", "templates", "vocabs", "snippets"})
+
+
 @generate_app.callback(invoke_without_command=True)
 def generate_all(ctx: typer.Context) -> None:
-    """Run full generation pipeline (docs, exports, then framework internals)."""
+    """Run the full pipeline, or named phases in the order given.
+
+    Pass ``schemas``, ``templates``, ``vocabs``, and ``snippets`` to run only
+    those phases. ``docs``, ``exports``, ``extract``, ``inflight``, and
+    ``explorer`` stay subcommands.
+    """
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
-    result = run_generate(cli)
-    emit_success(cli, result)
-
-
-@generate_app.command("schemas")
-def generate_schemas_cmd(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_generate(cli, phase="schemas"))
-
-
-@generate_app.command("templates")
-def generate_templates_cmd(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_generate(cli, phase="templates"))
-
-
-@generate_app.command("vocabs")
-def generate_vocabs_cmd(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_generate(cli, phase="vocabs"))
-
-
-@generate_app.command("snippets")
-def generate_snippets_cmd(ctx: typer.Context) -> None:
-    cli = get_context(ctx)
-    emit_success(cli, run_generate(cli, phase="snippets"))
+    phases = [str(name) for name in ctx.meta.get("generate_phases", [])]
+    if not phases:
+        emit_success(cli, run_generate(cli))
+        return
+    unknown = [name for name in phases if name not in _NAMED_GENERATE_PHASES]
+    if unknown:
+        names = ", ".join(unknown)
+        emit_error(
+            cli,
+            f"Unknown generation phase {names}. Pass schemas, templates, vocabs, or snippets.",
+        )
+    emit_success(cli, run_generate(cli, phases=phases))
 
 
 @generate_app.command("explorer")

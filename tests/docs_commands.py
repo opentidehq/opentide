@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 
 from typer.main import get_command
 
-from opentide.cli import app
+from opentide.cli import _NAMED_GENERATE_PHASES, app
 
 if TYPE_CHECKING:  # pragma: no cover - import only for annotations
     import click
@@ -516,6 +516,15 @@ def resolve(argv: tuple[str, ...]) -> list[str]:
             continue
         if _is_group(command):
             sub = command.get_command(context, token)
+            if sub is None and path == ["opentide", "generate"]:
+                phase_tokens = [
+                    token,
+                    *[item for item in tokens[index:] if not item.startswith("-")],
+                ]
+                unknown = [name for name in phase_tokens if name not in _NAMED_GENERATE_PHASES]
+                if unknown:
+                    problems.append(f"{where!r} has no subcommand {unknown[0]!r}")
+                return problems
             if sub is None:
                 problems.append(f"{where!r} has no subcommand {token!r}")
                 return problems
