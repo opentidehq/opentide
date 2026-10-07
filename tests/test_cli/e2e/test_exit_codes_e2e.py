@@ -31,7 +31,7 @@ EMPTY_CATALOGUE_COMMANDS: tuple[tuple[tuple[str, ...], int], ...] = (
     (("generate",), 0),
     (("generate", "docs"), 0),
     (("generate", "exports"), 0),
-    (("validate", "query", "--platform", "sentinel"), 0),
+    (("validate", "query", "--platform", "sentinel"), 1),
     (("validate", "query", "--platform", "sentinel", "--live"), 0),
     *((("deploy", "--dry-run", "--platform", platform), 0) for platform in DEPLOY_PLATFORMS),
     (("deploy", "--dry-run"), 0),
@@ -120,6 +120,8 @@ def test_catalogue_commands_in_an_empty_workspace(
     for marker in ("Traceback", "Errno", "No such file or directory"):
         assert marker not in output, output
     assert refuse_deployment_engines == []
+    if argv[:2] == ("validate", "query") and "--live" not in argv:
+        assert "--live" in output
     if not json_output:
         if expected_exit == 0:
             assert "FATAL" not in output, output
