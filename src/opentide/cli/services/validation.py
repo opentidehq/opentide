@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
-from opentide.cli.output import emit_error
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 from opentide.registry.discovery import discover_workspace
@@ -401,8 +400,6 @@ def validate_query_platform(
             validator.validate(deployment=deployment_list[platform])
     except ModuleNotFoundError as exc:
         return _missing_sdk_result(platform, exc)
-    if os.environ.get("VALIDATION_ERROR_RAISED"):
-        emit_error(ctx, f"Query validation failed for {platform}", exit_code=1)
     from opentide.cli.exit_codes import validation_outcome
 
     outcome = validation_outcome()

@@ -371,6 +371,35 @@ def test_validate_query_platform_legacy_validator_signature() -> None:
     assert validator.validate.call_count == 2
 
 
+def test_validate_query_platform_recorded_error_returns_failed_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A validator-recorded error is a result. It must not raise SystemExit."""
+    ctx = CliContext(json_output=True)
+    validator = MagicMock()
+
+    def _record_error(**kwargs: object) -> None:
+        monkeypatch.setenv("VALIDATION_ERROR_RAISED", "True")
+
+    validator.validate.side_effect = _record_error
+    with (
+        patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
+        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.registry.OpenTide") as mock_ot,
+    ):
+        mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
+        mock_ot.Configurations.Systems.Index = {
+            "sentinel": {"tide": {"name": "Sentinel"}},
+        }
+        result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
+    assert result["status"] == "failed"
+    assert result["mode"] == "live"
+    assert result["supported"] is True
+    assert result["_exit_code"] == 1
+    assert result["message"] == "Query validation failed for sentinel"
+
+
 def test_validate_query_platform_warnings_are_not_fatal() -> None:
     ctx = CliContext(json_output=True)
     warned = CiOutcome(exit_code=0, failed=False, warned=True)
