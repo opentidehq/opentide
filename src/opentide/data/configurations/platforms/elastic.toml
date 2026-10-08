@@ -1,0 +1,39 @@
+[platform]
+enabled = false
+identifier = "elastic"
+name = "Elastic Security"
+subschema = "Elastic Security"
+description = "Elastic Security detection rules via the Kibana detection engine API."
+flags = []
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#severity = "low"
+
+#[[tenants]]
+#name = "elastic-staging"
+#description = "Serverless Security project, staging space"
+#deployment = "STAGING"
+#[tenants.setup]
+#ssl = true
+#url = "https://soc-staging.kb.eu-west-1.aws.elastic.cloud"
+#elasticsearch_url = "https://soc-staging.es.eu-west-1.aws.elastic.cloud"
+#space = "staging"
+#api_key = "$ELASTIC_STAGING_API_KEY"
+
+#[[tenants]]
+#name = "elastic-prod"
+#description = "Self-managed cluster on a Basic licence, default space"
+#deployment = "PRODUCTION"
+#[tenants.setup]
+#ssl = true
+#url = "https://kibana.soc.example.internal:5601"
+#elasticsearch_url = "https://es.soc.example.internal:9200"
+#api_key = "$ELASTIC_PROD_API_KEY"
+#index = ["logs-*", "winlogbeat-*"]
+#tags = ["soc-prod"]
+#suppression = false

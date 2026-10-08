@@ -375,3 +375,121 @@ configurations:
       #- 
     #rule_id_bundle:
       #key: 
+  #elastic:
+    #enabled: false
+    #name: 
+    #schema: platform::elastic::1.0
+    #status: 
+    #flags:
+      #- 
+    #tenants:
+      #- 
+    #contributors:
+      #- 
+    #type: query
+    #query: |
+      #...
+    #language: kuery
+    #index:
+      #- 
+    #data_view_id: 
+    #filters:
+      #- field: 
+        #value: 
+        #negate: false
+        #meta:
+          #key: 
+        #query:
+          #key: 
+    #scheduling:
+      #interval: 5m
+      #lookback: 1m
+      #max_alerts: 3
+    #severity:
+      #default: 
+      #mapping:
+        #- field: 
+          #value: 
+          #operator: equals
+          #severity: low
+    #risk:
+      #score: 3
+      #mapping:
+        #- field: 
+          #operator: equals
+          #value: 
+    #suppression:
+      #group_by:
+        #- 
+      #duration: 
+      #missing_fields_strategy: suppress
+    #highlighted_fields:
+      #- 
+    #threshold:
+      #field:
+        #- 
+      #value: 3
+      #cardinality:
+        #field: 
+        #value: 3
+    #new_terms:
+      #fields:
+        #- 
+      #history_window_start: 
+    #eql:
+      #timestamp_field: 
+      #event_category_override: 
+      #tiebreaker_field: 
+    #threat:
+      #index:
+        #- 
+      #query: |
+        #...
+      #language: kuery
+      #mapping:
+        #- entries:
+            #- field: 
+              #value: 
+              #type: mapping
+              #negate: false
+      #filters:
+        #- key: 
+      #indicator_path: 
+    #machine_learning:
+      #job_id:
+        #- 
+      #anomaly_threshold: 3
+    #integration:
+      #- package: 
+        #integration: 
+        #version: "*"
+    #required_fields:
+      #- name: 
+        #type: keyword
+    #guide:
+      #investigation: 
+      #setup: 
+    #false_positives:
+      #- 
+    #tags:
+      #- 
+    #exceptions:
+      #endpoint: false
+      #lists:
+        #- id: 
+          #list_id: 
+          #namespace_type: single
+          #type: detection
+    #building_block: false
+    #overrides:
+      #name: 
+      #timestamp: 
+      #disable_fallback: false
+    #actions:
+      #notify:
+        #- key: 
+      #respond:
+        #- key: 
+      #timeline:
+        #id: 
+        #title: 

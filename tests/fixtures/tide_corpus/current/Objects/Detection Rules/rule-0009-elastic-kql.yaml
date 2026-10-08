@@ -1,0 +1,35 @@
+name: Elastic KQL Rule
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000009
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: |
+  Simulated Elastic rule for CLI E2E corpus.
+status: STAGING
+severity: Substantial incident
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: query
+    language: kuery
+    query: |
+      process.name: "powershell.exe"
+    index:
+      - logs-*
+    scheduling:
+      interval: 5m
+      lookback: 1m

@@ -224,3 +224,42 @@
     'yara': None,
   })
 # ---
+# name: test_preview_payload_shape[rule-0009-elastic-kql.yaml-elastic][elastic_api_request]
+  dict({
+    'description': 'Simulated Elastic rule for CLI E2E corpus.',
+    'enabled': True,
+    'from': 'now-6m',
+    'index': list([
+      'logs-*',
+    ]),
+    'interval': '5m',
+    'language': 'kuery',
+    'name': 'Elastic KQL Rule',
+    'query': 'process.name: "powershell.exe"',
+    'risk_score': 73,
+    'rule_id': '00000000-0000-4000-8003-000000000009',
+    'severity': 'high',
+    'tags': list([
+      'OpenTide',
+    ]),
+    'threat': list([
+      dict({
+        'framework': 'MITRE ATT&CK',
+        'tactic': dict({
+          'id': 'TA0002',
+          'name': 'Execution',
+          'reference': 'https://attack.mitre.org/tactics/TA0002/',
+        }),
+        'technique': list([
+          dict({
+            'id': 'T1059',
+            'name': 'Command and Scripting Interpreter',
+            'reference': 'https://attack.mitre.org/techniques/T1059',
+          }),
+        ]),
+      }),
+    ]),
+    'to': 'now',
+    'type': 'query',
+  })
+# ---

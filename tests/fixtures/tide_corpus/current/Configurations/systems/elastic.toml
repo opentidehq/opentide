@@ -1,0 +1,15 @@
+[platform]
+enabled = true
+identifier = "elastic"
+name = "Elastic Security"
+subschema = "Elastic Security"
+
+[[tenants]]
+name = "staging"
+deployment = "STAGING"
+[tenants.setup]
+ssl = true
+url = "https://kibana.staging.example"
+elasticsearch_url = "https://es.staging.example"
+api_key = "$ELASTIC_API_KEY"
+space = "staging"

@@ -1,11 +1,11 @@
 ---
 title: Platforms
-description: Seven deployment platforms, five query validators, and where each platform block schema is specified.
+description: Eight deployment platforms, six query validators, and where each platform block schema is specified.
 ---
 
 # Platforms
 
-OpenTide integrates with **seven detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
+OpenTide integrates with **eight detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
 
 ## Capability matrix
 
@@ -13,6 +13,7 @@ OpenTide integrates with **seven detection platforms** through built-in adapters
 |----------|------------------|:------:|:--------------:|----------------|
 | Microsoft Sentinel | `sentinel` | yes | yes | KQL |
 | Defender for Endpoint | `defender_for_endpoint` | yes | yes | KQL |
+| Elastic Security | `elastic` | yes | yes | Kuery / Lucene / EQL / ES\|QL |
 | Splunk Enterprise Security | `splunk` | yes | yes | SPL |
 | SentinelOne | `sentinel_one` | yes | yes | S1QL |
 | Carbon Black Cloud | `carbon_black_cloud` | yes | yes | Lucene |
@@ -36,6 +37,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="Splunk" href="/docs/specifications/specs/platforms/splunk-1.0/" description="SPL saved search, including the splunk::2.x keys that still normalise." />
   <Card title="SentinelOne" href="/docs/specifications/specs/platforms/sentinel-one-1.0/" description="STAR rule: one S1QL query or a correlation of sub-queries." />
   <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
+  <Card title="Elastic Security" href="/docs/specifications/specs/platforms/elastic-1.0/" description="Detection engine rules: query, eql, esql, threshold, new_terms, threat_match, machine_learning." />
   <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Correlation filter. No query validator." />
   <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA. No query validator. Sigma wins when both are set." />
 </Cards>

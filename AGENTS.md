@@ -92,6 +92,7 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 |----------|:------:|:--------------:|
 | Sentinel | ✅ | ✅ KQL |
 | Defender | ✅ | ✅ KQL |
+| Elastic | ✅ | ✅ Kuery, Lucene, EQL, ES\|QL |
 | Splunk | ✅ | ✅ SPL |
 | SentinelOne | ✅ | ✅ S1QL |
 | Carbon Black | ✅ | ✅ Lucene |

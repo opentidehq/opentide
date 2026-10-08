@@ -1,0 +1,123 @@
+name: IAM user creates an access key for the first time
+metadata:
+  uuid: f3a1c8e4-6d29-4b70-9e15-8a2c4f7b1d63
+  schema: rule::1.0
+  version: 1
+  created: '2026-09-29'
+  modified: '2026-09-29'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Alerts when an IAM user successfully calls CreateAccessKey in an AWS
+  account, and that user plus account pair has not done so in the past
+  14 days.
+techniques:
+- T1098.001
+references:
+  public:
+    1: https://attack.mitre.org/techniques/T1098/001/
+response:
+  alert_severity: Medium
+  procedure:
+    analysis: |
+      Confirm who called CreateAccessKey and which account it landed in.
+    containment: |
+      Deactivate the new access key if the caller is not break-glass automation.
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: new_terms
+    language: kuery
+    query: 'event.dataset : "aws.cloudtrail" and event.action : "CreateAccessKey" and event.outcome :
+      "success"'
+    index:
+    - logs-aws.cloudtrail-*
+    filters:
+    - field: cloud.provider
+      value: aws
+    scheduling:
+      interval: 1h
+      lookback: 5m
+      max_alerts: 100
+    severity:
+      default: Medium
+      mapping:
+      - field: user.name
+        value: OrganizationAccountAccessRole
+        severity: critical
+    risk:
+      score: 47
+      mapping:
+      - field: user.risk.calculated_score_norm
+        value: ''
+    suppression:
+      group_by:
+      - user.name
+      - cloud.account.id
+      duration: 1d
+      missing_fields_strategy: suppress
+    new_terms:
+      fields:
+      - user.name
+      - cloud.account.id
+      history_window_start: 14d
+    highlighted_fields:
+    - user.name
+    - cloud.account.id
+    - event.action
+    - aws.cloudtrail.user_identity.arn
+    - source.ip
+    required_fields:
+    - name: cloud.account.id
+      type: keyword
+    - name: event.action
+      type: keyword
+    - name: user.name
+      type: keyword
+    integration:
+    - package: aws
+      integration: cloudtrail
+      version: ^2.0.0
+    guide:
+      investigation: |
+        The new value is the pair user.name plus cloud.account.id.
+        history_window_start 14d is sent as now-14d.
+      setup: |
+        AWS CloudTrail via the AWS integration. user.name and cloud.account.id
+        must be aggregatable.
+    false_positives:
+    - A new engineer creating their first CLI key during onboarding.
+    tags:
+    - AWS
+    - Identity
+    exceptions:
+      endpoint: false
+      lists:
+      - id: 7d3b6e12-9c40-4a85-b2f1-0e8a5c4d7b69
+        list_id: iam-break-glass-key-creators
+        namespace_type: single
+        type: detection
+    overrides:
+      name: aws.cloudtrail.user_identity.arn
+      timestamp: event.ingested
+      disable_fallback: false
+    actions:
+      notify:
+      - id: c4e8a1b2-6d30-4f57-9a18-3b7e5c0d2f64
+        action_type_id: .slack
+        group: default
+        params:
+          message: First CreateAccessKey in 14d for {{user.name}} in {{cloud.account.id}}
+        frequency:
+          summary: true
+          notifyWhen: onActiveAlert
+          throttle: null
+      respond:
+      - osquery:
+          query: SELECT * FROM users;
+          timeout: 60
+      timeline:
+        id: 5e2a7c90-8b14-4f36-a1d8-0c6b9e3f7a52
+        title: AWS CloudTrail investigation

@@ -319,3 +319,174 @@ class SplunkActions(TideModel):
     notable: SplunkNotable | None = None
     risk: SplunkRisk | None = None
     email: SplunkEmail | None = None
+
+
+# --------------------------------------------------------------------------
+# Elastic Security platform models (RFC 0007 / platform::elastic::1.0)
+# --------------------------------------------------------------------------
+
+Duration = str
+
+FieldType = Literal[
+    "keyword",
+    "constant_keyword",
+    "wildcard",
+    "text",
+    "match_only_text",
+    "long",
+    "integer",
+    "short",
+    "byte",
+    "unsigned_long",
+    "double",
+    "float",
+    "half_float",
+    "scaled_float",
+    "date",
+    "date_nanos",
+    "boolean",
+    "ip",
+    "version",
+    "binary",
+    "geo_point",
+    "geo_shape",
+    "object",
+    "flattened",
+    "nested",
+]
+
+
+class ElasticSuppression(TideModel):
+    group_by: list[str] | None = None
+    duration: Duration | None = None
+    missing_fields_strategy: Literal["suppress", "doNotSuppress"] = "suppress"
+
+
+class ElasticCardinality(TideModel):
+    field: str
+    value: int
+
+
+class ElasticThreshold(TideModel):
+    field: list[str] = []
+    value: int
+    cardinality: ElasticCardinality | None = None
+
+
+class ElasticRequiredField(TideModel):
+    name: str
+    type: FieldType
+
+
+class ElasticIntegration(TideModel):
+    package: str
+    integration: str | None = None
+    version: str = "*"
+
+
+class ElasticSeverityMapping(TideModel):
+    field: str
+    value: str
+    operator: Literal["equals"] = "equals"
+    severity: Literal["low", "medium", "high", "critical"]
+
+
+class ElasticRiskScoreMapping(TideModel):
+    field: str
+    operator: Literal["equals"] = "equals"
+    value: str = ""
+
+
+class ElasticThreatEntry(TideModel):
+    field: str
+    value: str
+    type: Literal["mapping"] = "mapping"
+    negate: bool | None = None
+
+
+class ElasticThreatGroup(TideModel):
+    entries: list[ElasticThreatEntry]
+
+
+class ElasticScheduling(TideModel):
+    interval: Duration = "5m"
+    lookback: Duration = "1m"
+    max_alerts: int | None = None
+
+
+class ElasticSeverity(TideModel):
+    default: str
+    mapping: list[ElasticSeverityMapping] | None = None
+
+
+class ElasticRisk(TideModel):
+    score: int | None = None
+    mapping: list[ElasticRiskScoreMapping] | None = None
+
+
+class ElasticOverrides(TideModel):
+    name: str | None = None
+    timestamp: str | None = None
+    disable_fallback: bool | None = None
+
+
+class ElasticGuide(TideModel):
+    investigation: str | None = None
+    setup: str | None = None
+
+
+class ElasticExceptionList(TideModel):
+    id: str
+    list_id: str
+    namespace_type: Literal["single", "agnostic"]
+    type: Literal["detection", "rule_default"]
+
+
+class ElasticExceptions(TideModel):
+    endpoint: bool = False
+    lists: list[ElasticExceptionList] | None = None
+
+
+class ElasticTimeline(TideModel):
+    id: str | None = None
+    title: str | None = None
+
+
+class ElasticActions(TideModel):
+    notify: list[dict[str, Any]] | None = None
+    respond: list[dict[str, Any]] | None = None
+    timeline: ElasticTimeline | None = None
+
+
+class ElasticFilter(TideModel):
+    field: str | None = None
+    value: str | None = None
+    negate: bool = False
+    meta: dict[str, Any] | None = None
+    query: dict[str, Any] | None = None
+
+
+class ElasticEql(TideModel):
+    timestamp_field: str | None = None
+    event_category_override: str | None = None
+    tiebreaker_field: str | None = None
+
+
+class ElasticNewTerms(TideModel):
+    fields: list[str]
+    history_window_start: Duration
+
+
+class ElasticThreatMatch(TideModel):
+    index: list[str]
+    query: str
+    language: Literal["kuery", "lucene"] | None = None
+    mapping: list[ElasticThreatGroup]
+    filters: list[ElasticFilter] | None = None
+    indicator_path: str | None = None
+
+
+class ElasticMachineLearning(TideModel):
+    job_id: str | list[str]
+    anomaly_threshold: int
+

@@ -4,7 +4,7 @@ description: Install opentide from PyPI — one package, CLI, MCP, and all platf
 ---
 
 <Callout type="info">
-One install gets the CLI, the MCP server (`opentide mcp start`), all seven platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
+One install gets the CLI, the MCP server (`opentide mcp start`), all eight platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
 </Callout>
 
 ## Requirements
@@ -51,7 +51,7 @@ pip install opentide              # latest on PyPI
 pip install 'opentide==0.11.0'     # pin the current release
 ```
 
-That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, and all eight platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
 The MCP server needs one extra:
 
@@ -98,6 +98,7 @@ These `--platform` values are built into the package — **no separate PyPI extr
 |--------------|---------|
 | `sentinel` | Microsoft Sentinel |
 | `defender_for_endpoint` | Defender for Endpoint |
+| `elastic` | Elastic Security |
 | `splunk` | Splunk Enterprise Security |
 | `sentinel_one` | SentinelOne |
 | `carbon_black_cloud` | Carbon Black Cloud |

@@ -1,0 +1,115 @@
+name: Password spray from one source address
+metadata:
+  uuid: d19f3a60-2c84-4b17-a5e8-7f0c3d6b8a24
+  schema: rule::1.0
+  version: 1
+  created: '2026-09-29'
+  modified: '2026-09-29'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Alerts when one source address produces at least 20 Windows logon
+  failures with status 0xC000006A across 8 or more accounts.
+techniques:
+- T1110.003
+references:
+  public:
+    1: https://attack.mitre.org/techniques/T1110/003/
+response:
+  alert_severity: High
+  procedure:
+    analysis: |
+      Review the source address and whether the failures are 4625 with
+      substatus 0xC000006A.
+    containment: |
+      Block the source at the VPN or firewall if it is not a known
+      identity provider.
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: esql
+    query: |
+      FROM logs-system.security-*, logs-windows.forwarded-*
+      | WHERE event.code == "4625" AND winlog.event_data.SubStatus == "0xC000006A"
+      | STATS failures = COUNT(*), accounts = COUNT_DISTINCT(user.name) BY source.ip
+      | WHERE accounts >= 8 AND failures >= 20
+    scheduling:
+      interval: 15m
+      lookback: 5m
+      max_alerts: 50
+    severity:
+      default: High
+      mapping:
+      - field: source.ip
+        value: 10.0.0.5
+        severity: medium
+    risk:
+      score: 73
+      mapping:
+      - field: user.risk.calculated_score_norm
+        value: ''
+    suppression:
+      group_by:
+      - source.ip
+      duration: 1h
+      missing_fields_strategy: suppress
+    highlighted_fields:
+    - source.ip
+    - accounts
+    - failures
+    required_fields:
+    - name: event.code
+      type: keyword
+    - name: source.ip
+      type: ip
+    - name: user.name
+      type: keyword
+    integration:
+    - package: system
+      integration: security
+      version: ^1.0.0
+    - windows
+    guide:
+      investigation: |
+        source.ip is the spray source. 0xC000006A is a wrong password for
+        a real account.
+      setup: |
+        Windows Security auditing must log 4625 with SubStatus. The ES|QL
+        FROM clause selects the data streams.
+    false_positives:
+    - A password manager retrying one stale password across a small set of accounts.
+    - Terminal servers where many users fail from the same NAT address.
+    tags:
+    - Windows
+    - Identity
+    exceptions:
+      endpoint: false
+      lists:
+      - id: e1d4a860-2c79-4b15-9a30-7f6c2b8e1d45
+        list_id: known-nats-password-spray
+        namespace_type: single
+        type: detection
+    overrides:
+      name: source.ip
+      timestamp: event.ingested
+      disable_fallback: false
+    actions:
+      notify:
+      - id: c4e8a1b2-6d30-4f57-9a18-3b7e5c0d2f64
+        action_type_id: .slack
+        group: default
+        params:
+          message: Password spray from {{source.ip}}
+        frequency:
+          summary: true
+          notifyWhen: onThrottleInterval
+          throttle: 1h
+      respond:
+      - osquery:
+          query: SELECT user, host, time FROM logged_in_users;
+          timeout: 60
+      timeline:
+        id: 9b1e4c70-2a85-4d63-b0f7-6c8a3e5d1f24
+        title: Windows logon investigation

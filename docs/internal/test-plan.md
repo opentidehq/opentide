@@ -35,6 +35,7 @@ Epic: [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) · Agent guide: [`
 | splunk | ✅ | ✅ |
 | sentinel_one | ✅ | ✅ |
 | carbon_black_cloud | ✅ | ✅ |
+| elastic | ✅ | ✅ |
 | crowdstrike | ✅ | ❌ |
 | harfanglab | ✅ | ❌ |
 

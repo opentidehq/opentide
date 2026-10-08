@@ -136,10 +136,11 @@ client is built, and names the file to edit.
 
 ### Supported platforms
 
-Query validation works on **five platforms** only:
+Query validation works on **six platforms** only:
 
 - `sentinel` (KQL)
 - `defender_for_endpoint` (KQL)
+- `elastic` (Kuery, Lucene, EQL, ES|QL)
 - `splunk` (SPL)
 - `sentinel_one` (S1QL)
 - `carbon_black_cloud` (Lucene)

@@ -50,6 +50,7 @@ PLATFORM_FILES = {
     "crowdstrike": "Crowdstrike Falcon Correlation Rules Template.yaml",
     "harfanglab": "HarfangLab Template.yaml",
     "carbon_black_cloud": "Carbon Black Cloud Enterprise EDR Template.yaml",
+    "elastic": "Elastic Security Template.yaml",
 }
 
 

@@ -121,7 +121,7 @@ pages (`docs/mcp/`) are exempt.
 
 ## Platform capability rule
 
-Seven platforms deploy; five validate queries. CrowdStrike and HarfangLab: **`supported: false`** for query validation — document this consistently in Usage, CLI, MCP, and SDK pages.
+Eight platforms deploy; six validate queries. CrowdStrike and HarfangLab: **`supported: false`** for query validation — document this consistently in Usage, CLI, MCP, and SDK pages.
 
 ## Cross-linking
 

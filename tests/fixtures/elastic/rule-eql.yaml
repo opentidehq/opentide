@@ -1,0 +1,121 @@
+name: Word spawning cmd.exe and PowerShell
+metadata:
+  uuid: a4c8e1d2-5b67-4e90-8f13-2c6d9a0b4e71
+  schema: rule::1.0
+  version: 1
+  created: '2026-09-29'
+  modified: '2026-09-29'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Correlates WINWORD.EXE starting cmd.exe and that cmd.exe starting
+  powershell.exe on the same host within two minutes.
+techniques:
+- T1566.001
+- T1059.001
+references:
+  public:
+    1: https://attack.mitre.org/techniques/T1566/001/
+    2: https://attack.mitre.org/techniques/T1059/001/
+response:
+  alert_severity: High
+  procedure:
+    analysis: |
+      Confirm WINWORD.EXE is the ancestor of powershell.exe and collect
+      the document path.
+    containment: |
+      Kill the PowerShell process and quarantine the document.
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: eql
+    query: |
+      sequence by host.id with maxspan=2m
+        [process where event.type == "start" and process.name == "WINWORD.EXE"]
+        [process where event.type == "start" and process.parent.name == "WINWORD.EXE" and process.name == "cmd.exe"]
+        [process where event.type == "start" and process.parent.name == "cmd.exe" and process.name in ("powershell.exe", "pwsh.exe")]
+    index:
+    - logs-endpoint.events.process-*
+    filters:
+    - field: host.os.type
+      value: windows
+    scheduling:
+      interval: 5m
+      lookback: 5m
+      max_alerts: 100
+    severity:
+      default: High
+      mapping:
+      - field: user.name
+        value: svc-mail
+        severity: critical
+    risk:
+      score: 70
+      mapping:
+      - field: host.risk.calculated_score_norm
+        value: ''
+    suppression:
+      group_by:
+      - host.id
+      duration: 30m
+      missing_fields_strategy: suppress
+    eql:
+      timestamp_field: '@timestamp'
+      event_category_override: event.category
+      tiebreaker_field: event.sequence
+    highlighted_fields:
+    - process.name
+    - process.parent.name
+    - process.command_line
+    - process.parent.executable
+    required_fields:
+    - name: host.id
+      type: keyword
+    - name: process.name
+      type: keyword
+    - name: process.parent.name
+      type: keyword
+    integration:
+    - endpoint
+    guide:
+      investigation: |
+        Confirm the three events share host.id and fall inside maxspan=2m.
+      setup: |
+        Requires Elastic Defend or an equivalent process data stream with
+        parent process name populated.
+    false_positives:
+    - Office add-in installers that legitimately shell out to cmd.exe.
+    tags:
+    - Windows
+    - Phishing
+    exceptions:
+      endpoint: true
+      lists:
+      - id: b7c2e190-4a68-4d35-8f02-1c9e6a3b5d80
+        list_id: office-addin-installers
+        namespace_type: single
+        type: detection
+    overrides:
+      name: process.command_line
+      timestamp: event.ingested
+      disable_fallback: false
+    actions:
+      notify:
+      - id: c4e8a1b2-6d30-4f57-9a18-3b7e5c0d2f64
+        action_type_id: .slack
+        group: default
+        params:
+          message: Word spawned PowerShell via cmd on {{host.name}}
+        frequency:
+          summary: true
+          notifyWhen: onActiveAlert
+          throttle: null
+      respond:
+      - endpoint: kill-process
+        comment: Kill the PowerShell process started from the Word chain.
+        field: process.entity_id
+      timeline:
+        id: 3d6f8a20-1c54-4b79-8e02-5a9c7d1e4b36
+        title: Windows process investigation

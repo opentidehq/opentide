@@ -1,0 +1,110 @@
+name: Anomalous network volume for a host
+metadata:
+  uuid: 1f6a9e23-4c80-4d57-a2b9-6e8c0d3f5a71
+  schema: rule::1.0
+  version: 1
+  created: '2026-09-29'
+  modified: '2026-09-29'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Raises an alert when the packetbeat anomaly jobs score a host at 75
+  or above. The jobs already exist in the tenant; this rule only points
+  at them.
+techniques:
+- T1071
+references:
+  public:
+    1: https://attack.mitre.org/techniques/T1071/
+response:
+  alert_severity: Medium
+  procedure:
+    analysis: |
+      Open the anomaly in the ML app for the job named on the alert.
+    containment: |
+      Isolate the workstation if the score stays high.
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: machine_learning
+    scheduling:
+      interval: 15m
+      lookback: 1m
+      max_alerts: 100
+    severity:
+      default: Medium
+      mapping:
+      - field: host.name
+        value: dc01
+        severity: high
+    risk:
+      score: 42
+      mapping:
+      - field: host.risk.calculated_score_norm
+        value: ''
+    suppression:
+      group_by:
+      - host.name
+      duration: 3h
+      missing_fields_strategy: suppress
+    machine_learning:
+      job_id:
+      - high_count_network_events
+      - high_count_network_denies
+      anomaly_threshold: 75
+    highlighted_fields:
+    - host.name
+    - source.ip
+    - destination.ip
+    - network.transport
+    required_fields:
+    - name: destination.ip
+      type: ip
+    - name: host.name
+      type: keyword
+    - name: source.ip
+      type: ip
+    integration:
+    - packetbeat
+    guide:
+      investigation: |
+        anomaly_threshold 75 is the Kibana anomaly score cutoff. The job's
+        datafeed selects events. This block does not create the job.
+      setup: |
+        The named anomaly jobs must already be running in this tenant.
+    false_positives:
+    - Backup windows that the job has not baselined yet.
+    tags:
+    - Network
+    - MachineLearning
+    exceptions:
+      endpoint: false
+      lists:
+      - id: a6c1e840-5b27-4d90-8f13-2e9b7c4a1d58
+        list_id: backup-network-hosts
+        namespace_type: single
+        type: detection
+    overrides:
+      name: host.name
+      timestamp: event.ingested
+      disable_fallback: false
+    actions:
+      notify:
+      - id: c4e8a1b2-6d30-4f57-9a18-3b7e5c0d2f64
+        action_type_id: .slack
+        group: default
+        params:
+          message: Network anomaly score >= 75 for {{host.name}}
+        frequency:
+          summary: true
+          notifyWhen: onActiveAlert
+          throttle: null
+      respond:
+      - osquery:
+          query: SELECT pid, name, path, cmdline FROM processes;
+          timeout: 60
+      timeline:
+        id: 2f7b9e40-5c18-4a62-8d30-1a6e4c8b0f75
+        title: Network anomaly investigation

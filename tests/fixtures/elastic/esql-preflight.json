@@ -1,0 +1,3 @@
+{
+  "query": "FROM logs-system.security-*, logs-windows.forwarded-*\n| WHERE event.code == \"4625\" AND winlog.event_data.SubStatus == \"0xC000006A\"\n| STATS failures = COUNT(*), accounts = COUNT_DISTINCT(user.name) BY source.ip\n| WHERE accounts >= 8 AND failures >= 20\n| LIMIT 0"
+}

@@ -1,0 +1,26 @@
+name: Rule name
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000000
+  schema: rule::1.0
+  version: 1
+  created: "2026-09-29"
+  modified: "2026-09-29"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  What this rule detects.
+techniques: []
+response:
+  alert_severity: Medium
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: query
+    language: kuery
+    query: 'event.category : "process"'
+    index: [logs-*]
+    scheduling:
+      interval: 5m
+      lookback: 1m

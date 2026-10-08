@@ -29,6 +29,7 @@ CORPUS_RULE_UUIDS = {
     "carbon_black_cloud": "00000000-0000-4000-8003-000000000005",
     "crowdstrike": "00000000-0000-4000-8003-000000000006",
     "harfanglab": "00000000-0000-4000-8003-000000000007",
+    "elastic": "00000000-0000-4000-8003-000000000009",
 }
 #: Rules deploy skips because they sit in subfolders (#312). One shares a
 #: top-level file name, which a lookup by file name would resolve wrongly.

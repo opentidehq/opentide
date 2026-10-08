@@ -28,6 +28,7 @@ _SYSTEM_MODELS: dict[str, Any] = {
     "defender_for_endpoint": ConfigurationModels.Systems.DefenderForEndpoint,
     "crowdstrike": ConfigurationModels.Systems.Crowdstrike,
     "harfanglab": ConfigurationModels.Systems.HarfangLab,
+    "elastic": ConfigurationModels.Systems.Elastic,
 }
 
 #: ``SystemConfig.Tenant.Setup`` declares these without defaults, but every
@@ -81,6 +82,12 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
         supplied_setup = dict(data.get("setup") or {})
         if "proxy" in supplied_setup:
             raise ValueError(f"{where}: {_PROXY_RETIRED}")
+        if system == "elastic":
+            raw_key = supplied_setup.get("api_key")
+            if raw_key is not None and (not isinstance(raw_key, str) or not raw_key.startswith("$")):
+                raise ValueError(
+                    f"{where} setup: api_key must be an environment variable reference (e.g. $ELASTIC_API_KEY)"
+                )
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
         kwargs: dict[str, Any] = {

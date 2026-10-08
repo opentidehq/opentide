@@ -15,6 +15,7 @@ SYSTEM_KEYS = (
     "crowdstrike",
     "harfanglab",
     "carbon_black_cloud",
+    "elastic",
 )
 
 
