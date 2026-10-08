@@ -176,7 +176,9 @@ def main() -> None:
     """Start the MCP server on stdio transport."""
     from opentide.core.logging import LoggingConfig, init_logging
 
-    init_logging(LoggingConfig(json_output=True, plain=True))
+    # The Typer root callback already called init_logging. Without force the
+    # CLI path would keep Rich-on-stderr and skip the JSON logs hosts parse.
+    init_logging(LoggingConfig(json_output=True, plain=True), force=True)
     mcp.run(transport="stdio")
 
 

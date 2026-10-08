@@ -31,7 +31,8 @@ Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${works
 {
   "servers": {
     "opentide": {
-      "command": "opentide-mcp",
+      "command": "opentide",
+      "args": ["mcp", "start"],
       "env": {
         "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
       }
@@ -46,7 +47,8 @@ Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${works
 {
   "mcpServers": {
     "opentide": {
-      "command": "opentide-mcp",
+      "command": "opentide",
+      "args": ["mcp", "start"],
       "env": {
         "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
       }
@@ -61,7 +63,8 @@ Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${works
 {
   "mcpServers": {
     "opentide": {
-      "command": "opentide-mcp",
+      "command": "opentide",
+      "args": ["mcp", "start"],
       "env": {
         "OPENTIDE_REPO_ROOT": "${CLAUDE_PROJECT_DIR}"
       }
@@ -76,7 +79,8 @@ Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${works
 {
   "mcpServers": {
     "opentide": {
-      "command": "opentide-mcp"
+      "command": "opentide",
+      "args": ["mcp", "start"]
     }
   }
 }
@@ -104,7 +108,8 @@ If `OPENTIDE_REPO_ROOT` is unset, `get_repo_root()` walks up from cwd to the nea
 {
   "mcpServers": {
     "opentide": {
-      "command": "opentide-mcp",
+      "command": "opentide",
+      "args": ["mcp", "start"],
       "env": {
         "OPENTIDE_REPO_ROOT": "/absolute/path/to/detection-repo"
       }

@@ -228,11 +228,12 @@ def _install(uv: str, env_dir: Path, spec: str) -> Path:
     return python
 
 
-def test_bare_wheel_opentide_mcp_reports_the_missing_extra(tmp_path: Path) -> None:
-    """Issue #256: `pip install opentide` ships the script; it must explain itself.
+def test_bare_wheel_mcp_start_reports_the_missing_extra(tmp_path: Path) -> None:
+    """Issue #256: a bare install must explain the missing extra, not traceback.
 
-    Issue #262: the wheel gate never executed `opentide-mcp`, so a console script
-    that died with `ModuleNotFoundError: mcp` shipped twice.
+    Issue #262: the wheel gate never executed the server, so a start path that
+    died with `ModuleNotFoundError: mcp` could ship. Issue #460: that path is
+    `opentide mcp start`, and the wheel does not install `opentide-mcp`.
     """
     uv = shutil.which("uv")
     if uv is None:
@@ -241,29 +242,34 @@ def test_bare_wheel_opentide_mcp_reports_the_missing_extra(tmp_path: Path) -> No
     wheel = _build_wheel(uv, tmp_path / "dist")
     python = _install(uv, tmp_path / "bare-venv", str(wheel))
 
-    mcp_script = _venv_bin(tmp_path / "bare-venv", "opentide-mcp")
-    assert mcp_script.is_file(), "the base wheel is expected to install opentide-mcp"
+    removed = _venv_bin(tmp_path / "bare-venv", "opentide-mcp")
+    assert not removed.exists(), "the wheel must not install an opentide-mcp alias"
 
     imported = _run([str(python), "-c", "import mcp"], timeout=60)
     if imported.returncode == 0:  # pragma: no cover
         pytest.skip("mcp resolved from the ambient environment; cannot observe a bare install")
 
-    result = _run([str(mcp_script)], timeout=120)
+    opentide = _venv_bin(tmp_path / "bare-venv", "opentide")
+    result = _run([str(opentide), "mcp", "start"], timeout=120)
     combined = result.stdout + result.stderr
     assert result.returncode == 1, combined
     assert "ModuleNotFoundError" not in combined
     assert "Traceback" not in combined
-    assert "opentide[mcp]" in combined
+    assert "opentide[mcp]" in result.stderr
+    assert "jsonrpc" not in result.stdout
 
     # The rest of the CLI must not depend on the extra either.
-    cli = _run([str(_venv_bin(tmp_path / "bare-venv", "opentide")), "--help"], timeout=60)
+    cli = _run([str(opentide), "--help"], timeout=60)
     assert cli.returncode == 0, cli.stdout + cli.stderr
 
 
 def test_wheel_with_mcp_extra_answers_a_stdio_initialize(
     tmp_path: Path, tide_corpus_repo: Path
 ) -> None:
-    """Issue #262: prove the advertised extra actually starts the server."""
+    """Issue #262: prove the advertised extra actually starts the server.
+
+    Issue #460: the process is ``opentide mcp start``.
+    """
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
@@ -272,8 +278,9 @@ def test_wheel_with_mcp_extra_answers_a_stdio_initialize(
     env_dir = tmp_path / "mcp-venv"
     _install(uv, env_dir, f"{wheel}[mcp]")
 
-    mcp_script = _venv_bin(env_dir, "opentide-mcp")
-    assert mcp_script.is_file()
+    opentide = _venv_bin(env_dir, "opentide")
+    assert opentide.is_file()
+    assert not _venv_bin(env_dir, "opentide-mcp").exists()
 
     request = {
         "jsonrpc": "2.0",
@@ -286,7 +293,7 @@ def test_wheel_with_mcp_extra_answers_a_stdio_initialize(
         },
     }
     result = _run(
-        [str(mcp_script)],
+        [str(opentide), "mcp", "start"],
         input=json.dumps(request) + "\n",
         env={
             **os.environ,

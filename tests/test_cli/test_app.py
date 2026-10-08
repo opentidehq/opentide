@@ -40,6 +40,7 @@ def test_cli_help_lists_commands() -> None:
         "deploy",
         "share",
         "info",
+        "mcp",
     ):
         assert command in result.stdout
 

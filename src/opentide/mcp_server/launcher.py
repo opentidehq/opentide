@@ -1,11 +1,10 @@
-"""Console-script entry point for ``opentide-mcp``.
+"""Start path for ``opentide mcp start``.
 
-The script is installed by the base wheel, but ``mcp`` lives in the ``[mcp]``
-extra: it pulls a web-server stack that a CI pipeline running
-``opentide validate`` has no use for. Importing
+``mcp`` lives in the ``[mcp]`` extra: it pulls a web-server stack that a CI
+pipeline running ``opentide validate`` has no use for. Importing
 :mod:`opentide.mcp_server.server` directly therefore dies with a bare
 ``ModuleNotFoundError``. This launcher turns that into the one instruction the
-user needs.
+user needs, and it prints that line before any JSON-RPC.
 """
 
 from __future__ import annotations
@@ -42,13 +41,13 @@ def probe() -> str | None:
     except ImportError as exc:
         if _package_installed(MCP_PACKAGE):
             return (
-                f"opentide-mcp cannot use the installed mcp package: {exc}.\n"
+                f"opentide mcp start cannot use the installed mcp package: {exc}.\n"
                 f"OpenTide needs {MCP_SPECIFIER}; mcp 2.x replaced "
                 f"`{MCP_IMPORT}` with `MCPServer`.\n"
                 f"Pin it with:  pip install '{MCP_EXTRA}'"
             )
         return (
-            f"opentide-mcp needs the MCP extra, which is not installed "
+            f"opentide mcp start needs the MCP extra, which is not installed "
             f"(missing: {MCP_IMPORT}).\n"
             f"Install it with:  pip install '{MCP_EXTRA}'\n"
             f"Everything else in the opentide CLI works without it."

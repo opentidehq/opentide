@@ -37,7 +37,7 @@ tests/
                            # test_workflow_e2e.py = published first-user path (CliRunner)
                            # test_workflow_subprocess_e2e.py = same happy path via `opentide` binary
   test_mcp/
-    e2e/                   # @pytest.mark.cli_smoke — `opentide-mcp` NDJSON JSON-RPC
+    e2e/                   # @pytest.mark.cli_smoke — `opentide mcp start` NDJSON JSON-RPC
   test_deployment/
     test_deploy_payloads.py  # per-platform API payload golden tests
 ```

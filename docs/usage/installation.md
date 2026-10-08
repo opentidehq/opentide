@@ -4,7 +4,7 @@ description: Install opentide from PyPI — one package, CLI, MCP, and all platf
 ---
 
 <Callout type="info">
-One install gets the CLI, MCP server (`opentide-mcp`), all seven platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
+One install gets the CLI, the MCP server (`opentide mcp start`), all seven platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
 </Callout>
 
 ## Requirements
@@ -40,7 +40,7 @@ uv pip install 'opentide==0.11.0'
 
 </Tabs>
 
-For agent/MCP hosts, install `'opentide[mcp]'` and remember the path to this environment's `opentide-mcp` binary — you point the host at it in [MCP configuration](../mcp/configuration.md).
+For agent/MCP hosts, install `'opentide[mcp]'` and remember the path to this environment's `opentide` binary — you point the host at `opentide mcp start` in [MCP configuration](../mcp/configuration.md).
 
 ## PyPI install
 
@@ -56,10 +56,10 @@ That installs the **DetectionOps engine**: the `opentide` CLI, validation, gener
 The MCP server needs one extra:
 
 ```bash
-pip install 'opentide[mcp]'       # adds mcp (>=1.28.1,<2) for `opentide-mcp`
+pip install 'opentide[mcp]'       # adds mcp (>=1.28.1,<2) for `opentide mcp start`
 ```
 
-The `opentide-mcp` script is on `PATH` either way; without the extra it prints the install command and exits 1. See [MCP installation](../mcp/installation.md).
+Without the extra, `opentide mcp start` prints the install command on stderr and exits 1. See [MCP installation](../mcp/installation.md).
 
 ### Windows and PowerShell
 

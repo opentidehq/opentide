@@ -1,4 +1,4 @@
-"""End-to-end JSON-RPC exercise of the ``opentide-mcp`` console script (#264).
+"""End-to-end JSON-RPC exercise of ``opentide mcp start`` (#264, #460).
 
 Everything else under ``tests/test_mcp/`` calls tool functions in-process. This
 module spawns the published console script and speaks the newline-delimited
@@ -45,14 +45,14 @@ EXPECTED_TOOLS = {
 }
 
 
-def _console_script() -> str:
+def _server_argv() -> list[str]:
     # The script beside this interpreter runs the code under test; another one
     # earlier on PATH may belong to an older install.
-    candidate = Path(sys.executable).with_name("opentide-mcp")
-    resolved = str(candidate) if candidate.exists() else shutil.which("opentide-mcp")
+    candidate = Path(sys.executable).with_name("opentide")
+    resolved = str(candidate) if candidate.exists() else shutil.which("opentide")
     if resolved is None:
-        pytest.skip("opentide-mcp console script is not installed")
-    return resolved
+        pytest.skip("opentide console script is not installed")
+    return [resolved, "mcp", "start"]
 
 
 class StdioClient:
@@ -155,7 +155,7 @@ def mcp_stdio(tmp_path: Path) -> Iterator[StdioClient]:
     repo = materialise_corpus(tmp_path / "corpus")
     env = {**os.environ, **corpus_env(repo), "CI": "true"}
     process = subprocess.Popen(  # noqa: S603
-        [_console_script()],
+        _server_argv(),
         cwd=repo,
         env=env,
         stdin=subprocess.PIPE,
@@ -274,7 +274,7 @@ def test_content_length_headers_are_reported_as_protocol_errors(tmp_path: Path) 
     )
     framed = f"Content-Length: {len(body)}\r\n\r\n{body}"
     process = subprocess.run(  # noqa: S603
-        [_console_script()],
+        _server_argv(),
         cwd=repo,
         env=env,
         input=framed,

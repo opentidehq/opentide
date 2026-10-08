@@ -28,7 +28,8 @@ def test_write_mcp_config(tmp_path: Path, host: McpHost, rel: str, repo_root: st
     assert isinstance(servers, dict)
     server = servers["opentide"]
     assert isinstance(server, dict)
-    assert server["command"] == "opentide-mcp"
+    assert server["command"] == "opentide"
+    assert server["args"] == ["mcp", "start"]
     env = server.get("env")
     if repo_root is None:
         assert env is None

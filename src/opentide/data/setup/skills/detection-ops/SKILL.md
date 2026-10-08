@@ -44,4 +44,4 @@ Never fake query validation for CrowdStrike or HarfangLab.
 
 1. Run `opentide generate` after changing bundled vocabularies or when schemas are missing.
 2. Validate before deploy: `opentide validate --strict`.
-3. Use `opentide setup mcp` and `opentide-mcp` for agent-assisted rule work.
+3. Use `opentide setup mcp` and `opentide mcp start` for agent-assisted rule work.
