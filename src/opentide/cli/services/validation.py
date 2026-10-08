@@ -377,7 +377,19 @@ def validate_query_platform(
             "missing_tenants": {platform: missing.config_path},
             "_exit_code": 1,
         }
-    query_validators = cast(dict[str, Any], DeployTide().query_validation_for(platform))
+    try:
+        query_validators = cast(dict[str, Any], DeployTide().query_validation_for(platform))
+    except ValueError as exc:
+        # Config parsing (a retired tenant ``proxy`` key) raises ValueError inside
+        # engine load. Returning it keeps the FATAL panel instead of a traceback.
+        return {
+            "platform": platform,
+            "mode": "live",
+            "status": "failed",
+            "supported": True,
+            "message": str(exc),
+            "_exit_code": 1,
+        }
     if platform not in query_validators:
         return {
             "platform": platform,

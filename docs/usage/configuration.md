@@ -83,7 +83,7 @@ azure_client_secret = "$AZURE_CLIENT_SECRET"
 Exact connection keys differ per platform. Use `opentide info --platform <name>` to see what a platform expects, and never commit real secrets — see [CI/CD](./workflows/ci-cd.md#secrets) for injecting them in pipelines.
 </Callout>
 
-If you sit behind an outbound proxy, pass it on the command. A passed flag wins over `HTTP_PROXY` and `HTTPS_PROXY`. Omitting the flag leaves those variables as they are.
+If you sit behind an outbound proxy, pass it on the command. A passed flag wins over `HTTP_PROXY` and `HTTPS_PROXY`. Omitting the flag leaves those variables as they are. The same retirement covers platform tenant config, not only `[cve].proxy`: a `proxy` key under `[tenants.setup]` or in `deployment.toml` `[proxy]` fails the command and names `opentide --proxy`.
 
 ```bash
 opentide --proxy http://user:pass@proxy.internal:8080 validate --strict

@@ -269,6 +269,27 @@ def test_validate_query_platform_runs_validator(monkeypatch) -> None:
     assert result["mode"] == "live"
 
 
+def test_validate_query_platform_surfaces_retired_tenant_proxy() -> None:
+    """A config ValueError from engine load is the check result, not a traceback."""
+    ctx = CliContext(json_output=True)
+    message = (
+        "platforms/splunk.toml [[tenants]]: The proxy key is retired. "
+        "Pass the URL with `opentide --proxy http://[user:pass@]host:port`."
+    )
+    with (
+        patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u1"]}),
+        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+    ):
+        mock_tide.return_value.query_validation_for.side_effect = ValueError(message)
+        result = validation_service.validate_query_platform(ctx, "splunk", live=True)
+    assert result["status"] == "failed"
+    assert result["supported"] is True
+    assert result["_exit_code"] == 1
+    assert result["mode"] == "live"
+    assert "opentide --proxy" in str(result["message"])
+
+
 def test_validate_query_platform_refuses_without_live() -> None:
     """A bare call names ``--live`` and does not build a deployment plan."""
     ctx = CliContext(json_output=True)
