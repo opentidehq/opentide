@@ -34,7 +34,8 @@ This writes `.cursor/mcp.json`:
 {
   "mcpServers": {
     "opentide": {
-      "command": "opentide-mcp",
+      "command": "opentide",
+      "args": ["mcp", "start"],
       "env": { "OPENTIDE_REPO_ROOT": "${workspaceFolder}" }
     }
   }

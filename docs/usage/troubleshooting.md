@@ -37,7 +37,7 @@ The CLI ships as an extra. Install it:
 pip install 'opentide==0.11.0'
 ```
 
-Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at the venv's `opentide-mcp` — see [MCP configuration](../mcp/configuration.md).
+Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at that environment's `opentide` binary with args `mcp` and `start` — see [MCP configuration](../mcp/configuration.md).
 
 ### `UnicodeDecodeError` reading bundled configurations after pip install
 

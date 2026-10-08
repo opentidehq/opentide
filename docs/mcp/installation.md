@@ -1,6 +1,6 @@
 ---
 title: MCP installation
-description: Install opentide-mcp with the mcp extra and verify stdio transport.
+description: Install the mcp extra and start the stdio server with opentide mcp start.
 ---
 
 # MCP installation
@@ -13,14 +13,14 @@ The server needs the **`mcp` extra**:
 pip install 'opentide[mcp]==0.11.0'
 ```
 
-Console script: **`opentide-mcp`** → `opentide.mcp_server.launcher:main`
+Command: **`opentide mcp start`**. It calls `opentide.mcp_server.launcher:main`, which probes for `mcp.server.fastmcp` before importing the server.
 
 <Callout>
-The `opentide-mcp` script is installed by the base package, but `mcp` is not:
-it pulls a web-server stack (`starlette`, `httpx`, `sse-starlette`, `uvicorn`)
-that a CI pipeline running `opentide validate` has no use for. Run
-`opentide-mcp` without the extra and it tells you exactly that, then exits 1 —
-it never raises `ModuleNotFoundError`.
+`mcp` is not a dependency of the base package: it pulls a web-server stack
+(`starlette`, `httpx`, `sse-starlette`, `uvicorn`) that a CI pipeline running
+`opentide validate` has no use for. Run `opentide mcp start` without the extra
+and it tells you exactly that on stderr, then exits 1 — it never raises
+`ModuleNotFoundError`, and it writes no JSON-RPC.
 
 The extra pins `mcp>=1.28.1,<2`. `mcp` 2.x replaced `mcp.server.fastmcp` with
 `MCPServer`; OpenTide has not migrated yet.
@@ -30,22 +30,27 @@ All seven platform adapters ship in the same wheel — enable them in the repo w
 
 ## Verify
 
+`opentide mcp` with no subcommand prints help and exits. It does not start the server. `opentide mcp start` blocks until the host closes stdin. That is what an editor expects. Stop is the host closing stdin. Reload is the host spawning the command again. There is no `reload` or `stop` subcommand.
+
 ```bash
-which opentide-mcp
+which opentide
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
-opentide-mcp   # blocks on stdio — expected for MCP hosts
+opentide mcp --help
+opentide mcp start
 ```
 
-If the extra is missing you get this instead of a traceback:
+If the extra is missing you get this on stderr instead of a traceback:
 
 ```text
-opentide-mcp needs the MCP extra, which is not installed (missing: mcp.server.fastmcp).
+opentide mcp start needs the MCP extra, which is not installed (missing: mcp.server.fastmcp).
 Install it with:  pip install 'opentide[mcp]'
 Everything else in the opentide CLI works without it.
 ```
 
 MCP hosts spawn the process automatically; you rarely run it manually.
 `opentide setup mcp` warns when it writes a config for a server you cannot yet start.
+
+Logging on `opentide mcp start` is JSON/plain structlog on stderr. stdout is JSON-RPC only.
 
 ## Scaffold editor config
 
@@ -62,7 +67,7 @@ From this repository:
 
 ```bash
 uv sync --group dev
-uv run opentide-mcp
+uv run opentide mcp start
 ```
 
 Logging initialises as JSON/plain structlog on the MCP process (no Rich banner).

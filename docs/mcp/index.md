@@ -21,8 +21,10 @@ The `mcp` extra is required — see [Installation](./installation.md).
 Start manually:
 
 ```bash
-opentide-mcp
+opentide mcp start
 ```
+
+`opentide mcp` with no subcommand prints help and exits. The process blocks until the host closes stdin. Stop is that close. Reload is the host spawning `opentide mcp start` again.
 
 Transport: **stdio** (standard MCP over stdin/stdout).
 

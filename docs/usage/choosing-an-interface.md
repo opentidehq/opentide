@@ -12,7 +12,7 @@ flowchart TD
   engine["OpenTide engine<br/>objects · validate · generate · deploy · document"]
   cli["CLI · opentide"] --> engine
   sdk["SDK · from opentide import OpenTide"] --> engine
-  mcp["MCP · opentide-mcp"] --> engine
+  mcp["MCP · opentide mcp start"] --> engine
 ```
 
 ## Decision table

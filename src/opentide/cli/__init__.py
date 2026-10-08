@@ -19,6 +19,7 @@ from opentide.cli.enums import (
     LintCheck,
     ValidateCheck,
 )
+from opentide.cli.mcp_app import mcp_app
 from opentide.cli.output import (
     CommandResult,
     emit_deprecation,
@@ -112,6 +113,7 @@ def main_callback(
     init_logging(LoggingConfig.from_cli_context(cli_ctx), force=True)
 
 
+app.add_typer(mcp_app, name="mcp")
 app.add_typer(setup_app, name="setup")
 app.add_typer(share_app, name="share")
 app.add_typer(rules_app, name="rules")

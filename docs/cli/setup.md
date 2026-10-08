@@ -157,7 +157,7 @@ Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.p
 
 ### setup mcp
 
-Write MCP server configuration for editors.
+Write MCP server configuration for editors. Each file runs `opentide mcp start`. The editor owns that process: closing stdin stops it, and spawning the command again reloads it.
 
 ```bash
 opentide setup mcp --cursor --vscode --yes
