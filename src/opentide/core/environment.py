@@ -108,4 +108,21 @@ class DebugHelpers:
         return config_secrets
 
 
+def reject_unsubstituted_placeholders(*values: object, client: str) -> None:
+    """Refuse a vendor client call that still holds ``$VAR`` placeholders.
+
+    ``fetch_config_envvar`` leaves a missing variable as the literal ``$NAME``
+    because a disabled system may never need it. A live Azure or Splunk client
+    must not receive that literal.
+    """
+    missing = [value for value in values if isinstance(value, str) and value.startswith("$")]
+    if not missing:
+        return
+    joined = ", ".join(str(item) for item in missing)
+    raise ValueError(
+        f"{client} credentials are unset ({joined}). "
+        "Set those environment variables before a live check."
+    )
+
+
 HelperTide = DebugHelpers

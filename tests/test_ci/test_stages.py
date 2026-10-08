@@ -54,7 +54,8 @@ def test_query_validation_command_skips_when_that_platforms_credentials_are_empt
     assert "SPLUNK_TOKEN" not in names
     command = query_validation_command("sentinel")
     assert ":" not in command
-    assert 'if [ -z "$AZURE_CLIENT_ID$AZURE_CLIENT_SECRET' in command
+    assert "$AZURE_CLIENT_ID$AZURE_CLIENT_SECRET" not in command
+    assert '[ -z "$AZURE_CLIENT_ID" ] || [ -z "$AZURE_CLIENT_SECRET" ]' in command
     assert "echo skip sentinel live query validation" in command
     assert command.endswith("else opentide validate query --platform sentinel --live; fi")
 

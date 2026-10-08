@@ -105,7 +105,7 @@ opentide validate query --platform splunk --live --plan STAGING --wide
 
 ### The tenant check is `--live`
 
-A bare `validate query` does not scan query text. It exits `1` and names `--live`:
+Query validation is tenant-only. A bare `validate query` is not an offline check and does not scan query text. It exits `1` and names `--live`. `--live` fails when a credential is still an unsubstituted `$VARIABLE` placeholder:
 
 ```bash
 opentide --json validate query --platform sentinel

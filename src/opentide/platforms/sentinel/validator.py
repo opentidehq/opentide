@@ -61,6 +61,7 @@ class SentinelQueryValidator(QueryValidator):
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
+        from opentide.core.environment import reject_unsubstituted_placeholders
         from azure.identity import ClientSecretCredential
         from azure.monitor.query import LogsQueryClient
         from opentide.deployment import TideDeployment
@@ -69,6 +70,12 @@ class SentinelQueryValidator(QueryValidator):
             tenant_deployment: TenantDeployment.Sentinel
             tenant_setup = tenant_deployment.tenant.setup
             logger.info('acquiring_azure_credentials_for_tenant', detail=tenant_deployment.tenant.name)
+            reject_unsubstituted_placeholders(
+                tenant_setup.azure_tenant_id,
+                tenant_setup.azure_client_id,
+                tenant_setup.azure_client_secret,
+                client='Azure',
+            )
             credentials = ClientSecretCredential(tenant_setup.azure_tenant_id, tenant_setup.azure_client_id, tenant_setup.azure_client_secret)
             logger.info('azure_credentials_prepared_for_tenant', detail=tenant_deployment.tenant.name, advice='Note: credentials are validated lazily on first API call')
             logger.info('initialising_logsqueryclient_for_tenant', detail=tenant_deployment.tenant.name)

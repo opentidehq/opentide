@@ -413,6 +413,17 @@ def validate_query_platform(
             validator.validate(deployment=deployment_list[platform])
     except ModuleNotFoundError as exc:
         return _missing_sdk_result(platform, exc)
+    except ValueError as exc:
+        # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
+        # TypeError stays uncaught here so the legacy validator signature retry works.
+        return {
+            "platform": platform,
+            "mode": "live",
+            "status": "failed",
+            "supported": True,
+            "message": str(exc),
+            "_exit_code": 1,
+        }
     if os.environ.get("VALIDATION_ERROR_RAISED"):
         emit_error(ctx, f"Query validation failed for {platform}", exit_code=1)
     from opentide.cli.exit_codes import validation_outcome
