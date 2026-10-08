@@ -57,6 +57,56 @@ def test_build_splunk_config_v4_format() -> None:
     assert config.tenants[0].setup.enterprise_security is True
 
 
+def test_build_splunk_config_array_of_modifier_tables() -> None:
+    """Documented ``[[modifiers]]`` is a list. It must not be passed to ``dict()``."""
+    config = _build_splunk_config(
+        {
+            "platform": {
+                "enabled": True,
+                "identifier": "splunk",
+                "name": "Splunk",
+                "subschema": "Splunk Sub Schema",
+                "description": "desc",
+                "flags": [],
+            },
+            "tenants": [
+                {
+                    "name": "Primary",
+                    "description": "Primary tenant",
+                    "deployment": "ALWAYS",
+                    "setup": {
+                        "ssl": True,
+                        "url": "https://splunk.example",
+                        "port": "8089",
+                        "app": "search",
+                        "token": "secret",
+                    },
+                }
+            ],
+            "modifiers": [
+                {
+                    "name": "development-inert",
+                    "description": "DEVELOPMENT stays inert",
+                    "conditions": {"status": ["DEVELOPMENT"]},
+                    "modifications": {"disabled": "1"},
+                },
+                {
+                    "name": "improving-lower",
+                    "description": "IMPROVING at reduced severity",
+                    "conditions": {"status": ["IMPROVING"]},
+                    "modifications": {"severity": "low"},
+                },
+            ],
+        }
+    )
+    assert config.modifiers is not None
+    assert len(config.modifiers) == 2
+    assert config.modifiers[0].name == "development-inert"
+    assert config.modifiers[0].conditions.status == ["DEVELOPMENT"]
+    assert config.modifiers[1].name == "improving-lower"
+    assert config.modifiers[1].modifications == {"severity": "low"}
+
+
 def test_build_cbc_config_v4_format() -> None:
     config = _build_cbc_config(
         {

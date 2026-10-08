@@ -103,6 +103,22 @@ def test_load_engines_honours_the_only_filter() -> None:
     assert set(engines) == {"splunk"}
 
 
+def test_config_valueerror_is_not_rewritten_as_missing_declare() -> None:
+    """A platform config parse error must surface as that ValueError (#466)."""
+    loader = PlatformLoader()
+    mock_module = MagicMock()
+    mock_module.declare.side_effect = ValueError(
+        "dictionary update sequence element #0 has length 4; 2 is required"
+    )
+    with (
+        patch.object(loader, "import_engine", return_value=mock_module),
+        patch("opentide.core.registry.OpenTide") as mock_tide,
+    ):
+        mock_tide.Configuration.Systems.Index = ["splunk"]
+        with pytest.raises(ValueError, match="dictionary update sequence"):
+            loader.rule_deployers(only=["splunk"])
+
+
 def test_an_engine_without_declare_is_named_in_the_error() -> None:
     loader = PlatformLoader()
     mock_module = MagicMock()

@@ -212,13 +212,18 @@ def _build_splunk_config(raw: dict[str, Any]) -> Any:
         defaults: dict[str, Any]
         modifiers: dict[str, Any]
 
+    # ``[[modifiers]]`` is an array of tables. ``dict()`` on that list raises
+    # before ``_load_modifiers`` runs. The legacy shim only needs a mapping;
+    # the typed path loads the list below.
+    raw_modifiers = raw.get("modifiers", {})
+    legacy_modifiers = {} if isinstance(raw_modifiers, list) else dict(raw_modifiers or {})
     legacy = SplunkLegacyAttrs(
         Index=raw,
         tide=dict(raw.get("tide", {})),
         setup=dict(raw.get("setup", {})),
         secrets=dict(raw.get("secrets", {})),
         defaults=dict(raw.get("defaults", {})),
-        modifiers=dict(raw.get("modifiers", {})),
+        modifiers=legacy_modifiers,
     )
 
     if "platform" not in raw:
