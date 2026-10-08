@@ -332,6 +332,23 @@ def test_attach_yaml_lines_follows_a_list_index(tmp_path: Path) -> None:
     assert "att&ck::G0001" in text[result[0].yaml_line]
 
 
+def test_attach_yaml_lines_follows_a_scalar_field(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "threat.yaml"
+    yaml_path.write_text(
+        "threat:\n  chaining:\n    - relation: sequence::preceeds\n",
+        encoding="utf-8",
+    )
+    issue = ValidationIssue(
+        code="vocab",
+        field_path=("threat", "chaining", "0", "relation"),
+        message="unknown relation",
+    )
+    result = attach_yaml_lines([issue], {}, file_path=yaml_path)
+    assert result[0].yaml_line is not None
+    text = yaml_path.read_text(encoding="utf-8").splitlines()
+    assert "sequence::preceeds" in text[result[0].yaml_line]
+
+
 def test_attach_yaml_lines_keeps_an_existing_line(tmp_path: Path) -> None:
     yaml_path = tmp_path / "rule.yaml"
     yaml_path.write_text("name: x\n", encoding="utf-8")
