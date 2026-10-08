@@ -149,18 +149,37 @@ def attach_yaml_lines(
 
     updated: list[ValidationIssue] = []
     for issue in issues:
+        if issue.yaml_line is not None:
+            if issue.file_path is None:
+                updated.append(issue.model_copy(update={"file_path": file_path}))
+            else:
+                updated.append(issue)
+            continue
         line = _find_line(data, issue.field_path)
         updated.append(issue.model_copy(update={"yaml_line": line, "file_path": file_path}))
     return updated
 
 
+def _line_marker(node: Any) -> int | None:
+    marker = getattr(node, "lc", None)
+    if marker is None:
+        return None
+    return marker.line
+
+
 def _find_line(node: Any, path: tuple[str, ...]) -> int | None:
     if not path:
-        return getattr(node, "lc", None) and node.lc.line  # type: ignore[union-attr]
+        return _line_marker(node)
     head, *tail = path
+    child: Any = None
     if isinstance(node, dict) and head in node:
         child = node[head]
-        if not tail:
-            return getattr(child, "lc", None) and child.lc.line  # type: ignore[union-attr]
-        return _find_line(child, tuple(tail))
-    return None
+    elif isinstance(node, list) and head.isdigit():
+        index = int(head)
+        if 0 <= index < len(node):
+            child = node[index]
+    if child is None:
+        return None
+    if not tail:
+        return _line_marker(child)
+    return _find_line(child, tuple(tail))

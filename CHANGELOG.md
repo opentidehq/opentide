@@ -21,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - Stage-prefix suggestions strip using the field name, including when the caller passes `surface::1.0`. MISP actor UUIDs still get no suggestion ([#467](https://github.com/OpenTideHQ/opentide/issues/467)).
 - A retired `[tenants.setup] proxy` key fails the live query check with a message naming `opentide --proxy`. That retirement covers platform tenant config, not only `[cve].proxy` ([#469](https://github.com/OpenTideHQ/opentide/issues/469)).
 - `--live` fails when a credential is still an unsubstituted `$VARIABLE`. Generated CI runs that job only when every required credential variable is set ([#471](https://github.com/OpenTideHQ/opentide/issues/471)).
+- Validate findings for vocabulary and cross-object checks record `yaml_line`, including list indexes such as `actors[0]`. Lint findings are unchanged ([#470](https://github.com/OpenTideHQ/opentide/issues/470)).
 
 ## [0.11.0] — 2026-10-07
 
