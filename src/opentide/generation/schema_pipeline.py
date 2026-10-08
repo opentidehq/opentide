@@ -606,27 +606,43 @@ def recomposition_handler(entry_point):
     return recomposition
 
 
+def _array_items_are_objects(array_schema: dict) -> bool:
+    """True when array items are objects, so a string vocabulary enum does not belong there."""
+    items = array_schema.get("items")
+    if not isinstance(items, dict):
+        return False
+    return items.get("type") == "object" or "properties" in items or "$ref" in items
+
+
 def _apply_vocab_enum(field_schema: dict, temp: dict) -> None:
     """Attach a vocabulary enum to a field, including ``anyOf`` / ``oneOf`` branches.
 
     Optional lists are array-or-null and have no top-level ``type``. String-or-list
     unions (``str | list[str] | None``) need the enum on the string branch and
     ``items.enum`` on the array branch. A parent ``enum`` would reject arrays.
+
+    A list of objects (``threat.chaining``) must not receive that string enum on
+    ``items`` or on the array node. Leaving the field without an enum is correct
+    when the relation enum cannot be placed on ``chaining[].relation``.
     """
     alternatives = field_schema.get("anyOf") or field_schema.get("oneOf")
     if isinstance(alternatives, list):
         stamped = False
+        saw_object_array = False
         for alternative in alternatives:
             if not isinstance(alternative, dict):
                 continue
             if alternative.get("type") == "array":
+                if _array_items_are_objects(alternative):
+                    saw_object_array = True
+                    continue
                 alternative["items"] = dict(temp)
                 alternative["uniqueItems"] = True
                 stamped = True
             elif alternative.get("type") == "string":
                 alternative.update(temp)
                 stamped = True
-        if stamped:
+        if stamped or saw_object_array:
             return
 
     field_types = field_schema.get("type")
@@ -635,6 +651,8 @@ def _apply_vocab_enum(field_schema: dict, temp: dict) -> None:
     if field_types is None or (field_types and "string" in field_types):
         field_schema.update(temp)
     elif field_types and "array" in field_types:
+        if _array_items_are_objects(field_schema):
+            return
         field_schema["items"] = dict(temp)
         field_schema["uniqueItems"] = True
 
