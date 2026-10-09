@@ -7,6 +7,29 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.12.1 — 9 October 2026
+
+Patch on 0.12.0. A missing credential is logged once. Re-run `opentide setup ci` so a live query job guards only the `$VAR` names in the enabled platform file and exits 2 when one is unset.
+
+**Install**
+
+```bash
+pip install opentide==0.12.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- Each unset configuration variable is reported once, not once per object. The live check still ends on the FATAL panel.
+- Generated CI ignores comments and literal values in the platform file. A skip exits 2. Exit 0 means the tenant check ran.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.12.1/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.12.1)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.12.0 — 9 October 2026
 
 Minor on 0.11.0. **`opentide-mcp` is gone.** The command is `opentide mcp start`. Regenerate MCP config with `opentide setup mcp`. Re-run `opentide setup ci` so live query jobs run only when every required credential is set. Regenerate schemas with `opentide generate` so `threat.chaining` items are not stamped with a string enum.
