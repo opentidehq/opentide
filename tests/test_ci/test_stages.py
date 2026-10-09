@@ -92,9 +92,7 @@ def test_query_validation_command_guards_workspace_references(tmp_path: Path) ->
         "opentide validate query --platform literal --live"
     )
 
-    options = CiRenderOptions(
-        ci="gitlab", platforms=["splunk", "harfanglab"], repo=tmp_path
-    )
+    options = CiRenderOptions(ci="gitlab", platforms=["splunk", "harfanglab"], repo=tmp_path)
     gitlab = render_gitlab(options)
     azure = render_azure(CiRenderOptions(ci="azure", platforms=["splunk"], repo=tmp_path))
     assert command in gitlab
