@@ -147,11 +147,15 @@ def test_info_summary_lists_each_platform_capability(tutorial: Path) -> None:
 
 
 def test_failing_validate_keeps_the_severity_tag(tutorial: Path) -> None:
-    """#292: the panel printed ` detection_model: …` with the `[error]` tag gone."""
+    """#292: the panel printed ` detection_model: …` with the `[error]` tag gone.
+
+    A recorded ``yaml_line`` inserts ``file:line`` after the severity tag, and a
+    narrow console wraps the message. The tag and the field message still show.
+    """
     _break_objective_reference(tutorial)
-    assert "[error] detection_model: Unknown objective or signal reference" in _human(
-        tutorial, "validate", "--strict"
-    )
+    collapsed = _panel_text(_human(tutorial, "validate", "--strict"))
+    assert "[error]" in collapsed
+    assert "detection_model: Unknown objective or signal reference" in collapsed
 
 
 def test_extract_without_sdk_names_the_extra(tutorial: Path) -> None:
@@ -309,18 +313,29 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     return expected
 
 
+_PANEL_CHROME = str.maketrans({char: " " for char in "│╭╮╰╯─"})
+
+
+def _panel_text(text: str) -> str:
+    """Collapse a Rich panel so a wrapped finding is one searchable string."""
+    return " ".join(text.translate(_PANEL_CHROME).split())
+
+
 def _missing(expected: list[Expectation], human: str) -> list[Expectation]:
     lines = [" ".join(line.split()) for line in human.splitlines()]
-    flat = " ".join(human.split())
-    return [
-        item
-        for item in expected
-        if (
-            " ".join(item.split()) not in flat
-            if isinstance(item, str)
-            else not any(all(part in line for part in item) for line in lines)
-        )
-    ]
+    flat = _panel_text(human)
+    missing: list[Expectation] = []
+    for item in expected:
+        if isinstance(item, str):
+            if " ".join(item.split()) not in flat:
+                missing.append(item)
+            continue
+        on_one_line = any(all(part in line for part in item) for line in lines)
+        # file:line prefixes wrap long findings across panel rows
+        on_the_page = all(_panel_text(part) in flat for part in item)
+        if not on_one_line and not on_the_page:
+            missing.append(item)
+    return missing
 
 
 @pytest.mark.parametrize(
