@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-09
+
+Minor on 0.11.0. The `opentide-mcp` console script is gone. The stdio server is `opentide mcp start`. Regenerate editor config with `opentide setup mcp`. Re-run `opentide setup ci` so a live query job runs only when every required credential variable is set. Regenerate schemas with `opentide generate` so object lists such as `threat.chaining` are not given a string vocabulary enum.
+
 ### Removed
 
 - The `opentide-mcp` console script. The stdio server is `opentide mcp start`. There is no alias ([#460](https://github.com/OpenTideHQ/opentide/issues/460)).
@@ -22,6 +26,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - A retired `[tenants.setup] proxy` key fails the live query check with a message naming `opentide --proxy`. That retirement covers platform tenant config, not only `[cve].proxy` ([#469](https://github.com/OpenTideHQ/opentide/issues/469)).
 - `--live` fails when a credential is still an unsubstituted `$VARIABLE`. Generated CI runs that job only when every required credential variable is set ([#471](https://github.com/OpenTideHQ/opentide/issues/471)).
 - Validate findings for vocabulary and cross-object checks record `yaml_line`, including list indexes such as `actors[0]`. Lint findings are unchanged ([#470](https://github.com/OpenTideHQ/opentide/issues/470)).
+
+### Install
+
+```bash
+pip install opentide==0.12.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.11.0] — 2026-10-07
 
@@ -721,7 +733,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.12.0
 [0.11.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.11.0
 [0.10.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.10.0
 [0.9.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.9.0
