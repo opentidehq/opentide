@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -306,10 +307,14 @@ def test_format_issues_for_console_prints_file_line_when_yaml_line_is_set() -> N
 
 
 def test_attach_yaml_lines_without_ruamel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing ruamel install leaves yaml_line unset, even if the module was imported."""
+    import ruamel.yaml  # noqa: F401 — full-suite order already loaded this module
+
     issue = ValidationIssue(code="x", field_path=("name",), message="bad")
     yaml_path = tmp_path / "rule.yaml"
     yaml_path.write_text("name: x\n", encoding="utf-8")
-    monkeypatch.setitem(__import__("sys").modules, "ruamel", None)
+    monkeypatch.setitem(sys.modules, "ruamel", None)
+    monkeypatch.setitem(sys.modules, "ruamel.yaml", None)
     result = attach_yaml_lines([issue], {"name": "x"}, file_path=yaml_path)
     assert result[0].yaml_line is None
 
