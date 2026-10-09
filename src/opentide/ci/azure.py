@@ -100,7 +100,7 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 f"validate_query_{safe}",
                 display_name=f"Validate query ({platform})",
-                steps=_job_steps(options, [query_validation_command(platform)]),
+                steps=_job_steps(options, [query_validation_command(platform, repo=options.repo)]),
             )
         )
 

@@ -7,6 +7,11 @@ from opentide.core.runtime import is_debug as runtime_is_debug
 
 logger = get_logger(__name__)
 
+# Names already reported by ``fetch_config_envvar`` in this process. Platform
+# load calls that helper once per object, and the same unset variable must not
+# be printed again for every rule.
+_reported_missing_envvars: set[str] = set()
+
 
 class DebugHelpers:
     @staticmethod
@@ -38,13 +43,13 @@ class DebugHelpers:
 
         Notes:
             - If a referenced environment variable is missing and the runtime is
-              not in debug mode, a fatal log entry will be emitted and the
-              function will mark that an environment variable error occurred.
+              not in debug mode, that name is logged once per process. Later
+              objects that miss the same variable do not log it again.
             - When running in debug mode, a local helper module
               ``opentide.core.local_secrets`` is imported (if present) to help
               set environment variables for local development.
         """
-        missing_envvar_error = False
+        pending_missing: list[str] = []
         if DebugHelpers.is_debug():
             try:
                 import_module("opentide.core.local_secrets")
@@ -86,24 +91,15 @@ class DebugHelpers:
                         ),
                     )
                 else:
-                    logger.critical(
-                        "environment_variable_missing",
-                        detail=f"Could not find expected environment variable {value}",
-                        advice="Review configuration file and execution environment",
-                    )
-                    missing_envvar_error = True
-        if missing_envvar_error:
+                    if env_name not in _reported_missing_envvars:
+                        _reported_missing_envvars.add(env_name)
+                        pending_missing.append(env_name)
+        if pending_missing:
+            joined = ", ".join(f"${name}" for name in pending_missing)
             logger.critical(
-                "environment_variables_missing_summary",
-                detail=(
-                    "Some environment variables specified in configuration files were not "
-                    "found. Review the previous errors to find which ones were missing."
-                ),
-                advice=(
-                    "Check your CI settings to ensure these environment variables are "
-                    "properly injected. This may not be a critical issue, for example if "
-                    "you didn't enable a particular system."
-                ),
+                "environment_variable_missing",
+                detail=f"Unset configuration variables: {joined}",
+                advice="Set those environment variables before a live check.",
             )
         return config_secrets
 

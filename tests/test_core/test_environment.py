@@ -3,8 +3,26 @@
 from __future__ import annotations
 
 import pytest
+from structlog.testing import capture_logs
 
+from opentide.core import environment
 from opentide.core.environment import reject_unsubstituted_placeholders
+
+
+def test_missing_envvar_is_logged_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENTIDE_TEST_MISSING", raising=False)
+    monkeypatch.delenv("OPENTIDE_TEST_ALSO_MISSING", raising=False)
+    monkeypatch.setattr(environment.DebugHelpers, "is_debug", lambda: False)
+    environment._reported_missing_envvars.clear()
+    payload = {"token": "$OPENTIDE_TEST_MISSING", "secret": "$OPENTIDE_TEST_ALSO_MISSING"}
+    with capture_logs() as logs:
+        for _ in range(5):
+            environment.DebugHelpers.fetch_config_envvar(dict(payload))
+    missing = [entry for entry in logs if entry["event"] == "environment_variable_missing"]
+    assert len(missing) == 1
+    assert "$OPENTIDE_TEST_MISSING" in missing[0]["detail"]
+    assert "$OPENTIDE_TEST_ALSO_MISSING" in missing[0]["detail"]
+    assert not any(entry["event"] == "environment_variables_missing_summary" for entry in logs)
 
 
 def test_reject_unsubstituted_placeholders_names_the_literals() -> None:

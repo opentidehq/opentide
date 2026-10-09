@@ -30,8 +30,8 @@ def test_render_github_validate_includes_query_platforms() -> None:
     workflow = render_github(options)
     assert "opentide validate query --platform sentinel --live" in workflow
     assert "opentide validate query --platform splunk --live" in workflow
-    assert "skip sentinel live query validation" in workflow
-    assert "skip splunk live query validation" in workflow
+    assert "skip sentinel live query validation" not in workflow
+    assert "skip splunk live query validation" not in workflow
     validate = workflow.split("  validate:", 1)[1].split("  generate:", 1)[0]
     assert "AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}" in validate
 

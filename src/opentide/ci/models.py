@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -27,6 +28,9 @@ class CiRenderOptions:
     explorer_pages: bool = False
     inflight: bool = True
     sharing: bool = False
+    #: Workspace whose ``.opentide/configurations/platforms`` files supply the
+    #: live-query credential guard. Absent for a render that has no checkout.
+    repo: Path | None = None
 
     @classmethod
     def from_init(
@@ -69,6 +73,7 @@ class CiRenderOptions:
             inflight=repo.inflight,
             sharing=repo.sharing,
             default_branch=repo.default_branch or "main",
+            repo=repo.path,
         )
 
     @classmethod
