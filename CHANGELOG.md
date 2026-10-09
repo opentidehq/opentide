@@ -14,6 +14,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - `opentide setup mcp` writes `command: opentide` and `args: ["mcp", "start"]`. `opentide mcp` with no subcommand prints help and exits. The editor owns stop and reload ([#460](https://github.com/OpenTideHQ/opentide/issues/460)).
 
+### Fixed
+
+- Splunk `[[modifiers]]` loads as an array of tables. A config `ValueError` during engine load is no longer reported only as a missing `declare` ([#466](https://github.com/OpenTideHQ/opentide/issues/466)).
+
 ## [0.11.0] — 2026-10-07
 
 Minor on 0.10.0. Bare `validate query` no longer scans. `--live` is the tenant check. Regenerate CI with `opentide setup ci` so generated pipelines pass `--live` and pin this release. Regenerate schemas with `opentide generate` so optional vocabulary lists include `items.enum`.
