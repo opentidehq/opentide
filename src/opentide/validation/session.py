@@ -365,6 +365,10 @@ def _validate_work_item(
         if item.object_type == "threat":
             issues.extend(check_chaining_for_object(item.uuid, item.body, graph))
 
+    if file_path is not None:
+        issues = attach_yaml_lines(issues, item.body, file_path=file_path)
+        warnings = attach_yaml_lines(warnings, item.body, file_path=file_path)
+
     return issues, warnings
 
 

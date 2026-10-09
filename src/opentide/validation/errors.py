@@ -149,18 +149,61 @@ def attach_yaml_lines(
 
     updated: list[ValidationIssue] = []
     for issue in issues:
+        if issue.yaml_line is not None:
+            if issue.file_path is None:
+                updated.append(issue.model_copy(update={"file_path": file_path}))
+            else:
+                updated.append(issue)
+            continue
         line = _find_line(data, issue.field_path)
         updated.append(issue.model_copy(update={"yaml_line": line, "file_path": file_path}))
     return updated
 
 
+def _line_marker(node: Any) -> int | None:
+    marker = getattr(node, "lc", None)
+    if marker is None:
+        return None
+    line = marker.line
+    return line if isinstance(line, int) else None
+
+
+def _container_child_line(node: Any, head: str) -> int | None:
+    """Line of a scalar child. Strings have no ``.lc``; the parent container does."""
+    marker = getattr(node, "lc", None)
+    if marker is None:
+        return None
+    located: Any = None
+    if isinstance(node, list) and head.isdigit():
+        item = getattr(marker, "item", None)
+        if callable(item):
+            located = item(int(head))
+    elif isinstance(node, dict):
+        value = getattr(marker, "value", None)
+        if callable(value):
+            located = value(head)
+    if not located:
+        return None
+    line = located[0]
+    return line if isinstance(line, int) else None
+
+
 def _find_line(node: Any, path: tuple[str, ...]) -> int | None:
     if not path:
-        return getattr(node, "lc", None) and node.lc.line  # type: ignore[union-attr]
+        return _line_marker(node)
     head, *tail = path
+    child: Any = None
     if isinstance(node, dict) and head in node:
         child = node[head]
-        if not tail:
-            return getattr(child, "lc", None) and child.lc.line  # type: ignore[union-attr]
+    elif isinstance(node, list) and head.isdigit():
+        index = int(head)
+        if 0 <= index < len(node):
+            child = node[index]
+    if child is None:
+        return None
+    if tail:
         return _find_line(child, tuple(tail))
-    return None
+    line = _line_marker(child)
+    if line is not None:
+        return line
+    return _container_child_line(node, head)
