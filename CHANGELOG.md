@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.12.1] — 2026-10-09
+
+Patch on 0.12.0. A missing credential is logged once, not once per object. Re-run `opentide setup ci` so a live query job guards only the `$VAR` names in that platform file and exits 2 when one of them is unset.
+
+### Fixed
+
+- `fetch_config_envvar` reports each unset configuration variable once per process. The live check still ends on the FATAL panel that names those variables.
+- Generated CI no longer treats every `$VAR` in the bundled platform sample as required. The guard reads the enabled platform file, ignores comments and literals, and exits 2 on a skip. Exit 0 means the tenant check ran.
+
+### Install
+
+```bash
+pip install opentide==0.12.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.12.0] — 2026-10-09
 
 Minor on 0.11.0. The `opentide-mcp` console script is gone. The stdio server is `opentide mcp start`. Regenerate editor config with `opentide setup mcp`. Re-run `opentide setup ci` so a live query job runs only when every required credential variable is set. Regenerate schemas with `opentide generate` so object lists such as `threat.chaining` are not given a string vocabulary enum.
@@ -733,7 +750,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.12.1
 [0.12.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.12.0
 [0.11.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.11.0
 [0.10.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.10.0
