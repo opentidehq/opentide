@@ -10,7 +10,7 @@ description: Install the mcp extra and start the stdio server with opentide mcp 
 The server needs the **`mcp` extra**:
 
 ```bash
-pip install 'opentide[mcp]==0.11.0'
+pip install 'opentide[mcp]==0.12.0'
 ```
 
 Command: **`opentide mcp start`**. It calls `opentide.mcp_server.launcher:main`, which probes for `mcp.server.fastmcp` before importing the server.
