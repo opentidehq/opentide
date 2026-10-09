@@ -147,6 +147,40 @@ def test_gen_json_schema_stamps_string_and_array_union() -> None:
     assert result["killchain"]["anyOf"][2] == {"type": "null"}
 
 
+def test_gen_json_schema_does_not_stamp_string_enum_on_object_list() -> None:
+    """``threat.chaining`` is a list of objects. A string enum on items is wrong (#468)."""
+    items = {
+        "type": "object",
+        "properties": {
+            "relation": {"type": "string"},
+            "vector": {"type": "string"},
+            "description": {"type": "string"},
+        },
+    }
+    schema = {
+        "chaining": {
+            "anyOf": [
+                {"type": "array", "items": dict(items)},
+                {"type": "null"},
+            ],
+            "tide.vocab": "chaining_relations",
+        }
+    }
+    with patch.object(
+        sp.VocabularyResolver.Vocabulary,
+        "resolve",
+        return_value=(["preceeds"], ["Preceeds"]),
+    ):
+        result = sp.gen_json_schema(schema)
+    assert "enum" not in result["chaining"]
+    array_alt = result["chaining"]["anyOf"][0]
+    assert "enum" not in array_alt
+    assert array_alt["items"]["type"] == "object"
+    assert "enum" not in array_alt["items"]
+    assert array_alt["items"]["properties"]["relation"] == {"type": "string"}
+    assert result["chaining"]["anyOf"][1] == {"type": "null"}
+
+
 def test_gen_json_schema_stamps_items_enum_on_oneof_vocab_list() -> None:
     schema = {
         "mitre_attack": {

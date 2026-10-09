@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Fixed
 
 - Splunk `[[modifiers]]` loads as an array of tables. A config `ValueError` during engine load is no longer reported only as a missing `declare` ([#466](https://github.com/OpenTideHQ/opentide/issues/466)).
+- Generated schemas no longer put a string vocabulary enum on `threat.chaining` items or on the array node. `list[str]` vocabulary fields still get `items.enum` ([#468](https://github.com/OpenTideHQ/opentide/issues/468)).
 
 ## [0.11.0] — 2026-10-07
 
