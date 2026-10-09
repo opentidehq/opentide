@@ -103,3 +103,24 @@ def test_tenant_valid_env_api_key_loads() -> None:
     assert tenant.setup.elasticsearch_url == "https://es.test"
     assert tenant.setup.space == "staging"
     assert tenant.setup.suppression is True
+    assert tenant.setup.bulk_import is False
+
+
+def test_tenant_bulk_import_flag_loads() -> None:
+    raw = {
+        "platform": {"enabled": True, "identifier": "elastic"},
+        "tenants": [
+            {
+                "name": "staging",
+                "setup": {
+                    "url": "https://kibana.test",
+                    "elasticsearch_url": "https://es.test",
+                    "api_key": "$ELASTIC_API_KEY",
+                    "bulk_import": True,
+                },
+            }
+        ],
+    }
+    cfg = build_system_config("elastic", raw)
+    assert cfg.tenants is not None
+    assert cfg.tenants[0].setup.bulk_import is True

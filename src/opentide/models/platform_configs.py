@@ -482,7 +482,7 @@ class ElasticThreatMatch(TideModel):
     query: str
     language: Literal["kuery", "lucene"] | None = None
     mapping: list[ElasticThreatGroup]
-    filters: list[ElasticFilter] | None = None
+    filters: list[dict[str, Any]] | None = None
     indicator_path: str | None = None
 
 

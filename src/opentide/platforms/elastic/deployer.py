@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Sequence
 from typing import Any
 
@@ -64,6 +65,10 @@ class ElasticDeploy:
         tenant_config: ConfigurationModels.Systems.Elastic.Tenant,
     ) -> None:
         """Process rules for one tenant: delete, disable, create, or update."""
+        if getattr(tenant_config.setup, "bulk_import", False):
+            self._deploy_bulk(batch, client, tenant_config)
+            return
+
         suppression_warned: set[str] = set()
         setup = tenant_config.setup
 
@@ -214,6 +219,94 @@ class ElasticDeploy:
                     if put_resp.status_code in (401, 403):
                         raise RuntimeError(f"Tenant auth error: HTTP {put_resp.status_code}")
                     put_resp.raise_for_status()
+
+    def _deploy_bulk(
+        self,
+        batch: Any,
+        client: ElasticClient,
+        tenant_config: ConfigurationModels.Systems.Elastic.Tenant,
+    ) -> None:
+        """Deploy rules using Kibana's multipart NDJSON bulk _import endpoint."""
+        suppression_warned: set[str] = set()
+        setup = tenant_config.setup
+        ndjson_lines: list[str] = []
+
+        for rule in batch.rules:
+            cfg = getattr(rule.configurations, "elastic", None) if rule.configurations else None
+            if not cfg:
+                continue
+
+            rule_id = rule.metadata.uuid if rule.metadata else ""
+            status = cfg.status or "STAGING"
+            strategy = check_status(status)
+
+            if strategy is StatusStrategy.INERT:
+                continue
+
+            if strategy is StatusStrategy.DELETION:
+                logger.info("deleting_elastic_rule", rule_id=rule_id, name=rule.name)
+                try:
+                    resp = client.delete_rule(rule_id)
+                    if resp.status_code not in (200, 404):
+                        resp.raise_for_status()
+                except Exception as exc:
+                    status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                    if status_code == 404:
+                        logger.info("delete_elastic_rule_not_found_success", rule_id=rule_id)
+                    elif status_code in (401, 403):
+                        raise
+                    else:
+                        logger.error("delete_elastic_rule_failed", rule_id=rule_id, error=str(exc))
+                continue
+
+            # Active deployment: PREVIEW, RELEASE, or DISABLEMENT
+            if setup.suppression is False and cfg.suppression is not None:
+                if rule_id not in suppression_warned:
+                    logger.warning(
+                        "suppression_omitted_basic_license",
+                        rule=rule.name,
+                        rule_id=rule_id,
+                        tenant=tenant_config.name,
+                    )
+                    suppression_warned.add(rule_id)
+
+            compiled = self.compile_deployment(rule, tenant_config=tenant_config)
+            if strategy is StatusStrategy.DISABLEMENT:
+                compiled["enabled"] = False
+            else:
+                compiled["enabled"] = True
+
+            if "version" not in compiled:
+                compiled["version"] = getattr(rule.metadata, "version", 1) if rule.metadata else 1
+
+            ndjson_lines.append(json.dumps(compiled, sort_keys=True))
+
+        if ndjson_lines:
+            batch_size = 50
+            for i in range(0, len(ndjson_lines), batch_size):
+                chunk = ndjson_lines[i : i + batch_size]
+                ndjson_payload = "\n".join(chunk)
+                try:
+                    resp = client.import_rules(ndjson_payload, overwrite=True)
+                    success_count = resp.get("success_count", 0)
+                    errors = resp.get("errors", [])
+                    logger.info(
+                        "bulk_import_batch_complete",
+                        batch_index=i // batch_size + 1,
+                        success_count=success_count,
+                        error_count=len(errors),
+                        tenant=tenant_config.name,
+                    )
+                    if errors:
+                        for err in errors:
+                            rid = err.get("rule_id") or err.get("id") or "unknown"
+                            msg = err.get("error", {}).get("message") or err.get("message") or str(err)
+                            logger.error("bulk_import_rule_error", rule_id=rid, error=msg)
+                except Exception as exc:
+                    status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                    if status_code in (401, 403):
+                        raise
+                    logger.error("bulk_import_batch_failed", error=str(exc), tenant=tenant_config.name)
 
     def deploy(
         self,

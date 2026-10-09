@@ -224,7 +224,11 @@ def compile_rule(
         body["threat_mapping"] = [
             {
                 "entries": [
-                    {"type": entry.get("type", "mapping"), **entry}
+                    {
+                        k: v
+                        for k, v in {"type": entry.get("type", "mapping"), **entry}.items()
+                        if v is not None
+                    }
                     for entry in group["entries"]
                 ]
             }

@@ -24,6 +24,7 @@ flags = []
 #elasticsearch_url = "https://soc-staging.es.eu-west-1.aws.elastic.cloud"
 #space = "staging"
 #api_key = "$ELASTIC_STAGING_API_KEY"
+#bulk_import = false
 
 #[[tenants]]
 #name = "elastic-prod"

@@ -206,3 +206,64 @@ def test_deploy_rule_error_400_continues_batch(mock_checks) -> None:
 
         # Batch continued to second rule
         assert mock_post.call_count == 2
+
+
+def test_client_import_rules() -> None:
+    tenant = _make_tenant()
+    client = ElasticClient(url=tenant.setup.url, api_key=tenant.setup.api_key)
+    with patch.object(client.session, "post") as mock_post:
+        mock_post.return_value = _mock_response(200, json_data={"success": True, "success_count": 2, "errors": []})
+        ndjson = '{"rule_id": "r1"}\n{"rule_id": "r2"}'
+        res = client.import_rules(ndjson, overwrite=True)
+        assert res["success"] is True
+        assert res["success_count"] == 2
+        mock_post.assert_called_once()
+        call_kwargs = mock_post.call_args[1]
+        assert call_kwargs["params"]["overwrite"] == "true"
+        assert "file" in call_kwargs["files"]
+        assert call_kwargs["headers"]["kbn-xsrf"] == "true"
+        assert call_kwargs["headers"]["Content-Type"] is None
+
+
+@patch("opentide.platforms.elastic.deployer.run_elasticsearch_checks")
+def test_deploy_bulk_import_routing(mock_checks) -> None:
+    tenant = _make_tenant()
+    tenant.setup.bulk_import = True
+    rule1 = _make_rule("rule-1")
+    rule2 = _make_rule("rule-2")
+    batch = MagicMock(rules=[rule1, rule2])
+
+    client = ElasticClient(url=tenant.setup.url, api_key=tenant.setup.api_key)
+    with patch.object(client, "import_rules") as mock_import, patch.object(client, "create_rule") as mock_create:
+        mock_import.return_value = {"success": True, "success_count": 2, "errors": []}
+        deployer = ElasticDeploy()
+        deployer.deploy_mdr(batch, client, tenant)
+
+        mock_import.assert_called_once()
+        mock_create.assert_not_called()
+        ndjson_arg = mock_import.call_args[0][0]
+        assert "rule-1" in ndjson_arg
+        assert "rule-2" in ndjson_arg
+
+
+@patch("opentide.platforms.elastic.deployer.run_elasticsearch_checks")
+def test_deploy_bulk_import_with_deletions(mock_checks) -> None:
+    tenant = _make_tenant()
+    tenant.setup.bulk_import = True
+    active_rule = _make_rule("active-rule", status="STAGING")
+    deleted_rule = _make_rule("deleted-rule", status="REMOVED")
+    batch = MagicMock(rules=[active_rule, deleted_rule])
+
+    client = ElasticClient(url=tenant.setup.url, api_key=tenant.setup.api_key)
+    with patch.object(client, "import_rules") as mock_import, patch.object(client, "delete_rule") as mock_del:
+        mock_import.return_value = {"success": True, "success_count": 1, "errors": []}
+        mock_del.return_value = _mock_response(200, {})
+        deployer = ElasticDeploy()
+        deployer.deploy_mdr(batch, client, tenant)
+
+        mock_del.assert_called_once_with(deleted_rule.metadata.uuid)
+        mock_import.assert_called_once()
+        ndjson_arg = mock_import.call_args[0][0]
+        assert active_rule.metadata.uuid in ndjson_arg
+        assert deleted_rule.metadata.uuid not in ndjson_arg
+

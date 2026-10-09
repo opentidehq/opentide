@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
 import structlog
@@ -10,6 +11,8 @@ from opentide.generation.framework import get_type, get_vocab_entry, techniques_
 from opentide.models.rule import DetectionRule
 
 logger = structlog.get_logger(__name__)
+
+_cached_get_vocab_entry = lru_cache(maxsize=4096)(get_vocab_entry)
 
 NON_ENTERPRISE_PREFIXES = ("Mobile : ", "Industrial : ")
 
@@ -43,7 +46,7 @@ def resolve_elastic_threat(data: DetectionRule) -> list[dict[str, Any]]:
         raw_techniques.extend(data.techniques)
 
     uuid = data.metadata.uuid if data.metadata else ""
-    if uuid and get_type(uuid, mute=True) is not None:
+    if getattr(data, "detection_model", None) and uuid and get_type(uuid, mute=True) is not None:
         try:
             inherited = techniques_resolver(uuid)
             if inherited:
@@ -60,7 +63,7 @@ def resolve_elastic_threat(data: DetectionRule) -> list[dict[str, Any]]:
     grouped: dict[str, dict[str, set[str]]] = {}
 
     for tech_id in unique_techniques:
-        entry = get_vocab_entry("att&ck", tech_id)
+        entry = _cached_get_vocab_entry("att&ck", tech_id)
         if not entry:
             continue
 
@@ -69,7 +72,7 @@ def resolve_elastic_threat(data: DetectionRule) -> list[dict[str, Any]]:
             logger.warning("skipping_non_enterprise_technique", technique=tech_id, name=name)
             continue
 
-        raw_stages = get_vocab_entry("att&ck", tech_id, "tide.vocab.stages") or []
+        raw_stages = _cached_get_vocab_entry("att&ck", tech_id, "tide.vocab.stages") or []
         if isinstance(raw_stages, str):
             raw_stages = [raw_stages]
 
@@ -91,7 +94,7 @@ def resolve_elastic_threat(data: DetectionRule) -> list[dict[str, Any]]:
 
         techniques_out: list[dict[str, Any]] = []
         for parent_id in sorted(grouped[stage].keys()):
-            parent_entry = get_vocab_entry("att&ck", parent_id)
+            parent_entry = _cached_get_vocab_entry("att&ck", parent_id)
             if not parent_entry:
                 continue
             parent_name = parent_entry.get("name", parent_id)
@@ -109,7 +112,7 @@ def resolve_elastic_threat(data: DetectionRule) -> list[dict[str, Any]]:
             if subs:
                 sub_list: list[dict[str, Any]] = []
                 for sub_id in subs:
-                    sub_entry = get_vocab_entry("att&ck", sub_id)
+                    sub_entry = _cached_get_vocab_entry("att&ck", sub_id)
                     if not sub_entry:
                         continue
                     sub_name = sub_entry.get("name", sub_id)
