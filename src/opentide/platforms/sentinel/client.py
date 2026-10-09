@@ -11,6 +11,14 @@ class SentinelService:
         self.setup = tenant_config.setup
 
     def connect(self) -> SecurityInsights:
+        from opentide.core.environment import reject_unsubstituted_placeholders
+        reject_unsubstituted_placeholders(
+            self.setup.azure_tenant_id,
+            self.setup.azure_client_id,
+            self.setup.azure_client_secret,
+            self.setup.azure_subscription_id,
+            client='Azure',
+        )
         credentials = ClientSecretCredential(self.setup.azure_tenant_id, self.setup.azure_client_id, self.setup.azure_client_secret)
         client = SecurityInsights(credentials, self.setup.azure_subscription_id, connection_verify=self.setup.ssl)
         return client

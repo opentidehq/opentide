@@ -231,6 +231,9 @@ def connect_splunk(
     allow_http_errors: bool = False,
     ssl_enabled: bool = True,
 ) -> Service:
+    from opentide.core.environment import reject_unsubstituted_placeholders
+
+    reject_unsubstituted_placeholders(host, port, token, app, client="Splunk")
     from splunklib import client
 
     port = int(port)

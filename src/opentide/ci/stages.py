@@ -41,13 +41,14 @@ def platform_credential_names_for(platform: str) -> list[str]:
 
 
 def query_validation_command(platform: str) -> str:
-    """Tenant query check, skipped when every credential variable is empty."""
+    """Tenant query check, skipped unless every credential variable is set."""
     live = f"opentide validate query --platform {platform} --live"
     names = platform_credential_names_for(platform)
     if not names:
         return live
-    joined = "".join(f"${name}" for name in names)
-    return f'if [ -z "{joined}" ]; then echo skip {platform} live query validation; else {live}; fi'
+    clauses = " || ".join(f'[ -z "${name}" ]' for name in names)
+    skip = f"echo skip {platform} live query validation"
+    return f"if {clauses}; then {skip}; else {live}; fi"
 
 
 def object_validate_commands() -> list[str]:
