@@ -200,6 +200,25 @@ class ConfigurationModels:
 
             tenants: Sequence[Tenant] | None
 
+        @dataclass
+        class Elastic(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    url: str
+                    elasticsearch_url: str
+                    api_key: str
+                    space: str = "default"
+                    index: Sequence[str] | None = None
+                    tags: Sequence[str] | None = None
+                    suppression: bool = True
+                    bulk_import: bool = False
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
 
 @dataclass
 class DeploymentBatch:
@@ -235,3 +254,7 @@ class TenantDeployment:
     @dataclass
     class HarfangLab(DeploymentBatch):
         tenant: ConfigurationModels.Systems.HarfangLab.Tenant
+
+    @dataclass
+    class Elastic(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.Elastic.Tenant

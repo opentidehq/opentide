@@ -3,7 +3,7 @@
   dict({
     'counts': dict({
       'objectives': 1,
-      'rules': 8,
+      'rules': 9,
       'threats': 1,
     }),
     'platforms': list([
@@ -24,6 +24,12 @@
         'can_validate': True,
         'enabled': True,
         'name': 'defender_for_endpoint',
+      }),
+      dict({
+        'can_deploy': False,
+        'can_validate': False,
+        'enabled': False,
+        'name': 'elastic_security',
       }),
       dict({
         'can_deploy': True,

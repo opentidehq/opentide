@@ -1,0 +1,123 @@
+name: Certutil downloading a file
+metadata:
+  uuid: 6b2e9c14-7a31-4f58-9d0c-1e8a4b7c2d90
+  schema: rule::1.0
+  version: 1
+  created: '2026-09-29'
+  modified: '2026-09-29'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Detects certutil.exe started with -urlcache or -verifyctl. Windows uses
+  those switches to pull a remote file, and intrusions use the same path
+  to land a payload.
+techniques:
+- T1105
+references:
+  public:
+    1: https://attack.mitre.org/techniques/T1105/
+    2: https://lolbas-project.github.io/lolbas/Binaries/Certutil/
+response:
+  alert_severity: High
+  procedure:
+    analysis: |
+      Confirm the certutil command line and the file it wrote.
+    containment: |
+      Isolate the host if the downloaded file is unsigned.
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: STAGING
+    type: query
+    language: kuery
+    query: |
+      event.category : "process" and event.type : "start" and
+      process.name : "certutil.exe" and
+      process.command_line : (*urlcache* or *verifyctl*)
+    index:
+    - logs-endpoint.events.process-*
+    - logs-windows.sysmon_operational-*
+    filters:
+    - field: process.parent.name
+      value: msiexec.exe
+      negate: true
+    scheduling:
+      interval: 5m
+      lookback: 1m
+      max_alerts: 200
+    severity:
+      default: High
+      mapping:
+      - field: user.name
+        value: SYSTEM
+        severity: critical
+    risk:
+      score: 68
+      mapping:
+      - field: host.risk.calculated_score_norm
+        value: ''
+    suppression:
+      group_by:
+      - host.name
+      - user.name
+      duration: 1h
+      missing_fields_strategy: suppress
+    highlighted_fields:
+    - process.command_line
+    - process.parent.name
+    - process.parent.command_line
+    - file.path
+    required_fields:
+    - name: process.command_line
+      type: wildcard
+    - name: process.name
+      type: keyword
+    - name: process.parent.name
+      type: keyword
+    integration:
+    - endpoint
+    - package: windows
+      integration: sysmon
+      version: ^2.0.0
+    guide:
+      investigation: |
+        Read process.command_line and the URL in -urlcache or -verifyctl.
+        Hash the file certutil wrote.
+      setup: |
+        Requires Elastic Defend process events or Sysmon process creation
+        (Event ID 1) with command-line auditing.
+    false_positives:
+    - Certificate enrollment and Windows installer repair launching certutil.
+    - Software-distribution scripts that download vendor CRLs with certutil.
+    tags:
+    - Windows
+    - LOLBAS
+    exceptions:
+      endpoint: true
+      lists:
+      - id: 4a8e1c20-7b55-4d19-9e30-2f6c8a1b5d74
+        list_id: certutil-software-distribution
+        namespace_type: single
+        type: detection
+    overrides:
+      name: process.command_line
+      timestamp: event.ingested
+      disable_fallback: true
+    actions:
+      notify:
+      - id: c4e8a1b2-6d30-4f57-9a18-3b7e5c0d2f64
+        action_type_id: .slack
+        group: default
+        params:
+          message: Certutil download on {{host.name}} by {{user.name}}
+        frequency:
+          summary: true
+          notifyWhen: onActiveAlert
+          throttle: null
+      respond:
+      - endpoint: isolate
+        comment: Isolate the host that ran certutil -urlcache or -verifyctl.
+      timeline:
+        id: 3d6f8a20-1c54-4b79-8e02-5a9c7d1e4b36
+        title: Windows process investigation

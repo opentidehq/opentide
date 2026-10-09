@@ -10,6 +10,7 @@ from opentide.models.platform import (
     CarbonBlackConfig,
     CrowdstrikeConfig,
     DefenderConfig,
+    ElasticConfig,
     HarfangLabConfig,
     SentinelConfig,
     SentinelOneConfig,
@@ -163,6 +164,17 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
             "tenants": {"tide.config.system.tenants": "carbon_black_cloud"},
         },
     },
+    ElasticConfig: {
+        "required": ["status"],
+        "property_extras": {
+            **_COMMON_PLATFORM_EXTRAS["property_extras"],
+            "platform_schema": {
+                "default": "elastic::1.0",
+                "pattern": r"^elastic::[1-9]\.[0-9]$",
+            },
+            "tenants": {"tide.config.system.tenants": "elastic"},
+        },
+    },
 }
 
 
@@ -186,5 +198,6 @@ def platform_model_for_subschema_name(subschema_name: str) -> type[TideModel] | 
         "Crowdstrike": CrowdstrikeConfig,
         "HarfangLab": HarfangLabConfig,
         "CBC EDR Sub Schema": CarbonBlackConfig,
+        "Elastic Security": ElasticConfig,
     }
     return mapping.get(subschema_name)

@@ -13,5 +13,6 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
         "splunk",
         "sentinel_one",
         "carbon_black_cloud",
+        "elastic",
     }
 )

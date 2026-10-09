@@ -1,0 +1,9 @@
+# expect: esql_source, language, suppression_shape
+elastic:
+  enabled: true
+  schema: platform::elastic::1.0
+  type: esql
+  language: kuery
+  query: FROM logs-* | LIMIT 10
+  index: [logs-*]
+  suppression: {duration: 1h}

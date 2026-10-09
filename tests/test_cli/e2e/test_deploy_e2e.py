@@ -161,7 +161,7 @@ def test_deploy_loads_only_the_requested_engine(
 ) -> None:
     """No DeployTide mock: the real loader must not build every platform's engine.
 
-    Loading all seven deployers (and all five validators) meant one engine that
+    Loading all eight deployers (and all six validators) meant one engine that
     failed to declare blocked a deploy to any other platform.
     """
     from opentide.platforms import plugins

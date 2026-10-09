@@ -19,6 +19,7 @@ class DetectionPlatforms(Enum):
     SENTINEL_ONE = auto()
     CROWDSTRIKE = auto()
     HARFANGLAB = auto()
+    ELASTIC = auto()
 DetectionSystems = DetectionPlatforms
 
 class DeploymentStrategy(Enum):

@@ -23,9 +23,13 @@ from opentide.models.platform import (
 from opentide.models.platform_schema import platform_root_extras
 
 #: Platforms whose configuration carries a query string at all. SentinelOne
-#: expresses detection through `condition`, HarfangLab through sigma/yara.
+#: expresses detection through `condition`, HarfangLab through sigma/yara, and
+#: Elastic Security supports multiple rule types including machine_learning
+#: where query is optional.
 QUERY_PLATFORMS = [
-    key for key, model in PLATFORM_CONFIG_MODELS.items() if "query" in model.model_fields
+    key
+    for key, model in PLATFORM_CONFIG_MODELS.items()
+    if "query" in model.model_fields and key != "elastic"
 ]
 
 
@@ -76,7 +80,7 @@ def test_a_blank_query_is_rejected(key: str, blank: str) -> None:
 #: Fields the JSON Schema extras call required while the model leaves them
 #: optional. Left alone here on purpose, each for its own reason:
 #:
-#: * ``status`` is optional on the shared base for all seven platforms
+#: * ``status`` is optional on the shared base for all eight platforms
 #:   including Sentinel, so requiring it is a decision about every existing
 #:   object rather than about Splunk;
 #: * a Splunk correlation search has nothing to schedule;

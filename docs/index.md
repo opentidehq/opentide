@@ -1,6 +1,6 @@
 ---
 title: OpenTide
-description: DetectionOps engine — validate, generate, deploy, and document detection rules across seven security platforms.
+description: DetectionOps engine — validate, generate, deploy, and document detection rules across eight security platforms.
 ---
 
 # OpenTide

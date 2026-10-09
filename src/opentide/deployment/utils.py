@@ -109,7 +109,10 @@ def make_deploy_plan(
         mdr_uuid = object_uuid(data)
 
         for system in conf_data:
-            platform_status = conf_data[system]["status"]
+            block = conf_data[system] or {}
+            platform_status = block.get("status")
+            if platform_status is None and system == "elastic":
+                platform_status = "STAGING"
 
             if system not in systems_deployment:
                 # Not a failure: a catalogue may carry rules for platforms this

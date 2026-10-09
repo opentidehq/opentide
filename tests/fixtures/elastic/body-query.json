@@ -1,0 +1,174 @@
+{
+  "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c2d90",
+  "type": "query",
+  "name": "Certutil downloading a file",
+  "description": "Detects certutil.exe started with -urlcache or -verifyctl. Windows uses\nthose switches to pull a remote file, and intrusions use the same path\nto land a payload.",
+  "enabled": true,
+  "severity": "high",
+  "risk_score": 68,
+  "interval": "5m",
+  "from": "now-6m",
+  "to": "now",
+  "language": "kuery",
+  "query": "event.category : \"process\" and event.type : \"start\" and\nprocess.name : \"certutil.exe\" and\nprocess.command_line : (*urlcache* or *verifyctl*)",
+  "index": [
+    "logs-endpoint.events.process-*",
+    "logs-windows.sysmon_operational-*"
+  ],
+  "filters": [
+    {
+      "meta": {
+        "key": "process.parent.name",
+        "negate": true,
+        "disabled": false,
+        "type": "phrase",
+        "params": {
+          "query": "msiexec.exe"
+        }
+      },
+      "query": {
+        "match_phrase": {
+          "process.parent.name": "msiexec.exe"
+        }
+      }
+    }
+  ],
+  "severity_mapping": [
+    {
+      "operator": "equals",
+      "field": "user.name",
+      "value": "SYSTEM",
+      "severity": "critical"
+    }
+  ],
+  "risk_score_mapping": [
+    {
+      "operator": "equals",
+      "field": "host.risk.calculated_score_norm",
+      "value": ""
+    }
+  ],
+  "rule_name_override": "process.command_line",
+  "timestamp_override": "event.ingested",
+  "timestamp_override_fallback_disabled": true,
+  "actions": [
+    {
+      "id": "c4e8a1b2-6d30-4f57-9a18-3b7e5c0d2f64",
+      "action_type_id": ".slack",
+      "group": "default",
+      "params": {
+        "message": "Certutil download on {{host.name}} by {{user.name}}"
+      },
+      "frequency": {
+        "summary": true,
+        "notifyWhen": "onActiveAlert",
+        "throttle": null
+      }
+    }
+  ],
+  "response_actions": [
+    {
+      "action_type_id": ".endpoint",
+      "params": {
+        "command": "isolate",
+        "comment": "Isolate the host that ran certutil -urlcache or -verifyctl."
+      }
+    }
+  ],
+  "timeline_id": "3d6f8a20-1c54-4b79-8e02-5a9c7d1e4b36",
+  "timeline_title": "Windows process investigation",
+  "max_signals": 200,
+  "alert_suppression": {
+    "group_by": [
+      "host.name",
+      "user.name"
+    ],
+    "duration": {
+      "value": 1,
+      "unit": "h"
+    },
+    "missing_fields_strategy": "suppress"
+  },
+  "investigation_fields": {
+    "field_names": [
+      "process.command_line",
+      "process.parent.name",
+      "process.parent.command_line",
+      "file.path"
+    ]
+  },
+  "required_fields": [
+    {
+      "name": "process.command_line",
+      "type": "wildcard"
+    },
+    {
+      "name": "process.name",
+      "type": "keyword"
+    },
+    {
+      "name": "process.parent.name",
+      "type": "keyword"
+    }
+  ],
+  "related_integrations": [
+    {
+      "package": "endpoint",
+      "version": "*"
+    },
+    {
+      "package": "windows",
+      "integration": "sysmon",
+      "version": "^2.0.0"
+    }
+  ],
+  "setup": "Requires Elastic Defend process events or Sysmon process creation\n(Event ID 1) with command-line auditing.",
+  "false_positives": [
+    "Certificate enrollment and Windows installer repair launching certutil.",
+    "Software-distribution scripts that download vendor CRLs with certutil."
+  ],
+  "exceptions_list": [
+    {
+      "id": "4a8e1c20-7b55-4d19-9e30-2f6c8a1b5d74",
+      "list_id": "certutil-software-distribution",
+      "namespace_type": "single",
+      "type": "detection"
+    },
+    {
+      "id": "endpoint_list",
+      "list_id": "endpoint_list",
+      "namespace_type": "agnostic",
+      "type": "endpoint"
+    }
+  ],
+  "tags": [
+    "OpenTide",
+    "Windows",
+    "LOLBAS"
+  ],
+  "author": [
+    "Detection Engineering"
+  ],
+  "references": [
+    "https://attack.mitre.org/techniques/T1105/",
+    "https://lolbas-project.github.io/lolbas/Binaries/Certutil/"
+  ],
+  "note": "Read process.command_line and the URL in -urlcache or -verifyctl.\nHash the file certutil wrote.",
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": {
+        "id": "TA0011",
+        "name": "Command and Control",
+        "reference": "https://attack.mitre.org/tactics/TA0011/"
+      },
+      "technique": [
+        {
+          "id": "T1105",
+          "name": "Ingress Tool Transfer",
+          "reference": "https://attack.mitre.org/techniques/T1105"
+        }
+      ]
+    }
+  ]
+}

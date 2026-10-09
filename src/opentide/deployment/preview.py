@@ -59,10 +59,28 @@ def _sentinel_compile_preview(rule: DetectionRule) -> dict[str, Any] | None:
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
 
 
+def _elastic_compile_preview(rule: DetectionRule) -> dict[str, Any] | None:
+    try:
+        from opentide.platforms.elastic.compile import compile_rule
+    except Exception as exc:
+        logger.debug("elastic_preview_import_unavailable", error=str(exc))
+        return None
+    try:
+        payload = compile_rule(rule)
+    except Exception as exc:
+        logger.debug("elastic_preview_compile_failed", error=str(exc))
+        return None
+    return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
+
+
 def preview_rule_deployment(platform: str, rule: DetectionRule) -> dict[str, Any]:
     """Return a serialisable preview of the API payload for one rule on a platform."""
     if platform == "sentinel":
         compiled = _sentinel_compile_preview(rule)
+        if compiled is not None:
+            return compiled
+    if platform == "elastic":
+        compiled = _elastic_compile_preview(rule)
         if compiled is not None:
             return compiled
     return _config_preview(platform, rule)

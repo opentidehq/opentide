@@ -1,0 +1,138 @@
+name: Created file matches a malware hash
+metadata:
+  uuid: 8c5d2f70-1a94-4e36-b8c2-5d7e9a1b3f48
+  schema: rule::1.0
+  version: 1
+  created: '2026-09-29'
+  modified: '2026-09-29'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Alerts when a created file's SHA256 matches a file indicator, or when
+  its MD5 matches a file indicator and its path does not match the path
+  carried on that indicator.
+techniques:
+- T1204.002
+references:
+  public:
+    1: https://attack.mitre.org/techniques/T1204/002/
+response:
+  alert_severity: Critical
+  procedure:
+    analysis: |
+      Open the matched indicator and the file path. Confirm the hash
+      equality and whether the file was executed after it was written.
+    containment: |
+      Isolate the host and collect the file.
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: PRODUCTION
+    type: threat_match
+    language: kuery
+    query: 'event.category : "file" and event.type : "creation"'
+    index:
+    - logs-endpoint.events.file-*
+    filters:
+    - field: event.dataset
+      value: endpoint.events.file
+    scheduling:
+      interval: 1h
+      lookback: 10m
+      max_alerts: 500
+    severity:
+      default: Critical
+      mapping:
+      - field: file.extension
+        value: exe
+        severity: critical
+    risk:
+      score: 90
+      mapping:
+      - field: host.risk.calculated_score_norm
+        value: ''
+    suppression:
+      group_by:
+      - host.name
+      - file.hash.sha256
+      duration: 6h
+      missing_fields_strategy: doNotSuppress
+    threat:
+      index:
+      - logs-ti_abusech.malware-*
+      - logs-ti_misp.indicator-*
+      query: '@timestamp >= "now-30d/d" and threat.indicator.type : "file"'
+      language: kuery
+      indicator_path: threat.indicator
+      filters:
+      - field: threat.indicator.marking.tlp
+        value: red
+        negate: true
+      mapping:
+      - entries:
+        - field: file.hash.sha256
+          value: threat.indicator.file.hash.sha256
+      - entries:
+        - field: file.hash.md5
+          value: threat.indicator.file.hash.md5
+        - field: file.path
+          value: threat.indicator.file.path
+          negate: true
+    highlighted_fields:
+    - file.hash.sha256
+    - file.hash.md5
+    - file.path
+    - file.name
+    - process.name
+    required_fields:
+    - name: file.hash.md5
+      type: keyword
+    - name: file.hash.sha256
+      type: keyword
+    - name: file.path
+      type: keyword
+    integration:
+    - endpoint
+    - package: ti_abusech
+      version: '*'
+    guide:
+      investigation: |
+        The event query is file creation. The indicator query is under threat.
+        The second mapping group is OR, and file.path DOES NOT MATCH.
+      setup: |
+        Elastic Defend file events plus a file-indicator index. Hashes must
+        be keyword.
+    false_positives:
+    - A red-team hash left in the indicator index after an exercise.
+    tags:
+    - Windows
+    - ThreatIntel
+    exceptions:
+      endpoint: true
+      lists:
+      - id: 2b9f4d60-8e13-4c57-a0b6-5d7c1e8a3f24
+        list_id: approved-software-hashes
+        namespace_type: single
+        type: detection
+    overrides:
+      name: file.hash.sha256
+      timestamp: event.ingested
+      disable_fallback: false
+    actions:
+      notify:
+      - id: c4e8a1b2-6d30-4f57-9a18-3b7e5c0d2f64
+        action_type_id: .slack
+        group: default
+        params:
+          message: 'Malware hash written on {{host.name}}: {{file.hash.sha256}}'
+        frequency:
+          summary: true
+          notifyWhen: onActiveAlert
+          throttle: null
+      respond:
+      - endpoint: isolate
+        comment: Isolate the host that wrote a file matching a malware indicator.
+      timeline:
+        id: 6a4c1e80-3d25-4b97-9f10-7e2b8c5a1d63
+        title: File hash investigation

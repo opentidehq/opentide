@@ -236,7 +236,7 @@ class DeployTide:
             return {}
         return cast(dict[str, QueryValidator], PlatformLoader().query_validators(only=[platform]))
 PlatformsRegistry = DeployTide
-_PLATFORM_PKG: dict[str, str] = {'carbon_black_cloud': 'carbon_black', 'defender_for_endpoint': 'defender_for_endpoint', 'sentinel_one': 'sentinel_one', 'crowdstrike': 'crowdstrike', 'harfanglab': 'harfanglab', 'sentinel': 'sentinel', 'splunk': 'splunk'}
+_PLATFORM_PKG: dict[str, str] = {'carbon_black_cloud': 'carbon_black', 'defender_for_endpoint': 'defender_for_endpoint', 'sentinel_one': 'sentinel_one', 'crowdstrike': 'crowdstrike', 'harfanglab': 'harfanglab', 'sentinel': 'sentinel', 'splunk': 'splunk', 'elastic': 'elastic'}
 
 def _platform_pkg(system: str) -> str:
     return _PLATFORM_PKG.get(system, system)

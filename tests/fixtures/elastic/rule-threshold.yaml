@@ -1,0 +1,118 @@
+name: Many failed logons for one account
+metadata:
+  uuid: 2e7b5c91-8d40-4a63-b1f5-9c3e6a8d0f17
+  schema: rule::1.0
+  version: 1
+  created: '2026-09-29'
+  modified: '2026-09-29'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Alerts when one account accumulates 50 failed logons and those failures
+  come from at least 8 distinct source addresses.
+techniques:
+- T1110
+references:
+  public:
+    1: https://attack.mitre.org/techniques/T1110/
+response:
+  alert_severity: Medium
+  procedure:
+    analysis: |
+      Identify user.name and whether the account is privileged.
+    containment: |
+      Reset the account if the sources are off-network.
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: PRODUCTION
+    type: threshold
+    language: lucene
+    query: event.code:"4625" AND event.outcome:"failure"
+    index:
+    - logs-system.security-*
+    filters:
+    - field: winlog.channel
+      value: Security
+    scheduling:
+      interval: 5m
+      lookback: 1m
+      max_alerts: 100
+    severity:
+      default: Medium
+      mapping:
+      - field: user.name
+        value: Administrator
+        severity: high
+    risk:
+      score: 40
+      mapping:
+      - field: user.risk.calculated_score_norm
+        value: ''
+    suppression:
+      duration: 30m
+    threshold:
+      field:
+      - user.name
+      value: 50
+      cardinality:
+        field: source.ip
+        value: 8
+    highlighted_fields:
+    - user.name
+    - source.ip
+    - host.name
+    - winlog.event_data.SubStatus
+    required_fields:
+    - name: event.code
+      type: keyword
+    - name: source.ip
+      type: ip
+    - name: user.name
+      type: keyword
+    integration:
+    - package: system
+      integration: security
+      version: ^1.0.0
+    guide:
+      investigation: |
+        threshold.field groups by user.name. cardinality requires 8 distinct
+        source.ip values. Suppression on a threshold rule is a duration only.
+      setup: |
+        Windows Security log 4625 via the System integration. user.name and
+        source.ip must be aggregatable.
+    false_positives:
+    - A user with a stale laptop password plus a phone and a second workstation.
+    tags:
+    - Windows
+    - Identity
+    exceptions:
+      endpoint: false
+      lists:
+      - id: 0c5e8a31-6b47-4d92-a1f0-8e3c7b2d6a59
+        list_id: scanner-test-accounts
+        namespace_type: single
+        type: detection
+    overrides:
+      name: user.name
+      timestamp: event.ingested
+      disable_fallback: false
+    actions:
+      notify:
+      - id: c4e8a1b2-6d30-4f57-9a18-3b7e5c0d2f64
+        action_type_id: .slack
+        group: default
+        params:
+          message: Account {{user.name}} failed logon from many source addresses.
+        frequency:
+          summary: true
+          notifyWhen: onActiveAlert
+          throttle: null
+      respond:
+      - osquery:
+          query: SELECT user, host, time FROM logged_in_users;
+          timeout: 60
+      timeline:
+        id: 9b1e4c70-2a85-4d63-b0f7-6c8a3e5d1f24
+        title: Windows logon investigation

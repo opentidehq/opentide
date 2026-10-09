@@ -16,6 +16,7 @@ _ALL_PLATFORMS = (
     "sentinel_one",
     "carbon_black_cloud",
     "harfanglab",
+    "elastic",
 )
 
 
@@ -44,4 +45,4 @@ def test_bundled_platform_config_count() -> None:
 
     data_path = Path(str(files("opentide.data")))
     platforms = list((data_path / "configurations" / "platforms").glob("*.toml"))
-    assert len(platforms) == 7
+    assert len(platforms) == 8
