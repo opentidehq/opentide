@@ -35,7 +35,10 @@ def test_strip_vocab_stage_prefix() -> None:
     vocab_index.metadata.get.return_value = [{"id": "OS"}]
     with patch.object(fw, "VOCAB_INDEX", {"surface": vocab_index}):
         assert fw.strip_vocab_stage_prefix("surface", "OS::Windows::Desktop") == "Windows::Desktop"
+        stripped = fw.strip_vocab_stage_prefix("surface::1.0", "OS::Windows::Desktop")
+        assert stripped == "Windows::Desktop"
         assert fw.strip_vocab_stage_prefix("surface", "PlainValue") == "PlainValue"
+        assert fw.strip_vocab_stage_prefix("surface::1.0", "PlainValue") == "PlainValue"
 
 
 def test_get_type_from_schema(rule_payload: dict) -> None:
