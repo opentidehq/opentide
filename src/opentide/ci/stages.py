@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from opentide.ci.discovery import platforms_config_dir
 from opentide.ci.models import CiRenderOptions
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
 
@@ -40,14 +41,68 @@ def platform_credential_names_for(platform: str) -> list[str]:
     return sorted(set(_ENV_REF.findall(path.read_text(encoding="utf-8"))))
 
 
-def query_validation_command(platform: str) -> str:
-    """Tenant query check, skipped unless every credential variable is set."""
+def _toml_without_comments(text: str) -> str:
+    """Drop TOML comments so a remark cannot invent a credential reference."""
+    out: list[str] = []
+    i = 0
+    length = len(text)
+    while i < length:
+        char = text[i]
+        if char in "\"'":
+            quote = char
+            if text.startswith(quote * 3, i):
+                end = text.find(quote * 3, i + 3)
+                if end == -1:
+                    out.append(text[i:])
+                    break
+                out.append(text[i : end + 3])
+                i = end + 3
+                continue
+            end = i + 1
+            while end < length:
+                if text[end] == "\\":
+                    end += 2
+                    continue
+                if text[end] == quote:
+                    end += 1
+                    break
+                end += 1
+            out.append(text[i:end])
+            i = end
+            continue
+        if char == "#":
+            while i < length and text[i] != "\n":
+                i += 1
+            continue
+        out.append(char)
+        i += 1
+    return "".join(out)
+
+
+def workspace_credential_names(repo: Path, platform: str) -> list[str]:
+    """``$VAR`` names in the enabled platform file, ignoring comments and literals."""
+    path = platforms_config_dir(repo) / f"{platform}.toml"
+    if not path.is_file():
+        return []
+    text = _toml_without_comments(path.read_text(encoding="utf-8"))
+    return sorted(set(_ENV_REF.findall(text)))
+
+
+def query_validation_command(platform: str, *, repo: Path | None = None) -> str:
+    """Tenant query check.
+
+    The guard lists ``$VAR`` references in the workspace platform file. A
+    literal value is not a credential, and a comment is not a reference. No
+    references means the live check runs with no guard. A skip exits 2 so it
+    cannot be read as a check that ran.
+    """
     live = f"opentide validate query --platform {platform} --live"
-    names = platform_credential_names_for(platform)
+    names = workspace_credential_names(repo, platform) if repo is not None else []
     if not names:
         return live
     clauses = " || ".join(f'[ -z "${name}" ]' for name in names)
-    skip = f"echo skip {platform} live query validation"
+    listed = " ".join(names)
+    skip = f"echo skip {platform} live query validation {listed}; exit 2"
     return f"if {clauses}; then {skip}; else {live}; fi"
 
 
@@ -59,7 +114,7 @@ def object_validate_commands() -> list[str]:
 def validate_commands(options: CiRenderOptions) -> list[str]:
     steps = object_validate_commands()
     for platform in query_platforms(options):
-        steps.append(query_validation_command(platform))
+        steps.append(query_validation_command(platform, repo=options.repo))
     return steps
 
 

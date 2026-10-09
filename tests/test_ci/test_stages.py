@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     core_cli_steps,
@@ -33,12 +35,11 @@ def test_core_cli_steps_include_validate_and_generate() -> None:
     assert steps[0] == "opentide validate --strict"
     assert steps[1] == "opentide lint --strict"
     query = next(step for step in steps if "validate query" in step)
-    assert "opentide validate query --platform sentinel --live" in query
-    assert "skip sentinel live query validation" in query
+    assert query == "opentide validate query --platform sentinel --live"
     assert steps[-1] == "opentide generate"
 
 
-def test_query_validation_command_skips_when_that_platforms_credentials_are_empty() -> None:
+def test_query_validation_command_guards_workspace_references(tmp_path: Path) -> None:
     from opentide.ci.azure import render_azure
     from opentide.ci.gitlab import render_gitlab
     from opentide.ci.stages import platform_credential_names_for, query_validation_command
@@ -52,16 +53,50 @@ def test_query_validation_command_skips_when_that_platforms_credentials_are_empt
         "AZURE_WORKSPACE_ID",
     ]
     assert "SPLUNK_TOKEN" not in names
-    command = query_validation_command("sentinel")
-    assert ":" not in command
-    assert "$AZURE_CLIENT_ID$AZURE_CLIENT_SECRET" not in command
-    assert '[ -z "$AZURE_CLIENT_ID" ] || [ -z "$AZURE_CLIENT_SECRET" ]' in command
-    assert "echo skip sentinel live query validation" in command
-    assert command.endswith("else opentide validate query --platform sentinel --live; fi")
+    assert query_validation_command("sentinel") == (
+        "opentide validate query --platform sentinel --live"
+    )
 
-    options = CiRenderOptions(ci="gitlab", platforms=["sentinel", "harfanglab"])
+    platform_dir = tmp_path / ".opentide" / "configurations" / "platforms"
+    platform_dir.mkdir(parents=True)
+    (platform_dir / "splunk.toml").write_text(
+        "\n".join(
+            [
+                "[platform]",
+                "enabled = true",
+                "[tenants.setup]",
+                'url = "$SPLUNK_URL"',
+                'port = "$SPLUNK_PORT"',
+                'token = "$SPLUNK_TOKEN"',
+                'app = "DA-DIGIT-S2-CSOC"  # literal — $SPLUNK_APP is never referenced',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (platform_dir / "literal.toml").write_text(
+        '[platform]\nenabled = true\napp = "search"\n',
+        encoding="utf-8",
+    )
+    command = query_validation_command("splunk", repo=tmp_path)
+    assert "SPLUNK_APP" not in command
+    assert ":" not in command
+    assert "$SPLUNK_URL$SPLUNK_PORT" not in command
+    assert '[ -z "$SPLUNK_PORT" ] || [ -z "$SPLUNK_TOKEN" ] || [ -z "$SPLUNK_URL" ]' in command
+    assert (
+        "echo skip splunk live query validation SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL; exit 2"
+        in command
+    )
+    assert command.endswith("else opentide validate query --platform splunk --live; fi")
+    assert query_validation_command("literal", repo=tmp_path) == (
+        "opentide validate query --platform literal --live"
+    )
+
+    options = CiRenderOptions(
+        ci="gitlab", platforms=["splunk", "harfanglab"], repo=tmp_path
+    )
     gitlab = render_gitlab(options)
-    azure = render_azure(CiRenderOptions(ci="azure", platforms=["sentinel"]))
+    azure = render_azure(CiRenderOptions(ci="azure", platforms=["splunk"], repo=tmp_path))
     assert command in gitlab
     assert command in azure
     assert "validate_query_harfanglab" not in gitlab

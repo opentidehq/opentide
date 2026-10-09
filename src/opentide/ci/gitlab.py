@@ -77,7 +77,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 job_name,
                 options=options,
                 stage="validate",
-                script=[query_validation_command(platform)],
+                script=[query_validation_command(platform, repo=options.repo)],
             )
         )
 
