@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import structlog
 import typer
@@ -23,6 +23,7 @@ from opentide.cli.services.setup.skills_registry import (
     known_skill_slugs,
     list_github_paths,
     load_manifest,
+    slug_is_contained,
 )
 from opentide.cli.services.setup.templates import render_agent_entrypoint, setup_data_root
 from opentide.core.logging.config import get_stdout_console
@@ -98,7 +99,7 @@ def _replace_tree(dest: Path, files: dict[str, bytes]) -> list[str]:
         shutil.rmtree(staging)
     try:
         for rel, payload in files.items():
-            out = staging / rel
+            out = _contained_file(staging, rel)
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_bytes(payload)
         if backup.exists():
@@ -117,6 +118,26 @@ def _replace_tree(dest: Path, files: dict[str, bytes]) -> list[str]:
         if staging.exists():
             shutil.rmtree(staging)
     return list(files)
+
+
+def _contained_file(root: Path, relative: str) -> Path:
+    """Resolve *relative* under *root*, refusing paths that climb out of the skill tree."""
+    if not relative or relative.startswith(("/", "\\")) or "\\" in relative:
+        raise SkillsDownloadError(f"Refusing skill path {relative!r}")
+    parts = PurePosixPath(relative).parts
+    if not parts or any(part in {".", ".."} for part in parts):
+        raise SkillsDownloadError(f"Refusing skill path {relative!r}")
+    destination = root.joinpath(*parts)
+    root_resolved = root.resolve()
+    if not destination.resolve().is_relative_to(root_resolved):
+        raise SkillsDownloadError(f"Refusing skill path {relative!r}")
+    return destination
+
+
+def _require_slug(slug: str) -> str:
+    if not slug_is_contained(slug):
+        raise SkillsDownloadError(f"Refusing skill slug {slug!r}")
+    return slug
 
 
 def _install_bundled_skill(slug: str, dest: Path) -> list[str]:
@@ -138,6 +159,7 @@ def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str
     The four authoring skills come from the package. Every other skill is the
     full git tree under ``skills/<slug>/``, not a fixed pair of reference files.
     """
+    _require_slug(slug)
     if slug in BUNDLED_AUTHORING_SKILLS:
         return _install_bundled_skill(slug, dest)
     paths = list_github_paths(f"skills/{slug}", source=source, ref=ref)
@@ -176,6 +198,7 @@ def _install_skill_trees(target: Path, slugs: list[str]) -> list[str]:
     manifest = load_manifest()
     written: list[str] = []
     for slug in slugs:
+        _require_slug(slug)
         rel_files = _download_skill(
             slug,
             target / ".agents" / "skills" / slug,

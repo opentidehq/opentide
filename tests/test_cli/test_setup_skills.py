@@ -301,6 +301,36 @@ def test_download_skill_writes_every_file_in_the_github_tree(
     assert (dest / "references" / "Examples.md").read_text(encoding="utf-8") == "# Examples.md\n"
 
 
+def test_download_skill_refuses_paths_that_leave_the_skill_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def _fetch(path: str, **_: object) -> bytes | None:
+        return b"# skill\n"
+
+    monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
+    monkeypatch.setattr(skills_mod, "fetch_github_bytes", _fetch)
+    monkeypatch.setattr(
+        skills_mod,
+        "list_github_paths",
+        lambda prefix, **_: [f"{prefix}/SKILL.md", f"{prefix}/../../.git/hooks/pre-commit"],
+    )
+    dest = tmp_path / ".agents" / "skills" / "demo-skill"
+    with pytest.raises(SkillsDownloadError, match="Refusing skill path"):
+        skills_mod._download_skill("demo-skill", dest, source="OpenTideHQ/skills", ref="main")
+    assert not (tmp_path / ".git").exists()
+    assert not dest.exists()
+
+
+def test_download_skill_refuses_a_slug_that_leaves_the_skills_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
+    dest = tmp_path / ".agents" / "skills" / ".." / ".." / ".git" / "hooks"
+    with pytest.raises(SkillsDownloadError, match="Refusing skill slug"):
+        skills_mod._download_skill("../.git", dest, source="OpenTideHQ/skills", ref="main")
+    assert not (tmp_path / ".git").exists()
+
+
 def test_download_skill_keeps_the_previous_tree_when_a_later_file_is_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import posixpath
+import re
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import structlog
 
@@ -17,6 +20,10 @@ logger = structlog.get_logger("opentide.cli.services.setup.skills_registry")
 _DEFAULT_SOURCE = "OpenTideHQ/skills"
 _DEFAULT_REF = "main"
 _CACHE_TTL_SECONDS = 30.0
+_REF_SEGMENT = re.compile(r"[A-Za-z0-9._-]+")
+_SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+_RAW_HOST = "raw.githubusercontent.com"
+_API_HOST = "api.github.com"
 
 
 class SkillsManifestError(RuntimeError):
@@ -57,14 +64,72 @@ class _ManifestTtlCache:
 _MANIFEST_CACHE = _ManifestTtlCache()
 
 
+def ref_is_contained(ref: str) -> bool:
+    """True when *ref* cannot climb out of the pinned skills repository."""
+    parts = ref.split("/")
+    return bool(parts) and all(
+        part not in {".", ".."} and _REF_SEGMENT.fullmatch(part) is not None for part in parts
+    )
+
+
+def slug_is_contained(slug: str) -> bool:
+    """True when *slug* is a single directory name under ``.agents/skills``."""
+    return _SLUG.fullmatch(slug) is not None
+
+
+def _normalise_ref(raw: object) -> str:
+    """Keep a catalogue ref, or the default branch when it would escape the repo."""
+    ref = str(raw or _DEFAULT_REF).strip() or _DEFAULT_REF
+    if ref_is_contained(ref):
+        return ref
+    logger.warning("skills_manifest_ref_rejected", ref=ref, fallback=_DEFAULT_REF)
+    return _DEFAULT_REF
+
+
+def _contained_github_url(url: str, *, host: str, path_prefix: str, query: str = "") -> str | None:
+    """Return *url* only when it stays on *host* under *path_prefix* after dot-segment removal."""
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname != host:
+        return None
+    if parsed.username or parsed.password or parsed.fragment or parsed.query != query:
+        return None
+    if any(segment in {".", ".."} for segment in parsed.path.split("/")):
+        return None
+    normalized = posixpath.normpath(parsed.path)
+    if not normalized.startswith(path_prefix):
+        return None
+    return urlunsplit(("https", host, normalized, query, ""))
+
+
+def _repo_file_path(path: str) -> str | None:
+    """Reject absolute paths and parent segments in a catalogue file path."""
+    if not path or path.startswith("/") or "\\" in path or any(char in path for char in "?#\r\n"):
+        return None
+    parts = path.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return None
+    return path
+
+
 def fetch_github_bytes(
     path: str,
     *,
     source: str = _DEFAULT_SOURCE,
     ref: str = _DEFAULT_REF,
 ) -> bytes | None:
-    """Fetch raw file bytes from a public GitHub repository."""
-    url = f"https://raw.githubusercontent.com/{source}/{ref}/{path}"
+    """Fetch raw file bytes from the pinned OpenTideHQ/skills repository."""
+    file_path = _repo_file_path(path)
+    if source != _DEFAULT_SOURCE or not ref_is_contained(ref) or file_path is None:
+        logger.warning("skills_download_url_rejected", source=source, ref=ref, path=path)
+        return None
+    url = _contained_github_url(
+        f"https://{_RAW_HOST}/{source}/{ref}/{file_path}",
+        host=_RAW_HOST,
+        path_prefix=f"/{source}/",
+    )
+    if url is None:
+        logger.warning("skills_download_url_rejected", source=source, ref=ref, path=path)
+        return None
     request = urllib.request.Request(url)
     try:
         return urllib.request.urlopen(request, timeout=15).read()
@@ -84,8 +149,20 @@ def list_github_paths(
     has no blobs. A truncated tree is treated as unreadable so a skill is not
     installed with files missing.
     """
-    folder = prefix if prefix.endswith("/") else f"{prefix}/"
-    url = f"https://api.github.com/repos/{source}/git/trees/{ref}?recursive=1"
+    folder_path = _repo_file_path(prefix.rstrip("/"))
+    if source != _DEFAULT_SOURCE or not ref_is_contained(ref) or folder_path is None:
+        logger.warning("skills_tree_url_rejected", source=source, ref=ref, prefix=prefix)
+        return None
+    folder = f"{folder_path}/"
+    url = _contained_github_url(
+        f"https://{_API_HOST}/repos/{source}/git/trees/{ref}?recursive=1",
+        host=_API_HOST,
+        path_prefix=f"/repos/{source}/",
+        query="recursive=1",
+    )
+    if url is None:
+        logger.warning("skills_tree_url_rejected", source=source, ref=ref, prefix=prefix)
+        return None
     request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
     try:
         payload = urllib.request.urlopen(request, timeout=15).read()
@@ -105,8 +182,12 @@ def list_github_paths(
         if not isinstance(item, dict) or item.get("type") != "blob":
             continue
         path = item.get("path")
-        if isinstance(path, str) and path.startswith(folder):
-            paths.append(path)
+        if not isinstance(path, str) or not path.startswith(folder):
+            continue
+        if _repo_file_path(path[len(folder) :]) is None:
+            logger.warning("skills_tree_path_rejected", path=path)
+            return None
+        paths.append(path)
     return sorted(paths)
 
 
@@ -126,16 +207,19 @@ def _normalise_source(raw: object) -> str:
 
 def _parse_manifest(data: dict[str, Any]) -> tuple[str, str, list[SkillEntry]]:
     source = _normalise_source(data.get("source", _DEFAULT_SOURCE))
-    ref = str(data.get("ref", _DEFAULT_REF)).strip() or _DEFAULT_REF
+    ref = _normalise_ref(data.get("ref", _DEFAULT_REF))
     skills: list[SkillEntry] = []
     for item in data.get("skills", []):
         if not isinstance(item, dict):
             continue
-        slug = str(item.get("slug") or item.get("name", ""))
+        slug = str(item.get("slug") or item.get("name", "")).strip()
+        if not slug_is_contained(slug):
+            if slug:
+                logger.warning("skills_manifest_slug_rejected", slug=slug)
+            continue
         name = str(item.get("name", slug))
         description = str(item.get("description", ""))
-        if slug:
-            skills.append(SkillEntry(name=name, slug=slug, description=description))
+        skills.append(SkillEntry(name=name, slug=slug, description=description))
     return source, ref, skills
 
 

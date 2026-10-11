@@ -80,6 +80,36 @@ def test_parse_manifest_rejects_foreign_source() -> None:
     assert [e.slug for e in entries] == ["x"]
 
 
+def test_parse_manifest_rejects_ref_and_slug_that_escape_the_repo() -> None:
+    source, ref, entries = registry._parse_manifest(
+        {
+            "source": "OpenTideHQ/skills",
+            "ref": "../../../attacker/payload/main",
+            "skills": [
+                {"slug": "../.git", "name": "Escape", "description": ""},
+                {"slug": "ok", "name": "Ok", "description": ""},
+            ],
+        }
+    )
+    assert source == "OpenTideHQ/skills"
+    assert ref == "main"
+    assert [e.slug for e in entries] == ["ok"]
+
+
+def test_fetch_github_bytes_does_not_request_a_ref_outside_the_repo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _urlopen(*_: object, **__: object) -> None:
+        raise AssertionError("escaped ref must not be requested")
+
+    monkeypatch.setattr(registry.urllib.request, "urlopen", _urlopen)
+    assert (
+        registry.fetch_github_bytes("skills/demo/SKILL.md", ref="../../../attacker/payload/main")
+        is None
+    )
+    assert registry.list_github_paths("skills/demo", ref="../../../attacker/payload/main") is None
+
+
 def test_manifest_ttl_cache_avoids_double_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = 0
 
