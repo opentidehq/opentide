@@ -7,6 +7,34 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.13.0 — 12 October 2026
+
+Minor on 0.12.1. `threat.surface` values are now stage-scoped, platform configuration blocks require `status`, `opentide --json validate` emits one document shape, and the local `[vocabulary]` extension block is removed. Re-run `opentide setup ci`: generated pipelines deployed to the staging tenant and pushed to your default branch from any pull request.
+
+**Install**
+
+```bash
+pip install opentide==0.13.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide generate schemas templates vocabs snippets
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- `threat.surface` entries take their stage prefix: `Windows::Desktop` becomes `OS::Windows::Desktop`. The same key name is defined under two stages — `VPN`, `VPN::OpenVPN`, `VPN::WireGuard`, `Wireless` and `Industrial` are each both `Infrastructure` and `Protocol` — so a bare name was ambiguous and those five values were unreachable. Vocabulary entry keys are unchanged.
+- `configurations.<platform>.status` is required. A rule omitting it used to pass `validate` and then crash `deploy`.
+- `opentide --json validate --check <x>` returns the same document as a bare `validate`: the report is always at `report`. Replace `issues.issues` with `report.issues`, and replace the removed `errors` map with `report.issues`.
+- A `[vocabulary]` block in `schema.toml` no longer injects entries. Vocabularies are canonical in [specifications](https://github.com/OpenTideHQ/specifications).
+- Generated CI now requires a pull request to target the default branch before it deploys or pushes. Re-run `opentide setup ci`.
+- A MISP cluster UUID that was reported as unknown now validates: `threat.actors.name` is pinned to `actors::1.1`, exposing 220 clusters that were bundled but invisible.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.13.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.13.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.12.1 — 9 October 2026
 
 Patch on 0.12.0. A missing credential is logged once. Re-run `opentide setup ci` so a live query job guards only the `$VAR` names in the enabled platform file and exits 2 when one is unset.

@@ -6,6 +6,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-10-12
+
+Minor on 0.12.1. `threat.surface` values are now stage-scoped (`Windows::Desktop` → `OS::Windows::Desktop`), platform configuration blocks require `status`, `opentide --json validate` emits one document shape and drops its legacy `errors` map, and the local `[vocabulary]` extension block is removed. Re-run `opentide setup ci` — generated pipelines deployed to the staging tenant and pushed to your default branch from any pull request. Regenerate with `opentide generate schemas templates vocabs snippets`.
+
+### Changed
+
+- `threat.surface` entries are stage-scoped: an authored value is `<stage>::<key>`. The vocabulary groups keys under 8 stages and defines the same key under two of them, so a bare key name was ambiguous and five values were unreachable (`VPN`, `VPN::OpenVPN`, `VPN::WireGuard`, `Wireless` and `Industrial` are each both `Infrastructure` and `Protocol`). The enum carried 895 values where the vocabulary defines 900, and now carries all 900. Vocabulary entry keys are unchanged — the prefix is applied at resolve time.
+- `configurations.<platform>.status` is required. A rule omitting it previously passed `validate`, failed the published JSON Schema, and crashed the deployer; validation now reports `status: Field required` with the field path. Platform templates emit `status:` live rather than commented.
+- `opentide --json validate` and `opentide --json validate --check <x>` return the same document. The report is always at `report` and `checks` maps each check that ran to its verdict; `--check` narrows `checks` and adds `check` rather than relocating the report to `issues`. The duplicate legacy `errors` map is removed — read `report.issues`.
+- The `[vocabulary]` extension block in `schema.toml` no longer injects vocabulary entries and has been removed from the shipped template. Vocabularies are canonical in the specifications repository and are not locally extensible.
+
+### Fixed
+
+- Generated CI gated staging deployment and default-branch pushes on pull-request *events* rather than the pull request's *target branch*, so a pull request between two feature branches deployed detections to a live staging tenant and committed to the default branch. Six jobs across the GitLab, GitHub and Azure renderers now require the target to be the default branch. Re-run `opentide setup ci`.
+- `threat.actors.name` is pinned to `actors::1.1`. 220 threat-actor galaxy clusters were present in the bundled vocabulary but invisible behind the `actors::1.0` pin, so a correctly-authored MISP cluster UUID was reported as an unknown vocabulary value. The actors enum goes from 1029 to 1249 values; `actors::1.0` keys are unaffected.
+- `opentide setup skills --install opentide-detection-rule` no longer fails as an unknown slug. Three of the four wheel-bundled authoring skills were missing from the discovery catalogue while remaining in the default starter set, so the CLI installed a slug it refused to name.
+- The weekly vocabulary refresh workflow had never completed a run: its OpenTide pull-request step was not gated on the App credential the specifications step already required, so it fell back to `GITHUB_TOKEN`, force-pushed the branch, then failed at `gh pr create`, leaving an updated branch with no pull request. It now fails fast before any mutation and names the missing secrets.
+- `platform_loader` reported a missing `status` as a type error (`None is not a valid string`) instead of `Field required`.
+
+### Install
+
+```bash
+pip install opentide==0.13.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide generate schemas templates vocabs snippets
+opentide validate --strict
+```
+
 ## [0.12.1] — 2026-10-09
 
 Patch on 0.12.0. A missing credential is logged once, not once per object. Re-run `opentide setup ci` so a live query job guards only the `$VAR` names in that platform file and exits 2 when one of them is unset.
@@ -750,7 +778,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.13.0
 [0.12.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.12.1
 [0.12.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.12.0
 [0.11.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.11.0
