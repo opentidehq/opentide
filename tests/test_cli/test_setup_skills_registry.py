@@ -34,7 +34,10 @@ def test_load_manifest_remote_first(monkeypatch: pytest.MonkeyPatch) -> None:
     manifest = registry.load_manifest()
     assert manifest.manifest_source == "remote"
     assert manifest.ref == "feature-branch"
-    assert [e.slug for e in manifest.entries] == ["remote-skill"]
+    slugs = [e.slug for e in manifest.entries]
+    assert "remote-skill" in slugs
+    # Bundled authoring skills are merged in, so this is no longer an exact list.
+    assert registry.BUNDLED_AUTHORING_SKILLS.issubset(set(slugs))
 
 
 def test_load_manifest_refresh_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,7 +67,7 @@ def test_failed_fetch_does_not_cache_error(monkeypatch: pytest.MonkeyPatch) -> N
         [registry.SkillEntry(name="Recovered", slug="recovered", description="")],
     )
     manifest = registry.load_manifest()
-    assert [e.slug for e in manifest.entries] == ["recovered"]
+    assert "recovered" in [e.slug for e in manifest.entries]
 
 
 def test_parse_manifest_rejects_foreign_source() -> None:
@@ -286,9 +289,43 @@ def test_list_github_paths_returns_none_on_network_errors(monkeypatch: pytest.Mo
     assert registry.list_github_paths("skills/demo") is None
 
 
-def test_known_skill_slugs_come_from_live_catalogue(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_known_skill_slugs_include_the_live_catalogue_and_the_bundled_skills(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bundled authoring skills stay nameable when upstream stops listing them.
+
+    This test previously asserted ``known_skill_slugs() == {"live-only"}``,
+    which encoded the defect: when ``OpenTideHQ/skills`` dropped three
+    authoring skills from its manifest, the CLI refused
+    ``--install opentide-detection-rule`` as unknown while still installing
+    that slug as part of its default starter set.
+    """
     stub_remote_skills_manifest(
         monkeypatch,
         [registry.SkillEntry(name="Live", slug="live-only", description="")],
     )
-    assert registry.known_skill_slugs() == {"live-only"}
+    known = registry.known_skill_slugs()
+    assert "live-only" in known
+    assert registry.BUNDLED_AUTHORING_SKILLS.issubset(known), (
+        "a skill shipped in the wheel is not nameable"
+    )
+
+
+def test_bundled_entries_are_not_duplicated_when_upstream_lists_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The remote copy wins, so the catalogue stays authoritative for its own entries."""
+    stub_remote_skills_manifest(
+        monkeypatch,
+        [
+            registry.SkillEntry(
+                name="Upstream detection rules",
+                slug="opentide-detection-rule",
+                description="upstream copy",
+            )
+        ],
+    )
+    entries = registry.load_manifest().entries
+    matching = [e for e in entries if e.slug == "opentide-detection-rule"]
+    assert len(matching) == 1, "bundled merge duplicated a slug the catalogue already lists"
+    assert matching[0].description == "upstream copy"

@@ -19,6 +19,7 @@ from opentide.cli.services.setup.interactive import (
     skill_targets_from_keys,
 )
 from opentide.cli.services.setup.skills_registry import (
+    BUNDLED_AUTHORING_SKILLS,
     fetch_github_bytes,
     known_skill_slugs,
     list_github_paths,
@@ -31,17 +32,9 @@ logger = structlog.get_logger("opentide.cli.services.setup.skills")
 
 _STARTER_SKILLS = ("opentide-detection-rule", "detection-engineering")
 
-#: Authoring skills ship with the package. The public skills repository still
-#: describes CoreTide layouts (``mdr::2.1``, ``Schemas/Templates``), and this
-#: install cannot update that repository.
-BUNDLED_AUTHORING_SKILLS = frozenset(
-    {
-        "opentide-detection-rule",
-        "opentide-detection-objective",
-        "opentide-threat-vector",
-        "detection-engineering",
-    }
-)
+#: ``BUNDLED_AUTHORING_SKILLS`` is defined in ``skills_registry`` alongside the
+#: entries themselves, so the catalogue and the installer cannot disagree about
+#: which skills ship in the wheel.
 
 
 class SkillsDownloadError(RuntimeError):

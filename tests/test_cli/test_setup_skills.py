@@ -106,6 +106,13 @@ def test_run_skills_setup_rejects_unknown_slug(tmp_path: Path) -> None:
 def test_run_skills_setup_rejects_slug_absent_from_live_catalogue(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """An unknown slug is still refused.
+
+    This used to pass ``detection-engineering`` -- a skill bundled in the wheel
+    -- and assert it was rejected, which encoded the defect rather than the
+    contract. A slug that is neither in the catalogue nor bundled is the real
+    case to refuse.
+    """
     stub_remote_skills_manifest(
         monkeypatch,
         [registry.SkillEntry(name="Remote", slug="remote-only", description="live")],
@@ -115,10 +122,30 @@ def test_run_skills_setup_rejects_slug_absent_from_live_catalogue(
             SkillsSetupOptions(
                 path=tmp_path,
                 targets=[SkillTarget.generic],
-                skill_slugs=["detection-engineering"],
+                skill_slugs=["no-such-skill-anywhere"],
                 yes=True,
             )
         )
+
+
+def test_run_skills_setup_accepts_a_bundled_slug_the_catalogue_omits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A wheel-bundled authoring skill installs even when upstream omits it."""
+    stub_remote_skills_manifest(
+        monkeypatch,
+        [registry.SkillEntry(name="Remote", slug="remote-only", description="live")],
+    )
+    run_skills_setup(
+        SkillsSetupOptions(
+            path=tmp_path,
+            targets=[SkillTarget.generic],
+            skill_slugs=["opentide-detection-rule"],
+            yes=True,
+        )
+    )
+    installed = tmp_path / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md"
+    assert installed.is_file(), "a bundled authoring skill did not install from the package"
 
 
 def test_download_skill_uses_manifest_ref(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

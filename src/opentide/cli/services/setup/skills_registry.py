@@ -39,6 +39,56 @@ class SkillEntry:
         }
 
 
+#: Authoring skills that ship inside the wheel, under
+#: ``data/setup/skills/authoring/<slug>/``. They install from the package with
+#: no network access, so they must stay nameable and discoverable regardless of
+#: what the remote catalogue happens to list.
+#:
+#: They were previously known only through the remote manifest. When
+#: ``OpenTideHQ/skills`` dropped three of them from ``manifest.json``, the CLI
+#: began refusing ``--install opentide-detection-rule`` as an "unknown skill
+#: slug" while still installing that very slug as part of its default starter
+#: set -- and ``discover`` stopped listing skills the wheel contains.
+BUNDLED_AUTHORING_ENTRIES: tuple[SkillEntry, ...] = (
+    SkillEntry(
+        name="Detection engineering",
+        slug="detection-engineering",
+        description="OpenTide's three object families: threats, objectives and rules.",
+    ),
+    SkillEntry(
+        name="Detection objectives",
+        slug="opentide-detection-objective",
+        description="Author objectives as objective::1.0 YAML under objects/objectives/.",
+    ),
+    SkillEntry(
+        name="Detection rules",
+        slug="opentide-detection-rule",
+        description="Author rules as rule::1.0 YAML under objects/rules/.",
+    ),
+    SkillEntry(
+        name="Threats",
+        slug="opentide-threat-vector",
+        description="Author threats as threat::1.0 YAML under objects/threats/.",
+    ),
+)
+
+#: Slugs of the above, for the install path's package/remote branch.
+BUNDLED_AUTHORING_SKILLS = frozenset(entry.slug for entry in BUNDLED_AUTHORING_ENTRIES)
+
+
+def _merge_bundled(entries: list[SkillEntry]) -> list[SkillEntry]:
+    """Add bundled authoring skills the remote catalogue does not list.
+
+    The remote entry wins for a slug both sides describe, so the catalogue
+    stays authoritative for its own copy; a bundled skill absent upstream is
+    appended rather than dropped.
+    """
+    seen = {entry.slug for entry in entries}
+    merged = list(entries)
+    merged.extend(entry for entry in BUNDLED_AUTHORING_ENTRIES if entry.slug not in seen)
+    return merged
+
+
 @dataclass(frozen=True)
 class ManifestLoadResult:
     source: str
@@ -182,7 +232,7 @@ def load_manifest(*, refresh: bool = False) -> ManifestLoadResult:
     result = ManifestLoadResult(
         source=source,
         ref=ref,
-        entries=entries,
+        entries=_merge_bundled(entries),
         manifest_source="remote",
         manifest_refreshed=refresh,
     )
