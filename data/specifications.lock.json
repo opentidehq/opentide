@@ -1,5 +1,5 @@
 {
-  "bundled_vocabulary_sha256": "72b334402f5f6f6162243422ec086292d9177515e0780f4c38f80cea8d99c81b",
+  "bundled_vocabulary_sha256": "186b2414de51f747ac2d04d8d549da8781ca5d6a13101c48f9b182171131b4d4",
   "lock_version": 1,
   "managed_files": [
     "actors.vocab.toml",

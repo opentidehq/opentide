@@ -252,7 +252,7 @@ def test_calls_and_names_they_bind_are_skipped(sdk_namespace: dict[str, Any]) ->
         ('# ["T1059"]  (YAML `mitre_attack`)', ["T1059"]),
         ('# ["…8001…"]  (threat UUIDs)', _UNDOCUMENTED),
         ("# objective UUID", _UNDOCUMENTED),
-        ('# vocabulary list, e.g. ["Windows::Desktop"]', _UNDOCUMENTED),
+        ('# vocabulary list, e.g. ["OS::Windows::Desktop"]', _UNDOCUMENTED),
         ("", _UNDOCUMENTED),
     ],
 )

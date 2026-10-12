@@ -24,7 +24,7 @@
       ],
       "terrain": "Example only — no operational terrain.",
       "surface": [
-        "Windows::Desktop"
+        "OS::Windows::Desktop"
       ],
       "severity": "Localised incident",
       "leverage": [

@@ -57,13 +57,10 @@ class PreflightGraph:
         vocabs_raw.update(object_vocabs)
 
         vocab_index = VocabularyLoader.load_index(vocabs_raw)
-        schema_config = configurations.get("schema", {})
-        extensions = schema_config.get("vocabulary", {})
         icons = doc_config.get("icons", {})
 
         enum_resolver = RuntimeEnumResolver(
             vocab_index,
-            extensions=extensions,
             object_types=global_config.get("objects", list(CORE_OBJECT_TYPES)),
             icons=icons,
         )

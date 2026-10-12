@@ -24,7 +24,7 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 .opentide/configurations/
 ├── paths.toml              # workspace directory layout
 ├── deployment.toml         # statuses + promotion
-├── schema.toml             # template defaults, vocabulary extensions
+├── schema.toml             # template defaults
 ├── visibility.toml         # what is exposed/deployed
 ├── documentation.toml      # `opentide generate docs` settings
 └── platforms/
@@ -33,7 +33,7 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 ```
 
 <Callout type="warn">
-Do not put vocabulary files here. Vocabularies are canonical in the [specifications](/docs/specifications/specs/vocabularies/format/); extend them through `schema.toml`, never by copying `.vocab.toml` files.
+Do not put vocabulary files here, and do not try to extend a vocabulary locally. Vocabularies are canonical in the [specifications](/docs/specifications/specs/vocabularies/format/) and are **not** locally extensible: a missing entry is added upstream, never injected from your repository. The CoreTIDE-era `[vocabulary]` block in `schema.toml` was removed in 0.13.0 — if you carried one, it was silently ignored by validation and is now simply dropped.
 </Callout>
 
 ## Enabling a platform

@@ -170,7 +170,6 @@ def test_vocabulary_scoped_with_stage_filter() -> None:
     with (
         patch.object(sp, "_runtime_ready", True),
         patch.object(sp, "VOCAB_INDEX", {"surface": vocab}),
-        patch.object(sp, "VOCAB_EXTENSIONS", {}),
         patch.object(sp, "OBJECT_TYPES", []),
     ):
         enum, _descriptions = sp.VocabularyResolver.Vocabulary(

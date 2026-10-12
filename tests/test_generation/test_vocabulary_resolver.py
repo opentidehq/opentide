@@ -22,7 +22,6 @@ def test_vocabulary_resolve_emits_entry_names(monkeypatch: pytest.MonkeyPatch) -
     )
     monkeypatch.setattr(schema_pipeline, "_runtime_ready", True)
     monkeypatch.setattr(schema_pipeline, "VOCAB_INDEX", {"severity": vocab})
-    monkeypatch.setattr(schema_pipeline, "VOCAB_EXTENSIONS", {})
     monkeypatch.setattr(schema_pipeline, "OBJECT_TYPES", [])
 
     resolver = schema_pipeline.VocabularyResolver.Vocabulary("severity")
@@ -40,7 +39,6 @@ def test_vocabulary_resolve_empty_vocab_returns_placeholder(
 
     monkeypatch.setattr(schema_pipeline, "_runtime_ready", True)
     monkeypatch.setattr(schema_pipeline, "VOCAB_INDEX", {})
-    monkeypatch.setattr(schema_pipeline, "VOCAB_EXTENSIONS", {})
     monkeypatch.setattr(schema_pipeline, "OBJECT_TYPES", [])
 
     resolver = schema_pipeline.VocabularyResolver.Vocabulary("missing")
@@ -69,7 +67,6 @@ def test_vocabulary_finalise_appends_hints_separately(monkeypatch: pytest.Monkey
     )
     monkeypatch.setattr(schema_pipeline, "_runtime_ready", True)
     monkeypatch.setattr(schema_pipeline, "VOCAB_INDEX", {"impact": vocab})
-    monkeypatch.setattr(schema_pipeline, "VOCAB_EXTENSIONS", {})
     monkeypatch.setattr(schema_pipeline, "OBJECT_TYPES", [])
 
     resolver = schema_pipeline.VocabularyResolver.Vocabulary("impact")

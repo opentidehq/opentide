@@ -22,7 +22,6 @@ def test_vocabulary_resolver_emits_enum_values() -> None:
     with (
         patch.object(sp, "_runtime_ready", True),
         patch.object(sp, "VOCAB_INDEX", {"severity": _severity_vocab()}),
-        patch.object(sp, "VOCAB_EXTENSIONS", {}),
         patch.object(sp, "OBJECT_TYPES", []),
     ):
         enum, descriptions = sp.VocabularyResolver.Vocabulary("severity").resolve()

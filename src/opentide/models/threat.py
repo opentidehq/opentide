@@ -43,7 +43,11 @@ class ThreatBody(TideModel):
     leverage: list[VocabName] = VocabField(True, min_length=1)
     viability: str = VocabField(True)
     terrain: str
-    surface: list[str] = VocabField(True)
+    # `surface` keys are grouped by stage and the SAME key name legitimately
+    # appears under two stages (VPN, Wireless and Industrial are each both
+    # Infrastructure and Protocol). Without `scoped` those collapse to one bare
+    # key and `_emit` drops the duplicate, so five values were unreachable.
+    surface: list[str] = VocabField(True, scoped=True)
     mitre_attack: list[str] = VocabField(True)
     actors: list[ThreatActor] | None = None
     killchain: str | list[str] | None = VocabField(True, default=None)

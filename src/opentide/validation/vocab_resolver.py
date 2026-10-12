@@ -10,7 +10,6 @@ from opentide.core.logging import get_logger
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
     VocabularyRevisionResolver,
-    entry_key_field,
     is_id_keyed,
     split_vocab_reference,
 )
@@ -71,7 +70,6 @@ class _VocabEnumBuilder:
         vocab: str,
         vocab_index: dict[str, VocabularyDefinition],
         *,
-        extensions: dict[str, list[dict[str, Any]]],
         object_types: tuple[str, ...] | list[str],
         icons: dict[str, str],
         stages: str | list | None = None,
@@ -81,7 +79,6 @@ class _VocabEnumBuilder:
         self.vocab = vocab
         self._field_name, self._pin = split_vocab_reference(vocab)
         self.vocab_index = vocab_index
-        self.extensions = extensions
         self.object_types = tuple(object_types)
         self.icons = icons
         self.scoped = scoped
@@ -96,7 +93,6 @@ class _VocabEnumBuilder:
     def resolve(self) -> tuple[list[str], list[str]]:
         logger.debug("resolving_vocab_enums", vocab=self.vocab)
         self._ingest(self.vocab_index.get(self._field_name))
-        self._ingest_extensions()
         return self._finalise()
 
     def _ingest(self, vocab_data: VocabularyDefinition | None) -> None:
@@ -111,26 +107,6 @@ class _VocabEnumBuilder:
         else:
             entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
         self._process(entries, is_model=is_model)
-
-    def _ingest_extensions(self) -> None:
-        extension_rows = self.extensions.get(self._field_name, [])
-        if not extension_rows:
-            return
-        ext_vocab = self.vocab_index.get(self._field_name)
-        ext_meta = ext_vocab.metadata if ext_vocab else None
-        is_model = (is_id_keyed(ext_meta.to_dict()) if ext_meta else False) or (
-            self._field_name in self.object_types
-        )
-        key_field = entry_key_field(key="id" if is_model else "name")
-        normalised: dict[str, dict[str, Any]] = {}
-        for ext in extension_rows:
-            row = dict(ext)
-            key = row.pop(key_field, None)
-            if not key:
-                logger.warning("extension_missing_key_field", key_field=key_field, vocab=self.vocab)
-                continue
-            normalised[str(key)] = row
-        self._process(normalised, is_model=is_model)
 
     def _process(self, entries: dict[str, dict[str, Any]], *, is_model: bool) -> None:
         for key, data in entries.items():
@@ -244,12 +220,10 @@ class RuntimeEnumResolver:
         self,
         vocab_index: dict[str, VocabularyDefinition],
         *,
-        extensions: dict[str, list[dict[str, Any]]] | None = None,
         object_types: tuple[str, ...] | list[str] | None = None,
         icons: dict[str, str] | None = None,
     ) -> None:
         self._vocab_index = vocab_index
-        self._extensions = extensions or {}
         self._object_types = tuple(object_types or CORE_OBJECT_TYPES)
         self._icons = icons or {}
 
@@ -269,7 +243,6 @@ class RuntimeEnumResolver:
         builder = _VocabEnumBuilder(
             vocab,
             self._vocab_index,
-            extensions=self._extensions,
             object_types=self._object_types,
             icons=self._icons,
             stages=stages,

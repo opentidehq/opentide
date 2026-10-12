@@ -22,7 +22,7 @@ def test_threat_vector_from_yaml_dict(metadata: dict[str, Any]) -> None:
             "leverage": ["High"],
             "viability": "High",
             "terrain": "Endpoint workstations and user devices.",
-            "surface": ["Windows::Desktop"],
+            "surface": ["OS::Windows::Desktop"],
             "mitre_attack": ["T1059"],
         },
     }
@@ -43,7 +43,7 @@ def _threat_payload(metadata: dict[str, Any], *, actors: Any) -> dict[str, Any]:
             "leverage": ["High"],
             "viability": "High",
             "terrain": "Endpoint workstations and user devices.",
-            "surface": ["Windows::Desktop"],
+            "surface": ["OS::Windows::Desktop"],
             "mitre_attack": ["T1059"],
             "actors": actors,
         },

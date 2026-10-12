@@ -300,7 +300,7 @@ def test_render_threat_assessment_keeps_impact_vocab_spelling(
                 "leverage": ["High"],
                 "viability": "High",
                 "terrain": "Endpoint workstations.",
-                "surface": ["Windows::Desktop"],
+                "surface": ["OS::Windows::Desktop"],
                 "mitre_attack": ["T1486"],
             },
         }
@@ -325,7 +325,7 @@ def test_render_threat_assessment_lists_every_impact_and_leverage_name(
                 "leverage": ["Elevation of privilege", "Repudiation"],
                 "viability": "Likely",
                 "terrain": "Endpoint workstations.",
-                "surface": ["Windows::Desktop"],
+                "surface": ["OS::Windows::Desktop"],
                 "mitre_attack": ["T1059"],
             },
         }
@@ -356,7 +356,7 @@ def _actor_source_cells(metadata: dict[str, Any], *actors: str) -> dict[str, str
                 "leverage": ["Elevation of privilege"],
                 "viability": "Likely",
                 "terrain": "Endpoint workstations.",
-                "surface": ["Windows::Desktop"],
+                "surface": ["OS::Windows::Desktop"],
                 "actors": [{"name": actor} for actor in actors],
                 "mitre_attack": ["T1059"],
             },
@@ -456,7 +456,7 @@ def test_render_signals_and_threat_body(metadata: dict[str, Any]) -> None:
                 "leverage": ["High"],
                 "viability": "High",
                 "terrain": "Endpoint workstations and user devices.",
-                "surface": ["Windows::Desktop"],
+                "surface": ["OS::Windows::Desktop"],
                 "mitre_attack": ["T1486"],
             },
         }

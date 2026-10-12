@@ -112,11 +112,23 @@ def test_runtime_enum_resolver_suggest_returns_none_for_empty_vocab() -> None:
     assert resolver.suggest("anything", "missing") is None
 
 
-def test_runtime_enum_resolver_with_extensions() -> None:
+def test_runtime_enum_resolver_refuses_local_vocabulary_extension() -> None:
+    """Vocabularies are canonical upstream and are NOT locally extensible.
+
+    The CoreTIDE-era ``[vocabulary]`` block in ``schema.toml`` was never part of
+    this package's contract and was removed in 0.13.0. It had silently worked,
+    which let a downstream repository carry unknown entries that no upstream
+    vocabulary knew about. This guard fails if the mechanism comes back: the
+    constructor must not grow an ``extensions`` parameter again, and a value
+    absent from the core vocabulary must stay invalid.
+    """
     meta = VocabularyMetadata(name="Status", field="status", key="name")
     vocab = VocabularyDefinition(metadata=meta, entries={})
-    resolver = RuntimeEnumResolver(
-        {"status": vocab},
-        extensions={"status": [{"name": "STAGING", "description": "Staging status"}]},
-    )
-    assert resolver.is_valid("STAGING", "status")
+    resolver = RuntimeEnumResolver({"status": vocab})
+    assert not resolver.is_valid("STAGING", "status")
+
+    with pytest.raises(TypeError):
+        RuntimeEnumResolver(  # type: ignore[call-arg]
+            {"status": vocab},
+            extensions={"status": [{"name": "STAGING", "description": "Staging status"}]},
+        )

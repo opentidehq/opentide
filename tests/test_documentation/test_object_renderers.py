@@ -39,7 +39,7 @@ def test_threat_renderer_includes_diagram_sections(metadata: dict[str, Any]) -> 
                 "leverage": ["High"],
                 "viability": "High",
                 "terrain": "Endpoint workstations and user devices.",
-                "surface": ["Windows::Desktop"],
+                "surface": ["OS::Windows::Desktop"],
                 "mitre_attack": ["T1003"],
             },
         }

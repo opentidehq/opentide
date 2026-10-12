@@ -12,7 +12,6 @@ from opentide.generation.framework import get_type, get_vocab_entry
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
     VocabularyRevisionResolver,
-    entry_key_field,
     is_id_keyed,
     split_vocab_reference,
 )
@@ -33,7 +32,6 @@ _runtime_ready = False
 GLOBAL_CONFIG: Any = None
 VOCAB_INDEX: dict[str, Any] = {}
 CONFIG_INDEX: dict[str, Any] = {}
-VOCAB_EXTENSIONS: dict[str, Any] = {}
 JSON_SCHEMA_FOLDER: Path | None = None
 ICONS: dict[str, Any] = {}
 OBJECT_TYPES: list[Any] = []
@@ -42,15 +40,12 @@ OBJECT_TYPES: list[Any] = []
 def _refresh_runtime_context() -> None:
     """Rebind module globals after env or index changes (tests, reload)."""
     global _runtime_ready, GLOBAL_CONFIG, VOCAB_INDEX, CONFIG_INDEX
-    global VOCAB_EXTENSIONS
     global JSON_SCHEMA_FOLDER
     global ICONS, OBJECT_TYPES
 
     GLOBAL_CONFIG = OpenTide.Configurations.Global
     VOCAB_INDEX = OpenTide.Vocabularies.Index
     CONFIG_INDEX = OpenTide.Configurations.Index
-    schema_config = CONFIG_INDEX.get("schema", {})
-    VOCAB_EXTENSIONS = schema_config.get("vocabulary", {})
     paths = resolve_paths()
     JSON_SCHEMA_FOLDER = Path(paths["json_schemas"])
     ICONS = {}
@@ -130,9 +125,13 @@ class VocabularyResolver:
     class Vocabulary:
         """Resolve vocabulary entries into JSON Schema enum arrays.
 
-        Reads entries from the core vocabulary index and any user-defined
-        extensions (``[vocabulary]`` in ``schema.toml``), producing
+        Reads entries from the core vocabulary index, producing
         parallel lists of enum values and their markdown descriptions.
+
+        Vocabularies are canonical in the specifications repository and are
+        NOT locally extensible: the CoreTIDE-era ``[vocabulary]`` block in
+        ``schema.toml`` was never part of this package's contract and has
+        been removed. A missing entry is fixed upstream, not injected here.
 
         Handles three patterns:
 
@@ -202,7 +201,6 @@ _Vocabulary_ : `{source_vocab}`
             _ensure_runtime_context()
             logger.debug("resolving_vocab_enums_for", detail=self.vocab)
             self._ingest(VOCAB_INDEX.get(self._field_name))
-            self._ingest_extensions()
             return self._finalise()
 
         # --- Ingestion ------------------------------------------------
@@ -220,28 +218,6 @@ _Vocabulary_ : `{source_vocab}`
             else:
                 entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
             self._process(entries, is_model=is_model)
-
-        def _ingest_extensions(self):
-            """Ingest user-defined extensions from ``schema.toml``."""
-            extensions = VOCAB_EXTENSIONS.get(self._field_name, [])
-            if not extensions:
-                return
-            logger.debug("processing", detail=self.vocab)
-            ext_vocab = VOCAB_INDEX.get(self._field_name)
-            ext_meta = ext_vocab.metadata if ext_vocab else None
-            is_model = (is_id_keyed(ext_meta.to_dict()) if ext_meta else False) or (
-                self._field_name in OBJECT_TYPES
-            )
-            key_field = entry_key_field(key="id" if is_model else "name")
-            normalised = {}
-            for ext in extensions:
-                d = ext.copy()
-                key = d.pop(key_field, None)
-                if not key:
-                    logger.warning("extension_missing", detail=self.vocab)
-                    continue
-                normalised[key] = d
-            self._process(normalised, is_model=is_model)
 
         def _process(self, entries: dict, *, is_model: bool):
             """Iterate entries and emit enum values."""
