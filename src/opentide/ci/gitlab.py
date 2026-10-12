@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from opentide.ci.gates import gitlab_premerge_rule
 from opentide.ci.inflight import gitlab_inflight_job, gitlab_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
@@ -91,7 +92,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 stage="deploy",
                 script=staging_deploy_steps(options),
                 needs="generate",
-                rules='$CI_PIPELINE_SOURCE == "merge_request_event"',
+                rules=gitlab_premerge_rule(),
                 extra_lines=full_history,
             )
         )

@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import textwrap
 
+from opentide.ci.gates import (
+    azure_premerge_condition,
+    github_premerge_if,
+    gitlab_premerge_rule,
+)
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import inflight_generate_steps, inflight_prune_steps, pip_install
 
@@ -158,7 +163,7 @@ def github_inflight_job(
         inflight_shards:
           name: Update inflight preview shards
           needs: generate
-          if: github.event_name == 'pull_request'
+          if: {github_premerge_if(default_branch)}
           runs-on: ubuntu-latest
           permissions:
             contents: write
@@ -261,7 +266,7 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
         "  stage: deploy\n"
         f"  image: python:{python_version}-slim\n"
         "  rules:\n"
-        '    - if: $CI_PIPELINE_SOURCE == "merge_request_event"\n'
+        f"    - if: {gitlab_premerge_rule()}\n"
         "  variables:\n"
         '    GIT_DEPTH: "0"\n'
         "  before_script:\n"
@@ -349,7 +354,7 @@ def azure_inflight_job(*, python_version: str, opentide_version: str, default_br
     return _azure_job(
         "inflight_shards",
         display_name="Inflight preview shards",
-        condition="eq(variables['Build.Reason'], 'PullRequest')",
+        condition=azure_premerge_condition(default_branch),
         steps=_job_steps(opts, [merge_push], persist_credentials=True),
     )
 

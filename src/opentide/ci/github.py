@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import textwrap
 
+from opentide.ci.gates import github_premerge_if
 from opentide.ci.inflight import github_inflight_job, github_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
@@ -196,7 +197,7 @@ def render_github(options: CiRenderOptions) -> str:
                 "deploy_staging",
                 name="Deploy Staging",
                 needs="generate",
-                if_cond="github.event_name == 'pull_request'",
+                if_cond=github_premerge_if(branch),
                 env=deploy_env,
                 steps=join_blocks(
                     _setup_steps(options, full_history=True),

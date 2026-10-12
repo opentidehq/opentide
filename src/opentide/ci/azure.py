@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from opentide.ci.gates import azure_premerge_condition
 from opentide.ci.inflight import azure_inflight_job, azure_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
@@ -125,7 +126,7 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 "deploy_staging",
                 display_name="Deploy Staging",
-                condition="eq(variables['Build.Reason'], 'PullRequest')",
+                condition=azure_premerge_condition(branch),
                 steps=_job_steps(options, staging_deploy_steps(options), full_history=True),
             )
         )
