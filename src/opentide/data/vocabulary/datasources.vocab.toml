@@ -5,7 +5,7 @@ reference = "https://attack.mitre.org/datasources/"
 key = "name"
 source = "mitre-attack"
 source_version = "19.2"
-source_fetched_at = "2026-09-29T11:52:47.430Z"
+source_fetched_at = "2026-10-12T07:01:19.567Z"
 [[keys]]
 id = "DS0026"
 name = "Active Directory"

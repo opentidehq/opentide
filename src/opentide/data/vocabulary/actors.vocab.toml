@@ -1,14 +1,11 @@
-# Point-in-time snapshot of MITRE ATT&CK STIX groups and the live MISP
-# threat-actor galaxy. generated_at, source_fetched_at, and source_misp_sha256
-# record this refresh. This file is not a live feed.
 name = "Threat Actors"
 field = "actors"
 description = "Groups are activity clusters that are tracked by a common name in the\n  security community.\n\n  Analysts track these clusters using various analytic methodologies and terms such\n  as threat groups, activity groups, and threat actors. Some groups have multiple\n  names associated with similar activities due to various organizations tracking similar\n  activities by different names.\n\n  Organizations group definitions may partially overlap with groups designated by\n  other organizations and may disagree on specific activity."
 key = "id"
 source_version = "19.2"
-source_fetched_at = "2026-10-07T13:59:18.436Z"
+source_fetched_at = "2026-10-12T07:01:19.567Z"
 source = "mitre-attack+misp"
-generated_at = "2026-10-07T13:59:26.360Z"
+generated_at = "2026-10-12T07:01:25.496Z"
 source_misp_url = "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
 source_misp_sha256 = "599aa85c28dab5c6136bd10329fa754d694a6d99088d7fd89376debdcebca896"
 

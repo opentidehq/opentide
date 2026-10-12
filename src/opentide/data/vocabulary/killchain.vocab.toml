@@ -1,12 +1,12 @@
 name = "Unified Kill Chain"
 field = "killchain"
-version = "1.0"
 description = "Cyber attacks are typically phased progressions towards strategic objectives. The Unified Kill Chains provides insight into the tactics that hackers employ to attain these objectives. This provides a solid basis to develop (or realign) defensive strategies to raise cyber resilience."
 reference = "https://www.unifiedkillchain.com/assets/The-Unified-Kill-Chain.pdf"
 
 stages = [ "Initial Foothold", "Network Propagation", "Action on Objectives",]
 key = "name"
 [[keys]]
+version = "1.0"
 name = "Reconnaissance"
 
 description = "Researching, identifying and selecting targets using active or passive reconnaissance."
@@ -14,6 +14,7 @@ description = "Researching, identifying and selecting targets using active or pa
 misp = "unified-kill-chain:Initial Foothold=\"reconnaissance\""
 
 [[keys]]
+version = "1.0"
 name = "Weaponization"
 
 "tide.vocab.stages" = "Initial Foothold"
@@ -21,6 +22,7 @@ description = "Preparatory activities aimed at setting up the infrastructure req
 misp = "unified-kill-chain:Initial Foothold=\"weaponization\""
 
 [[keys]]
+version = "1.0"
 name = "Delivery"
 
 "tide.vocab.stages" = "Initial Foothold"
@@ -28,6 +30,7 @@ description = "Techniques resulting in the transmission of a weaponized object t
 misp = "unified-kill-chain:Initial Foothold=\"delivery\""
 
 [[keys]]
+version = "1.0"
 name = "Social Engineering"
 
 "tide.vocab.stages" = "Initial Foothold"
@@ -35,6 +38,7 @@ description = "Techniques aimed at the manipulation of people to perform unsafe 
 misp = "unified-kill-chain:Initial Foothold=\"social-engineering\""
 
 [[keys]]
+version = "1.0"
 name = "Exploitation"
 
 "tide.vocab.stages" = "Initial Foothold"
@@ -42,6 +46,7 @@ description = "Techniques to exploit vulnerabilities in systems that may, amongs
 misp = "unified-kill-chain:Initial Foothold=\"exploitation\""
 
 [[keys]]
+version = "1.0"
 name = "Persistence"
 
 "tide.vocab.stages" = "Initial Foothold"
@@ -49,6 +54,7 @@ description = "Any access, action or change to a system that gives an attacker p
 misp = "unified-kill-chain:Initial Foothold=\"persistence\""
 
 [[keys]]
+version = "1.0"
 name = "Defense Evasion"
 
 "tide.vocab.stages" = "Initial Foothold"
@@ -56,6 +62,7 @@ description = "Techniques an attacker may specifically use for evading detection
 misp = "unified-kill-chain:Initial Foothold=\"defense-evasion\""
 
 [[keys]]
+version = "1.0"
 name = "Command & Control"
 
 "tide.vocab.stages" = "Initial Foothold"
@@ -63,6 +70,7 @@ description = "Techniques that allow attackers to communicate with controlled sy
 misp = "unified-kill-chain:Initial Foothold=\"command-control\""
 
 [[keys]]
+version = "1.0"
 name = "Pivoting"
 
 "tide.vocab.stages" = "Network Propagation"
@@ -70,6 +78,7 @@ description = "Tunneling traffic through a controlled system to other systems th
 misp = "unified-kill-chain:Network Propagation=\"pivoting\""
 
 [[keys]]
+version = "1.0"
 name = "Discovery"
 
 "tide.vocab.stages" = "Network Propagation"
@@ -77,6 +86,7 @@ description = "Techniques that allow an attacker to gain knowledge about a syste
 misp = "unified-kill-chain:Network Propagation=\"discovery\""
 
 [[keys]]
+version = "1.0"
 name = "Privilege Escalation"
 
 "tide.vocab.stages" = "Network Propagation"
@@ -84,6 +94,7 @@ description = "The result of techniques that provide an attacker with higher per
 misp = "unified-kill-chain:Network Propagation=\"privilege-escalation\""
 
 [[keys]]
+version = "1.0"
 name = "Execution"
 
 "tide.vocab.stages" = "Network Propagation"
@@ -91,6 +102,7 @@ description = "Techniques that result in execution of attacker-controlled code o
 misp = "unified-kill-chain:Network Propagation=\"execution\""
 
 [[keys]]
+version = "1.0"
 name = "Credential Access"
 
 "tide.vocab.stages" = "Network Propagation"
@@ -98,6 +110,7 @@ description = "Techniques resulting in the access of, or control over, system, s
 misp = "unified-kill-chain:Network Propagation=\"credential-access\""
 
 [[keys]]
+version = "1.0"
 name = "Lateral Movement"
 
 "tide.vocab.stages" = "Network Propagation"
@@ -105,6 +118,7 @@ description = "Techniques that enable an adversary to horizontally access and co
 misp = "unified-kill-chain:Network Propagation=\"lateral-movement\""
 
 [[keys]]
+version = "1.0"
 name = "Collection"
 
 "tide.vocab.stages" = "Action on Objectives"
@@ -112,6 +126,7 @@ description = "Techniques used to identify and gather data from a target network
 misp = "unified-kill-chain:Action on Objectives=\"collection\""
 
 [[keys]]
+version = "1.0"
 name = "Exfiltration"
 
 "tide.vocab.stages" = "Action on Objectives"
@@ -119,6 +134,7 @@ description = "Techniques that result or aid in an attacker removing data from a
 misp = "unified-kill-chain:Action on Objectives=\"exfiltration\""
 
 [[keys]]
+version = "1.0"
 name = "Impact"
 
 "tide.vocab.stages" = "Action on Objectives"
@@ -126,6 +142,7 @@ description = "Techniques aimed at manipulating, interrupting or destroying the 
 misp = "unified-kill-chain:Action on Objectives=\"impact\""
 
 [[keys]]
+version = "1.0"
 name = "Objectives"
 
 "tide.vocab.stages" = "Action on Objectives"
