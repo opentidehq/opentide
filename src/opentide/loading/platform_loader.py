@@ -64,13 +64,18 @@ def _base_configuration(mdr_config: dict[str, Any]) -> tuple[dict[str, Any], dic
     config = deepcopy(mdr_config)
     base = {
         "schema": config.pop("schema", None),
-        "status": config.pop("status", None),
         "tenants": config.pop("tenants", None),
         "flags": config.pop("flags", None),
         "contributors": config.pop("contributors", None),
         "enabled": config.pop("enabled", False),
         "name": config.pop("name", ""),
     }
+    # ``status`` is required. Passing an explicit ``None`` for an absent key
+    # made Pydantic report "Input should be a valid string", which tells an
+    # author their value is the wrong type when in fact they never wrote one.
+    # Omitting the key yields "Field required" and names the real problem.
+    if "status" in config:
+        base["status"] = config.pop("status")
     return (config, base)
 
 

@@ -1,7 +1,7 @@
   #enabled: false
   #name: 
   schema: platform::harfanglab::1.0
-  #status: 
+  status: 
   #flags:
     #- 
   #tenants:

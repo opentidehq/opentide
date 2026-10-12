@@ -76,15 +76,16 @@ def test_a_blank_query_is_rejected(key: str, blank: str) -> None:
 #: Fields the JSON Schema extras call required while the model leaves them
 #: optional. Left alone here on purpose, each for its own reason:
 #:
-#: * ``status`` is optional on the shared base for all seven platforms
-#:   including Sentinel, so requiring it is a decision about every existing
-#:   object rather than about Splunk;
 #: * a Splunk correlation search has nothing to schedule;
 #: * Sentinel entity mappings and alert grouping are genuinely optional on an
 #:   analytics rule.
 #:
+#: ``status`` used to sit here. It no longer does: the deploy planner selects
+#: on it and cannot proceed without it, so the model now requires it too and
+#: the gap is closed rather than tolerated.
+#:
 #: Recorded so that *new* drift fails while the accepted set stays visible.
-KNOWN_EXTRAS_ONLY_REQUIRED = frozenset({"status", "scheduling", "entities", "grouping"})
+KNOWN_EXTRAS_ONLY_REQUIRED = frozenset({"scheduling", "entities", "grouping"})
 
 
 @pytest.mark.parametrize("key", sorted(PLATFORM_CONFIG_MODELS))

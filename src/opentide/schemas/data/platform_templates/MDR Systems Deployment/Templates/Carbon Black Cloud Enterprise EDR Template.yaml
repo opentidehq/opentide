@@ -1,7 +1,7 @@
   #enabled: false
   #name: 
   schema: platform::carbon_black_cloud::1.0
-  #status: 
+  status: 
   #flags:
     #- 
   #tenants:

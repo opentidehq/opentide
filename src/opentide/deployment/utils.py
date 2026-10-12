@@ -26,6 +26,36 @@ __all__ = [
 ]
 
 
+def _platform_status(block: object, *, system: str, rule: str, uuid: str) -> str:
+    """Read a platform block's ``status``, naming the object when it is absent.
+
+    This used to be ``conf_data[system]["status"]``. A rule whose platform
+    block omitted ``status`` therefore failed with a bare ``KeyError``, which
+    the CLI rendered as a FATAL panel containing the single word ``'status'``
+    -- no file, no UUID, no field path, nothing to act on.
+
+    The model now requires ``status``, so a rule that reaches here without one
+    predates that rule or bypassed validation. Either way it should say which
+    object is wrong.
+    """
+    if not isinstance(block, dict) or not block.get("status"):
+        logger.critical(
+            "platform_status_missing",
+            detail=(
+                f"Rule {rule!r} ({uuid}) has no 'status' in its {system} "
+                "configuration block. Add a status, e.g. 'status: STAGING', "
+                "then re-run 'opentide validate'."
+            ),
+            system=system,
+            rule=rule,
+            uuid=uuid,
+        )
+        raise KeyError(
+            f"{rule!r} ({uuid}): configurations.{system}.status is required for deployment"
+        )
+    return str(block["status"])
+
+
 def check_status(status_name: str) -> StatusStrategy:
     statuses_definitions = OpenTide.Configurations.Deployment.statuses
     for status in statuses_definitions:
@@ -109,7 +139,7 @@ def make_deploy_plan(
         mdr_uuid = object_uuid(data)
 
         for system in conf_data:
-            platform_status = conf_data[system]["status"]
+            platform_status = _platform_status(conf_data[system], system=system, rule=name, uuid=mdr_uuid)
 
             if system not in systems_deployment:
                 # Not a failure: a catalogue may carry rules for platforms this

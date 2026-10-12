@@ -16,6 +16,7 @@ def test_parse_platform_config_sentinel() -> None:
         {
             "enabled": True,
             "name": "Sentinel",
+            "status": "STAGING",
             "query": "SecurityEvent | take 1",
             "scheduling": {"frequency": "PT1H", "lookback": "PT2H"},
             "alert": {"title": "T", "suppression": False},
@@ -30,6 +31,7 @@ def test_platform_schema_attribute_is_the_schema_identifier() -> None:
     block = {
         "enabled": True,
         "name": "Sentinel",
+        "status": "STAGING",
         "query": "SecurityEvent | take 1",
         "scheduling": {"frequency": "PT1H", "lookback": "PT2H"},
         "alert": {"title": "T", "suppression": False},
@@ -47,6 +49,7 @@ def test_rule_configurations_from_platforms_dict() -> None:
             "sentinel": {
                 "enabled": True,
                 "name": "S",
+                "status": "STAGING",
                 "query": "SecurityEvent | take 1",
                 "scheduling": {"frequency": "PT1H", "lookback": "PT2H"},
                 "alert": {"title": "T", "suppression": False},
@@ -54,6 +57,7 @@ def test_rule_configurations_from_platforms_dict() -> None:
             "crowdstrike": {
                 "enabled": False,
                 "name": "C",
+                "status": "STAGING",
                 "query": "index=main",
                 "details": {"trigger": "event", "outcome": "detection"},
                 "schedule": {"frequency": "1h", "lookback": "2h"},

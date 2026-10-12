@@ -60,7 +60,14 @@ class PlatformConfigBase(TideModel):
         alias="schema",
         schema_extra={"tide.template.required": True},
     )
-    status: str | None = None
+    status: str
+    """Deployment status for this platform block.
+
+    Required, because the deploy planner selects on it and cannot proceed
+    without it. Leaving it optional let a rule validate cleanly and then fail
+    deployment, while the JSON Schema we publish for the same object required
+    it all along -- three surfaces disagreeing about one field.
+    """
     flags: list[str] | None = None
     tenants: list[str] | None = None
     contributors: list[str] | None = None
