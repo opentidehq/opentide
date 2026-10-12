@@ -36,6 +36,50 @@ Without `--json`, issues are listed in a **Validation issues** panel, grouped by
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 
+### One JSON shape for every invocation
+
+`--json` emits the same document whichever way you invoke validation. The full
+report is always under `report`, and `checks` always maps a check name to that
+check's verdict. Passing `--check` narrows `checks` to the one check you asked
+for and adds `check` naming it; it does **not** move the report.
+
+```bash
+opentide --json validate --check schema
+```
+
+```json output-of="opentide --json validate --check schema"
+{
+  "checks": {
+    "schema": { "check": "schema", "status": "passed" }
+  },
+  "report": {
+    "ok": true,
+    "issues": []
+  },
+  "check": "schema",
+  "workspace": "...",
+  "ok": true,
+  "status": "passed"
+}
+```
+
+So one expression reads the issue list regardless of invocation:
+
+```bash
+opentide --json validate                  | jq '.report.issues'
+opentide --json validate --check schema   | jq '.report.issues'
+```
+
+!!! warning "Changed in 0.13.0"
+
+    `--check` previously returned a different document from a bare `validate`:
+    the report was placed under `issues` (so the list was at `issues.issues`)
+    and a legacy `errors` map, keyed by UUID, was emitted alongside it. Neither
+    appeared on a bare run, so a consumer could not parse both the same way.
+    Both paths now emit the shape above. Read `report.issues` instead of
+    `issues.issues`, and replace `errors` with `report.issues`, which carries
+    the same failures with their field paths, codes and line numbers.
+
 ### Which workspace was checked
 
 Run from anywhere inside the detection workspace: the CLI walks up to it (see [Repository root resolution](./global-options.md#repository-root-resolution)). The JSON payload names the directory it read objects from under `workspace`.

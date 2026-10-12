@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
@@ -134,11 +135,27 @@ def _dump_check_issues(issues: list[ValidationIssue]) -> list[dict[str, object]]
     return list(payload.get("issues", []))
 
 
-def _report_payload(report: ValidationReport) -> dict[str, object]:
+#: The checks a bare ``validate`` runs, and the key order of ``checks``.
+DEFAULT_CHECK_NAMES: tuple[str, ...] = (
+    ValidateCheck.id_uniqueness.value,
+    ValidateCheck.uuid_format.value,
+    ValidateCheck.schema.value,
+)
+
+
+def _validate_payload(report: ValidationReport, check_names: Sequence[str]) -> dict[str, object]:
+    """Build the one JSON shape every ``validate`` invocation emits.
+
+    ``checks`` always maps a check name to that check's verdict, and the full
+    report always lives under ``report``. Selecting a single check narrows
+    ``checks`` to one entry; it must not move the report or otherwise change the
+    document's shape, because a consumer has to parse both the same way.
+    """
     return {
-        "status": "passed" if report.ok else "failed",
-        "errors": report.legacy_errors_by_uuid(),
-        "issues": report.model_dump_json_ready(),
+        "checks": {
+            name: {"check": name, "status": _status_for_check(report, name)} for name in check_names
+        },
+        "report": report.model_dump_json_ready(),
     }
 
 
@@ -151,8 +168,9 @@ def run_validate_check(
     report = run_validation(scope=scope or ValidationScope.full(), checks=frozenset({check}))
     if not report.ok:
         os.environ["VALIDATION_ERROR_RAISED"] = "1"
-    payload = _report_payload(report)
+    payload = _validate_payload(report, (check.value,))
     payload["check"] = check.value
+    payload["status"] = "passed" if report.ok else "failed"
     return payload
 
 
@@ -195,23 +213,13 @@ def run_validate(
     if not report.ok:
         os.environ["VALIDATION_ERROR_RAISED"] = "1"
 
-    if check is None:
-        result: dict[str, object] = {
-            "checks": {
-                name: {
-                    "check": name,
-                    "status": _status_for_check(report, name),
-                }
-                for name in (
-                    ValidateCheck.id_uniqueness.value,
-                    ValidateCheck.uuid_format.value,
-                    ValidateCheck.schema.value,
-                )
-            },
-            "report": report.model_dump_json_ready(),
-        }
-    else:
-        result = _report_payload(report)
+    # Both branches build the SAME document. A single check only narrows
+    # `checks`; it used to relocate the report to `issues` (so consumers read
+    # `issues.issues`) and bolt on a legacy `errors` map, which meant one
+    # command emitted two incompatible shapes.
+    names = DEFAULT_CHECK_NAMES if check is None else (check.value,)
+    result: dict[str, object] = _validate_payload(report, names)
+    if check is not None:
         result["check"] = check.value
     workspace = discover_workspace()
     result["workspace"] = str(workspace)

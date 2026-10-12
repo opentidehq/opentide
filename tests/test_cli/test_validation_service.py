@@ -142,6 +142,65 @@ def test_run_validate_default_checks_payload() -> None:
     assert result["checks"]["schema"]["status"] == "passed"
 
 
+def _payload_for(check: ValidateCheck | None, report: ValidationReport) -> dict[str, object]:
+    with (
+        patch.object(validation_service, "run_validation", return_value=report),
+        patch("opentide.cli.exit_codes.validation_outcome", return_value=CLEAN_OUTCOME),
+        patch.object(validation_service, "discover_workspace", return_value=Path("/ws")),
+    ):
+        return validation_service.run_validate(CliContext(json_output=True), check=check)
+
+
+@pytest.mark.parametrize("check", [None, ValidateCheck.schema, ValidateCheck.id_uniqueness])
+def test_every_invocation_puts_the_report_in_the_same_place(check: ValidateCheck | None) -> None:
+    """#487: selecting a check used to relocate the report to ``issues``.
+
+    A consumer then had to read ``report.issues`` for a bare run and
+    ``issues.issues`` for ``--check``, from one command. The report must be at
+    one path regardless of how validate was invoked.
+    """
+    report = ValidationReport(
+        ok=False,
+        issues=[ValidationIssue(code="schema_validation", message="bad")],
+    )
+    payload = _payload_for(check, report)
+
+    assert "report" in payload, "the report moved; consumers break"
+    assert payload["report"]["issues"], "the report is present but empty"
+    assert "issues" not in payload, "the report is duplicated at the top level"
+    assert "errors" not in payload, "the legacy errors map is back"
+
+
+def test_selecting_a_check_changes_only_the_checks_map() -> None:
+    """The narrow invocation must be the broad one minus untouched checks."""
+    report = ValidationReport(ok=True, stats={"objects_checked": 1})
+    broad = _payload_for(None, report)
+    narrow = _payload_for(ValidateCheck.schema, report)
+
+    # `check` names the selection and is the ONLY permitted extra key.
+    assert set(narrow) - set(broad) == {"check"}
+    assert set(broad) - set(narrow) == set()
+    assert narrow["check"] == "schema"
+
+    assert list(broad["checks"]) == list(validation_service.DEFAULT_CHECK_NAMES)
+    assert list(narrow["checks"]) == ["schema"]
+
+    # Everything outside `checks` is identical.
+    assert {k: v for k, v in broad.items() if k != "checks"} == {
+        k: v for k, v in narrow.items() if k not in {"checks", "check"}
+    }
+
+
+def test_single_check_payload_matches_the_cli_shape() -> None:
+    """``run_validate_check`` must not reintroduce a third shape."""
+    report = ValidationReport(ok=True)
+    with patch.object(validation_service, "run_validation", return_value=report):
+        payload = validation_service.run_validate_check(ValidateCheck.schema)
+    assert "report" in payload
+    assert list(payload["checks"]) == ["schema"]
+    assert "errors" not in payload
+
+
 def _validate_against(workspace: Path, objects_checked: int, **kwargs: object) -> dict[str, object]:
     report = ValidationReport(ok=True, stats={"objects_checked": objects_checked})
     with (
