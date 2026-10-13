@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Literal, cast
 
+from opentide.core.responders import resolve_responders
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.format.protocol import MarkdownFormatter
 from opentide.documentation.markdown.links import object_link
@@ -132,8 +133,11 @@ def render_rule_response(rule: DetectionRule, formatter: MarkdownFormatter) -> s
     ]
     if response.playbook:
         chunks.append(f"- **Playbook**: {response.playbook}")
-    if response.responders:
-        chunks.append(f"- **Responders**: {_render_vocab_label('responders', response.responders)}")
+    responders = resolve_responders(response)
+    if responders:
+        # Not vocabulary-labelled: `responders` is per-organisation
+        # configuration, so there is no canonical entry to enrich it with.
+        chunks.append(f"- **Responders**: {responders}")
     if response.procedure:
         chunks.append(formatter.heading(3, "Procedure").strip())
         chunks.append(f"- **Analysis**: {response.procedure.analysis}")

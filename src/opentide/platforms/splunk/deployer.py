@@ -8,6 +8,7 @@ import structlog
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, OpenTide
+from opentide.core.responders import resolve_responders
 from opentide.deployment import TideDeployment, check_status
 from opentide.generation.framework import techniques_resolver
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
@@ -213,8 +214,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                     if inc.trigger_time is not None:
                         config["action.email.include.trigger_time"] = 1 if inc.trigger_time else 0
 
-        responders = (data.response.responders if data.response else None) or ""
-        config["alert.managedBy"] = responders
+        config["alert.managedBy"] = resolve_responders(data.response)
         if splunk_config.advanced:
             for key, value in splunk_config.advanced.items():
                 config[key] = str(value)

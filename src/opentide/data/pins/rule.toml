@@ -2,16 +2,19 @@
 # Machine-readable source of truth for rule::* pin tables.
 # See rfcs/0003-per-key-vocabulary-versioning.md
 
+# `response.responders` is deliberately NOT pinned to a vocabulary. The alert
+# handling team is per-organisation configuration, not a canonical vocabulary:
+# the shipped vocabulary was empty, so every authored value failed validation
+# and no instance could fix it (vocabularies are not locally extensible). The
+# field is free text, defaulted from `[deployment] default_responders`.
 ["rule::1.0"]
 "metadata.tlp" = "tlp::1.0"
 "severity" = "severity::1.0"
 "techniques" = "att&ck::1.1"
 "response.alert_severity" = "alert_severity::1.0"
-"response.responders" = "responders::1.0"
 
 ["rule::1.1"]
 "metadata.tlp" = "tlp::1.0"
 "severity" = "severity::1.0"
 "techniques" = "att&ck::1.1"
 "response.alert_severity" = "alert_severity::1.0"
-"response.responders" = "responders::1.0"

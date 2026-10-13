@@ -31,4 +31,15 @@ def test_malapi_vocab_still_indexed() -> None:
 def test_bundled_vocab_file_count() -> None:
     vocab_dir = resolve_paths()["vocabularies"]
     toml_files = list(vocab_dir.glob("*.vocab.toml"))
-    assert len(toml_files) == 36
+    # 36 before `responders` was retired: it shipped with `keys = []` while
+    # `response.responders` was pinned to it, so every authored value failed
+    # validation and no instance could fix it. The field is now free text
+    # defaulted from `[deployment] default_responders`.
+    assert len(toml_files) == 35
+
+
+def test_responders_is_not_a_bundled_vocabulary() -> None:
+    """`responders` is per-organisation configuration, not a vocabulary."""
+    vocab_dir = resolve_paths()["vocabularies"]
+    assert not (vocab_dir / "responders.vocab.toml").exists()
+    assert "responders" not in OpenTide.Vocabularies.Index

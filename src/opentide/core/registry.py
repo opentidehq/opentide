@@ -310,6 +310,18 @@ class _DeploymentConfig:
     def debug(self) -> dict[str, Any]:
         return dict(self.Index.get("debug", {}))
 
+    @property
+    def default_responders(self) -> str:
+        """Repository-wide fallback alert-handling team.
+
+        Set by ``[deployment] default_responders`` and applied when a rule's
+        ``response.responders`` is unset. The key shipped in
+        ``deployment.toml`` and was documented in the specification, but no
+        code read it, so the documented fallback never happened.
+        """
+        value = self.Index.get("default_responders", "")
+        return str(value).strip() if value is not None else ""
+
 
 @dataclass(frozen=True)
 class _VisibilityConfig:
