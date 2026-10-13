@@ -180,6 +180,41 @@ def strip_vocab_stage_prefix(vocab: str, identifier: str) -> str:
     return identifier
 
 
+def resolve_vocab_identifier(vocab: str, identifier: str) -> str:
+    """Return the key *identifier* names in ``vocab``, raw value first.
+
+    The single resolution rule for a staged vocabulary, shared by the
+    generation and validation paths so they cannot disagree about the same
+    value.
+
+    **Raw first, stripped only as a fallback.** A key name may itself begin
+    with a token that happens to be a stage id, and stripping unconditionally
+    then resolves the wrong entry -- silently, because the stripped form is a
+    real key. In the bundled ``surface`` vocabulary six keys under stage
+    ``Protocol`` start with ``Security::``:
+
+    ======================== ============================================
+    ``Security::Kerberos``   stripped to ``Kerberos`` -- a DIFFERENT key,
+                             under stage ``Authentication``
+    ``Security::NTLM``       same, wrong entry
+    ``Security::SAML``       same, wrong entry
+    ``Security::TLS``        stripped to a name that does not exist
+    ``Security::OAuth``      same, misses
+    ``Security::OpenID       same, misses
+    Connect``
+    ======================== ============================================
+
+    Since ``threat.surface`` became stage-scoped, every authored surface value
+    is prefixed, so this is on the hot path for an entire corpus: it was right
+    for the other 889 keys and wrong for these six.
+    """
+    index_key = vocab.split("::", 1)[0]
+    vocabulary = VOCAB_INDEX.get(index_key)
+    if vocabulary is not None and identifier in vocabulary.entries:
+        return identifier
+    return strip_vocab_stage_prefix(vocab, identifier)
+
+
 def get_vocab_entry(vocab, identifier, field=None, newlines=False):
     """
     Returns data for a particular entry of a voacbulary.
@@ -189,7 +224,7 @@ def get_vocab_entry(vocab, identifier, field=None, newlines=False):
     """
     if vocab not in VOCAB_INDEX:
         return ""
-    identifier = strip_vocab_stage_prefix(vocab, identifier)
+    identifier = resolve_vocab_identifier(vocab, identifier)
     vocabulary = VOCAB_INDEX[vocab]
     if identifier in vocabulary.entries:
         entry = vocabulary.entries[identifier]

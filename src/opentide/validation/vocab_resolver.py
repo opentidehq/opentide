@@ -273,13 +273,17 @@ class RuntimeEnumResolver:
         scoped: bool = False,
         no_wrap: bool = False,
     ) -> bool:
-        from opentide.generation.framework import strip_vocab_stage_prefix
+        from opentide.generation.framework import resolve_vocab_identifier
 
         allowed = self.enum_values(vocab, stages=stages, scoped=scoped, no_wrap=no_wrap)
         if value in allowed:
             return True
-        stripped = strip_vocab_stage_prefix(vocab, value)
-        return stripped in allowed or value in allowed
+        # Same rule as the generation path, through the shared helper, so
+        # `validate` and `generate` cannot reach different verdicts about one
+        # value. Previously this guarded raw-first and `get_vocab_entry()` did
+        # not, so a repository could be green on `validate` while generation
+        # silently resolved the wrong vocabulary entry.
+        return resolve_vocab_identifier(vocab, value) in allowed
 
     def suggest(
         self,
