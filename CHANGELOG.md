@@ -6,6 +6,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-10-13
+
+Minor on 0.13.0. Two things need action after upgrading. `objective.signals[].entities` values are now stage-scoped (`Hostname` → `Host::Hostname`), and `opentide migrate vocab-scope` re-prefixes them for you. `response.responders` is no longer a vocabulary, so a value that could not validate under 0.13.0 now does. Documentation and export generation are dramatically faster — a corpus that previously exceeded a one-hour CI timeout now completes.
+
+### Breaking
+
+- `objective.signals[].entities` entries are stage-scoped: an authored value is `<stage>::<key>`. Seven of the 28 entity keys are defined under two stages (`Account`, `User`, `Authentication`, `Token`, `Permissions`, `Email` and `API Call`), so a bare key name could not say whether a signal keyed on a **host** account or a **cloud** account — different telemetry, a different data contract, often a different platform. The enum carried 28 values where the vocabulary defines 35, and now carries all 35. Stage identifiers are capitalised to `Host`, `Network` and `Cloud`, matching the convention `threat.surface` already uses. Vocabulary entry keys are unchanged — the prefix is applied at resolve time — so the `signal.entities::1.0` pin is unaffected. Migrate with `opentide migrate vocab-scope --apply`, then `opentide generate schemas templates vocabs snippets` ([#509](https://github.com/OpenTideHQ/opentide/issues/509), [RFC 0005](https://github.com/OpenTideHQ/specifications/blob/main/rfcs/0005-scoped-signal-entities.md)).
+- `response.responders` is no longer bound to a vocabulary. The shipped `responders` vocabulary had `keys = []` while both rule revisions pinned the field to it, so every authored value failed validation and no instance could clear it — vocabularies are not locally extensible. One corpus reported 483 unclearable findings from two values. The field is now free text defaulted from `[deployment] default_responders`, a key that shipped in the configuration template and in the spec but **was read by no code**, so the documented fallback never happened. The `responders` vocabulary file is removed ([#507](https://github.com/OpenTideHQ/opentide/issues/507)).
+
+### Added
+
+- `opentide migrate vocab-scope` re-prefixes authored values for every stage-scoped field. It applies only mechanical outcomes — a key defined under exactly one stage, and a stage whose casing drifted — and reports a key defined under several stages with its candidates rather than guessing, exiting 2 while anything is left for a human. Values are located by path through the document rather than by leaf key name, so a Sentinel platform block that also carries a key called `entities` is never touched, and each value is replaced over the exact span its scalar occupies, so comments, block scalars, quoting style and flow sequences survive.
+
+### Fixed
+
+- Documentation and export generation no longer rescan the whole catalogue for every object. `childs()` walked every model on every call while all of its callers are per-object — the table exporter per row, the documentation catalogue per signal, and `relations_downstream()` recursively at every level — so cost grew with the square of the corpus. It is now a reverse index built once per catalogue generation: **68× faster** on a 1497-object corpus. This is the root cause behind both a `generate docs` phase that exceeded a one-hour CI job timeout and a `generate exports` phase measured at 395s ([#510](https://github.com/OpenTideHQ/opentide/issues/510)).
+- `childs()` matched a model id against reference values with a substring test, so a short non-UUID id matched a longer one that merely contained it — `o-1` matched a signal referencing `o-186`, returning 113 spurious children. Relations are now compared by equality. UUID-shaped ids could not trigger this; any other id scheme could.
+- `validate` and `generate` no longer disagree on the same vocabulary value. `get_vocab_entry()` stripped the stage prefix unconditionally before lookup while `is_valid()` checked the raw value first, so the two paths could resolve one value differently. Both now go through one helper that tries the raw value first. Three `Security::*` surface keys resolved to a different entry under the stripping path and three more missed entirely; those keys are reachable now ([#508](https://github.com/OpenTideHQ/opentide/issues/508)).
+- `check_status` resolved a deployment status by its configured *name* rather than by the strategy it maps to, so a renamed status silently took the wrong branch. It now resolves the strategy, and raises typed errors instead of a bare `Exception` ([#506](https://github.com/OpenTideHQ/opentide/issues/506)).
+- The test suite no longer operates on the repository under test. Git tests ran `git` with `cwd=` set to a temporary repository but inherited the environment, and `GIT_DIR` overrides `cwd` — so when `git push` exported `GIT_DIR` to its hooks and a hook ran the suite, the fixtures committed and checked out branches **in the real repository**, producing a commit that deleted 890 files. The environment is now sanitised for every test, with a collection-time guard so the hazard cannot return silently ([#513](https://github.com/OpenTideHQ/opentide/issues/513)).
+
+### Install
+
+```bash
+pip install opentide==0.14.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide migrate vocab-scope --apply
+opentide generate schemas templates vocabs snippets
+opentide validate --strict
+```
+
 ## [0.13.0] — 2026-10-12
 
 Minor on 0.12.1. `threat.surface` values are now stage-scoped (`Windows::Desktop` → `OS::Windows::Desktop`), platform configuration blocks require `status`, `opentide --json validate` emits one document shape and drops its legacy `errors` map, and the local `[vocabulary]` extension block is removed. Re-run `opentide setup ci` — generated pipelines deployed to the staging tenant and pushed to your default branch from any pull request. Regenerate with `opentide generate schemas templates vocabs snippets`.

@@ -7,6 +7,34 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.14.0 — 13 October 2026
+
+Minor on 0.13.0. `objective.signals[].entities` values are stage-scoped, `response.responders` is no longer a vocabulary, and documentation and export generation no longer rescan the catalogue for every object — a corpus that exceeded a one-hour CI job timeout now completes.
+
+**Install**
+
+```bash
+pip install opentide==0.14.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide migrate vocab-scope --apply
+opentide generate schemas templates vocabs snippets
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- `objective.signals[].entities` entries take their stage prefix: `Hostname` becomes `Host::Hostname`. Seven of the 28 keys are defined under two stages — `Account`, `User`, `Authentication`, `Token`, `Permissions`, `Email` and `API Call` — so a bare name could not tell a **host** account from a **cloud** account, and seven values were unreachable. Stage ids are capitalised (`Host`, `Network`, `Cloud`) to match `threat.surface`. Vocabulary entry keys are unchanged.
+- `opentide migrate vocab-scope --apply` does the re-prefixing, for `threat.surface` as well. It applies only what the vocabulary implies and reports anything ambiguous instead of guessing, exiting 2 while a value still needs a human.
+- `response.responders` accepts any string and defaults from `[deployment] default_responders`. If you emptied the field to get past validation on 0.13.0, you can put the team back.
+- `validate` and `generate` now resolve a vocabulary value the same way, so a green `validate` no longer hides degraded documentation.
+- A deployment status resolves by the strategy it maps to rather than by its configured name, so renaming a status no longer changes behaviour.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.14.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.13.0 — 12 October 2026
 
 Minor on 0.12.1. `threat.surface` values are now stage-scoped, platform configuration blocks require `status`, `opentide --json validate` emits one document shape, and the local `[vocabulary]` extension block is removed. Re-run `opentide setup ci`: generated pipelines deployed to the staging tenant and pushed to your default branch from any pull request.
