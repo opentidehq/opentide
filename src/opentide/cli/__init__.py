@@ -144,7 +144,21 @@ class GeneratePhaseGroup(TyperGroup):
 
 generate_app = typer.Typer(
     cls=GeneratePhaseGroup,
-    help="Framework generation and documentation pipeline",
+    # Typer renders THIS string for `generate --help`, not the callback
+    # docstring, so the positional phases have to be named here or they are
+    # undiscoverable. Knowing they exist is what lets an instance regenerate
+    # schemas without paying for the documentation phase.
+    #
+    # No square brackets: Rich parses them as console markup and silently
+    # renders the contents as nothing.
+    help=(
+        "Framework generation and documentation pipeline.\n\n"
+        "Run with no argument for the full pipeline, or name one or more "
+        "phases to run only those, in the order given: "
+        "schemas, templates, vocabs, snippets.\n\n"
+        "Regenerate editor schemas without paying for documentation: "
+        "`opentide generate schemas templates vocabs snippets`."
+    ),
 )
 app.add_typer(generate_app, name="generate")
 
@@ -177,9 +191,10 @@ def generate_all(ctx: typer.Context) -> None:
     unknown = [name for name in phases if name not in _NAMED_GENERATE_PHASES]
     if unknown:
         names = ", ".join(unknown)
+        known = ", ".join(sorted(_NAMED_GENERATE_PHASES))
         emit_error(
             cli,
-            f"Unknown generation phase {names}. Pass schemas, templates, vocabs, or snippets.",
+            f"Unknown generation phase {names}. Pass one or more of: {known}.",
         )
     emit_success(cli, run_generate(cli, phases=phases))
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -182,9 +183,35 @@ def run_generate_docs(
 
 
 def run_generate_all() -> None:
-    """Run the full generation pipeline."""
+    """Run the full generation pipeline, reporting what each phase costs.
+
+    A run that overruns a CI job timeout is otherwise undiagnosable: the
+    output carries no phase boundary and no timing, so there is no way to
+    tell from a killed job whether it was 10% or 90% through, or which
+    phase consumed the budget.
+    """
+    elapsed: dict[str, float] = {}
+    started = time.monotonic()
     for phase in _PHASE_ORDER:
-        run_generate_phase(phase)
+        phase_started = time.monotonic()
+        try:
+            run_generate_phase(phase)
+        finally:
+            # Timed in `finally` so a phase that raises still reports its
+            # cost -- that reading is exactly what a killed job needs.
+            elapsed[phase] = time.monotonic() - phase_started
+            logger.info(
+                "generation_phase_complete",
+                phase=phase,
+                seconds=round(elapsed[phase], 1),
+            )
+    total = time.monotonic() - started
+    logger.info(
+        "generation_complete",
+        seconds=round(total, 1),
+        phases={name: round(value, 1) for name, value in elapsed.items()},
+        slowest=max(elapsed, key=lambda name: elapsed[name]) if elapsed else None,
+    )
 
 
 def run_generate(
