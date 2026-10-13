@@ -207,7 +207,7 @@ def test_shipped_template_declares_no_responders() -> None:
     assert config.get("default_responders") == ""
 
 
-def test_template_survives_a_user_declaring_responders() -> None:
+def test_template_survives_a_user_declaring_responders(tmp_path: Any) -> None:
     """`default_responders` must still apply after teams are declared.
 
     The hazard is TOML's, not the reader's: a root-level key written below an
@@ -217,17 +217,19 @@ def test_template_survives_a_user_declaring_responders() -> None:
     so only a parse catches it.
 
     This appends the block the template tells a user to uncomment, then
-    checks the root key survived.
+    checks the root key survived. Parsed through the project's own loader,
+    which carries the `tomli` fallback for the 3.10 floor.
     """
-    import tomllib
-
+    from opentide.core.io import load_toml
     from opentide.core.root import get_data_root
 
     text = (get_data_root() / "configurations" / "deployment.toml").read_text(encoding="utf-8")
     declared = text.replace('default_responders = ""', 'default_responders = "CSIRC"', 1) + (
         '\n[[responders]]\nname = "CSIRC"\ndescription = "First line"\n'
     )
-    config = tomllib.loads(declared)
+    probe = tmp_path / "deployment.toml"
+    probe.write_text(declared, encoding="utf-8")
+    config = load_toml(probe)
 
     assert config.get("default_responders") == "CSIRC", (
         "default_responders was folded into a table; every root-level key must "
