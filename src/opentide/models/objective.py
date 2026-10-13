@@ -43,7 +43,13 @@ class DetectionSignal(TideModel):
     severity: str = VocabField("alert_severity")
     data: SignalData
     methodology: str = VocabField(True)
-    entities: list[str] = VocabField(True)
+    # `signal.entities` keys are grouped by stage and the SAME key name
+    # legitimately appears under two stages (Account, User, Email, Token,
+    # Authentication, Permissions and API Call are each both Host and Cloud,
+    # or Network and one of them). Without `scoped` those collapse to one bare
+    # key and `_emit` drops the duplicate, so seven values were unreachable and
+    # a host account could not be told apart from a cloud account.
+    entities: list[str] = VocabField(True, scoped=True)
     effort: int | None = None
     detectors: list[ExternalDetector] | None = None
     examples: list[DetectionExample] | None = None

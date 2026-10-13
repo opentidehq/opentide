@@ -128,7 +128,7 @@ objective:
       description: Suspicious authentication activity
       severity: Medium
       methodology: Statistical
-      entities: [Hostname]
+      entities: [Host::Hostname]
       data:
         availability: Complete
         requirements: Security event logs

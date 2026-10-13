@@ -19,7 +19,7 @@ threat:
   viability: Medium
   terrain: Cloud identity and Azure account inventory telemetry.
   surface:
-    - Azure
+    - Cloud::Azure
   actors:
     - name: att&ck::G1028
   killchain:

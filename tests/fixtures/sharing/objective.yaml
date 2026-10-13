@@ -28,7 +28,7 @@ objective:
       severity: Medium
       methodology: analytics
       entities:
-        - host
+        - Host::Hostname
       data:
         availability: Complete
         requirements: Security event logs

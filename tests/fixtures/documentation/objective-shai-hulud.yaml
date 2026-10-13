@@ -30,8 +30,8 @@ objective:
       effort: 3
       methodology: Behavioural
       entities:
-        - Account
-        - Hostname
+        - Cloud::Account
+        - Host::Hostname
       data:
         availability: Complete
         requirements: Cloud activity and identity logs
