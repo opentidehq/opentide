@@ -395,14 +395,12 @@ def test_scoped_fields_cover_every_scoped_model_field() -> None:
 
 def test_scoped_fields_match_the_pins() -> None:
     """Each declared path must be the pin key the engine validates against."""
-    import tomllib
-
+    from opentide.core.io import load_toml
     from opentide.core.root import get_data_root
 
     pins: dict[str, str] = {}
     for name in ("threat", "objective", "rule"):
-        raw = tomllib.loads((get_data_root() / "pins" / f"{name}.toml").read_text(encoding="utf-8"))
-        for contract in raw.values():
+        for contract in load_toml(get_data_root() / "pins" / f"{name}.toml").values():
             pins.update(contract)
 
     for field_name, spec in SCOPED_FIELDS.items():
