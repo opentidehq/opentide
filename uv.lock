@@ -1256,6 +1256,7 @@ name = "opentide"
 source = { editable = "." }
 dependencies = [
     { name = "dulwich" },
+    { name = "mcp" },
     { name = "orjson" },
     { name = "pydantic" },
     { name = "pymisp" },
@@ -1276,7 +1277,6 @@ carbon-black = [
     { name = "carbon-black-cloud-sdk" },
 ]
 dev = [
-    { name = "mcp" },
     { name = "openpyxl" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1291,7 +1291,6 @@ dev = [
     { name = "ty" },
 ]
 mcp = [
-    { name = "mcp" },
 ]
 sentinel = [
     { name = "azure-identity" },
@@ -1307,7 +1306,6 @@ splunk = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "mcp" },
     { name = "openpyxl" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1329,8 +1327,7 @@ requires-dist = [
     { name = "azure-monitor-query", marker = "extra == 'sentinel'", specifier = ">=1.4" },
     { name = "carbon-black-cloud-sdk", marker = "extra == 'carbon-black'", specifier = ">=1.0" },
     { name = "dulwich", specifier = ">=1.2.12" },
-    { name = "mcp", marker = "extra == 'dev'", specifier = ">=1.28.1,<2" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.28.1,<2" },
+    { name = "mcp", specifier = ">=1.28.1,<2" },
     { name = "openpyxl", marker = "extra == 'dev'", specifier = ">=3.1" },
     { name = "orjson", specifier = ">=3.9" },
     { name = "pandas", marker = "extra == 'dev'", specifier = ">=2.0" },
@@ -1362,7 +1359,6 @@ provides-extras = ["carbon-black", "cli", "crowdstrike", "dev", "mcp", "sentinel
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "mcp", specifier = ">=1.28.1,<2" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pandas", specifier = ">=2.0" },
     { name = "pexpect", specifier = ">=4.9" },
