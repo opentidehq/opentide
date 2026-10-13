@@ -57,26 +57,59 @@ def _platform_status(block: object, *, system: str, rule: str, uuid: str) -> str
 
 
 def check_status(status_name: str) -> StatusStrategy:
+    """Map a deployment status NAME to the strategy it carries.
+
+    ``[[statuses]]`` in ``deployment.toml`` pairs a lifecycle label (``DESIGN``,
+    ``PRODUCTION``) with a :class:`StatusStrategy` (``INERT``, ``RELEASE``).
+    This resolves the label to the strategy, which is what the deploy planner
+    filters on.
+    """
     statuses_definitions = OpenTide.Configurations.Deployment.statuses
     for status in statuses_definitions:
         if status.name == status_name:
-            if type(status.strategy) is str:
-                return StatusStrategy[status.name]
-            if type(status.strategy) is StatusStrategy:
+            if isinstance(status.strategy, StatusStrategy):
                 return status.strategy
+            if isinstance(status.strategy, str):
+                # Was `StatusStrategy[status.name]` -- the status NAME, not its
+                # strategy. No status name is a StatusStrategy member, so this
+                # could only ever raise KeyError, never return. It was
+                # unreachable because `DeploymentStatus.__post_init__` coerces
+                # the string to the enum at load time, so a status built
+                # outside that loader was the only way in.
+                try:
+                    return StatusStrategy[status.strategy]
+                except KeyError as exc:
+                    supported = ", ".join(member.name for member in StatusStrategy)
+                    logger.critical(
+                        "unknown_status_strategy",
+                        status=status_name,
+                        strategy=status.strategy,
+                        supported=supported,
+                    )
+                    raise ValueError(
+                        f"Status {status_name!r} declares an unknown strategy "
+                        f"{status.strategy!r}. Use one of: {supported}."
+                    ) from exc
             logger.critical(
                 "could_not_return_status_strategy",
                 detail=str(status),
                 strategy_type=str(type(status.strategy)),
             )
-            raise Exception
+            raise TypeError(
+                f"Status {status_name!r} has a strategy of unsupported type "
+                f"{type(status.strategy).__name__}; expected StatusStrategy or str."
+            )
 
+    available = ", ".join(status.name for status in statuses_definitions)
     logger.critical(
         "status_lookup_failed",
         detail=f"Requested status: {status_name}",
-        available=str(statuses_definitions),
+        available=available,
     )
-    raise Exception
+    raise KeyError(
+        f"Status {status_name!r} is not defined in deployment configuration. "
+        f"Available statuses: {available}."
+    )
 
 
 def _nested_rules_warning(nested: tuple[str, ...]) -> str:
