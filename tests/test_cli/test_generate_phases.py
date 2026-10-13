@@ -7,16 +7,25 @@ Neither was true before #510.
 
 from __future__ import annotations
 
+import re
+
 from typer.testing import CliRunner
 
 from opentide.cli import _NAMED_GENERATE_PHASES, app
 
 runner = CliRunner()
 
+# Rich emits SGR colour codes whenever it believes the sink supports them, and
+# CI's captured output does while a local non-TTY run does not. It also wraps
+# to the terminal width, so a multi-word phrase can be split across lines.
+# Assertions here are about CONTENT, so strip styling and collapse wrapping
+# before matching -- otherwise the test passes locally and fails on CI.
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
 
 def _flatten(text: str) -> str:
-    """Join Rich's wrapped help output so assertions are not line-sensitive."""
-    return " ".join(text.split())
+    """Return *text* with ANSI styling removed and whitespace collapsed."""
+    return " ".join(_ANSI.sub("", text).split())
 
 
 def test_help_names_every_positional_phase() -> None:
