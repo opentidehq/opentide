@@ -9,7 +9,7 @@ The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin 
 
 ## 0.14.0 — 13 October 2026
 
-Minor on 0.13.0. `objective.signals[].entities` values are stage-scoped, `response.responders` is no longer a vocabulary, and documentation and export generation no longer rescan the catalogue for every object — a corpus that exceeded a one-hour CI job timeout now completes.
+Minor on 0.13.0. `objective.signals[].entities` values are stage-scoped, `response.responders` is a configuration enum, and documentation and export generation no longer rescan the catalogue for every object — a corpus that exceeded a one-hour CI job timeout now completes.
 
 **Install**
 
@@ -25,7 +25,7 @@ opentide validate --strict
 
 - `objective.signals[].entities` entries take their stage prefix: `Hostname` becomes `Host::Hostname`. Seven of the 28 keys are defined under two stages — `Account`, `User`, `Authentication`, `Token`, `Permissions`, `Email` and `API Call` — so a bare name could not tell a **host** account from a **cloud** account, and seven values were unreachable. Stage ids are capitalised (`Host`, `Network`, `Cloud`) to match `threat.surface`. Vocabulary entry keys are unchanged.
 - `opentide migrate vocab-scope --apply` does the re-prefixing, for `threat.surface` as well. It applies only what the vocabulary implies and reports anything ambiguous instead of guessing, exiting 2 while a value still needs a human.
-- `response.responders` accepts any string and defaults from `[deployment] default_responders`. If you emptied the field to get past validation on 0.13.0, you can put the team back.
+- `response.responders` is a configuration enum: declare your teams in a `[[responders]]` block in `deployment.toml` and they appear in the editor, validated. Declaring none leaves the field unconstrained. `[deployment] default_responders` supplies the team for a rule that names none. If you emptied the field to get past validation on 0.13.0, you can put the team back.
 - `validate` and `generate` now resolve a vocabulary value the same way, so a green `validate` no longer hides degraded documentation.
 - A deployment status resolves by the strategy it maps to rather than by its configured name, so renaming a status no longer changes behaviour.
 

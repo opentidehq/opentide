@@ -464,6 +464,46 @@ _Vocabulary_ : `{source_vocab}`
             return enums, descriptions
 
     # ==================================================================
+    # Responders
+    # ==================================================================
+
+    class Responders:
+        """Resolve alert-handling teams from configuration.
+
+        A configuration enum, like :class:`Statuses`, rather than a
+        vocabulary: the teams are per-organisation and declared in
+        ``deployment.toml``.
+
+        An instance that declares none gets **no enum**, leaving the field
+        unconstrained. That is the whole point: a validated field bound to
+        an empty list is unclearable by any instance, which is what made
+        the old `responders` vocabulary a blocker (#507).
+        """
+
+        def resolve(self) -> tuple[list[str], list[str]]:
+            _ensure_runtime_context()
+            try:
+                configured = OpenTide.Configurations.Deployment.responders or []
+            except (KeyError, AttributeError):
+                # No deployment block at all is legitimate; documentation
+                # generation must not require one.
+                return [], []
+            enums: list[str] = []
+            descriptions: list[str] = []
+            for responder in configured:
+                name = getattr(responder, "name", None) or (
+                    responder.get("name") if isinstance(responder, dict) else None
+                )
+                if not name:
+                    continue
+                description = getattr(responder, "description", "") or (
+                    responder.get("description", "") if isinstance(responder, dict) else ""
+                )
+                enums.append(str(name))
+                descriptions.append(str(description))
+            return enums, descriptions
+
+    # ==================================================================
     # Parameters
     # ==================================================================
 
@@ -794,6 +834,25 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
                         dictionary[field]["items"]["enum"] = values_list
                         dictionary[field]["items"]["uniqueItems"] = True
                         dictionary[field]["markdownEnumDescriptions"] = descriptions_list
+
+                # Alert-handling teams, a configuration enum like statuses.
+                # No configured teams means no `enum` is written at all, so
+                # the field stays unconstrained rather than unsatisfiable.
+                #
+                # Applied through `_apply_vocab_enum` because the field is
+                # `str | None` and so renders as `anyOf`, with no top-level
+                # `type` to branch on; a parent-level `enum` would also
+                # reject the null branch.
+                if dict_foo[field].get("tide.config.responders"):
+                    values_list, descriptions_list = VocabularyResolver.Responders().resolve()
+                    if values_list:
+                        _apply_vocab_enum(
+                            dictionary[field],
+                            {
+                                "enum": values_list,
+                                "markdownEnumDescriptions": descriptions_list,
+                            },
+                        )
 
                 # Handles vocabularies
                 if vocab := dict_foo[field].get("tide.vocab"):

@@ -34,6 +34,10 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 
 <Callout type="warn">
 Do not put vocabulary files here, and do not try to extend a vocabulary locally. Vocabularies are canonical in the [specifications](/docs/specifications/specs/vocabularies/format/) and are **not** locally extensible: a missing entry is added upstream, never injected from your repository. The CoreTIDE-era `[vocabulary]` block in `schema.toml` was removed in 0.13.0 — if you carried one, it was silently ignored by validation and is now simply dropped.
+
+`threat.surface` is covered by that rule like every other vocabulary. Earlier releases harvested an extra surface value from a `visibility.toml` asset that named a technology, so an instance could effectively invent one; that no longer happens, and it was never a supported mechanism. A technology the catalogue does not yet name is [proposed upstream](https://github.com/OpenTideHQ/specifications) — which is what makes a surface value mean the same thing in every OpenTide instance. Where a local system needs naming, the asset itself is the place for it.
+
+Two fields are deliberately **not** vocabularies, because their values are per-organisation rather than shared: `response.responders` (your alert handling teams) and `configurations.<platform>.status` (your deployment statuses). Both are *configuration enums* — you declare the allowed values in `deployment.toml`, the generated schema offers them in your editor, and `validate` holds authored objects to them. Declaring none leaves the field unconstrained.
 </Callout>
 
 ## Enabling a platform

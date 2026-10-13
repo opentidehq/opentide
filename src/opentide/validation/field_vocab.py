@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, cast
 
 from opentide.generation.pydantic_metaschema import _deref_schema_node, _schema_branch_nodes
@@ -9,6 +10,17 @@ from opentide.validation.deprecated_fields import resolve_metaschema
 from opentide.validation.errors import _leaf_field_name
 from opentide.validation.issues import ValidationIssue
 from opentide.validation.preflight import PreflightGraph
+
+
+def _configured_responders() -> list[str]:
+    """Read the configured alert-handling teams.
+
+    Imported lazily: `opentide.core.responders` reaches the registry, which
+    is not built at module import time.
+    """
+    from opentide.core.responders import configured_responders
+
+    return configured_responders()
 
 
 def walk_vocab_fields(
@@ -43,6 +55,17 @@ def walk_vocab_fields(
                     value,
                     vocab_schema,
                     graph,
+                    field_path=field_path,
+                    object_uuid=object_uuid,
+                    object_type=object_type,
+                )
+            )
+        config_schema = field_schema if _config_enum_keyword(field_schema) else resolved
+        if _config_enum_keyword(config_schema):
+            issues.extend(
+                _validate_config_enum_value(
+                    value,
+                    config_schema,
                     field_path=field_path,
                     object_uuid=object_uuid,
                     object_type=object_type,
@@ -93,6 +116,94 @@ def walk_vocab_fields(
                                 object_type=object_type,
                             )
                         )
+    return issues
+
+
+#: Metaschema keywords marking a field whose allowed values come from the
+#: instance's own configuration rather than from a canonical vocabulary,
+#: mapped to the ONE function that reads them.
+#:
+#: Validation walks the *un-enriched* metaschema, which carries the keyword
+#: but no `enum` -- the enum is written later, during schema generation. So
+#: the allowed set cannot be read off the node here. Both paths therefore
+#: call the same resolver rather than each deriving the answer: `validate`
+#: through this table, and the generation pipeline through
+#: `VocabularyResolver.Responders`. One function, two call sites, no second
+#: implementation to drift (the failure class #508 was about).
+CONFIG_ENUM_RESOLVERS: dict[str, Callable[[], list[str]]] = {
+    "tide.config.responders": _configured_responders,
+}
+
+CONFIG_ENUM_KEYWORDS: tuple[str, ...] = tuple(CONFIG_ENUM_RESOLVERS)
+
+
+def _config_enum_keyword(field_schema: dict[str, Any]) -> str | None:
+    """Return the configuration-enum keyword on *field_schema*, if any."""
+    for keyword in CONFIG_ENUM_KEYWORDS:
+        if field_schema.get(keyword):
+            return keyword
+    return None
+
+
+def _config_enum_allowed(keyword: str, field_schema: dict[str, Any]) -> list[str]:
+    """Return the allowed values for a configuration-enum field.
+
+    Prefers an `enum` already present on the node, so a caller handing in an
+    enriched schema is validated against exactly what that schema advertises;
+    otherwise resolves from configuration.
+    """
+    for candidate in (field_schema, field_schema.get("items")):
+        if isinstance(candidate, dict):
+            allowed = candidate.get("enum")
+            if isinstance(allowed, list) and allowed:
+                return [str(value) for value in allowed]
+    resolver = CONFIG_ENUM_RESOLVERS.get(keyword)
+    return list(resolver()) if resolver else []
+
+
+def _validate_config_enum_value(
+    value: Any,
+    field_schema: dict[str, Any],
+    *,
+    field_path: tuple[str, ...],
+    object_uuid: str,
+    object_type: str,
+) -> list[ValidationIssue]:
+    """Validate a configuration-enum field against the configured values.
+
+    An instance that has declared nothing leaves the field unconstrained,
+    which is how a shipped template avoids carrying a constraint nobody can
+    satisfy (#507).
+    """
+    if value is None:
+        return []
+    keyword = _config_enum_keyword(field_schema)
+    if keyword is None:
+        return []
+    allowed = _config_enum_allowed(keyword, field_schema)
+    if not allowed:
+        return []
+
+    setting = keyword.rsplit(".", 1)[-1]
+    issues: list[ValidationIssue] = []
+    for item in value if isinstance(value, list) else [value]:
+        if not isinstance(item, str) or item in allowed:
+            continue
+        issues.append(
+            ValidationIssue(
+                code="config_enum_unknown",
+                severity="error",
+                object_uuid=object_uuid,
+                object_type=object_type,
+                field_path=field_path,
+                message=(
+                    f"Value {item!r} is not a configured {setting} value. "
+                    f"Declare it in the [[{setting}]] block of your deployment "
+                    f"configuration, or use one of: {', '.join(allowed)}"
+                ),
+                context={"setting": setting, "value": item, "allowed": allowed},
+            )
+        )
     return issues
 
 

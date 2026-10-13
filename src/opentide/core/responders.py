@@ -1,9 +1,14 @@
 """Resolution of a rule's alert-handling team (``response.responders``).
 
-``responders`` names the team that handles alerts raised by a rule. It is
-per-organisation configuration rather than a canonical vocabulary, so it is
-free text with a repository-wide fallback from
-``[deployment] default_responders``.
+``responders`` names the team that handles alerts raised by a rule. It is a
+**configuration enum**, not a canonical vocabulary: the teams are
+per-organisation, so an instance declares them in ``[[responders]]`` under
+``deployment.toml`` and an authored value must be one of them. A repository
+that declares none leaves the field unconstrained, which is what keeps a
+shipped template from carrying a constraint no instance can satisfy.
+
+``[deployment] default_responders`` supplies the team for a rule that names
+none, and must itself be one of the configured names.
 
 This lives in ``core`` because both the deployment path (platform deployers
 writing an ownership field) and the documentation path (rendering the response
@@ -14,7 +19,29 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["default_responders", "resolve_responders"]
+__all__ = ["configured_responders", "default_responders", "resolve_responders"]
+
+
+def configured_responders() -> list[str]:
+    """Return the team names declared in ``[[responders]]``.
+
+    An empty list means the instance has declared none, and therefore that
+    ``response.responders`` is unconstrained.
+    """
+    from opentide.core.registry import OpenTide
+
+    try:
+        configured = OpenTide.Configurations.Deployment.responders or []
+    except (KeyError, AttributeError):
+        return []
+    names: list[str] = []
+    for responder in configured:
+        name = getattr(responder, "name", None) or (
+            responder.get("name") if isinstance(responder, dict) else None
+        )
+        if name:
+            names.append(str(name))
+    return names
 
 
 def default_responders() -> str:

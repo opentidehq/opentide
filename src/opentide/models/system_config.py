@@ -22,6 +22,20 @@ class DeploymentStatus:
 
 
 @dataclass
+class DeploymentResponder:
+    """One alert-handling team this instance operates.
+
+    A configuration enum entry, not a vocabulary entry: the teams are
+    per-organisation, so they are declared in ``deployment.toml`` rather
+    than upstream. An empty list leaves ``response.responders``
+    unconstrained -- see the note in that file.
+    """
+
+    name: str
+    description: str = ""
+
+
+@dataclass
 class SystemConfig:
     @dataclass
     class Platform:
@@ -77,6 +91,8 @@ class ConfigurationModels:
     class Deployment:
         Status = DeploymentStatus
         statuses = Sequence[DeploymentStatus]
+        Responder = DeploymentResponder
+        responders = Sequence[DeploymentResponder]
 
     @dataclass
     class Systems:

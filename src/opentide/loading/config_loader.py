@@ -21,6 +21,28 @@ class ConfigurationsLoader:
         return [Status(**status_configuration) for status_configuration in statuses_configuration]
 
     @staticmethod
+    def load_responders(
+        responders_configuration: list[dict] | None,
+    ) -> Sequence[ConfigurationModels.Deployment.Responder]:
+        """Convert responder configuration dicts into typed Responder objects.
+
+        Tolerates a malformed entry by skipping it rather than failing the
+        load: an unparseable team leaves the enum shorter, whereas raising
+        here would take down documentation generation for the whole
+        repository.
+        """
+        Responder = ConfigurationModels.Deployment.Responder
+        loaded: list[ConfigurationModels.Deployment.Responder] = []
+        for entry in responders_configuration or []:
+            if not isinstance(entry, dict) or not entry.get("name"):
+                logger.warning("skipping_responder_without_name", detail=str(entry)[:120])
+                continue
+            loaded.append(
+                Responder(name=str(entry["name"]), description=str(entry.get("description", "")))
+            )
+        return loaded
+
+    @staticmethod
     def load_visibility(config: dict) -> VisibilityConfig | None:
         """Load visibility configuration into a Pydantic ``VisibilityConfig``."""
         if not config:

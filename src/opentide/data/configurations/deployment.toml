@@ -1,3 +1,9 @@
+# Team used when a rule does not name one. Must be a name declared in the
+# [[responders]] block at the END of this file.
+#
+# This key MUST stay above every [[...]] block: in TOML a root-level key
+# written after an array-of-tables belongs to that table, not to the
+# document, so moving it below [[responders]] silently stops it applying.
 default_responders = ""
 
 # New-style statuses mapped from Framework Vocabulary `MDR Status`
@@ -50,3 +56,27 @@ promotion_target = "PRODUCTION"
 mdr_test_uuids = [""] #UUID of MDRs that can be used for Debugging purposes
 
 ssl_enabled = true #Global flag to enable or disable TLS verification when running in debug mode
+# ---------------------------------------------------------------------------
+# Alert handling teams
+# ---------------------------------------------------------------------------
+# `response.responders` is a CONFIGURATION ENUM, not a vocabulary: the teams
+# are per-organisation, so they are declared here rather than upstream. An
+# authored value must be one of the names below, and the generated schema
+# offers them in the editor with these descriptions.
+#
+# Declaring NONE leaves the field unconstrained. That is deliberate: a shipped
+# list with no entries bound to a validated field is what made the old
+# `responders` vocabulary unclearable by any instance (#507), so a template
+# must never ship a constraint nobody can satisfy. Uncomment and edit the
+# entries below to turn the constraint on.
+#
+# This block is LAST on purpose. Every root-level key must appear above it --
+# in TOML a key written after an array-of-tables belongs to that table.
+#
+# [[responders]]
+# name = "CSIRC"
+# description = "Computer Security Incident Response Capability — first line triage"
+#
+# [[responders]]
+# name = "CATCH"
+# description = "Cyber Threat Analysis and Hunting — escalation and deep analysis"

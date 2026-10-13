@@ -311,6 +311,22 @@ class _DeploymentConfig:
         return dict(self.Index.get("debug", {}))
 
     @property
+    def responders(self) -> list[Any]:
+        """Alert-handling teams declared by ``[[responders]]``.
+
+        A configuration enum, loaded the same way as ``statuses``. An empty
+        list means the instance declared none, which leaves
+        ``response.responders`` unconstrained -- a shipped list with no
+        entries bound to a validated field is unsatisfiable by any instance
+        (#507).
+        """
+        from opentide.loading.config_loader import ConfigurationsLoader
+
+        return cast(
+            list[Any], ConfigurationsLoader.load_responders(self.Index.get("responders", []))
+        )
+
+    @property
     def default_responders(self) -> str:
         """Repository-wide fallback alert-handling team.
 
