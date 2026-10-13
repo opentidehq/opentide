@@ -284,6 +284,115 @@ def parents(id: str) -> list:
     return parents
 
 
+_CHILD_RELATION_MAPPINGS: Mapping[str, Mapping[str, Any]] = {
+    "threat": {
+        "child_types": ["objective"],
+        "data_sections": ["detection", "objective"],
+        "references": ["vectors", "threats"],
+    },
+    "objective": {
+        "child_types": ["signal", "rule"],
+        "references": ["detection_model", "parent"],
+    },
+    "signal": {"child_types": ["rule"], "references": ["detection_model"]},
+}
+
+# Reverse relation index, rebuilt whenever the models index object changes.
+#
+# `childs()` used to scan every object of each child type on EVERY call. That
+# made it O(objects) per call, and its callers are per-object -- `TableExporter`
+# builds one row per object, `DocumentationCatalog.rules_for_signal` runs per
+# signal, and `relations_downstream()` recurses, calling it again at each level.
+# The result was O(N^2) over a corpus: ~0.3s per object on 1276 objects, which
+# is the dominant cost of both the `exports` and `docs` phases.
+#
+# The index inverts that: one pass over the catalogue yields
+# parent_uuid -> [child_uuid, ...], after which a lookup is O(1).
+#
+# `_source` holds a REFERENCE to the mapping the index was built from, not its
+# id(). Comparing with `is` against a live reference is what makes staleness
+# detectable -- an id() could be recycled by a new object at the same address.
+_RELATION_INDEX: dict[str, Any] = {"_source": None, "childs": {}}
+
+
+def _models_snapshot() -> Mapping[str, Any]:
+    """Return the mapping ``MODELS_INDEX`` currently resolves to.
+
+    Normally a :class:`_LazyMapping` view over the registry, whose ``_data()``
+    returns the live index object. Callers and tests also substitute a plain
+    dict for ``MODELS_INDEX``, which has no ``_data`` -- that object is then its
+    own snapshot. Both forms give an object whose identity changes when the
+    catalogue is replaced, which is what the relation index keys on.
+    """
+    resolve = getattr(MODELS_INDEX, "_data", None)
+    return resolve() if callable(resolve) else MODELS_INDEX
+
+
+def _child_relation_index() -> dict[str, dict[str, list[str]]]:
+    """Return ``parent_type -> parent_uuid -> [child_uuid, ...]``.
+
+    Built by replaying the same traversal ``childs()`` performed inline, in the
+    same order, so a parent's child list is identical to the pre-index result
+    including any repeated child.
+
+    Keyed by PARENT TYPE, not flat by uuid. ``detection_model`` is a reference
+    under both the ``objective`` and the ``signal`` mapping, so a rule naming a
+    signal would be collected twice by a flat index, where the original --
+    which selected exactly one mapping from the parent's own type -- collected
+    it once.
+    """
+    current = _models_snapshot()
+    if _RELATION_INDEX["_source"] is current:
+        return _RELATION_INDEX["childs"]
+
+    index: dict[str, dict[str, list[str]]] = {}
+    for parent_type, mapping in _CHILD_RELATION_MAPPINGS.items():
+        per_type: dict[str, list[str]] = {}
+        child_types = mapping["child_types"]
+        child_types = [child_types] if type(child_types) is str else child_types
+        data_sections = mapping.get("data_sections", None)
+        references = mapping["references"]
+        for child_type in child_types:
+            childs_index = current.get(child_type, {}) or {}
+            for child in childs_index:
+                body = childs_index[child]
+                if data_sections:
+                    for section in data_sections:
+                        for reference in references:
+                            for parent in _referenced_uuids(
+                                body.get(section, {}).get(reference, [])
+                            ):
+                                per_type.setdefault(parent, []).append(child)
+                else:
+                    for reference in references:
+                        for parent in _referenced_uuids(body.get(reference, [])):
+                            per_type.setdefault(parent, []).append(child)
+        index[parent_type] = per_type
+
+    _RELATION_INDEX["_source"] = current
+    _RELATION_INDEX["childs"] = index
+    return index
+
+
+def _referenced_uuids(value: Any) -> list[str]:
+    """Normalise a reference field to the list of UUIDs it names.
+
+    A reference is usually a list, but ``parent`` / ``detection_model`` may be a
+    bare string. The pre-index code tested ``model_id in value``, which on a
+    string was a SUBSTRING test; treating it as a single-element list makes that
+    an equality test instead. For the UUIDs these fields hold the two agree --
+    one valid UUID cannot be a strict substring of another, since they are the
+    same length -- and equality is the intended meaning.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple, set)):
+        return [item for item in value if isinstance(item, str)]
+    return []
+
+
 def childs(model_id: str) -> list:
     """
     Returns the list of direct descendants for any given OpenTide Object,
@@ -292,39 +401,11 @@ def childs(model_id: str) -> list:
     If the object can not have descendants, or in other word is a last-line
     Object (such as MDRs), will return an empty list
     """
-    implementations = []
-    mappings = {
-        "threat": {
-            "child_types": ["objective"],
-            "data_sections": ["detection", "objective"],
-            "references": ["vectors", "threats"],
-        },
-        "objective": {
-            "child_types": ["signal", "rule"],
-            "references": ["detection_model", "parent"],
-        },
-        "signal": {"child_types": ["rule"], "references": ["detection_model"]},
-    }
     model_type = get_type(model_id)
-    if model_type not in mappings:
+    if model_type not in _CHILD_RELATION_MAPPINGS:
         return []
-    child_types = mappings[model_type]["child_types"]
-    child_types = [child_types] if type(child_types) is str else child_types
-    data_sections = mappings[model_type].get("data_sections", None)
-    references = mappings[model_type]["references"]
-    for child_type in child_types:
-        CHILDS_INDEX = MODELS_INDEX.get(child_type, {})
-        for child in CHILDS_INDEX:
-            if data_sections:
-                for section in data_sections:
-                    for reference in references:
-                        if model_id in CHILDS_INDEX[child].get(section, {}).get(reference, []):
-                            implementations.append(child)
-            else:
-                for reference in references:
-                    if model_id in CHILDS_INDEX[child].get(reference, []):
-                        implementations.append(child)
-    return implementations
+    # list() so a caller mutating the result cannot corrupt the shared index.
+    return list(_child_relation_index().get(model_type, {}).get(model_id, []))
 
 
 @overload
