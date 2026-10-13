@@ -57,6 +57,45 @@ def pytest_unconfigure(config: object) -> None:
         _repo_patcher = None
 
 
+# `git` resolves these BEFORE the `cwd` a caller passes, so a test that shells
+# out to git while one of them is set operates on the repository THEY name --
+# not on its own fixture.
+#
+# That is not hypothetical. `git push` exports `GIT_DIR` to its hooks, and this
+# project registers `ci-local-full` as a pre-push hook that runs this suite. A
+# contributor pushing therefore ran the git fixtures against their own
+# checkout: it was switched to a fixture branch, a commit deleting 890 files
+# was created, and that commit was published.
+#
+# Stripping them here rather than in each helper is deliberate --
+# `subprocess` inherits `os.environ`, so one autouse fixture covers every test
+# that shells out to git, including ones added later. Author and committer
+# identity are intentionally NOT stripped: tests set those on purpose, and they
+# cannot redirect git at a different repository.
+_GIT_LOCATION_ENV = (
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_NAMESPACE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_PREFIX",
+    "GIT_WORK_TREE",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_git_location_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove the repository-location ``GIT_*`` family for every test.
+
+    Applies to all tests, not only the git ones: any test that shells out to a
+    tool which itself invokes git inherits the same hazard.
+    """
+    for name in _GIT_LOCATION_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def metadata() -> dict[str, Any]:
     return {

@@ -9,6 +9,19 @@ cd "$ROOT"
 # prints, which hides output drift from the golden tests until CI runs them.
 unset NO_COLOR FORCE_COLOR PY_COLORS CLICOLOR_FORCE
 
+# This script runs from the pre-push hook, and `git push` exports the
+# repository-location GIT_* family to its hooks. Those variables take
+# precedence over any `cwd`, so anything below that invokes git -- including
+# the test fixtures that create throwaway repositories -- would operate on THIS
+# checkout instead. That once switched a contributor's worktree to a fixture
+# branch and published a commit deleting the repository.
+#
+# The suite also strips these in tests/conftest.py; doing it here as well
+# protects the steps that are not pytest.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_NAMESPACE \
+      GIT_CEILING_DIRECTORIES GIT_PREFIX
+
 usage() {
   cat <<'EOF'
 Usage: scripts/ci-local.sh [OPTIONS]
