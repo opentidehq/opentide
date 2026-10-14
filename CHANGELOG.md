@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.14.2] — 2026-10-14
+
+Patch on 0.14.1. Nothing to do after upgrading, but upgrade promptly if you run `opentide setup skills`: it could be made to install skill content from a repository other than the pinned catalogue. A patch rather than a minor because no input contract, generated artefact, exit code or command surface changes — the installer refuses inputs that no legitimate catalogue produces, and a normal install behaves exactly as before.
+
+### Fixed
+
+- `opentide setup skills` can no longer be steered outside the pinned `OpenTideHQ/skills` catalogue. The installer interpolated the catalogue manifest's `ref`, the skill `slug`, and each tree path straight into `raw.githubusercontent.com` and `api.github.com` URLs without rejecting `..`. GitHub normalises dot segments server-side, so a manifest ref of `../../../attacker/payload/main` resolved to a **different public repository** and its `SKILL.md` files were installed into `.agents/skills/` on a developer or agent machine — unreviewed instructions, delivered by the tool whose whole promise is that the catalogue is pinned. The same gap existed on the write side: a tree entry such as `skills/<slug>/../../.git/hooks/pre-commit` escaped the staging directory, which turns a catalogue listing into arbitrary file write, a git hook being the obvious target. Containment is now checked at four points — the ref, the slug, each repository path, and the fully-assembled URL after dot-segment removal (host, scheme, prefix, query, and absence of credentials or a fragment all re-verified) — and the destination of every written file is confirmed to resolve inside the skill tree. A rejected manifest ref falls back to `main` rather than being used, and a rejected slug or path aborts the install instead of writing a partial tree ([#483](https://github.com/OpenTideHQ/opentide/pull/483)).
+
+### Changed
+
+- Runtime dependencies moved up: `pydantic` 2.13.5 → 2.14.0, `orjson` 3.12.0 → 3.13.0, `dulwich` 1.2.15 → 1.2.17, `typer` 0.27.2 → 0.27.3. No API, schema or output change — the full matrix (Python 3.10–3.14), the CLI E2E shards and the Windows smoke job are green on each ([#502](https://github.com/OpenTideHQ/opentide/pull/502), [#500](https://github.com/OpenTideHQ/opentide/pull/500), [#501](https://github.com/OpenTideHQ/opentide/pull/501), [#498](https://github.com/OpenTideHQ/opentide/pull/498)).
+
+### Install
+
+```bash
+pip install opentide==0.14.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.14.1] — 2026-10-14
 
 Patch on 0.14.0. Nothing to do after upgrading. Documentation and export generation are dramatically faster again — a 265-object corpus that took **722s** on 0.14.0 now completes in **under a second**, and the generated output is byte-identical, so no regeneration is required. Field extraction for ATT&CK techniques, threat actors and platform configurations is now derived from the Pydantic models rather than a hardcoded key list. A patch rather than a minor because no input contract, generated artefact, exit code or command surface changes; the one behaviour change is an undeclared legacy key that no model ever described, noted under Changed.
@@ -839,7 +859,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.2
 [0.14.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.1
 [0.14.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.0
 [0.13.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.13.0

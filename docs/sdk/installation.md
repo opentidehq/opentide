@@ -9,11 +9,11 @@ description: Install opentide as a library dependency with PEP 561 typing suppor
 
 ```python
 # pyproject.toml — pin the current release in CI
-dependencies = ["opentide==0.14.1"]
+dependencies = ["opentide==0.14.2"]
 ```
 
 ```bash
-pip install 'opentide==0.14.1'
+pip install 'opentide==0.14.2'
 ```
 
 Includes the CLI, all platform adapters, the MCP server, and core dependencies (`pydantic`, `pyyaml`, `structlog`, `rich`, `dulwich`, `typer`, `mcp`). Start the server with `opentide mcp start` — no extra required since 0.14.0; see [MCP installation](../mcp/installation.md).

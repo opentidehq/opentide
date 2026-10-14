@@ -7,6 +7,30 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.14.2 — 14 October 2026
+
+Patch on 0.14.1. Nothing to do after upgrading, and nothing to regenerate — but upgrade promptly if you or your agents run `opentide setup skills`, which could be made to install skill content from a repository other than the pinned catalogue.
+
+**Install**
+
+```bash
+pip install opentide==0.14.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- Nothing you author changes, no generated artefact changes, and no exit code or command surface changes. A normal `opentide setup skills` run behaves exactly as it did on 0.14.1.
+- **Security fix.** `opentide setup skills` pins its catalogue to `OpenTideHQ/skills`, but it built its download URLs by interpolating the manifest's `ref`, the skill `slug` and each tree path without rejecting `..`. GitHub normalises dot segments on its side, so a ref such as `../../../attacker/payload/main` reached a *different public repository*, and that repository's `SKILL.md` files were installed into `.agents/skills/` — unreviewed agent instructions on a developer machine. A tree path could likewise escape the staging directory and write anywhere, a `.git/hooks/pre-commit` being the obvious target. The installer now verifies containment at the ref, the slug, each path, and the assembled URL, and confirms every written file lands inside the skill tree. A rejected ref falls back to `main`; a rejected slug or path aborts rather than writing a partial tree.
+- Dependencies moved up with no API or output change: `pydantic` 2.14.0, `orjson` 3.13.0, `dulwich` 1.2.17, `typer` 0.27.3.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.14.2/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.2)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.14.1 — 14 October 2026
 
 Patch on 0.14.0. Nothing to do after upgrading. Documentation and export generation are dramatically faster again — a 265-object corpus that took 722s on 0.14.0 now completes in under a second — and the generated output is byte-identical, so there is nothing to regenerate. Technique, actor and platform-configuration extraction is now derived from the Pydantic models rather than a hardcoded key list.
