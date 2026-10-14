@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, ClassVar, Protocol, cast
 
-from pydantic import Field, PrivateAttr
+from pydantic import PrivateAttr
 
-from opentide.models.base import TideField, TideModel
+from opentide.models.base import FieldRole, TideField, TideModel
 from opentide.models.metadata import ObjectMetadata, ObjectReferences, RuleMetadata
 from opentide.models.platform import RuleConfigurations
 from opentide.models.response import RuleResponse
@@ -43,15 +43,17 @@ class DetectionRule(TideModel):
     )
     status: str = "STAGING"
     severity: str = "Informational"
-    techniques: list[str] = Field(default_factory=list)
-    platforms: dict[str, dict[str, Any]] = Field(
-        default_factory=dict, json_schema_extra={"tide.template.hide": True}
+    techniques: list[str] = TideField(default_factory=list, role=FieldRole.TECHNIQUES)
+    platforms: dict[str, dict[str, Any]] = TideField(
+        default_factory=dict,
+        schema_extra={"tide.template.hide": True},
+        role=FieldRole.CONFIGURATIONS,
     )
     references: ObjectReferences | None = None
     detection_model: str | None = None
     response: RuleResponse | None = TideField(None, schema_extra={"tide.template.required": True})
     configurations: RuleConfigurations | None = TideField(
-        None, schema_extra={"tide.template.required": True}
+        None, schema_extra={"tide.template.required": True}, role=FieldRole.CONFIGURATIONS
     )
     file: Path | None = TideField(None, schema_extra={"tide.template.hide": True})
     _registry: TideRegistry | None = PrivateAttr(default=None)

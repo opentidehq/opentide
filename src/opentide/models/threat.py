@@ -8,7 +8,7 @@ from typing import Annotated, Any, ClassVar, cast
 from pydantic import AfterValidator, Field, ValidationInfo, field_validator
 from pydantic_core import PydanticCustomError
 
-from opentide.models.base import TideField, TideModel, VocabField
+from opentide.models.base import FieldRole, TideField, TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 
 
@@ -48,8 +48,8 @@ class ThreatBody(TideModel):
     # Infrastructure and Protocol). Without `scoped` those collapse to one bare
     # key and `_emit` drops the duplicate, so five values were unreachable.
     surface: list[str] = VocabField(True, scoped=True)
-    mitre_attack: list[str] = VocabField(True)
-    actors: list[ThreatActor] | None = None
+    mitre_attack: list[str] = VocabField(True, role=FieldRole.TECHNIQUES)
+    actors: list[ThreatActor] | None = TideField(None, role=FieldRole.ACTORS)
     killchain: str | list[str] | None = VocabField(True, default=None)
     chaining: list[dict[str, str]] | None = None
     cve: list[str] | None = Field(default=None, title="CVE")

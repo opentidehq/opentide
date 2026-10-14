@@ -7,7 +7,7 @@ from typing import Any, ClassVar, cast
 
 from pydantic import model_validator
 
-from opentide.models.base import TideField, TideModel, VocabField
+from opentide.models.base import FieldRole, TideField, TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 
 
@@ -69,7 +69,7 @@ class ObjectiveBody(TideModel):
     composition: ObjectiveComposition
     investment: str | None = None
     threats: list[str] | None = None
-    mitre_attack: list[str] | None = VocabField(True, default=None)
+    mitre_attack: list[str] | None = VocabField(True, default=None, role=FieldRole.TECHNIQUES)
 
 
 class DetectionObjective(TideModel):

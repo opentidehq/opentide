@@ -86,8 +86,17 @@ def test_collect_info_coverage_section() -> None:
 
 
 def test_technique_coverage_matches_rules() -> None:
+    """A rule's techniques are read from the model-declared top-level ``techniques``.
+
+    Updated for 0.14.1: extraction is anchored to the Pydantic models, so the
+    legacy ``tags.techniques`` location is no longer scanned (``rule::1.0``
+    declares ``techniques`` at the top level, not under ``tags``).
+    """
     rule = MagicMock()
-    rule.model_dump.return_value = {"tags": {"techniques": ["T1059", "T1003"]}}
+    rule.model_dump.return_value = {
+        "metadata": {"schema": "rule::1.0"},
+        "techniques": ["T1059", "T1003"],
+    }
     with patch.object(info_service, "OpenTide") as mock_ot:
         mock_ot.Models.rules = {"u1": rule}
         coverage = info_service._technique_coverage("T1059")
@@ -96,9 +105,14 @@ def test_technique_coverage_matches_rules() -> None:
 
 
 def test_technique_coverage_accepts_dict_rules() -> None:
+    """Raw dict rules work too, read from the model-declared ``techniques`` field.
+
+    Updated for 0.14.1: the legacy ``tags.attack`` location is gone — ``attack``
+    is declared by no model.
+    """
     with patch.object(info_service, "OpenTide") as mock_ot:
         mock_ot.Models.rules = {
-            "u2": {"tags": {"attack": ["T1003"]}},
+            "u2": {"metadata": {"schema": "rule::1.0"}, "techniques": ["T1003"]},
         }
         coverage = info_service._technique_coverage("T1003")
     assert coverage["count"] == 1
