@@ -553,7 +553,21 @@ class _ModelsAccessor:
 
     @property
     def chaining(self) -> dict[str, Any]:
-        return IndexManager.compute_chains(self.threats)
+        """Threat chaining graph, memoized per snapshot like :attr:`FlatIndex`.
+
+        ``generation.framework.CHAINING_INDEX`` is a lazy view whose ``_data()``
+        re-reads this property for every lookup, so recomputing here meant
+        rebuilding the whole graph per access. Rendering a 265-object corpus
+        measured 4,273 ``compute_chains`` calls costing 1.5s of a 3.5s run,
+        second only to the vocabulary index rebuild.
+        """
+        index = self._index
+        if IndexManager._chain_cache_index is index and IndexManager._chain_cache is not None:
+            return IndexManager._chain_cache
+        chains = IndexManager.compute_chains(self.threats)
+        IndexManager._chain_cache = chains
+        IndexManager._chain_cache_index = index
+        return chains
 
     @property
     def FlatIndex(self) -> dict[str, Any]:

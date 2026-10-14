@@ -23,6 +23,8 @@ class _IndexCacheMeta(type):
         if name == "_cache" and value is None:
             super().__setattr__("_flat_cache", None)
             super().__setattr__("_flat_cache_index", None)
+            super().__setattr__("_chain_cache", None)
+            super().__setattr__("_chain_cache_index", None)
 
 
 class IndexManager(metaclass=_IndexCacheMeta):
@@ -32,6 +34,9 @@ class IndexManager(metaclass=_IndexCacheMeta):
     _flat_cache: dict[str, Any] | None = None
     #: Snapshot the memo belongs to. Identity, not ``id()``, so a recycled id cannot hit.
     _flat_cache_index: IndexSnapshot | None = None
+    _chain_cache: dict[str, Any] | None = None
+    #: Snapshot the chaining memo belongs to, on the same terms as the flat one.
+    _chain_cache_index: IndexSnapshot | None = None
 
     @classmethod
     def load(cls) -> IndexSnapshot:
