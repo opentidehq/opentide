@@ -13,6 +13,12 @@ from opentide.models.version import SchemaVersion
 
 logger = get_logger(__name__)
 
+#: Built vocabulary index, keyed by the identity and length of the vocabs
+#: mapping it came from. Holds at most one entry -- see
+#: :meth:`VocabularyLoader.load_index` for why the key is shaped this way and
+#: why a single entry is sufficient and self-invalidating.
+_INDEX_CACHE: dict[tuple[int, int], tuple[Mapping[str, Any], dict[str, VocabularyDefinition]]] = {}
+
 
 VocabKey = Literal["name", "id"]
 
@@ -475,10 +481,35 @@ class VocabularyLoader:
 
     @staticmethod
     def load_index(raw_vocabs: Mapping[str, Any] | None) -> dict[str, VocabularyDefinition]:
-        """Load all vocabularies from an index vocabs mapping with per-file error boundaries."""
+        """Load all vocabularies from an index vocabs mapping with per-file error boundaries.
+
+        Memoized per vocabs mapping, because the callers read this through
+        properties that re-resolve on every access.
+        ``OpenTide.Vocabularies.Index`` is a property that calls this, and
+        ``generation.framework.VOCAB_INDEX`` is a lazy view whose ``_data()``
+        re-reads that property for every lookup, ``in`` test and iteration. So
+        one ``get_vocab_entry`` call used to rebuild every vocabulary from
+        scratch: rendering 20 threat pages measured 2,832 index builds and
+        **11.5 million** ``_build_entry`` calls, 77s of an 80s run.
+
+        The cache key is the mapping's identity plus its length, and the
+        mapping itself is retained as part of the entry. Identity alone is not
+        enough on two counts: ``id`` values are recycled once an object is
+        freed, which the retained reference prevents for the live entry and the
+        ``is`` re-check catches otherwise; and ``registry.builder`` mutates this
+        mapping in place with ``index["vocabs"].update(object_vocab)`` while
+        building, which necessarily changes its length. Only one entry is kept,
+        so a registry reload builds a fresh mapping, misses, and evicts the old
+        one -- no reload path has to remember to invalidate anything.
+        """
         if not raw_vocabs:
             logger.error("vocabulary_index_is_missing_or_empty")
             return {}
+
+        key = (id(raw_vocabs), len(raw_vocabs))
+        cached = _INDEX_CACHE.get(key)
+        if cached is not None and cached[0] is raw_vocabs:
+            return cached[1]
 
         loaded: dict[str, VocabularyDefinition] = {}
         for name, data in raw_vocabs.items():
@@ -486,4 +517,6 @@ class VocabularyLoader:
                 loaded[name] = VocabularyLoader.load(data, source=name)
             except VocabularyLoadError as exc:
                 logger.error("failure", detail=str(exc))
+        _INDEX_CACHE.clear()
+        _INDEX_CACHE[key] = (raw_vocabs, loaded)
         return loaded
