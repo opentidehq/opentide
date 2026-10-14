@@ -13,6 +13,7 @@ environment) and then pointed at a different detection repository.
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -32,6 +33,22 @@ pytestmark = [
 
 BROKEN_YAML = "name: [\n"
 BROKEN_RELPATH = "objects/rules/not-yaml.yaml"
+
+# Rich panel borders and the padding it adds when wrapping a line.
+_LAYOUT = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|[\u2500-\u257f|]|\s+")
+
+
+def _flattened(text: str) -> str:
+    """``text`` with ANSI, Rich panel borders and all whitespace removed.
+
+    The hook reports the offending path inside a Rich panel, which wraps a long
+    absolute path across lines and pads each one with a border. Matching the path
+    verbatim therefore depends on the terminal width and on how long ``tmp_path``
+    happens to be -- under xdist it gains a ``popen-gwN`` segment, which is
+    enough on its own to push the path past the wrap column and break the match.
+    Flattening both sides asserts on the message rather than on the layout.
+    """
+    return _LAYOUT.sub("", text)
 
 
 def _clean_env(**overrides: str) -> dict[str, str]:
@@ -143,7 +160,9 @@ def test_hook_validates_the_worktree_not_opentide_repo_root(
         "the hook validated OPENTIDE_REPO_ROOT instead of the committed worktree; "
         f"broken YAML in {repo} was committed\n{output}"
     )
-    assert str(repo) in output, output
+    # Flattened: the hook prints the path inside a Rich panel, which wraps a long
+    # absolute path across lines. See _flattened.
+    assert _flattened(str(repo)) in _flattened(output), output
 
 
 def test_hook_still_honours_the_documented_bypass(
