@@ -282,4 +282,21 @@ exclude = [
 [tool.ty.rules]
 # Tide domain models intentionally shadow Pydantic BaseModel.validate (instance delegation).
 invalid-method-override = "warn"
+# Per-platform system configs narrow the nested SystemConfig.Tenant and
+# .Tenant.Setup dataclasses so each platform's tenant carries its own setup
+# fields (Sentinel gets a workspace, Splunk gets a port, and so on). Narrowing a
+# mutable attribute is unsound for writes in the general case, which is what ty
+# reports here, but these objects are parsed once from system configuration and
+# read thereafter. Metadata.schema and PlatformConfigBase.schema trip the same
+# pattern: both deliberately expose the object's `schema` YAML key, which would
+# otherwise resolve to the deprecated BaseModel.schema() classmethod.
+#
+# ty reports these same 19 sites under three overlapping override rules, so
+# silencing one surfaces the next -- all three are listed deliberately. The
+# names also churn between ty patch releases (0.0.86 used the first two, 0.0.87
+# added the third), so a ty bump that reds the lint job is usually a rename
+# rather than a new finding: compare the reported sites before changing code.
+invalid-property-type-override = "ignore"
+invalid-attribute-override = "ignore"
+invalid-mutable-override = "ignore"
 redundant-cast = "ignore"
