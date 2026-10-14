@@ -104,19 +104,20 @@ fi
 echo "==> Pytest"
 unit_marker='not cli_e2e and not cli_smoke and not gitlab_ci_lint'
 
-# Only the E2E suite is sharded. It is the long one -- 722 tests, mostly
-# console-script subprocesses -- and it produces an identical pass/fail set
-# serially and in parallel. The unit suite stays serial on purpose: a few of its
-# tests read a stale IndexManager cache and pass only because the serial file
-# order leaves a full index behind them, so spreading them across workers fails
-# intermittently (#530). Mirrors ci.yml. PYTEST_WORKERS=0 forces serial.
+# Both suites are sharded. The E2E one is the long pole -- 722 tests, mostly
+# console-script subprocesses. The unit suite was serial until #530: a few tests
+# left a partial index in IndexManager._cache and a mocked registry in
+# opentide.deployment.utils, so it passed only because the serial file order put
+# the victims before the polluters. Both leaks are fixed and the suite now gives
+# the same result serially and at -n 2/4/8, with identical coverage totals.
+# Mirrors ci.yml. PYTEST_WORKERS=0 forces serial.
 #
 # Defaults to 4 to match ci.yml, NOT to `auto`. Each worker holds an interpreter
 # plus the subprocess its test spawned, so the suite hits a memory cliff before
-# it runs out of cores: on a 10-core host one shard measured 62s at -n 4 and
-# 137s at `auto` (10 workers), i.e. `auto` was slower than serial-ish. If you
-# have the headroom, PYTEST_WORKERS=6 measured best here -- but measure, do not
-# assume more is faster.
+# it runs out of cores: on a 10-core host one E2E shard measured 62s at -n 4 and
+# 137s at `auto` (10 workers), i.e. `auto` was slower than 4. If you have the
+# headroom, PYTEST_WORKERS=6 measured best here -- but measure, do not assume
+# more is faster.
 workers="${PYTEST_WORKERS:-4}"
 if [[ "$workers" == "0" ]]; then
   parallel=()
@@ -133,7 +134,7 @@ if uv run python -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 1
 fi
 
 if [[ "$mode" == "full" ]]; then
-  "${cov_env[@]}" uv run pytest tests/ -q -m "$unit_marker"
+  "${cov_env[@]}" uv run pytest tests/ -q "${parallel[@]}" -m "$unit_marker"
   uv run coverage report
   echo "==> E2E pytest (CLI + MCP stdio)"
   uv run pytest tests/ -m "cli_e2e or cli_smoke" -q "${parallel[@]}" --no-cov
@@ -143,7 +144,7 @@ if [[ "$mode" == "full" ]]; then
   PATH="$linters:$PATH" OPENTIDE_GITLAB_CI_LINT=1 \
     uv run pytest tests/test_ci/test_gitlab_pipeline_lint.py -m gitlab_ci_lint -q --no-cov
 else
-  uv run pytest tests/ --no-cov -q -m "$unit_marker"
+  uv run pytest tests/ --no-cov -q "${parallel[@]}" -m "$unit_marker"
 fi
 
 echo "==> All checks passed ($mode)"

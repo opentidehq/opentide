@@ -180,6 +180,7 @@ def _restore_logging() -> Iterator[None]:
 def _reset_opentide_registry() -> None:
     """Prevent tests from polluting singleton state."""
     yield
+    from opentide.core.index_manager import IndexManager
     from opentide.core.registry import OpenTide
 
     OpenTide._initialised = False  # noqa: SLF001
@@ -188,6 +189,16 @@ def _reset_opentide_registry() -> None:
     OpenTide._rules = {}
     OpenTide._threats = {}
     OpenTide._objectives = {}
+    # The cache BEHIND the singleton, which resetting OpenTide._index does not
+    # touch (#530). Tests that exercise index behaviour assign a partial index
+    # here -- `{"objects": ..., "configurations": {}}` -- and a later test
+    # reading `OpenTide.Configurations.Global.objects` then sees an empty
+    # configuration namespace. Serially that was invisible, because the file
+    # order happened to put the victims before the polluters; under xdist the
+    # grouping changes and it surfaces. The metaclass cascades this assignment
+    # to `_flat_cache` and `_flat_cache_index`, so clearing `_cache` is the
+    # whole clear-set.
+    IndexManager._cache = None  # noqa: SLF001
 
 
 @pytest.fixture

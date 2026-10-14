@@ -116,26 +116,34 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      # NOT sharded with xdist, unlike the E2E job below. The unit suite has a
-      # latent test-isolation bug: a few tests read a stale IndexManager cache
-      # and only pass because the serial file order happens to leave a full
-      # index behind. Reordering them across workers turns that into an
-      # intermittent empty-configuration failure in test_export and
-      # test_documentation (#530). This job is not on the critical path
-      # anyway — the E2E job is.
+      # Sharded with xdist, like the E2E job below. This was serial until #530:
+      # a few tests left a partial index in `IndexManager._cache` and a mocked
+      # registry in `opentide.deployment.utils`, and the suite passed only
+      # because the serial file order happened to put the victims first.
+      # Reordering it across workers surfaced 11 failures in test_export and
+      # test_documentation. Both leaks are fixed, and the suite now produces the
+      # same result serially and at -n 2/4/8. `-n 4` is pinned for the same
+      # reason as the E2E job -- see the note there.
       - name: Pytest
         if: matrix.python-version != env.COVERAGE_PYTHON
-        run: uv run pytest tests/ --no-cov -q -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
+        run: uv run pytest tests/ --no-cov -q -n 4 -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
 
       - name: Pytest with coverage
         if: matrix.python-version == env.COVERAGE_PYTHON
         # sys.monitoring (PEP 669) instead of the C trace function. Same line
         # data for a fraction of the overhead; 3.12+ only, which this cell is.
+        #
+        # Coverage is combined across xdist workers by pytest-cov, and the
+        # totals are identical to a serial run (17959 statements, 1646 missed,
+        # 90.8%), so the threshold gate below reads the same number it always
+        # did -- verified, because sharding a coverage run silently losing
+        # worker data would quietly lower the gate instead of failing it.
         env:
           COVERAGE_CORE: sysmon
         run: |
           uv run pytest tests/ \
             -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint" \
+            -n 4 \
             --cov-report=xml:coverage.xml \
             --cov-report=html:htmlcov \
             --junitxml=pytest-results.xml

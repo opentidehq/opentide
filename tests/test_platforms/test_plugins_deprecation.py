@@ -6,14 +6,34 @@ import contextlib
 import warnings
 from unittest.mock import patch
 
+import pytest
+
+# Imported here, at collection time, on purpose (#530).
+#
+# The test below nulls the accessor's caches to force `_ensure_loaded`, which
+# does `from opentide.deployment import enabled_systems` *inside* the method --
+# so that import runs while `opentide.core.registry.OpenTide` is patched with a
+# MagicMock. `opentide.deployment.utils` binds `OpenTide` at module level and
+# evaluates `SYSTEMS_CONFIGS_INDEX` at import time, so whichever test imports it
+# first under that patch leaves the module holding a dead mock for the rest of
+# the process. Every later deployment test then reads statuses off the mock,
+# which iterates empty: "Status 'STAGING' is not defined ... Available: ."
+#
+# Importing it now means it is already in sys.modules, so the lazy import is a
+# cache hit that cannot rebind. Do not move this inside the test.
+import opentide.deployment  # noqa: F401
 from opentide.platforms import plugins
 
 
-def test_platforms_accessor_emits_deprecation_warning() -> None:
+def test_platforms_accessor_emits_deprecation_warning(monkeypatch: pytest.MonkeyPatch) -> None:
     accessor = plugins.Platforms
-    accessor._deployers = None
-    accessor._validators = None
-    accessor._instances = None
+    # monkeypatch, not bare assignment: these are the accessor's process-wide
+    # caches. Assigning them left the mocked loader's empty dicts behind, and
+    # because the guard is `is None` they never reloaded.
+    monkeypatch.setattr(accessor, "_deployers", None, raising=False)
+    monkeypatch.setattr(accessor, "_validators", None, raising=False)
+    monkeypatch.setattr(accessor, "_instances", None, raising=False)
+
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         with (
@@ -27,3 +47,17 @@ def test_platforms_accessor_emits_deprecation_warning() -> None:
             with contextlib.suppress(KeyError):
                 _ = accessor["sentinel"]
     assert any(issubclass(w.category, DeprecationWarning) for w in caught)
+
+    # Regression guard for #530, asserted here rather than in a separate test
+    # because a separate one is not guaranteed to run after this in the same
+    # worker: xdist distributes individual tests, so it could land elsewhere and
+    # never see the leak. If the module-level import above is removed, the lazy
+    # import inside `_ensure_loaded` rebinds this module to the MagicMock and
+    # every later deployment test fails with an empty status list.
+    import opentide.deployment.utils as deployment_utils
+    from opentide.core.registry import OpenTideRegistry
+
+    assert isinstance(deployment_utils.OpenTide, OpenTideRegistry), (
+        "a mocked registry leaked into opentide.deployment.utils; it was imported "
+        "for the first time while opentide.core.registry.OpenTide was patched (#530)"
+    )
