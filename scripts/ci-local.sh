@@ -33,12 +33,25 @@ Options:
   --test        Lint + unit pytest (excludes cli_e2e/cli_smoke) — default
   --full        Lint + unit pytest + coverage gate + CLI E2E + GitLab CI lint — pre-push
   --coverage    Alias for --full
+  --store-e2e-durations
+                Re-measure the E2E suite serially and rewrite
+                .test_durations_e2e, which balances the CI shard matrix.
+                Run it after adding or removing slow E2E tests; commit the
+                result. Takes about as long as a serial E2E run (~9 min).
   -h, --help    Show this help
+
+Environment:
+  PYTEST_WORKERS  xdist worker count for the E2E suite (default: 4, matching
+                  ci.yml). 0 runs it serially, which is what you want to read a
+                  failure. More is not reliably faster -- each worker holds an
+                  interpreter plus a spawned subprocess, and `auto` measured
+                  slower than 4 on a 10-core host.
 
 Examples:
   scripts/ci-local.sh              # default: lint + unit tests
   scripts/ci-local.sh --quick      # before every commit (also via pre-commit)
   scripts/ci-local.sh --full       # before opening a PR (unit then E2E)
+  PYTEST_WORKERS=0 scripts/ci-local.sh   # serial, readable output
 EOF
 }
 
@@ -48,6 +61,7 @@ while [[ $# -gt 0 ]]; do
     --quick) mode="quick" ;;
     --test) mode="test" ;;
     --full|--coverage) mode="full" ;;
+    --store-e2e-durations) mode="store-e2e-durations" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
   esac
@@ -56,6 +70,17 @@ done
 
 echo "==> Syncing dev dependencies"
 uv sync --group dev --quiet
+
+if [[ "$mode" == "store-e2e-durations" ]]; then
+  echo "==> Re-measuring E2E durations (serial) -> .test_durations_e2e"
+  # Serial on purpose. Durations recorded under xdist absorb worker startup and
+  # CPU contention, which skews the per-test weights the shard packer reads and
+  # would unbalance CI rather than improve it.
+  uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov \
+    --store-durations --durations-path .test_durations_e2e
+  echo "==> Wrote .test_durations_e2e — commit it to keep the CI shards balanced"
+  exit 0
+fi
 
 echo "==> Ruff check"
 uv run ruff check tests src/opentide
@@ -78,11 +103,40 @@ fi
 
 echo "==> Pytest"
 unit_marker='not cli_e2e and not cli_smoke and not gitlab_ci_lint'
+
+# Only the E2E suite is sharded. It is the long one -- 722 tests, mostly
+# console-script subprocesses -- and it produces an identical pass/fail set
+# serially and in parallel. The unit suite stays serial on purpose: a few of its
+# tests read a stale IndexManager cache and pass only because the serial file
+# order leaves a full index behind them, so spreading them across workers fails
+# intermittently (#530). Mirrors ci.yml. PYTEST_WORKERS=0 forces serial.
+#
+# Defaults to 4 to match ci.yml, NOT to `auto`. Each worker holds an interpreter
+# plus the subprocess its test spawned, so the suite hits a memory cliff before
+# it runs out of cores: on a 10-core host one shard measured 62s at -n 4 and
+# 137s at `auto` (10 workers), i.e. `auto` was slower than serial-ish. If you
+# have the headroom, PYTEST_WORKERS=6 measured best here -- but measure, do not
+# assume more is faster.
+workers="${PYTEST_WORKERS:-4}"
+if [[ "$workers" == "0" ]]; then
+  parallel=()
+else
+  parallel=(-n "$workers")
+fi
+
+# coverage's sys.monitoring backend (PEP 669) costs roughly half what the C
+# trace function does for the same line data, but it needs 3.12+. The gate runs
+# on whatever interpreter uv resolved here, which may be older.
+cov_env=()
+if uv run python -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)'; then
+  cov_env=(env COVERAGE_CORE=sysmon)
+fi
+
 if [[ "$mode" == "full" ]]; then
-  uv run pytest tests/ -q -m "$unit_marker"
+  "${cov_env[@]}" uv run pytest tests/ -q -m "$unit_marker"
   uv run coverage report
   echo "==> E2E pytest (CLI + MCP stdio)"
-  uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov
+  uv run pytest tests/ -m "cli_e2e or cli_smoke" -q "${parallel[@]}" --no-cov
   echo "==> Generated GitLab CI lint (glint + gitlab-ci-verify)"
   linters="$ROOT/.cache/gitlab-ci-linters"
   bash scripts/install-gitlab-ci-linters.sh "$linters"

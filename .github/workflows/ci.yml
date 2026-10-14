@@ -116,12 +116,23 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
+      # NOT sharded with xdist, unlike the E2E job below. The unit suite has a
+      # latent test-isolation bug: a few tests read a stale IndexManager cache
+      # and only pass because the serial file order happens to leave a full
+      # index behind. Reordering them across workers turns that into an
+      # intermittent empty-configuration failure in test_export and
+      # test_documentation (#530). This job is not on the critical path
+      # anyway — the E2E job is.
       - name: Pytest
         if: matrix.python-version != env.COVERAGE_PYTHON
         run: uv run pytest tests/ --no-cov -q -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
 
       - name: Pytest with coverage
         if: matrix.python-version == env.COVERAGE_PYTHON
+        # sys.monitoring (PEP 669) instead of the C trace function. Same line
+        # data for a fraction of the overhead; 3.12+ only, which this cell is.
+        env:
+          COVERAGE_CORE: sysmon
         run: |
           uv run pytest tests/ \
             -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint" \
@@ -163,9 +174,22 @@ jobs:
           retention-days: 14
 
   cli-e2e:
-    name: E2E (3.14)
+    name: E2E (3.14, shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    needs: [test]
+    # Deliberately NOT `needs: [test]`. This job is the longest in the
+    # workflow, and gating it on the matrix put the slowest unit cell in front
+    # of it: the two ran back to back for a ~22 min wall clock where the
+    # longest single job was ~16 min. They share no artifact, so running them
+    # concurrently costs the same runner minutes and returns the answer sooner.
+    strategy:
+      # Every shard reports, so a failure anywhere does not hide the others.
+      fail-fast: false
+      matrix:
+        # Keep the length of this list equal to `--splits` below;
+        # tests/test_ci/test_own_ci_workflow.py fails if they drift, because a
+        # short matrix would silently skip the tests in the groups that no
+        # longer have a runner.
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -181,8 +205,55 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
+      # The longest step in the workflow by a wide margin: 722 tests, most of
+      # them a console-script subprocess or a scaffolded repo, so it is
+      # dominated by process startup rather than by any one slow test.
+      #
+      # Within a single runner the win is limited -- each worker re-pays import
+      # and scaffold cost -- so the suite is split across runners too. Measured
+      # locally: 561s serial for the whole suite, and 54/74/85/84s as 4 shards.
+      # Verified to produce an identical pass/fail set serially and sharded.
+      #
+      # `--splits` partitions the whole selection, so no test can fall outside
+      # a shard. Balance comes from .test_durations_e2e; a test missing from it
+      # is assigned the average, so adding tests is safe, and refreshing the
+      # file (scripts/ci-local.sh --store-e2e-durations) only improves packing.
+      #
+      # `-n 4` is pinned deliberately rather than `-n auto`. Measured on one
+      # shard (262 tests): serial 162s, -n 2 93s, -n 3 72s, -n 4 62s, -n 6 51s,
+      # but `auto` on a 10-core host 137s -- slower than 4 workers. Each worker
+      # holds an interpreter and the subprocess its test spawned, so the suite
+      # hits a memory cliff well before it runs out of cores. `auto` tracks
+      # whatever the runner reports, so it would sit on that cliff silently if
+      # the hosted spec changed; 4 matches today's ubuntu-latest (4 vCPU) and
+      # stays put. Raise it only with a measurement from a real run.
       - name: E2E pytest (CLI + MCP stdio)
-        run: uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov
+        run: >-
+          uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov -n 4
+          --splits 4
+          --group ${{ matrix.shard }}
+          --durations-path .test_durations_e2e
+
+  # Was two trailing steps on cli-e2e, which made a ~20 s check wait out the
+  # longest job in the workflow. It renders the pipeline from
+  # opentide.ci.render and lints that, consuming nothing the E2E run produces.
+  gitlab-ci-lint:
+    name: GitLab CI lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      - name: Install dependencies
+        run: uv sync --group dev
 
       - name: Install GitLab CI linters
         run: |
@@ -197,7 +268,9 @@ jobs:
   cli-windows-smoke:
     name: CLI Windows smoke
     runs-on: windows-latest
-    needs: [test]
+    # Also not gated on `test`: a 36 s job that waited ~5 min for a matrix it
+    # shares nothing with. Left serial — one test file, so workers would only
+    # add startup cost.
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
