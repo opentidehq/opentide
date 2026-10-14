@@ -7,6 +7,31 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.14.1 — 14 October 2026
+
+Patch on 0.14.0. Nothing to do after upgrading. Documentation and export generation are dramatically faster again — a 265-object corpus that took 722s on 0.14.0 now completes in under a second — and the generated output is byte-identical, so there is nothing to regenerate. Technique, actor and platform-configuration extraction is now derived from the Pydantic models rather than a hardcoded key list.
+
+**Install**
+
+```bash
+pip install opentide==0.14.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- Nothing you author changes, and nothing needs regenerating. Both fixes are pure performance: generated documentation and exports were verified byte-for-byte identical against the same corpus generated under 0.14.0.
+- `generate docs` went from **722s to 1.44s** and `generate exports` from 152s to 0.61s on a 265-object corpus. Two derived structures — the vocabulary index and the threat chaining graph — were rebuilt on *every* access rather than once per run, which cost 169 million redundant index-entry builds on a full run.
+- Techniques, actors and platform configurations are located by reading the models that declare them. `attack` was accepted as a technique key although no model has ever declared it, and the old key list also searched for fields on object types that do not have them — a rule was scanned for `mitre_attack`, a threat for `techniques`.
+- **One behaviour change.** The undocumented tolerance for a nested `tags` mapping holding techniques is removed, because no model declares that shape. If you hold pre-0.9 objects carrying techniques under `tags:`, catalogue search and `opentide info` stop reporting them until those values move to the field the object's own model declares. No validation behaviour changes either way.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.14.1/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.1)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.14.0 — 14 October 2026
 
 Minor on 0.13.0. `objective.signals[].entities` values are stage-scoped, `response.responders` is a configuration enum, `pip install opentide` now ships the MCP server, and documentation and export generation no longer rescan the catalogue for every object — a corpus that exceeded a one-hour CI job timeout now completes.

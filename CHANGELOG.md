@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.14.1] — 2026-10-14
+
+Patch on 0.14.0. Nothing to do after upgrading. Documentation and export generation are dramatically faster again — a 265-object corpus that took **722s** on 0.14.0 now completes in **under a second**, and the generated output is byte-identical, so no regeneration is required. Field extraction for ATT&CK techniques, threat actors and platform configurations is now derived from the Pydantic models rather than a hardcoded key list. A patch rather than a minor because no input contract, generated artefact, exit code or command surface changes; the one behaviour change is an undeclared legacy key that no model ever described, noted under Changed.
+
+### Fixed
+
+- The vocabulary index is no longer rebuilt on every access. `OpenTide.Vocabularies.Index` was a `@property` calling `VocabularyLoader.load_index()` on each read, and `generation.framework.VOCAB_INDEX` is a `_LazyMapping` whose `_data()` re-read that property for every `[]`, `in`, `.get`, iteration and `len` — so a single `get_vocab_entry()` call rebuilt all 35 vocabularies, `actors` and its ~1,249 entries included. A full-corpus run made **169 million** `_build_entry` calls and re-validated the same vocabulary models **172 million** times. `generate docs` goes from **722s to 1.44s** on a 265-object corpus and `generate exports` from 152s to 0.61s; generated documentation is byte-identical to the same corpus generated under 0.14.0, verified file by file. `_LazyMapping`'s own docstring already promised the cost was "paid once per process" — nothing tested it, so the claim and the code had diverged indefinitely ([#510](https://github.com/OpenTideHQ/opentide/issues/510)).
+- The threat chaining graph is no longer recomputed on every access. `OpenTide.Models.chaining` rebuilt the whole graph per read and `generation.framework.CHAINING_INDEX` re-read it per lookup — the same defect shape as the vocabulary index, measured at **4,273** `compute_chains` calls on a 265-object corpus. It is now memoised against the registry snapshot's identity, mirroring `FlatIndex` two properties above it in the same class, whose metaclass already clears that cache whenever the registry reloads. Worth **3.82s → 0.91s** on top of the vocabulary fix, output byte-identical ([#510](https://github.com/OpenTideHQ/opentide/issues/510)).
+
+### Changed
+
+- ATT&CK techniques, threat actors and platform configurations are extracted by deriving the field locations **from the Pydantic models** instead of scanning hardcoded key tuples. The previous `_TECHNIQUE_KEYS = ("techniques", "mitre_attack", "attack")` was wrong on two counts: `attack` was declared by **no model at all**, and the tuple conflated field names with model types — every key was tried in every section, so a rule was scanned for `mitre_attack` and a threat for `techniques`, fields those models do not have. Each role-bearing field now carries a `FieldRole` marker on the model that declares it, and the search paths are built per model by walking `model_fields`, selected by the body's `metadata.schema`. A renamed or added role-bearing field is picked up by tagging the model, with no edit to the extractor, and every registered revision of a model is covered. **Behaviour change:** the undocumented tolerance for a nested `tags` mapping carrying techniques is gone. No model declares that shape — the only model-declared `tags` is a `list[str]` on platform configuration, which is not a technique holder — and no object in the reference catalogue uses it. If you hold pre-0.9 objects that carry techniques under a `tags:` mapping, catalogue search and `opentide info` will stop reporting those techniques until the values are moved to the field the object's model declares.
+
+### Install
+
+```bash
+pip install opentide==0.14.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.14.0] — 2026-10-14
 
 Minor on 0.13.0. Two things need action after upgrading. `objective.signals[].entities` values are now stage-scoped (`Hostname` → `Host::Hostname`), and `opentide migrate vocab-scope` re-prefixes them for you. `response.responders` becomes a configuration enum you declare in `deployment.toml`, so a value that no instance could make valid under 0.13.0 now validates. Documentation and export generation are dramatically faster — a corpus that previously exceeded a one-hour CI timeout now completes.
@@ -818,7 +839,9 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.14.1...HEAD
+[0.14.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.1
+[0.14.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.0
 [0.13.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.13.0
 [0.12.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.12.1
 [0.12.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.12.0
