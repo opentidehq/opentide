@@ -367,7 +367,7 @@ def _ci_step(
     )
 
 
-def _mcp_without_its_extra(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SetupOptions:
+def _mcp_server_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SetupOptions:
     monkeypatch.setattr("opentide.mcp_server.launcher.missing_requirements", lambda: ["mcp"])
     return SetupOptions(
         path=tmp_path, mcp_hosts=[McpHost.vscode], yes=True, run_repo=False, run_mcp=True
@@ -398,7 +398,11 @@ _REAL_STEP_WARNINGS: dict[
         "checked-out branch 'feature'",
         lambda tmp, _: _ci_step(_repo_on(tmp, "main", "feature")),
     ),
-    "mcp-extra-missing": ("mcp", "needs opentide[mcp]", _mcp_without_its_extra),
+    "mcp-server-unavailable": (
+        "mcp",
+        "Repair it with: pip install 'mcp>=1.28.1,<2'",
+        _mcp_server_unavailable,
+    ),
 }
 
 

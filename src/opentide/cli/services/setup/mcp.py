@@ -73,24 +73,24 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
         )
     # Every config runs `opentide mcp start`. Say so now rather than leaving the
     # user to debug a server their editor silently fails to start.
-    from opentide.mcp_server.launcher import MCP_EXTRA, missing_requirements
+    from opentide.mcp_server.launcher import MCP_INSTALL_HINT, missing_requirements
 
     missing = missing_requirements()
     if missing:
-        result["mcp_extra_installed"] = False
+        result["mcp_available"] = False
         warnings = list(result.get("warnings") or [])
         warnings.append(
-            f"These configs launch opentide mcp start, which needs {MCP_EXTRA} "
-            f"(missing: {', '.join(missing)}). Install it with: pip install '{MCP_EXTRA}'"
+            f"These configs launch opentide mcp start, which cannot import "
+            f"{', '.join(missing)} in this environment. Repair it with: {MCP_INSTALL_HINT}"
         )
         result["warnings"] = warnings
         logger.warning(
-            "mcp_extra_not_installed",
+            "mcp_server_unavailable",
             detail=", ".join(missing),
-            advice=f"pip install '{MCP_EXTRA}'",
+            advice=MCP_INSTALL_HINT,
         )
     else:
-        result["mcp_extra_installed"] = True
+        result["mcp_available"] = True
     return result
 
 

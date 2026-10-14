@@ -1,29 +1,32 @@
 ---
 title: MCP installation
-description: Install the mcp extra and start the stdio server with opentide mcp start.
+description: Install opentide and start the stdio server with opentide mcp start.
 ---
 
 # MCP installation
 
 ## PyPI
 
-The server needs the **`mcp` extra**:
+The server ships in the base package — no extra:
 
 ```bash
-pip install 'opentide[mcp]==0.12.1'
+pip install 'opentide==0.14.0'
 ```
 
 Command: **`opentide mcp start`**. It calls `opentide.mcp_server.launcher:main`, which probes for `mcp.server.fastmcp` before importing the server.
 
 <Callout>
-`mcp` is not a dependency of the base package: it pulls a web-server stack
-(`starlette`, `httpx`, `sse-starlette`, `uvicorn`) that a CI pipeline running
-`opentide validate` has no use for. Run `opentide mcp start` without the extra
-and it tells you exactly that on stderr, then exits 1 — it never raises
-`ModuleNotFoundError`, and it writes no JSON-RPC.
+`mcp` was an optional `[mcp]` extra until 0.14.0, on the grounds that it pulls a
+web-server stack (`starlette`, `httpx`, `sse-starlette`, `uvicorn`) that a CI
+pipeline running `opentide validate` has no use for. That traded a few
+megabytes for a first-class CLI command that did not work on a plain install,
+so `mcp` is now a base dependency. The `[mcp]` extra is kept as an **empty
+alias**, so an existing `pip install opentide[mcp]` or an editor config naming
+it keeps resolving.
 
-The extra pins `mcp>=1.28.1,<2`. `mcp` 2.x replaced `mcp.server.fastmcp` with
-`MCPServer`; OpenTide has not migrated yet.
+The base dependency pins `mcp>=1.28.1,<2`. `mcp` 2.x replaced
+`mcp.server.fastmcp` with `MCPServer`; OpenTide has not migrated yet, so the
+launcher tells those two failures apart rather than reporting both as missing.
 </Callout>
 
 All seven platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
@@ -39,11 +42,11 @@ opentide mcp --help
 opentide mcp start
 ```
 
-If the extra is missing you get this on stderr instead of a traceback:
+If `mcp` cannot be imported — an incomplete environment, or an incompatible major — you get this on stderr instead of a traceback:
 
 ```text
-opentide mcp start needs the MCP extra, which is not installed (missing: mcp.server.fastmcp).
-Install it with:  pip install 'opentide[mcp]'
+opentide mcp start cannot import mcp.server.fastmcp, but mcp ships as a base dependency of opentide — this environment is incomplete.
+Repair it with:  pip install 'mcp>=1.28.1,<2'
 Everything else in the opentide CLI works without it.
 ```
 

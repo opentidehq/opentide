@@ -1,8 +1,9 @@
 """Start path for ``opentide mcp start``.
 
-``mcp`` lives in the ``[mcp]`` extra: it pulls a web-server stack that a CI
-pipeline running ``opentide validate`` has no use for. Importing
-:mod:`opentide.mcp_server.server` directly therefore dies with a bare
+``mcp`` is a base dependency of ``opentide`` (since 0.14.0), so a plain
+``pip install opentide`` can start the server. When the import fails anyway the
+cause is an incomplete environment or an incompatible ``mcp`` major, and
+importing :mod:`opentide.mcp_server.server` directly would die with a bare
 ``ModuleNotFoundError``. This launcher turns that into the one instruction the
 user needs, and it prints that line before any JSON-RPC.
 """
@@ -18,8 +19,11 @@ import sys
 MCP_IMPORT = "mcp.server.fastmcp"
 MCP_PACKAGE = "mcp"
 
-MCP_EXTRA = "opentide[mcp]"
 MCP_SPECIFIER = "mcp>=1.28.1,<2"
+#: Remedy for both failure modes. ``mcp`` is a base dependency since 0.14.0, so
+#: the ``[mcp]`` extra is now an empty alias — advising it would install nothing
+#: and leave the user exactly where they started.
+MCP_INSTALL_HINT = f"pip install '{MCP_SPECIFIER}'"
 
 
 def _package_installed(name: str) -> bool:
@@ -44,12 +48,12 @@ def probe() -> str | None:
                 f"opentide mcp start cannot use the installed mcp package: {exc}.\n"
                 f"OpenTide needs {MCP_SPECIFIER}; mcp 2.x replaced "
                 f"`{MCP_IMPORT}` with `MCPServer`.\n"
-                f"Pin it with:  pip install '{MCP_EXTRA}'"
+                f"Pin it with:  {MCP_INSTALL_HINT}"
             )
         return (
-            f"opentide mcp start needs the MCP extra, which is not installed "
-            f"(missing: {MCP_IMPORT}).\n"
-            f"Install it with:  pip install '{MCP_EXTRA}'\n"
+            f"opentide mcp start cannot import {MCP_IMPORT}, but mcp ships as a "
+            f"base dependency of opentide — this environment is incomplete.\n"
+            f"Repair it with:  {MCP_INSTALL_HINT}\n"
             f"Everything else in the opentide CLI works without it."
         )
     return None

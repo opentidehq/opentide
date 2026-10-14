@@ -16,7 +16,7 @@ dependencies = ["opentide==0.14.0"]
 pip install 'opentide==0.14.0'
 ```
 
-Includes the CLI, all platform adapters, and core dependencies (`pydantic`, `pyyaml`, `structlog`, `rich`, `dulwich`, `typer`). The MCP server is `opentide mcp start` and needs `pip install 'opentide[mcp]'` — see [MCP installation](../mcp/installation.md).
+Includes the CLI, all platform adapters, the MCP server, and core dependencies (`pydantic`, `pyyaml`, `structlog`, `rich`, `dulwich`, `typer`, `mcp`). Start the server with `opentide mcp start` — no extra required since 0.14.0; see [MCP installation](../mcp/installation.md).
 
 ## Live deploy SDKs
 

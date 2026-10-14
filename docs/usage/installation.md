@@ -40,7 +40,7 @@ uv venv
 
 ## PyPI install
 
-The latest release is **0.12.1** (9 October 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest release is **0.14.0** (14 October 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 <Tabs items={['venv + pip', 'uv']}>
 
@@ -67,33 +67,17 @@ uv pip install 'opentide==0.14.0'    # pin the current release
 
 That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, and all seven platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
-### opentide-mcp
+### MCP server
 
-For agent/MCP hosts, install `'opentide[mcp]'` and remember the path to this environment's `opentide` binary — you point the host at `opentide mcp start` in [MCP configuration](../mcp/configuration.md).
+For agent/MCP hosts, remember the path to this environment's `opentide` binary — you point the host at `opentide mcp start` in [MCP configuration](../mcp/configuration.md).
 
-The MCP server needs one extra step:
-
-<Tabs items={['venv + pip', 'uv']}>
-
-<Tab value="venv + pip">
+The base install above already ships the MCP server. There is no extra step and no extra to install:
 
 ```bash
-pip install 'opentide[mcp]'       # adds mcp (>=1.28.1,<2) for `opentide mcp start`
+opentide mcp start        # mcp (>=1.28.1,<2) is a base dependency since 0.14.0
 ```
 
-</Tab>
-
-<Tab value="uv">
-
-```bash
-uv pip install 'opentide[mcp]'       # adds mcp (>=1.28.1,<2) for `opentide-mcp`
-```
-
-</Tab>
-
-</Tabs>
-
-The `opentide-mcp` script is on `PATH` either way; without the extra it prints the install command and exits 1. See [MCP installation](../mcp/installation.md).
+`pip install 'opentide[mcp]'` still resolves — the extra is kept as an empty alias so existing commands and editor configurations keep working — but it adds nothing. See [MCP installation](../mcp/installation.md).
 
 ### Windows and PowerShell
 

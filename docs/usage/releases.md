@@ -7,9 +7,9 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
-## 0.14.0 — 13 October 2026
+## 0.14.0 — 14 October 2026
 
-Minor on 0.13.0. `objective.signals[].entities` values are stage-scoped, `response.responders` is a configuration enum, and documentation and export generation no longer rescan the catalogue for every object — a corpus that exceeded a one-hour CI job timeout now completes.
+Minor on 0.13.0. `objective.signals[].entities` values are stage-scoped, `response.responders` is a configuration enum, `pip install opentide` now ships the MCP server, and documentation and export generation no longer rescan the catalogue for every object — a corpus that exceeded a one-hour CI job timeout now completes.
 
 **Install**
 

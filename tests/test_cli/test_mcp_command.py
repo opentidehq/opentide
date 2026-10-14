@@ -61,18 +61,18 @@ def test_mcp_has_no_lifecycle_verb(verb: str) -> None:
     assert "jsonrpc" not in result.stdout
 
 
-def test_start_missing_extra_prints_install_line_on_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_missing_mcp_prints_repair_line_on_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "opentide.mcp_server.launcher.probe",
         lambda: (
-            "opentide mcp start needs the MCP extra, which is not installed "
-            "(missing: mcp.server.fastmcp).\n"
-            "Install it with:  pip install 'opentide[mcp]'\n"
+            "opentide mcp start cannot import mcp.server.fastmcp, but mcp ships as a "
+            "base dependency of opentide — this environment is incomplete.\n"
+            "Repair it with:  pip install 'mcp>=1.28.1,<2'\n"
         ),
     )
     result = runner.invoke(app, ["mcp", "start"])
     assert result.exit_code == 1
-    assert "pip install 'opentide[mcp]'" in result.stderr
+    assert "pip install 'mcp>=1.28.1,<2'" in result.stderr
     assert result.stdout.strip() == ""
     assert "jsonrpc" not in result.stdout
     assert "Traceback" not in result.stderr
@@ -92,9 +92,12 @@ def test_probe_names_mcp_start_when_fastmcp_is_missing(monkeypatch: pytest.Monke
     monkeypatch.setattr("opentide.mcp_server.launcher.importlib.import_module", boom)
     text = probe()
     assert text is not None
-    assert text.startswith("opentide mcp start needs the MCP extra")
-    assert "pip install 'opentide[mcp]'" in text
+    assert text.startswith("opentide mcp start cannot import mcp.server.fastmcp")
+    assert "pip install 'mcp>=1.28.1,<2'" in text
     assert "opentide-mcp" not in text
+    # mcp is a base dependency since 0.14.0, so the [mcp] extra is an empty
+    # alias: advising it would install nothing and strand the user.
+    assert "opentide[mcp]" not in text
 
 
 def test_probe_names_mcp_start_when_mcp_2_replaced_fastmcp(
@@ -114,8 +117,9 @@ def test_probe_names_mcp_start_when_mcp_2_replaced_fastmcp(
     text = probe()
     assert text is not None
     assert text.startswith("opentide mcp start cannot use the installed mcp package")
-    assert "pip install 'opentide[mcp]'" in text
+    assert "pip install 'mcp>=1.28.1,<2'" in text
     assert "opentide-mcp" not in text
+    assert "opentide[mcp]" not in text
 
 
 def test_server_main_forces_json_logging_after_cli_init(
