@@ -51,7 +51,12 @@ def statuses(monkeypatch: pytest.MonkeyPatch):
         class _OpenTide:
             Configurations = _Configurations()
 
-        monkeypatch.setattr("opentide.deployment.utils.OpenTide", _OpenTide())
+        # Patched on the registry module, not on `opentide.deployment.utils`,
+        # because utils no longer binds its own `OpenTide` name: it resolves
+        # `registry.OpenTide` at call time so that a patch is seen by the code
+        # under test and released afterwards (#536). This is the seam every
+        # consumer now reads through.
+        monkeypatch.setattr("opentide.core.registry.OpenTide", _OpenTide())
 
     return _install
 

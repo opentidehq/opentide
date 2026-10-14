@@ -2,7 +2,7 @@ from collections.abc import MutableMapping, Sequence
 from typing import Any
 
 from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
+from opentide.core import registry
 from opentide.generation.framework import unroll_dot_dict
 from opentide.models.deployment_enums import (
     DeploymentStrategy,
@@ -18,10 +18,16 @@ from opentide.models.system_config import (
 )
 from opentide.platforms.enabled import MissingTenantsError
 
-SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
 
 logger = get_logger(__name__)
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve registry-backed globals on access rather than at import (#536)."""
+    if name == "SYSTEMS_CONFIGS_INDEX":
+        return registry.OpenTide.Configurations.Systems.Index
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _json_normalize(data: Any) -> Any:
@@ -81,19 +87,19 @@ class TideDeployment:
     def system_configuration_resolver(self, system: DetectionPlatforms):  # type:ignore
         match system:
             case DetectionPlatforms.SPLUNK:
-                return OpenTide.Configurations.Systems.Splunk
+                return registry.OpenTide.Configurations.Systems.Splunk
             case DetectionPlatforms.CARBON_BLACK_CLOUD:
-                return OpenTide.Configurations.Systems.CarbonBlackCloud
+                return registry.OpenTide.Configurations.Systems.CarbonBlackCloud
             case DetectionPlatforms.SENTINEL:
-                return OpenTide.Configurations.Systems.Sentinel
+                return registry.OpenTide.Configurations.Systems.Sentinel
             case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
-                return OpenTide.Configurations.Systems.DefenderForEndpoint
+                return registry.OpenTide.Configurations.Systems.DefenderForEndpoint
             case DetectionPlatforms.SENTINEL_ONE:
-                return OpenTide.Configurations.Systems.SentinelOne
+                return registry.OpenTide.Configurations.Systems.SentinelOne
             case DetectionPlatforms.CROWDSTRIKE:
-                return OpenTide.Configurations.Systems.Crowdstrike
+                return registry.OpenTide.Configurations.Systems.Crowdstrike
             case DetectionPlatforms.HARFANGLAB:
-                return OpenTide.Configurations.Systems.HarfangLab
+                return registry.OpenTide.Configurations.Systems.HarfangLab
             # case _:
             # raise NotImplementedError
         return None
@@ -353,7 +359,7 @@ class TideDeployment:
 
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                mdr = OpenTide.Rules[mdr]
+                mdr = registry.OpenTide.Rules[mdr]
 
             tenants = self.tenants_resolver(mdr, system, deployment_strategy)
 
@@ -369,3 +375,7 @@ class TideDeployment:
             )
 
         return deployment
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | {"SYSTEMS_CONFIGS_INDEX"})

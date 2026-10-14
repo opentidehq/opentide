@@ -2,14 +2,22 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from opentide.core.registry import OpenTide
+from opentide.core import registry
 from opentide.deployment.git_backend import DulwichRepo, open_repo
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.registry.discovery import discover_workspace
 
-SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve registry-backed globals on access rather than at import (#536)."""
+    if name == "SYSTEMS_CONFIGS_INDEX":
+        return registry.OpenTide.Configurations.Systems.Index
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 from opentide.core.logging import get_logger
 from opentide.deployment.ci import CIEnvironment
@@ -107,7 +115,7 @@ class RuleScope:
 
 def rules_folder_in_repo() -> str:
     """The rules folder relative to the workspace, spelled as git diff paths are."""
-    rule_dir = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
+    rule_dir = Path(registry.OpenTide.Configurations.Global.Paths.Tide.rule)
     try:
         return rule_dir.relative_to(discover_workspace()).as_posix()
     except ValueError:
@@ -120,7 +128,7 @@ def local_rule_scope() -> RuleScope:
     Git does not keep empty folders, so a clone of a repository without rules
     has no rules folder at all: that is an empty catalogue, not an error.
     """
-    mdr_path = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
+    mdr_path = Path(registry.OpenTide.Configurations.Global.Paths.Tide.rule)
     if not mdr_path.is_dir():
         logger.info("rule_folder_not_found", path=str(mdr_path))
         return RuleScope()
@@ -160,7 +168,7 @@ def split_changed_rule_paths(changed: list[str]) -> tuple[list[str], list[str]]:
 
 def modified_rule_scope(plan: DeploymentStrategy) -> RuleScope:
     """The local rule files, or in CI the rule files the git diff changed."""
-    MDR_PATH = Path(OpenTide.Configurations.Global.Paths.Tide.rule)
+    MDR_PATH = Path(registry.OpenTide.Configurations.Global.Paths.Tide.rule)
     if CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug:
         scope = local_rule_scope()
         logger.info("computed_modified_mdr_files", detail=str(list(scope.files)))
@@ -234,7 +242,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
             "local_debug_using_full_rule_tree",
             detail="Git diff is unavailable outside CI; compiling from the local rules folder",
         )
-        raw = OpenTide.Configurations.Global.Paths.Tide._raw["rule"]
+        raw = registry.OpenTide.Configurations.Global.Paths.Tide._raw["rule"]
         # Repo-relative paths so modified_mdr_files' regex still matches.
         return [str(Path(raw) / path.name) for path in local_rule_files()]
 
@@ -437,3 +445,7 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
 
 # Legacy alias
 TideRepo = GitRepository
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | {"SYSTEMS_CONFIGS_INDEX"})

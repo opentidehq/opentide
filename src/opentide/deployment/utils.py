@@ -1,19 +1,34 @@
 from __future__ import annotations
 
+from typing import Any
+
+from opentide.core import registry
 from opentide.core.io import load_yaml
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
-from opentide.core.registry import OpenTide
 from opentide.deployment.git_repo import local_rule_scope, modified_rule_scope, rules_folder_in_repo
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.platforms.enabled import enabled_systems
 
 logger = get_logger(__name__)
 
-SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
 NESTED_RULES_ISSUE = "https://github.com/OpenTideHQ/opentide/issues/312"
 NESTED_RULES_SHOWN = 5
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve registry-backed globals on access rather than at import (#536).
+
+    This module is the canonical home of ``SYSTEMS_CONFIGS_INDEX``; the
+    deployment package re-exports it from here. Binding it at import time built
+    the entire registry index as a side effect of importing this module (~271 ms)
+    and captured whichever ``opentide.core.registry.OpenTide`` was live, so a
+    first import under ``patch()`` left a dead mock here for the whole process.
+    """
+    if name == "SYSTEMS_CONFIGS_INDEX":
+        return registry.OpenTide.Configurations.Systems.Index
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "DEPRECATED_STATUSES",
@@ -64,7 +79,7 @@ def check_status(status_name: str) -> StatusStrategy:
     This resolves the label to the strategy, which is what the deploy planner
     filters on.
     """
-    statuses_definitions = OpenTide.Configurations.Deployment.statuses
+    statuses_definitions = registry.OpenTide.Configurations.Deployment.statuses
     for status in statuses_definitions:
         if status.name == status_name:
             if isinstance(status.strategy, StatusStrategy):
@@ -257,7 +272,7 @@ class ExternalIdHelper:
 
     @staticmethod
     def remove_id(rule_id: int | str, tenant_name: str, mdr_uuid: str) -> None:
-        file_path = OpenTide.Configurations.Global.Paths.Tide.rule / OpenTide.Models.files[mdr_uuid]
+        file_path = registry.OpenTide.Configurations.Global.Paths.Tide.rule / registry.OpenTide.Models.files[mdr_uuid]
         content = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
         updated = [line for line in content if line.strip() != f"rule_id::{tenant_name}: {rule_id}"]
         file_path.write_text("".join(updated), encoding="utf-8")
@@ -270,7 +285,7 @@ class ExternalIdHelper:
         mdr_uuid: str,
         system_name: str,
     ) -> None:
-        file_path = OpenTide.Configurations.Global.Paths.Tide.rule / OpenTide.Models.files[mdr_uuid]
+        file_path = registry.OpenTide.Configurations.Global.Paths.Tide.rule / registry.OpenTide.Models.files[mdr_uuid]
         content = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
         updated: list[str] = []
         for line in content:
@@ -286,3 +301,7 @@ class ExternalIdHelper:
             tenant=tenant_name,
             rule_id=str(rule_id),
         )
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

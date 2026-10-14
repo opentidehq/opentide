@@ -51,13 +51,16 @@ def test_platforms_accessor_emits_deprecation_warning(monkeypatch: pytest.Monkey
     # Regression guard for #530, asserted here rather than in a separate test
     # because a separate one is not guaranteed to run after this in the same
     # worker: xdist distributes individual tests, so it could land elsewhere and
-    # never see the leak. If the module-level import above is removed, the lazy
-    # import inside `_ensure_loaded` rebinds this module to the MagicMock and
-    # every later deployment test fails with an empty status list.
+    # never see the leak.
+    #
+    # Since #536 utils resolves `registry.OpenTide` at call time instead of
+    # binding its own name, so a patch can no longer be captured by an import.
+    # This asserts the property that actually matters -- what the code under
+    # test will read -- and so keeps holding whichever way the seam is spelled.
     import opentide.deployment.utils as deployment_utils
     from opentide.core.registry import OpenTideRegistry
 
-    assert isinstance(deployment_utils.OpenTide, OpenTideRegistry), (
-        "a mocked registry leaked into opentide.deployment.utils; it was imported "
-        "for the first time while opentide.core.registry.OpenTide was patched (#530)"
+    assert isinstance(deployment_utils.registry.OpenTide, OpenTideRegistry), (
+        "a mocked registry is still visible to opentide.deployment.utils after the "
+        "patch exited; it must resolve registry.OpenTide at call time (#530, #536)"
     )

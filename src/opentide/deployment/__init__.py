@@ -8,7 +8,6 @@ from opentide.deployment.ci import CIEnvironment
 from opentide.deployment.git_repo import GitRepository, diff_calculation, modified_mdr_files
 from opentide.deployment.utils import (
     DEPRECATED_STATUSES,
-    SYSTEMS_CONFIGS_INDEX,
     ExternalIdHelper,
     Proxy,
     check_status,
@@ -44,10 +43,21 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    """Load pandas-dependent compatibility exports only when requested."""
+    """Load pandas-dependent and registry-backed exports only when requested."""
     if name == "TideDeployment":
         from opentide.deployment.planning import TideDeployment
 
         globals()[name] = TideDeployment
         return TideDeployment
+    if name == "SYSTEMS_CONFIGS_INDEX":
+        # Deliberately NOT cached in globals(): it is a live view of registry
+        # configuration, and importing this package must not build the index
+        # (#536). Resolved from utils, which owns the name.
+        from opentide.deployment import utils
+
+        return utils.SYSTEMS_CONFIGS_INDEX
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

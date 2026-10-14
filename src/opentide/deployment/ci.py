@@ -1,7 +1,8 @@
 import os
+from typing import Any
 
 from opentide.core.logging import get_logger
-from opentide.core.registry import DebugHelpers, OpenTide
+from opentide.core.registry import DebugHelpers
 from opentide.models.deployment_enums import (
     StatusStrategy,
 )
@@ -9,8 +10,22 @@ from opentide.models.deployment_enums import (
 logger = get_logger(__name__)
 from enum import Enum, auto
 
-SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve registry-backed globals on access rather than at import (#536).
+
+    Evaluating this at module level built the whole registry index as an import
+    side effect, and bound whatever ``opentide.core.registry.OpenTide`` happened
+    to be at the time -- so a module first imported under ``patch()`` kept the
+    mock permanently.
+    """
+    if name == "SYSTEMS_CONFIGS_INDEX":
+        from opentide.core import registry
+
+        return registry.OpenTide.Configurations.Systems.Index
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class CIEnvironment:
@@ -47,3 +62,7 @@ class CIEnvironment:
         else:
             logger.info("discovered_ci_environment", platform="local")
             return self.CIPlatforms.LocalDebug
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | {"SYSTEMS_CONFIGS_INDEX"})
