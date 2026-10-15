@@ -194,7 +194,13 @@ def _not_a_ci_diff_plan(plan: DeploymentStrategy) -> Exception:
 
 
 def _production_base(repo: DulwichRepo) -> str | None:
-    """The parent of HEAD when that object is in the checkout.
+    """HEAD's first parent (``HEAD^1``) when that object is in the checkout.
+
+    The first parent is the default branch before this commit landed, for a
+    merge commit, a squash, and a pull request's synthetic merge ref alike.
+    The second commit of a date-ordered walk is not: on a merge it is usually
+    the merged branch's head, so the rules the merge changed diffed to
+    nothing (#546).
 
     ``None`` means HEAD is the first commit, so a production diff is empty.
     A shallow clone still names the parent and does not contain its object;
@@ -208,9 +214,6 @@ def _production_base(repo: DulwichRepo) -> str | None:
         repo._repo[parent.encode("ascii")]
     except KeyError:
         raise Exception(f"Could not find git commit {parent}") from None
-    commits = list(repo.iter_commits("HEAD", max_count=2))
-    if len(commits) > 1:
-        return commits[1].hexsha
     return parent
 
 
