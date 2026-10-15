@@ -268,6 +268,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
                 platform=PLATFORM,
                 tenant_name=tenant,
                 status_of=lambda mdr: mdr.configurations.defender_for_endpoint.status,
+                plan=deployment_plan,
             )
             if not planned:
                 continue

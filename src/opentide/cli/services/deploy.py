@@ -71,12 +71,22 @@ def run_deploy(
     keep_deprecated: bool | None = None,
     wide: bool = False,
     skip_unconfigured: bool = False,
+    persist_state_externally: bool = False,
 ) -> dict[str, object]:
     """Deploy detection rules (Orchestration/deploy.py parity).
 
     *keep_deprecated* ``None`` keeps ``DISABLEMENT`` and ``DELETION`` rules
     for the ``PRODUCTION`` plan only; see :func:`keeps_deprecated`.
+    *persist_state_externally* lets a CI run other than ``PRODUCTION`` create
+    rules whose ids land in deployment state; the caller commits the shards.
     """
+    from opentide.deployment.external_ids import PERSIST_EXTERNALLY_ENV
+
+    # Per run, like the plan: a long-lived process must not inherit it.
+    if persist_state_externally:
+        os.environ[PERSIST_EXTERNALLY_ENV] = "1"
+    else:
+        os.environ.pop(PERSIST_EXTERNALLY_ENV, None)
     plan_warnings: list[str] = []
     result = _deploy(
         ctx,

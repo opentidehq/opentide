@@ -144,7 +144,7 @@ class CrowdstrikeDeploy(RuleDeployer):
             logger.info('currently_targeting_tenant', detail=tenant_deployment.tenant.name)
             # Plan against the deployment state before the client exists, so a
             # refused rule makes no HTTP call.
-            planned = screen_tenant(list(tenant_deployment.rules), platform=PLATFORM, tenant_name=tenant_deployment.tenant.name, status_of=lambda mdr: mdr.configurations.crowdstrike.status)
+            planned = screen_tenant(list(tenant_deployment.rules), platform=PLATFORM, tenant_name=tenant_deployment.tenant.name, status_of=lambda mdr: mdr.configurations.crowdstrike.status, plan=deployment_plan)
             if not planned:
                 continue
             service = CrowdstrikeService(tenant_deployment.tenant)

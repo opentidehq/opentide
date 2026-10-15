@@ -477,6 +477,14 @@ def deploy_cmd(
         "--skip-unconfigured",
         help="Exit 0 when every platform in the plan has no \\[\\[tenants]] block",
     ),
+    persist_state_externally: bool = typer.Option(
+        False,
+        "--persist-state-externally",
+        help=(
+            "Allow Defender, SentinelOne and CrowdStrike creates in a CI run other than "
+            "--plan PRODUCTION; this pipeline must commit .opentide/states/deployment/ itself"
+        ),
+    ),
 ) -> None:
     """Deploy detection rules to configured platforms."""
     if ctx.invoked_subcommand is not None:
@@ -491,6 +499,7 @@ def deploy_cmd(
         keep_deprecated=keep_deprecated,
         wide=wide,
         skip_unconfigured=skip_unconfigured,
+        persist_state_externally=persist_state_externally,
     )
     emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 

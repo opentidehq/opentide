@@ -93,8 +93,9 @@ def defender(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> Callabl
     service_class = _service(module, monkeypatch, "DefenderForEndpointService")
     service_class.return_value.create_detection_rule.return_value = 12345
 
-    def run() -> MagicMock:
-        module.DefenderForEndpointDeploy().deploy([DEFENDER], DeploymentStrategy.FULL)
+    def run(plan: DeploymentStrategy = DeploymentStrategy.PRODUCTION) -> MagicMock:
+        # PRODUCTION: the one plan whose CI job commits the shards.
+        module.DefenderForEndpointDeploy().deploy([DEFENDER], plan)
         return service_class
 
     return run
@@ -319,6 +320,106 @@ def test_defender_mismatched_shard_creates_nothing(
     assert _failed()
 
 
+@pytest.fixture
+def no_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("CI", "GITHUB_ACTIONS", "TF_BUILD"):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [DeploymentStrategy.STAGING, DeploymentStrategy.FULL, DeploymentStrategy.ALWAYS],
+)
+@pytest.mark.parametrize("ci", ["CI", "GITHUB_ACTIONS", "TF_BUILD"])
+def test_a_ci_create_outside_production_is_refused_before_any_http(
+    tide_corpus_repo: Path,
+    defender: Callable[..., MagicMock],
+    monkeypatch: pytest.MonkeyPatch,
+    plan: DeploymentStrategy,
+    ci: str,
+) -> None:
+    """#554: only the production job commits shards, so the new id would be lost."""
+    monkeypatch.setenv(ci, "true")
+    spy = _spy_logger(monkeypatch)
+
+    defender(plan).assert_not_called()
+
+    assert _failed()
+    assert _shard(tide_corpus_repo, DEFENDER) is None
+    assert _events(spy.error) == ["deployment_state_unpersisted"]
+    with pytest.raises(DeploymentStateError) as caught:
+        plan_external_id(
+            object_uuid=DEFENDER,
+            platform="defender_for_endpoint",
+            tenant_name="contoso",
+            status="STAGING",
+            plan=plan,
+        )
+    assert caught.value.code == "deployment_state_unpersisted"
+    assert "--persist-state-externally" in caught.value.message
+
+
+def test_a_ci_staging_run_still_updates_a_bound_rule(
+    tide_corpus_repo: Path, defender: Callable[..., MagicMock]
+) -> None:
+    record_external_id(DEFENDER, "defender_for_endpoint", "contoso", 777, tide_corpus_repo)
+
+    service = defender(DeploymentStrategy.STAGING).return_value
+
+    service.update_detection_rule.assert_called_once()
+    service.create_detection_rule.assert_not_called()
+    assert not _failed()
+
+
+def test_a_ci_staging_run_still_deletes_a_bound_rule(
+    tide_corpus_repo: Path, defender: Callable[..., MagicMock]
+) -> None:
+    _edit_block(tide_corpus_repo, DEFENDER, "defender_for_endpoint", status="REMOVED")
+    record_external_id(DEFENDER, "defender_for_endpoint", "contoso", 777, tide_corpus_repo)
+
+    service = defender(DeploymentStrategy.STAGING).return_value
+
+    service.delete_detection_rule.assert_called_once_with("777")
+    assert _shard(tide_corpus_repo, DEFENDER) is None
+    assert not _failed()
+
+
+def test_a_local_staging_run_may_create(
+    tide_corpus_repo: Path, defender: Callable[..., MagicMock], no_ci: None
+) -> None:
+    """Outside CI the operator commits the shard."""
+    defender(DeploymentStrategy.STAGING).return_value.create_detection_rule.assert_called_once()
+    assert _shard(tide_corpus_repo, DEFENDER)["platforms"] == {
+        "defender_for_endpoint": {"contoso": "12345"}
+    }
+    assert not _failed()
+
+
+def test_persist_state_externally_lifts_the_refusal(
+    tide_corpus_repo: Path, defender: Callable[..., MagicMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.deployment.external_ids import PERSIST_EXTERNALLY_ENV
+
+    monkeypatch.setenv(PERSIST_EXTERNALLY_ENV, "1")
+
+    defender(DeploymentStrategy.STAGING).return_value.create_detection_rule.assert_called_once()
+    assert _shard(tide_corpus_repo, DEFENDER) is not None
+    assert not _failed()
+
+
+@pytest.mark.parametrize("platform", ["sentinel_one", "crowdstrike"])
+def test_sentinel_one_and_crowdstrike_refuse_an_unpersisted_create_too(
+    request: pytest.FixtureRequest, tide_corpus_repo: Path, platform: str
+) -> None:
+    run = request.getfixturevalue(platform)
+    uuid = SENTINEL_ONE if platform == "sentinel_one" else CROWDSTRIKE
+
+    run(DeploymentStrategy.STAGING).assert_not_called()
+
+    assert _failed()
+    assert _shard(tide_corpus_repo, uuid) is None
+
+
 def test_defender_misspelt_shard_name_creates_nothing(
     tide_corpus_repo: Path, defender: Callable[[], MagicMock]
 ) -> None:
@@ -383,8 +484,9 @@ def sentinel_one(
     service_class = _service(module, monkeypatch, "SentinelOneService")
     service_class.return_value.create_update_detection_rule.return_value = 4242
 
-    def run() -> MagicMock:
-        module.SentinelOneDeploy().deploy([SENTINEL_ONE], DeploymentStrategy.FULL)
+    def run(plan: DeploymentStrategy = DeploymentStrategy.PRODUCTION) -> MagicMock:
+        # PRODUCTION: the one plan whose CI job commits the shards.
+        module.SentinelOneDeploy().deploy([SENTINEL_ONE], plan)
         return service_class
 
     return run
@@ -425,8 +527,9 @@ def crowdstrike(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> Call
         "c5e1b2a0e4c84f0a9d3b7e6a1c8f0d22"
     )
 
-    def run() -> MagicMock:
-        module.CrowdstrikeDeploy().deploy([CROWDSTRIKE], DeploymentStrategy.FULL)
+    def run(plan: DeploymentStrategy = DeploymentStrategy.PRODUCTION) -> MagicMock:
+        # PRODUCTION: the one plan whose CI job commits the shards.
+        module.CrowdstrikeDeploy().deploy([CROWDSTRIKE], plan)
         return service_class
 
     return run

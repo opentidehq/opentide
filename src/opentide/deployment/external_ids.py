@@ -12,6 +12,13 @@ no fallback to ids on the rule, and a rule that still carries
 | absent     | present     | update (disablement included), or delete |
 | absent     | absent      | create, unless ``DELETION``/``DISABLEMENT``: ``external_id_missing`` |
 
+A create is also refused, before any HTTP call, while git ignores the shard
+directory (``deployment_state_ignored``) and when the run cannot persist the
+id it would record (``deployment_state_unpersisted``): in CI under any plan
+other than ``PRODUCTION``, because only the generated production job commits
+``.opentide/states/deployment/``. ``opentide deploy --persist-state-externally``
+lifts that refusal for a pipeline that commits the shards itself.
+
 ``external_id_missing`` is a warning, not a failure: nothing is known to exist
 on that tenant, so there is nothing to disable or delete, and retiring a rule
 that never reached a tenant must not fail the run. Every other code is an
@@ -39,6 +46,9 @@ from opentide.states.deployment import (
 )
 
 logger = get_logger(__name__)
+
+#: Set by ``opentide deploy --persist-state-externally`` for the run.
+PERSIST_EXTERNALLY_ENV = "OPENTIDE_PERSIST_STATE_EXTERNALLY"
 
 MIGRATE_ADVICE = (
     "Run 'opentide deploy migrate-state' and commit the stripped rules together "
@@ -106,6 +116,50 @@ def without_legacy_external_ids(rules: list[Any], *, platform: str) -> list[Any]
     return kept
 
 
+def _plan_name(plan: object) -> str | None:
+    """The deployment plan of this run: *plan*, else ``DEPLOYMENT_PLAN``."""
+    if plan is not None:
+        return getattr(plan, "name", str(plan)).upper()
+    from opentide.models.deployment_enums import DeploymentStrategy
+
+    try:
+        return DeploymentStrategy.load_from_environment().name
+    except ValueError:
+        return None
+
+
+def unpersisted_error(
+    *, object_uuid: str, platform: str, tenant_name: str, plan: object = None
+) -> DeploymentStateError | None:
+    """``deployment_state_unpersisted`` when this run could create an id nobody commits.
+
+    Only the generated production job commits ``.opentide/states/deployment/``.
+    A create anywhere else in CI (a pull-request STAGING job, a FULL, ALWAYS or
+    MANUAL run) would leave the only copy of the new id on a runner that is
+    thrown away, and the next run would create the rule again. A local run may
+    create: the operator commits the shard. ``--persist-state-externally``
+    says the pipeline commits the shards itself.
+    """
+    if os.environ.get(PERSIST_EXTERNALLY_ENV):
+        return None
+    from opentide.deployment.ci import CIEnvironment
+
+    if CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug:
+        return None
+    name = _plan_name(plan)
+    if name == "PRODUCTION":
+        return None
+    return DeploymentStateError(
+        "deployment_state_unpersisted",
+        f"rule {object_uuid} has no {platform} id for tenant {tenant_name.strip()!r}, and "
+        f"this {name or 'unknown'} run in CI cannot keep the id a create would return: only "
+        "the generated production job commits .opentide/states/deployment/. The create "
+        "was refused before any vendor call. Deploy the rule from the production job, or "
+        "pass --persist-state-externally if this pipeline commits "
+        ".opentide/states/deployment/ itself.",
+    )
+
+
 def plan_external_id(
     *,
     object_uuid: str,
@@ -114,8 +168,12 @@ def plan_external_id(
     status: object,
     raw_rule: Mapping[str, Any] | None = None,
     workspace: Path | None = None,
+    plan: object = None,
 ) -> ExternalIdAction:
-    """Decide create, update or delete from the shard, or raise a coded error."""
+    """Decide create, update or delete from the shard, or raise a coded error.
+
+    *plan* is the run's deployment plan; ``None`` reads ``DEPLOYMENT_PLAN``.
+    """
     document = raw_rule if raw_rule is not None else raw_rule_document(object_uuid)
     legacy = legacy_key_error(object_uuid, document)
     if legacy is not None:
@@ -147,6 +205,11 @@ def plan_external_id(
     ignore = deployment_state_ignore(workspace)
     if ignore is not None:
         raise DeploymentStateError("deployment_state_ignored", ignored_message(ignore))
+    unpersisted = unpersisted_error(
+        object_uuid=object_uuid, platform=platform, tenant_name=tenant_name, plan=plan
+    )
+    if unpersisted is not None:
+        raise unpersisted
     return ExternalIdAction("create")
 
 
@@ -240,6 +303,7 @@ def screen_tenant(
     tenant_name: str,
     status_of: Any,
     workspace: Path | None = None,
+    plan: object = None,
 ) -> list[tuple[Any, ExternalIdAction]]:
     """Plan every rule for one tenant before the client is built; drop and report failures."""
     planned: list[tuple[Any, ExternalIdAction]] = []
@@ -252,6 +316,7 @@ def screen_tenant(
                 tenant_name=tenant_name,
                 status=status_of(rule),
                 workspace=workspace,
+                plan=plan,
             )
         except DeploymentStateError as error:
             report_failure(

@@ -140,7 +140,7 @@ class SentinelOneDeploy(RuleDeployer):
         for tenant_deployment in deployment.rule_deployment:
             # Plan against the deployment state before the client exists, so a
             # refused rule makes no HTTP call.
-            planned = screen_tenant(list(tenant_deployment.rules), platform=PLATFORM, tenant_name=tenant_deployment.tenant.name, status_of=lambda mdr: mdr.configurations.sentinel_one.status)
+            planned = screen_tenant(list(tenant_deployment.rules), platform=PLATFORM, tenant_name=tenant_deployment.tenant.name, status_of=lambda mdr: mdr.configurations.sentinel_one.status, plan=deployment_plan)
             if not planned:
                 continue
             service = SentinelOneService(tenant_deployment.tenant)

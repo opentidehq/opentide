@@ -39,6 +39,7 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | `--keep-deprecated` / `--drop-deprecated` | — | Include rules whose status strategy is `DISABLEMENT` or `DELETION`, so the deploy disables or deletes them. Default: on for `--plan PRODUCTION`, off for other plans |
 | `--skip-promotion` | — | Skip promotion step |
 | `--skip-unconfigured` | — | Exit 0 when every platform in the plan has no `[[tenants]]` block |
+| `--persist-state-externally` | — | In CI, allow a run whose plan is not `PRODUCTION` to create Defender for Endpoint, SentinelOne and CrowdStrike rules. Pass it only when the pipeline commits `.opentide/states/deployment/` itself; see [Creates outside the production job](../usage/concepts/deployment-state.md#creates-outside-the-production-job) |
 
 ## Output
 
@@ -151,6 +152,7 @@ FATAL: Metadata deployment is not implemented for splunk
 - **Platform not found** — it is not enabled in your workspace config.
 - **`external_id_in_rule`** — the rule still carries `rule_id`, `rule_id_bundle` or `rule_id::<tenant>` on some platform block. The deployment plan leaves it out for every platform, `--dry-run` included, before any HTTP call, and the run exits `1`; other rules still deploy. Run [`deploy migrate-state`](#deploy-migrate-state) and commit the result.
 - **`external_id_missing`** (warning) — a deletion or disablement found no id for that tenant in `.opentide/states/deployment/`, so nothing is known to exist there and nothing is called. The run does not fail on it: retiring a rule that never reached a tenant is normal. If a remote copy does exist, remove or disable it by hand.
+- **`deployment_state_unpersisted`** — a CI run whose plan is not `PRODUCTION` (the pull-request staging job, for example) would create a Defender for Endpoint, SentinelOne or CrowdStrike rule, and nothing would commit the id it returns. The create was refused before any vendor call and the run exits `1`; updates and deletes of rules that already have an id still ran. The production job creates the rule after merge. Pass `--persist-state-externally` only if your pipeline commits `.opentide/states/deployment/` itself.
 - **`deployment_state_ignored`** — `.gitignore` hides `.opentide/states/deployment/`, so deploy will not create a Defender, SentinelOne or CrowdStrike rule whose id git would never see. Ignore `.opentide/states/sharing.jsonl` instead. See [Deployment state](../usage/concepts/deployment-state.md) for the other `deployment_state_*` codes.
 - **`skipped` with no rules in a new repository** — git does not keep empty folders, so a fresh clone has no `objects/rules/` until the first rule is committed. Deploy treats the missing folder as an empty catalogue: it reports `skipped` with exit `0`, an empty `plan`, and the `dry_run` flag, and contacts no platform.
 - **No tenants** — `setup repo` enables a platform and leaves the `[[tenants]]` example commented out. A real `deploy` of rules for that platform exits `1` before any engine loads, and names the file to edit. `--dry-run` still previews the payloads and warns that a real deploy would stop.
