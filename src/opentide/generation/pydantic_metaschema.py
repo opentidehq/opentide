@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import importlib
 import types
 from typing import Any, Union, cast, get_args, get_origin
 
@@ -65,8 +67,65 @@ _CORE_ROOT_EXTRAS_BASE: dict[str, dict[str, Any]] = {
 }
 
 
-def _core_root_extras_for_model(_model: type[TideModel], family: str) -> dict[str, Any]:
-    return dict(_CORE_ROOT_EXTRAS_BASE.get(family, {}))
+def _resolve_model_type(annotation: Any) -> type[TideModel] | None:
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+    if origin in {Union, types.UnionType} and args:
+        for arg in args:
+            resolved = _resolve_model_type(arg)
+            if resolved:
+                return resolved
+        return None
+    if origin is list and args:
+        return _resolve_model_type(args[0])
+    if isinstance(annotation, type) and issubclass(annotation, TideModel):
+        return annotation
+    return None
+
+
+def definition_key(model: type[TideModel]) -> str:
+    """Serialisable ``tide.meta.definition`` value naming *model* by import path."""
+    return f"{model.__module__}:{model.__qualname__}"
+
+
+def resolve_definition_model(field: str, definition: object) -> type[TideModel]:
+    """Model behind a ``tide.meta.definition`` value on property *field*.
+
+    ``True`` means the shared model for *field* (``metadata`` → ``ObjectMetadata``).
+    A ``DEFINITION_MODELS`` key aliases another field's model (legacy ``meta``).
+    ``module:QualName`` names a revision-specific model, such as ``RuleMetadata``
+    for ``rule::1.1``.
+    """
+    if definition is True:
+        return DEFINITION_MODELS[field]
+    key = str(definition)
+    if key in DEFINITION_MODELS:
+        return DEFINITION_MODELS[key]
+    module_name, _, qualname = key.partition(":")
+    target: Any = importlib.import_module(module_name)
+    for part in qualname.split("."):
+        target = getattr(target, part)
+    if not (isinstance(target, type) and issubclass(target, TideModel)):
+        raise TypeError(f"tide.meta.definition {key!r} is not a TideModel")
+    return target
+
+
+def _core_root_extras_for_model(model: type[TideModel], family: str) -> dict[str, Any]:
+    """Root extras for *model*, with definitions resolved to the revision's own models.
+
+    A revision can narrow a definition field (``rule::1.1`` declares
+    ``metadata: RuleMetadata``). Point ``tide.meta.definition`` at that model so
+    the generated schema describes the revision's fields, not the shared default.
+    """
+    extras = copy.deepcopy(_CORE_ROOT_EXTRAS_BASE.get(family, {}))
+    for field, field_extras in extras.get("property_extras", {}).items():
+        if field_extras.get("tide.meta.definition") is not True:
+            continue
+        info = model.model_fields.get(field)
+        own = _resolve_model_type(info.annotation) if info is not None else None
+        if own is not None and own is not DEFINITION_MODELS.get(field):
+            field_extras["tide.meta.definition"] = definition_key(own)
+    return extras
 
 
 def _core_root_extras() -> dict[str, dict[str, Any]]:
@@ -261,22 +320,6 @@ def _merge_model_field_extras(model: type[TideModel], properties: dict[str, Any]
                 item_props = items.get("properties")
                 if isinstance(item_props, dict):
                     _merge_model_field_extras(nested, item_props)
-
-
-def _resolve_model_type(annotation: Any) -> type[TideModel] | None:
-    origin = get_origin(annotation)
-    args = get_args(annotation)
-    if origin in {Union, types.UnionType} and args:
-        for arg in args:
-            resolved = _resolve_model_type(arg)
-            if resolved:
-                return resolved
-        return None
-    if origin is list and args:
-        return _resolve_model_type(args[0])
-    if isinstance(annotation, type) and issubclass(annotation, TideModel):
-        return annotation
-    return None
 
 
 def _normalize_schema(schema: dict[str, Any]) -> dict[str, Any]:

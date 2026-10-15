@@ -707,16 +707,12 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
         if type(dict_foo[field]) == dict:
             if "tide.meta.definition" in dict_foo[field].keys():
                 from opentide.generation.pydantic_metaschema import (
-                    DEFINITION_MODELS,
                     build_model_schema_source,
+                    resolve_definition_model,
                 )
 
                 metadef = dict_foo[field]["tide.meta.definition"]
-                if metadef is True:
-                    definition_model = DEFINITION_MODELS[field]
-                else:
-                    definition_model = DEFINITION_MODELS[str(metadef)]
-                temp = build_model_schema_source(definition_model)
+                temp = build_model_schema_source(resolve_definition_model(field, metadef))
 
                 if deprecation_message := dict_foo[field].get("tide.meta.deprecation"):
                     temp["title"] = " DEPRECATION WARNING"

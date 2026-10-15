@@ -48,10 +48,25 @@ class ObjectMetadata(TideModel):
         return str(value)
 
 
+_SPACED_DATETIME = r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
+
+
 class RuleMetadata(ObjectMetadata):
     """``rule::1.1`` metadata: optional ISO 8601 ``reviewed`` instant."""
 
-    reviewed: str | None = TideField(None, schema_extra={"format": "date"})
+    # Editor schema mirrors parse_review_instant: an ISO 8601 date or a datetime
+    # with an offset, including the space-separated form the parser accepts.
+    reviewed: str | None = TideField(
+        None,
+        schema_extra={
+            "anyOf": [
+                {"type": "string", "format": "date"},
+                {"type": "string", "format": "date-time"},
+                {"type": "string", "pattern": _SPACED_DATETIME},
+                {"type": "null"},
+            ]
+        },
+    )
 
     @field_validator("reviewed", mode="before")
     @classmethod
