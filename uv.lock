@@ -56,15 +56,6 @@ wheels = [
 ]
 
 [[package]]
-name = "azure-common"
-version = "1.1.28"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3e/71/f6f71a276e2e69264a97ad39ef850dca0a04fce67b12570730cb38d0ccac/azure-common-1.1.28.zip", hash = "sha256:4ac0cd3214e36b6a1b6a442686722a5d8cc449603aa833f3f0f40bda836704a3", size = 20914, upload-time = "2022-02-03T19:39:44.373Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/62/55/7f118b9c1b23ec15ca05d15a578d8207aa1706bc6f7c87218efffbbf875d/azure_common-1.1.28-py2.py3-none-any.whl", hash = "sha256:5c12d3dcf4ec20599ca6b0d3e09e86e146353d443e7fcc050c9a19c1f9df20ad", size = 14462, upload-time = "2022-02-03T19:39:42.417Z" },
-]
-
-[[package]]
 name = "azure-core"
 version = "1.41.0"
 source = { registry = "https://pypi.org/simple" }
@@ -107,16 +98,16 @@ wheels = [
 
 [[package]]
 name = "azure-mgmt-securityinsight"
-version = "1.0.0"
+version = "2.0.0b4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "azure-common" },
     { name = "azure-mgmt-core" },
-    { name = "msrest" },
+    { name = "isodate" },
+    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/cf/d0bba7e17fd6005bbf59c75713f27473ac67379a49a247caab8860c51208/azure-mgmt-securityinsight-1.0.0.zip", hash = "sha256:2d244ae2b42437de85137cc7dd8518c6dc70a7c01a8cc2bf7c477a3ec7bfd9a4", size = 176287, upload-time = "2022-07-26T02:50:29.795Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/61/7bc3d10f4d7952362466ae1ef5ae5c0352cf086222b4b2756637b9df1473/azure_mgmt_securityinsight-2.0.0b4.tar.gz", hash = "sha256:4331fb302c2bd0b0c472692d55a8340942bbfe25f3703e846319eb8b66ce41e5", size = 401316, upload-time = "2026-09-16T08:03:37.93Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/de/9a5d5f542728be7f9c554536a4dcd8f9cea49faa32c466204e3a3523c2ff/azure_mgmt_securityinsight-1.0.0-py3-none-any.whl", hash = "sha256:400c57a96c1385ff9f5c84e8b37b9c3cbb3948971d5c8385e245f51ebc3a199e", size = 164745, upload-time = "2022-07-26T02:50:27.88Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/83/46de01f13141f3c5ba4e2490c3112a9aadadba3255913d349a3b4ed36bee/azure_mgmt_securityinsight-2.0.0b4-py3-none-any.whl", hash = "sha256:0dabf743d7afbde2a87875b1ca881d1b96e9570b194fa9b2983d42a4c487d90d", size = 337281, upload-time = "2026-09-16T08:03:39.348Z" },
 ]
 
 [[package]]
@@ -1007,22 +998,6 @@ wheels = [
 ]
 
 [[package]]
-name = "msrest"
-version = "0.7.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "azure-core" },
-    { name = "certifi" },
-    { name = "isodate" },
-    { name = "requests" },
-    { name = "requests-oauthlib" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/68/77/8397c8fb8fc257d8ea0fa66f8068e073278c65f05acb17dcb22a02bfdc42/msrest-0.7.1.zip", hash = "sha256:6e7661f46f3afd88b75667b7187a92829924446c7ea1d169be8c4bb7eeb788b9", size = 175332, upload-time = "2022-06-13T22:41:25.111Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/cf/f2966a2638144491f8696c27320d5219f48a072715075d168b31d3237720/msrest-0.7.1-py3-none-any.whl", hash = "sha256:21120a810e1233e5e6cc7fe40b474eeb4ec6f757a15d7cf86702c369f9567c32", size = 85384, upload-time = "2022-06-13T22:41:22.42Z" },
-]
-
-[[package]]
 name = "nodeenv"
 version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1240,15 +1215,6 @@ wheels = [
 ]
 
 [[package]]
-name = "oauthlib"
-version = "4.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7a/d8/a1bcc8ba112a627f8ffbdc212a78ce18d3ac07e91a5ca65d27918eee25a1/oauthlib-4.0.0.tar.gz", hash = "sha256:efb274799819440f95b4ab3b818869f1ce9ae26c5beacba0201d1a1b76b54f86", size = 187232, upload-time = "2026-09-28T06:01:18.77Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d9/f4/78229a1066068ca14fc60fb26cf7381cabe4382261392b90e5f9552722d4/oauthlib-4.0.0-py3-none-any.whl", hash = "sha256:624c28c13a0a59cabf9747dfa52af63be3e512a7f2714df16e91b5b3a145e6cd", size = 159715, upload-time = "2026-09-28T06:01:17.008Z" },
-]
-
-[[package]]
 name = "openpyxl"
 version = "3.1.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1286,6 +1252,7 @@ carbon-black = [
     { name = "carbon-black-cloud-sdk" },
 ]
 dev = [
+    { name = "azure-mgmt-securityinsight" },
     { name = "openpyxl" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1315,6 +1282,7 @@ splunk = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "azure-mgmt-securityinsight" },
     { name = "openpyxl" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1334,7 +1302,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "azure-identity", marker = "extra == 'sentinel'", specifier = ">=1.17" },
-    { name = "azure-mgmt-securityinsight", marker = "extra == 'sentinel'", specifier = ">=1.0" },
+    { name = "azure-mgmt-securityinsight", marker = "extra == 'dev'", specifier = ">=2.0.0b2" },
+    { name = "azure-mgmt-securityinsight", marker = "extra == 'sentinel'", specifier = ">=2.0.0b2" },
     { name = "azure-monitor-query", marker = "extra == 'sentinel'", specifier = ">=1.4" },
     { name = "carbon-black-cloud-sdk", marker = "extra == 'carbon-black'", specifier = ">=1.0" },
     { name = "dulwich", specifier = ">=1.2.12" },
@@ -1372,6 +1341,7 @@ provides-extras = ["carbon-black", "cli", "crowdstrike", "dev", "mcp", "sentinel
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "azure-mgmt-securityinsight", specifier = ">=2.0.0b2" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pandas", specifier = ">=2.0" },
     { name = "pexpect", specifier = ">=4.9" },
@@ -2140,19 +2110,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz", hash = "sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed", size = 142856, upload-time = "2026-05-14T19:25:27.735Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl", hash = "sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0", size = 73075, upload-time = "2026-05-14T19:25:26.443Z" },
-]
-
-[[package]]
-name = "requests-oauthlib"
-version = "2.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "oauthlib" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/42/f2/05f29bc3913aea15eb670be136045bf5c5bbf4b99ecb839da9b422bb2c85/requests-oauthlib-2.0.0.tar.gz", hash = "sha256:b3dffaebd884d8cd778494369603a9e7b58d29111bf6b41bdc2dcd87203af4e9", size = 55650, upload-time = "2024-03-22T20:32:29.939Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/5d/63d4ae3b9daea098d5d6f5da83984853c1bbacd5dc826764b249fe119d24/requests_oauthlib-2.0.0-py2.py3-none-any.whl", hash = "sha256:7dd8a5c40426b779b0868c404bdef9768deccf22749cde15852df527e6269b36", size = 24179, upload-time = "2024-03-22T20:32:28.055Z" },
 ]
 
 [[package]]

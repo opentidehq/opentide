@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, cast
 
 import structlog
@@ -9,23 +10,6 @@ import structlog
 from opentide.models.rule import DetectionRule
 
 logger = structlog.get_logger(__name__)
-
-
-def _mock_sentinel_service() -> Any:
-    from unittest.mock import MagicMock
-
-    service = MagicMock()
-    models = MagicMock()
-    service.alert_rules.models.ScheduledAlertRule.return_value = MagicMock()
-    service.alert_rules.models.AlertDetailsOverride.return_value = MagicMock()
-    service.alert_rules.models.AlertPropertyMapping.return_value = MagicMock()
-    service.alert_rules.models.EventGroupingSettings.return_value = MagicMock()
-    service.alert_rules.models.IncidentConfiguration.return_value = MagicMock()
-    service.alert_rules.models.GroupingConfiguration.return_value = MagicMock()
-    service.alert_rules.models.EntityMapping.return_value = MagicMock()
-    service.alert_rules.models.FieldMapping.return_value = MagicMock()
-    service.alert_rules = MagicMock(models=models)
-    return service
 
 
 def _config_preview(platform: str, rule: DetectionRule) -> dict[str, Any]:
@@ -36,26 +20,52 @@ def _config_preview(platform: str, rule: DetectionRule) -> dict[str, Any]:
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": api_request}
 
 
+# Exclusions scoped to a tenant name are left out of the preview; the payload
+# shows the rule as any tenant without a tenant-specific exclusion receives it.
+_PREVIEW_TENANT = "corpus-tenant"
+
+
+def _compile_failure(rule: DetectionRule, exc: Exception) -> dict[str, Any]:
+    """Record a rule that would fail to deploy, and fail the dry-run with it."""
+    error = f"{type(exc).__name__}: {exc}" if str(exc).strip() else type(exc).__name__
+    logger.error(
+        "sentinel_preview_compile_failed",
+        detail=f"{rule.name} ({rule.metadata.uuid}) would fail to deploy: {error}",
+    )
+    # Read by deployment_outcome(): the dry-run reports failed and exits 1.
+    os.environ["DEPLOYMENT_ERROR_RAISED"] = "1"
+    return {
+        "uuid": rule.metadata.uuid,
+        "name": rule.name,
+        "status": "failed",
+        "error": error,
+        "api_request": None,
+    }
+
+
 def _sentinel_compile_preview(rule: DetectionRule) -> dict[str, Any] | None:
-    try:
-        from opentide.platforms.sentinel.deployer import SentinelDeploy
-    except Exception as exc:
-        logger.debug("sentinel_preview_import_unavailable", error=str(exc))
-        return None
+    """Compile and serialise the ARM request body, offline, with the real SDK models.
 
-    deployer = SentinelDeploy()
-    service = _mock_sentinel_service()
+    Returns ``None`` only when the ``sentinel`` extra is not installed, so the
+    caller falls back to the configuration block. Any compilation or
+    serialisation error is a failure for the rule, never a silent fallback.
+    """
+    from opentide.platforms.sentinel.client import alert_rule_request_body, securityinsight_models
+
     try:
-        compiled = deployer.compile_deployment(
-            service=service,
-            data=rule,
-            tenant="corpus-tenant",
+        securityinsight_models()
+    except ImportError as exc:
+        logger.debug("sentinel_preview_sdk_unavailable", error=str(exc))
+        return None
+    from opentide.platforms.sentinel.deployer import SentinelDeploy
+
+    try:
+        compiled = SentinelDeploy().compile_deployment(
+            service=None, data=rule, tenant=_PREVIEW_TENANT
         )
+        payload = alert_rule_request_body(compiled)
     except Exception as exc:
-        logger.debug("sentinel_preview_compile_failed", error=str(exc))
-        return None
-
-    payload = compiled.as_dict() if hasattr(compiled, "as_dict") else dict(compiled)
+        return _compile_failure(rule, exc)
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
 
 

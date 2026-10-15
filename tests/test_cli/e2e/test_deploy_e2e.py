@@ -156,6 +156,47 @@ def test_deploy_dry_run_sentinel_payload_contains_query(
     assert preview["uuid"] == corpus_rule_uuids[platform]
 
 
+def test_deploy_dry_run_fails_when_a_sentinel_rule_does_not_compile(
+    invoke_cli,
+    tide_corpus_repo: Path,
+    corpus_rule_uuids,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A compile error is a failed dry-run naming the rule, not a config-block preview (#545)."""
+    _mock_deployer(monkeypatch, "sentinel")
+    rule_file = tide_corpus_repo / "objects/rules/rule-0001-sentinel-kql.yaml"
+    rule_file.write_text(
+        rule_file.read_text(encoding="utf-8").replace("frequency: PT1H", "frequency: hourly"),
+        encoding="utf-8",
+    )
+    result = invoke_cli(
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "sentinel",
+        "--plan",
+        "FULL",
+        "--wide",
+        "--skip-promotion",
+        # Click restores keys it was given, so the flag the preview raises
+        # does not leak into later in-process tests.
+        extra_env={"DEPLOYMENT_ERROR_RAISED": ""},
+    )
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "failed"
+    preview = next(
+        item
+        for item in payload["payloads"]["sentinel"]
+        if item["uuid"] == corpus_rule_uuids["sentinel"]
+    )
+    assert preview["status"] == "failed"
+    assert "hourly" in preview["error"]
+    assert preview["api_request"] is None
+    (event,) = _log_events(result.stderr, "sentinel_preview_compile_failed")
+    assert corpus_rule_uuids["sentinel"] in str(event["detail"])
+
+
 def test_deploy_loads_only_the_requested_engine(
     invoke_cli, monkeypatch: pytest.MonkeyPatch
 ) -> None:

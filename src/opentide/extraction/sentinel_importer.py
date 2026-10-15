@@ -11,6 +11,7 @@ from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 from opentide.platforms.sentinel.client import (
     SentinelService,
+    alert_rule_as_flat_dict,
 )
 
 logger = get_logger(__name__)
@@ -205,7 +206,7 @@ def _import_sentinel_rules() -> None:
             resource_group_name=tenant.setup.resource_group,  # type: ignore
             workspace_name=tenant.setup.workspace_name,  # type: ignore
         )
-        rules_list = [rule.as_dict() for rule in rules]
+        rules_list = [alert_rule_as_flat_dict(rule) for rule in rules]
 
         with open(f"output-{tenant.name}.json", "w+", encoding="utf-8") as f:
             json.dump(rules_list, f, indent=4)

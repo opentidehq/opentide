@@ -1,51 +1,49 @@
 # serializer version: 1
 # name: test_preview_payload_shape[rule-0001-sentinel-kql.yaml-sentinel][sentinel_api_request]
   dict({
-    'alert': dict({
-      'create_incident': True,
-      'custom_details': None,
-      'description': None,
-      'dynamic_properties': None,
-      'severity': None,
-      'suppression': False,
-      'tactics': None,
-      'techniques': None,
-      'title': 'Sentinel KQL Rule',
-    }),
-    'contributors': None,
-    'enabled': True,
-    'entities': None,
-    'exclusions': None,
-    'flags': None,
-    'grouping': dict({
-      'alert': dict({
-        'enabled': False,
-        'group_by_alert_details': None,
-        'group_by_custom_details': None,
-        'group_by_entities': None,
-        'grouping_lookback': None,
-        'matching': None,
-        'reopen_closed_incidents': None,
+    'kind': 'Scheduled',
+    'properties': dict({
+      'alertDetailsOverride': dict({
+        'alertDisplayNameFormat': 'Sentinel KQL Rule',
       }),
-      'event': 'SingleAlert',
-    }),
-    'name': 'Sentinel KQL Rule',
-    'query': '''
-      SecurityEvent
-      | where EventID == 4688
-      | take 1
+      'description': '''
+        Simulated Sentinel rule for CLI E2E corpus.
   
-    ''',
-    'scheduling': dict({
-      'frequency': 'PT1H',
-      'lookback': 'PT2H',
-      'nrt': None,
+      ''',
+      'displayName': 'Sentinel KQL Rule',
+      'enabled': True,
+      'entityMappings': list([
+      ]),
+      'eventGroupingSettings': dict({
+        'aggregationKind': 'SingleAlert',
+      }),
+      'incidentConfiguration': dict({
+        'createIncident': True,
+        'groupingConfiguration': dict({
+          'enabled': False,
+          'lookbackDuration': 'PT01H00M00S',
+          'matchingMethod': 'AllEntities',
+          'reopenClosedIncident': False,
+        }),
+      }),
+      'query': '''
+        SecurityEvent
+        | where EventID == 4688
+        | take 1
+  
+      ''',
+      'queryFrequency': 'PT01H00M00S',
+      'queryPeriod': 'PT02H00M00S',
+      'severity': 'High',
+      'suppressionDuration': 'PT01H00M00S',
+      'suppressionEnabled': False,
+      'tactics': list([
+        'Execution',
+      ]),
+      'techniques': list([
+        'T1059',
+      ]),
     }),
-    'schema': None,
-    'status': 'STAGING',
-    'template': None,
-    'tenants': None,
-    'trigger': None,
   })
 # ---
 # name: test_preview_payload_shape[rule-0002-defender-kql.yaml-defender_for_endpoint][defender_for_endpoint_api_request]

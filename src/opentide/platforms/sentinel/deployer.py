@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 from opentide.generation.framework import get_vocab_entry, techniques_resolver
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import OpenTide, DetectionPlatforms
@@ -15,14 +15,23 @@ import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel.deployer')
 
 if TYPE_CHECKING:
-    from azure.mgmt.securityinsight import SecurityInsights
     from opentide.models.system_config import TenantDeployment
 
 class SentinelDeploy(RuleDeployer):
 
-    def compile_deployment(self, service: SecurityInsights, data: DetectionRule, tenant: str):
-        from opentide.platforms.sentinel.client import iso_duration_timedelta
-        rule = service.alert_rules.models.ScheduledAlertRule()
+    def compile_deployment(self, service: Any, data: DetectionRule, tenant: str):
+        """Compile a rule into an SDK alert-rule model for one tenant.
+
+        Models come from ``azure.mgmt.securityinsight.models`` rather than the
+        client: TypeSpec-generated SDKs (2.0.0b3+) no longer expose them on the
+        operation group. ``service`` is kept for API compatibility.
+        """
+        from opentide.platforms.sentinel.client import alert_rule_request_body, iso_duration_timedelta, securityinsight_models
+        models = securityinsight_models()
+        rule = models.ScheduledAlertRule()
+        # TypeSpec models leave the discriminator unset when no properties are
+        # passed to the constructor, which would send a body without `kind`.
+        rule.kind = 'Scheduled'
         configuration = data.configurations.sentinel
         if not configuration:
             raise Exception
@@ -57,7 +66,7 @@ class SentinelDeploy(RuleDeployer):
             if configuration.trigger:
                 rule.trigger_threshold = configuration.trigger.threshold
                 rule.trigger_operator = configuration.trigger.operator
-        details_overrides = service.alert_rules.models.AlertDetailsOverride()
+        details_overrides = models.AlertDetailsOverride()
         if (alert_title := configuration.alert.title):
             details_overrides.alert_display_name_format = alert_title
         if (alert_description := configuration.alert.description):
@@ -71,7 +80,7 @@ class SentinelDeploy(RuleDeployer):
                 if property.property == 'Severity':
                     details_overrides.alert_severity_column_name = property.column
                     continue
-                alert_dynamic_property = service.alert_rules.models.AlertPropertyMapping()
+                alert_dynamic_property = models.AlertPropertyMapping()
                 alert_dynamic_property.alert_property = property.property
                 alert_dynamic_property.value = property.column
                 alert_dynamic_properties.append(alert_dynamic_property)
@@ -87,12 +96,12 @@ class SentinelDeploy(RuleDeployer):
         if not configuration.grouping:
             raise Errors.TideMDRDataModelErrors('Missing Grouping > Event')
         logger.info('event_grouping_configuration', detail=configuration.grouping.event)
-        event_grouping = service.alert_rules.models.EventGroupingSettings()
+        event_grouping = models.EventGroupingSettings()
         event_grouping.aggregation_kind = configuration.grouping.event
         rule.event_grouping_settings = event_grouping
         alert_enabled = configuration.alert.create_incident
         logger.info('alert_enabled', detail=str(alert_enabled))
-        incident_configuration = service.alert_rules.models.IncidentConfiguration(create_incident=alert_enabled)
+        incident_configuration = models.IncidentConfiguration(create_incident=alert_enabled)
         grouping_enabled = configuration.grouping.alert.enabled
         logger.info('alert_grouping_enabled', detail=str(grouping_enabled))
         grouping_lookback = configuration.grouping.alert.grouping_lookback
@@ -109,18 +118,18 @@ class SentinelDeploy(RuleDeployer):
         group_by_entities = configuration.grouping.alert.group_by_entities
         group_by_alert_details = configuration.grouping.alert.group_by_alert_details
         group_by_custom_details = configuration.grouping.alert.group_by_custom_details
-        grouping_configuration = service.alert_rules.models.GroupingConfiguration(enabled=grouping_enabled, lookback_duration=grouping_lookback, reopen_closed_incident=reopen_closed_incident, matching_method=matching_method, group_by_entities=group_by_entities, group_by_alert_details=group_by_alert_details, group_by_custom_details=group_by_custom_details)
+        grouping_configuration = models.GroupingConfiguration(enabled=grouping_enabled, lookback_duration=grouping_lookback, reopen_closed_incident=reopen_closed_incident, matching_method=matching_method, group_by_entities=group_by_entities, group_by_alert_details=group_by_alert_details, group_by_custom_details=group_by_custom_details)
         incident_configuration.grouping_configuration = grouping_configuration
         rule.incident_configuration = incident_configuration
         entity_data = configuration.entities
         entity_mappings = []
         if entity_data:
             for entity in entity_data:
-                mappings = service.alert_rules.models.EntityMapping()
+                mappings = models.EntityMapping()
                 mappings.entity_type = entity.entity
                 field_mappings = []
                 for field in entity.mappings:
-                    field_mapping = service.alert_rules.models.FieldMapping()
+                    field_mapping = models.FieldMapping()
                     field_mapping.identifier = field.identifier
                     field_mapping.column_name = field.column
                     field_mappings.append(field_mapping)
@@ -144,10 +153,10 @@ class SentinelDeploy(RuleDeployer):
             tactics = list(dict.fromkeys(tactics))
             rule.tactics = tactics
             rule.techniques = techniques
-        logger.info('compiled_rule', detail=json.dumps(rule.as_dict()))
+        logger.info('compiled_rule', detail=json.dumps(alert_rule_request_body(rule)))
         return rule
 
-    def deploy_mdr(self, data: DetectionRule, service: SecurityInsights, tenant_config: ConfigurationModels.Systems.Sentinel.Tenant):
+    def deploy_mdr(self, data: DetectionRule, service: Any, tenant_config: ConfigurationModels.Systems.Sentinel.Tenant):
         """
         Deploys the detection rule : creation, update, deletion and disabling.
         """

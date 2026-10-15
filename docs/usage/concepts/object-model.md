@@ -140,6 +140,10 @@ configurations:
     alert:
       title: Sentinel KQL Rule
       suppression: false
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false
 ```
 
 ## Chaining

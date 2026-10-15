@@ -54,8 +54,12 @@ dependencies = [
 sentinel = [
     "azure-identity>=1.17",
     "azure-monitor-query>=1.4",
-    # 2.0 is pre-release only; 1.0 is the newest stable line.
-    "azure-mgmt-securityinsight>=1.0",
+    # The deployer needs models.AlertPropertyMapping, first shipped in
+    # 2.0.0b2; 1.0.0 (the newest stable release) lacks it (#545). 2.0 is
+    # pre-release only, so the pre-release is named in the specifier for
+    # pip and uv to select it. 2.0.0b3 renamed the client to
+    # SecurityInsightsMgmtClient; opentide accepts either spelling.
+    "azure-mgmt-securityinsight>=2.0.0b2",
 ]
 splunk = ["splunk-sdk>=2.0", "pandas>=2.0"]
 crowdstrike = []
@@ -87,6 +91,7 @@ dev = [
     "pre-commit>=4.0",
     "pandas>=2.0",
     "openpyxl>=3.1",
+    "azure-mgmt-securityinsight>=2.0.0b2",
 ]
 
 [dependency-groups]
@@ -106,6 +111,9 @@ dev = [
     "pre-commit>=4.0",
     "pandas>=2.0",
     "openpyxl>=3.1",
+    # The Sentinel deployer's model layer, so tests compile and serialise real
+    # alert rules against the SDK the sentinel extra resolves (#545).
+    "azure-mgmt-securityinsight>=2.0.0b2",
 ]
 
 [project.urls]

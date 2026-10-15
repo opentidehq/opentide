@@ -72,6 +72,16 @@ def tenantless_repo(invoke_cli, tmp_path: Path) -> Callable[[list[str]], Path]:
             assert re.search(r"^enabled = true$", config, re.MULTILINE)
             assert not re.search(r"^\[\[tenants\]\]", config, re.MULTILINE)
             shutil.copy(_corpus_rule(platform), rules / f"{platform}-rule.yaml")
+        # The rules' detection_model chain, so a deploy (and the Sentinel
+        # dry-run, which compiles the rule) can resolve their techniques.
+        for folder, corpus_folder in (
+            ("objectives", "Detection Objectives"),
+            ("threats", "Threat Vectors"),
+        ):
+            target = repo / "objects" / folder
+            target.mkdir(parents=True, exist_ok=True)
+            for path in (TIDE_CORPUS_ROOT / "Objects" / corpus_folder).glob("*.yaml"):
+                shutil.copy(path, target / path.name)
         return repo
 
     return _scaffold

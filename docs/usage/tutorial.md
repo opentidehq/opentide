@@ -173,7 +173,13 @@ configurations:
     alert:
       title: Sentinel KQL Rule
       suppression: false
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false
 ```
+
+Validation accepts a Sentinel block without `grouping`, but a deploy needs `grouping.event` and `grouping.alert`, so the rule sets both. See the [Sentinel platform contract](/docs/specifications/specs/platforms/sentinel-1.0/).
 
 ## 6. Validate
 

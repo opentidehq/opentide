@@ -143,6 +143,8 @@ OpenTide ships platform logic in the wheel. **Third-party SDKs** are only requir
 | Splunk | `opentide[splunk]` | `splunk-sdk` `pandas` |
 | Carbon Black Cloud | `opentide[carbon-black]` | `carbon-black-cloud-sdk` |
 
+The `sentinel` extra installs an `azure-mgmt-securityinsight` 2.0 pre-release (2.0.0b2 or later). The 1.0.0 stable release lacks models the deployer sends, such as `AlertPropertyMapping`. With the extra installed, `deploy --dry-run` compiles each Sentinel rule into the request a live deploy would send; without it, the dry-run previews the configuration block.
+
 Defender, CrowdStrike, SentinelOne, and HarfangLab use HTTP clients bundled with opentide.
 
 Extras are only needed for live API calls — live deploy, and `opentide validate
