@@ -168,3 +168,51 @@ def test_a_previous_runs_failure_does_not_leak(
 
     assert result.exit_code == 0, result.stdout + result.stderr
     assert parse_cli_json(result)["status"] == "skipped"
+
+
+def test_skip_unconfigured_does_not_excuse_a_refused_rule(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--skip-unconfigured`` excuses missing tenants, not ``external_id_in_rule``."""
+    _give_sentinel_rule_a_defender_rule_id(tide_corpus_repo)
+    write_rule_variant(_rules(tide_corpus_repo), "rule-0301-clean.yaml", CLEAN)
+    _mock_sentinel(monkeypatch)
+
+    result = _deploy(invoke_cli, "--skip-unconfigured")
+
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["status"] == "failed"
+    assert payload["message"].startswith("Planning refused rules")
+
+
+@pytest.mark.parametrize(
+    ("module", "engine"),
+    [
+        ("opentide.platforms.sentinel.deployer", "SentinelDeploy"),
+        ("opentide.platforms.splunk.deployer", "SplunkDeploy"),
+    ],
+    ids=["sentinel", "splunk"],
+)
+def test_direct_deployer_calls_refuse_a_legacy_key(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch, module: str, engine: str
+) -> None:
+    """SDK and MCP callers reach the deployer without ``make_deploy_plan``."""
+    import importlib
+
+    from tests.corpus_support import clear_runtime_caches
+
+    from opentide.deployment import DeploymentStrategy
+
+    _give_sentinel_rule_a_defender_rule_id(tide_corpus_repo)
+    clear_runtime_caches()
+    deployer_module = importlib.import_module(module)
+    built = MagicMock()
+    # Sentinel imports TideDeployment inside deploy(); Splunk binds it at import.
+    monkeypatch.setattr("opentide.deployment.TideDeployment", built)
+    if hasattr(deployer_module, "TideDeployment"):
+        monkeypatch.setattr(deployer_module, "TideDeployment", built)
+
+    getattr(deployer_module, engine)().deploy([REFUSED], DeploymentStrategy.FULL)
+
+    built.assert_not_called()

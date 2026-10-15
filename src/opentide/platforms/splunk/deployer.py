@@ -10,6 +10,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, OpenTide
 from opentide.core.responders import resolve_responders
 from opentide.deployment import TideDeployment, check_status
+from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.generation.framework import techniques_resolver
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.models.rule import DetectionRule
@@ -434,6 +435,9 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                 loaded_mdr.append(OpenTide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
+        # Refused on every platform while unmigrated (RFC 0010), including
+        # direct SDK/MCP calls that skip make_deploy_plan.
+        loaded_mdr = without_legacy_external_ids(loaded_mdr, platform="splunk")
 
         if not loaded_mdr:
             logger.info("no_mdrs_to_deploy_for_splunk")

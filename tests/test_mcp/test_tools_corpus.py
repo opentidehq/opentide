@@ -72,6 +72,60 @@ def test_tool_deploy_rule_without_tenants_names_the_failure(tide_corpus_repo: Pa
     assert "TypeError" not in result["message"]
 
 
+def test_tool_deploy_rule_reports_a_refused_rule_as_failed(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review issue 4: a refusal the deployer reports through the run flags is a failure.
+
+    The Sentinel rule still carries a vendor id, so the deployer refuses it
+    with external_id_in_rule before building the client.
+    """
+    from unittest.mock import MagicMock
+
+    from tests.corpus_support import clear_runtime_caches
+
+    uuid = CORPUS_RULE_UUIDS["sentinel"]
+    path = next(
+        p
+        for p in (tide_corpus_repo / "objects" / "rules").glob("*.yaml")
+        if uuid in p.read_text(encoding="utf-8")
+    )
+    text = path.read_text(encoding="utf-8")
+    path.write_text(
+        text.replace("  sentinel:\n", "  sentinel:\n    rule_id::contoso: 42\n", 1),
+        encoding="utf-8",
+    )
+    clear_runtime_caches()
+    monkeypatch.setattr(tools, "_missing_tenants", lambda *_: None)
+    service = MagicMock(name="SentinelService")
+    monkeypatch.setattr("opentide.platforms.sentinel.client.SentinelService", service)
+
+    result = tools.tool_deploy_rule(uuid, "sentinel", dry_run=False)
+
+    service.assert_not_called()
+    assert result["status"] == "failed"
+    assert result["action"] == "error"
+    assert result["error"] == "deployment_failed"
+
+
+def test_tool_deploy_rule_does_not_inherit_a_previous_failure(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.models.rule import DeploymentResult, DetectionRule
+
+    def deployed(self: DetectionRule, platform: str, dry_run: bool = False) -> DeploymentResult:
+        return DeploymentResult(platform=platform, uuids=[self.metadata.uuid], dry_run=dry_run)
+
+    monkeypatch.setattr(DetectionRule, "deploy", deployed)
+    monkeypatch.setattr(tools, "_missing_tenants", lambda *_: None)
+    monkeypatch.setenv("DEPLOYMENT_ERROR_RAISED", "1")
+
+    result = tools.tool_deploy_rule(CORPUS_RULE_UUIDS["sentinel"], "sentinel", dry_run=False)
+
+    assert result["action"] == "deploy"
+    assert result["status"] != "failed"
+
+
 def test_tool_deploy_rule_unknown_platform_is_structured(tide_corpus_repo: Path) -> None:
     for dry_run in (True, False):
         result = tools.tool_deploy_rule(

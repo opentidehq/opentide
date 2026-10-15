@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from opentide.core.registry import OpenTide
@@ -177,6 +178,12 @@ def tool_deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict[str
         missing = _missing_tenants(uuid, platform)
         if missing is not None:
             return missing
+    # Deployers report per-rule refusals (external_id_in_rule,
+    # deployment_state_write_failed, ...) through these flags rather than by
+    # raising. Each call grades itself: a long-lived server must not inherit a
+    # previous call's result.
+    for flag in ("DEPLOYMENT_ERROR_RAISED", "DEPLOYMENT_WARNING_RAISED"):
+        os.environ.pop(flag, None)
     try:
         result = rule.deploy(platform, dry_run=dry_run)
     except ValueError as exc:
@@ -188,6 +195,23 @@ def tool_deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict[str
             "dry_run": dry_run,
             "platform": platform,
             "message": str(exc),
+        }
+    from opentide.cli.exit_codes import deployment_outcome
+
+    outcome = deployment_outcome()
+    if outcome.failed:
+        return {
+            "action": "error",
+            "tenant": None,
+            "rule_id": uuid,
+            "status": "failed",
+            "dry_run": result.dry_run,
+            "platform": platform,
+            "message": (
+                "Deployment failed: the deployer reported a rule error "
+                "(see the log for its code, for example external_id_in_rule)"
+            ),
+            "error": "deployment_failed",
         }
     return {
         "action": "dry-run" if dry_run else "deploy",

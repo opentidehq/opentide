@@ -186,8 +186,13 @@ def _deploy(
     missing_tenants = {error.system: error.config_path for error in tenantless}
     tenants_advice = "; ".join(error.advice for error in tenantless)
     if tenantless and not dry_run:
+        from opentide.cli.exit_codes import deployment_outcome
+
         detail = "; ".join(str(error) for error in tenantless)
-        if skip_unconfigured and len(tenantless) == len(deployment_list):
+        # --skip-unconfigured excuses missing tenants, not a rule that planning
+        # refused (for example external_id_in_rule): that run still fails.
+        refused = deployment_outcome().failed
+        if skip_unconfigured and len(tenantless) == len(deployment_list) and not refused:
             return {
                 "status": "skipped",
                 "message": f"Skipped deploy: {detail}",
@@ -199,7 +204,9 @@ def _deploy(
             }
         return {
             "status": "failed",
-            "message": f"Cannot deploy: {detail}",
+            "message": (
+                f"Planning refused rules; {detail}" if refused else f"Cannot deploy: {detail}"
+            ),
             "advice": tenants_advice,
             "missing_tenants": missing_tenants,
             "deployed": deployed,

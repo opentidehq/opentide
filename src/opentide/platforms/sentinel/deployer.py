@@ -199,7 +199,13 @@ class SentinelDeploy(RuleDeployer):
                 loaded_mdr.append(OpenTide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
-        mdr_deployment = loaded_mdr
+        from opentide.deployment.external_ids import without_legacy_external_ids
+        # Sentinel addresses rules by metadata.uuid, but a rule that still
+        # carries a vendor id on any block is unmigrated and refused on every
+        # platform (RFC 0010), including direct SDK/MCP calls that skip planning.
+        mdr_deployment = without_legacy_external_ids(loaded_mdr, platform='sentinel')
+        if not mdr_deployment:
+            return
         from opentide.deployment import TideDeployment
         from opentide.platforms.sentinel.client import SentinelService
         deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL, strategy=deployment_plan)
