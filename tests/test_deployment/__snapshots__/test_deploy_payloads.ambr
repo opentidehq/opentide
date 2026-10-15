@@ -12,8 +12,6 @@
       ''',
       'displayName': 'Sentinel KQL Rule',
       'enabled': True,
-      'entityMappings': list([
-      ]),
       'eventGroupingSettings': dict({
         'aggregationKind': 'SingleAlert',
       }),

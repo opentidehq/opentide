@@ -126,3 +126,19 @@ def test_sentinel_preview_falls_back_to_config_without_the_sdk(
     assert preview["api_request"]["query"].startswith("SecurityEvent")
     assert "status" not in preview
     assert not os.environ.get("DEPLOYMENT_ERROR_RAISED")
+
+
+def test_sentinel_preview_fails_when_grouping_alert_is_missing(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The deploy-time grouping.alert requirement surfaces in the dry-run too (#549)."""
+    monkeypatch.delenv("DEPLOYMENT_ERROR_RAISED", raising=False)
+    rule = _sentinel_rule(grouping={"event": "SingleAlert"})
+
+    preview = preview_rule_deployment("sentinel", rule)
+
+    assert preview["status"] == "failed"
+    assert preview["error"].startswith("TideMDRDataModelErrors: ")
+    assert rule.metadata.uuid in preview["error"]
+    assert "configurations.sentinel.grouping.alert is missing" in preview["error"]
+    assert os.environ.get("DEPLOYMENT_ERROR_RAISED") == "1"

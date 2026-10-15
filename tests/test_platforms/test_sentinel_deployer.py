@@ -303,3 +303,43 @@ def test_alert_rule_as_flat_dict_reads_a_listed_rule_for_the_importer() -> None:
     assert flat["custom_details"] == {"CommandLine": "ProcessCommandLine"}
     assert str(flat["last_modified_utc"]).startswith("2026-10-01")
     assert "properties" not in flat
+
+
+@pytest.mark.parametrize("entities", [None, []])
+def test_rule_without_entities_omits_entity_mappings(
+    tide_corpus_repo: Path, entities: list[Any] | None
+) -> None:
+    """ARM rejects ``entityMappings: []`` (length 1-10), so it is never sent empty (#549)."""
+    rule = _corpus_rule(entities=entities)
+    assert not rule.configurations.sentinel.entities  # type: ignore[union-attr]
+
+    body, _ = _sent_body(rule)
+
+    assert "entityMappings" not in body["properties"]
+
+
+@pytest.mark.parametrize(
+    ("grouping", "field"),
+    [
+        (None, "configurations.sentinel.grouping is missing"),
+        ({"event": "SingleAlert"}, "configurations.sentinel.grouping.alert is missing"),
+        (
+            {"event": "SingleAlert", "alert": {"enabled": True}},
+            "configurations.sentinel.grouping.alert.grouping_lookback is missing",
+        ),
+    ],
+)
+def test_missing_grouping_fails_with_the_rule_and_field(
+    tide_corpus_repo: Path, grouping: dict[str, Any] | None, field: str
+) -> None:
+    """Spec: deploy MUST fail when grouping or grouping.alert is missing (#549)."""
+    from opentide.core.errors import Errors
+
+    rule = _corpus_rule(grouping=grouping)
+
+    with pytest.raises(Errors.TideMDRDataModelErrors) as excinfo:
+        SentinelDeploy().compile_deployment(service=None, data=rule, tenant="tenant-a")
+
+    message = str(excinfo.value)
+    assert rule.metadata.uuid in message
+    assert field in message

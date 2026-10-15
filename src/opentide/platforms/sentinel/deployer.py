@@ -17,6 +17,12 @@ logger = structlog.get_logger('opentide.platforms.sentinel.deployer')
 if TYPE_CHECKING:
     from opentide.models.system_config import TenantDeployment
 
+def _missing_field(data: DetectionRule, field: str, requirement: str) -> Errors.TideMDRDataModelErrors:
+    return Errors.TideMDRDataModelErrors(
+        f'Rule {data.metadata.uuid} ({data.name}): configurations.sentinel.{field} is missing; {requirement}'
+    )
+
+
 class SentinelDeploy(RuleDeployer):
 
     def compile_deployment(self, service: Any, data: DetectionRule, tenant: str):
@@ -34,7 +40,15 @@ class SentinelDeploy(RuleDeployer):
         rule.kind = 'Scheduled'
         configuration = data.configurations.sentinel
         if not configuration:
-            raise Exception
+            raise Errors.TideMDRDataModelErrors(
+                f'Rule {data.metadata.uuid} ({data.name}): configurations.sentinel is missing'
+            )
+        # Checked before anything is built so the failure names the rule and the
+        # field rather than surfacing as an AttributeError on None (#549).
+        if not configuration.grouping:
+            raise _missing_field(data, 'grouping', 'Sentinel deploy requires grouping.event and grouping.alert')
+        if not configuration.grouping.alert:
+            raise _missing_field(data, 'grouping.alert', 'Sentinel deploy requires incident grouping (grouping.alert.enabled)')
         status = configuration.status
         rule.enabled = True
         query = compile_kql_query(configuration.query, configuration.exclusions, tenant)
@@ -58,9 +72,9 @@ class SentinelDeploy(RuleDeployer):
             rule.kind = 'NRT'
         else:
             if not configuration.scheduling.frequency:
-                raise Errors.TideMDRDataModelErrors('Missing frequency')
+                raise _missing_field(data, 'scheduling.frequency', 'required unless scheduling.nrt is true')
             if not configuration.scheduling.lookback:
-                raise Errors.TideMDRDataModelErrors('Missing lookback')
+                raise _missing_field(data, 'scheduling.lookback', 'required unless scheduling.nrt is true')
             rule.query_frequency = iso_duration_timedelta(configuration.scheduling.frequency)
             rule.query_period = iso_duration_timedelta(configuration.scheduling.lookback)
             if configuration.trigger:
@@ -93,8 +107,6 @@ class SentinelDeploy(RuleDeployer):
             rule.tactics = tactics
         if (custom_details := configuration.alert.custom_details):
             rule.custom_details = {detail.key: detail.column for detail in custom_details}
-        if not configuration.grouping:
-            raise Errors.TideMDRDataModelErrors('Missing Grouping > Event')
         logger.info('event_grouping_configuration', detail=configuration.grouping.event)
         event_grouping = models.EventGroupingSettings()
         event_grouping.aggregation_kind = configuration.grouping.event
@@ -107,7 +119,7 @@ class SentinelDeploy(RuleDeployer):
         grouping_lookback = configuration.grouping.alert.grouping_lookback
         if grouping_enabled:
             if not grouping_lookback:
-                raise Errors.TideMDRDataModelErrors('Missing Grouping Lookback')
+                raise _missing_field(data, 'grouping.alert.grouping_lookback', 'required when grouping.alert.enabled is true')
             grouping_lookback = iso_duration_timedelta(grouping_lookback)
         elif not grouping_lookback:
             grouping_lookback = iso_duration_timedelta('1h')
@@ -121,9 +133,10 @@ class SentinelDeploy(RuleDeployer):
         grouping_configuration = models.GroupingConfiguration(enabled=grouping_enabled, lookback_duration=grouping_lookback, reopen_closed_incident=reopen_closed_incident, matching_method=matching_method, group_by_entities=group_by_entities, group_by_alert_details=group_by_alert_details, group_by_custom_details=group_by_custom_details)
         incident_configuration.grouping_configuration = grouping_configuration
         rule.incident_configuration = incident_configuration
-        entity_data = configuration.entities
-        entity_mappings = []
-        if entity_data:
+        # ARM rejects an empty entityMappings list (length must be 1-10), so a
+        # rule without entities leaves the property unset (#549).
+        if (entity_data := configuration.entities):
+            entity_mappings = []
             for entity in entity_data:
                 mappings = models.EntityMapping()
                 mappings.entity_type = entity.entity
@@ -135,7 +148,7 @@ class SentinelDeploy(RuleDeployer):
                     field_mappings.append(field_mapping)
                 mappings.field_mappings = field_mappings
                 entity_mappings.append(mappings)
-        rule.entity_mappings = entity_mappings
+            rule.entity_mappings = entity_mappings
         severity = configuration.alert.severity or data.response.alert_severity
         if severity == 'Critical':
             severity = 'High'
