@@ -44,7 +44,7 @@ class CrowdstrikeDeploy(RuleDeployer):
         customer_id = tenant_config.setup.customer_id.split('-')[0].lower()
         tactic = configuration.details.tactic
         technique = configuration.details.technique
-        status = 'active' if check_status(configuration.status) is StatusStrategy.DISABLEMENT else 'inactive'
+        status = 'inactive' if check_status(configuration.status) is StatusStrategy.DISABLEMENT else 'active'
         severity = configuration.details.severity or data.response.alert_severity
         severity = map_severity(severity)
         filter = configuration.query
@@ -57,9 +57,9 @@ class CrowdstrikeDeploy(RuleDeployer):
         if trigger_mode not in ['verbose', 'summary']:
             logger.critical('trigger_value_not_expected', detail=str(outcome), advice='Expects verbose or summary')
             raise Errors.TideConfigurationErrors('Invalid Crowdstrike outcome value')
-        search = DetectionRule.Search(outcome=outcome, filter=filter, lookback=lookback, trigger_mode=trigger_mode)
+        search = CrowdstrikeRule.Search(outcome=outcome, filter=filter, lookback=lookback, trigger_mode=trigger_mode)
         definition = configuration.schedule.frequency
-        schedule = DetectionRule.Operation.Schedule(definition=f'@every {definition}')
+        schedule = CrowdstrikeRule.Operation.Schedule(definition=f'@every {definition}')
 
         def fix_datetime(timestamp: str) -> str:
             """
@@ -84,7 +84,7 @@ class CrowdstrikeDeploy(RuleDeployer):
         start_on = fix_datetime(start_on) if start_on else None
         stop_on = configuration.schedule.end
         stop_on = fix_datetime(stop_on) if stop_on else None
-        operation = DetectionRule.Operation(schedule=schedule, start_on=start_on, stop_on=stop_on)
+        operation = CrowdstrikeRule.Operation(schedule=schedule, start_on=start_on, stop_on=stop_on)
         contributors = configuration.contributors
         author = contributors or [data.metadata.author]
         author = ', '.join(author)
