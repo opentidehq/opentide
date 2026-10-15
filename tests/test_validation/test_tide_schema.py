@@ -31,6 +31,9 @@ def test_run_prints_stats_when_validation_passes() -> None:
         patch("opentide.validation.tide_schema.OpenTide", mock_opentide),
         patch("opentide.validation.tide_schema.run_validation", return_value=report),
         patch("opentide.validation.tide_schema.emit_section"),
+        # Logging configuration is process-global: an earlier `--json` CLI test
+        # in the same worker would otherwise suppress the human-readable table.
+        patch("opentide.validation.tide_schema.is_json_output", return_value=False),
         patch.object(tide_schema.get_stdout_console(), "print") as mock_print,
     ):
         tide_schema.run()

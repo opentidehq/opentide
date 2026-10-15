@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import structlog
 from structlog.testing import capture_logs
 
 from opentide.core import environment
@@ -16,6 +17,10 @@ def test_missing_envvar_is_logged_once(monkeypatch: pytest.MonkeyPatch) -> None:
     environment._reported_missing_envvars.clear()
     payload = {"token": "$OPENTIDE_TEST_MISSING", "secret": "$OPENTIDE_TEST_ALSO_MISSING"}
     with capture_logs() as logs:
+        # configure_logging() caches loggers on first use, so once any CLI test
+        # in this worker has logged through the module logger it no longer
+        # reaches capture_logs(). Bind a fresh one inside the capture.
+        monkeypatch.setattr(environment, "logger", structlog.get_logger(environment.__name__))
         for _ in range(5):
             environment.DebugHelpers.fetch_config_envvar(dict(payload))
     missing = [entry for entry in logs if entry["event"] == "environment_variable_missing"]
