@@ -92,6 +92,29 @@ When no rules match the selected plan, the command reports `skipped` with exit `
 
 ## Subcommands
 
+### deploy migrate-state
+
+Moves vendor rule ids off rule files into [deployment state](../usage/concepts/deployment-state.md). Run it once, in every workspace that has deployed to Microsoft Defender for Endpoint, SentinelOne or CrowdStrike with an earlier release. It calls no vendor API and deploys nothing.
+
+```bash
+opentide deploy migrate-state
+opentide --json deploy migrate-state
+```
+
+What it does:
+
+1. **Refuses a gitignored destination.** If git ignores `.opentide/states/deployment/` (the `.opentide/states/` line older setups wrote does), it exits `1` with `deployment_state_ignored`, names the ignore line, and edits nothing. Replace that line with `.opentide/states/sharing.jsonl`; the command does not edit `.gitignore` itself.
+2. **Scans every `.yaml` and `.yml` file under `objects/rules/`, subfolders included**, for `rule_id`, `rule_id_bundle` and `rule_id::<tenant>` at the root of each platform block.
+3. **Writes the Defender, SentinelOne and CrowdStrike ids to `.opentide/states/deployment/<uuid>.json` first**, flushed to disk, and only then removes the keys from the YAML. Comments, key order and whitespace are kept: only the id lines go.
+4. **Drops the keys of every other platform.** Sentinel, Splunk, HarfangLab, Carbon Black Cloud and the rest address their rules without a vendor id, so their keys are removed and printed as `external_id_unused` (platform, tenant, value, file), not stored.
+5. **Leaves a rule untouched and exits `1`** when a tenant is mapped twice or to a different id than the shard already holds (`external_id_conflict`), or when a value is not a usable id (`external_id_shape`: not a string or integer, an empty tenant or id, or a Defender or SentinelOne id that is not a plain decimal like `12345`). Other rules still migrate.
+
+It exits `0` after a migration, after a second run with nothing left to move, and when the only findings are `external_id_unused` warnings. It exits `1` when any rule fails or git ignores the deployment state directory. If the command stopped after writing a shard and before editing the rule, the next run finds the two agree and finishes the edit.
+
+<Callout type="warn">
+The migration is done when it is committed. Commit the edited rules together with every new file under `.opentide/states/deployment/`. A deploy from a checkout that has the stripped rules but not the shards creates a second live rule for every one of them.
+</Callout>
+
 ### deploy metadata
 
 Reserved stub. Hidden from `--help`; it deploys nothing and exits `2` with “not implemented”:
@@ -126,6 +149,9 @@ FATAL: Metadata deployment is not implemented for splunk
 - **A rule did not deploy** — check its `status` strategy; `INERT` statuses never deploy. See [Configuration → deployment statuses](../usage/configuration.md#deployment-statuses-and-strategies).
 - **`WARNING … rule file(s) in subfolders of objects/rules are not deployed`** — a rule file has to sit directly in `objects/rules/`. A file in a subdirectory is outside the rule catalogue and is not deployed. Move it up into `objects/rules/` to deploy it. In CI, the warning names only the subdirectory files the change touched.
 - **Platform not found** — it is not enabled in your workspace config.
+- **`external_id_in_rule`** — the rule still carries `rule_id`, `rule_id_bundle` or `rule_id::<tenant>` on some platform block. The deployment plan leaves it out for every platform, `--dry-run` included, before any HTTP call, and the run exits `1`; other rules still deploy. Run [`deploy migrate-state`](#deploy-migrate-state) and commit the result.
+- **`external_id_missing`** (warning) — a deletion or disablement found no id for that tenant in `.opentide/states/deployment/`, so nothing is known to exist there and nothing is called. The run does not fail on it: retiring a rule that never reached a tenant is normal. If a remote copy does exist, remove or disable it by hand.
+- **`deployment_state_ignored`** — `.gitignore` hides `.opentide/states/deployment/`, so deploy will not create a Defender, SentinelOne or CrowdStrike rule whose id git would never see. Ignore `.opentide/states/sharing.jsonl` instead. See [Deployment state](../usage/concepts/deployment-state.md) for the other `deployment_state_*` codes.
 - **`skipped` with no rules in a new repository** — git does not keep empty folders, so a fresh clone has no `objects/rules/` until the first rule is committed. Deploy treats the missing folder as an empty catalogue: it reports `skipped` with exit `0`, an empty `plan`, and the `dry_run` flag, and contacts no platform.
 - **No tenants** — `setup repo` enables a platform and leaves the `[[tenants]]` example commented out. A real `deploy` of rules for that platform exits `1` before any engine loads, and names the file to edit. `--dry-run` still previews the payloads and warns that a real deploy would stop.
 - **GitLab `No Source Commit Found`** — a `STAGING` or `PRODUCTION` plan whose base SHA is unset or not in the checkout exits `1` with that sentence. Through 0.6.1 the same case crashed with `'Repo' object has no attribute 'lookup_ref'`.
@@ -147,4 +173,4 @@ MCP: `deploy_rule(uuid, platform, dry_run=True)` (defaults to dry-run).
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/deploy.py`
+`src/opentide/cli/__init__.py`, `src/opentide/cli/services/deploy.py`, `src/opentide/cli/services/migrate_state.py`

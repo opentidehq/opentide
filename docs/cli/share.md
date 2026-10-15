@@ -54,7 +54,7 @@ opentide share push --changed
 
 ## State
 
-Successful creates, updates, and retractions are recorded in `.opentide/states/sharing.jsonl`. Skips and failures leave the file unchanged. `preview` writes nothing. Setup gitignores `.opentide/states/`.
+Successful creates, updates, and retractions are recorded in `.opentide/states/sharing.jsonl`. Skips and failures leave the file unchanged. `preview` writes nothing. Setup gitignores `.opentide/states/sharing.jsonl` only: the file is a cache, while `.opentide/states/deployment/` holds [deployment state](../usage/concepts/deployment-state.md) that must be committed.
 
 ## Exit codes
 

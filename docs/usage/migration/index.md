@@ -135,6 +135,29 @@ Or configure manually:
 - `opentide generate docs` writes `docs/`. Wiki publishing is gone.
 - `opentide migrate objects` also moves `Models Library/Threat Vector Models`, `Models Library/Detection Objectives`, and `Models Library/Managed Detection Rules`, plus object folders named in `Configurations/global.toml`.
 
+## Vendor rule ids move to deployment state
+
+**Breaking.** Releases after 0.14.2 no longer accept vendor rule ids on rules. `rule_id`, `rule_id_bundle` and `rule_id::<tenant>` are unknown keys on every platform block, `opentide validate` fails them with `external_id_in_rule`, and `opentide deploy` refuses those rules before any HTTP call. The ids live in `.opentide/states/deployment/<uuid>.json` instead ([Deployment state](../concepts/deployment-state.md)).
+
+There is no fallback that keeps reading the old keys. Microsoft Defender for Endpoint, SentinelOne and CrowdStrike only know a deployed rule by the id written on the rule at create time; a deploy that finds neither the key nor a shard creates a second live rule.
+
+Every workspace that has deployed to one of those three platforms:
+
+1. In `.gitignore`, replace the line `.opentide/states/` with `.opentide/states/sharing.jsonl`. The shards must be committed.
+2. Run the migration:
+
+   ```bash
+   opentide deploy migrate-state
+   opentide validate --strict
+   ```
+
+3. Commit the edited rules and every new file under `.opentide/states/deployment/` in one commit, before the next deploy.
+4. If CI deploys, make it commit `.opentide/states/deployment/` after a deploy that creates rules, together with any promoted rule files.
+
+Keys on every other platform (Sentinel, Splunk, HarfangLab, Carbon Black Cloud) were never read; the migration removes them without storing them and prints each one as `external_id_unused` with its platform, tenant, value and file. Those warnings do not fail the command. Workspaces that only deploy to Sentinel or Splunk have no shard to write.
+
+`ExternalIdHelper` is removed from `opentide.deployment`. Use `opentide.states.deployment` (`DeploymentState`, `record_external_id`, `forget_external_id`) instead.
+
 ## Layout migration
 
 If the repository still uses CoreTide directory names (`Configurations/`, `Objects/Threat Vectors`, `.opentide/framework/`), preview and apply:
@@ -162,6 +185,7 @@ Replacing a CoreTide **git submodule**, Orchestration scripts, and Python import
 - [ ] `pip install 'opentide==0.14.2'` succeeds
 - [ ] `OPENTIDE_REPO_ROOT` set
 - [ ] `opentide validate --strict` passes
+- [ ] `opentide deploy migrate-state` exits `0`, and `.opentide/states/deployment/` is committed and not gitignored
 - [ ] CI no longer uses submodule
 - [ ] No `sys.path.append` hacks
 

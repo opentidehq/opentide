@@ -495,6 +495,28 @@ def deploy_cmd(
     emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 
 
+@deploy_app.command("migrate-state")
+def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
+    """Move vendor rule ids off rules into .opentide/states/deployment/ (no vendor calls).
+
+    Refuses with deployment_state_ignored, and edits nothing, while .gitignore
+    hides .opentide/states/deployment/. Exits 1 when any rule cannot be migrated;
+    ids dropped from other platforms (external_id_unused) are warnings only.
+    """
+    from opentide.cli.services.migrate_state import run_migrate_state
+    from opentide.core.index_manager import IndexManager
+    from opentide.registry.discovery import discover_workspace
+
+    cli = get_context(ctx)
+    cli.apply_environment()
+    workspace = discover_workspace()
+    rules_dir = (
+        IndexManager.return_paths(tier="tide").get("rule") or workspace / "objects" / "rules"
+    )
+    result = run_migrate_state(workspace, rules_dir)
+    emit_result(cli, CommandResult.from_payload(result, default_message="Migration completed"))
+
+
 @deploy_app.command("metadata", hidden=True)
 def deploy_metadata_cmd(
     ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")

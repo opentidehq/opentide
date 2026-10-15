@@ -263,7 +263,7 @@ Deploy a rule to a platform. Defaults to a dry run — a real deploy requires an
 
 ## deployment_status
 
-Per-platform deployment state for a rule.
+Per-platform deployment state for a rule. Vendor rule ids come from the rule's [deployment state](../usage/concepts/deployment-state.md) shard, keyed by tenant.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -278,10 +278,18 @@ Per-platform deployment state for a rule.
   "found": true,
   "uuid": "00000000-0000-4000-8003-000000000001",
   "platforms": {
-    "sentinel": { "deployed": true, "rule_id": "abc-123", "tenants": ["contoso"] }
+    "defender_for_endpoint": {
+      "deployed": true,
+      "rule_id": "12345",
+      "external_ids": { "contoso": "12345" },
+      "tenants": []
+    },
+    "sentinel": { "deployed": true, "rule_id": null, "external_ids": {}, "tenants": ["contoso"] }
   }
 }
 ```
+
+`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (Defender for Endpoint, SentinelOne, CrowdStrike only). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code.
 
 ## Agent workflows
 

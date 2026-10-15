@@ -72,7 +72,10 @@ detection-repo/
 │   │   └── platforms/
 │   ├── schemas/                  # opentide generate schemas
 │   ├── templates/
-│   └── exports/
+│   ├── exports/
+│   └── states/
+│       ├── deployment/           # vendor rule ids, committed (written by deploy)
+│       └── sharing.jsonl         # sharing cache, gitignored
 ├── .github/workflows/            # when --ci github
 ├── .env.example                 # when setup env
 ├── README.md
