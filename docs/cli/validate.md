@@ -178,6 +178,43 @@ loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
 modules. A platform with no `[[tenants]]` entry fails the same way, before the
 client is built, and names the file to edit.
 
+### Which tenants are checked
+
+A live check only reads, so it is not bound by the tenant `deployment`
+strategy the way `deploy` is. With no `--plan` (the `FULL` plan), every
+tenant a rule can reach is checked: `STAGING`, `PRODUCTION` and `ALWAYS`
+tenants, and a `MANUAL` tenant when the rule lists it under `tenants`. A
+rule's `tenants` list still limits it to those tenants. `--plan STAGING` or
+`--plan PRODUCTION` narrows the check to the tenants that plan deploys to.
+When that leaves every rule without a tenant (for example, only staging-only
+rules under `--plan PRODUCTION`), nothing needed checking: the result is
+`skipped` with exit `0`. Exit `2` is kept for rules that reach no configured
+tenant at all, where the check could never run.
+`deploy` itself is unchanged: a `FULL` deploy still targets only `ALWAYS`,
+listed `MANUAL` and plan-equal tenants.
+
+`--json` reports the plan and how many queries each tenant received. The sample is illustrative, because a live run needs tenant credentials:
+
+```json illustrative
+{
+  "platform": "sentinel",
+  "mode": "live",
+  "status": "passed",
+  "plan": "FULL",
+  "queries_validated": 4,
+  "queries_per_tenant": { "Staging": 2, "Production": 2 }
+}
+```
+
+A run that sends no query never reports `passed`. When the plan has rules for
+the platform but none of them resolves to a configured tenant, the command
+reports `skipped`, names the reason in `message` and `advice`, and exits `2`,
+the same code the generated CI credential guard uses for a check that did not
+run. Through 0.14.2 that case printed `Query validation passed` with zero
+queries sent, which made the generated pipeline's live gate a no-op for the
+usual `STAGING` + `PRODUCTION` tenant layout. A plan with no rules for the
+platform at all is still `skipped` with exit `0`: there is nothing to check.
+
 ### Supported platforms
 
 Query validation works on **five platforms** only:

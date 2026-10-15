@@ -1,4 +1,6 @@
-from collections.abc import MutableMapping, Sequence
+from collections.abc import Iterator, MutableMapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
 
 from opentide.core.logging import get_logger
@@ -28,6 +30,31 @@ def __getattr__(name: str) -> Any:
     if name == "SYSTEMS_CONFIGS_INDEX":
         return registry.OpenTide.Configurations.Systems.Index
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+_READ_ONLY_RESOLUTION: ContextVar[bool] = ContextVar("opentide_read_only_resolution", default=False)
+
+
+@contextmanager
+def read_only_tenant_resolution() -> Iterator[None]:
+    """Resolve tenants for a check that writes nothing to them (#547).
+
+    A tenant's ``deployment`` strategy says when a rule may be *deployed* to
+    it. Live query validation only reads, so under the ``FULL`` plan every
+    tenant a rule can reach is checked: the ``STAGING`` and ``PRODUCTION``
+    tenants that a deploy would leave to its own pipeline included. A
+    ``MANUAL`` tenant is still reached only when the rule names it, and an
+    explicit ``STAGING`` or ``PRODUCTION`` plan still narrows the check to
+    the tenants that plan deploys to.
+
+    Deployment never enters this context, so what ``deploy`` targets is
+    unchanged.
+    """
+    token = _READ_ONLY_RESOLUTION.set(True)
+    try:
+        yield
+    finally:
+        _READ_ONLY_RESOLUTION.reset(token)
 
 
 def _json_normalize(data: Any) -> Any:
@@ -148,10 +175,15 @@ class TideDeployment:
         - If ALWAYS, will be targeted on every deployment
         - If MANUAL, can only be targeted if defined in the MDR
         - If STAGING or PRODUCTION, can only be targeted if the current deployment plan alligns with it
+        - Inside :func:`read_only_tenant_resolution` the FULL plan reaches every
+          tenant above, whatever its strategy
         """
         tenants = self.system_configuration_resolver(system).tenants  # type: ignore
         mdr_tenants = self.mdr_configuration_resolver(data, system).tenants
         target_tenants = list()
+        reach_every_tenant = (
+            _READ_ONLY_RESOLUTION.get() and deployment_strategy is DeploymentStrategy.FULL
+        )
 
         logger.info(
             "currently_resolving_available_tenant_deployments_for_rule",
@@ -177,7 +209,8 @@ class TideDeployment:
 
                 if tenant.name in mdr_tenants:
                     if (
-                        (tenant.deployment is DeploymentStrategy.MANUAL)
+                        reach_every_tenant
+                        or (tenant.deployment is DeploymentStrategy.MANUAL)
                         or (tenant.deployment is DeploymentStrategy.ALWAYS)
                         or (tenant.deployment is deployment_strategy)
                     ):
@@ -207,8 +240,10 @@ class TideDeployment:
                     )
                     continue
 
-                elif (tenant.deployment is deployment_strategy) or (
-                    tenant.deployment is DeploymentStrategy.ALWAYS
+                elif (
+                    reach_every_tenant
+                    or (tenant.deployment is deployment_strategy)
+                    or (tenant.deployment is DeploymentStrategy.ALWAYS)
                 ):
                     target_tenants.append(tenant)
                     logger.info(

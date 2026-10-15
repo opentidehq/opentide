@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
-from opentide.cli.output import emit_error
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 from opentide.registry.discovery import discover_workspace
@@ -322,9 +321,7 @@ def validate_query_platform(
         }
     if not live:
         return _live_required_result(platform)
-    from opentide.core.registry import OpenTide as LegacyOpenTide
     from opentide.deployment import DeploymentStrategy, make_deploy_plan
-    from opentide.platforms.plugins import DeployTide
 
     _reset_validation_env()
     try:
@@ -385,6 +382,112 @@ def validate_query_platform(
             "missing_tenants": {platform: missing.config_path},
             "_exit_code": 1,
         }
+    from opentide.deployment.planning import read_only_tenant_resolution
+
+    # Only reads: every tenant a rule reaches is checked under FULL (#547).
+    with read_only_tenant_resolution():
+        try:
+            reach = queries_per_tenant(platform, deployment_list[platform], deployment_plan)
+        except Exception as exc:
+            message = str(exc).strip() or f"{type(exc).__name__} while resolving tenants"
+            return {
+                "platform": platform,
+                "mode": "live",
+                "status": "failed",
+                "supported": True,
+                "message": message,
+                "_exit_code": 1,
+            }
+        if not reach:
+            rules = deployment_list[platform]
+            from opentide.deployment import DeploymentStrategy
+
+            if deployment_plan in (DeploymentStrategy.STAGING, DeploymentStrategy.PRODUCTION):
+                # An explicit plan narrowing a rule out (a staging-only rule under
+                # PRODUCTION) is an ordinary skip. Only a rule that reaches no
+                # configured tenant at all means the check could never run.
+                if queries_per_tenant(platform, rules, DeploymentStrategy.FULL):
+                    return _plan_reaches_none(platform, deployment_plan.name, len(rules))
+            return _no_tenant_reached(platform, deployment_plan.name, len(rules))
+        return _run_live_validator(ctx, platform, deployment_list[platform], deployment_plan, reach)
+
+
+def queries_per_tenant(platform: str, rules: Sequence[Any], plan: Any) -> dict[str, int]:
+    """How many rule queries a live check sends to each tenant.
+
+    The same resolution the platform validator runs, so a tenant listed here
+    is one the validator connects to. Tenants that receive no rule are absent.
+    """
+    from opentide.deployment import TideDeployment
+    from opentide.models.deployment_enums import DetectionPlatforms
+
+    deployment = TideDeployment(
+        deployment=list(rules), system=DetectionPlatforms[platform.upper()], strategy=plan
+    )
+    reach: dict[str, int] = {}
+    for batch in deployment.rule_deployment:
+        if batch.rules:
+            reach[batch.tenant.name] = reach.get(batch.tenant.name, 0) + len(batch.rules)
+    return reach
+
+
+def _plan_reaches_none(platform: str, plan: str, rules: int) -> dict[str, object]:
+    """Every rule targets a tenant, but none that *plan* deploys to: nothing to check here."""
+    return {
+        "platform": platform,
+        "mode": "live",
+        "status": "skipped",
+        "supported": True,
+        "plan": plan,
+        "queries_validated": 0,
+        "queries_per_tenant": {},
+        "message": (
+            f"No {plan} tenant is targeted by the {rules} {platform} rule(s) in the plan; "
+            "they are checked by the plan that deploys them, or by validate without --plan"
+        ),
+    }
+
+
+def _no_tenant_reached(platform: str, plan: str, rules: int) -> dict[str, object]:
+    """No query was sent, so the check did not run. Exit 2, like the CI credential guard."""
+    from opentide.platforms.enabled import platform_config_path
+
+    config = platform_config_path(platform)
+    return {
+        "platform": platform,
+        "mode": "live",
+        "status": "skipped",
+        "supported": True,
+        "plan": plan,
+        "queries_validated": 0,
+        "queries_per_tenant": {},
+        "message": (
+            f"No query was sent: none of the {rules} {platform} rule(s) in the "
+            f"{plan} plan resolves to a tenant in {config}"
+        ),
+        "advice": (
+            "a MANUAL tenant is reached only when a rule lists it under tenants, and a "
+            "rule's tenants list must name a tenant configured for this platform"
+        ),
+        "_exit_code": 2,
+    }
+
+
+def _run_live_validator(
+    ctx: CliContext,
+    platform: str,
+    rules: Sequence[Any],
+    deployment_plan: Any,
+    reach: dict[str, int],
+) -> dict[str, object]:
+    from opentide.core.registry import OpenTide as LegacyOpenTide
+    from opentide.platforms.plugins import DeployTide
+
+    counts: dict[str, object] = {
+        "plan": deployment_plan.name,
+        "queries_validated": sum(reach.values()),
+        "queries_per_tenant": dict(reach),
+    }
     try:
         query_validators = cast(dict[str, Any], DeployTide().query_validation_for(platform))
     except ValueError as exc:
@@ -413,12 +516,10 @@ def validate_query_platform(
     validator = cast(Any, query_validators[platform])
     try:
         try:
-            validator.validate(
-                mdr_deployment=deployment_list[platform], deployment_plan=deployment_plan
-            )
+            validator.validate(mdr_deployment=rules, deployment_plan=deployment_plan)
         except TypeError:
             logger.warning("trying_mdrv3_style_method")
-            validator.validate(deployment=deployment_list[platform])
+            validator.validate(deployment=rules)
     except ModuleNotFoundError as exc:
         return _missing_sdk_result(platform, exc)
     except ValueError as exc:
@@ -432,23 +533,25 @@ def validate_query_platform(
             "message": str(exc),
             "_exit_code": 1,
         }
-    if os.environ.get("VALIDATION_ERROR_RAISED"):
-        emit_error(ctx, f"Query validation failed for {platform}", exit_code=1)
     from opentide.cli.exit_codes import validation_outcome
 
     outcome = validation_outcome()
+    message = (
+        f"Query validation failed for {platform}"
+        if outcome.failed
+        else f"Query validation passed for {platform}"
+    )
     result: dict[str, object] = {
         "platform": platform,
         "mode": "live",
         "status": "failed" if outcome.failed else "passed",
         "supported": True,
-        "message": (
-            f"Query validation failed for {platform}"
-            if outcome.failed
-            else f"Query validation passed for {platform}"
-        ),
+        **counts,
+        "message": message,
         "_exit_code": outcome.exit_code,
     }
+    if outcome.failed:
+        result["error"] = message
     if outcome.warned:
         result["warnings"] = [f"Query validation reported warnings for {platform}"]
     return result

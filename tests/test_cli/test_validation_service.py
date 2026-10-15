@@ -25,6 +25,15 @@ def tenantless() -> Iterator[MagicMock]:
         yield mock
 
 
+@pytest.fixture(autouse=True)
+def reached() -> Iterator[MagicMock]:
+    """Every planned rule reaches one tenant unless a test says otherwise."""
+    with patch.object(
+        validation_service, "queries_per_tenant", return_value={"tenant-a": 1}
+    ) as mock:
+        yield mock
+
+
 def test_run_validate_cve_delegates_to_session() -> None:
     ctx = CliContext(json_output=True)
     report = ValidationReport(ok=True)

@@ -19,6 +19,8 @@ OpenTide uses the same result semantics in human and JSON modes: presentation fo
 
 There is no soft-failure exit code. Warnings are listed under `warnings` in JSON (and printed in human mode) and only fail the process when `--strict` is set.
 
+`validate query --live` also exits `2` when it reports `skipped` because the plan's rules reached no configured tenant, so no query was sent. That is a check that did not run, not a pass. See [Which tenants are checked](./validate.md#which-tenants-are-checked).
+
 ## How warnings vs errors work
 
 `validate` and `deploy` record outcomes during the run:
