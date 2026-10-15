@@ -6,6 +6,66 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+Two things need action after upgrading.
+- **Vendor rule ids move out of rule YAML into committed deployment state shards** (RFC 0010, [specs/deployment-state.md](https://github.com/OpenTideHQ/specifications/blob/main/specs/deployment-state.md)). Run `opentide deploy migrate-state` and commit its output before the next deploy.
+- **Generated pipelines must be regenerated** with `opentide setup ci <provider> --yes`. They now retire rules, deploy from the default branch's newest deployment state, run production deploys one at a time, and persist deploy write-backs.
+
+This release is held until RFC 0010 is accepted.
+
+### Breaking
+
+- `rule_id`, `rule_id_bundle` and `rule_id::<tenant>` are removed from the Defender for Endpoint, SentinelOne, CrowdStrike, HarfangLab and Carbon Black blocks. Vendor ids for Defender, SentinelOne and CrowdStrike now live in `.opentide/states/deployment/<uuid>.json` (`deployment.state::1.0`), one committed shard per rule.
+  - `opentide validate` fails a rule that still carries any of those keys with `external_id_in_rule`.
+  - `opentide deploy` refuses it for **every** platform before any HTTP call.
+  - There is no fallback read of the YAML. A deploy with neither the key nor a shard would create a second remote rule, so migrate first.
+  - Upgrade: in `.gitignore`, replace `.opentide/states/` with `.opentide/states/sharing.jsonl`. Then run `opentide deploy migrate-state` and `opentide validate --strict`, and commit the stripped rules together with `.opentide/states/deployment/` ([#396](https://github.com/OpenTideHQ/opentide/issues/396)).
+- Deploy no longer writes ids into rule files. A create records the returned id in the shard, and logs it as `external_id_recorded` at warning level so the CI log keeps it. `DELETION` or `DISABLEMENT` without an entry is the warning `external_id_missing`: nothing is called and the run does not fail, since nothing is known to exist on that tenant. A create is refused with `deployment_state_ignored` while git ignores the shard directory. `opentide.deployment.ExternalIdHelper` is removed ([#396](https://github.com/OpenTideHQ/opentide/issues/396)).
+- In CI, a deploy whose plan is not `PRODUCTION` (the pull-request staging job, or a `FULL`, `ALWAYS` or `MANUAL` run) refuses to create a Defender for Endpoint, SentinelOne or CrowdStrike rule with `deployment_state_unpersisted`, before any vendor call, because only the production job commits the shards. Updates and deletes of bound rules still run, and local runs may still create. A pipeline that commits `.opentide/states/deployment/` itself can pass `opentide deploy --persist-state-externally`. Before, every staging rerun created another untracked remote rule ([#554](https://github.com/OpenTideHQ/opentide/issues/554)).
+- Shards are read in canonical form only: a file name that is not the lowercase canonical uuid, an `object_uuid` that is not exactly the file name, or a second file naming the same rule is `deployment_state_uuid_mismatch`, and a tenant key with surrounding spaces is `deployment_state_shape`. The rule is refused rather than read as having no id ([#396](https://github.com/OpenTideHQ/opentide/issues/396)).
+
+### Added
+
+- `opentide deploy migrate-state` moves existing Defender, SentinelOne and CrowdStrike ids into shards. It writes the shard before stripping the lines, preserves comments and layout, reports `external_id_conflict` and `external_id_shape`, refuses a gitignored destination, and is idempotent. Keys on every other platform (Sentinel, Splunk, HarfangLab, Carbon Black Cloud) are removed without being stored and reported as `external_id_unused` with platform, tenant, value and file. It exits `0` on success, on a clean second run and on `external_id_unused` warnings only, and `1` when any rule fails or the destination is ignored ([#396](https://github.com/OpenTideHQ/opentide/issues/396)).
+- `opentide deploy --persist-state-externally` ([#554](https://github.com/OpenTideHQ/opentide/issues/554)).
+- Full-workspace `opentide validate` checks every shard under `.opentide/states/deployment/`, including orphans whose rule was deleted ([#396](https://github.com/OpenTideHQ/opentide/issues/396)).
+- MCP `deployment_status` returns `external_ids` from the shard ([#396](https://github.com/OpenTideHQ/opentide/issues/396)).
+- `opentide validate --file` is repeatable ([#548](https://github.com/OpenTideHQ/opentide/issues/548)).
+- `validate query --live` JSON reports `plan`, `queries_validated` and `queries_per_tenant` ([#547](https://github.com/OpenTideHQ/opentide/issues/547)).
+
+### Changed
+
+- `opentide setup repo` ignores `.opentide/states/sharing.jsonl` instead of the whole `.opentide/states/` directory ([#396](https://github.com/OpenTideHQ/opentide/issues/396)).
+- `opentide validate --file` fails with `scope_no_match` when any one `--file` target matches no object, and names that target in `context.targets`. Before, a run with several targets passed as long as one of them matched, so a mistyped or quoted path was never validated. A script that passes a `--file` for a file that may not exist now exits `1`.
+- `opentide deploy --plan PRODUCTION` now includes `DISABLED` and `REMOVED` rules, so they are disabled or deleted as [specs/deployment.md](https://github.com/OpenTideHQ/specifications/blob/main/specs/deployment.md) defines. Before, the `--keep-deprecated` default dropped them before the `PRODUCTION` allow-list was consulted, and a retirement never reached the platform. `--drop-deprecated` restores the old behaviour ([#548](https://github.com/OpenTideHQ/opentide/issues/548)).
+- The generated production job (GitHub, GitLab, Azure) commits promoted rule statuses and `.opentide/states/deployment/` back to the default branch with `[skip ci]` ([#548](https://github.com/OpenTideHQ/opentide/issues/548)):
+  - Before the dry-run it replaces the checkout's `.opentide/states/deployment/` with the default branch tip's, so a merge made before an earlier run's write-back landed updates the rule that run created instead of creating it again.
+  - Production jobs run one at a time: GitHub job `concurrency` (`opentide-production-<branch>`, no cancel-in-progress), GitLab `resource_group: opentide-production`, and Azure `lockBehavior: sequential`, which takes effect once an Exclusive lock check is added to a resource the stage uses.
+  - The write-back runs whenever the deploy started: after a deploy that failed part way, was cancelled or timed out (GitHub `always()`, Azure `always()`, GitLab `after_script` on cancel; GitLab skips `after_script` on a timeout), so ids from the creates that succeeded are never lost.
+  - Rule files are committed only when `opentide validate --strict` passes on exactly those files, read NUL-delimited so no file name is C-quoted.
+  - If a concurrent merge conflicts with the rule files, this run's shard changes are replayed per tenant onto the new tip and pushed alone, and the job fails. Bindings other runs recorded and shards either run deleted are preserved.
+  - Any failure that leaves the state commit off the default branch (push rejected every time, a failed fetch or replay) prints the state diff and pushes the commit to `refs/opentide/deployment-state/<commit>`.
+- `opentide setup vscode` maps `objects/**/*.yaml` to `.opentide/schemas/opentide.schema.json`, so `rule::1.0` and `rule::1.1` rules validate side by side. A merge removes the per-folder revision mappings earlier releases wrote ([#550](https://github.com/OpenTideHQ/opentide/issues/550)).
+- `opentide validate` rejects a quoted or boolean signal `effort` (for example `"3"`), as the editor schema does ([#552](https://github.com/OpenTideHQ/opentide/issues/552)).
+- The `sentinel` extra requires `azure-mgmt-securityinsight>=2.0.0b2`; the lock uses 2.0.0b4 ([#545](https://github.com/OpenTideHQ/opentide/issues/545)).
+- The router no longer lists `visibility::1.0`, which is configuration rather than an object ([#550](https://github.com/OpenTideHQ/opentide/issues/550)).
+
+### Fixed
+
+- **Sentinel deploy:**
+  - Rules with `alert.dynamic_properties` deploy. The `sentinel` extra resolved `azure-mgmt-securityinsight` 1.0.0, which has no `AlertPropertyMapping`, so every such rule failed with `AttributeError`. Both the `SecurityInsights` and `SecurityInsightsMgmtClient` client names now work ([#545](https://github.com/OpenTideHQ/opentide/issues/545)).
+  - Rules accept ISO 8601 durations (`PT1H`, `P1D`) as the platform spec documents; before, only the `1h` shorthand parsed ([#545](https://github.com/OpenTideHQ/opentide/issues/545)).
+  - A rule without `entities` no longer sends an empty `entityMappings`, which ARM rejected with 400 ([#549](https://github.com/OpenTideHQ/opentide/issues/549)).
+  - A missing `grouping` or `grouping.alert` fails with an error naming the rule and `configurations.sentinel.grouping.alert`, in deploy and in `--dry-run`, instead of an `AttributeError` ([#549](https://github.com/OpenTideHQ/opentide/issues/549)).
+- `deploy --dry-run` no longer hides Sentinel compile errors. It previously fell back to the configuration block and reported `completed`. It now shows the ARM request a deploy would send, and a rule that would fail is listed as `failed` with its `error`; the run exits `1` ([#545](https://github.com/OpenTideHQ/opentide/issues/545)).
+- The `PRODUCTION` plan on GitHub Actions and Azure Pipelines diffs against HEAD's first parent. Before, on a merge commit the diff was taken against the merged branch's head, so the rules the merge changed were not deployed, and pull-request jobs on the merge ref reported `skipped` ([#546](https://github.com/OpenTideHQ/opentide/issues/546)).
+- `validate query --live` with no `--plan` checks every tenant a rule can reach, `STAGING` and `PRODUCTION` alike. `MANUAL` tenants are checked only when listed, and `deploy` targets are unchanged. If the rules reach no configured tenant at all, the run reports `skipped` with exit `2` instead of `passed`. An explicit `--plan` that only narrows every rule out (a staging-only rule under `--plan PRODUCTION`) is an ordinary `skipped` with exit `0` ([#547](https://github.com/OpenTideHQ/opentide/issues/547)).
+- `opentide.schema.json` applies exactly one revision schema per object, selected by `metadata.schema`. It offers the registered identifiers as completions and resolves its references to the files next to it. Before, its `oneOf` could never be satisfied ("Matches multiple schemas"), and its `$id` sent references to a remote URL ([#550](https://github.com/OpenTideHQ/opentide/issues/550)).
+- `rule.1.1.schema.json` includes `metadata.reviewed` and accepts the same date and datetime forms as `opentide validate` ([#551](https://github.com/OpenTideHQ/opentide/issues/551)).
+- Signal `effort` is typed as an integer in `objective.1.0.schema.json`; the efforts names had made every authored value invalid in the editor ([#552](https://github.com/OpenTideHQ/opentide/issues/552)).
+- CrowdStrike rules deploy as `active`, and disabled rules as `inactive`; the status was inverted. Compiling any CrowdStrike rule had also raised `AttributeError` ([#553](https://github.com/OpenTideHQ/opentide/issues/553)).
+- A rule refused with `external_id_in_rule` fails the deploy on every path: with `--platform`, with `--skip-unconfigured`, and when the Sentinel or Splunk deployer is called directly (SDK, MCP `deploy_rule`). MCP `deploy_rule` returns `status: failed` with an `error` when the deployer refused or failed the rule; it used to report a plain `deploy`. Error and warning flags no longer leak from one deploy to the next in a long-lived process.
+- The commented `[[tenants]]` example in every bundled platform template loads when uncommented. The retired `proxy` key is gone, and the HarfangLab `type` and SentinelOne `url`/`account_id` placeholders are valid TOML.
+
 ## [0.14.2] — 2026-10-14
 
 Patch on 0.14.1. Nothing to do after upgrading, but upgrade promptly if you run `opentide setup skills`: it could be made to install skill content from a repository other than the pinned catalogue. A patch rather than a minor because no input contract, generated artefact, exit code or command surface changes — the installer refuses inputs that no legitimate catalogue produces, and a normal install behaves exactly as before.
