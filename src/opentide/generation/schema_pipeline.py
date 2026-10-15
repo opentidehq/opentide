@@ -640,26 +640,24 @@ def _apply_vocab_enum(field_schema: dict, temp: dict) -> None:
     A list of objects (``threat.chaining``) must not receive that string enum on
     ``items`` or on the array node. Leaving the field without an enum is correct
     when the relation enum cannot be placed on ``chaining[].relation``.
+
+    A union with no string branch (``int | None``, signal ``effort``) gets no
+    enum either: a string enum on an integer field rejects every value the
+    model accepts.
     """
     alternatives = field_schema.get("anyOf") or field_schema.get("oneOf")
     if isinstance(alternatives, list):
-        stamped = False
-        saw_object_array = False
         for alternative in alternatives:
             if not isinstance(alternative, dict):
                 continue
             if alternative.get("type") == "array":
                 if _array_items_are_objects(alternative):
-                    saw_object_array = True
                     continue
                 alternative["items"] = dict(temp)
                 alternative["uniqueItems"] = True
-                stamped = True
             elif alternative.get("type") == "string":
                 alternative.update(temp)
-                stamped = True
-        if stamped or saw_object_array:
-            return
+        return
 
     field_types = field_schema.get("type")
     if field_types:

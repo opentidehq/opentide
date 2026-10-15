@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
-from pydantic import model_validator
+from pydantic import StrictInt, model_validator
 
 from opentide.models.base import FieldRole, TideField, TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
@@ -50,7 +50,9 @@ class DetectionSignal(TideModel):
     # key and `_emit` drops the duplicate, so seven values were unreachable and
     # a host account could not be told apart from a cloud account.
     entities: list[str] = VocabField(True, scoped=True)
-    effort: int | None = None
+    # Strict, so `opentide validate` and the editor schema (`type: integer`)
+    # reject the same values: no quoted numbers or booleans.
+    effort: StrictInt | None = None
     detectors: list[ExternalDetector] | None = None
     examples: list[DetectionExample] | None = None
     parent: str | None = None

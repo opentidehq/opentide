@@ -31,6 +31,9 @@ REVIEWED = [
     "2026-10-15T08:30:00+02:00",
     "2026-10-15 08:30:00Z",
 ]
+EFFORT = [(3, True), (0, True), (10, True), (None, True)] + [
+    (value, False) for value in ("3", "Regular", True, 2.5)
+]
 NOT_REVIEWED = ["yesterday", "2026-13-45", "2026-10-15T08:30:00"]
 
 
@@ -83,6 +86,8 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     objective = _load(next((objects / "objectives").rglob("*.yaml")))
     # The model drops a legacy root `composition`; the editor schema does not list it.
     objective.pop("composition", None)
+    signals = objective["objective"]["signals"]
+    signals[0] = {**signals[0], "effort": 3}
     rule = _load(next((objects / "rules").rglob("rule-0001-*.yaml")))
     return {
         "schemas": schemas,
@@ -148,3 +153,28 @@ def test_reviewed_is_rejected_on_rule_1_0(corpus: dict[str, Any]) -> None:
     assert not Draft202012Validator(corpus["schemas"]["rule::1.0"]).is_valid(body)
     with pytest.raises(ValidationError):
         load_object(body)
+
+
+def _signal_effort(objective: dict[str, Any], value: Any) -> dict[str, Any]:
+    body = copy.deepcopy(objective)
+    body["objective"]["signals"][0]["effort"] = value
+    return body
+
+
+def test_effort_schema_is_an_integer_without_string_vocabulary(corpus: dict[str, Any]) -> None:
+    schema = corpus["schemas"]["objective::1.0"]
+    effort = schema["$defs"]["DetectionSignal"]["properties"]["effort"]
+    assert effort["anyOf"] == [{"type": "integer"}, {"type": "null"}]
+    assert "enum" not in effort
+
+
+@pytest.mark.parametrize(("value", "valid"), EFFORT)
+def test_effort_schema_and_model_agree(value: Any, valid: bool, corpus: dict[str, Any]) -> None:
+    body = _signal_effort(corpus["valid"]["objective::1.0"], value)
+    assert Draft202012Validator(corpus["schemas"]["objective::1.0"]).is_valid(body) is valid
+    try:
+        load_object(body)
+    except ValidationError:
+        assert not valid
+    else:
+        assert valid
