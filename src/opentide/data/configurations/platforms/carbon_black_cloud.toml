@@ -13,7 +13,6 @@ flags = []
 # description = "Organisation description"
 # deployment = "ALWAYS"
 # [tenants.setup]
-# proxy = false
 # ssl = true
 # url = "$CBC_URL"
 # org_key = "$CBC_ORG_KEY"

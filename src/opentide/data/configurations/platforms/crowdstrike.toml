@@ -23,7 +23,6 @@ flags = [""]
 #description = "Tenant Description"
 #deployment = "ALWAYS" #STAGING, PRODUCTION, MANUAL (only when defined in MDR) or ALWAYS
 #[tenants.setup]
-#proxy = false
 #ssl = true
 #api = ""
 #customer_id = ""

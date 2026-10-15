@@ -12,7 +12,6 @@ flags = []
 # description = "Default Splunk deployment target"
 # deployment = "ALWAYS"
 # [tenants.setup]
-# proxy = false
 # ssl = false
 # url = "$SPLUNK_URL"
 # port = "$SPLUNK_PORT"
