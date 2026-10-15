@@ -18,15 +18,26 @@ if TYPE_CHECKING:
 
 
 def _nothing_to_deploy(message: str, *, dry_run: bool, **fields: object) -> dict[str, object]:
-    """A skipped deploy, in the same envelope as one that planned rules."""
+    """A skipped deploy, in the same envelope as one that planned rules.
+
+    Planning can record a per-rule failure and still leave nothing to deploy,
+    for instance when ``make_deploy_plan`` refuses a rule with
+    ``external_id_in_rule``. That run failed: it is reported as such, not as a
+    clean skip.
+    """
+    from opentide.cli.exit_codes import deployment_outcome
+
+    outcome = deployment_outcome()
     result: dict[str, object] = {
         **fields,
-        "status": "skipped",
-        "message": message,
+        "status": "failed" if outcome.failed else "skipped",
+        "message": f"{message}; planning reported rule errors" if outcome.failed else message,
         "deployed": [],
         "dry_run": dry_run,
         "plan": {},
     }
+    if outcome.failed:
+        result["_exit_code"] = outcome.exit_code
     if dry_run:
         result["payloads"] = {}
     return result
@@ -97,6 +108,10 @@ def _deploy(
 ) -> dict[str, object]:
     ctx.apply_environment()
     os.environ["INDEX_OUTPUT"] = "cache"
+    # Each deploy grades itself. A long-lived process (MCP server, tests) must
+    # not inherit a previous run's failure or warning.
+    for flag in ("DEPLOYMENT_ERROR_RAISED", "DEPLOYMENT_WARNING_RAISED"):
+        os.environ.pop(flag, None)
     if plan is not None:
         ctx.set_deployment_plan(plan)
     from opentide.core.registry import OpenTide

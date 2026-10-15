@@ -130,3 +130,41 @@ def test_live_query_validation_plan_excludes_the_rule(tide_corpus_repo: Path) ->
 
     assert all(REFUSED not in uuids for uuids in plan.values())
     assert CLEAN in plan["sentinel"]
+
+
+def test_platform_left_empty_by_the_guard_fails(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--platform`` narrowing to a platform the guard emptied is a failure, not a skip.
+
+    A clean Sentinel rule keeps the overall plan non-empty, so only the
+    Defender slice is empty and the early "nothing to deploy" return is taken.
+    """
+    _give_sentinel_rule_a_defender_rule_id(tide_corpus_repo)
+    for path in _rules(tide_corpus_repo).glob("*.yaml"):
+        if REFUSED not in path.read_text(encoding="utf-8"):
+            path.unlink()
+    write_rule_variant(_rules(tide_corpus_repo), "rule-0301-clean.yaml", CLEAN)
+    _mock_sentinel(monkeypatch)
+
+    result = invoke_cli(
+        "deploy", "--platform", "defender_for_endpoint", "--plan", "FULL", "--skip-promotion"
+    )
+
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["status"] == "failed"
+    assert payload["plan"] == {}
+
+
+def test_a_previous_runs_failure_does_not_leak(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for path in _rules(tide_corpus_repo).glob("*.yaml"):
+        path.unlink()
+    monkeypatch.setenv("DEPLOYMENT_ERROR_RAISED", "1")
+
+    result = _deploy(invoke_cli)
+
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert parse_cli_json(result)["status"] == "skipped"
