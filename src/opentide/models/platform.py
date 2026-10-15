@@ -100,7 +100,6 @@ class DefenderConfig(PlatformConfigBase):
     alert: DefenderAlert
     impacted_entities: DefenderImpactedEntities
     scheduling: Literal["NRT", "1H", "3H", "12H", "24H"]
-    rule_id: dict[str, int] | None = None
     actions: DefenderResponseActions | None = None
     scope: DefenderGroupScoping | None = None
     exclusions: list[DefenderExclusion] | None = None
@@ -145,7 +144,6 @@ class SentinelOneConfig(PlatformConfigBase):
     condition: SentinelOneCondition
     response: SentinelOneResponse | None = None
     details: SentinelOneDetails | None = None
-    rule_id_bundle: dict[str, int] | None = None
 
 
 class CrowdstrikeConfig(PlatformConfigBase):
@@ -155,7 +153,6 @@ class CrowdstrikeConfig(PlatformConfigBase):
     query: QueryText = TideField(
         schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
-    rule_id_bundle: dict[str, str] | None = None
 
 
 class HarfangLabConfig(PlatformConfigBase):
@@ -166,7 +163,6 @@ class HarfangLabConfig(PlatformConfigBase):
     tags: list[str] | None = None
     sigma: HarfangLabSigma | None = None
     yara: HarfangLabYara | None = None
-    rule_id_bundle: dict[str, str] | None = None
 
 
 class CarbonBlackConfig(PlatformConfigBase):
@@ -178,7 +174,6 @@ class CarbonBlackConfig(PlatformConfigBase):
     watchlist: str | None = None
     report: str | None = None
     tags: list[str] | None = None
-    rule_id_bundle: dict[str, str] | None = None
 
 
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {

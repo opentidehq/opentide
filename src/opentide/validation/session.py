@@ -166,6 +166,7 @@ def run_validation(
                     graph=graph,
                     metaschemas=metaschemas,
                     checks=object_checks,
+                    check_shard=scope.mode != "full",
                 )
 
             with ThreadPoolExecutor(max_workers=object_workers) as pool:
@@ -179,10 +180,19 @@ def run_validation(
                     graph=graph,
                     metaschemas=metaschemas,
                     checks=object_checks,
+                    check_shard=scope.mode != "full",
                 )
                 issues.extend(item_issues)
                 warnings.extend(item_warnings)
         stats["objects_checked"] = len(work_items)
+
+    if ValidateCheck.schema in checks and scope.mode == "full":
+        # Shards outlive their rules: an orphan is still the only handle on a
+        # remote rule, so the whole directory is checked, not only shards a
+        # rule points at.
+        from opentide.validation.external_ids import deployment_state_issues
+
+        issues.extend(deployment_state_issues())
 
     issues = sort_issues(issues)
     stats["wall_ms"] = round((time.perf_counter() - started) * 1000, 2)
@@ -301,6 +311,7 @@ def _validate_work_item(
     graph: PreflightGraph,
     metaschemas: dict[str, Any],
     checks: frozenset[ValidateCheck],
+    check_shard: bool = True,
 ) -> tuple[list[ValidationIssue], list[ValidationIssue]]:
     issues: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []
@@ -325,6 +336,9 @@ def _validate_work_item(
                 file_path=file_path,
                 graph=graph,
             )
+            from opentide.validation.external_ids import is_superseded_extra_key
+
+            bucket = [issue for issue in bucket if not is_superseded_extra_key(issue)]
             issues.extend(attach_yaml_lines(bucket, item.body, file_path=file_path))
         except Exception as exc:
             issues.append(
@@ -361,6 +375,17 @@ def _validate_work_item(
         for issue in deprecated_issues:
             warnings.append(issue.model_copy(update={"file_path": file_path}))
 
+        from opentide.validation.external_ids import external_id_issues
+
+        issues.extend(
+            external_id_issues(
+                item.body,
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+                check_shard=check_shard,
+            )
+        )
         issues.extend(check_references_for_object(item.uuid, item.object_type, item.body, graph))
         if item.object_type == "threat":
             issues.extend(check_chaining_for_object(item.uuid, item.body, graph))

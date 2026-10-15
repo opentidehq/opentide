@@ -102,7 +102,9 @@ def _write_gitignore(target: Path) -> None:
                 "*.egg-info/",
                 ".pytest_cache/",
                 f"{OPENTIDE_DIR}/exports/*.export.json",
-                f"{OPENTIDE_DIR}/states/",
+                # Only the sharing cache. ``states/deployment/`` holds vendor rule
+                # ids and must be committed (RFC 0010).
+                f"{OPENTIDE_DIR}/states/sharing.jsonl",
             ]
         )
         + "\n",

@@ -56,7 +56,8 @@ def test_defender_config_loader_parses_nested_actions() -> None:
     assert config.actions.devices.run_antivirus_scan is True
 
 
-def test_crowdstrike_config_loader_parses_rule_id_bundle() -> None:
+def test_crowdstrike_config_loader_drops_legacy_external_ids() -> None:
+    """Vendor ids live in deployment state; the loader never reads them (RFC 0010)."""
     config = load_crowdstrike_config(
         {
             "schema": "platform::crowdstrike::1.0",
@@ -65,9 +66,17 @@ def test_crowdstrike_config_loader_parses_rule_id_bundle() -> None:
             "details": {"trigger": "event", "outcome": "detection"},
             "schedule": {"frequency": "1h", "lookback": "2h"},
             "rule_id::tenant-a": "abc",
+            "rule_id_bundle": {"tenant-b": "def"},
         }
     )
-    assert config.rule_id_bundle == {"tenant-a": "abc"}
+    dumped = config.model_dump()
+    assert not any(key.startswith("rule_id") for key in dumped)
+
+
+def test_defender_config_loader_drops_legacy_external_ids() -> None:
+    from opentide.models.platform import DefenderConfig
+
+    assert "rule_id" not in DefenderConfig.model_fields
 
 
 def test_sentinel_one_config_loader_parses_correlation() -> None:
@@ -170,7 +179,6 @@ def test_carbon_black_config_loader_parses_typed_fields() -> None:
             "watchlist": "Default",
             "report": "Report A",
             "tags": ["tag-a"],
-            "rule_id::org-a": "123",
         }
     )
     assert isinstance(config, CarbonBlackConfig)
@@ -179,4 +187,3 @@ def test_carbon_black_config_loader_parses_typed_fields() -> None:
     assert config.watchlist == "Default"
     assert config.report == "Report A"
     assert config.tags == ["tag-a"]
-    assert config.rule_id_bundle == {"org-a": "123"}

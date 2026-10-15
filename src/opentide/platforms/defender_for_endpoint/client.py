@@ -186,7 +186,7 @@ class DefenderForEndpointService:
             else:
                 raise Errors.DetectionRuleCreationFailed
 
-    def update_detection_rule(self, rule: DetectionRule, rule_id: int):
+    def update_detection_rule(self, rule: DetectionRule, rule_id: int | str):
         rule_body = json.dumps(asdict(rule))
         rule_body = rule_body.replace('odata_type', '@odata.type')
         rule_body = json.loads(rule_body)
@@ -198,7 +198,7 @@ class DefenderForEndpointService:
             logger.critical('fatal_error', detail=f'Failed to update detection rule with id {rule_id} in tenant {self.tenant_config.name} ({url})', context=str(request.json()), advice=str(rule_body))
             raise Errors.DetectionRuleUpdateFailed
 
-    def delete_detection_rule(self, rule_id: int):
+    def delete_detection_rule(self, rule_id: int | str):
         request = self.session.delete(url=self.DETECTION_RULES_ENDPOINT + f'/{rule_id}', verify=self.tenant_config.setup.ssl)
         if request.status_code == 204:
             logger.info('removed_detection_rule_from_mde_tenant')

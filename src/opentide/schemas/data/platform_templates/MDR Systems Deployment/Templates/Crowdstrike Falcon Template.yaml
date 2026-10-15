@@ -25,5 +25,3 @@
 
   query: |
     ...
-  #rule_id_bundle:
-    #key: 

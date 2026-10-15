@@ -8,7 +8,6 @@ from opentide.deployment.ci import CIEnvironment
 from opentide.deployment.git_repo import GitRepository, diff_calculation, modified_mdr_files
 from opentide.deployment.utils import (
     DEPRECATED_STATUSES,
-    ExternalIdHelper,
     Proxy,
     check_status,
     enabled_systems,
@@ -34,7 +33,6 @@ __all__ = [
     "make_deploy_plan",
     "enabled_systems",
     "Proxy",
-    "ExternalIdHelper",
     "TideDeployment",
     "DeploymentStrategy",
     "DetectionPlatforms",

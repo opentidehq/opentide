@@ -33,7 +33,7 @@ def __getattr__(name: str) -> Any:
 __all__ = [
     "DEPRECATED_STATUSES",
     "SYSTEMS_CONFIGS_INDEX",
-    "ExternalIdHelper",
+    "ExternalIdInRuleError",
     "Proxy",
     "check_status",
     "enabled_systems",
@@ -160,6 +160,13 @@ def make_deploy_plan(
     Only the files directly in the rules folder are deployed (#312). The
     message naming the skipped subfolder files is appended to *warnings*;
     without a list to report through, it is logged as a warning instead.
+
+    A selected rule that still carries ``rule_id``, ``rule_id_bundle`` or
+    ``rule_id::<tenant>`` on any platform block is left out of every
+    platform's plan and reported as an ``external_id_in_rule`` failure, which
+    marks the run as failed (RFC 0010). If that leaves nothing to deploy, the
+    plan raises :class:`ExternalIdInRuleError` so the run cannot end as an
+    empty success.
     """
     systems_deployment = enabled_systems()
 
@@ -180,11 +187,13 @@ def make_deploy_plan(
     if scope.nested:
         _report_nested_rules(scope.nested, warnings)
 
+    refused: list[str] = []
     for rule in scope.files:
         data = load_yaml(rule)
         name = data["name"]
         conf_data = data["configurations"]
         mdr_uuid = object_uuid(data)
+        selected: list[str] = []
 
         for system in conf_data:
             platform_status = _platform_status(conf_data[system], system=system, rule=name, uuid=mdr_uuid)
@@ -209,7 +218,7 @@ def make_deploy_plan(
                 continue
 
             if wide_scope:
-                deploy_mdr.setdefault(system, []).append(mdr_uuid)
+                selected.append(system)
                 continue
 
             if plan is DeploymentStrategy.PRODUCTION:
@@ -233,7 +242,7 @@ def make_deploy_plan(
                 allowed = ()
 
             if check_status(platform_status) in allowed:
-                deploy_mdr.setdefault(system, []).append(mdr_uuid)
+                selected.append(system)
                 logger.info(
                     "mdr_selected_for_deploy",
                     system=system.upper(),
@@ -250,7 +259,38 @@ def make_deploy_plan(
                     rule=name,
                 )
 
+        if selected and _refuse_external_ids(data, rule=rule, uuid=mdr_uuid, warnings=warnings):
+            refused.append(mdr_uuid)
+            continue
+        for system in selected:
+            deploy_mdr.setdefault(system, []).append(mdr_uuid)
+
+    if refused and not deploy_mdr:
+        raise ExternalIdInRuleError(
+            f"external_id_in_rule: {len(refused)} rule(s) still carry vendor rule ids "
+            f"({', '.join(refused)}) and nothing else is left to deploy. "
+            "Run 'opentide deploy migrate-state' and commit the result."
+        )
     return deploy_mdr
+
+
+class ExternalIdInRuleError(ValueError):
+    """Every rule in the plan was refused for carrying vendor ids on the rule."""
+
+
+def _refuse_external_ids(
+    data: dict[str, Any], *, rule: Any, uuid: str, warnings: list[str] | None
+) -> bool:
+    """Report ``external_id_in_rule`` for a rule with a legacy id key on any block."""
+    from opentide.deployment.external_ids import legacy_key_error, report_failure
+
+    error = legacy_key_error(uuid, data)
+    if error is None:
+        return False
+    report_failure(error, object_uuid=uuid, platform="*")
+    if warnings is not None:
+        warnings.append(f"{error} -- {rule} was not deployed to any platform")
+    return True
 
 
 class Proxy:
@@ -265,42 +305,6 @@ class Proxy:
     def unset_proxy() -> None:
         """Retired. An omitted ``--proxy`` leaves the process environment alone."""
         return
-
-
-class ExternalIdHelper:
-    """Utility class to help processing external rule IDs in MDR files."""
-
-    @staticmethod
-    def remove_id(rule_id: int | str, tenant_name: str, mdr_uuid: str) -> None:
-        file_path = registry.OpenTide.Configurations.Global.Paths.Tide.rule / registry.OpenTide.Models.files[mdr_uuid]
-        content = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
-        updated = [line for line in content if line.strip() != f"rule_id::{tenant_name}: {rule_id}"]
-        file_path.write_text("".join(updated), encoding="utf-8")
-        logger.info("external_id_removed", tenant=tenant_name)
-
-    @staticmethod
-    def insert_id(
-        rule_id: int | str,
-        tenant_name: str,
-        mdr_uuid: str,
-        system_name: str,
-    ) -> None:
-        file_path = registry.OpenTide.Configurations.Global.Paths.Tide.rule / registry.OpenTide.Models.files[mdr_uuid]
-        content = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
-        updated: list[str] = []
-        for line in content:
-            if line.strip().removesuffix(":").strip() == system_name:
-                updated.append(line)
-                updated.append(f"    rule_id::{tenant_name}: {rule_id}\n")
-            else:
-                updated.append(line)
-
-        file_path.write_text("".join(updated), encoding="utf-8")
-        logger.info(
-            "external_id_inserted",
-            tenant=tenant_name,
-            rule_id=str(rule_id),
-        )
 
 
 def __dir__() -> list[str]:

@@ -3,9 +3,18 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from opentide.core.debug import DebugEnvironment
-from opentide.core.logging import get_logger, is_debug_enabled
+from opentide.core.logging import get_logger
 from opentide.core.registry import DetectionPlatforms, OpenTide
 from opentide.deployment import TideDeployment, check_status
+from opentide.deployment.external_ids import (
+    ExternalIdAction,
+    plan_external_id,
+    record_created,
+    record_deleted,
+    report_failure,
+    screen_tenant,
+)
+from opentide.states.deployment import DeploymentStateError
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.platforms.defender_for_endpoint.client import (
@@ -18,9 +27,17 @@ from opentide.platforms.plugins import RuleDeployer
 
 logger = get_logger(__name__)
 
+PLATFORM = "defender_for_endpoint"
+
 
 class DefenderForEndpointDeploy(RuleDeployer):
-    def deploy_mdr(self, data: DetectionRule, service: DefenderForEndpointService, tenant: str):
+    def deploy_mdr(
+        self,
+        data: DetectionRule,
+        service: DefenderForEndpointService,
+        tenant: str,
+        action: ExternalIdAction | None = None,
+    ):
 
         def lower_first_character(string: str) -> str:
             return string[0].lower() + string[1:]
@@ -190,64 +207,46 @@ class DefenderForEndpointDeploy(RuleDeployer):
                 alertTemplate=alert_template, responseActions=response_actions
             ),
         )
-        if mdr_config.rule_id:
-            rule_id = mdr_config.rule_id.get(tenant)
+        object_uuid = str(data.metadata.uuid)
+        if action is None:
+            try:
+                action = plan_external_id(
+                    object_uuid=object_uuid,
+                    platform=PLATFORM,
+                    tenant_name=tenant,
+                    status=mdr_config.status,
+                )
+            except DeploymentStateError as error:
+                report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
+                return
+        if action.kind == "delete":
+            logger.info("proceeding_with_deletion_of_rule_against_tenant", detail=str(action.external_id))
+            service.delete_detection_rule(action.external_id)
+            try:
+                record_deleted(object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
+            except DeploymentStateError as error:
+                report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
+        elif action.kind == "update":
             logger.info(
                 "retrieved_id_for_tenant",
-                detail=str(str(rule_id)) + " | " + "Will perform an update",
+                detail=str(action.external_id) + " | " + "Will perform an update",
             )
+            service.update_detection_rule(rule, action.external_id)
         else:
             logger.info(
                 "could_not_retrieve_id_for_tenant",
-                detail="Will create a new rule, and write back the ID to the file",
+                detail="Will create a new rule, and record its ID in .opentide/states/deployment/",
             )
-            rule_id = None
-        if check_status(mdr_config.status) is StatusStrategy.DELETION:
-            if not rule_id:
-                logger.critical(
-                    "cannot_remove_the_rule_as_a_rule_id_could_not_be_found_in_the_file",
-                    detail="You will need to manually check the target system to remove the rule",
-                )
-            else:
-                logger.info("proceeding_with_deletion_of_rule_against_tenant", detail=str(rule_id))
-                service.delete_detection_rule(rule_id)
-                file_path = (
-                    OpenTide.Configurations.Global.Paths.Tide.rule
-                    / OpenTide.Models.files[data.metadata.uuid]
-                )
-                with open(file_path, encoding="utf-8") as mdr_file:
-                    content = mdr_file.readlines()
-                updated_content = list()
-                for line in content:
-                    if line.strip() != f"rule_id::{tenant}: {rule_id}":
-                        updated_content.append(line)
-                with open(file_path, "w", encoding="utf-8") as mdr_file:
-                    logger.info("removed_id_in_mdr_file_for_tenant")
-                    mdr_file.writelines(updated_content)
-        elif rule_id:
-            service.update_detection_rule(rule, rule_id)
-        else:
             rule_id = service.create_detection_rule(rule)
-            file_path = (
-                OpenTide.Configurations.Global.Paths.Tide.rule
-                / OpenTide.Models.files[data.metadata.uuid]
-            )
-            with open(file_path, encoding="utf-8") as mdr_file:
-                content = mdr_file.readlines()
-            updated_content = list()
-            for line in content:
-                if is_debug_enabled():
-                    logger.debug("mdr_file_line", detail=line.rstrip())
-                if line.strip() == "defender_for_endpoint:":
-                    updated_content.append(line)
-                    updated_content.append(f"    rule_id::{tenant}: {rule_id}\n")
-                    if is_debug_enabled():
-                        logger.debug("appending_rule_id_line", rule_id=str(rule_id))
-                else:
-                    updated_content.append(line)
-            with open(file_path, "w", encoding="utf-8") as mdr_file:
-                logger.info("updated_mdr_file_with_new_id_for_tenant", detail=str(rule_id))
-                mdr_file.writelines(updated_content)
+            try:
+                record_created(
+                    object_uuid=object_uuid,
+                    platform=PLATFORM,
+                    tenant_name=tenant,
+                    external_id=rule_id,
+                )
+            except DeploymentStateError as error:
+                report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
 
     def deploy(self, mdr_deployment: Sequence[DetectionRule], deployment_plan: DeploymentStrategy):
         mdr_deployment = [OpenTide.Rules[uuid] for uuid in mdr_deployment]
@@ -257,15 +256,24 @@ class DefenderForEndpointDeploy(RuleDeployer):
             strategy=deployment_plan,
         )
         for tenant_deployment in deployment.rule_deployment:
-            service = DefenderForEndpointService(tenant_deployment.tenant)
+            tenant = tenant_deployment.tenant.name
             logger.info(
                 "planned_deployment",
-                detail=str(tenant_deployment.tenant.name)
-                + " | "
-                + str(str(tenant_deployment.rules)),
+                detail=str(tenant) + " | " + str(str(tenant_deployment.rules)),
             )
-            for mdr in tenant_deployment.rules:
-                self.deploy_mdr(data=mdr, service=service, tenant=tenant_deployment.tenant.name)
+            # Every rule is planned against the deployment state before the
+            # client authenticates, so a refused rule makes no HTTP call.
+            planned = screen_tenant(
+                list(tenant_deployment.rules),
+                platform=PLATFORM,
+                tenant_name=tenant,
+                status_of=lambda mdr: mdr.configurations.defender_for_endpoint.status,
+            )
+            if not planned:
+                continue
+            service = DefenderForEndpointService(tenant_deployment.tenant)
+            for mdr, action in planned:
+                self.deploy_mdr(data=mdr, service=service, tenant=tenant, action=action)
 
 
 def declare():

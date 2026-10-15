@@ -92,6 +92,10 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "invalid_ref",
             "vocab_unknown",
             "chaining_relation_unknown",
+            "external_id_in_rule",
+            "deployment_state_uuid_mismatch",
+            "deployment_state_platform",
+            "deployment_state_shape",
         }
     ),
     ValidateCheck.cve.value: frozenset({"invalid_cve"}),

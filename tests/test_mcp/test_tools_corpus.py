@@ -90,12 +90,46 @@ def test_tool_deployment_status_configuration_is_not_a_deploy(tide_corpus_repo: 
     assert sentinel["rule_id"] is None
 
 
-def test_platform_deployment_state_uses_external_id() -> None:
-    recorded = tools._platform_deployment_state({"external_id": "abc-123", "tenants": ["contoso"]})
-    assert recorded == {"deployed": True, "rule_id": "abc-123", "tenants": ["contoso"]}
+def test_platform_deployment_state_uses_recorded_external_ids() -> None:
+    recorded = tools._platform_deployment_state({"tenants": ["contoso"]}, {"contoso": "12345"})
+    assert recorded == {
+        "deployed": True,
+        "rule_id": "12345",
+        "external_ids": {"contoso": "12345"},
+        "tenants": ["contoso"],
+    }
+    two = tools._platform_deployment_state({}, {"a": "1", "b": "2"})
+    assert two["deployed"] is True
+    assert two["rule_id"] is None
     authoring = tools._platform_deployment_state({"enabled": True, "query": "SecurityEvent"})
     assert authoring["deployed"] is False
     assert authoring["rule_id"] is None
+    assert authoring["external_ids"] == {}
+
+
+def test_tool_deployment_status_reads_the_deployment_state_shard(tide_corpus_repo: Path) -> None:
+    from opentide.states.deployment import record_external_id
+
+    uuid = CORPUS_RULE_UUIDS["defender_for_endpoint"]
+    record_external_id(uuid, "defender_for_endpoint", "contoso", 4242, tide_corpus_repo)
+    payload = tools.tool_deployment_status(uuid)
+    defender = payload["platforms"]["defender_for_endpoint"]
+    assert defender["deployed"] is True
+    assert defender["external_ids"] == {"contoso": "4242"}
+    assert defender["rule_id"] == "4242"
+    assert "state_error" not in payload
+
+
+def test_tool_deployment_status_reports_a_broken_shard(tide_corpus_repo: Path) -> None:
+    from opentide.states.deployment import shard_path
+
+    uuid = CORPUS_RULE_UUIDS["defender_for_endpoint"]
+    path = shard_path(uuid, tide_corpus_repo)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{not json", encoding="utf-8")
+    payload = tools.tool_deployment_status(uuid)
+    assert payload["found"] is True
+    assert payload["state_error"]["code"] == "deployment_state_shape"
 
 
 def test_tool_deployment_status_missing_rule(tide_corpus_repo: Path) -> None:

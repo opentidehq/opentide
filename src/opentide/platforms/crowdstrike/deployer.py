@@ -4,13 +4,16 @@ from opentide.core.registry import OpenTide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy
-from opentide.deployment import TideDeployment, ExternalIdHelper, check_status
+from opentide.deployment import TideDeployment, check_status
+from opentide.deployment.external_ids import ExternalIdAction, plan_external_id, record_created, record_deleted, report_failure, screen_tenant
+from opentide.states.deployment import DeploymentStateError
 from opentide.models.system_config import ConfigurationModels
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.core.errors import Errors
 from opentide.platforms.crowdstrike.client import CrowdstrikeService, DetectionRule as CrowdstrikeRule
 import structlog
 logger = structlog.get_logger('opentide.platforms.crowdstrike.deployer')
+PLATFORM = 'crowdstrike'
 
 class CrowdstrikeDeploy(RuleDeployer):
 
@@ -91,7 +94,7 @@ class CrowdstrikeDeploy(RuleDeployer):
         comment = f'Updated by OpenTide Crowdstrike Deployer - Author(s) : {author}'
         return CrowdstrikeRule(name=name, description=description, customer_id=customer_id, tactic=tactic, technique=technique, status=status, severity=severity, search=search, operation=operation, comment=comment)
 
-    def deploy_mdr(self, data: DetectionRule, service: CrowdstrikeService, tenant_config: ConfigurationModels.Systems.Crowdstrike.Tenant):
+    def deploy_mdr(self, data: DetectionRule, service: CrowdstrikeService, tenant_config: ConfigurationModels.Systems.Crowdstrike.Tenant, action: ExternalIdAction | None=None):
         """
         Deploys the detection rule : creation, update, deletion and disabling.
         """
@@ -99,29 +102,31 @@ class CrowdstrikeDeploy(RuleDeployer):
         if not mdr_config:
             raise Errors.TideSystemConfigurationErrors('Missing Crowdstrike')
         rule = self.compile_deployment(data=data, tenant_config=tenant_config)
-        if mdr_config.rule_id_bundle:
-            mdr_config.rule_id_bundle
-            rule_id = mdr_config.rule_id_bundle.get(tenant_config.name.strip())
-            if rule_id:
-                logger.info('event', detail=f'Retrieved ID for tenant {tenant_config.name} in MDR', context=str(rule_id), advice='Will perform an update')
-            else:
-                logger.info('event', detail=f'Could not retrieve ID for tenant {tenant_config.name} in MDR existing rule IDs', context=str(mdr_config.rule_id_bundle), advice='Will create a new rule, and write back the ID to the file')
+        object_uuid = str(data.metadata.uuid)
+        tenant = tenant_config.name
+        if action is None:
+            try:
+                action = plan_external_id(object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant, status=mdr_config.status)
+            except DeploymentStateError as error:
+                report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
+                return
+        if action.kind == 'delete':
+            logger.info('step_in_progress', detail=f'Proceeding with deletion of rule against tenant {tenant}', context=str(action.external_id))
+            service.delete_detection_rule(rule_id=action.external_id)
+            try:
+                record_deleted(object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
+            except DeploymentStateError as error:
+                report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
+        elif action.kind == 'update':
+            logger.info('event', detail=str(action.external_id), advice='Going to update the rule')
+            service.update_detection_rule(rule=rule, rule_id=action.external_id)
         else:
-            logger.info('event', detail=f'Could not retrieve ID for tenant {tenant_config.name} in MDR', context_1='Will create a new rule, and write back the ID to the file')
-            rule_id = None
-        if check_status(mdr_config.status) is StatusStrategy.DELETION:
-            if not rule_id:
-                logger.critical('cannot_remove_the_rule_as_a_rule_id_could_not_be_found_in_the_fi', detail='You will need to manually check the target system to remove the rule')
-            else:
-                logger.info('step_in_progress', detail=f'Proceeding with deletion of rule against tenant {tenant_config.name}', context=str(rule_id))
-                service.delete_detection_rule(rule_id=rule_id)
-                ExternalIdHelper.remove_id(rule_id=rule_id, tenant_name=tenant_config.name, mdr_uuid=data.metadata.uuid)
-        elif rule_id:
-            logger.info('event', detail=str(rule_id), advice='Going to update the rule')
-            service.update_detection_rule(rule=rule, rule_id=rule_id)
-        else:
+            logger.info('event', detail=f'No ID recorded for tenant {tenant}', advice='Will create a new rule, and record its ID in .opentide/states/deployment/')
             rule_id = service.create_detection_rule(rule)
-            ExternalIdHelper.insert_id(rule_id=rule_id, tenant_name=tenant_config.name, mdr_uuid=data.metadata.uuid, system_name=OpenTide.Configurations.Systems.Crowdstrike.platform.identifier)
+            try:
+                record_created(object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant, external_id=rule_id)
+            except DeploymentStateError as error:
+                report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
 
     def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan: DeploymentStrategy):
         """
@@ -137,10 +142,15 @@ class CrowdstrikeDeploy(RuleDeployer):
         deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.CROWDSTRIKE, strategy=deployment_plan)
         for tenant_deployment in deployment.rule_deployment:
             logger.info('currently_targeting_tenant', detail=tenant_deployment.tenant.name)
+            # Plan against the deployment state before the client exists, so a
+            # refused rule makes no HTTP call.
+            planned = screen_tenant(list(tenant_deployment.rules), platform=PLATFORM, tenant_name=tenant_deployment.tenant.name, status_of=lambda mdr: mdr.configurations.crowdstrike.status)
+            if not planned:
+                continue
             service = CrowdstrikeService(tenant_deployment.tenant)
-            for mdr in tenant_deployment.rules:
+            for mdr, action in planned:
                 logger.info('processing_rule', detail=mdr.name, advice=mdr.metadata.uuid)
-                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_deployment.tenant)
+                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_deployment.tenant, action=action)
 
 def declare():
     return CrowdstrikeDeploy()

@@ -5,6 +5,7 @@ from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.deployment import TideDeployment, check_status
+from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.models.system_config import ConfigurationModels
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.harfanglab.client import HarfangLabService, SigmaRule, YaraRule, SigmaRuleBuilder
@@ -201,7 +202,7 @@ class HarfangLabDeploy(RuleDeployer):
                 loaded_mdr.append(OpenTide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
-        mdr_deployment = loaded_mdr
+        mdr_deployment = without_legacy_external_ids(loaded_mdr, platform='harfanglab')
         deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.HARFANGLAB, strategy=deployment_plan)
         for tenant_deployment in deployment.rule_deployment:
             logger.info('currently_targeting_tenant', detail=tenant_deployment.tenant.name)

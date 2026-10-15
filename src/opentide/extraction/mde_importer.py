@@ -11,6 +11,7 @@ from pathlib import Path
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService
+from opentide.states.deployment import record_external_id
 
 logger = get_logger(__name__)
 
@@ -53,7 +54,6 @@ response:
 
 configurations:
   defender_for_endpoint: 
-    rule_id::PandoraStores: {rule_id}
     schema: defender_for_endpoint::2.0
     status: {status}
     {contributors}
@@ -157,7 +157,6 @@ def fix_multiline(string:str, indentation:int):
 def _render_rule(rule) -> tuple[str, str]:
     """Return the file name and YAML body for one Defender custom detection."""
     rule_name = rule["displayName"]
-    rule_id = rule["id"]
     rule_uuid = rule["detectorId"]
     rule_created = rule["createdDateTime"].split("T")[0]
     rule_modified = rule["lastModifiedDateTime"].split("T")[0]
@@ -204,7 +203,6 @@ def _render_rule(rule) -> tuple[str, str]:
 
     body = template.format(name=rule_name,
                                 uuid=rule_uuid,
-                                rule_id=rule_id,
                                 created=rule_created,
                                 modified=rule_modified,
                                 alert_severity=rule_severity.title(),
@@ -239,6 +237,8 @@ def _import_defender_rules() -> None:
         for rule in service.list_rules()["value"]:
             filename, body = _render_rule(rule)
             (destination / f"{filename}.yaml").write_text(body, encoding="utf-8")
+            # The Graph id is deployment state, not rule content (RFC 0010).
+            record_external_id(rule["detectorId"], "defender_for_endpoint", tenant.name, rule["id"])
             logger.info("imported_defender_rule", detail=filename, arg0=tenant.name)
 
 

@@ -70,7 +70,6 @@
       | take 1
   
     ''',
-    'rule_id': None,
     'scheduling': '1H',
     'schema': None,
     'scope': dict({
@@ -136,7 +135,6 @@
       'network_quarantine': False,
       'treat_as_threat': 'Malicious',
     }),
-    'rule_id_bundle': None,
     'schema': None,
     'status': 'STAGING',
     'tenants': None,
@@ -151,7 +149,6 @@
     'organizations': None,
     'query': 'process_name:cmd.exe',
     'report': None,
-    'rule_id_bundle': None,
     'schema': None,
     'status': 'STAGING',
     'tags': None,
@@ -175,7 +172,6 @@
     'flags': None,
     'name': 'CrowdStrike Deploy Rule',
     'query': 'index=main',
-    'rule_id_bundle': None,
     'schedule': dict({
       'end': None,
       'frequency': '1h',
@@ -196,7 +192,6 @@
     'flags': None,
     'maturity': 'Experimental',
     'name': 'HarfangLab Deploy Rule',
-    'rule_id_bundle': None,
     'schema': None,
     'sigma': dict({
       'condition': 'selection',

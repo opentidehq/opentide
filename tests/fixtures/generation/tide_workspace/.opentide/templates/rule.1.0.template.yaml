@@ -136,8 +136,6 @@ configurations:
       #mailbox: 
       #user: 
     #scheduling: NRT
-    #rule_id:
-      #key: 3
     #actions:
       #devices:
         #isolate_device: 
@@ -276,8 +274,6 @@ configurations:
         #...
       #severity: 
       #expiration: 
-    #rule_id_bundle:
-      #key: 3
   #crowdstrike:
     #enabled: false
     #name: 
@@ -306,8 +302,6 @@ configurations:
 
     #query: |
       #...
-    #rule_id_bundle:
-      #key: 
   #harfanglab:
     #enabled: false
     #name: 
@@ -351,8 +345,6 @@ configurations:
       #condition: 
       #imports:
         #- 
-    #rule_id_bundle:
-      #key: 
   #carbon_black_cloud:
     #enabled: false
     #name: 
@@ -373,5 +365,3 @@ configurations:
     #report: 
     #tags:
       #- 
-    #rule_id_bundle:
-      #key: 

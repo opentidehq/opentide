@@ -134,3 +134,15 @@ def test_setup_repo_rerun_without_metadata_flags_does_not_warn(tmp_path: Path) -
     result = run_repo_setup(RepoSetupOptions(path=target, yes=True))
     assert result["skipped"] == ["README.md", ".gitignore"]
     assert "warnings" not in result
+
+
+def test_setup_repo_ignores_only_the_sharing_cache(tmp_path: Path) -> None:
+    """RFC 0010: deployment state shards are committed; only sharing.jsonl is a cache."""
+    from opentide.states.deployment import deployment_state_ignore
+
+    target = tmp_path / "repo"
+    run_repo_setup(RepoSetupOptions(path=target, platforms=[], yes=True))
+    lines = (target / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert ".opentide/states/sharing.jsonl" in lines
+    assert ".opentide/states/" not in lines
+    assert deployment_state_ignore(target) is None

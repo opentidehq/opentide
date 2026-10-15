@@ -57,6 +57,7 @@ from opentide.models.platform_configs import (
     SplunkTrigger,
 )
 from opentide.models.splunk_legacy import normalize_splunk_v2
+from opentide.states.deployment import is_legacy_external_id_key
 
 
 def _base_configuration(mdr_config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -79,17 +80,16 @@ def _base_configuration(mdr_config: dict[str, Any]) -> tuple[dict[str, Any], dic
     return (config, base)
 
 
-def _external_rule_id(mdr_config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Normalise rule_id:: tenant keys into a bundle mapping."""
-    config = deepcopy(mdr_config)
-    if "rule_id_bundle" in config:
-        return (config, cast(dict[str, Any], config.pop("rule_id_bundle")))
-    bundle: dict[str, Any] = {}
-    for key in list(config):
-        if key.startswith("rule_id::"):
-            tenant = key.split("rule_id::", 1)[1]
-            bundle[tenant] = config.pop(key)
-    return (config, bundle)
+def _without_external_ids(mdr_config: dict[str, Any]) -> dict[str, Any]:
+    """Drop ``rule_id``, ``rule_id_bundle`` and ``rule_id::<tenant>`` from a block.
+
+    Vendor ids live in ``.opentide/states/deployment/`` (RFC 0010). The keys are
+    not read here: ``opentide validate`` reports them as ``external_id_in_rule``
+    and deploy refuses the rule from its authored document, before any HTTP
+    call. Dropping them lets the rest of the catalogue load while a rule waits
+    for ``opentide deploy migrate-state``.
+    """
+    return {key: value for key, value in mdr_config.items() if not is_legacy_external_id_key(key)}
 
 
 def load_sentinel_config(mdr_config: dict[str, Any]) -> SentinelConfig:
@@ -147,13 +147,7 @@ def load_sentinel_config(mdr_config: dict[str, Any]) -> SentinelConfig:
 
 
 def load_defender_config(mdr_config: dict[str, Any]) -> DefenderConfig:
-    remaining, base = _base_configuration(mdr_config)
-    rule_id_bundle: dict[str, int] = {}
-    for key in list(remaining):
-        if key.startswith("rule_id::"):
-            tenant = key.split("rule_id::", 1)[1]
-            rule_id_bundle[tenant] = remaining.pop(key)
-    rule_id = rule_id_bundle or remaining.pop("rule_id", None)
+    remaining, base = _base_configuration(_without_external_ids(mdr_config))
     from opentide.models.platform_configs import (
         DefenderAlert,
         DefenderExclusion,
@@ -206,15 +200,13 @@ def load_defender_config(mdr_config: dict[str, Any]) -> DefenderConfig:
         alert=alert,
         impacted_entities=impacted_entities,
         scope=scope,
-        rule_id=rule_id,
         actions=response_actions,
         exclusions=exclusions,
     )
 
 
 def load_crowdstrike_config(mdr_config: dict[str, Any]) -> CrowdstrikeConfig:
-    remaining, base = _base_configuration(mdr_config)
-    remaining, rule_id_bundle = _external_rule_id(remaining)
+    remaining, base = _base_configuration(_without_external_ids(mdr_config))
     from opentide.models.platform_configs import CrowdstrikeDetails, CrowdstrikeSchedule
 
     return CrowdstrikeConfig(
@@ -222,13 +214,11 @@ def load_crowdstrike_config(mdr_config: dict[str, Any]) -> CrowdstrikeConfig:
         details=CrowdstrikeDetails.model_validate(remaining.pop("details")),
         schedule=CrowdstrikeSchedule.model_validate(remaining.pop("schedule")),
         query=remaining.pop("query"),
-        rule_id_bundle=rule_id_bundle or None,
     )
 
 
 def load_sentinel_one_config(mdr_config: dict[str, Any]) -> SentinelOneConfig:
-    remaining, base = _base_configuration(mdr_config)
-    remaining, rule_id_bundle = _external_rule_id(remaining)
+    remaining, base = _base_configuration(_without_external_ids(mdr_config))
     details = None
     if details_raw := remaining.pop("details", None):
         from opentide.models.platform_configs import SentinelOneDetails
@@ -263,13 +253,11 @@ def load_sentinel_one_config(mdr_config: dict[str, Any]) -> SentinelOneConfig:
         details=details,
         condition=condition,
         response=response,
-        rule_id_bundle=rule_id_bundle or None,
     )
 
 
 def load_harfanglab_config(mdr_config: dict[str, Any]) -> HarfangLabConfig:
-    remaining, base = _base_configuration(mdr_config)
-    remaining, rule_id_bundle = _external_rule_id(remaining)
+    remaining, base = _base_configuration(_without_external_ids(mdr_config))
     sigma = None
     if sigma_raw := remaining.pop("sigma", None):
         logsource = HarfangLabSigmaLogSource.model_validate(sigma_raw.pop("logsource"))
@@ -299,7 +287,6 @@ def load_harfanglab_config(mdr_config: dict[str, Any]) -> HarfangLabConfig:
         tags=remaining.pop("tags", None),
         sigma=sigma,
         yara=yara,
-        rule_id_bundle=rule_id_bundle or None,
     )
 
 
@@ -378,8 +365,7 @@ def load_splunk_config(mdr_config: dict[str, Any]) -> SplunkConfig:
 
 
 def load_carbon_black_config(mdr_config: dict[str, Any]) -> CarbonBlackConfig:
-    remaining, base = _base_configuration(mdr_config)
-    remaining, rule_id_bundle = _external_rule_id(remaining)
+    remaining, base = _base_configuration(_without_external_ids(mdr_config))
     query = remaining.pop("query", None)
     organizations = remaining.pop("organizations", None) or remaining.pop("organization", None)
     watchlist = remaining.pop("watchlist", None)
@@ -392,7 +378,6 @@ def load_carbon_black_config(mdr_config: dict[str, Any]) -> CarbonBlackConfig:
         watchlist=watchlist,
         report=report,
         tags=tags,
-        rule_id_bundle=rule_id_bundle or None,
         **remaining,
     )
 
