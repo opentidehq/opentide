@@ -17,7 +17,11 @@ from opentide.ci.stages import (
     validate_commands,
 )
 from opentide.ci.text import indent, join_blocks
-from opentide.ci.writeback import production_writeback, rules_folder
+from opentide.ci.writeback import (
+    overlay_default_branch_state,
+    production_writeback,
+    rules_folder,
+)
 
 _SHARE_STEPS_NOTE = (
     "# API key environment variables named in sharing.toml come from the CI secret store."
@@ -52,12 +56,16 @@ def _github_job(
     if_cond: str | None = None,
     env: str | None = None,
     permissions: str | None = None,
+    concurrency: str | None = None,
 ) -> str:
     lines = [f"{job_id}:", f"  name: {name}", "  runs-on: ubuntu-latest"]
     if needs:
         lines.append(f"  needs: {needs}")
     if if_cond:
         lines.append(f"  if: {if_cond}")
+    if concurrency:
+        lines.append("  concurrency:")
+        lines.append(indent(concurrency, 4))
     if permissions:
         lines.append("  permissions:")
         lines.append(indent(permissions, 4))
@@ -68,16 +76,38 @@ def _github_job(
     return "\n".join(lines)
 
 
-#: The write-back runs whenever the deploy step started, also when it failed
-#: part way, so the ids of the rules it did create are committed. A dry-run
-#: failure skips the deploy step, and then there is nothing to record.
-WRITEBACK_IF = "${{ !cancelled() && steps.deploy.outcome != 'skipped' }}"
+#: The write-back runs whenever the deploy step started: also when it failed
+#: part way, was cancelled, or hit the job timeout, so the ids of the rules it
+#: did create are committed. ``always()`` is what lets a step run after a
+#: cancellation; ``!cancelled()`` did not. A dry-run failure skips the deploy
+#: step, and then there is nothing to record.
+WRITEBACK_IF = "${{ always() && steps.deploy.outcome != 'skipped' }}"
+
+#: One production deploy at a time. Without it two merges deploy at once and
+#: both create the same new rule. GitHub keeps one run pending per group and
+#: cancels an older pending one; the CI/CD docs say so.
+PRODUCTION_CONCURRENCY_GROUP = "opentide-production-{branch}"
+
+_GIT_IDENTITY = (
+    'git config user.name "github-actions[bot]"',
+    'git config user.email "github-actions[bot]@users.noreply.github.com"',
+)
 
 
 def _production_steps(options: CiRenderOptions) -> str:
-    """Dry-run, then the deploy as a step with an id the write-back can test."""
+    """State overlay, dry-run, then the deploy as a step with an id the write-back can test."""
     dry_run, deploy = production_deploy_steps(options)
-    return f"- run: {dry_run}\n- name: Deploy\n  id: deploy\n  run: {deploy}"
+    overlay = "\n".join(
+        [
+            *_GIT_IDENTITY,
+            overlay_default_branch_state(fetch=f"git fetch origin {options.default_branch}"),
+        ]
+    )
+    return (
+        "- name: Use the default branch's deployment state\n  run: |\n"
+        + indent(overlay, 4)
+        + f"\n- run: {dry_run}\n- name: Deploy\n  id: deploy\n  run: {deploy}"
+    )
 
 
 def _writeback_step(options: CiRenderOptions) -> str:
@@ -88,13 +118,7 @@ def _writeback_step(options: CiRenderOptions) -> str:
         push=f'git push origin "HEAD:{branch}"',
         fetch=f"git fetch origin {branch}",
     )
-    body = "\n".join(
-        [
-            'git config user.name "github-actions[bot]"',
-            'git config user.email "github-actions[bot]@users.noreply.github.com"',
-            script,
-        ]
-    )
+    body = "\n".join([*_GIT_IDENTITY, script])
     return f"- name: Commit deployment write-backs\n  if: {WRITEBACK_IF}\n  run: |\n" + indent(
         body, 4
     )
@@ -271,6 +295,10 @@ def render_github(options: CiRenderOptions) -> str:
             env=deploy_env,
             # The write-back step pushes to the default branch.
             permissions="contents: write",
+            concurrency=(
+                f"group: {PRODUCTION_CONCURRENCY_GROUP.format(branch=branch)}\n"
+                "cancel-in-progress: false"
+            ),
             steps=join_blocks(
                 _setup_steps(options, full_history=True),
                 _production_steps(options),

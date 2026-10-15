@@ -517,6 +517,21 @@ def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
     emit_result(cli, CommandResult.from_payload(result, default_message="Migration completed"))
 
 
+@deploy_app.command("replay-state", hidden=True)
+def deploy_replay_state_cmd(
+    state_commit: str = typer.Argument(..., help="Commit whose deployment-state changes to replay"),
+) -> None:
+    """Replay one commit's deployment-state changes onto the checkout (CI write-back).
+
+    Used by the generated production write-back when its rule files conflict
+    with a concurrent merge. A subcommand rather than ``python -m`` so it runs
+    in the interpreter that has opentide, whatever ``python`` is on PATH.
+    """
+    from opentide.ci.state_replay import main as replay_main
+
+    raise typer.Exit(replay_main([state_commit]))
+
+
 @deploy_app.command("metadata", hidden=True)
 def deploy_metadata_cmd(
     ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")

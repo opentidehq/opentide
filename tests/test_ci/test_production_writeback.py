@@ -13,6 +13,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -26,12 +27,18 @@ from opentide.ci.models import CiRenderOptions
 from opentide.ci.writeback import (
     DEPLOY_FAILED_NOTE,
     DEPLOYMENT_STATES,
+    SIDE_REF_PREFIX,
+    STATE_BASE_MESSAGE,
+    WRITEBACK_AFTER_CANCEL,
     WRITEBACK_EMPTY_NOTE,
     WRITEBACK_MESSAGE,
     WRITEBACK_RULES_SKIPPED,
+    WRITEBACK_STATE_ONLY,
+    WRITEBACK_UNPUBLISHED,
     deploy_then_writeback,
     production_writeback,
     rules_folder,
+    writeback_after_cancel,
 )
 
 DEPLOY = "opentide deploy --plan PRODUCTION --keep-deprecated --skip-unconfigured"
@@ -57,14 +64,23 @@ def _azure_job(name: str) -> dict:
 
 
 def _assert_writeback(script: str, *, push: str) -> None:
-    assert f'git commit -m "{WRITEBACK_MESSAGE}"' in script
+    assert f'git commit -q -m "{WRITEBACK_MESSAGE}"' in script
     assert "[skip ci]" in WRITEBACK_MESSAGE
-    assert f"git add -- {DEPLOYMENT_STATES}" in script
+    assert f"git add -A -- {DEPLOYMENT_STATES}" in script
     assert 'opentide validate --strict "$@"' in script
+    # NUL-delimited, so git never C-quotes a name on its way to --file.
+    assert "git diff -z --name-only -- objects/rules" in script
+    assert "read -r -d ''" in script
+    assert "quotePath" not in script
     assert "git add -u -- objects/rules" in script
     assert "if git diff --staged --quiet; then" in script
     assert f"until {push}; do" in script
-    assert "git rebase FETCH_HEAD" in script
+    # Only this run's commit is rebased, never the local overlay commit under it.
+    assert "git rebase -q --onto FETCH_HEAD HEAD~1" in script
+    assert "trap opentide_state_exit EXIT" in script
+    # A conflicting rule write-back is dropped, never the deployment state.
+    assert "git rebase --abort" in script
+    assert WRITEBACK_STATE_ONLY in script
     # The shards are staged before the rule files are validated.
     assert script.index(DEPLOYMENT_STATES) < script.index("opentide validate --strict")
 
@@ -83,10 +99,21 @@ def test_github_writeback_runs_whenever_the_deploy_started() -> None:
     writeback = steps[names.index("Commit deployment write-backs")]
     assert writeback is steps[-1]
     assert writeback["if"] == WRITEBACK_IF
-    assert "!cancelled()" in WRITEBACK_IF
-    assert "steps.deploy.outcome != 'skipped'" in WRITEBACK_IF
+    # A cancelled or timed-out deploy has written shards too.
+    assert WRITEBACK_IF == "${{ always() && steps.deploy.outcome != 'skipped' }}"
     _assert_writeback(writeback["run"], push='git push origin "HEAD:main"')
     assert 'git config user.name "github-actions[bot]"' in writeback["run"]
+
+
+def test_github_production_jobs_are_serialised_and_read_the_tip_state() -> None:
+    job = yaml.safe_load(render_github(_options("github")))["jobs"]["deploy_production"]
+    assert job["concurrency"] == {"group": "opentide-production-main", "cancel-in-progress": False}
+    runs = [step.get("run", "") for step in job["steps"]]
+    overlay = next(i for i, run in enumerate(runs) if STATE_BASE_MESSAGE in run)
+    dry_run = runs.index("opentide deploy --dry-run --plan PRODUCTION --keep-deprecated")
+    assert overlay < dry_run < runs.index(DEPLOY)
+    assert "git fetch origin main" in runs[overlay]
+    assert runs[overlay].index("git config user.name") < runs[overlay].index("commit-tree")
 
 
 def test_github_staging_job_does_not_commit() -> None:
@@ -98,8 +125,15 @@ def test_github_staging_job_does_not_commit() -> None:
 def test_gitlab_deploy_and_writeback_share_one_block() -> None:
     job = yaml.safe_load(render_gitlab(_options("gitlab")))["deploy_production"]
     assert job["before_script"][0] == GITLAB_INSTALL_GIT
+    assert job["resource_group"] == "opentide-production"
     script = job["script"]
-    assert script[0] == "opentide deploy --dry-run --plan PRODUCTION --keep-deprecated"
+    dry_run = script.index("opentide deploy --dry-run --plan PRODUCTION --keep-deprecated")
+    overlay = next(i for i, line in enumerate(script) if STATE_BASE_MESSAGE in line)
+    assert script.index('git config user.name "gitlab-ci"') < overlay < dry_run
+    assert 'git fetch origin "$CI_DEFAULT_BRANCH"' in script[overlay]
+    (after,) = job["after_script"]
+    assert WRITEBACK_AFTER_CANCEL in after
+    _assert_writeback(after, push=GITLAB_PUSH)
     block = script[-1]
     assert block.startswith("deploy_status=0\n")
     assert f"{DEPLOY} || deploy_status=$?" in block
@@ -115,11 +149,15 @@ def test_azure_writeback_step_runs_after_a_failed_deploy() -> None:
     assert steps[0] == {"checkout": "self", "persistCredentials": True, "fetchDepth": 0}
     deploy = steps[-2]["script"]
     started = deploy.index("##vso[task.setvariable variable=OPENTIDE_DEPLOY_STARTED]true")
-    assert deploy.index("--dry-run") < started < deploy.index(DEPLOY)
+    overlay = deploy.index(STATE_BASE_MESSAGE)
+    assert deploy.index("git config user.name") < overlay < deploy.index("--dry-run") < started
+    assert started < deploy.index(DEPLOY)
     writeback = steps[-1]
     assert writeback["displayName"] == "Commit deployment write-backs"
     assert writeback["condition"] == WRITEBACK_CONDITION
-    assert "succeededOrFailed()" in WRITEBACK_CONDITION
+    # always(), so a cancelled or timed-out deploy still writes back.
+    assert WRITEBACK_CONDITION == "and(always(), eq(variables['OPENTIDE_DEPLOY_STARTED'], 'true'))"
+    assert yaml.safe_load(render_azure(_options("azure")))["lockBehavior"] == "sequential"
     _assert_writeback(writeback["script"], push="git push origin HEAD:main")
     staging = _azure_job("deploy_staging")
     assert not any("git commit" in str(step.get("script", "")) for step in staging["steps"])
@@ -163,20 +201,33 @@ def test_rules_folder_defaults_without_a_checkout(tmp_path: Path) -> None:
 
 # --- The scripts themselves, against real repositories -----------------------
 
+SHARD = "00000000-0000-4000-8003-000000000001"
+"""The rule whose vendor id the fake deploy records."""
+
 #: Stands in for the CLI. ``deploy`` records a vendor id, promotes the rule and
 #: exits ``FAKE_DEPLOY_EXIT``; ``validate`` logs its arguments and exits
 #: ``FAKE_VALIDATE_EXIT``.
 FAKE_OPENTIDE = """#!/bin/sh
 case "$1" in
   deploy)
+    if [ "$2" = "replay-state" ]; then
+      exec "$OPENTIDE_TEST_PYTHON" -m opentide.ci.state_replay "$3"
+    fi
     mkdir -p .opentide/states/deployment
-    printf '{"rule_id": 3}\\n' > .opentide/states/deployment/rule.json
+    cat > .opentide/states/deployment/00000000-0000-4000-8003-000000000001.json <<'SHARD'
+{
+  "object_uuid": "00000000-0000-4000-8003-000000000001",
+  "platforms": {"defender_for_endpoint": {"contoso": "3"}},
+  "schema": "deployment.state::1.0"
+}
+SHARD
     printf 'status: PRODUCTION\\n' > objects/rules/rule.yaml
     exit "${FAKE_DEPLOY_EXIT:-0}"
     ;;
   validate)
     shift
     echo "$*" >> "$FAKE_VALIDATE_LOG"
+    if [ -n "$FAKE_VALIDATE_NUL_LOG" ]; then printf '%s\\0' "$@" >> "$FAKE_VALIDATE_NUL_LOG"; fi
     exit "${FAKE_VALIDATE_EXIT:-0}"
     ;;
 esac
@@ -213,6 +264,8 @@ def fake_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     log.touch()
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_VALIDATE_LOG", str(log))
+    # The real replay, in this interpreter: whatever `python` is on PATH may lack opentide.
+    monkeypatch.setenv("OPENTIDE_TEST_PYTHON", sys.executable)
     return log
 
 
@@ -297,7 +350,7 @@ def test_writebacks_land_on_the_default_branch(clone: Path, fake_cli: Path) -> N
 
     assert result.returncode == 0, result.stderr
     assert _remote_log(clone) == [WRITEBACK_MESSAGE, "catalogue"]
-    assert _remote_files(clone) == [f"{DEPLOYMENT_STATES}/rule.json", "objects/rules/rule.yaml"]
+    assert _remote_files(clone) == [f"{DEPLOYMENT_STATES}/{SHARD}.json", "objects/rules/rule.yaml"]
     # Validation is scoped to the rule files the deploy modified.
     assert fake_cli.read_text(encoding="utf-8").splitlines() == [
         "--strict --file objects/rules/rule.yaml"
@@ -312,7 +365,7 @@ def test_invalid_rule_files_still_commit_the_state(clone: Path) -> None:
     assert result.returncode == 1
     assert WRITEBACK_RULES_SKIPPED in result.stderr
     assert _remote_log(clone) == [WRITEBACK_MESSAGE, "catalogue"]
-    assert _remote_files(clone) == [f"{DEPLOYMENT_STATES}/rule.json"]
+    assert _remote_files(clone) == [f"{DEPLOYMENT_STATES}/{SHARD}.json"]
 
 
 def test_a_rejected_push_is_retried_on_the_new_tip(clone: Path, tmp_path: Path) -> None:
@@ -336,7 +389,7 @@ def test_a_partly_failed_deploy_commits_its_ids_and_still_fails(clone: Path) -> 
     assert result.returncode == 3, result.stderr
     assert DEPLOY_FAILED_NOTE.replace("$deploy_status", "3") in result.stderr
     assert _remote_log(clone) == [WRITEBACK_MESSAGE, "catalogue"]
-    assert _remote_files(clone) == [f"{DEPLOYMENT_STATES}/rule.json", "objects/rules/rule.yaml"]
+    assert _remote_files(clone) == [f"{DEPLOYMENT_STATES}/{SHARD}.json", "objects/rules/rule.yaml"]
 
 
 def test_a_successful_deploy_block_exits_0(clone: Path) -> None:
@@ -345,10 +398,12 @@ def test_a_successful_deploy_block_exits_0(clone: Path) -> None:
     assert _remote_log(clone) == [WRITEBACK_MESSAGE, "catalogue"]
 
 
-def test_a_failed_rebase_fails_the_block_instead_of_pushing_nothing(
-    clone: Path, tmp_path: Path
-) -> None:
-    """``set -e`` is ignored inside a tested subshell; the block must not rely on that."""
+def test_a_rule_conflict_still_pushes_the_state_and_fails(clone: Path, tmp_path: Path) -> None:
+    """A concurrent merge edited the promoted rule: the ids must land anyway.
+
+    ``set -e`` is ignored inside a tested subshell, so the block must also not
+    report success when the rule write-back was dropped.
+    """
     other = tmp_path / "other"
     _git(tmp_path, "clone", "-q", str(tmp_path / "remote.git"), str(other))
     (other / "objects" / "rules" / "rule.yaml").write_text("status: DISABLED\n", encoding="utf-8")
@@ -357,5 +412,165 @@ def test_a_failed_rebase_fails_the_block_instead_of_pushing_nothing(
 
     result = _gitlab_block(clone)
 
-    assert result.returncode != 0
-    assert _remote_log(clone) == ["conflicting edit", "catalogue"]
+    assert result.returncode == 1, result.stderr
+    assert WRITEBACK_STATE_ONLY in result.stderr
+    assert _remote_log(clone) == [WRITEBACK_MESSAGE, "conflicting edit", "catalogue"]
+    assert _remote_files(clone) == [f"{DEPLOYMENT_STATES}/{SHARD}.json"]
+    _git(clone, "fetch", "-q", "origin", "main")
+    assert _git(clone, "show", "FETCH_HEAD:objects/rules/rule.yaml") == "status: DISABLED"
+
+
+def test_invalid_rules_and_a_moved_branch_still_push_the_state(clone: Path, tmp_path: Path) -> None:
+    """Unstaged rule edits must not stop the rebase onto a branch that moved."""
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(tmp_path / "remote.git"), str(other))
+    (other / "README.md").write_text("moved on\n", encoding="utf-8")
+    _git(other, "commit", "-q", "-am", "newer merge")
+    _git(other, "push", "-q", "origin", "HEAD:main")
+    _deploy(clone)
+
+    result = _writeback(clone, FAKE_VALIDATE_EXIT="1")
+
+    assert result.returncode == 1, result.stderr
+    assert WRITEBACK_RULES_SKIPPED in result.stderr
+    assert _remote_log(clone) == [WRITEBACK_MESSAGE, "newer merge", "catalogue"]
+    assert _remote_files(clone) == [f"{DEPLOYMENT_STATES}/{SHARD}.json"]
+
+
+# --- No vendor id is lost when the state cannot be published (#548) ---------
+
+PROTECTED_MAIN_HOOK = """#!/bin/sh
+while read -r old new ref; do
+  if [ "$ref" = "refs/heads/main" ]; then
+    echo "refs/heads/main is protected" >&2
+    exit 1
+  fi
+done
+exit 0
+"""
+
+
+def _side_refs(work: Path) -> list[str]:
+    return _git(work, "ls-remote", "origin", f"{SIDE_REF_PREFIX}*").splitlines()
+
+
+def _assert_ids_kept_on_a_side_ref(work: Path, result: subprocess.CompletedProcess[str]) -> None:
+    assert result.returncode != 0, result.stderr
+    assert WRITEBACK_UNPUBLISHED in result.stderr
+    # The diff is in the log, so the ids survive even if the side ref push fails too.
+    assert '"defender_for_endpoint": {"contoso": "3"}' in result.stderr
+    (ref,) = _side_refs(work)
+    sha, name = ref.split()
+    assert name == f"{SIDE_REF_PREFIX}{sha}"
+    _git(work, "fetch", "-q", "origin", name)
+    shard = _git(work, "show", f"{sha}:{DEPLOYMENT_STATES}/{SHARD}.json")
+    assert '"contoso": "3"' in shard
+
+
+def test_a_push_the_remote_refuses_keeps_the_ids_on_a_side_ref(clone: Path, tmp_path: Path) -> None:
+    """A protected branch the CI token cannot push to: five rejections, then give up."""
+    hook = tmp_path / "remote.git" / "hooks" / "pre-receive"
+    hook.write_text(PROTECTED_MAIN_HOOK, encoding="utf-8")
+    hook.chmod(hook.stat().st_mode | stat.S_IEXEC)
+    _deploy(clone)
+
+    result = _writeback(clone)
+
+    assert "giving up" in result.stderr
+    _assert_ids_kept_on_a_side_ref(clone, result)
+    assert _remote_log(clone) == ["catalogue"]
+
+
+def test_a_failed_fetch_keeps_the_ids_on_a_side_ref(clone: Path, tmp_path: Path) -> None:
+    """The branch moved, and fetching the new tip fails: ``set -e`` exits, the trap runs."""
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(tmp_path / "remote.git"), str(other))
+    (other / "README.md").write_text("moved on\n", encoding="utf-8")
+    _git(other, "commit", "-q", "-am", "newer merge")
+    _git(other, "push", "-q", "origin", "HEAD:main")
+    _deploy(clone)
+    script = production_writeback(
+        rules="objects/rules",
+        push='git push -q origin "HEAD:main"',
+        fetch="git fetch -q origin no-such-branch",
+    )
+
+    result = _bash(script, clone)
+
+    _assert_ids_kept_on_a_side_ref(clone, result)
+
+
+def test_a_published_state_pushes_no_side_ref(clone: Path) -> None:
+    _deploy(clone)
+    result = _writeback(clone, FAKE_VALIDATE_EXIT="1")
+    assert result.returncode == 1
+    assert WRITEBACK_UNPUBLISHED not in result.stderr
+    assert _side_refs(clone) == []
+
+
+@pytest.mark.parametrize("name", ['q"x.yaml', "back\\s.yaml", "tab\tt.yaml", "nl\nx.yaml"])
+def test_rule_file_names_reach_validate_as_themselves(
+    clone: Path, tmp_path: Path, name: str
+) -> None:
+    """git C-quotes these names in a plain ``--name-only`` list; ``-z`` does not."""
+    rule = clone / "objects" / "rules" / name
+    rule.write_text("status: STAGING\n", encoding="utf-8")
+    _git(clone, "add", "-A")
+    _git(clone, "commit", "-q", "-m", "odd name")
+    _git(clone, "push", "-q", "origin", "HEAD:main")
+    rule.write_text("status: PRODUCTION\n", encoding="utf-8")
+    nul_log = tmp_path / "validate.nul"
+
+    result = _writeback(clone, FAKE_VALIDATE_NUL_LOG=str(nul_log))
+
+    assert result.returncode == 0, result.stderr
+    args = nul_log.read_bytes().decode("utf-8").split("\0")[:-1]
+    assert args == ["--strict", "--file", f"objects/rules/{name}"]
+    _git(clone, "fetch", "-q", "origin", "main")
+    assert _git(clone, "show", f"FETCH_HEAD:objects/rules/{name}") == "status: PRODUCTION"
+
+
+def _after_cancel(work: Path) -> subprocess.CompletedProcess[str]:
+    script = writeback_after_cancel(
+        rules="objects/rules",
+        push='git push -q origin "HEAD:main"',
+        fetch="git fetch -q origin main",
+    )
+    return _bash(script, work)
+
+
+def _marker(work: Path, name: str) -> Path:
+    return work / _git(work, "rev-parse", "--git-path", name)
+
+
+def test_gitlab_after_script_writes_back_a_cancelled_deploy(clone: Path) -> None:
+    """GitLab runs after_script on cancel; the combined block never reached its write-back."""
+    _marker(clone, "opentide-deploy-started").touch()
+    _deploy(clone)
+
+    result = _after_cancel(clone)
+
+    assert result.returncode == 0, result.stderr
+    assert WRITEBACK_AFTER_CANCEL in result.stderr
+    assert _remote_log(clone) == [WRITEBACK_MESSAGE, "catalogue"]
+
+
+@pytest.mark.parametrize("markers", [(), ("opentide-deploy-started", "opentide-writeback-done")])
+def test_gitlab_after_script_is_a_no_op_otherwise(clone: Path, markers: tuple[str, ...]) -> None:
+    """Never started (cancelled in the dry-run), or the block already wrote back."""
+    for name in markers:
+        _marker(clone, name).touch()
+    _deploy(clone)
+
+    result = _after_cancel(clone)
+
+    assert result.returncode == 0, result.stderr
+    assert WRITEBACK_AFTER_CANCEL not in result.stderr
+    assert _remote_log(clone) == ["catalogue"]
+
+
+def test_the_gitlab_block_marks_its_write_back_done(clone: Path) -> None:
+    result = _gitlab_block(clone)
+    assert result.returncode == 0, result.stderr
+    assert _marker(clone, "opentide-deploy-started").exists()
+    assert _marker(clone, "opentide-writeback-done").exists()

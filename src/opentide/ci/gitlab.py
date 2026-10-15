@@ -21,7 +21,12 @@ from opentide.ci.stages import (
     staging_deploy_steps,
 )
 from opentide.ci.text import indent
-from opentide.ci.writeback import deploy_then_writeback, rules_folder
+from opentide.ci.writeback import (
+    deploy_then_writeback,
+    overlay_default_branch_state,
+    rules_folder,
+    writeback_after_cancel,
+)
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
 
 
@@ -44,6 +49,7 @@ def _gitlab_job(
     rules: str | None = None,
     extra_lines: list[str] | None = None,
     before: list[str] | None = None,
+    after: list[str] | None = None,
 ) -> str:
     lines = [
         f"{name}:",
@@ -60,6 +66,9 @@ def _gitlab_job(
     lines.append(f"    - {pip_install(options)}")
     lines.append("  script:")
     lines.extend(f"    - {cmd}" for cmd in script)
+    if after:
+        lines.append("  after_script:")
+        lines.extend(f"    - {cmd}" for cmd in after)
     lines.extend(_need_lines(needs))
     return "\n".join(lines)
 
@@ -71,7 +80,8 @@ def _production_script(options: CiRenderOptions) -> list[str]:
     write-back share one block: the write-back runs even when the deploy
     failed part way, and the block still exits with the deploy's status. The
     block is a block scalar because a commit message contains ``": "``,
-    which a plain sequence item parses as a mapping.
+    which a plain sequence item parses as a mapping. The default branch's
+    deployment state is laid over the checkout before the dry-run.
     """
     dry_run, deploy = production_deploy_steps(options)
     script = deploy_then_writeback(
@@ -81,11 +91,20 @@ def _production_script(options: CiRenderOptions) -> list[str]:
         fetch=GITLAB_FETCH,
     )
     return [
-        dry_run,
         'git config user.email "gitlab-ci@opentide.local"',
         'git config user.name "gitlab-ci"',
+        "|\n" + indent(overlay_default_branch_state(fetch=GITLAB_FETCH), 6),
+        dry_run,
         "|\n" + indent(script, 6),
     ]
+
+
+def _production_after_script(options: CiRenderOptions) -> list[str]:
+    """Write back after a cancelled deploy; see :func:`writeback_after_cancel`."""
+    script = writeback_after_cancel(
+        rules=rules_folder(options.repo), push=GITLAB_PUSH, fetch=GITLAB_FETCH
+    )
+    return ["|\n" + indent(script, 6)]
 
 
 def render_gitlab(options: CiRenderOptions) -> str:
@@ -139,9 +158,12 @@ def render_gitlab(options: CiRenderOptions) -> str:
             script=_production_script(options),
             needs="generate",
             rules="$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH",
-            extra_lines=full_history,
+            # One production deploy at a time, in pipeline order: two at once
+            # would both create the same new rule.
+            extra_lines=[*full_history, "  resource_group: opentide-production"],
             # ``python:<ver>-slim`` ships without git; the write-back needs it.
             before=[GITLAB_INSTALL_GIT],
+            after=_production_after_script(options),
         )
     )
 

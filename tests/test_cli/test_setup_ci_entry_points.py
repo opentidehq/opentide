@@ -41,7 +41,8 @@ _BRANCH_REFERENCES = (
     re.compile(r"refs/heads/([A-Za-z0-9._/-]+)"),
     re.compile(r"git fetch origin ([A-Za-z0-9._/-]+)"),
     re.compile(r"origin/([A-Za-z0-9._/-]+)"),
-    re.compile(r"HEAD:([A-Za-z0-9._/-]+)"),
+    # Not FETCH_HEAD:<path>, which names a file in the fetched tip.
+    re.compile(r"(?<!FETCH_)HEAD:([A-Za-z0-9._/-]+)"),
 )
 
 
