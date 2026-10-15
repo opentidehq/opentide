@@ -1,9 +1,14 @@
+from __future__ import annotations
+
+import re
 from datetime import timedelta
-from azure.mgmt.securityinsight import SecurityInsights
-from azure.identity import ClientSecretCredential
+from typing import TYPE_CHECKING
 from opentide.models.system_config import ConfigurationModels
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel.client')
+
+if TYPE_CHECKING:
+    from azure.mgmt.securityinsight import SecurityInsights
 
 class SentinelService:
 
@@ -11,6 +16,9 @@ class SentinelService:
         self.setup = tenant_config.setup
 
     def connect(self) -> SecurityInsights:
+        from azure.identity import ClientSecretCredential
+        from azure.mgmt.securityinsight import SecurityInsights
+
         from opentide.core.environment import reject_unsubstituted_placeholders
         reject_unsubstituted_placeholders(
             self.setup.azure_tenant_id,
@@ -23,20 +31,34 @@ class SentinelService:
         client = SecurityInsights(credentials, self.setup.azure_subscription_id, connection_verify=self.setup.ssl)
         return client
 
+_SHORTHAND_DURATION = re.compile(r'^(\d+)([mhd])$')
+_ISO_DURATION = re.compile(
+    r'^P(?:(?P<weeks>\d+)W)?(?:(?P<days>\d+)D)?'
+    r'(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?$',
+    re.IGNORECASE,
+)
+_SHORTHAND_UNITS = {'m': 'minutes', 'h': 'hours', 'd': 'days'}
+
+
 def iso_duration_timedelta(duration: str) -> timedelta:
+    """Parse a rule duration into a timedelta.
+
+    Accepts the ISO 8601 form the Sentinel platform contract documents (``PT1H``,
+    ``PT30M``, ``P1D``) and the shorthand older catalogues use (``30m``, ``1h``,
+    ``1d``). The SDK serialises the result back to an ISO 8601 duration.
     """
-    Converts an simple duration into an ISO 8601 compliant time duration.
-    See https://tc39.es/proposal-temporal/docs/duration.html for more information.
-    """
-    unit = duration[-1]
-    count = int(duration[:-1])
-    match unit:
-        case 'm':
-            delta = timedelta(minutes=count)
-        case 'h':
-            delta = timedelta(hours=count)
-        case 'd':
-            delta = timedelta(days=count)
-        case _:
-            raise Exception(f'[FATAL] Duration {duration} is not in supported unit (m, h or d)')
-    return delta
+    from opentide.core.errors import Errors
+
+    text = str(duration).strip()
+    if (shorthand := _SHORTHAND_DURATION.match(text)):
+        count, unit = shorthand.groups()
+        return timedelta(**{_SHORTHAND_UNITS[unit]: int(count)})
+    iso = _ISO_DURATION.match(text)
+    if iso and not text.upper().endswith('T'):
+        parts = {name: int(value) for name, value in iso.groupdict().items() if value}
+        if parts:
+            return timedelta(**parts)
+    raise Errors.TideMDRDataModelErrors(
+        f'Duration {duration!r} is not an ISO 8601 duration (PT1H, PT30M, P1D) '
+        'or a shorthand duration (30m, 1h, 1d)'
+    )

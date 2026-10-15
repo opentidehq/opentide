@@ -1,6 +1,12 @@
 import json
 from pathlib import Path
 
+# Fail at import without the sentinel extra: the CLI turns this
+# ModuleNotFoundError into "install opentide[sentinel]" (#242). The client
+# module itself imports the SDK lazily.
+import azure.identity  # noqa: F401
+import azure.mgmt.securityinsight  # noqa: F401
+
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 from opentide.platforms.sentinel.client import (
