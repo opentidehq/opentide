@@ -10,13 +10,14 @@ import json
 import re
 import sys
 import warnings
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import structlog
 
 from opentide.cli.services.setup.templates import load_yaml_schema_fragment
 from opentide.core.files import resolve_configurations
+from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.registry.discovery import OPENTIDE_DIR
 
 logger = structlog.get_logger("opentide.cli.services.setup.vscode")
@@ -100,41 +101,81 @@ def emit_vscode_deprecation() -> None:
     logger.warning("vscode_setup_deprecated", detail=DEPRECATION_MESSAGE)
 
 
-def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, str]:
-    """Build per-folder yaml.schemas mappings from bundled paths.toml.
-
-    The Red Hat YAML extension cannot reliably narrow ``opentide.schema.json``
-    (a oneOf/if-then router) against a single ``objects/**/*.yaml`` glob, which
-    produces "Matches multiple schemas" and disables autocompletion. Map each
-    core object family to its concrete schema with a recursive per-folder glob
-    (``objects/threats/**/*.yaml``), matching ``Path.rglob("*.yaml")`` object
-    discovery. Do not collapse families onto the router glob.
-    """
-    del workspace  # reserved for future workspace-relative schema URIs
+def _paths_config() -> dict[str, Any]:
     configs = resolve_configurations()
-    cfg = configs.get("paths") or configs["global"]
+    return configs.get("paths") or configs["global"]
+
+
+def _schema_artifacts(cfg: dict[str, Any]) -> dict[str, str]:
     artifacts = cfg.get("artifacts", {})
-    schema_map: dict[str, str] = dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
+    return dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
+
+
+def _object_folders(cfg: dict[str, Any]) -> list[str]:
+    """Configured object folders, workspace-relative and without trailing ``/``."""
+    families = cfg.get("objects") or list(CORE_OBJECT_TYPES)
     object_dirs = (cfg.get("paths") or {}).get("objects") or {}
-    mappings: dict[str, str] = {}
-    for object_type in ("threat", "objective", "rule"):
-        schema_name = schema_map.get(object_type, f"{object_type}.1.0.schema.json")
-        folder = str(object_dirs.get(object_type, f"objects/{object_type}s/"))
-        glob = f"{folder.rstrip('/')}/**/*.yaml"
-        mappings[f"{OPENTIDE_DIR}/schemas/{schema_name}"] = glob
-    return mappings
+    return [str(object_dirs.get(family, f"objects/{family}s/")).rstrip("/") for family in families]
 
 
-def _router_schema_uri() -> str:
-    configs = resolve_configurations()
-    cfg = configs.get("paths") or configs["global"]
-    artifacts = cfg.get("artifacts", {})
-    schema_map: dict[str, str] = dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
+def _object_glob(folders: list[str]) -> str | list[str]:
+    """One recursive glob over the common parent of every object folder.
+
+    Matches ``Path.rglob("*.yaml")`` object discovery. When the folders share
+    no parent, fall back to one recursive glob per folder.
+    """
+    parents = {PurePosixPath(folder).parent.as_posix() for folder in folders}
+    if len(parents) == 1:
+        parent = parents.pop()
+        if parent not in ("", "."):
+            return f"{parent}/**/*.yaml"
+    return [f"{folder}/**/*.yaml" for folder in folders]
+
+
+def _router_schema_uri(cfg: dict[str, Any] | None = None) -> str:
+    schema_map = _schema_artifacts(cfg or _paths_config())
     return f"{OPENTIDE_DIR}/schemas/{schema_map.get('router', 'opentide.schema.json')}"
 
 
+def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, str | list[str]]:
+    """Map every object file to the ``opentide.schema.json`` router.
+
+    The router selects the revision schema from ``metadata.schema``, so
+    revisions of one family (``rule::1.0`` and ``rule::1.1``) coexist in one
+    folder. A per-folder mapping to a single revision schema cannot express that.
+    """
+    del workspace  # reserved for future workspace-relative schema URIs
+    cfg = _paths_config()
+    return {_router_schema_uri(cfg): _object_glob(_object_folders(cfg))}
+
+
+def _is_stale_revision_mapping(
+    schema: str, globs: object, *, families: list[str], folders: list[str]
+) -> bool:
+    """True for a per-folder revision mapping an earlier ``setup vscode`` wrote.
+
+    Those mapped ``.opentide/schemas/<family>.<major>.<minor>.schema.json`` to
+    ``<folder>/**/*.yaml`` (or ``<folder>/*.yaml``). Left in place they
+    validate every object against one revision, alongside the router.
+    """
+    pattern = rf"{re.escape(OPENTIDE_DIR)}/schemas/(?:{'|'.join(map(re.escape, families))})"
+    if not re.fullmatch(pattern + r"\.\d+\.\d+\.schema\.json", schema.removeprefix("./")):
+        return False
+    generated = {f"{folder}/{suffix}" for folder in folders for suffix in ("**/*.yaml", "*.yaml")}
+    values = [globs] if isinstance(globs, str) else globs
+    return (
+        isinstance(values, list)
+        and bool(values)
+        and all(isinstance(value, str) and value in generated for value in values)
+    )
+
+
 def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
-    """Write or merge .vscode/settings.json with OpenTide yaml.schemas."""
+    """Write or merge .vscode/settings.json with OpenTide yaml.schemas.
+
+    Merging keeps unrelated settings and user mappings, and drops the
+    per-folder revision mappings earlier releases generated.
+    """
     vscode_dir = target / ".vscode"
     vscode_dir.mkdir(parents=True, exist_ok=True)
     settings_path = vscode_dir / "settings.json"
@@ -146,7 +187,14 @@ def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
     yaml_schemas = existing.get("yaml.schemas", {})
     if not isinstance(yaml_schemas, dict):
         yaml_schemas = {}
-    yaml_schemas.pop(_router_schema_uri(), None)
+    cfg = _paths_config()
+    families = list(cfg.get("objects") or CORE_OBJECT_TYPES)
+    folders = _object_folders(cfg)
+    yaml_schemas = {
+        schema: globs
+        for schema, globs in yaml_schemas.items()
+        if not _is_stale_revision_mapping(schema, globs, families=families, folders=folders)
+    }
     yaml_schemas.update(mappings)
     existing["yaml.schemas"] = yaml_schemas
     settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")

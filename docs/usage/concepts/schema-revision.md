@@ -31,16 +31,22 @@ The schema identifier maps predictably to files and specs:
 | Specification file | `specs/objects/{family}-{major}.{minor}.md` | `rule-1.0.md` |
 | JSON Schema artifact | `.opentide/schemas/{family}.{major}.{minor}.schema.json` | `rule.1.0.schema.json` |
 | Template artifact | `.opentide/templates/{family}.{major}.{minor}.template.yaml` | `rule.1.0.template.yaml` |
-| IDE yaml.schemas | `.opentide/schemas/{family}.{major}.{minor}.schema.json` | `objects/{family}s/**/*.yaml` (recursive per-folder; the router glob is not used) |
+| IDE router | `.opentide/schemas/opentide.schema.json` | `objects/**/*.yaml`, routed by `metadata.schema` |
 
-Your editor validates YAML live because `opentide setup vscode` maps each object folder to its concrete JSON Schema. The bundled `opentide.schema.json` router is still generated for tooling that can follow `oneOf`/`if`/`then`; the YAML language server cannot, so it must not be mapped against `objects/**/*.yaml`.
+The router `opentide.schema.json` is the editor entry point. `opentide setup vscode` maps `objects/**/*.yaml` to it, and the router applies the revision schema named in each object's `metadata.schema`:
+
+- `metadata.schema` completes to the registered object identifiers (`objective::1.0`, `rule::1.0`, `rule::1.1`, `threat::1.0`). An unknown identifier is reported on that field with the valid values.
+- Each identifier has one `if`/`then` branch, combined with `allOf`. Only the branch whose identifier matches applies, so a `rule::1.1` object is checked against `rule.1.1.schema.json` and nothing else.
+- Branches reference the revision schemas by relative file name, so they resolve to the files next to the router in `.opentide/schemas/`.
+
+Map the router, not a revision schema. A folder mapping such as `objects/rules/**/*.yaml` → `rule.1.0.schema.json` checks every rule against `rule::1.0` and flags valid `rule::1.1` objects.
 
 ## How revisions coexist
 
 Schema revisions are additive. When a new revision such as `rule::1.1` ships, both revisions can exist in the same repo at once:
 
 1. `opentide generate schemas` emits **both** `rule.1.0.schema.json` and `rule.1.1.schema.json`.
-2. The IDE router adds a branch for each identifier and routes objects by their declared `metadata.schema`.
+2. The IDE router adds a branch and a `metadata.schema` value for each identifier, and routes objects by their declared `metadata.schema`.
 3. Objects opt in individually by setting `metadata.schema: rule::1.1`. Objects that still declare `rule::1.0` keep validating against `1.0` until you migrate them.
 
 This means a schema upgrade never forces a big-bang migration — you move objects over at your own pace. For CoreTide-era repos, see the [migration guide](../migration/index.md).

@@ -1,94 +1,133 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://opentide.dev/schemas/opentide.schema.json",
     "title": "OpenTide Object Router",
-    "oneOf": [
+    "description": "Validates any OpenTide object against the schema revision named in metadata.schema. Map objects/**/*.yaml to this file in the editor.",
+    "type": "object",
+    "required": [
+        "metadata"
+    ],
+    "properties": {
+        "metadata": {
+            "type": "object",
+            "required": [
+                "schema"
+            ],
+            "properties": {
+                "schema": {
+                    "title": "Schema",
+                    "description": "Schema identifier (family::major.minor). Selects the revision schema that validates this object.",
+                    "type": "string",
+                    "enum": [
+                        "objective::1.0",
+                        "rule::1.0",
+                        "rule::1.1",
+                        "threat::1.0"
+                    ],
+                    "enumDescriptions": [
+                        "Detection Objective, schema revision 1.0",
+                        "Detection Rule, schema revision 1.0",
+                        "Detection Rule, schema revision 1.1",
+                        "Threat Vector, schema revision 1.0"
+                    ]
+                }
+            }
+        }
+    },
+    "allOf": [
         {
             "if": {
+                "type": "object",
+                "required": [
+                    "metadata"
+                ],
                 "properties": {
                     "metadata": {
+                        "type": "object",
+                        "required": [
+                            "schema"
+                        ],
                         "properties": {
                             "schema": {
                                 "const": "objective::1.0"
                             }
-                        },
-                        "required": [
-                            "schema"
-                        ]
+                        }
                     }
-                },
-                "required": [
-                    "metadata"
-                ]
+                }
             },
             "then": {
-                "$ref": "./objective.1.0.schema.json"
+                "$ref": "objective.1.0.schema.json"
             }
         },
         {
             "if": {
+                "type": "object",
+                "required": [
+                    "metadata"
+                ],
                 "properties": {
                     "metadata": {
+                        "type": "object",
+                        "required": [
+                            "schema"
+                        ],
                         "properties": {
                             "schema": {
                                 "const": "rule::1.0"
                             }
-                        },
-                        "required": [
-                            "schema"
-                        ]
+                        }
                     }
-                },
-                "required": [
-                    "metadata"
-                ]
+                }
             },
             "then": {
-                "$ref": "./rule.1.0.schema.json"
+                "$ref": "rule.1.0.schema.json"
             }
         },
         {
             "if": {
+                "type": "object",
+                "required": [
+                    "metadata"
+                ],
                 "properties": {
                     "metadata": {
+                        "type": "object",
+                        "required": [
+                            "schema"
+                        ],
+                        "properties": {
+                            "schema": {
+                                "const": "rule::1.1"
+                            }
+                        }
+                    }
+                }
+            },
+            "then": {
+                "$ref": "rule.1.1.schema.json"
+            }
+        },
+        {
+            "if": {
+                "type": "object",
+                "required": [
+                    "metadata"
+                ],
+                "properties": {
+                    "metadata": {
+                        "type": "object",
+                        "required": [
+                            "schema"
+                        ],
                         "properties": {
                             "schema": {
                                 "const": "threat::1.0"
                             }
-                        },
-                        "required": [
-                            "schema"
-                        ]
+                        }
                     }
-                },
-                "required": [
-                    "metadata"
-                ]
+                }
             },
             "then": {
-                "$ref": "./threat.1.0.schema.json"
-            }
-        },
-        {
-            "if": {
-                "properties": {
-                    "metadata": {
-                        "properties": {
-                            "schema": {
-                                "const": "visibility::1.0"
-                            }
-                        },
-                        "required": [
-                            "schema"
-                        ]
-                    }
-                },
-                "required": [
-                    "metadata"
-                ]
-            },
-            "then": {
-                "$ref": "./visibility.1.0.schema.json"
+                "$ref": "threat.1.0.schema.json"
             }
         }
     ]

@@ -230,7 +230,9 @@ The full wizard checks skill availability before writing repository files. If th
 
 Interim yaml.schemas and snippet generation. By default the command generates templates and JSON schemas into `.opentide/`, then writes settings and snippets. A missing target path is created first so generate-first setup does not `chdir` into a nonexistent directory. Deprecation is logged once per invocation.
 
-`yaml.schemas` maps each object folder to its concrete schema (`threat.1.0.schema.json` → `objects/threats/**/*.yaml`, and the same for objectives and rules). Nested files under those folders stay associated; it does not map the `opentide.schema.json` router against `objects/**/*.yaml` — the Red Hat YAML extension reports "Matches multiple schemas" for that glob.
+`yaml.schemas` maps `objects/**/*.yaml` to the `.opentide/schemas/opentide.schema.json` router. The glob is the common parent of the configured object folders; when they share none, each folder gets its own recursive glob. The router validates each object against the revision schema named in its `metadata.schema`, so `rule::1.0` and `rule::1.1` rules can sit in the same folder. See [Schema revision](../usage/concepts/schema-revision.md).
+
+When merging into an existing `settings.json`, the command removes the per-folder revision mappings earlier releases wrote (for example `.opentide/schemas/rule.1.0.schema.json` → `objects/rules/**/*.yaml`). Other settings and other `yaml.schemas` entries are kept.
 
 ```bash
 opentide setup vscode                 # generate templates + schemas, then settings + snippets
@@ -247,7 +249,7 @@ If snippets were requested and templates are still missing after generate, the c
 |------|---------|
 | `--settings` | Write `.vscode/settings.json` yaml.schemas and `.vscode/extensions.json` (generates schemas first) |
 | `--snippets` | Write model template snippets (generates templates first) |
-| `--no-merge` | Replace settings instead of merging |
+| `--no-merge` | Replace `settings.json` and `extensions.json` instead of merging |
 | `--no-generate` | Do not run `opentide generate` phases first |
 | `--mcp` | Write `.vscode/mcp.json` by calling `write_mcp_config` (opt-in; parent `--vscode-setup` does not imply this) |
 

@@ -248,11 +248,12 @@ Run [`generate`](../cli/generate.md) after cloning a repo, after upgrading the O
 
 ### Editor stopped validating YAML / "Matches multiple schemas"
 
-`0.1.6` mapped the bundled `opentide.schema.json` router against `objects/**/*.yaml`. The Red Hat YAML extension cannot narrow that `oneOf` router, so it reports **Matches multiple schemas** and disables autocompletion. **0.1.7** maps each object folder recursively (`objects/threats/**/*.yaml` → `threat.1.0.schema.json`, and the same for objectives and rules). Nested files under those folders stay associated.
+Routers generated up to `0.14.2` combined their branches with `oneOf` and no `else`, so every valid object matched several branches and the Red Hat YAML extension reported **Matches multiple schemas**. Those releases mapped each object folder to one revision schema instead, which flags valid `rule::1.1` rules because `objects/rules/**/*.yaml` pointed at `rule.1.0.schema.json`. Current releases generate a router that applies exactly one revision schema per object, and `opentide setup vscode` maps `objects/**/*.yaml` to it and removes the old per-folder mappings.
 
 ```bash
-pip install 'opentide==0.14.2'
-opentide setup vscode
+pip install --upgrade opentide
+opentide generate schemas
+opentide setup vscode --settings --no-generate
 ```
 
 Then reload the YAML language server. If schemas are stale or missing:

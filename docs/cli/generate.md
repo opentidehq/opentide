@@ -28,7 +28,7 @@ When run without a subcommand, phases execute in this order:
 | 2 | exports | `generate exports` | ATT&CK navigator layer, objects export, revisions export |
 | 3 | vocabs | `generate vocabs` | In-memory object vocabulary indexes |
 | 4 | templates | `generate templates` | `.opentide/templates/*.template.yaml` |
-| 5 | schemas | `generate schemas` | `.opentide/schemas/*.schema.json`, IDE router |
+| 5 | schemas | `generate schemas` | `.opentide/schemas/*.schema.json`, IDE router `opentide.schema.json` |
 | 6 | snippets | `generate snippets` | VS Code snippets from templates |
 
 `extract` is **not** part of the default run — it calls live platform APIs and writes `Imported/` in the working directory. Use `opentide generate extract sentinel` or `opentide generate extract defender` explicitly when importing rules.
@@ -46,7 +46,7 @@ A freshly scaffolded repository (no objects yet) is a valid generate target. Doc
 - `DetectionRule.file` and other `Path` / hidden fields are omitted.
 - Rule `configurations` is a live key whose platform slots (`#sentinel:`, `#splunk:`, …) are commented stubs including nested `query: |`. It is never `configurations: {}`.
 
-JSON Schema generation (`generate schemas`) stays a separate pipeline. VS Code snippets copy the YAML templates and add tabstops; they do not re-walk models.
+JSON Schema generation (`generate schemas`) stays a separate pipeline. It writes one schema per registered revision (`rule.1.0.schema.json`, `rule.1.1.schema.json`, …) and the router `opentide.schema.json`, which applies the revision named in each object's `metadata.schema`. Map the router in your editor; see [Schema revision](../usage/concepts/schema-revision.md). VS Code snippets copy the YAML templates and add tabstops; they do not re-walk models.
 
 ## generate docs
 

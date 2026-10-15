@@ -155,20 +155,22 @@ def test_framework_schema_scan_indexes_disk_files(
     assert rule_meta["schema"]["const"] == "rule::1.0"
 
 
-def test_router_includes_registered_identifiers(example_registry: None) -> None:
-    router = build_opentide_router()
-    branches = router["oneOf"]
-    consts = {
-        branch["if"]["properties"]["metadata"]["properties"]["schema"]["const"]
-        for branch in branches
+def test_router_routes_the_identifiers_it_is_given(example_registry: None) -> None:
+    router = build_opentide_router(["example::1.1", "example::1.0"])
+    assert router["properties"]["metadata"]["properties"]["schema"]["enum"] == [
+        "example::1.0",
+        "example::1.1",
+    ]
+    routes = {
+        branch["if"]["properties"]["metadata"]["properties"]["schema"]["const"]: branch["then"][
+            "$ref"
+        ]
+        for branch in router["allOf"]
     }
-    assert "example::1.0" in consts
-    assert "example::1.1" in consts
-    assert any(
-        branch["then"]["$ref"] == f"./{schema_artifact_name('example::1.1')}"
-        for branch in branches
-        if branch["if"]["properties"]["metadata"]["properties"]["schema"]["const"] == "example::1.1"
-    )
+    assert routes == {
+        "example::1.0": schema_artifact_name("example::1.0"),
+        "example::1.1": schema_artifact_name("example::1.1"),
+    }
 
 
 def test_schema_version_chain_path(example_registry: None) -> None:

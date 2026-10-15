@@ -19,6 +19,7 @@ from opentide.cli.services.setup.vscode import (
 )
 
 SNIPPET_REL = ".vscode/model-templates.code-snippets"
+ROUTER = ".opentide/schemas/opentide.schema.json"
 
 
 def _object_folder_log_levels(stderr: str) -> list[str]:
@@ -38,13 +39,9 @@ def test_snippet_file_rel_matches_paths_toml(tmp_path: Path) -> None:
     assert snippet_file_rel(workspace=tmp_path) == SNIPPET_REL
 
 
-def test_build_yaml_schema_mappings() -> None:
-    mappings = build_yaml_schema_mappings()
-    assert mappings[".opentide/schemas/threat.1.0.schema.json"] == "objects/threats/**/*.yaml"
-    assert mappings[".opentide/schemas/objective.1.0.schema.json"] == "objects/objectives/**/*.yaml"
-    assert mappings[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/**/*.yaml"
-    assert ".opentide/schemas/opentide.schema.json" not in mappings
-    assert "objects/**/*.yaml" not in mappings.values()
+def test_build_yaml_schema_mappings_maps_objects_to_router() -> None:
+    """Issue #550: one router mapping, so rule::1.0 and rule::1.1 coexist."""
+    assert build_yaml_schema_mappings() == {ROUTER: "objects/**/*.yaml"}
 
 
 def test_write_vscode_settings_merge(tmp_path: Path) -> None:
@@ -60,10 +57,7 @@ def test_write_vscode_settings_merge(tmp_path: Path) -> None:
     assert not any(issubclass(item.category, DeprecationWarning) for item in caught)
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["editor.tabSize"] == 4
-    assert ".opentide/schemas/threat.1.0.schema.json" in settings["yaml.schemas"]
-    assert settings["yaml.schemas"][".opentide/schemas/threat.1.0.schema.json"] == (
-        "objects/threats/**/*.yaml"
-    )
+    assert settings["yaml.schemas"] == {ROUTER: "objects/**/*.yaml"}
 
 
 def test_schema_fragment_matches_global() -> None:
@@ -295,40 +289,74 @@ def test_write_vscode_extensions_non_list_recommendations(tmp_path: Path) -> Non
     assert extensions["recommendations"] == ["redhat.vscode-yaml"]
 
 
-def test_build_yaml_schema_mappings_uses_per_folder_schemas() -> None:
-    mappings = build_yaml_schema_mappings()
-    assert len(mappings) == 3
-    assert ".opentide/schemas/opentide.schema.json" not in mappings
-    assert set(mappings.values()) == {
-        "objects/threats/**/*.yaml",
-        "objects/objectives/**/*.yaml",
-        "objects/rules/**/*.yaml",
+def test_build_yaml_schema_mappings_lists_folders_without_common_parent(monkeypatch) -> None:
+    from opentide.core.files import resolve_configurations
+
+    configs = resolve_configurations()
+    cfg = dict(configs["paths"])
+    cfg["paths"] = {
+        **cfg["paths"],
+        "objects": {"threat": "intel/threats/", "objective": "objectives/", "rule": "rules/"},
     }
-    assert all(glob.endswith("/**/*.yaml") for glob in mappings.values())
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.vscode.resolve_configurations",
+        lambda: {**configs, "paths": cfg},
+    )
+    assert build_yaml_schema_mappings() == {
+        ROUTER: ["intel/threats/**/*.yaml", "objectives/**/*.yaml", "rules/**/*.yaml"]
+    }
 
 
-def test_write_vscode_settings_replaces_legacy_router_wildcard(tmp_path: Path) -> None:
+def test_write_vscode_settings_drops_stale_revision_mappings(tmp_path: Path) -> None:
+    """Merging removes per-folder revision mappings earlier releases wrote (issue #550)."""
     vscode_dir = tmp_path / ".vscode"
     vscode_dir.mkdir()
     (vscode_dir / "settings.json").write_text(
-        json.dumps(
-            {
-                "yaml.schemas": {
-                    ".opentide/schemas/opentide.schema.json": "objects/**/*.yaml",
-                    "other.schema.json": "other/*.yaml",
-                }
-            }
-        ),
+        """{
+  // user comment survives parsing
+  "editor.tabSize": 2,
+  "yaml.schemas": {
+    ".opentide/schemas/threat.1.0.schema.json": "objects/threats/**/*.yaml",
+    ".opentide/schemas/objective.1.0.schema.json": "objects/objectives/*.yaml",
+    ".opentide/schemas/rule.1.1.schema.json": "objects/rules/**/*.yaml",
+    "./.opentide/schemas/rule.1.0.schema.json": ["objects/rules/*.yaml"],
+    ".opentide/schemas/opentide.schema.json": "objects/rules/**/*.yaml",
+    ".opentide/schemas/rule.1.0.schema.json": "legacy/rules/*.yaml",
+    ".opentide/schemas/visibility.1.0.schema.json": "visibility/*.yaml",
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml",
+  },
+}
+""",
         encoding="utf-8",
     )
-    with warnings.catch_warnings(record=True):
-        warnings.simplefilter("always")
-        write_vscode_settings(tmp_path)
+    write_vscode_settings(tmp_path)
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
-    schemas = settings["yaml.schemas"]
-    assert ".opentide/schemas/opentide.schema.json" not in schemas
-    assert schemas[".opentide/schemas/rule.1.0.schema.json"] == "objects/rules/**/*.yaml"
-    assert schemas["other.schema.json"] == "other/*.yaml"
+    assert settings["editor.tabSize"] == 2
+    assert settings["yaml.schemas"] == {
+        ROUTER: "objects/**/*.yaml",
+        ".opentide/schemas/rule.1.0.schema.json": "legacy/rules/*.yaml",
+        ".opentide/schemas/visibility.1.0.schema.json": "visibility/*.yaml",
+        "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml",
+    }
+
+
+def test_write_vscode_settings_is_idempotent(tmp_path: Path) -> None:
+    write_vscode_settings(tmp_path)
+    first = (tmp_path / ".vscode" / "settings.json").read_text(encoding="utf-8")
+    write_vscode_settings(tmp_path)
+    assert (tmp_path / ".vscode" / "settings.json").read_text(encoding="utf-8") == first
+
+
+def test_write_vscode_settings_no_merge_overwrites(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "settings.json").write_text(
+        json.dumps({"editor.tabSize": 4, "yaml.schemas": {"other.schema.json": "other/*.yaml"}}),
+        encoding="utf-8",
+    )
+    write_vscode_settings(tmp_path, merge=False)
+    settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
+    assert settings == {"yaml.schemas": {ROUTER: "objects/**/*.yaml"}}
 
 
 def test_run_vscode_snippets_file_not_found(tmp_path: Path, monkeypatch) -> None:

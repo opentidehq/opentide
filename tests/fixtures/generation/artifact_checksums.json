@@ -8,7 +8,7 @@
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Sentinel One Template.yaml": "600582806998dbc0a9f9f96ff9c8b9d30a0d73688f944d6081b80ec0a9805f2b",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Splunk Enterprise Template.yaml": "a2d8f3e3d1e2f8d230c6942b4dd28526e61db0c6ee19dc91400c99f3616a0f2c",
   "tide:.opentide/schemas/objective.1.0.schema.json": "4ba96f3c39d254abdcbf1f5bebb7f5b828bb96aa076ced1eec314754484853eb",
-  "tide:.opentide/schemas/opentide.schema.json": "21105afdbd57e663e598c80bb1044269e026d72a2ee4a3af60a4e8b5a07438a5",
+  "tide:.opentide/schemas/opentide.schema.json": "35a4fd296707d75f5e72eff6a010a7ca516b2c54886b0c78b1e0537382e4b55f",
   "tide:.opentide/schemas/rule.1.0.schema.json": "1db7170a6ef4f5003acf8a29538d888070f80d88d2ac3f5f152c0399f54b8de1",
   "tide:.opentide/schemas/threat.1.0.schema.json": "c3a9c066bdbdde3dbc85a8ba6e65b38bd02782b63a64bf1bbaf338986f7f1f37",
   "tide:.opentide/schemas/visibility.1.0.schema.json": "fe98467b3b51256dbc14a22773a433766b5f5e8441a2e5e395bd8bafd6e53097",
