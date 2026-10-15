@@ -383,7 +383,9 @@ app.add_typer(validate_app, name="validate")
 def validate_group(
     ctx: typer.Context,
     check: ValidateCheck | None = typer.Option(None, "--check"),
-    file: str | None = typer.Option(None, "--file"),
+    file: list[str] | None = typer.Option(
+        None, "--file", help="Validate only this file (repeatable)"
+    ),
     uuid: list[str] | None = typer.Option(None, "--uuid"),
     object_type: list[str] | None = typer.Option(None, "--type"),
     strict: bool = typer.Option(False, "--strict"),
@@ -405,7 +407,7 @@ def validate_group(
         cli,
         check=check,
         strict=strict,
-        file=file,
+        files=file,
         uuids=uuid,
         object_types=object_type,
     )
@@ -461,7 +463,14 @@ def deploy_cmd(
     plan: str | None = typer.Option(None, "--plan", envvar="DEPLOYMENT_PLAN"),
     wide: bool = typer.Option(False, "--wide"),
     dry_run: bool = typer.Option(False, "--dry-run"),
-    keep_deprecated: bool = typer.Option(False, "--keep-deprecated"),
+    keep_deprecated: bool | None = typer.Option(
+        None,
+        "--keep-deprecated/--drop-deprecated",
+        help=(
+            "Include rules whose status disables or deletes them, so the deploy does. "
+            "Default: on for --plan PRODUCTION, off for other plans"
+        ),
+    ),
     skip_promotion: bool = typer.Option(False, "--skip-promotion"),
     skip_unconfigured: bool = typer.Option(
         False,

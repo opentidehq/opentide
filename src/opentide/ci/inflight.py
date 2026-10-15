@@ -31,7 +31,21 @@ GITLAB_INSTALL_GIT = (
 PUSH_ATTEMPTS = 5
 
 
-def _commit_and_push(*, message: str, empty_note: str, push: str, fetch: str) -> str:
+#: Stage the inflight shards. ``git add`` exits 128 when the path was never
+#: committed (#403); an empty directory stages nothing, so the guard exits 0.
+_STAGE_INFLIGHT = ("mkdir -p .opentide/inflight", "git add .opentide/inflight/")
+
+
+def _commit_and_push(
+    *,
+    message: str,
+    empty_note: str,
+    push: str,
+    fetch: str,
+    stage: tuple[str, ...] | list[str] = _STAGE_INFLIGHT,
+    empty_exit: str = "0",
+    after: tuple[str, ...] | list[str] = (),
+) -> str:
     """Stage, commit only when something changed, and push onto the latest default branch.
 
     ``git diff --staged --quiet`` exits 1 when there *are* staged changes, so
@@ -46,19 +60,18 @@ def _commit_and_push(*, message: str, empty_note: str, push: str, fetch: str) ->
     ``": "``, which a plain ``- git commit -m "ci: ..."`` sequence item parses
     as a mapping instead of a string, and GitLab then rejects the pipeline.
 
-    The inflight directory is created first. ``git add`` of a path that was
-    never committed exits 128, which fails the prune job on a repository that
-    has not published shards yet (#403).
+    *stage* lists the commands that stage the job's files. The default
+    creates the inflight directory first: ``git add`` of a path that was never
+    committed exits 128, which fails the prune job on a repository that has
+    not published shards yet (#403). *empty_exit* is the exit status when
+    nothing was staged, and *after* runs once the push succeeded.
     """
     return "\n".join(
         [
-            # ``git add`` exits 128 when the path was never committed (#403).
-            # An empty directory stages nothing, so the guard below exits 0.
-            "mkdir -p .opentide/inflight",
-            "git add .opentide/inflight/",
+            *stage,
             "if git diff --staged --quiet; then",
             f'  echo "{empty_note}"',
-            "  exit 0",
+            f"  exit {empty_exit}",
             "fi",
             f'git commit -m "{message}"',
             "push_attempt=1",
@@ -71,6 +84,7 @@ def _commit_and_push(*, message: str, empty_note: str, push: str, fetch: str) ->
             f"  {fetch}",
             "  git rebase FETCH_HEAD",
             "done",
+            *after,
         ]
     )
 

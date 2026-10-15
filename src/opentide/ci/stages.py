@@ -123,10 +123,11 @@ def core_cli_steps(options: CiRenderOptions) -> list[str]:
     return [*validate_commands(options), "opentide generate"]
 
 
-def _deploy_steps(plan: str) -> list[str]:
+def _deploy_steps(plan: str, *flags: str) -> list[str]:
+    extra = "".join(f" {flag}" for flag in flags)
     return [
-        f"opentide deploy --dry-run --plan {plan}",
-        f"opentide deploy --plan {plan} --skip-unconfigured",
+        f"opentide deploy --dry-run --plan {plan}{extra}",
+        f"opentide deploy --plan {plan}{extra} --skip-unconfigured",
     ]
 
 
@@ -137,7 +138,13 @@ def staging_deploy_steps(options: CiRenderOptions) -> list[str]:
 
 
 def production_deploy_steps(options: CiRenderOptions) -> list[str]:
-    return _deploy_steps("PRODUCTION")
+    """Production deploys DISABLED and REMOVED rules so they are disabled or deleted.
+
+    ``--keep-deprecated`` is the CLI default for the PRODUCTION plan (#548);
+    the pipeline spells it out so the job reads the same as the deployment
+    spec whatever version it pins.
+    """
+    return _deploy_steps("PRODUCTION", "--keep-deprecated")
 
 
 def github_deploy_env() -> str:

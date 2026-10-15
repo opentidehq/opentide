@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from opentide.ci.gates import gitlab_premerge_rule
-from opentide.ci.inflight import gitlab_inflight_job, gitlab_inflight_prune_job
+from opentide.ci.inflight import (
+    GITLAB_FETCH,
+    GITLAB_INSTALL_GIT,
+    GITLAB_PUSH,
+    gitlab_inflight_job,
+    gitlab_inflight_prune_job,
+)
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     document_steps,
@@ -14,6 +20,8 @@ from opentide.ci.stages import (
     query_validation_command,
     staging_deploy_steps,
 )
+from opentide.ci.text import indent
+from opentide.ci.writeback import deploy_then_writeback, rules_folder
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
 
 
@@ -35,6 +43,7 @@ def _gitlab_job(
     needs: str | list[str] | None = None,
     rules: str | None = None,
     extra_lines: list[str] | None = None,
+    before: list[str] | None = None,
 ) -> str:
     lines = [
         f"{name}:",
@@ -47,11 +56,36 @@ def _gitlab_job(
     if extra_lines:
         lines.extend(extra_lines)
     lines.append("  before_script:")
+    lines.extend(f"    - {cmd}" for cmd in before or [])
     lines.append(f"    - {pip_install(options)}")
     lines.append("  script:")
     lines.extend(f"    - {cmd}" for cmd in script)
     lines.extend(_need_lines(needs))
     return "\n".join(lines)
+
+
+def _production_script(options: CiRenderOptions) -> list[str]:
+    """Dry-run, then deploy and commit the write-backs (#548).
+
+    GitLab stops at the first failing script line, so the deploy and the
+    write-back share one block: the write-back runs even when the deploy
+    failed part way, and the block still exits with the deploy's status. The
+    block is a block scalar because a commit message contains ``": "``,
+    which a plain sequence item parses as a mapping.
+    """
+    dry_run, deploy = production_deploy_steps(options)
+    script = deploy_then_writeback(
+        deploy=deploy,
+        rules=rules_folder(options.repo),
+        push=GITLAB_PUSH,
+        fetch=GITLAB_FETCH,
+    )
+    return [
+        dry_run,
+        'git config user.email "gitlab-ci@opentide.local"',
+        'git config user.name "gitlab-ci"',
+        "|\n" + indent(script, 6),
+    ]
 
 
 def render_gitlab(options: CiRenderOptions) -> str:
@@ -102,10 +136,12 @@ def render_gitlab(options: CiRenderOptions) -> str:
             "deploy_production",
             options=options,
             stage="deploy",
-            script=production_deploy_steps(options),
+            script=_production_script(options),
             needs="generate",
             rules="$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH",
             extra_lines=full_history,
+            # ``python:<ver>-slim`` ships without git; the write-back needs it.
+            before=[GITLAB_INSTALL_GIT],
         )
     )
 

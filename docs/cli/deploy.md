@@ -36,7 +36,7 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | `--plan` | `DEPLOYMENT_PLAN` | Deployment plan / strategy |
 | `--wide` | — | Wide output |
 | `--dry-run` | — | Simulate deployment without writes |
-| `--keep-deprecated` | — | Include deprecated rules |
+| `--keep-deprecated` / `--drop-deprecated` | — | Include rules whose status strategy is `DISABLEMENT` or `DELETION`, so the deploy disables or deletes them. Default: on for `--plan PRODUCTION`, off for other plans |
 | `--skip-promotion` | — | Skip promotion step |
 | `--skip-unconfigured` | — | Exit 0 when every platform in the plan has no `[[tenants]]` block |
 
@@ -132,6 +132,7 @@ FATAL: Metadata deployment is not implemented for splunk
 - **GitHub `STAGING` without pull-request refs** — the failure names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`. Through 0.6.1 it asked for Azure `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME`, then `KeyError`.
 - **Other CI diff failures** — a missing tip SHA names `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION`. Azure `STAGING` without its pull-request variables names those variables before fetching. A ref that is not on `origin` names `origin/<name>`. `DEBUG`, `MANUAL`, and `ALWAYS` say they are not a CI diff plan. A one-parent GitLab merged result keeps the tip SHA.
 - **GitHub production deploy skipped** — through 0.6.3 the generated production job needed `deploy_staging`, which runs only on a pull request, so a push to the default branch skipped production. 0.6.4 needs `generate` and still runs only on that push. Regenerate with `opentide setup ci github --yes`.
+- **`DISABLED` or `REMOVED` rule never retired** — through 0.14.2 `--keep-deprecated` defaulted to off for every plan, so a `PRODUCTION` deploy dropped those rules before its allow-list, which includes both strategies, was consulted. `PRODUCTION` now keeps them by default; pass `--drop-deprecated` for the old behaviour. Other plans are unchanged.
 - **`PRODUCTION` plan empty or wrong after a merge commit** — the GitHub and Azure `PRODUCTION` diff runs from HEAD's first parent (`HEAD^1`), the default branch before the merge. Through 0.14.2 the base was the second commit by date, which on a merge commit is usually the merged branch's head: the rules the merge changed were not deployed, and a pull-request job on the synthetic merge ref reported `skipped`. GitLab uses `CI_COMMIT_BEFORE_SHA` and was not affected.
 - **Shallow checkout** — deploy jobs fetch full history. A missing parent commit is named. Through 0.6.3 a depth-1 checkout exited `1` with the parent SHA and no sentence.
 

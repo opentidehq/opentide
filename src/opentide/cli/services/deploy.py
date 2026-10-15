@@ -32,6 +32,24 @@ def _nothing_to_deploy(message: str, *, dry_run: bool, **fields: object) -> dict
     return result
 
 
+def keeps_deprecated(plan: Any, requested: bool | None) -> bool:
+    """Whether a deploy keeps rules whose status strategy is DISABLEMENT or DELETION.
+
+    The deployment spec defines both as deploy actions: DISABLEMENT disables
+    any active deployment of the rule, DELETION removes it. The PRODUCTION
+    allow-list includes both, so dropping them first meant that setting a
+    rule to DISABLED or REMOVED never reached the platform (#548). PRODUCTION
+    therefore keeps them unless ``--drop-deprecated`` says otherwise. Other
+    plans keep the historical default: a FULL deploy does not delete or
+    disable the whole retired catalogue unless asked.
+    """
+    from opentide.deployment import DeploymentStrategy
+
+    if requested is not None:
+        return requested
+    return plan is DeploymentStrategy.PRODUCTION
+
+
 def run_deploy(
     ctx: CliContext,
     *,
@@ -39,11 +57,15 @@ def run_deploy(
     plan: str | None = None,
     dry_run: bool = False,
     skip_promotion: bool = False,
-    keep_deprecated: bool = False,
+    keep_deprecated: bool | None = None,
     wide: bool = False,
     skip_unconfigured: bool = False,
 ) -> dict[str, object]:
-    """Deploy detection rules (Orchestration/deploy.py parity)."""
+    """Deploy detection rules (Orchestration/deploy.py parity).
+
+    *keep_deprecated* ``None`` keeps ``DISABLEMENT`` and ``DELETION`` rules
+    for the ``PRODUCTION`` plan only; see :func:`keeps_deprecated`.
+    """
     plan_warnings: list[str] = []
     result = _deploy(
         ctx,
@@ -69,7 +91,7 @@ def _deploy(
     plan: str | None,
     dry_run: bool,
     skip_promotion: bool,
-    keep_deprecated: bool,
+    keep_deprecated: bool | None,
     wide: bool,
     skip_unconfigured: bool = False,
 ) -> dict[str, object]:
@@ -107,7 +129,7 @@ def _deploy(
         deployment_list = make_deploy_plan(
             deployment_plan,
             wide_scope=wide,
-            keep_deprecated=keep_deprecated,
+            keep_deprecated=keeps_deprecated(deployment_plan, keep_deprecated),
             warnings=plan_warnings,
         )
     except MissingGitCheckout as exc:

@@ -121,9 +121,10 @@ def test_staging_and_production_steps() -> None:
         "opentide deploy --plan STAGING --skip-unconfigured",
     ]
     assert staging_deploy_steps(disabled) == []
+    # Production keeps DISABLED and REMOVED rules so they are disabled or deleted (#548).
     assert production_deploy_steps(enabled) == [
-        "opentide deploy --dry-run --plan PRODUCTION",
-        "opentide deploy --plan PRODUCTION --skip-unconfigured",
+        "opentide deploy --dry-run --plan PRODUCTION --keep-deprecated",
+        "opentide deploy --plan PRODUCTION --keep-deprecated --skip-unconfigured",
     ]
     assert document_steps(enabled) == ["opentide generate docs --output docs"]
     assert document_steps(CiRenderOptions(ci="github", docs_enabled=False)) == []
