@@ -241,7 +241,7 @@ def production_writeback(*, rules: str, push: str, fetch: str) -> str:
             "git reset -q --hard HEAD",
             "state_commit=$(git rev-parse HEAD)",
             "state_published=0",
-            "# shellcheck disable=SC2329 # run by the EXIT trap below",
+            "# shellcheck disable=SC2317,SC2329 # run by the EXIT trap below",
             "opentide_state_exit() {",
             "  exit_status=$?",
             '  if [ "$state_published" -ne 1 ]; then',
