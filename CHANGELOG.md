@@ -6,11 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
-Two things need action after upgrading.
+## [0.15.0] — 2026-10-16
+
+Minor release: two things need action after upgrading.
 - **Vendor rule ids move out of rule YAML into committed deployment state shards** (RFC 0010, [specs/deployment-state.md](https://github.com/OpenTideHQ/specifications/blob/main/specs/deployment-state.md)). Run `opentide deploy migrate-state` and commit its output before the next deploy.
 - **Generated pipelines must be regenerated** with `opentide setup ci <provider> --yes`. They now retire rules, deploy from the default branch's newest deployment state, queue production deploys on GitLab and Azure, and persist deploy write-backs.
 
-This release is held until RFC 0010 is accepted.
+Elastic Security is also now a supported platform, with an `opentide extract elastic` importer. Nothing to do unless you use it.
 
 ### Breaking
 
@@ -66,6 +68,15 @@ This release is held until RFC 0010 is accepted.
 - CrowdStrike rules deploy as `active`, and disabled rules as `inactive`; the status was inverted. Compiling any CrowdStrike rule had also raised `AttributeError` ([#553](https://github.com/OpenTideHQ/opentide/issues/553)).
 - A rule refused with `external_id_in_rule` fails the deploy on every path: with `--platform`, with `--skip-unconfigured`, and when the Sentinel or Splunk deployer is called directly (SDK, MCP `deploy_rule`). MCP `deploy_rule` returns `status: failed` with an `error` when the deployer refused or failed the rule; it used to report a plain `deploy`. Error and warning flags no longer leak from one deploy to the next in a long-lived process.
 - The commented `[[tenants]]` example in every bundled platform template loads when uncommented. The retired `proxy` key is gone, and the HarfangLab `type` and SentinelOne `url`/`account_id` placeholders are valid TOML.
+
+### Install
+
+```bash
+pip install opentide==0.15.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide deploy migrate-state
+opentide validate --strict
+```
 
 ## [0.14.2] — 2026-10-14
 
@@ -920,7 +931,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.14.2...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.15.0
 [0.14.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.2
 [0.14.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.1
 [0.14.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.0

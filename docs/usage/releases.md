@@ -7,6 +7,32 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.15.0 — 16 October 2026
+
+Minor release. Vendor rule ids move out of rule YAML into committed deployment state shards (RFC 0010), and generated pipelines must be regenerated. Elastic Security joins as a supported platform.
+
+**Install**
+
+```bash
+pip install opentide==0.15.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide deploy migrate-state
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- `rule_id` keys are removed from Defender for Endpoint, SentinelOne, CrowdStrike, HarfangLab and Carbon Black blocks. Run `opentide deploy migrate-state`, replace `.opentide/states/` in `.gitignore` with `.opentide/states/sharing.jsonl`, and commit the output.
+- Regenerate pipelines with `opentide setup ci <provider> --yes`: they now retire rules, deploy from the default branch's newest state, never cancel pending GitHub production deploys, and persist write-backs.
+- New: Elastic Security platform and `opentide extract elastic`.
+- See the CHANGELOG for the full list of fixes.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.15.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.15.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.14.2 — 14 October 2026
 
 Patch on 0.14.1. Nothing to do after upgrading, and nothing to regenerate — but upgrade promptly if you or your agents run `opentide setup skills`, which could be made to install skill content from a repository other than the pinned catalogue.
