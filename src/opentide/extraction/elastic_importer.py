@@ -465,14 +465,14 @@ def kibana_to_opentide(
         for g in threat_mapping_in:
             entries = []
             for e in g.get("entries", []):
-                entries.append(
-                    {
-                        "field": e.get("field"),
-                        "value": e.get("value"),
-                        "type": e.get("type", "mapping"),
-                        "negate": e.get("negate"),
-                    }
-                )
+                entry_out: dict[str, Any] = {
+                    "field": e.get("field"),
+                    "value": e.get("value"),
+                    "type": e.get("type", "mapping"),
+                }
+                if e.get("negate") is not None:
+                    entry_out["negate"] = e["negate"]
+                entries.append(entry_out)
             threat_mapping_out.append({"entries": entries})
 
         threat_filters_out = [_extract_filter(f) for f in (rule.get("threat_filters") or [])]
