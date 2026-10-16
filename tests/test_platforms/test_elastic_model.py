@@ -222,3 +222,19 @@ def test_elastic_config_rejects_with_a_code_not_a_crash(overrides: dict, code: s
 @pytest.mark.parametrize("severity", ["Informational", "low", "High", {"default": "Critical"}])
 def test_elastic_config_accepts_alert_severity_vocabulary(severity: object) -> None:
     ElasticConfig.model_validate({**_BASE, "severity": severity})
+
+
+def test_elastic_config_roundtrips_through_exclude_none_false_dump() -> None:
+    """TideDeployment.modifiers_resolver re-validates model_dump(exclude_none=False)."""
+    from pathlib import Path
+
+    from opentide.loading.rule_loader import load_rule_from_dict
+
+    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "elastic"
+    for path in sorted(fixtures_dir.glob("rule-*.yaml")):
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        rule = load_rule_from_dict(raw)
+        dumped = rule.model_dump(by_alias=True, exclude_none=False)
+        reloaded = load_rule_from_dict(dumped)
+        assert reloaded.configurations.elastic is not None
+        assert reloaded.configurations.elastic.type == rule.configurations.elastic.type
