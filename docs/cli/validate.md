@@ -104,6 +104,8 @@ Object folders may contain subfolders, and files in different folders may share 
 
 A path never falls back to its file name: `objects/rules/rule.yaml` does not select `objects/rules/team-a/rule.yaml`, and a path that names no object file fails with `scope_no_match`. Give a path when a file name is not unique.
 
+Every `--file` target must select at least one object. A target that matches nothing fails the run with a `scope_no_match` issue naming that target (`context.targets`), even when the other targets matched and validated cleanly. Through 0.14.2 the run failed only when no target matched at all, so a mistyped or quoted path beside a valid one passed without being validated.
+
 Every issue reports the `file_path` of the object it concerns, so issues from two files that share a name stay apart when a bare file name selects both.
 
 ### Unparseable object files

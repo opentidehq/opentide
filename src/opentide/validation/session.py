@@ -57,6 +57,7 @@ class ObjectWorkItem:
     object_type: str
     body: dict[str, Any]
     file_name: str | None
+    file_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,17 @@ def run_validation(
     }
     if _scope_has_narrow_filter(scope) and object_checks and not work_items and not parse_issues:
         issues.append(_scope_no_match_issue(scope))
+    elif object_checks and scope.file_targets:
+        # One matching target must not let another, unmatched one pass: the
+        # production write-back validates exactly the files it is about to
+        # commit, and a target that matches nothing validated nothing.
+        selected: list[tuple[str | None, Path | str | None]] = [
+            (item.file_name, item.file_path) for item in work_items
+        ]
+        selected.extend((None, issue.file_path) for issue in parse_issues if issue.file_path)
+        issues.extend(
+            _file_target_no_match_issue(target) for target in scope.unmatched_file_targets(selected)
+        )
 
     if ValidateCheck.id_uniqueness in checks:
         issues.extend(
@@ -258,6 +270,7 @@ def _collect_work_items(
                     object_type=object_type,
                     body=body,
                     file_name=file_name,
+                    file_path=ref.file_path if ref else None,
                 )
             )
     return items
@@ -434,6 +447,15 @@ def _scope_no_match_issue(scope: ValidationScope) -> ValidationIssue:
             "targets": sorted(scope.targets),
             "object_types": sorted(scope.object_types),
         },
+    )
+
+
+def _file_target_no_match_issue(target: str) -> ValidationIssue:
+    return ValidationIssue(
+        code="scope_no_match",
+        severity="error",
+        message=f"--file {target!r} matched no object, so it was not validated",
+        context={"targets": [target], "object_types": []},
     )
 
 

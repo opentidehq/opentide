@@ -70,6 +70,10 @@ class ValidationScope:
     #: They match an object only through its own path, never by basename, or
     #: ``objects/rules/x.yaml`` would also select ``objects/rules/y/x.yaml``.
     file_paths: frozenset[str] = field(default_factory=frozenset)
+    #: Each ``--file`` target as given, with its basename (bare names) or
+    #: absolute candidates (paths), so a target that matched nothing can be
+    #: named even when another target matched.
+    file_targets: tuple[tuple[str, str, frozenset[str]], ...] = ()
 
     @classmethod
     def full(cls) -> ValidationScope:
@@ -94,9 +98,11 @@ class ValidationScope:
         targets: set[str] = set()
         file_names: set[str] = set()
         file_paths: set[str] = set()
-        for target in files or ():
+        file_targets: list[tuple[str, str, frozenset[str]]] = []
+        for target in sorted(files or ()):
             targets.add(target.strip())
             name, resolved = _path_variants(target, roots or ())
+            file_targets.append((target, name, resolved))
             if resolved:
                 file_paths.update(resolved)
             else:
@@ -109,7 +115,27 @@ class ValidationScope:
             object_types=frozenset(types or ()),
             file_names=frozenset(file_names),
             file_paths=frozenset(file_paths),
+            file_targets=tuple(file_targets),
         )
+
+    def unmatched_file_targets(
+        self, files: list[tuple[str | None, Path | str | None]]
+    ) -> list[str]:
+        """``--file`` targets that select none of *files* (``(file_name, file_path)`` pairs)."""
+        unmatched: list[str] = []
+        for raw, name, resolved in self.file_targets:
+            hit = False
+            for file_name, file_path in files:
+                if resolved:
+                    hit = file_path is not None and _resolve(Path(file_path)) in resolved
+                else:
+                    own = file_name or (Path(file_path).name if file_path is not None else None)
+                    hit = own == name
+                if hit:
+                    break
+            if not hit:
+                unmatched.append(raw)
+        return unmatched
 
     def matches_file(self, file_name: str | None, file_path: Path | str | None = None) -> bool:
         """Match a ``--file`` target against an object's own file.

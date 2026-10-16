@@ -115,6 +115,30 @@ def test_validate_file_unknown_path_does_not_silently_pass(invoke_cli) -> None:
     assert_issues_point_at_their_objects(payload["report"])
 
 
+@pytest.mark.parametrize(
+    "missing",
+    ["objects/rules/does-not-exist.yaml", '"objects/rules/q\\"x.yaml"', "nl\\nx.yaml"],
+    ids=["missing-path", "git-quoted", "escaped-newline"],
+)
+def test_validate_file_fails_when_any_one_target_matches_nothing(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch, missing: str
+) -> None:
+    """A valid target beside it must not turn an unvalidated file into a pass.
+
+    The production write-back stages exactly the files it validated; a name git
+    quoted would otherwise reach ``--file`` as a literal that selects nothing.
+    """
+    monkeypatch.chdir(tide_corpus_repo)
+    result = invoke_cli("validate", "--strict", "--file", CORPUS_RULE_RELATIVE, "--file", missing)
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    report = payload["report"]
+    assert report["stats"]["objects_checked"] == 1
+    unmatched = [i for i in report["issues"] if i["code"] == "scope_no_match"]
+    assert [i["context"]["targets"] for i in unmatched] == [[missing]]
+    assert payload["checks"]["schema"]["status"] == "failed"
+
+
 def test_validate_file_honours_the_directory_component(
     invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
