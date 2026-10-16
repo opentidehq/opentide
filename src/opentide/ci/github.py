@@ -83,10 +83,12 @@ def _github_job(
 #: step, and then there is nothing to record.
 WRITEBACK_IF = "${{ always() && steps.deploy.outcome != 'skipped' }}"
 
-#: One production deploy at a time. Without it two merges deploy at once and
-#: both create the same new rule. GitHub keeps one run pending per group and
-#: cancels an older pending one; the CI/CD docs say so.
-PRODUCTION_CONCURRENCY_GROUP = "opentide-production-{branch}"
+#: The GitHub production job deliberately has no ``concurrency`` group. GitHub
+#: keeps one run pending per group and cancels an older *pending* run, and the
+#: production plan deploys only its own commit's diff, so a burst of merges
+#: would silently never deploy the middle one. Overlapping runs are tolerated
+#: instead: the tip-state overlay and the per-tenant replay turn a double
+#: create into a reported ``deployment_state_conflict`` (RFC 0010).
 
 _GIT_IDENTITY = (
     'git config user.name "github-actions[bot]"',
@@ -295,10 +297,6 @@ def render_github(options: CiRenderOptions) -> str:
             env=deploy_env,
             # The write-back step pushes to the default branch.
             permissions="contents: write",
-            concurrency=(
-                f"group: {PRODUCTION_CONCURRENCY_GROUP.format(branch=branch)}\n"
-                "cancel-in-progress: false"
-            ),
             steps=join_blocks(
                 _setup_steps(options, full_history=True),
                 _production_steps(options),

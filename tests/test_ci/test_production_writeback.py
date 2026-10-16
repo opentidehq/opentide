@@ -105,9 +105,10 @@ def test_github_writeback_runs_whenever_the_deploy_started() -> None:
     assert 'git config user.name "github-actions[bot]"' in writeback["run"]
 
 
-def test_github_production_jobs_are_serialised_and_read_the_tip_state() -> None:
+def test_github_production_jobs_never_cancel_and_read_the_tip_state() -> None:
+    """No concurrency group: GitHub would cancel a pending run, and its diff would never deploy."""
     job = yaml.safe_load(render_github(_options("github")))["jobs"]["deploy_production"]
-    assert job["concurrency"] == {"group": "opentide-production-main", "cancel-in-progress": False}
+    assert "concurrency" not in job
     runs = [step.get("run", "") for step in job["steps"]]
     overlay = next(i for i, run in enumerate(runs) if STATE_BASE_MESSAGE in run)
     dry_run = runs.index("opentide deploy --dry-run --plan PRODUCTION --keep-deprecated")

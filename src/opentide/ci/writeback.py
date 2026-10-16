@@ -8,7 +8,8 @@ died with the runner: promoted rules kept claiming their old status, and the
 next deploy of a rule whose id was lost created a duplicate remote rule.
 
 The step runs only in the production job, which is already gated on the
-default branch and runs one at a time. Before the deploy,
+default branch and is queued on GitLab and Azure (never on GitHub, which
+would cancel a pending run). Before the deploy,
 :func:`overlay_default_branch_state` gives it the default branch's newest
 deployment state. The write-back runs whenever the deploy step started,
 including when the deploy failed part way, was cancelled or timed out: ids

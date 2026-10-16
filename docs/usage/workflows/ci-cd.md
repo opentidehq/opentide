@@ -77,9 +77,9 @@ The write-back:
 
 The write-back script needs bash (`read -d ''`). GitHub `run:` steps and Azure `script:` steps use bash on Linux, and GitLab uses it when the image has it, as the default `python:<version>-slim` image does.
 
-Production deploys run one at a time, so two merges never deploy, and create the same new rule, at once:
+Production deploys are queued where the provider can queue without dropping runs:
 
-- **GitHub**: the job has `concurrency: {group: opentide-production-<branch>, cancel-in-progress: false}`. GitHub keeps one run pending per group and cancels an older *pending* run when a newer one queues. A cancelled pending run never deployed its commit's changes; re-run it, or push the next change after the current deploy finished.
+- **GitHub**: the job has **no** `concurrency` group. GitHub keeps only one run pending per group and cancels an older *pending* run when a newer one queues; the production plan deploys only its own commit's diff, so a cancelled run's rules would silently never deploy. Overlapping runs are tolerated instead: each starts from the default branch's newest deployment state, and if two overlapping runs both create the same new rule, the write-back reports `deployment_state_conflict` with both ids and fails the job, so the duplicate is removed by hand.
 - **GitLab**: the job has `resource_group: opentide-production`, which queues every production job.
 - **Azure**: a YAML pipeline cannot serialise a job on its own. The pipeline sets `lockBehavior: sequential`; add an **Exclusive lock** check to a protected resource the Deploy stage uses (for example an environment or the agent pool), and runs then queue in order. Without that check, Azure production deploys can overlap.
 

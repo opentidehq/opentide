@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 Two things need action after upgrading.
 - **Vendor rule ids move out of rule YAML into committed deployment state shards** (RFC 0010, [specs/deployment-state.md](https://github.com/OpenTideHQ/specifications/blob/main/specs/deployment-state.md)). Run `opentide deploy migrate-state` and commit its output before the next deploy.
-- **Generated pipelines must be regenerated** with `opentide setup ci <provider> --yes`. They now retire rules, deploy from the default branch's newest deployment state, run production deploys one at a time, and persist deploy write-backs.
+- **Generated pipelines must be regenerated** with `opentide setup ci <provider> --yes`. They now retire rules, deploy from the default branch's newest deployment state, queue production deploys on GitLab and Azure, and persist deploy write-backs.
 
 This release is held until RFC 0010 is accepted.
 
@@ -39,7 +39,7 @@ This release is held until RFC 0010 is accepted.
 - `opentide deploy --plan PRODUCTION` now includes `DISABLED` and `REMOVED` rules, so they are disabled or deleted as [specs/deployment.md](https://github.com/OpenTideHQ/specifications/blob/main/specs/deployment.md) defines. Before, the `--keep-deprecated` default dropped them before the `PRODUCTION` allow-list was consulted, and a retirement never reached the platform. `--drop-deprecated` restores the old behaviour ([#548](https://github.com/OpenTideHQ/opentide/issues/548)).
 - The generated production job (GitHub, GitLab, Azure) commits promoted rule statuses and `.opentide/states/deployment/` back to the default branch with `[skip ci]` ([#548](https://github.com/OpenTideHQ/opentide/issues/548)):
   - Before the dry-run it replaces the checkout's `.opentide/states/deployment/` with the default branch tip's, so a merge made before an earlier run's write-back landed updates the rule that run created instead of creating it again.
-  - Production jobs run one at a time: GitHub job `concurrency` (`opentide-production-<branch>`, no cancel-in-progress), GitLab `resource_group: opentide-production`, and Azure `lockBehavior: sequential`, which takes effect once an Exclusive lock check is added to a resource the stage uses.
+  - Production jobs are queued on GitLab (`resource_group: opentide-production`) and Azure (`lockBehavior: sequential`, which takes effect once an Exclusive lock check is added to a resource the stage uses). GitHub deliberately has no `concurrency` group: it cancels pending runs, and a cancelled diff-scoped deploy would silently never deploy its rules. Overlapping GitHub runs that create the same rule fail loudly with `deployment_state_conflict`.
   - The write-back runs whenever the deploy started: after a deploy that failed part way, was cancelled or timed out (GitHub `always()`, Azure `always()`, GitLab `after_script` on cancel; GitLab skips `after_script` on a timeout), so ids from the creates that succeeded are never lost.
   - Rule files are committed only when `opentide validate --strict` passes on exactly those files, read NUL-delimited so no file name is C-quoted.
   - If a concurrent merge conflicts with the rule files, this run's shard changes are replayed per tenant onto the new tip and pushed alone, and the job fails. Bindings other runs recorded and shards either run deleted are preserved.
