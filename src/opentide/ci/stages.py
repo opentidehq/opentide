@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 from opentide.ci.discovery import platforms_config_dir
@@ -11,10 +12,33 @@ from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
 
 _ENV_REF = re.compile(r"\$([A-Z][A-Z0-9_]*)")
 _PLATFORMS_DIR = Path(__file__).resolve().parents[1] / "data" / "configurations" / "platforms"
+# Tenant URLs and ``$VAR`` references live anywhere under this directory
+# (``platforms/``, legacy ``systems/``, and a root ``platforms.toml``).
+_WORKSPACE_CONFIG_DIR = ".opentide/configurations"
 
 
 def pip_install(options: CiRenderOptions) -> str:
     return f'pip install "opentide=={options.opentide_version}"'
+
+
+def trusted_platform_config_commands(default_branch: str) -> list[str]:
+    """Replace workspace configuration with the default branch's copy.
+
+    Pull-request jobs check out the pull request. A tenant ``url`` in that
+    tree, or a ``$VAR`` reference pointed at any credential the job exported,
+    is where the next live validation or staging deploy sends the secret.
+    Deleting the directory first drops files that exist only on the pull
+    request. ``git checkout`` then writes the reviewed tree. A missing path
+    fails the job instead of continuing with the pull request's files.
+    """
+    branch = shlex.quote(default_branch)
+    ref = shlex.quote(f"origin/{default_branch}")
+    path = shlex.quote(_WORKSPACE_CONFIG_DIR)
+    return [
+        f"rm -rf -- {path}",
+        f"git fetch origin {branch} --depth=1",
+        f"git checkout {ref} -- {path}",
+    ]
 
 
 def query_platforms(options: CiRenderOptions) -> list[str]:
