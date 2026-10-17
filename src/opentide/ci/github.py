@@ -14,6 +14,7 @@ from opentide.ci.stages import (
     pip_install,
     production_deploy_steps,
     staging_deploy_steps,
+    trusted_platform_config_commands,
     validate_commands,
 )
 from opentide.ci.text import indent, join_blocks
@@ -45,6 +46,12 @@ def _setup_steps(options: CiRenderOptions, *, full_history: bool = False) -> str
 
 def _run_steps(commands: list[str]) -> str:
     return "\n".join(f"- run: {cmd}" for cmd in commands)
+
+
+def _trusted_platform_config_step(default_branch: str) -> str:
+    """Checkout reviewed endpoints before a job that holds platform secrets."""
+    script = "\n".join(trusted_platform_config_commands(default_branch))
+    return "- name: Use reviewed platform endpoints\n  run: |\n" + indent(script, 4)
 
 
 def _github_job(
@@ -225,7 +232,11 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
 def render_github(options: CiRenderOptions) -> str:
     branch = options.default_branch
     setup = _setup_steps(options)
-    validate_steps = join_blocks(setup, _run_steps(validate_commands(options)))
+    validate_steps = join_blocks(
+        setup,
+        _trusted_platform_config_step(branch),
+        _run_steps(validate_commands(options)),
+    )
     deploy_env = github_deploy_env()
     generate_steps = join_blocks(setup, _run_steps(["opentide generate"]))
 
@@ -264,6 +275,7 @@ def render_github(options: CiRenderOptions) -> str:
                 env=deploy_env,
                 steps=join_blocks(
                     _setup_steps(options, full_history=True),
+                    _trusted_platform_config_step(branch),
                     _run_steps(staging_deploy_steps(options)),
                 ),
             )

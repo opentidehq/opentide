@@ -13,6 +13,7 @@ from opentide.ci.stages import (
     production_deploy_steps,
     query_validation_command,
     staging_deploy_steps,
+    trusted_platform_config_commands,
 )
 from opentide.ci.text import indent
 from opentide.ci.writeback import (
@@ -155,7 +156,16 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 f"validate_query_{safe}",
                 display_name=f"Validate query ({platform})",
-                steps=_job_steps(options, [query_validation_command(platform, repo=options.repo)]),
+                steps=_job_steps(
+                    options,
+                    [
+                        *trusted_platform_config_commands(options.default_branch),
+                        query_validation_command(platform, repo=options.repo),
+                    ],
+                    # The checkout token is removed before later steps unless it
+                    # is persisted, and the endpoint restore has to fetch.
+                    persist_credentials=True,
+                ),
             )
         )
 
@@ -181,7 +191,15 @@ def render_azure(options: CiRenderOptions) -> str:
                 "deploy_staging",
                 display_name="Deploy Staging",
                 condition=azure_premerge_condition(branch),
-                steps=_job_steps(options, staging_deploy_steps(options), full_history=True),
+                steps=_job_steps(
+                    options,
+                    [
+                        *trusted_platform_config_commands(branch),
+                        *staging_deploy_steps(options),
+                    ],
+                    persist_credentials=True,
+                    full_history=True,
+                ),
             )
         )
     if options.inflight:

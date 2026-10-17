@@ -19,6 +19,7 @@ from opentide.ci.stages import (
     production_deploy_steps,
     query_validation_command,
     staging_deploy_steps,
+    trusted_platform_config_commands,
 )
 from opentide.ci.text import indent
 from opentide.ci.writeback import (
@@ -131,7 +132,12 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 job_name,
                 options=options,
                 stage="validate",
-                script=[query_validation_command(platform, repo=options.repo)],
+                script=[
+                    *trusted_platform_config_commands(options.default_branch),
+                    query_validation_command(platform, repo=options.repo),
+                ],
+                # python slim has no git; without it the endpoint checkout cannot run.
+                before=[GITLAB_INSTALL_GIT],
             )
         )
 
@@ -143,10 +149,14 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 "deploy_staging",
                 options=options,
                 stage="deploy",
-                script=staging_deploy_steps(options),
+                script=[
+                    *trusted_platform_config_commands(options.default_branch),
+                    *staging_deploy_steps(options),
+                ],
                 needs="generate",
                 rules=gitlab_premerge_rule(),
                 extra_lines=full_history,
+                before=[GITLAB_INSTALL_GIT],
             )
         )
 
