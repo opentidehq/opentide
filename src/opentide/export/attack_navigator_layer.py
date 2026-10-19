@@ -69,7 +69,9 @@ class AttackNavigatorLayer:
         technique_mapping: dict[str, TechniqueIndexEntry] = {}
         # Visit objects by name, not index order: the index follows file paths,
         # so a rename or move would otherwise reorder every comment.
-        for object in sorted(index, key=lambda object_id: (index[object_id]["name"], object_id)):
+        for object in sorted(
+            index, key=lambda object_id: (str(index[object_id].get("name") or "").casefold(), object_id)
+        ):
             techniques = techniques_resolver(object)
             name = index[object]["name"]
             uuid = index[object]["metadata"]["uuid"]
