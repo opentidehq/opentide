@@ -9,6 +9,7 @@ that state.
 from __future__ import annotations
 
 from functools import cache
+from pathlib import Path
 
 import pytest
 
@@ -27,6 +28,17 @@ _VOCABULARY_DIR = pin_data_dir().parent / "vocabulary"
 @cache
 def _bundled(field: str) -> VocabularyDefinition:
     return VocabularyLoader.load_from_vocab_file(_VOCABULARY_DIR / f"{field}.vocab.toml")
+
+
+def _backed_revisions(definition: VocabularyDefinition) -> set[str]:
+    """Revisions where some key is introduced (``version``) or removed.
+
+    Under RFC 0003 a removal opens the next major with no key introduced at
+    it, so a ``removed`` revision is a real contract too.
+    """
+    return {entry.version for entry in definition.entries.values()} | {
+        entry.removed for entry in definition.entries.values() if entry.removed
+    }
 
 
 def _bundled_pins() -> list[tuple[str, str, str]]:
@@ -55,18 +67,41 @@ def test_shipped_revisions_have_pins() -> None:
     _bundled_pins(),
     ids=lambda value: str(value),
 )
-def test_every_pinned_minor_is_introduced_by_a_bundled_key(
+def test_every_pinned_revision_is_backed_by_a_bundled_key(
     schema_id: str, path: str, contract: str
 ) -> None:
-    """A pin naming ``field::M.m`` needs at least one key at version ``M.m``."""
+    """A pin naming ``field::M.m`` needs a key introduced or removed at ``M.m``."""
     field, version = parse_vocab_contract(contract)
     assert (_VOCABULARY_DIR / f"{field}.vocab.toml").is_file(), (
         f"{schema_id} {path} pins {contract} but {field}.vocab.toml is not bundled"
     )
-    versions = {entry.version for entry in _bundled(field).entries.values()}
-    assert version in versions, (
-        f"{schema_id} {path} pins {contract} but no bundled {field} key is at {version}"
+    assert version in _backed_revisions(_bundled(field)), (
+        f"{schema_id} {path} pins {contract} but no bundled {field} key is "
+        f"introduced or removed at {version}"
     )
+
+
+def test_removal_only_major_is_a_backed_revision(tmp_path: Path) -> None:
+    vocab = tmp_path / "demo.vocab.toml"
+    vocab.write_text(
+        'name = "Demo"\nfield = "demo"\ndescription = "Demo."\nkey = "id"\n\n'
+        '[[keys]]\nid = "A"\nname = "A"\nversion = "1.0"\n\n'
+        '[[keys]]\nid = "B"\nname = "B"\nversion = "1.1"\nremoved = "2.0"\n',
+        encoding="utf-8",
+    )
+
+    backed = _backed_revisions(VocabularyLoader.load_from_vocab_file(vocab))
+
+    assert backed == {"1.0", "1.1", "2.0"}
+
+
+def test_attack_removal_major_is_backed() -> None:
+    """``att&ck::2.0`` drops the 27 revoked keys and introduces none."""
+    attack = _bundled("att&ck")
+    introduced = {entry.version for entry in attack.entries.values()}
+
+    assert "2.0" not in introduced
+    assert "2.0" in _backed_revisions(attack)
 
 
 @pytest.mark.parametrize(
@@ -106,3 +141,4 @@ def test_bundled_attack_records_its_source_release() -> None:
 
     assert metadata.get("source") == "mitre-attack"
     assert metadata.get("source_version")
+
