@@ -369,7 +369,7 @@ def azure_inflight_job(*, python_version: str, opentide_version: str, default_br
         "inflight_shards",
         display_name="Inflight preview shards",
         condition=azure_premerge_condition(default_branch),
-        steps=_job_steps(opts, [merge_push], persist_credentials=True),
+        steps=_job_steps(opts, [merge_push], persist_credentials=True, full_history=True),
     )
 
 
@@ -402,5 +402,5 @@ def azure_inflight_prune_job(
         "inflight_prune",
         display_name="Prune inflight preview shards",
         condition=f"eq(variables['Build.SourceBranch'], 'refs/heads/{default_branch}')",
-        steps=_job_steps(opts, [prune_script], persist_credentials=True),
+        steps=_job_steps(opts, [prune_script], persist_credentials=True, full_history=True),
     )

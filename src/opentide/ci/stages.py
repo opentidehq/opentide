@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 from opentide.ci.discovery import platforms_config_dir
@@ -11,10 +12,54 @@ from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
 
 _ENV_REF = re.compile(r"\$([A-Z][A-Z0-9_]*)")
 _PLATFORMS_DIR = Path(__file__).resolve().parents[1] / "data" / "configurations" / "platforms"
+# Tenant URLs and ``$VAR`` references live anywhere under this directory
+# (``platforms/``, legacy ``systems/``, and a root ``platforms.toml``).
+_WORKSPACE_CONFIG_DIR = ".opentide/configurations"
 
 
 def pip_install(options: CiRenderOptions) -> str:
     return f'pip install "opentide=={options.opentide_version}"'
+
+
+#: Printed when the default branch has no configuration to restore.
+NO_REVIEWED_CONFIG_NOTE = (
+    "The default branch has no .opentide/configurations yet, so no tenant is reviewed."
+    " Skipped without using platform credentials."
+)
+
+
+def trusted_platform_config_commands(branch: str) -> list[str]:
+    """Replace workspace configuration with the default branch's copy.
+
+    ``branch`` is a shell word naming the default branch: a name passed
+    through :func:`shlex.quote`, or a quoted CI variable such as
+    ``"$CI_DEFAULT_BRANCH"``.
+
+    Pull-request jobs check out the pull request. A tenant ``url`` in that
+    tree, or a ``$VAR`` reference pointed at any credential the job exported,
+    is where the next live validation or staging deploy sends the secret.
+    Deleting the directory first drops files that exist only on the pull
+    request. ``git checkout`` then writes the reviewed tree.
+
+    The fetch is shallow only when the checkout already is. ``--depth`` on a
+    full clone makes it shallow, and the staging deploy can then no longer
+    find the pull request's merge base.
+
+    When the default branch has no configuration yet (the pull request that
+    adds it), the commands print :data:`NO_REVIEWED_CONFIG_NOTE` and
+    ``exit 0``. They must therefore share one shell with the commands they
+    guard, so that the exit skips those too.
+    """
+    path = shlex.quote(_WORKSPACE_CONFIG_DIR)
+    reviewed = f"FETCH_HEAD:{_WORKSPACE_CONFIG_DIR}"
+    return [
+        f"rm -rf -- {path}",
+        'if [ "$(git rev-parse --is-shallow-repository)" = true ]; '
+        f"then git fetch --depth=1 origin {branch}; else git fetch origin {branch}; fi",
+        f"if ! git cat-file -e {shlex.quote(reviewed)} 2>/dev/null; "
+        f'then echo "{NO_REVIEWED_CONFIG_NOTE}"; exit 0; fi',
+        f"git checkout FETCH_HEAD -- {path}",
+    ]
 
 
 def query_platforms(options: CiRenderOptions) -> list[str]:
@@ -111,11 +156,12 @@ def object_validate_commands() -> list[str]:
     return ["opentide validate --strict", "opentide lint --strict"]
 
 
+def query_validation_commands(options: CiRenderOptions) -> list[str]:
+    return [query_validation_command(p, repo=options.repo) for p in query_platforms(options)]
+
+
 def validate_commands(options: CiRenderOptions) -> list[str]:
-    steps = object_validate_commands()
-    for platform in query_platforms(options):
-        steps.append(query_validation_command(platform, repo=options.repo))
-    return steps
+    return [*object_validate_commands(), *query_validation_commands(options)]
 
 
 def core_cli_steps(options: CiRenderOptions) -> list[str]:

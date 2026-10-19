@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import textwrap
 
 from opentide.ci.gates import github_premerge_if
@@ -11,10 +12,12 @@ from opentide.ci.stages import (
     document_steps,
     github_deploy_env,
     header_comment,
+    object_validate_commands,
     pip_install,
     production_deploy_steps,
+    query_validation_commands,
     staging_deploy_steps,
-    validate_commands,
+    trusted_platform_config_commands,
 )
 from opentide.ci.text import indent, join_blocks
 from opentide.ci.writeback import (
@@ -45,6 +48,20 @@ def _setup_steps(options: CiRenderOptions, *, full_history: bool = False) -> str
 
 def _run_steps(commands: list[str]) -> str:
     return "\n".join(f"- run: {cmd}" for cmd in commands)
+
+
+def _reviewed_tenants_step(name: str, default_branch: str, commands: list[str]) -> str:
+    """Run ``commands`` against the default branch's configuration.
+
+    One step, not one per command: the restore exits early when the default
+    branch has no configuration yet, and that has to skip ``commands`` too.
+    Empty when there is nothing to run.
+    """
+    if not commands:
+        return ""
+    restore = trusted_platform_config_commands(shlex.quote(default_branch))
+    script = "\n".join([*restore, *commands])
+    return f"- name: {name}\n  run: |\n" + indent(script, 4)
 
 
 def _github_job(
@@ -225,7 +242,15 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
 def render_github(options: CiRenderOptions) -> str:
     branch = options.default_branch
     setup = _setup_steps(options)
-    validate_steps = join_blocks(setup, _run_steps(validate_commands(options)))
+    # Object validation reads the pull request's own configuration. Only the
+    # steps that send credentials use the default branch's copy.
+    validate_steps = join_blocks(
+        setup,
+        _run_steps(object_validate_commands()),
+        _reviewed_tenants_step(
+            "Validate queries on reviewed tenants", branch, query_validation_commands(options)
+        ),
+    )
     deploy_env = github_deploy_env()
     generate_steps = join_blocks(setup, _run_steps(["opentide generate"]))
 
@@ -264,7 +289,9 @@ def render_github(options: CiRenderOptions) -> str:
                 env=deploy_env,
                 steps=join_blocks(
                     _setup_steps(options, full_history=True),
-                    _run_steps(staging_deploy_steps(options)),
+                    _reviewed_tenants_step(
+                        "Deploy staging to reviewed tenants", branch, staging_deploy_steps(options)
+                    ),
                 ),
             )
         )

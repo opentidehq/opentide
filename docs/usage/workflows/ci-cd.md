@@ -55,6 +55,17 @@ GitHub runs that job when `github.event_name == 'push'` and the ref is the defau
 
 The staging job commits nothing. In CI, a deploy whose plan is not `PRODUCTION` therefore refuses to create a Defender for Endpoint, SentinelOne or CrowdStrike rule that has no recorded id (`deployment_state_unpersisted`, before any vendor call), because the id would be lost with the runner and the next run would create the rule again. Updates and deletes of rules that already have an id still run. See [Creates outside the production job](../concepts/deployment-state.md#creates-outside-the-production-job).
 
+### Tenant configuration on pull requests
+
+Live query validation and the staging deploy send platform credentials to the tenant URLs in `.opentide/configurations`, and a pull request can change that directory. The step that runs them therefore first deletes `.opentide/configurations`, fetches the default branch, and checks the directory out again from it. The fetch is shallow only when the checkout already is, so the full-history staging checkout stays complete and the deploy can still find the pull request's merge base. On GitLab the jobs fetch `$CI_DEFAULT_BRANCH` and install `git`. On Azure they check out with `persistCredentials: true` so the fetch can authenticate. On GitHub, `opentide validate --strict` and `opentide lint --strict` run before that step, against the pull request's own configuration; GitLab and Azure run them in a separate job that keeps it.
+
+- A tenant `url` or `$VAR` reference that a pull request adds or changes under `.opentide/configurations` never receives a credential.
+- A tenant added or changed in a pull request is not used by that pull request's live query validation or staging deploy. Later pipelines use it once it is on the default branch. The same holds for every other file in the directory, such as `deployment.toml` and `paths.toml`.
+- When the default branch has no `.opentide/configurations` yet, as on the pull request that adds it, the step prints `The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials.` and exits 0 without running the live commands.
+- The production job restores nothing: it runs on the default branch.
+
+This closes the configuration-file route only. A pull request can also edit the pipeline file itself (`.github/workflows/*.yml`, `.gitlab-ci.yml` or `azure-pipelines.yml`), and that file runs with the same secrets. Scope platform secrets to a protected environment: GitHub environments with required reviewers, GitLab protected variables and environments, or Azure environment approvals. Through 0.15.0 the generated jobs used the pull request's own `.opentide/configurations`. Regenerate existing pipelines with `opentide setup ci <github|gitlab|azure> --yes`.
+
 ### Production write-back
 
 The generated production job runs `opentide deploy --plan PRODUCTION --keep-deprecated`. A rule whose status maps to `DISABLEMENT` (bundled `DISABLED`) or `DELETION` (bundled `REMOVED`) is therefore disabled or deleted on the platform, as the [deployment spec](/docs/specifications/specs/deployment/) defines; `--keep-deprecated` is also the CLI default for the `PRODUCTION` plan, and `--drop-deprecated` turns it off.
