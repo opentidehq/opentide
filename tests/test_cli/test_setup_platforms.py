@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import shlex
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -64,3 +66,31 @@ def test_enable_advice_is_a_working_setup_platforms_call(system: str, tmp_path: 
     assert result.exit_code == 0, result.stdout + result.stderr
     out = tmp_path / ".opentide" / "configurations" / "platforms" / f"{system}.toml"
     assert "enabled = true" in out.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("module", "entry", "system"),
+    [
+        ("opentide.extraction.mde_importer", "_import_defender_rules", "defender_for_endpoint"),
+        ("opentide.extraction.sentinel_importer", "_import_sentinel_rules", "sentinel"),
+    ],
+    ids=["defender", "sentinel"],
+)
+def test_importer_tenant_advice_comes_from_the_shared_command(
+    module: str, entry: str, system: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The importers spelled the flag by hand, so a renamed flag would not reach them."""
+    importer = importlib.import_module(module)
+    logged: list[dict[str, object]] = []
+    no_tenants = {
+        "Configurations.Systems.DefenderForEndpoint.tenants": [],
+        "Configurations.Systems.Sentinel.tenants": [],
+    }
+    monkeypatch.setattr(importer, "OpenTide", MagicMock(**no_tenants))
+    monkeypatch.setattr(
+        importer, "logger", MagicMock(critical=lambda _event, **fields: logged.append(fields))
+    )
+    monkeypatch.setattr(importer, "enable_platform_command", lambda key: f"setup --renamed-{key}")
+    with pytest.raises(RuntimeError, match="tenants"):
+        getattr(importer, entry)()
+    assert [fields["advice"] for fields in logged] == [f"run 'setup --renamed-{system}'"]
