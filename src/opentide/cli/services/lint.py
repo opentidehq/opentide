@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 import yaml
@@ -14,11 +14,15 @@ from opentide.cli.enums import LintCheck
 from opentide.core.io import parse_yaml
 from opentide.core.logging.config import get_stdout_console
 from opentide.documentation.markdown.links import slugify
+from opentide.validation.errors import find_key_line, load_yaml_with_lines
 
 logger = structlog.get_logger("opentide.cli.services.lint")
 
 _OBJECT_FAMILIES = ("threats", "objectives", "rules")
 _YAML_SUFFIXES = {".yaml", ".yml"}
+
+#: How much a finding matters. ``--strict`` still fails on any finding.
+Severity = Literal["error", "warning", "info"]
 
 
 @dataclass
@@ -86,6 +90,32 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
     return record
 
 
+def _key_line(record: _ObjectRecord, key: str) -> int | None:
+    """Zero-based line of a top-level *key*, as ``validate`` records ``yaml_line``."""
+    return find_key_line(load_yaml_with_lines(record.path), (key,))
+
+
+def _finding(
+    check: LintCheck,
+    severity: Severity,
+    record: _ObjectRecord,
+    message: str,
+    *,
+    yaml_line: int | None = None,
+    **extra: object,
+) -> dict[str, object]:
+    """One finding. ``uuid`` and ``yaml_line`` are ``None`` when the file does not say."""
+    return {
+        "check": check.value,
+        "severity": severity,
+        "path": record.relative,
+        "yaml_line": yaml_line,
+        "uuid": record.uuid,
+        **extra,
+        "message": message,
+    }
+
+
 def _assign_expected_stems(records: list[_ObjectRecord]) -> None:
     grouped: dict[Path, list[_ObjectRecord]] = defaultdict(list)
     for record in records:
@@ -124,32 +154,36 @@ def _filename_findings(
     for record in records:
         if record.parse_error:
             findings.append(
-                {
-                    "check": LintCheck.filenames.value,
-                    "path": record.relative,
-                    "message": f"Could not parse object YAML: {record.parse_error}",
-                }
+                _finding(
+                    LintCheck.filenames,
+                    "error",
+                    record,
+                    f"Could not parse object YAML: {record.parse_error}",
+                )
             )
             continue
         if not record.name:
             findings.append(
-                {
-                    "check": LintCheck.filenames.value,
-                    "path": record.relative,
-                    "message": "Object has no name; cannot check filename slug",
-                }
+                _finding(
+                    LintCheck.filenames,
+                    "error",
+                    record,
+                    "Object has no name; cannot check filename slug",
+                    yaml_line=_key_line(record, "name"),
+                )
             )
             continue
         expected = record.expected_stem
         if expected is None or expected == record.path.stem:
             continue
         dest = record.path.with_name(f"{expected}{record.path.suffix}")
-        finding: dict[str, object] = {
-            "check": LintCheck.filenames.value,
-            "path": record.relative,
-            "expected": dest.relative_to(root).as_posix(),
-            "message": (f"Filename {record.path.name!r} does not match slugify(name)={expected!r}"),
-        }
+        finding = _finding(
+            LintCheck.filenames,
+            "warning",
+            record,
+            f"Filename {record.path.name!r} does not match slugify(name)={expected!r}",
+            expected=dest.relative_to(root).as_posix(),
+        )
         if fix:
             if dest.exists():
                 finding["fixed"] = False
@@ -177,11 +211,13 @@ def _metadata_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
             missing.append("organisation")
         if missing:
             findings.append(
-                {
-                    "check": LintCheck.metadata.value,
-                    "path": record.relative,
-                    "message": "Recommended metadata missing: " + ", ".join(missing),
-                }
+                _finding(
+                    LintCheck.metadata,
+                    "info",
+                    record,
+                    "Recommended metadata missing: " + ", ".join(missing),
+                    yaml_line=_key_line(record, "metadata"),
+                )
             )
     return findings
 
@@ -248,8 +284,10 @@ def render_findings(findings: list[dict[str, object]]) -> None:
     console = get_stdout_console()
     for finding in findings:
         renamed = f" (renamed from {finding['from']})" if finding.get("fixed") is True else ""
+        line = finding.get("yaml_line")
+        where = f"{finding['path']}:{line + 1}" if isinstance(line, int) else finding["path"]
         console.print(
-            f"[{finding['check']}] {finding['path']}: {finding['message']}{renamed}",
+            f"[{finding['check']}/{finding['severity']}] {where}: {finding['message']}{renamed}",
             markup=False,
             soft_wrap=True,
         )
