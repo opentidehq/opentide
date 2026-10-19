@@ -33,7 +33,7 @@ DetectionRule.__schema_identifier__  # "rule::1.0"
 | `techniques` | `list[str]` | ATT&CK technique IDs |
 | `configurations` | `RuleConfigurations` | Typed per-platform blocks (preferred) |
 | `platforms` | `dict` | Legacy flat platform dict |
-| `detection_model` | `str \| None` | Objective UUID this rule implements |
+| `detection_model` | `str \| None` | UUID of the objective, or of a signal under it, that this rule implements |
 | `response` | `RuleResponse \| None` | Alert + response playbook |
 
 The YAML you author maps one-to-one onto these attributes:
@@ -43,7 +43,7 @@ rule = OpenTide.Rules["00000000-0000-4000-8003-000000000001"]
 rule.name                       # "Sentinel KQL Rule"
 rule.metadata.schema_id         # "rule::1.0"  (YAML `metadata.schema`)
 rule.metadata.schema            # "rule::1.0"  (read-only alias of schema_id)
-rule.detection_model            # objective UUID
+rule.detection_model            # objective UUID (or a signal UUID under one)
 rule.configurations.sentinel.query
 ```
 
