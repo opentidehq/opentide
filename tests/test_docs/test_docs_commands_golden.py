@@ -52,6 +52,7 @@ from tests.docs_commands import (
     stated_exit_codes,
     unchecked_output_fences,
 )
+from tests.registry_support import reset_opentide_singletons
 from typer.testing import CliRunner
 
 from opentide.cli import app
@@ -570,6 +571,10 @@ def _pristine_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
         app, ["--repo", str(repo), "--json", "generate"], env=dict.fromkeys(_LEAKY_ENV)
     )
     assert result.exit_code == 0, result.stdout + result.stderr
+    # That run loaded this tree into the registry singletons. The autouse reset
+    # only runs at teardown, so without this the first sample would read the
+    # pristine tree instead of its own edited copy.
+    reset_opentide_singletons()
     return repo
 
 
