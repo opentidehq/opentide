@@ -35,7 +35,8 @@ API_DETAILS_FIELD_MAPPING = {
     "Associated Attacks": "tide.vocab.stages",
     "Documentation": "link",
 }
-# Field order of the canonical file, so a rerun only diffs real changes.
+# Field order of the canonical file's keys. Only the order is kept: the first run
+# rewrites the whole file in dump_vocab_document's layout (blank lines, arrays).
 KEY_FIELD_ORDER = ("version", "name", "description", "link", "tide.vocab.stages")
 TIMEOUT_SECONDS = 30
 # malapi.io answers 429, with no Retry-After, after a short burst and then serves

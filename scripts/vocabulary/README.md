@@ -85,10 +85,11 @@ uv run --with beautifulsoup4 --with lxml python scripts/vocabulary/generate_mala
 
 Scrapes [malapi.io](https://malapi.io), one page per API, and merges the result
 into `$OPENTIDE_SPECIFICATIONS_ROOT/vocabularies/malapi.vocab.toml` with the
-per-key rules below, then syncs the bundle. The site rate-limits to roughly one
-page a minute after a short burst; the script backs off and retries, so a full
-run of ~370 APIs takes hours. BeautifulSoup is not an opentide dependency, hence
-`--with`.
+per-key rules above, then syncs the bundle. The first run also reformats that
+file into the layout the generators write, so expect a whole-file diff once.
+The site rate-limits to roughly one page a minute after a short burst; the
+script backs off and retries, so a full run of ~370 APIs takes hours.
+BeautifulSoup is not an opentide dependency, hence `--with`.
 
 ## Migration
 
