@@ -332,6 +332,36 @@ def test_case_fix_renames_through_a_temporary_name(
     ]
 
 
+def test_migrate_objects_lists_the_case_fix_and_advises_only_after_apply(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Runs on any filesystem: the case-variant lookup and the renames are patched."""
+    root = _legacy_repo(tmp_path)
+    monkeypatch.setattr(
+        migrate_objects,
+        "_case_variant",
+        lambda parent, name: "Objects" if name == "objects" else None,
+    )
+    renames: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        Path, "rename", lambda self, target: renames.append((self.name, Path(target).name))
+    )
+
+    planned = run_migrate_objects(root, apply=False)
+    assert planned["case_renamed"] == [{"from": "Objects", "to": "objects"}]
+    assert "advice" not in planned
+    assert renames == []
+
+    result = run_migrate_objects(root, apply=True)
+    assert result["case_renamed"] == [{"from": "Objects", "to": "objects"}]
+    assert "git rm -r --cached -q Objects` then `git add objects`" in str(result["advice"])
+    assert renames == [
+        ("Objects", "Objects.opentide-case-rename"),
+        ("Objects.opentide-case-rename", "objects"),
+    ]
+
+
 def test_migrate_objects_warns_once_when_the_case_rename_is_blocked(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
