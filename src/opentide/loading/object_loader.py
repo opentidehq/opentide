@@ -6,6 +6,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
+from pydantic import ValidationError
+
 from opentide.models.base import TideModel
 from opentide.models.migration import stamp_schema_identifier
 from opentide.models.schema_registry import get_chain, resolve_model
@@ -25,9 +27,19 @@ class SchemaIdentifierError(LookupError):
 
 
 def schema_id_from_body(body: dict[str, Any]) -> str:
-    """Extract schema identifier from object YAML body."""
+    """Extract schema identifier from object YAML body.
+
+    Raises ``SchemaMissingError`` when there is none. A ``metadata`` that is
+    not a mapping raises a ``ValidationError`` at that key instead: its shape
+    needs fixing, not a missing key.
+    """
     metadata = body.get("metadata") or body.get("meta") or {}
-    schema_id = metadata.get("schema") if isinstance(metadata, dict) else None
+    if not isinstance(metadata, dict):
+        key = "metadata" if body.get("metadata") else "meta"
+        raise ValidationError.from_exception_data(
+            key, [{"type": "dict_type", "loc": (key,), "input": metadata}]
+        )
+    schema_id = metadata.get("schema")
     if not schema_id:
         raise SchemaMissingError("missing metadata.schema on object")
     return str(schema_id)

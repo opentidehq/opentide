@@ -31,6 +31,7 @@ def _run_schema_check(body: dict[str, Any]) -> ValidationReport:
     graph = MagicMock()
     graph.resolve.return_value = MagicMock(file_path=None)
     graph.enum_values.return_value = frozenset()
+    graph.enum_resolver.suggest.return_value = None
     with (
         patch("opentide.validation.session.OpenTide.initialise"),
         patch("opentide.validation.session.PreflightGraph.build", return_value=graph),
@@ -60,6 +61,13 @@ def test_run_validation_reports_missing_schema_without_a_model() -> None:
     report = _run_schema_check({"name": "Incomplete", "metadata": {"tlp": "clear"}})
     assert [(i.code, i.field_path) for i in report.errors] == [
         ("schema_missing", ("metadata", "schema"))
+    ]
+
+
+def test_run_validation_reports_a_non_mapping_metadata_as_a_shape_error() -> None:
+    report = _run_schema_check({"name": "Incomplete", "metadata": "rule::1.0"})
+    assert [(i.code, i.field_path, i.message) for i in report.errors] == [
+        ("schema_validation", ("metadata",), "Input should be a valid dictionary")
     ]
 
 

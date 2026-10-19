@@ -75,6 +75,14 @@ def test_missing_schema_is_schema_missing() -> None:
     assert result.errors == ["schema_missing: missing metadata.schema on object"]
 
 
+def test_metadata_that_is_not_a_mapping_is_a_shape_error() -> None:
+    body = _fixture("valid/rule-1.1.yaml")
+    body["metadata"] = "rule::1.1"
+    result = validate_raw_payload(body, "rule")
+    assert not result.ok
+    assert result.errors == ["('metadata',): Input should be a valid dictionary"]
+
+
 def test_unknown_schema_is_not_the_newest_revision() -> None:
     result = validate_raw_payload(_fixture("invalid/rule-unknown-schema.yaml"), "rule")
     assert not result.ok

@@ -20,7 +20,7 @@ def resolve_metaschema(
     check reports it.
     """
     metadata = payload.get("metadata") or payload.get("meta") or {}
-    schema_id = metadata.get("schema")
+    schema_id = metadata.get("schema") if isinstance(metadata, dict) else None
     if isinstance(schema_id, str) and schema_id in metaschemas:
         if "::" in schema_id and SchemaVersion.parse(schema_id).family != object_type:
             return None
