@@ -123,13 +123,23 @@ def test_azure_query_and_staging_jobs_pin_endpoints() -> None:
         )
     )
     jobs = {job["job"]: job for stage in parsed["stages"] for job in stage["jobs"]}
-    restore = "\n".join(trusted_platform_config_commands("main"))
+    restore = trusted_platform_config_commands("main")
     query = jobs["validate_query_elastic"]
-    assert f"{restore}\n{reviewed_query_validation_command('elastic')}" in _azure_script(query)
+    # One step, so the restore's ``exit 0`` also skips the credentialed commands.
+    assert _azure_scripts(query)[-1].splitlines() == [
+        "set -e",
+        *restore,
+        reviewed_query_validation_command("elastic"),
+    ]
     # The restore fetches, so the token is kept; one path needs no full history.
     assert query["steps"][0] == {"checkout": "self", "persistCredentials": True}
     staging = jobs["deploy_staging"]
-    assert restore in _azure_script(staging)
+    assert _azure_scripts(staging)[-1].splitlines() == [
+        "set -e",
+        *restore,
+        "opentide deploy --dry-run --plan STAGING",
+        "opentide deploy --plan STAGING --skip-unconfigured",
+    ]
     assert staging["steps"][0] == {"checkout": "self", "persistCredentials": True, "fetchDepth": 0}
     # Jobs that rebase or diff still ask for full history explicitly.
     for name in ("deploy_production", "inflight_shards", "inflight_prune"):
@@ -328,7 +338,7 @@ def _runs(steps: list[dict[str, object]]) -> list[str]:
     return [run for step in steps if isinstance(run := step.get("run"), str)]
 
 
-def _azure_script(job: dict[str, object]) -> str:
+def _azure_scripts(job: dict[str, object]) -> list[str]:
     steps = job["steps"]
     assert isinstance(steps, list)
     scripts = [
@@ -337,4 +347,8 @@ def _azure_script(job: dict[str, object]) -> str:
         if isinstance(step, dict) and isinstance(step.get("script"), str)
     ]
     assert scripts
-    return "\n".join(scripts)
+    return scripts
+
+
+def _azure_script(job: dict[str, object]) -> str:
+    return "\n".join(_azure_scripts(job))
