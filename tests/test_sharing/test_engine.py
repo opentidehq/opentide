@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from opentide.sharing.client import GalaxyCluster, MispCallError, RemoteEvent, TemplateView
 from opentide.sharing.config import MispBlock
 from opentide.sharing.constants import OPENTIDE_TEMPLATE_VERSION, REQUIRED_TEMPLATE_RELATIONS
@@ -283,6 +285,54 @@ def test_tlp_and_status_skips_are_not_failures(tmp_path: Path) -> None:
     actions = {record.object_uuid: record.action for record in result.records}
     assert actions[red.uuid or ""] == "skipped_tlp"
     assert actions[_load("objective.yaml").uuid or ""] == "skipped_type"
+    assert result.exit_code == 0
+
+
+def _rule(root: str, platform: str, *, enabled: bool = True) -> TideDocument:
+    """The fixture rule with its root ``status`` and its Sentinel block's ``status``."""
+    text = (FIXTURES / "rule.yaml").read_text(encoding="utf-8")
+    text = text.replace("\nstatus: STAGING", f"\nstatus: {root}")
+    text = text.replace("    status: STAGING", f"    status: {platform}")
+    if not enabled:
+        text = text.replace("    enabled: true", "    enabled: false")
+    return load_document(text)
+
+
+def test_push_shares_a_promoted_rule_by_its_platform_status(tmp_path: Path) -> None:
+    """#583: promotion rewrites only the platform block, so the root stays STAGING."""
+    fake = FakeMisp()
+    result = run_misp(
+        [_rule("STAGING", "PRODUCTION")],
+        [_block(max_tlp="red")],
+        mode="push",
+        ledger=ShareLedger.load(tmp_path / "sharing.jsonl"),
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert result.exit_code == 0
+    assert result.records[0].action == "created"
+    assert "add" in fake.calls
+
+
+@pytest.mark.parametrize(
+    ("root", "platform", "enabled", "action"),
+    [
+        ("STAGING", "PRODUCTION", True, "created"),
+        ("PRODUCTION", "STAGING", True, "skipped_status"),
+        ("STAGING", "PRODUCTION", False, "skipped_status"),
+        ("PRODUCTION", "STAGING", False, "created"),
+    ],
+)
+def test_rule_statuses_match_enabled_blocks_then_the_root(
+    tmp_path: Path, root: str, platform: str, enabled: bool, action: str
+) -> None:
+    result = run_misp(
+        [_rule(root, platform, enabled=enabled)],
+        [_block(max_tlp="red")],
+        mode="preview",
+        ledger=ShareLedger.load(tmp_path / "sharing.jsonl"),
+    )
+    assert result.records[0].action == action
     assert result.exit_code == 0
 
 
