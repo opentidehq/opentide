@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from opentide.cli import app
 from opentide.cli.enums import LintCheck
-from opentide.cli.services.lint import run_lint
+from opentide.cli.services.lint import _top_level_key_lines, run_lint
 
 runner = CliRunner()
 
@@ -375,3 +375,23 @@ def test_lint_object_built_only_from_a_merge_has_no_lines(tmp_path: Path) -> Non
         ("objects/threats/b.yaml", "metadata", None),
         ("objects/threats/a.yaml", "filenames", None),
     ]
+
+
+def test_top_level_key_lines_reads_column_zero_keys_only() -> None:
+    text = (
+        "# name: commented out\n"
+        '"name": Quoted\n'
+        "metadata:\n"
+        "  name: nested\n"
+        "'tide.vocab': x\n"
+        "description: |\n"
+        "  uuid: inside a block scalar\n"
+        "name: duplicate\n"
+        "<<: {uuid: merged}\n"
+    )
+    assert _top_level_key_lines(text) == {
+        "name": 1,
+        "metadata": 2,
+        "tide.vocab": 4,
+        "description": 5,
+    }

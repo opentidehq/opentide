@@ -13,7 +13,6 @@ from pydantic import BaseModel, Field, ValidationError
 from opentide.models.threat import ThreatVector
 from opentide.validation.errors import (
     attach_yaml_lines,
-    find_key_line,
     format_issues_for_console,
     is_vocab_shape_duplicate,
     issues_from_pydantic,
@@ -373,37 +372,6 @@ def test_attach_yaml_lines_missing_file() -> None:
     issue = ValidationIssue(code="x", field_path=("name",), message="bad")
     result = attach_yaml_lines([issue], {"name": "x"}, file_path=Path("/no/such/file.yaml"))
     assert result == [issue]
-
-
-def test_find_key_line_points_at_the_key_not_its_first_child(tmp_path: Path) -> None:
-    yaml_path = tmp_path / "threat.yaml"
-    yaml_path.write_text(
-        "name: x\nmetadata:\n  uuid: y\n  tags: {team: soc}\nempty:\n",
-        encoding="utf-8",
-    )
-    data = load_yaml_with_lines(yaml_path)
-    assert find_key_line(data, ("metadata",)) == 1
-    assert find_key_line(data, ("metadata", "tags")) == 3
-    assert find_key_line(data, ("empty",)) == 4
-    assert find_key_line(data, ("metadata", "author")) is None
-    assert find_key_line(data, ("missing", "author")) is None
-    assert find_key_line(data, ()) is None
-    assert find_key_line({"metadata": {}}, ("metadata",)) is None
-
-
-def test_find_key_line_skips_a_merged_key(tmp_path: Path) -> None:
-    yaml_path = tmp_path / "threat.yaml"
-    yaml_path.write_text(
-        "base: &b\n  author: x\nmetadata:\n  <<: *b\n  uuid: y\n",
-        encoding="utf-8",
-    )
-    data = load_yaml_with_lines(yaml_path)
-    assert find_key_line(data, ("metadata", "uuid")) == 4
-    assert find_key_line(data, ("metadata", "author")) is None
-
-    only_merge = tmp_path / "only-merge.yaml"
-    only_merge.write_text("<<: &b {metadata: {uuid: y}}\n", encoding="utf-8")
-    assert find_key_line(load_yaml_with_lines(only_merge), ("metadata",)) is None
 
 
 def test_load_yaml_with_lines_returns_none_for_invalid_yaml(tmp_path: Path) -> None:

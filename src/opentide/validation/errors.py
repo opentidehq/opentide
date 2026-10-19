@@ -220,34 +220,3 @@ def _find_line(node: Any, path: tuple[str, ...]) -> int | None:
     if line is not None:
         return line
     return _container_child_line(node, head)
-
-
-def find_key_line(data: Any, field_path: tuple[str, ...]) -> int | None:
-    """Zero-based line of the mapping key that ends *field_path*, or ``None`` when absent.
-
-    :func:`attach_yaml_lines` points at a field's value, which for a block
-    mapping is the line of its first child. A finding about the mapping as a
-    whole (``metadata`` lacks ``author``) belongs on the ``metadata:`` line.
-    """
-    if not field_path:
-        return None
-    *parents, key = field_path
-    node = data
-    for part in parents:
-        node = _child(node, part)
-    if not isinstance(node, dict) or key not in node:
-        return None
-    marker = getattr(node, "lc", None)
-    locate = getattr(marker, "key", None)
-    if not callable(locate):
-        return None
-    # A key merged in with ``<<:`` has no line of its own here: ruamel raises
-    # KeyError, or returns None when no key of the mapping has a line at all.
-    try:
-        located = locate(key)
-    except KeyError:
-        return None
-    if not located:
-        return None
-    line = located[0]
-    return line if isinstance(line, int) else None
