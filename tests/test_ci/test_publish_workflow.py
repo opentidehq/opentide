@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -123,6 +124,19 @@ def test_warns_last_whenever_the_website_was_not_notified() -> None:
     # not also report a website warning.
     assert steps[warn]["if"] == "steps.notify.outcome != 'success'"
     assert "continue-on-error" not in steps[warn]
+
+
+def test_website_warning_step_gets_every_variable_it_reads() -> None:
+    # The warning runs under `set -u` after the upload and without
+    # continue-on-error, so a variable the workflow stops passing would turn a
+    # release that is already on PyPI red. _run_website_warning sets them all
+    # itself and cannot notice.
+    job = _workflow()["jobs"]["publish"]
+    step = job["steps"][_step_index(lambda step: step.get("name") == WEBSITE_WARNING_STEP)]
+    read = set(re.findall(r"\$\{?([A-Z][A-Z0-9_]*)", step["run"]))
+    assert {"RELEASE_TAG", "HAS_WEBSITE_APP", "WEBSITE_TOKEN_OUTCOME", "NOTIFY_OUTCOME"} <= read
+    provided = job["env"].keys() | step.get("env", {}).keys()
+    assert sorted(read - provided) == []
 
 
 def _run_website_warning(**env: str) -> subprocess.CompletedProcess[str]:
