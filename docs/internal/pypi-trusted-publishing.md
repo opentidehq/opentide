@@ -78,7 +78,7 @@ After a successful upload, `publish-pypi.yml` dispatches `opentide-released` to 
 gh api repos/OpenTideHQ/website/dispatches -f event_type=opentide-released
 ```
 
-That call uses the same GitHub App as vocab-upstream (`GH_APP_ID` / `GH_APP_KEY`). Install the App on `OpenTideHQ/website` with **contents: write** (required for `repository_dispatch`). If token minting or the dispatch fails, publish still succeeds; the website hourly cron picks the docs change up. The landing-page version number is fetched live from PyPI and does not wait on a rebuild.
+That call mints a token from `GH_APP_ID` / `GH_APP_KEY`, the secret names vocab-upstream also reads (set them on the `pypi` environment to use a separate App for publishing). The App must be installed on `OpenTideHQ/website` with **contents: write**, which `repository_dispatch` requires: an App with only `contents: read` mints a token and the dispatch then returns 403. If the secrets are missing, token minting fails, or the dispatch fails, publish still succeeds and the run ends with a **Website not notified** warning that names the cause. The website's hourly cron picks the docs change up; run the command above to rebuild sooner. The landing-page version number is fetched live from PyPI and does not wait on a rebuild.
 
 Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https://test.pypi.org/manage/account/publishing/) with the same GitHub fields (and a `testpypi` environment if you add one). Production `publish-pypi.yml` targets pypi.org only.
 
