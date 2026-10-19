@@ -510,7 +510,9 @@ def _rule_statuses(body: Mapping[str, Any]) -> list[str]:
     ``status`` at ``STAGING``. Matching the root skipped rules that were
     deployed to production (#583). The statuses of the enabled blocks under
     ``configurations`` count, as RFC 0012 proposes for ``rule::2.0``; the root
-    ``status`` is used only when no enabled block has one.
+    ``status`` is used only when no enabled block has one. Sharing does not
+    read the platform configuration, so a block for a platform the repository
+    has not enabled counts too, although deploy skips it.
     """
     configurations = body.get("configurations")
     blocks = configurations.values() if isinstance(configurations, Mapping) else ()
