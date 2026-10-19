@@ -56,7 +56,7 @@ Generation runs first because validation checks objects against these generated 
 
 ```bash
 opentide validate
-opentide validate --strict   # warnings also fail (exit 1) — use in CI
+opentide validate --strict   # warnings also fail (exit 1), except platform_not_enabled — use in CI
 ```
 
 On success the process exits `0`. For structured detail add `--json`, which writes one result document to stdout (see [Exit codes](../cli/exit-codes.md)). If validation fails, see [Troubleshooting](./troubleshooting.md).

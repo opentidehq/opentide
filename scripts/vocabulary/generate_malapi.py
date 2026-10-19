@@ -157,7 +157,11 @@ def main() -> int:
         print(f"[{index}/{len(apis)}] {api}")
         try:
             keys.append(fetch_win_api_details(session, api))
-        except (requests.exceptions.RetryError, requests.exceptions.ConnectionError) as exc:
+        except (
+            requests.exceptions.RetryError,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+        ) as exc:
             # Hours into a run, keep what was fetched instead of discarding it.
             print(f"malapi: stopped at {api}: {exc}", file=sys.stderr)
             unfetched = apis[index - 1 :]

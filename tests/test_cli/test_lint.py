@@ -368,7 +368,7 @@ name: Simulated Actor
 
 
 def test_lint_object_built_only_from_a_merge_has_no_lines(tmp_path: Path) -> None:
-    """With every key merged in, ruamel keeps no key lines for the mapping at all."""
+    """With every key merged in, no key starts in column 0, so no finding has a line."""
     uuid = "00000000-0000-4000-8001-000000000001"
     _write_object(tmp_path, "threats", "a.yaml", f'<<: {{name: "", metadata: {{uuid: {uuid}}}}}\n')
     _write_object(tmp_path, "threats", "b.yaml", f"<<: {{name: B, metadata: {{uuid: {uuid}}}}}\n")

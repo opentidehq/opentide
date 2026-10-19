@@ -307,7 +307,9 @@ def test_case_fix_renames_through_a_temporary_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     if _case_insensitive(tmp_path):
-        pytest.skip("real case-insensitive filesystem: covered by the test above")
+        pytest.skip(
+            "simulates case-insensitivity with a symlink, which a real case-insensitive filesystem cannot host"
+        )
     root = tmp_path / "repo"
     (root / "Objects" / "threats").mkdir(parents=True)
     _alias_objects(root, monkeypatch)
@@ -368,7 +370,9 @@ def test_migrate_objects_warns_once_when_the_case_rename_is_blocked(
 ) -> None:
     """A leftover temporary name keeps ``Objects``; ``--json`` readers see why."""
     if _case_insensitive(tmp_path):
-        pytest.skip("real case-insensitive filesystem: covered by the test above")
+        pytest.skip(
+            "simulates case-insensitivity with a symlink, which a real case-insensitive filesystem cannot host"
+        )
     root = _legacy_repo(tmp_path)
     _alias_objects(root, monkeypatch)
     (root / "Objects.opentide-case-rename").mkdir()
@@ -385,7 +389,8 @@ def test_migrate_objects_warns_once_when_the_case_rename_is_blocked(
     warning = (
         "Left Objects as it is instead of renaming it to objects: "
         "Objects.opentide-case-rename is in the way. "
-        "Remove it and run `opentide migrate objects --apply` again"
+        "Move anything you still need out of it, delete it, "
+        "and run `opentide migrate objects --apply` again"
     )
     staged = str(root.resolve() / "Objects.opentide-case-rename")
 
@@ -410,7 +415,9 @@ def test_migrate_objects_repairs_a_layout_an_earlier_release_migrated(
 ) -> None:
     """No legacy source is left, but the migrated folders still sit in ``Objects``."""
     if _case_insensitive(tmp_path):
-        pytest.skip("real case-insensitive filesystem: covered by the test above")
+        pytest.skip(
+            "simulates case-insensitivity with a symlink, which a real case-insensitive filesystem cannot host"
+        )
     root = tmp_path / "repo"
     (root / "Objects" / "threats").mkdir(parents=True)
     (root / "Objects" / "threats" / "threat.yaml").write_text("name: t\n", encoding="utf-8")

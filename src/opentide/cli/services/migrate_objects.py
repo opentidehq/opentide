@@ -201,7 +201,8 @@ def _fix_destination_case(
                     warnings.append(
                         f"Left {legacy} as it is instead of renaming it to {relative}: "
                         f"{staged.relative_to(root).as_posix()} is in the way. "
-                        "Remove it and run `opentide migrate objects --apply` again"
+                        "Move anything you still need out of it, delete it, "
+                        "and run `opentide migrate objects --apply` again"
                     )
                     break
                 if apply:

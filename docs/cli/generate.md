@@ -54,7 +54,7 @@ opentide --json generate docs
 
 A phase that logged errors reports the first one, as `docs: logged an error: malformed_object_yaml (path=…, error=…)` or `logged 3 errors, first: …`. The same error logged twice counts once. A phase that logged an error and then raised reports both, the logged error after a `;`, because the skipped object is often what broke the later one. Every error is on stderr. Run [`opentide validate`](./validate.md) to list every broken object at once.
 
-The `schemas` and `templates` phases reload the registry, which parses every object file again. A malformed object file therefore also fails them: `opentide generate schemas templates vocabs snippets` stops at `schemas`.
+Every phase that loads the registry parses every object file, and the `schemas` and `templates` phases load it again. A malformed object file therefore fails the first such phase: `opentide generate schemas templates vocabs snippets` stops at `schemas`.
 
 [`generate extract`](#generate-extract) is not a phase, and [`generate docs --changed`](#changed-object-baseline) with no git baseline fails before it renders anything. Both print their own failed document, with no `phase` field.
 

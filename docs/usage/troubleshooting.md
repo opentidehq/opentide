@@ -357,7 +357,7 @@ A rule's `status` (or a platform block's `status`) is not defined in the merged 
 
 ### Warnings fail my build but pass locally
 
-Warnings alone exit `0` by default and are listed in `--json` output under `warnings`. Pass `--strict` to fail the run with exit `1`. If your pipeline uses `--strict`, reproduce it locally with the same flag:
+Warnings alone exit `0` by default and are listed in `--json` output under `warnings`. Pass `--strict` to fail the run with exit `1`; `platform_not_enabled` is the one warning `--strict` ignores. If your pipeline uses `--strict`, reproduce it locally with the same flag:
 
 ```bash
 opentide validate --strict
