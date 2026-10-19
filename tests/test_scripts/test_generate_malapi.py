@@ -14,6 +14,9 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+import requests
+
+from opentide.vocabulary.io import read_vocab_document, write_vocab_file
 
 _MODULE = Path(__file__).resolve().parents[2] / "scripts" / "vocabulary" / "generate_malapi.py"
 
@@ -121,6 +124,19 @@ class _Session:
         return _Response(url)
 
 
+class _DroppingSession(_Session):
+    """Fails on IsDebuggerPresent, the second of the two APIs."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+
+    def get(self, url: str, timeout: float) -> _Response:
+        if url.endswith("/IsDebuggerPresent"):
+            raise self.error
+        return super().get(url, timeout)
+
+
 @pytest.fixture
 def malapi(monkeypatch: pytest.MonkeyPatch) -> Any:
     bs4 = types.ModuleType("bs4")
@@ -202,3 +218,74 @@ def test_build_document_keeps_versions_and_header(malapi: Any) -> None:
     assert keys["Gone"]["removed"] == "2.0"
     assert all(next(iter(key)) == "version" for key in document["keys"])
     assert existing["stages"] == [{"name": "Old", "description": "Old stage"}]
+
+
+def test_build_document_carries_unfetched_keys_over(malapi: Any) -> None:
+    existing = {
+        "name": "Malicious Window API",
+        "field": "malapi",
+        "key": "name",
+        "keys": [
+            {"version": "1.0", "name": "Unreached", "description": "old", "link": "l"},
+            {"version": "1.0", "name": "Gone", "description": "gone", "link": "l"},
+            {"version": "1.0", "name": "Dead", "description": "d", "link": "l", "removed": "2.0"},
+        ],
+    }
+
+    document = malapi.build_document(existing, [], [], unfetched=["Unreached", "Dead"])
+
+    keys = {key["name"]: key for key in document["keys"]}
+    assert keys["Unreached"] == existing["keys"][0]
+    assert keys["Gone"]["removed"] == "2.0"
+    assert keys["Dead"] == existing["keys"][2]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        requests.exceptions.RetryError("too many 429 error responses"),
+        requests.exceptions.ConnectionError("connection reset by peer"),
+    ],
+)
+def test_main_writes_partial_scrape_when_the_site_gives_up(
+    malapi: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    error: Exception,
+) -> None:
+    output_path = tmp_path / "vocabularies" / "malapi.vocab.toml"
+    output_path.parent.mkdir()
+    unreached = {
+        "version": "1.0",
+        "name": "IsDebuggerPresent",
+        "description": "old",
+        "link": "l",
+        "tide.vocab.stages": "Anti-Debugging",
+    }
+    write_vocab_file(
+        output_path,
+        {
+            "name": "Malicious Window API",
+            "field": "malapi",
+            "key": "name",
+            "keys": [
+                {"version": "1.0", "name": "GetDriveTypeA", "description": "old", "link": "l"},
+                unreached,
+            ],
+        },
+    )
+    synced: list[Path] = []
+    monkeypatch.setattr(sys, "argv", ["generate_malapi.py"])
+    monkeypatch.setattr(malapi, "PAUSE_SECONDS", 0)
+    monkeypatch.setattr(malapi, "_specifications_root", lambda: tmp_path)
+    monkeypatch.setattr(malapi, "_session", lambda: _DroppingSession(error))
+    monkeypatch.setattr(malapi, "_sync_bundled_vocabularies", synced.append)
+
+    assert malapi.main() == 1
+
+    keys = {key["name"]: key for key in read_vocab_document(output_path)["keys"]}
+    assert keys["GetDriveTypeA"]["description"].startswith("GetDriveTypeA is used")
+    assert keys["IsDebuggerPresent"] == unreached
+    assert synced == []
+    assert "1 of 2 APIs not fetched" in capsys.readouterr().err

@@ -88,8 +88,10 @@ into `$OPENTIDE_SPECIFICATIONS_ROOT/vocabularies/malapi.vocab.toml` with the
 per-key rules above, then syncs the bundle. The first run also reformats that
 file into the layout the generators write, so expect a whole-file diff once.
 The site rate-limits to roughly one page a minute after a short burst; the
-script backs off and retries, so a full run of ~370 APIs takes hours.
-BeautifulSoup is not an opentide dependency, hence `--with`.
+script backs off and retries, so a full run of ~370 APIs takes hours. If the
+retries run out or the connection drops, it still writes what it fetched,
+leaves the APIs it did not reach as they were, skips the bundle sync and exits
+with status 1. BeautifulSoup is not an opentide dependency, hence `--with`.
 
 ## Migration
 

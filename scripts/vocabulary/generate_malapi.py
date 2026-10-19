@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -117,10 +118,22 @@ def fetch_win_api_details(session: requests.Session, api: str) -> dict[str, Any]
 
 
 def build_document(
-    existing: dict[str, Any], stages: list[dict[str, str]], keys: list[dict[str, Any]]
+    existing: dict[str, Any],
+    stages: list[dict[str, str]],
+    keys: list[dict[str, Any]],
+    unfetched: Sequence[str] = (),
 ) -> dict[str, Any]:
-    """Merge scraped *keys* into *existing* with RFC 0003 per-key versions."""
-    lifecycle = merge_vocab_keys(existing.get("keys") or [], keys, key_field="name")
+    """Merge scraped *keys* into *existing* with RFC 0003 per-key versions.
+
+    Live existing keys named in *unfetched* are carried over unchanged, so an
+    aborted run does not mark the APIs it never reached as removed.
+    """
+    existing_keys = existing.get("keys") or []
+    skipped = set(unfetched)
+    carried = [
+        key for key in existing_keys if key.get("name") in skipped and not key.get("removed")
+    ]
+    lifecycle = merge_vocab_keys(existing_keys, [*keys, *carried], key_field="name")
     document = dict(existing)
     document["stages"] = stages
     document["keys"] = [
@@ -130,7 +143,7 @@ def build_document(
     return document
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description="Regenerate the MalAPI vocabulary")
     parser.parse_args()
     specifications_root = _specifications_root()
@@ -139,17 +152,32 @@ def main() -> None:
     session = _session()
     stages, apis = fetch_stages_and_apis(session)
     keys = []
+    unfetched: list[str] = []
     for index, api in enumerate(apis, start=1):
         print(f"[{index}/{len(apis)}] {api}")
-        keys.append(fetch_win_api_details(session, api))
+        try:
+            keys.append(fetch_win_api_details(session, api))
+        except (requests.exceptions.RetryError, requests.exceptions.ConnectionError) as exc:
+            # Hours into a run, keep what was fetched instead of discarding it.
+            print(f"malapi: stopped at {api}: {exc}", file=sys.stderr)
+            unfetched = apis[index - 1 :]
+            break
         time.sleep(PAUSE_SECONDS)
 
-    document = build_document(read_vocab_document(output_path), stages, keys)
+    document = build_document(read_vocab_document(output_path), stages, keys, unfetched)
     write_vocab_file(output_path, document)
+    if unfetched:
+        print(
+            f"malapi: {len(unfetched)} of {len(apis)} APIs not fetched, their entries left "
+            f"as they were in {output_path}; bundle not synced, rerun to finish",
+            file=sys.stderr,
+        )
+        return 1
     _sync_bundled_vocabularies(specifications_root)
     print(f"malapi: {len(document['keys'])} entries")
     print(f"synced bundle from: {output_path.parent}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
