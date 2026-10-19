@@ -17,7 +17,10 @@ Vocabularies must match byte for byte. Pins are compared table by table, the
 way OpenTide loads them: a missing or extra `[schema::M.m]` revision, a
 missing or extra dot-path key, or a different `field::M.m` contract is drift.
 Comments and layout are not, so sync leaves a bundled pin file alone when only
-those differ. Sync refuses to run against a specifications clone with no
+those differ. A pin file that does drift is replaced whole, comments included,
+so notes about the bundled pins belong in
+[`docs/internal/vocab-upstream.md`](../../docs/internal/vocab-upstream.md).
+Sync refuses to run against a specifications clone with no
 `schemas/pins/`, because it would delete every bundled pin.
 
 Run commands from the repository root.

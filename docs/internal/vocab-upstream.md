@@ -63,6 +63,10 @@ RFC 0003 pins map **schema fields** to vocab contracts (`field::M.m`). They do n
 
 ATT&CK groups **are** version-gated on threat objects through `threat.actors.name` → `actors::*`. `generate_actors` merges STIX intrusion-sets (G-ids) into `actors`. The separate `att&ck.groups` file is a MITRE-only catalog; `ThreatBody` has no `groups` field, so a pin such as `"threat.groups" = "att&ck.groups::1.0"` would be unused.
 
+`response.responders` on rules is deliberately not pinned. The team that handles a rule's alerts is per-organisation configuration, not a canonical vocabulary: the shipped `responders` vocabulary was empty, so every authored value failed validation and no instance could fix it ([#507](https://github.com/OpenTideHQ/opentide/issues/507)). An instance declares its teams in `[[responders]]` in `deployment.toml`, and `[deployment] default_responders` fills the field for a rule that names none.
+
+Notes like this one live here, not in the pin files: sync replaces a bundled pin file whole when its tables drift, comments included.
+
 ## Pin policy
 
 Existing objects keep validating: disappeared ATT&CK/MISP ids stay in the
