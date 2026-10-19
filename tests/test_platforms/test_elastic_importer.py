@@ -201,6 +201,52 @@ def test_kibana_only_shapes_still_validate() -> None:
     assert "required_fields" not in doc["configurations"]["elastic"]
 
 
+def test_threat_match_mapping_omits_null_negate() -> None:
+    rule = _sample_kibana_rule()
+    rule.update(
+        {
+            "type": "threat_match",
+            "threat_index": ["logs-ti_*"],
+            "threat_query": 'event.category: "threat"',
+            "threat_language": "kuery",
+            "threat_indicator_path": "threat.indicator",
+            "threat_mapping": [
+                {
+                    "entries": [
+                        {
+                            "field": "source.ip",
+                            "type": "mapping",
+                            "value": "threat.indicator.ip",
+                        },
+                        {
+                            "field": "file.path",
+                            "type": "mapping",
+                            "value": "threat.indicator.file.path",
+                            "negate": True,
+                        },
+                    ]
+                }
+            ],
+        }
+    )
+    doc = kibana_to_opentide(rule)
+    load_rule_from_dict(doc)
+    entries = doc["configurations"]["elastic"]["threat"]["mapping"][0]["entries"]
+    assert entries == [
+        {
+            "field": "source.ip",
+            "value": "threat.indicator.ip",
+            "type": "mapping",
+        },
+        {
+            "field": "file.path",
+            "value": "threat.indicator.file.path",
+            "type": "mapping",
+            "negate": True,
+        },
+    ]
+
+
 def test_run_skips_rules_it_cannot_write_valid(tmp_path: Path) -> None:
     from opentide.extraction.elastic_importer import _unwritable_reason
 
