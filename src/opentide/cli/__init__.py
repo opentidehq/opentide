@@ -58,13 +58,14 @@ def _no_color_before_help(value: bool) -> bool:
     return value
 
 
-def _print_version(value: bool) -> None:
+def _print_version(value: bool) -> bool:
     """Eager, so ``opentide --version`` answers before the workspace is resolved."""
     if value:
         from opentide import __version__
 
         typer.echo(f"opentide {__version__}")
         raise typer.Exit()
+    return value
 
 
 def _came_from_command_line(ctx: typer.Context, name: str) -> bool:
