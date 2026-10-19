@@ -25,12 +25,24 @@ from opentide.platforms.sentinel.client import iso_duration_timedelta
         ("15m", timedelta(minutes=15)),
         ("1h", timedelta(hours=1)),
         ("14d", timedelta(days=14)),
+        ("1h10m", timedelta(hours=1, minutes=10)),
+        ("1d2h", timedelta(days=1, hours=2)),
     ],
 )
 def test_iso_duration_timedelta_parses_iso_and_shorthand(
     duration: str, expected: timedelta
 ) -> None:
     assert iso_duration_timedelta(duration) == expected
+
+
+def test_elastic_duration_seconds_parses_compound_shorthand() -> None:
+    from opentide.platforms.elastic.durations import date_math, duration_seconds, format_duration
+
+    assert duration_seconds("1h10m") == 4200
+    assert format_duration(duration_seconds("1h10m")) == "70m"
+    assert date_math("1h10m") == "70m"
+    assert duration_seconds("1d2h") == 93600
+    assert date_math("1d2h") == "26h"
 
 
 @pytest.mark.parametrize("duration", ["", "1", "1x", "P", "PT", "P1DT", "PT1.5H", "one hour"])
