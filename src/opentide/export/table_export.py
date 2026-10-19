@@ -11,6 +11,7 @@ from typing import Any
 from opentide.core.io import json_timestamp_default, stringify_yaml_temporals
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
+from opentide.generation.errors import rendering
 from opentide.generation.framework import childs, get_vocab_entry, parents
 
 logger = get_logger(__name__)
@@ -144,7 +145,8 @@ class TableExporter:
                 )
                 continue
             for object_uuid in object_index:
-                dataset.append(self._create_entry(object_uuid, object_type))
+                with rendering(object_uuid):
+                    dataset.append(self._create_entry(object_uuid, object_type))
         return dataset
 
 

@@ -14,7 +14,7 @@ OpenTide uses the same result semantics in human and JSON modes: presentation fo
 | Code | Meaning | Emitted when |
 |-----:|---------|--------------|
 | `0` | Success | The command completed or intentionally skipped without an operational failure. Success JSON includes `"ok": true`. |
-| `1` | Error | Validation/deployment errors, network/runtime failure, or `--strict` with warnings. |
+| `1` | Error | Validation/deployment errors, a [`generate` phase](./generate.md#when-a-phase-fails) that raised or logged an error, network/runtime failure, or `--strict` with warnings. |
 | `2` | Usage error | Invalid arguments, missing required flags, or an explicitly unsupported command. |
 
 There is no soft-failure exit code. Warnings are listed under `warnings` in JSON (and printed in human mode) and only fail the process when `--strict` is set.

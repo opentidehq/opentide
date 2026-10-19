@@ -35,6 +35,25 @@ When run without a subcommand, phases execute in this order:
 
 A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts. Snippet conversion requires the YAML templates from the templates phase and fails if a core or enabled-platform template is missing. Snippet prefixes are `tide-threat`, `tide-objective`, `tide-rule`, and `tide-<platform>` for enabled platforms, with `scope: yaml` and tabstops on empty values.
 
+## When a phase fails
+
+A phase fails the run when it raises, and also when it logs an error and carries on, for example after skipping an object file it could not parse. The run stops at that phase and exits `1`. The result names the phase in `phase` and at the start of `message`. The message keeps the exception type and, when one object caused the failure, ends with that object's UUID. With `--json`, every `generate` command prints this one document instead of a traceback:
+
+```bash
+opentide --json generate docs
+```
+
+```json output-of="opentide --json generate docs" exit=1 state=dangling-reference
+{
+  "phase": "docs",
+  "ok": false,
+  "status": "failed",
+  "message": "docs: Exception: detection_model 00000000-0000-4000-8002-DEADBEEF0000 does not exist in the catalogue while rendering 00000000-0000-4000-8003-000000000001"
+}
+```
+
+A phase that logged errors reports the first one, as `docs: logged an error: malformed_object_yaml (path=…, error=…)` or `logged 3 errors, first: …`. Every error is on stderr. Run [`opentide validate`](./validate.md) to list every broken object at once.
+
 ## generate templates
 
 `opentide generate templates` walks Pydantic `model_fields` (not JSON Schema `$defs`). Output is line-oriented YAML:
@@ -217,4 +236,4 @@ Schema and template phases reload `IndexManager` and `OpenTide` registry caches.
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/generation.py`
+`src/opentide/cli/__init__.py`, `src/opentide/cli/services/generation.py`, `src/opentide/generation/errors.py`

@@ -4,6 +4,7 @@ from typing import Literal
 
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
+from opentide.generation.errors import rendering
 from opentide.generation.framework import techniques_resolver
 
 logger = get_logger(__name__)
@@ -72,9 +73,10 @@ class AttackNavigatorLayer:
         for object in sorted(
             index, key=lambda object_id: (str(index[object_id].get("name") or "").casefold(), object_id)
         ):
-            techniques = techniques_resolver(object)
-            name = index[object]["name"]
-            uuid = index[object]["metadata"]["uuid"]
+            with rendering(object):
+                techniques = techniques_resolver(object)
+                name = index[object]["name"]
+                uuid = index[object]["metadata"]["uuid"]
             for technique in techniques:
                 if technique in technique_mapping:
                     technique_mapping[technique].objects_names.append(

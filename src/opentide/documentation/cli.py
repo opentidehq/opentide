@@ -19,6 +19,7 @@ from opentide.documentation.publish.paths import page_path, targets
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentScope
 from opentide.generation import framework as fw
+from opentide.generation.errors import rendering
 
 logger = structlog.get_logger("opentide.documentation.cli")
 
@@ -208,30 +209,33 @@ def run_objects(
         for record in catalog.threats:
             if target_uuids is not None and record.uuid not in target_uuids:
                 continue
-            write_page(
-                page_path(ctx, folder=pub.threats_dir, name=record.name, uuid=record.uuid),
-                render_threat_page(record.model, ctx, catalog),
-            )
+            with rendering(record.uuid):
+                write_page(
+                    page_path(ctx, folder=pub.threats_dir, name=record.name, uuid=record.uuid),
+                    render_threat_page(record.model, ctx, catalog),
+                )
             counts["threats"] += 1
 
     if scope in (None, DocumentScope.objectives):
         for record in catalog.objectives:
             if target_uuids is not None and record.uuid not in target_uuids:
                 continue
-            write_page(
-                page_path(ctx, folder=pub.objectives_dir, name=record.name, uuid=record.uuid),
-                render_objective_page(record.model, ctx, catalog),
-            )
+            with rendering(record.uuid):
+                write_page(
+                    page_path(ctx, folder=pub.objectives_dir, name=record.name, uuid=record.uuid),
+                    render_objective_page(record.model, ctx, catalog),
+                )
             counts["objectives"] += 1
 
     if scope in (None, DocumentScope.rules):
         for record in catalog.rules:
             if target_uuids is not None and record.uuid not in target_uuids:
                 continue
-            write_page(
-                page_path(ctx, folder=pub.rules_dir, name=record.name, uuid=record.uuid),
-                render_rule_page(record.model, ctx, catalog),
-            )
+            with rendering(record.uuid):
+                write_page(
+                    page_path(ctx, folder=pub.rules_dir, name=record.name, uuid=record.uuid),
+                    render_rule_page(record.model, ctx, catalog),
+                )
             counts["rules"] += 1
 
     return counts
