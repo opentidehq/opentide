@@ -287,7 +287,10 @@ def run_migrate_objects(
     if apply:
         for operation in actionable:
             _apply_operation(target, operation, copy=copy)
-    destinations = list(dict.fromkeys(str(item["to"]) for item in actionable))
+    # A repository an earlier release migrated on macOS or Windows has no
+    # legacy sources left, but its object folders can still sit in ``Objects/``.
+    migrated = [folder for folder in sorted(_MERGE_DESTINATIONS) if (target / folder).is_dir()]
+    destinations = list(dict.fromkeys([*(str(item["to"]) for item in actionable), *migrated]))
     case_renamed, warnings = _fix_destination_case(target, destinations, apply=apply)
     if apply and not copy:
         removed = _cleanup_empty_parents(target)
@@ -298,7 +301,14 @@ def run_migrate_objects(
         copy=copy,
         planned=len(actionable),
     )
-    if not actionable:
+    if not actionable and case_renamed:
+        message = (
+            f"Renamed {len(case_renamed)} folder(s) to the exact case"
+            if apply
+            else f"Planned {len(case_renamed)} folder case rename(s) "
+            "(dry-run; pass --apply to execute)"
+        )
+    elif not actionable:
         message = "No legacy layout paths to migrate"
     elif apply:
         verb = "Copied" if copy else "Migrated"
@@ -315,7 +325,7 @@ def run_migrate_objects(
         "operations": operations,
         "planned": len(actionable),
         "skipped": len(skipped),
-        "applied": bool(apply and actionable),
+        "applied": bool(apply and (actionable or case_renamed)),
     }
     if case_renamed:
         result["case_renamed"] = case_renamed

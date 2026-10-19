@@ -34,6 +34,8 @@ Existing non-empty destinations are skipped (never overwritten). Empty destinati
 
 On macOS and Windows, `Objects/` and `objects/` are the same folder, so the moves land inside the legacy `Objects/` folder. The command then renames that folder to `objects/`, so a case-sensitive checkout such as a Linux CI runner finds it. The `--json` output lists the rename under `case_renamed`, in the dry-run too. Anything left in `Objects/` (the legacy folders after `--copy`, or folders the command does not migrate) ends up in `objects/` too, because the two names cannot exist side by side on these filesystems. The rename goes through a temporary `Objects.opentide-case-rename/` folder; if one is left over from an interrupted run, the command keeps `Objects/` and says so under `warnings`.
 
+A repository that an earlier release migrated on macOS or Windows can still have `objects/threats/`, `objects/objectives/` or `objects/rules/` inside a folder named `Objects/`, with no legacy folders left to move. Run `opentide migrate objects --apply` again to rename `Objects/` to `objects/`. Git tracks those files under `Objects/`, so then follow the check below.
+
 Git keeps the folder case it recorded while the folder still has tracked files, which is the case after `--copy` or when files stay behind. Check before you commit:
 
 ```bash
