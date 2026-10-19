@@ -53,14 +53,33 @@ def rendering(uuid: str) -> Generator[None, None, None]:
 
 
 class _ErrorRecords(logging.Handler):
-    """Keep the records a phase logs at ERROR or above."""
+    """Keep the distinct records a phase logs at ERROR or above.
+
+    The schemas and templates phases reload the registry, which parses the
+    corpus again and logs the same error again; that is still one error.
+    """
 
     def __init__(self) -> None:
         super().__init__(logging.ERROR)
         self.records: list[logging.LogRecord] = []
+        self._seen: set[object] = set()
 
     def emit(self, record: logging.LogRecord) -> None:
-        self.records.append(record)
+        key = _record_key(record)
+        if key not in self._seen:
+            self._seen.add(key)
+            self.records.append(record)
+
+
+def _record_key(record: logging.LogRecord) -> object:
+    """The event and its fields in sorted order; not when or where it was logged."""
+    event = record.msg
+    if not isinstance(event, dict):
+        return record.getMessage()
+    fields = sorted(
+        (str(key), str(value)) for key, value in event.items() if key not in _LOG_BOILERPLATE
+    )
+    return (str(event.get("event")), tuple(fields))
 
 
 def _describe_record(record: logging.LogRecord) -> str:

@@ -107,15 +107,25 @@ def test_a_docs_failure_is_one_result_naming_the_phase(
     )
 
 
-def test_a_phase_that_logs_an_error_fails_the_run(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("command", "phase"),
+    [
+        (("generate",), "docs"),
+        # `schemas` reloads the registry, which logs the same error again.
+        (("generate", "schemas", "templates", "vocabs", "snippets"), "schemas"),
+    ],
+)
+def test_a_phase_that_logs_an_error_fails_the_run(
+    tmp_path: Path, command: tuple[str, ...], phase: str
+) -> None:
     """A9: the malformed object was skipped, logged at ERROR, and the run exited 0."""
     repo = _tutorial(tmp_path)
     broken = repo / "objects" / "rules" / "broken.yaml"
     broken.write_text("name: Broken\nmetadata: [unclosed\n", encoding="utf-8")
-    payload = _failure(_invoke(repo, "generate"))
-    assert payload["phase"] == "docs"
+    payload = _failure(_invoke(repo, *command))
+    assert payload["phase"] == phase
     message = str(payload["message"])
-    assert message.startswith("docs: logged an error: malformed_object_yaml (path=")
+    assert message.startswith(f"{phase}: logged an error: malformed_object_yaml (path=")
     assert str(broken) in message
 
 
@@ -170,4 +180,16 @@ def test_failing_phase_fails_on_logged_errors_and_ignores_warnings() -> None:
     assert str(caught.value) == "vocabs: logged 2 errors, first: first broken thing"
     assert not any(
         type(handler).__name__ == "_ErrorRecords" for handler in logging.getLogger().handlers
+    )
+
+
+def test_failing_phase_counts_a_repeated_error_once() -> None:
+    """Only the event and its fields identify an error; not when, nor their order."""
+    logger = logging.getLogger("opentide.tests.generate_errors")
+    with pytest.raises(GenerationPhaseError) as caught, failing_phase("schemas"):
+        logger.error({"event": "malformed_object_yaml", "path": "a.yaml", "timestamp": "09:00:00"})
+        logger.error({"timestamp": "09:00:01", "path": "a.yaml", "event": "malformed_object_yaml"})
+        logger.error({"event": "malformed_object_yaml", "path": "b.yaml"})
+    assert (
+        str(caught.value) == "schemas: logged 2 errors, first: malformed_object_yaml (path=a.yaml)"
     )
