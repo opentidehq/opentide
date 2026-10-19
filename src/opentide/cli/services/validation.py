@@ -20,6 +20,7 @@ from opentide.validation.session import run_validation
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
+    from opentide.platforms.transport import TenantUnreachableError
 
 
 def _reset_validation_env() -> None:
@@ -298,6 +299,26 @@ def _missing_sdk_result(platform: str, exc: ModuleNotFoundError) -> dict[str, ob
     }
 
 
+def _unreachable_tenant_result(exc: TenantUnreachableError) -> dict[str, object]:
+    """A tenant the live check could not reach (DNS, refused, TLS, timeout): no traceback."""
+    from opentide.platforms.enabled import platform_config_path
+
+    return {
+        "platform": exc.platform,
+        "mode": "live",
+        "supported": True,
+        "status": "failed",
+        "tenant": exc.tenant,
+        "host": exc.host,
+        "message": str(exc),
+        "advice": (
+            f"check the '{exc.tenant}' tenant in {platform_config_path(exc.platform)} and the "
+            f"network path to {exc.host}; behind a proxy, pass opentide --proxy"
+        ),
+        "_exit_code": 1,
+    }
+
+
 def _live_required_result(platform: str) -> dict[str, object]:
     """Bare ``validate query`` does not scan. The tenant check is ``--live``."""
     return {
@@ -500,6 +521,7 @@ def _run_live_validator(
 ) -> dict[str, object]:
     from opentide.core.registry import OpenTide as LegacyOpenTide
     from opentide.platforms.plugins import DeployTide
+    from opentide.platforms.transport import TenantUnreachableError
 
     counts: dict[str, object] = {
         "plan": deployment_plan.name,
@@ -540,6 +562,8 @@ def _run_live_validator(
             validator.validate(deployment=rules)
     except ModuleNotFoundError as exc:
         return _missing_sdk_result(platform, exc)
+    except TenantUnreachableError as exc:
+        return _unreachable_tenant_result(exc)
     except ValueError as exc:
         # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
         # TypeError stays uncaught here so the legacy validator signature retry works.

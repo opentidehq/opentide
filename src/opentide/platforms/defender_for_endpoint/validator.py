@@ -10,6 +10,7 @@ from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.models.rule import DetectionRule
 from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService
 from opentide.platforms.plugins import QueryValidator
+from opentide.platforms.transport import reaching_tenant, transport_error
 
 logger = get_logger(__name__)
 TIMESTAMP_COLUMNS = {"Timestamp", "TimeGenerated"}
@@ -150,7 +151,9 @@ class DefenderForEndpointQueryValidator(QueryValidator):
         mdr_uuid = mdr.metadata.uuid
         try:
             response = service.run_hunting_query(query)
-        except Exception:
+        except Exception as exc:
+            if transport_error(exc) is not None:
+                raise
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
             return
         returned_columns = returned_schema_columns(response)
@@ -181,9 +184,13 @@ class DefenderForEndpointQueryValidator(QueryValidator):
             strategy=deployment_plan,
         )
         for tenant_deployment in deployment.rule_deployment:
-            service = DefenderForEndpointService(tenant_deployment.tenant)
-            for mdr in tenant_deployment.rules:
-                self.check_query(mdr=mdr, service=service)
+            tenant = tenant_deployment.tenant
+            # Fixed Microsoft endpoints: a requests error names the one that failed.
+            graph = "https://graph.microsoft.com"
+            with reaching_tenant("defender_for_endpoint", tenant.name, graph):
+                service = DefenderForEndpointService(tenant)
+                for mdr in tenant_deployment.rules:
+                    self.check_query(mdr=mdr, service=service)
 
 
 def declare():

@@ -7,6 +7,7 @@ from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.deployment import TideDeployment
 from opentide.platforms.sentinel_one.client import SentinelOneService
+from opentide.platforms.transport import reaching_tenant
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel_one.validator')
 
@@ -44,10 +45,12 @@ class SentinelOneQueryValidator(QueryValidator):
         mdr_deployment = loaded_mdr
         deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL_ONE, strategy=deployment_plan)
         for tenant_deployment in deployment.rule_deployment:
-            service = SentinelOneService(tenant_deployment.tenant)
-            for mdr in tenant_deployment.rules:
-                logger.info('event', detail=f'Starting query validation on tenant {tenant_deployment.tenant.name}', context_1=mdr.name, advice=mdr.metadata.uuid)
-                self.check_query(mdr=mdr, service=service)
+            tenant = tenant_deployment.tenant
+            with reaching_tenant('sentinel_one', tenant.name, tenant.setup.url):
+                service = SentinelOneService(tenant)
+                for mdr in tenant_deployment.rules:
+                    logger.info('event', detail=f'Starting query validation on tenant {tenant.name}', context_1=mdr.name, advice=mdr.metadata.uuid)
+                    self.check_query(mdr=mdr, service=service)
 
 def declare():
     return SentinelOneQueryValidator()
