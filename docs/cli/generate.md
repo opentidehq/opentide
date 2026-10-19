@@ -152,6 +152,8 @@ opentide generate exports objects
 opentide generate exports revisions
 ```
 
+`generate exports navigator` writes `.opentide/exports/attack-navigator.json`. Techniques are sorted by ID, and each comment lists threats, then rules, by name. The file changes only when coverage or object names change, not when object files are renamed or moved.
+
 `generate exports objects` writes `.opentide/exports/objects.export.json`. Threat `actors` are objects whose `name` is a scoped vocabulary ID (`att&ck::G0006`); the export enriches those names to display names.
 
 ## generate inflight

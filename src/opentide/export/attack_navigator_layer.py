@@ -67,7 +67,9 @@ class AttackNavigatorLayer:
             case "rule":
                 index = OpenTide.Models.rules
         technique_mapping: dict[str, TechniqueIndexEntry] = {}
-        for object in index:
+        # Visit objects by name, not index order: the index follows file paths,
+        # so a rename or move would otherwise reorder every comment.
+        for object in sorted(index, key=lambda object_id: (index[object_id]["name"], object_id)):
             techniques = techniques_resolver(object)
             name = index[object]["name"]
             uuid = index[object]["metadata"]["uuid"]
@@ -136,7 +138,8 @@ class AttackNavigatorLayer:
                     comment=", ".join(mdr_mapping_detail.objects_names),
                 )
             )
-        return technique_layer
+        # Sorted by ID so the exported layer does not depend on object order.
+        return sorted(technique_layer, key=lambda layer: layer.techniqueID)
 
     def assemble_full_layer(self, technique_layer: list[TechniqueLayer]) -> NavigatorLayer:
         legend = list()
