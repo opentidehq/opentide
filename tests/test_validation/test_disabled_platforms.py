@@ -42,6 +42,17 @@ def test_warning_names_the_setup_flag_with_dashes() -> None:
     assert "'opentide setup platforms --defender-for-endpoint'" in warning.message
 
 
+@pytest.mark.parametrize("block_enabled", [True, False], ids=["block-enabled", "block-disabled"])
+def test_warning_does_not_promise_the_block_deploys_once_enabled(block_enabled: bool) -> None:
+    """It said the block would deploy once the platform was enabled, even for ``enabled: false``."""
+    body = {"configurations": {"splunk": {"enabled": block_enabled, "query": "x"}}}
+    (warning,) = platform_not_enabled_warnings(body, set())
+    assert warning.message == (
+        "this block will not deploy while splunk is disabled in this workspace; "
+        "enable splunk with 'opentide setup platforms --splunk'"
+    )
+
+
 @pytest.mark.parametrize("configurations", [None, [], "splunk"], ids=["none", "list", "str"])
 def test_no_warning_without_a_configurations_mapping(configurations: Any) -> None:
     assert platform_not_enabled_warnings({"configurations": configurations}, set()) == []

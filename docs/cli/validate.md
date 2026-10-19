@@ -126,7 +126,7 @@ A rule may carry a block for a platform this workspace has not enabled, for exam
 
 ```text illustrative
 OK Validation passed
-WARNING objects/rules/imported.yaml:24: configurations.splunk: splunk is not enabled in this workspace, so this block will not deploy until 'opentide setup platforms --splunk' enables it
+WARNING /repo/objects/rules/imported.yaml:24: configurations.splunk: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
 ```
 
 In `--json` mode the line is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.

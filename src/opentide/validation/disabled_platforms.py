@@ -41,9 +41,11 @@ def platform_not_enabled_warnings(
             object_uuid=object_uuid,
             object_type="rule",
             field_path=("configurations", platform),
+            # Enabling the platform is not enough on its own (the block's status, the
+            # plan and, per the rule spec, its own ``enabled`` count too): promise nothing.
             message=(
-                f"{platform} is not enabled in this workspace, so this block will not "
-                f"deploy until '{enable_platform_command(platform)}' enables it"
+                f"this block will not deploy while {platform} is disabled in this "
+                f"workspace; enable {platform} with '{enable_platform_command(platform)}'"
             ),
             context={"platform": platform},
         )
