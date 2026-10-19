@@ -141,7 +141,14 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         if enable_correlation:
             config["action.correlationsearch.enabled"] = "true"
             config["action.correlationsearch.label"] = name + " - Rule"
-            techniques = techniques_resolver(uuid)
+            raw_techniques: list[str] = list(data.techniques or [])
+            try:
+                inherited = techniques_resolver(uuid)
+                if inherited:
+                    raw_techniques.extend(inherited)
+            except Exception:
+                pass
+            techniques = list(dict.fromkeys(raw_techniques))
             if techniques:
                 config["action.correlationsearch.annotations.mitre_attack"] = ", ".join(techniques)
 
