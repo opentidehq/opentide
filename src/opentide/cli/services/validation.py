@@ -253,10 +253,27 @@ def run_validate(
         )
     else:
         result["message"] = "Validation passed"
-    if outcome.warned:
-        result["warnings"] = ["Validation reported warnings"]
+    warnings = ["Validation reported warnings"] if outcome.warned else []
+    warnings.extend(_exempt_warning_lines(report))
+    if warnings:
+        result["warnings"] = warnings
     result["_exit_code"] = outcome.exit_code
     return result
+
+
+def _exempt_warning_lines(report: ValidationReport) -> list[str]:
+    """Spell out warnings that ``--strict`` ignores, which nothing else would print (#413)."""
+    from opentide.validation.disabled_platforms import STRICT_EXEMPT_WARNINGS
+
+    lines: list[str] = []
+    for warning in report.warnings:
+        if warning.code not in STRICT_EXEMPT_WARNINGS:
+            continue
+        location = str(warning.file_path or warning.object_uuid)
+        if warning.file_path is not None and warning.yaml_line is not None:
+            location = f"{location}:{warning.yaml_line + 1}"
+        lines.append(f"{location}: {'.'.join(warning.field_path)}: {warning.message}")
+    return lines
 
 
 #: Every vendor SDK ships with ``pip install opentide``: there are no extras. An
@@ -348,7 +365,7 @@ def validate_query_platform(
             "_exit_code": 1,
         }
     if platform not in deployment_list:
-        from opentide.platforms.enabled import enabled_systems
+        from opentide.platforms.enabled import enable_platform_command, enabled_systems
 
         if platform not in set(enabled_systems()):
             return {
@@ -360,7 +377,7 @@ def validate_query_platform(
                     f"Platform {platform} is disabled in configurations, so the "
                     "deployment plan contains no rules for it"
                 ),
-                "advice": f"enable it with 'opentide setup platforms --{platform}'",
+                "advice": f"enable it with '{enable_platform_command(platform)}'",
             }
         return {
             "platform": platform,

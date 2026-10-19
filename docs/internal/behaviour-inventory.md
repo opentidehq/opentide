@@ -45,7 +45,7 @@ Template generation (section 2) is the **0.2.0 FieldInfo** renderer. Other secti
 | JS-13 | Depth-first walk; copy keys before mutation | `dict_foo = dictionary.copy()` |
 | JS-14 | Resolve `tide.vocab` → enum + `markdownEnum` via `EnumResolver` | inline in walk |
 | JS-15 | Resolve `tide.meta.definition` references from definitions index | inline |
-| JS-16 | Resolve `recomposition` blocks via `recomposition_handler` | object properties |
+| JS-16 | Resolve `recomposition` blocks via `recomposition_handler` | overlay `properties` beside the `$ref`; the `$ref` decides which keys are legal |
 | JS-17 | Strip `tide.*` keys recursively via `strip_framework_keywords` | post-process |
 | JS-18 | Config-driven required fields via `fetch_config_template` | template keywords |
 | JS-19 | Icon injection on titled fields | `get_icon` |
@@ -55,7 +55,7 @@ Template generation (section 2) is the **0.2.0 FieldInfo** renderer. Other secti
 
 | ID | Behaviour |
 |----|-----------|
-| JS-21 | Load enabled platform/system entries from `CONFIG_INDEX` |
+| JS-21 | Load enabled platform/system entries from `CONFIG_INDEX` for the overlay. Disabled platforms stay valid keys through the `RuleConfigurations` `$ref` (#410) |
 | JS-22 | Support both `tide.enabled` and `platform.enabled` config shapes |
 | JS-23 | Merge subschema YAML from `Sub Schemas/` folder |
 

@@ -226,7 +226,12 @@ def test_gen_json_schema_object_additional_properties_false() -> None:
     assert result["metadata"]["additionalProperties"] is False
 
 
-def test_recomposition_handler_skips_disabled_platforms() -> None:
+def test_recomposition_overlay_describes_only_enabled_platforms() -> None:
+    """The overlay describes enabled platforms in the editor. It does not gate the key.
+
+    ``configurations`` also references ``RuleConfigurations``, which accepts
+    every registered platform; see ``test_portable_rule_schema.py`` (#411).
+    """
     config = {
         "platforms": {
             "sentinel": {"tide": {"enabled": False, "name": "Sentinel", "description": "Azure"}},

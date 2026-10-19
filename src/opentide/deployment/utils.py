@@ -8,7 +8,7 @@ from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
 from opentide.deployment.git_repo import local_rule_scope, modified_rule_scope, rules_folder_in_repo
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
-from opentide.platforms.enabled import enabled_systems
+from opentide.platforms.enabled import enable_platform_command, enabled_systems
 
 logger = get_logger(__name__)
 
@@ -205,7 +205,7 @@ def make_deploy_plan(
                     "system_disabled_for_deploy",
                     system=system.upper(),
                     rule=name,
-                    advice=f"enable it with 'opentide setup platforms --{system}'",
+                    advice=f"enable it with '{enable_platform_command(system)}'",
                 )
                 continue
 

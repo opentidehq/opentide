@@ -28,7 +28,7 @@ There is no soft-failure exit code. Warnings are listed under `warnings` in JSON
 | Signal | Set when | Affects |
 |--------|----------|---------|
 | `VALIDATION_ERROR_RAISED` | Any validation error | Exit `1`, `status: failed` |
-| `VALIDATION_WARNING_RAISED` | Any validation warning | Exit `1` with `--strict`; otherwise exit `0` with warnings |
+| `VALIDATION_WARNING_RAISED` | Any validation warning except [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) | Exit `1` with `--strict`; otherwise exit `0` with warnings |
 | `DEPLOYMENT_ERROR_RAISED` | Any deployment error | Exit `1`, `status: failed` |
 | `DEPLOYMENT_WARNING_RAISED` | Any deployment warning | Exit `0` with warnings |
 

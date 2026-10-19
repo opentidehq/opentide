@@ -74,6 +74,7 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--sentinel-one` | SentinelOne |
 | `--carbon-black-cloud` | Carbon Black Cloud |
 | `--harfanglab` | HarfangLab |
+| `--elastic` | Elastic Security |
 
 ### setup ci
 

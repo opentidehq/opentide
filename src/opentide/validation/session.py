@@ -22,6 +22,10 @@ from opentide.validation.checks.cross_object import (
     check_references_for_object,
 )
 from opentide.validation.checks.kinds import ValidateCheck
+from opentide.validation.disabled_platforms import (
+    STRICT_EXEMPT_WARNINGS,
+    platform_not_enabled_warnings,
+)
 from opentide.validation.errors import (
     attach_yaml_lines,
     is_vocab_shape_duplicate,
@@ -167,6 +171,7 @@ def run_validation(
         warnings.extend(sharing_warnings)
 
     if object_checks:
+        enabled_platforms = _enabled_platforms(work_items, object_checks)
         if object_workers > 0:
             from concurrent.futures import ThreadPoolExecutor
 
@@ -179,6 +184,7 @@ def run_validation(
                     metaschemas=metaschemas,
                     checks=object_checks,
                     check_shard=scope.mode != "full",
+                    enabled_platforms=enabled_platforms,
                 )
 
             with ThreadPoolExecutor(max_workers=object_workers) as pool:
@@ -193,6 +199,7 @@ def run_validation(
                     metaschemas=metaschemas,
                     checks=object_checks,
                     check_shard=scope.mode != "full",
+                    enabled_platforms=enabled_platforms,
                 )
                 issues.extend(item_issues)
                 warnings.extend(item_warnings)
@@ -211,10 +218,22 @@ def run_validation(
 
     if issues:
         os.environ["VALIDATION_ERROR_RAISED"] = "1"
-    if warnings:
+    # The flag fails --strict. A disabled platform's block is reported, not failed.
+    if any(warning.code not in STRICT_EXEMPT_WARNINGS for warning in warnings):
         os.environ["VALIDATION_WARNING_RAISED"] = "1"
 
     return ValidationReport(ok=not issues, issues=issues, warnings=warnings, stats=stats)
+
+
+def _enabled_platforms(
+    work_items: list[ObjectWorkItem], checks: frozenset[ValidateCheck]
+) -> frozenset[str] | None:
+    """Platforms deploy sends to, read once per run. ``None`` when no rule is schema-checked."""
+    if ValidateCheck.schema not in checks or not any(i.object_type == "rule" for i in work_items):
+        return None
+    from opentide.platforms.enabled import enabled_systems
+
+    return frozenset(enabled_systems())
 
 
 def _sharing_config_issues() -> tuple[list[ValidationIssue], list[ValidationIssue]]:
@@ -325,6 +344,7 @@ def _validate_work_item(
     metaschemas: dict[str, Any],
     checks: frozenset[ValidateCheck],
     check_shard: bool = True,
+    enabled_platforms: frozenset[str] | None = None,
 ) -> tuple[list[ValidationIssue], list[ValidationIssue]]:
     issues: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []
@@ -387,6 +407,14 @@ def _validate_work_item(
         )
         for issue in deprecated_issues:
             warnings.append(issue.model_copy(update={"file_path": file_path}))
+
+        if item.object_type == "rule" and enabled_platforms is not None:
+            warnings.extend(
+                issue.model_copy(update={"file_path": file_path})
+                for issue in platform_not_enabled_warnings(
+                    item.body, enabled_platforms, object_uuid=item.uuid
+                )
+            )
 
         from opentide.validation.external_ids import external_id_issues
 

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
+from opentide.cli import app
 from opentide.cli.enums import DetectionPlatform
 from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
+from opentide.platforms.enabled import SYSTEM_KEYS, enable_platform_command
 
 
 def test_run_platforms_setup_writes_enabled_toml(tmp_path: Path) -> None:
@@ -48,3 +52,15 @@ def test_run_platforms_setup_keeps_comments_in_an_existing_file(tmp_path: Path) 
 def test_run_platforms_setup_requires_platform() -> None:
     with pytest.raises(ValueError, match="Choose at least one platform"):
         run_platforms_setup(PlatformsSetupOptions(platforms=[]))
+
+
+@pytest.mark.parametrize("system", SYSTEM_KEYS)
+def test_enable_advice_is_a_working_setup_platforms_call(system: str, tmp_path: Path) -> None:
+    """#414: advice named ``--defender_for_endpoint``, and Elastic had no flag at all."""
+    command = enable_platform_command(system)
+    assert command.startswith("opentide setup platforms --")
+    argv = [*shlex.split(command)[1:], str(tmp_path), "--yes"]
+    result = CliRunner().invoke(app, ["--json", *argv])
+    assert result.exit_code == 0, result.stdout + result.stderr
+    out = tmp_path / ".opentide" / "configurations" / "platforms" / f"{system}.toml"
+    assert "enabled = true" in out.read_text(encoding="utf-8")

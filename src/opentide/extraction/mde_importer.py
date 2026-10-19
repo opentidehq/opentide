@@ -227,7 +227,7 @@ def _import_defender_rules() -> None:
         logger.critical(
             "defender_tenants_not_configured",
             detail="You must first have Defender for Endpoint tenants configured to initiate the import",
-            advice="run 'opentide setup platforms --defender'",
+            advice="run 'opentide setup platforms --defender-for-endpoint'",
         )
         raise RuntimeError("No Defender for Endpoint tenants are configured")
     destination = Path("Imported")
