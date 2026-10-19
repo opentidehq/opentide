@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import structlog
@@ -56,6 +57,8 @@ _PATH_DESTINATIONS = {
 _MERGE_DESTINATIONS = frozenset(_PATH_DESTINATIONS.values())
 
 _EMPTY_PARENTS = ("Objects", "Models Library", ".opentide/framework")
+
+_CASE_RENAME_SUFFIX = ".opentide-case-rename"
 
 
 def _is_empty_dir(path: Path) -> bool:
@@ -146,6 +149,68 @@ def _apply_operation(root: Path, operation: dict[str, object], *, copy: bool) ->
     shutil.move(str(src), str(dest))
 
 
+def _case_variant(parent: Path, name: str) -> str | None:
+    """Return the on-disk name that *name* resolves to when only the case differs."""
+    path = parent / name
+    if not path.exists():
+        return None
+    entries = os.listdir(parent)
+    if name in entries:
+        return None
+    for entry in entries:
+        if entry.casefold() == name.casefold() and (parent / entry).samefile(path):
+            return entry
+    return None
+
+
+def _fix_destination_case(
+    root: Path,
+    destinations: list[str],
+    *,
+    apply: bool,
+) -> list[dict[str, str]]:
+    """Give destination folders their exact names on a case-insensitive filesystem.
+
+    On macOS and Windows ``Objects`` and ``objects`` are one folder, so a move
+    into ``objects/threats`` lands in ``Objects/threats`` and the legacy name
+    stays. Git adds new files under the on-disk name, and a case-sensitive
+    checkout (Linux CI) then has no ``objects/``. A case-only rename is a
+    no-op on some filesystems, so it goes through a temporary name.
+    """
+    renamed: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for destination in destinations:
+        parent = root
+        for name in PurePosixPath(destination).parts:
+            variant = _case_variant(parent, name)
+            target = parent / name
+            relative = target.relative_to(root).as_posix()
+            if variant is not None and relative not in seen:
+                if apply:
+                    staged = parent / f"{variant}{_CASE_RENAME_SUFFIX}"
+                    if os.path.lexists(staged):
+                        logger.warning("migrate_case_rename_blocked", path=str(staged))
+                        break
+                    (parent / variant).rename(staged)
+                    staged.rename(target)
+                seen.add(relative)
+                renamed.append(
+                    {"from": (parent / variant).relative_to(root).as_posix(), "to": relative}
+                )
+            parent = target
+    return renamed
+
+
+def _case_rename_advice(renamed: list[dict[str, str]]) -> str:
+    """Git keeps the case it recorded for a folder that still has tracked files."""
+    steps = "; ".join(
+        f"{item['from']} is now {item['to']}: if `git ls-files {item['from']}` lists files, "
+        f"run `git rm -r --cached -q {item['from']}` then `git add {item['to']}`"
+        for item in renamed
+    )
+    return f"Git keeps the folder case it already tracks. {steps}"
+
+
 def _cleanup_empty_parents(root: Path) -> list[str]:
     removed: list[str] = []
     for relative in _EMPTY_PARENTS:
@@ -210,8 +275,10 @@ def run_migrate_objects(
     if apply:
         for operation in actionable:
             _apply_operation(target, operation, copy=copy)
-        if not copy:
-            removed = _cleanup_empty_parents(target)
+    destinations = list(dict.fromkeys(str(item["to"]) for item in actionable))
+    case_renamed = _fix_destination_case(target, destinations, apply=apply)
+    if apply and not copy:
+        removed = _cleanup_empty_parents(target)
     logger.debug(
         "migrate_objects",
         path=str(target),
@@ -238,6 +305,10 @@ def run_migrate_objects(
         "skipped": len(skipped),
         "applied": bool(apply and actionable),
     }
+    if case_renamed:
+        result["case_renamed"] = case_renamed
+        if apply:
+            result["advice"] = _case_rename_advice(case_renamed)
     if removed:
         result["removed_empty"] = removed
     return result
