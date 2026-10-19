@@ -210,6 +210,57 @@ def test_parse_techniques_extracts_entries() -> None:
     assert entries[0]["link"] == "https://example.com"
 
 
+def _technique(ext_id: str, name: str, **extra: object) -> dict[str, object]:
+    return {
+        "type": "attack-pattern",
+        "name": name,
+        "external_references": [{"source_name": "mitre-attack", "external_id": ext_id}],
+        **extra,
+    }
+
+
+def test_parse_techniques_prefixes_enterprise_subtechniques_with_parent_name() -> None:
+    # STIX names sub-techniques without their parent; the canonical att&ck
+    # vocabulary (and RFC 0007) uses "Parent: Sub". Order must not matter.
+    objects = [
+        _technique("T1685.002", "Disable or Modify Cloud Log"),
+        _technique("T1685", "Disable or Modify Tools"),
+        _technique("T1059.013", "Container CLI/API"),
+        _technique("T1059", "Command and Scripting Interpreter"),
+    ]
+    names = {entry["id"]: entry["name"] for entry in stix_attack.parse_techniques(objects)}
+    assert names == {
+        "T1685": "Disable or Modify Tools",
+        "T1685.002": "Disable or Modify Tools: Disable or Modify Cloud Log",
+        "T1059": "Command and Scripting Interpreter",
+        "T1059.013": "Command and Scripting Interpreter: Container CLI/API",
+    }
+
+
+def test_parse_techniques_ignores_revoked_parent_names() -> None:
+    objects = [
+        _technique("T1562", "Impair Defenses", revoked=True),
+        _technique("T1562.001", "Disable or Modify Tools"),
+    ]
+    entries = stix_attack.parse_techniques(objects)
+    assert [entry["name"] for entry in entries] == ["Disable or Modify Tools"]
+
+
+def test_parse_techniques_keeps_prefix_only_names_for_mobile_and_ics() -> None:
+    objects = [
+        _technique("T1406", "Obfuscated Files or Information"),
+        _technique("T1406.001", "Steganography"),
+    ]
+    names = {
+        entry["id"]: entry["name"]
+        for entry in stix_attack.parse_techniques(objects, prefix="Mobile")
+    }
+    assert names == {
+        "T1406": "Mobile : Obfuscated Files or Information",
+        "T1406.001": "Mobile : Steganography",
+    }
+
+
 def test_parse_groups_extracts_intrusion_sets() -> None:
     objects = [
         {

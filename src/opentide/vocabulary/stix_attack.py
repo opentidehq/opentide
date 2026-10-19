@@ -67,16 +67,36 @@ def _tactics_for_technique(obj: Mapping[str, Any], tactic_map: dict[str, str]) -
     return stages
 
 
+def _parent_technique_names(objects: Sequence[Mapping[str, Any]]) -> dict[str, str]:
+    """Map live parent technique IDs (no ``.``) to their STIX names."""
+    names: dict[str, str] = {}
+    for obj in objects:
+        if obj.get("type") != "attack-pattern":
+            continue
+        if obj.get("x_mitre_deprecated") or obj.get("revoked"):
+            continue
+        ext_id = _mitre_external_id(obj)
+        if ext_id and ext_id.startswith("T") and "." not in ext_id:
+            names[ext_id] = str(obj.get("name", ""))
+    return names
+
+
 def parse_techniques(
     objects: Sequence[Mapping[str, Any]],
     *,
     prefix: str = "",
     tactic_map: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Extract technique entries from STIX attack-pattern objects."""
+    """Extract technique entries from STIX attack-pattern objects.
+
+    STIX sub-technique names omit their parent. Unprefixed (enterprise)
+    sub-techniques are named ``"Parent: Sub"``, the canonical ``att&ck``
+    vocabulary format; prefixed bundles (mobile, ICS) keep ``"<prefix> : Sub"``.
+    """
     if tactic_map is None:
         tactic_map = build_tactic_name_map(objects)
     name_prefix = f"{prefix} : " if prefix else ""
+    parent_names = {} if prefix else _parent_technique_names(objects)
     entries: list[dict[str, Any]] = []
 
     for obj in objects:
@@ -87,9 +107,13 @@ def parse_techniques(
         ext_id = _mitre_external_id(obj)
         if not ext_id or not ext_id.startswith("T"):
             continue
+        name = str(obj.get("name", ""))
+        parent_name = parent_names.get(ext_id.partition(".")[0]) if "." in ext_id else None
+        if parent_name:
+            name = f"{parent_name}: {name}"
         entry: dict[str, Any] = {
             "id": ext_id,
-            "name": name_prefix + str(obj.get("name", "")),
+            "name": name_prefix + name,
             "description": obj.get("description") or "",
         }
         url = _mitre_url(obj)
