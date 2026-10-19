@@ -67,6 +67,34 @@ def _tactics_for_technique(obj: Mapping[str, Any], tactic_map: dict[str, str]) -
     return stages
 
 
+def parse_matrix_tactics(objects: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Tactic names of the bundle's live matrix, in matrix order.
+
+    Names are normalised as technique stages are, so a vocabulary header built
+    from them lists the stages its keys use. ATT&CK renames tactics between
+    releases (v19: Defense Evasion became Stealth, and Defense Impairment was
+    added), so the header has to follow the bundle rather than a fixed list.
+    """
+    tactics = {
+        str(obj["id"]): str(obj.get("name", ""))
+        for obj in objects
+        if obj.get("type") == "x-mitre-tactic"
+        and obj.get("id")
+        and not (obj.get("x_mitre_deprecated") or obj.get("revoked"))
+    }
+    stages: list[str] = []
+    for obj in objects:
+        if obj.get("type") != "x-mitre-matrix":
+            continue
+        if obj.get("x_mitre_deprecated") or obj.get("revoked"):
+            continue
+        for ref in obj.get("tactic_refs") or []:
+            name = _normalise_tactic_name(tactics.get(str(ref), ""))
+            if name and name not in stages:
+                stages.append(name)
+    return stages
+
+
 def _parent_technique_names(objects: Sequence[Mapping[str, Any]]) -> dict[str, str]:
     """Map live parent technique IDs (no ``.``) to their STIX names."""
     names: dict[str, str] = {}

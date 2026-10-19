@@ -17,6 +17,7 @@ from opentide.vocabulary.stix_attack import (
     merge_technique_bundles,
     parse_datasources,
     parse_groups,
+    parse_matrix_tactics,
     parse_mitigations,
 )
 
@@ -155,6 +156,11 @@ def generate_attack_vocabs(
     previous_source = techniques_doc.get("source_version")
     techniques_doc["key"] = "id"
     techniques_doc.pop("model", None)
+    # The header lists the enterprise matrix, so it follows ATT&CK's tactic
+    # renames. Schema docs only render a key's stages that the header lists.
+    matrix_stages = parse_matrix_tactics(load_stix_bundle(enterprise))
+    if matrix_stages:
+        techniques_doc["stages"] = matrix_stages
     bundles = [(enterprise, "")]
     if mobile.is_file():
         bundles.append((mobile, "Mobile"))

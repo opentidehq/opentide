@@ -142,3 +142,21 @@ def test_bundled_attack_records_its_source_release() -> None:
     assert metadata.get("source") == "mitre-attack"
     assert metadata.get("source_version")
 
+
+def test_bundled_attack_header_lists_every_live_enterprise_stage() -> None:
+    """Generated schema docs render only the key stages the header lists.
+
+    The header kept the v17 tactics after the ATT&CK 20.0 ingest, so the
+    docs dropped Stealth, Defense Impairment and Privilege Escalation.
+    """
+    attack = _bundled("att&ck")
+    header = {stage.get("name") for stage in attack.metadata.stages}
+    live = {
+        stage
+        for entry in attack.entries.values()
+        if not entry.removed and not entry.name.startswith(("Mobile : ", "Industrial : "))
+        for stage in entry.stages
+    }
+
+    assert live
+    assert live <= header, sorted(live - header)

@@ -162,6 +162,50 @@ def test_build_tactic_name_map() -> None:
     assert mapping["discovery"] == "Discovery"
 
 
+def test_parse_matrix_tactics_follows_matrix_order() -> None:
+    def tactic(ref: str, name: str, **extra: object) -> dict[str, object]:
+        return {"type": "x-mitre-tactic", "id": ref, "name": name, **extra}
+
+    objects = [
+        tactic("x-mitre-tactic--a", "Persistence"),
+        tactic("x-mitre-tactic--b", "Stealth"),
+        tactic("x-mitre-tactic--c", "Defense Impairment"),
+        tactic("x-mitre-tactic--d", "Defense Evasion", revoked=True),
+        tactic("x-mitre-tactic--e", "Initial Access"),
+        {
+            "type": "x-mitre-matrix",
+            "name": "Old matrix",
+            "x_mitre_deprecated": True,
+            "tactic_refs": ["x-mitre-tactic--d"],
+        },
+        {
+            "type": "x-mitre-matrix",
+            "name": "Enterprise ATT&CK",
+            "tactic_refs": [
+                "x-mitre-tactic--e",
+                "x-mitre-tactic--a",
+                "x-mitre-tactic--d",
+                "x-mitre-tactic--b",
+                "x-mitre-tactic--c",
+                "x-mitre-tactic--missing",
+            ],
+        },
+    ]
+
+    assert stix_attack.parse_matrix_tactics(objects) == [
+        "Initial Access",
+        "Persistence",
+        "Stealth",
+        "Defense Impairment",
+    ]
+
+
+def test_parse_matrix_tactics_without_a_matrix_is_empty() -> None:
+    objects = [{"type": "x-mitre-tactic", "id": "x-mitre-tactic--a", "name": "Execution"}]
+
+    assert stix_attack.parse_matrix_tactics(objects) == []
+
+
 def test_parse_datasources_skips_sources_without_external_id() -> None:
     objects = [
         {
