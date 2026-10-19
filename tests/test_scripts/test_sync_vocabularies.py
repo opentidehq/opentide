@@ -151,6 +151,9 @@ def test_check_without_source_accepts_lockfile_synced_from_specifications(
     paths.source_vocabulary_dir.mkdir(parents=True)
     _write_vocab(paths.source_vocabulary_dir / "example.vocab.toml", "1.0")
     _write_pins(paths.source_pins_dir / "threat.toml", _THREAT_PINS)
+    # Sync keeps a bundled pin file that differs only in comments, so the lockfile digest,
+    # taken from specifications, must not depend on them either.
+    _write_pins(paths.target_pins_dir / "threat.toml", "# Bundled note.\n" + _THREAT_PINS)
     assert sync_vocabularies(paths=paths, check=False, specifications_sha="deadbeef") == 0
 
     # CI has no specifications checkout: the recorded SHA is provenance, not content.
@@ -170,7 +173,10 @@ def test_check_reports_pin_drift_against_source(
     for directory in (paths.source_vocabulary_dir, paths.target_vocabulary_dir):
         directory.mkdir(parents=True)
         _write_vocab(directory / "example.vocab.toml", "1.0")
-    _write_pins(paths.source_pins_dir / "threat.toml", _THREAT_PINS)
+    _write_pins(
+        paths.source_pins_dir / "threat.toml",
+        _THREAT_PINS + '\n["threat::1.1"]\n"threat.killchain" = "killchain::1.0"\n',
+    )
     _write_pins(
         paths.source_pins_dir / "rule.toml", '["rule::1.0"]\n"severity" = "severity::1.0"\n'
     )
@@ -190,6 +196,7 @@ def test_check_reports_pin_drift_against_source(
         "[threat::1.0] threat.killchain: bundled killchain::1.1, specifications killchain::1.0"
         in out
     )
+    assert "[threat::1.1] schema revision missing in bundled pins" in out
     assert "[threat::2.1] schema revision not in specifications" in out
 
 
@@ -209,6 +216,27 @@ def test_pin_comments_and_formatting_are_not_drift(tmp_path: Path) -> None:
 
     assert sync_vocabularies(paths=paths, check=False, specifications_sha="abc123") == 0
     assert (paths.target_pins_dir / "threat.toml").read_text(encoding="utf-8") == bundled
+    assert sync_vocabularies(paths=paths, check=True, specifications_sha="abc123") == 0
+
+
+def test_sync_replaces_drifted_pin_files_and_keeps_layout_only_ones(tmp_path: Path) -> None:
+    paths = _sync_paths(tmp_path)
+    for directory in (paths.source_vocabulary_dir, paths.target_vocabulary_dir):
+        directory.mkdir(parents=True)
+        _write_vocab(directory / "example.vocab.toml", "1.0")
+    rule_pins = '["rule::1.0"]\n"severity" = "severity::1.0"\n'
+    _write_pins(paths.source_pins_dir / "threat.toml", _THREAT_PINS)
+    _write_pins(paths.source_pins_dir / "rule.toml", rule_pins)
+    _write_pins(
+        paths.target_pins_dir / "threat.toml",
+        "# Dropped with the file.\n" + _THREAT_PINS.replace("killchain::1.0", "killchain::0.9"),
+    )
+    bundled_rule = "# Bundled copy keeps its own notes.\n" + rule_pins
+    _write_pins(paths.target_pins_dir / "rule.toml", bundled_rule)
+
+    assert sync_vocabularies(paths=paths, check=False, specifications_sha="abc123") == 0
+    assert (paths.target_pins_dir / "threat.toml").read_text(encoding="utf-8") == _THREAT_PINS
+    assert (paths.target_pins_dir / "rule.toml").read_text(encoding="utf-8") == bundled_rule
     assert sync_vocabularies(paths=paths, check=True, specifications_sha="abc123") == 0
 
 
