@@ -363,3 +363,15 @@ name: Simulated Actor
     (finding,) = run_lint(tmp_path)["findings"]
     assert finding["check"] == "metadata"
     assert finding["yaml_line"] is None
+
+
+def test_lint_object_built_only_from_a_merge_has_no_lines(tmp_path: Path) -> None:
+    """With every key merged in, ruamel keeps no key lines for the mapping at all."""
+    uuid = "00000000-0000-4000-8001-000000000001"
+    _write_object(tmp_path, "threats", "a.yaml", f'<<: {{name: "", metadata: {{uuid: {uuid}}}}}\n')
+    _write_object(tmp_path, "threats", "b.yaml", f"<<: {{name: B, metadata: {{uuid: {uuid}}}}}\n")
+    findings = run_lint(tmp_path)["findings"]
+    assert [(f["path"], f["check"], f["yaml_line"]) for f in findings] == [
+        ("objects/threats/b.yaml", "metadata", None),
+        ("objects/threats/a.yaml", "filenames", None),
+    ]

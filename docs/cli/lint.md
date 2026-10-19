@@ -62,7 +62,7 @@ A file renamed by `--fix` gets `(renamed from <old path>)`.
 | `check` | `filenames` or `metadata` |
 | `severity` | `error`, `warning` or `info` (table below) |
 | `path` | Object file, relative to the workspace |
-| `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`. `null` when the finding is about the whole file |
+| `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`. `null` when the finding is about the whole file, or the key comes from a `<<:` merge and has no line of its own |
 | `uuid` | The object's `metadata.uuid`. `null` when the file did not parse or has no UUID |
 | `message` | What is wrong |
 

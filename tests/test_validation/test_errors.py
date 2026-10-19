@@ -401,6 +401,10 @@ def test_find_key_line_skips_a_merged_key(tmp_path: Path) -> None:
     assert find_key_line(data, ("metadata", "uuid")) == 4
     assert find_key_line(data, ("metadata", "author")) is None
 
+    only_merge = tmp_path / "only-merge.yaml"
+    only_merge.write_text("<<: &b {metadata: {uuid: y}}\n", encoding="utf-8")
+    assert find_key_line(load_yaml_with_lines(only_merge), ("metadata",)) is None
+
 
 def test_load_yaml_with_lines_returns_none_for_invalid_yaml(tmp_path: Path) -> None:
     yaml_path = tmp_path / "broken.yaml"

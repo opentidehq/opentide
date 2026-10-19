@@ -241,8 +241,13 @@ def find_key_line(data: Any, field_path: tuple[str, ...]) -> int | None:
     locate = getattr(marker, "key", None)
     if not callable(locate):
         return None
+    # A key merged in with ``<<:`` has no line of its own here: ruamel raises
+    # KeyError, or returns None when no key of the mapping has a line at all.
     try:
-        line = locate(key)[0]
-    except KeyError:  # merged in with ``<<:``, so the key has no line of its own here
+        located = locate(key)
+    except KeyError:
         return None
+    if not located:
+        return None
+    line = located[0]
     return line if isinstance(line, int) else None
