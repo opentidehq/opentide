@@ -65,7 +65,7 @@ def test_shipped_revisions_have_pins() -> None:
 @pytest.mark.parametrize(
     ("schema_id", "path", "contract"),
     _bundled_pins(),
-    ids=lambda value: str(value),
+    ids=str,
 )
 def test_every_pinned_revision_is_backed_by_a_bundled_key(
     schema_id: str, path: str, contract: str

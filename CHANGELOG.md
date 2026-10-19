@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-19
+
+Minor release: `pip install opentide` is the only install, and two things need action after upgrading.
+- **Regenerate generated pipelines** with `opentide setup ci <provider> --yes`. They now take tenant configuration from the default branch before credentialed jobs (security), and an install with no extras validates every platform live.
+- **Regenerate schemas** with `opentide generate schemas`: technique pins move to `att&ck::1.2` (ATT&CK 20.0), and techniques added since ATT&CK v17 validate again.
+
+It is a minor because `generate` and `validate` now fail on input they used to accept (a phase that logs an error, a missing or unknown `metadata.schema`), and lint and generate output change.
+
 ### Security
 
 - **Generated pipelines no longer let a pull request choose where platform credentials go.** Live query validation and the staging deploy hold platform secrets and send them to the tenant URLs and `$VAR` references in `.opentide/configurations`. On a pull request that directory came from the pull request itself, so a configuration-only change could send a credential to any host. The generated GitHub, GitLab and Azure pipelines now replace `.opentide/configurations` with the default branch's copy, in the same step, right before those commands. A platform the default branch has no tenant for yet skips its live query step with a note and exits `0`, so the pull request that adds the first tenant can pass. Regenerate existing pipelines with `opentide setup ci <github|gitlab|azure> --yes` ([#565](https://github.com/OpenTideHQ/opentide/pull/565)).
@@ -52,6 +60,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - opentide's own CI checks the bundled vocabulary pins against the specifications. The drift gate never ran before, because it filtered changed paths with `rg`, which GitHub-hosted runners do not ship ([#111](https://github.com/OpenTideHQ/opentide/issues/111)).
 - `data/specifications.lock.json` no longer lists `responders.vocab.toml`, which was removed in #512.
 - The PyPI publish workflow warns, naming the cause, when the website was not notified of a release ([#540](https://github.com/OpenTideHQ/opentide/issues/540)).
+
+### Install
+
+```bash
+pip install opentide==0.16.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide setup ci <github|gitlab|azure> --yes
+opentide generate schemas
+opentide validate --strict
+```
 
 ## [0.15.0] — 2026-10-16
 
@@ -979,7 +997,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/OpenTideHQ/opentide/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.16.0
 [0.15.0]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.15.0
 [0.14.2]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.2
 [0.14.1]: https://github.com/OpenTideHQ/opentide/releases/tag/v0.14.1
