@@ -374,29 +374,22 @@ def test_bare_wheel_imports_every_platform_sdk(tmp_path: Path) -> None:
     wheel = _build_wheel(uv, tmp_path / "dist")
     python = _install(uv, tmp_path / "sdk-venv", str(wheel))
 
-    probe = _run(
+    import_every_sdk = "\n".join(
         [
-            str(python),
-            "-c",
-            "import importlib, sys\n"
-            "for name in sys.argv[1:]:\n"
-            "    importlib.import_module(name)\n"
-            "import opentide.platforms.sentinel.client as client\n"
-            "assert client.ALERT_RULES_API_VERSION\n",
-            *_PLATFORM_SDK_IMPORTS,
-        ],
-        timeout=120,
+            "import importlib, sys",
+            "for name in sys.argv[1:]:",
+            "    importlib.import_module(name)",
+            "import opentide.platforms.sentinel.client as client",
+            "assert client.ALERT_RULES_API_VERSION",
+        ]
     )
+    probe = _run([str(python), "-c", import_every_sdk, *_PLATFORM_SDK_IMPORTS], timeout=120)
     assert probe.returncode == 0, probe.stdout + probe.stderr
-    metadata = _run(
-        [
-            str(python),
-            "-c",
-            "from importlib.metadata import metadata; "
-            "print(metadata('opentide').get_all('Provides-Extra') or [])",
-        ],
-        timeout=60,
+    print_extras = (
+        "from importlib.metadata import metadata; "
+        + "print(metadata('opentide').get_all('Provides-Extra') or [])"
     )
+    metadata = _run([str(python), "-c", print_extras], timeout=60)
     assert metadata.stdout.strip() == "[]", metadata.stdout + metadata.stderr
 
 
