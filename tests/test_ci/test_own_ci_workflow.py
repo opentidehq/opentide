@@ -15,7 +15,9 @@ most of the win.
 
 Also covers the vocabulary drift gate's path filter. It used ``rg``, which
 GitHub-hosted runners do not ship; inside ``if`` the missing command read as
-"no match", so ``sync_vocabularies.py --check`` never ran.
+"no match", so ``sync_vocabularies.py --check`` never ran. When the gate fires,
+``--check`` must see a specifications checkout: without one it only compares the
+lockfile with the bundle, and hand-edited pins pass once relocked.
 """
 
 from __future__ import annotations
@@ -149,3 +151,24 @@ def test_vocab_drift_gate_watches_bundle_pins_and_lockfile(
     workflow: dict[str, Any], path: str, gated: bool
 ) -> None:
     assert bool(re.search(_vocab_gate_pattern(workflow), path)) is gated
+
+
+def test_vocab_drift_check_compares_against_a_specifications_checkout(
+    workflow: dict[str, Any],
+) -> None:
+    steps = workflow["jobs"]["lint"]["steps"]
+    checks = [step for step in steps if "sync_vocabularies.py --check" in str(step.get("run", ""))]
+    assert len(checks) == 1, "expected exactly one sync_vocabularies.py --check step in lint"
+    root = checks[0].get("env", {}).get("OPENTIDE_SPECIFICATIONS_ROOT", "")
+    assert root == "${{ github.workspace }}/specifications"
+
+    checkouts = [
+        step
+        for step in steps[: steps.index(checks[0])]
+        if step.get("with", {}).get("repository") == "OpenTideHQ/specifications"
+    ]
+    assert len(checkouts) == 1, "the drift check needs a specifications checkout before it"
+    assert checkouts[0]["with"]["path"] == "specifications"
+    assert checkouts[0]["with"].get("ref") == "main"
+    # Gated like the check, so the check never runs without the clone.
+    assert checkouts[0].get("if") == checks[0].get("if")

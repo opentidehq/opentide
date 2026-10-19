@@ -78,8 +78,21 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Without a specifications clone, --check only compares the lockfile with the
+      # bundle, so pins edited by hand and relocked would pass.
+      - name: Checkout specifications
+        if: steps.vocab_changes.outputs.changed == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: OpenTideHQ/specifications
+          ref: main
+          path: specifications
+          persist-credentials: false
+
       - name: Check vocabulary and pin sync drift
         if: steps.vocab_changes.outputs.changed == 'true'
+        env:
+          OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
         run: uv run python scripts/build/sync_vocabularies.py --check
 
   test:

@@ -111,16 +111,19 @@ def test_bundled_pins_do_not_reference_catalog_only_vocabs() -> None:
     assert "mitigations" not in fields
 
 
-def test_bundled_pins_only_cover_shipped_schemas() -> None:
-    from opentide.models.schema_registry import registered_identifiers
+def test_bundled_pins_cover_every_shipped_schema() -> None:
+    """Each registered revision has a pin table.
+
+    The reverse does not hold: pins mirror specifications, which may pin a revision
+    (``objective::1.1``) before OpenTide ships it. ``get_pins`` only reads the table of
+    the schema being generated, so such a table is unused until then.
+    """
+    from opentide.models.schema_registry import identifiers_for_families
     from opentide.models.vocab_pins import pins_for_family
 
-    pinned = {
-        schema_id
-        for family in ("threat", "objective", "rule")
-        for schema_id in pins_for_family(family)
-    }
-    assert pinned <= set(registered_identifiers())
+    families = ("threat", "objective", "rule")
+    pinned = {schema_id for family in families for schema_id in pins_for_family(family)}
+    assert set(identifiers_for_families(families)) <= pinned
 
 
 def test_bundled_pins_resolve_against_bundled_vocabularies() -> None:
