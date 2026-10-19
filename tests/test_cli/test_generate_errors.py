@@ -87,6 +87,12 @@ def test_an_export_failure_names_the_phase_type_and_object(
     assert payload["message"] == f"exports: KeyError: 'mitre_attack' while rendering {_THREAT}"
 
 
+def test_an_explorer_failure_names_the_object(no_attack_threat: Path) -> None:
+    payload = _failure(_invoke(no_attack_threat, "generate", "explorer"))
+    assert payload["phase"] == "explorer"
+    assert payload["message"] == f"explorer: KeyError: 'mitre_attack' while rendering {_THREAT}"
+
+
 @pytest.mark.parametrize("command", [("generate", "docs"), ("generate",)])
 def test_a_docs_failure_is_one_result_naming_the_phase(
     tmp_path: Path, command: tuple[str, ...]

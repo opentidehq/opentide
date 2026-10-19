@@ -10,6 +10,7 @@ from opentide.core.io import json_timestamp_default
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 from opentide.core.time import utc_now
+from opentide.generation.errors import rendering
 from opentide.generation.framework import techniques_resolver
 
 logger = get_logger(__name__)
@@ -192,21 +193,22 @@ class ExplorerExport:
             obj_type = _infer_type(body)
             if not obj_type:
                 continue
-            summaries.append(
-                {
-                    "uuid": uuid,
-                    "type": obj_type,
-                    "name": body.get("name") or uuid,
-                    "schema": (body.get("metadata") or {}).get("schema"),
-                    "version": (body.get("metadata") or {}).get("version"),
-                    "tlp": (body.get("metadata") or {}).get("tlp"),
-                    "status": _status(body, obj_type),
-                    "techniques": techniques_resolver(uuid),
-                    "actors": _actors(body, obj_type),
-                    "relatedCount": _count_relations(uuid, flat_index),
-                    "platforms": _platforms(body, obj_type),
-                }
-            )
+            with rendering(uuid):
+                summaries.append(
+                    {
+                        "uuid": uuid,
+                        "type": obj_type,
+                        "name": body.get("name") or uuid,
+                        "schema": (body.get("metadata") or {}).get("schema"),
+                        "version": (body.get("metadata") or {}).get("version"),
+                        "tlp": (body.get("metadata") or {}).get("tlp"),
+                        "status": _status(body, obj_type),
+                        "techniques": techniques_resolver(uuid),
+                        "actors": _actors(body, obj_type),
+                        "relatedCount": _count_relations(uuid, flat_index),
+                        "platforms": _platforms(body, obj_type),
+                    }
+                )
 
         signals = {uuid: body for uuid, body in models["signal"].items() if isinstance(body, dict)}
 
