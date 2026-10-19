@@ -313,33 +313,37 @@ class ElasticConfig(PlatformConfigBase):
         rule_type = raw.get("type")
         if rule_type not in _RULE_TYPES or bool(_REMOVED_FLAT & set(raw)):
             codes.add("type_block")
-        if ("threshold" in raw) != (rule_type == "threshold"):
+        if (raw.get("threshold") is not None) != (rule_type == "threshold"):
             codes.add("type_block")
         new_terms = raw.get("new_terms")
-        if ("new_terms" in raw) != (rule_type == "new_terms") or (
+        if (new_terms is not None) != (rule_type == "new_terms") or (
             rule_type == "new_terms"
             and (
                 not isinstance(new_terms, dict)
-                or "fields" not in new_terms
-                or "history_window_start" not in new_terms
+                or new_terms.get("fields") is None
+                or new_terms.get("history_window_start") is None
             )
         ):
             codes.add("type_block")
-        if "eql" in raw and rule_type != "eql":
+        if raw.get("eql") is not None and rule_type != "eql":
             codes.add("type_block")
         threat = raw.get("threat")
-        if ("threat" in raw) != (rule_type == "threat_match") or (
+        if (threat is not None) != (rule_type == "threat_match") or (
             rule_type == "threat_match"
             and (
                 not isinstance(threat, dict)
-                or any(key not in threat for key in ("index", "query", "mapping"))
+                or any(threat.get(key) is None for key in ("index", "query", "mapping"))
             )
         ):
             codes.add("type_block")
         ml = raw.get("machine_learning")
-        if ("machine_learning" in raw) != (rule_type == "machine_learning") or (
+        if (ml is not None) != (rule_type == "machine_learning") or (
             rule_type == "machine_learning"
-            and (not isinstance(ml, dict) or "job_id" not in ml or "anomaly_threshold" not in ml)
+            and (
+                not isinstance(ml, dict)
+                or ml.get("job_id") is None
+                or ml.get("anomaly_threshold") is None
+            )
         ):
             codes.add("type_block")
         if rule_type != "machine_learning" and not raw.get("query"):
@@ -352,9 +356,13 @@ class ElasticConfig(PlatformConfigBase):
             codes.add("esql_source")
         if raw.get("index") and raw.get("data_view_id"):
             codes.add("index_xor_data_view")
-        if "index" in raw and not _pattern_list(raw["index"]):
+        if raw.get("index") is not None and not _pattern_list(raw["index"]):
             codes.add("index_list")
-        if isinstance(threat, dict) and "index" in threat and not _pattern_list(threat["index"]):
+        if (
+            isinstance(threat, dict)
+            and threat.get("index") is not None
+            and not _pattern_list(threat["index"])
+        ):
             codes.add("index_list")
         for entries in (
             raw.get("filters"),
@@ -369,14 +377,14 @@ class ElasticConfig(PlatformConfigBase):
                 if not isinstance(entry, dict):
                     codes.add("filter_shape")
                     continue
-                shorthand = "field" in entry or "value" in entry or "negate" in entry
-                raw_filter = "meta" in entry or "query" in entry
+                shorthand = entry.get("field") is not None or entry.get("value") is not None
+                raw_filter = entry.get("meta") is not None or entry.get("query") is not None
                 # Exactly one shape, and that shape complete: {field, value, negate?}
                 # or {meta, query}. An empty entry is neither.
                 if (
                     shorthand == raw_filter
-                    or (shorthand and ("field" not in entry or "value" not in entry))
-                    or (raw_filter and ("meta" not in entry or "query" not in entry))
+                    or (shorthand and (entry.get("field") is None or entry.get("value") is None))
+                    or (raw_filter and (entry.get("meta") is None or entry.get("query") is None))
                 ):
                     codes.add("filter_shape")
         for item in (raw.get("exceptions") or {}).get("lists") or []:
@@ -436,15 +444,17 @@ class ElasticConfig(PlatformConfigBase):
                 codes.add("risk_score")
         elif isinstance(risk, dict):
             score = risk.get("score")
-            if "score" in risk and not (isinstance(score, int) and 0 <= score <= 100):
+            if score is not None and not (isinstance(score, int) and 0 <= score <= 100):
                 codes.add("risk_score")
         elif risk is not None:
             codes.add("risk_score")
-        scheduling = raw.get("scheduling") or {}
-        if "scheduling" in raw and not isinstance(scheduling, dict):
+        raw_scheduling = raw.get("scheduling")
+        if raw_scheduling is not None and not isinstance(raw_scheduling, dict):
             codes.add("duration")
-            scheduling = {}
-        if isinstance(scheduling, dict) and "lookback" in scheduling:
+            scheduling: dict[str, Any] = {}
+        else:
+            scheduling = raw_scheduling or {}
+        if scheduling.get("lookback") is not None:
             try:
                 duration_seconds(scheduling["lookback"], allow_zero=True)
             except ValueError:

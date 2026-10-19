@@ -498,3 +498,22 @@ def test_deploy_create_401_through_deploy_fails_the_run(
 
         assert mock_post.call_count == 1
     assert os.environ.get("DEPLOYMENT_ERROR_RAISED") == "1"
+
+
+def test_find_managed_paginates_past_1000_rules() -> None:
+    client = ElasticClient(url="https://kibana.test", api_key="k")
+    page_1 = [{"rule_id": f"r-{i}"} for i in range(1000)]
+    page_2 = [{"rule_id": f"r-{i}"} for i in range(1000, 2000)]
+    page_3 = [{"rule_id": f"r-{i}"} for i in range(2000, 2691)]
+
+    with patch.object(client.session, "get") as mock_get:
+        mock_get.side_effect = [
+            _mock_response(200, {"total": 2691, "data": page_1}),
+            _mock_response(200, {"total": 2691, "data": page_2}),
+            _mock_response(200, {"total": 2691, "data": page_3}),
+        ]
+        managed = client.find_managed("OpenTide")
+
+    assert len(managed) == 2691
+    assert mock_get.call_count == 3
+    assert [call.kwargs["params"]["page"] for call in mock_get.call_args_list] == [1, 2, 3]

@@ -199,13 +199,15 @@ class SentinelService:
         return SentinelClient(credentials, self.setup.azure_subscription_id, verify=self.setup.ssl)
 
 
-_SHORTHAND_DURATION = re.compile(r'^(\d+)([mhd])$')
+_SHORTHAND_DURATION = re.compile(
+    r'^(?:(?P<days>\d+)d)?(?:(?P<hours>\d+)h)?(?:(?P<minutes>\d+)m)?$',
+    re.IGNORECASE,
+)
 _ISO_DURATION = re.compile(
     r'^P(?:(?P<weeks>\d+)W)?(?:(?P<days>\d+)D)?'
     r'(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?$',
     re.IGNORECASE,
 )
-_SHORTHAND_UNITS = {'m': 'minutes', 'h': 'hours', 'd': 'days'}
 
 
 def iso_duration_timedelta(duration: str) -> timedelta:
@@ -213,14 +215,15 @@ def iso_duration_timedelta(duration: str) -> timedelta:
 
     Accepts the ISO 8601 form the Sentinel platform contract documents (``PT1H``,
     ``PT30M``, ``P1D``) and the shorthand older catalogues use (``30m``, ``1h``,
-    ``1d``). :func:`duration_isoformat` writes the result back as ISO 8601.
+    ``1h10m``, ``1d``). :func:`duration_isoformat` writes the result back as ISO 8601.
     """
     from opentide.core.errors import Errors
 
     text = str(duration).strip()
-    if (shorthand := _SHORTHAND_DURATION.match(text)):
-        count, unit = shorthand.groups()
-        return timedelta(**{_SHORTHAND_UNITS[unit]: int(count)})
+    shorthand = _SHORTHAND_DURATION.match(text)
+    if shorthand and any(shorthand.groups()):
+        parts = {name: int(value) for name, value in shorthand.groupdict().items() if value}
+        return timedelta(**parts)
     iso = _ISO_DURATION.match(text)
     if iso and not text.upper().endswith('T'):
         parts = {name: int(value) for name, value in iso.groupdict().items() if value}

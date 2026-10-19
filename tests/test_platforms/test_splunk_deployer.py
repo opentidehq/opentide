@@ -283,3 +283,27 @@ def test_real_time_scheduling_is_not_marked_scheduled(
     config = _deployer().config_mdr(load_rule_from_dict(splunk_rule_payload), _tenant().setup)
     assert config["dispatch.earliest_time"] == "rt"
     assert "is_scheduled" not in config
+
+
+def test_correlation_search_includes_direct_rule_techniques_and_survives_unindexed_uuid(
+    splunk_rule_payload: dict,
+) -> None:
+    splunk_rule_payload["techniques"] = ["T1059.001", "T1003"]
+    splunk_rule_payload["configurations"]["splunk"]["correlation_search"] = True
+    rule = load_rule_from_dict(splunk_rule_payload)
+
+    # Without patching techniques_resolver, an unindexed UUID must not crash config_mdr
+    config = _deployer().config_mdr(rule, _tenant().setup)
+    assert config["action.correlationsearch.enabled"] == "true"
+    assert config["action.correlationsearch.annotations.mitre_attack"] == "T1059.001, T1003"
+
+    # When techniques_resolver also returns inherited techniques, union in order without duplicates
+    with patch(
+        "opentide.platforms.splunk.deployer.techniques_resolver",
+        return_value=["T1003", "T1059.003"],
+    ):
+        config_with_inherited = _deployer().config_mdr(rule, _tenant().setup)
+    assert (
+        config_with_inherited["action.correlationsearch.annotations.mitre_attack"]
+        == "T1059.001, T1003, T1059.003"
+    )

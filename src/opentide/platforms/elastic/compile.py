@@ -48,11 +48,14 @@ SEVERITY_NORM = {k.lower(): k for k in SEVERITY_TABLE}
 def compile_response(action: dict[str, Any]) -> dict[str, Any]:
     """Compile author response action into Kibana detection engine response_action."""
     if "endpoint" in action:
-        params: dict[str, Any] = {"command": action["endpoint"]}
+        command = action["endpoint"]
+        params: dict[str, Any] = {"command": command}
         if action.get("comment"):
             params["comment"] = action["comment"]
         if action.get("field"):
             params["config"] = {"field": action["field"], "overwrite": False}
+        elif command in ("kill-process", "suspend-process"):
+            params["config"] = {"field": "process.entity_id", "overwrite": True}
         return {"action_type_id": ".endpoint", "params": params}
     if "osquery" in action:
         return {"action_type_id": ".osquery", "params": copy.deepcopy(action["osquery"])}

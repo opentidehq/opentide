@@ -137,15 +137,31 @@ class ElasticClient:
     def find_managed(self, tag: str = "OpenTide") -> list[dict[str, Any]]:
         """List rules managed by OpenTide using the tag filter."""
         url = self._kibana_url("/api/detection_engine/rules/_find")
-        resp = self.session.get(
-            url,
-            params={"filter": f'alert.attributes.tags:"{tag}"', "per_page": 1000},
-            timeout=self.timeout,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            return data.get("data", [])
-        return []
+        per_page = 1000
+        page = 1
+        collected: list[dict[str, Any]] = []
+        while True:
+            resp = self.session.get(
+                url,
+                params={
+                    "filter": f'alert.attributes.tags:"{tag}"',
+                    "page": page,
+                    "per_page": per_page,
+                },
+                timeout=self.timeout,
+            )
+            if resp.status_code != 200:
+                break
+            body = resp.json()
+            batch = body.get("data", [])
+            if not batch:
+                break
+            collected.extend(batch)
+            total = int(body.get("total") or 0)
+            if len(batch) < per_page or (total and len(collected) >= total):
+                break
+            page += 1
+        return collected
 
     def get_data_view_response(self, data_view_id: str) -> requests.Response:
         """Retrieve the raw HTTP response for a Kibana Data View by id."""
