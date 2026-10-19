@@ -307,7 +307,10 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     expected.extend(payload.get("warnings") or [])
     for issue in (payload.get("report") or {}).get("issues", []):
         expected.append((f"[{issue['severity']}]", issue["message"]))
-    expected.extend(finding["message"] for finding in payload.get("findings") or [])
+    expected.extend(
+        (f"[{finding['check']}/{finding['severity']}]", finding["message"])
+        for finding in payload.get("findings") or []
+    )
     if "counts" in payload and "platforms" in payload:
         expected.extend(_info_expectations(payload))
     return expected
