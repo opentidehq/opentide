@@ -151,3 +151,34 @@ def test_loaded_rule_matches_published_body() -> None:
 
     rule = load_rule_from_dict(_load_yaml_fixture("rule-query"))
     assert compile_rule(rule, STAGING_SETUP) == _load_json_fixture("body-query")
+
+
+def test_compile_response_emits_default_config_for_process_actions() -> None:
+    from opentide.platforms.elastic.compile import compile_response
+
+    assert compile_response({"endpoint": "isolate", "comment": "Isolate host"}) == {
+        "action_type_id": ".endpoint",
+        "params": {"command": "isolate", "comment": "Isolate host"},
+    }
+    assert compile_response({"endpoint": "kill-process", "comment": "Kill default"}) == {
+        "action_type_id": ".endpoint",
+        "params": {
+            "command": "kill-process",
+            "comment": "Kill default",
+            "config": {"field": "process.entity_id", "overwrite": True},
+        },
+    }
+    assert compile_response({"endpoint": "suspend-process"}) == {
+        "action_type_id": ".endpoint",
+        "params": {
+            "command": "suspend-process",
+            "config": {"field": "process.entity_id", "overwrite": True},
+        },
+    }
+    assert compile_response({"endpoint": "kill-process", "field": "process.parent.entity_id"}) == {
+        "action_type_id": ".endpoint",
+        "params": {
+            "command": "kill-process",
+            "config": {"field": "process.parent.entity_id", "overwrite": False},
+        },
+    }

@@ -296,7 +296,11 @@ def test_endpoint_response_action_overwrite_and_unsupported_commands() -> None:
     assert _recompiled(rule)["response_actions"] == [
         {
             "action_type_id": ".endpoint",
-            "params": {"command": "kill-process", "comment": "Default field"},
+            "params": {
+                "command": "kill-process",
+                "comment": "Default field",
+                "config": {"field": "process.entity_id", "overwrite": True},
+            },
         },
         {
             "action_type_id": ".endpoint",
