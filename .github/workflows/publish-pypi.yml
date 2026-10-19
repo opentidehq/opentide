@@ -186,12 +186,20 @@ jobs:
       - name: Warn when the website was not notified
         if: steps.notify.outcome != 'success'
         env:
+          HAS_GH_APP_ID: ${{ secrets.GH_APP_ID != '' }}
+          HAS_GH_APP_KEY: ${{ secrets.GH_APP_KEY != '' }}
           WEBSITE_TOKEN_OUTCOME: ${{ steps.website.outcome }}
           NOTIFY_OUTCOME: ${{ steps.notify.outcome }}
         run: |
           set -euo pipefail
           if [[ "${HAS_WEBSITE_APP}" != "true" ]]; then
-            reason="GH_APP_ID / GH_APP_KEY are not set for this workflow"
+            if [[ "${HAS_GH_APP_ID}" == "true" ]]; then
+              reason="GH_APP_KEY is not set for this workflow"
+            elif [[ "${HAS_GH_APP_KEY}" == "true" ]]; then
+              reason="GH_APP_ID is not set for this workflow"
+            else
+              reason="GH_APP_ID and GH_APP_KEY are not set for this workflow"
+            fi
           elif [[ "${WEBSITE_TOKEN_OUTCOME}" == "failure" ]]; then
             reason="it could not mint a GitHub App token for OpenTideHQ/website (is the App installed there?)"
           elif [[ "${NOTIFY_OUTCOME}" == "failure" ]]; then

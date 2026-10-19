@@ -155,19 +155,26 @@ def _run_website_warning(**env: str) -> subprocess.CompletedProcess[str]:
 
 
 @pytest.mark.parametrize(
-    ("has_app", "token", "notify", "reason"),
+    ("has_id", "has_key", "token", "notify", "reason"),
     [
-        ("false", "skipped", "skipped", "GH_APP_ID / GH_APP_KEY are not set"),
-        ("true", "failure", "skipped", "could not mint a GitHub App token"),
-        ("true", "success", "failure", "needs contents: write"),
-        ("true", "success", "skipped", "token was empty"),
+        ("false", "false", "skipped", "skipped", "but GH_APP_ID and GH_APP_KEY are not set"),
+        ("true", "false", "skipped", "skipped", "but GH_APP_KEY is not set"),
+        ("false", "true", "skipped", "skipped", "but GH_APP_ID is not set"),
+        ("true", "true", "failure", "skipped", "could not mint a GitHub App token"),
+        ("true", "true", "success", "failure", "needs contents: write"),
+        ("true", "true", "success", "skipped", "token was empty"),
     ],
 )
 def test_website_warning_names_the_reason_and_the_manual_dispatch(
-    has_app: str, token: str, notify: str, reason: str
+    has_id: str, has_key: str, token: str, notify: str, reason: str
 ) -> None:
     result = _run_website_warning(
-        HAS_WEBSITE_APP=has_app, WEBSITE_TOKEN_OUTCOME=token, NOTIFY_OUTCOME=notify
+        # Mirrors the job-level HAS_WEBSITE_APP expression.
+        HAS_WEBSITE_APP="true" if has_id == has_key == "true" else "false",
+        HAS_GH_APP_ID=has_id,
+        HAS_GH_APP_KEY=has_key,
+        WEBSITE_TOKEN_OUTCOME=token,
+        NOTIFY_OUTCOME=notify,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     warning = result.stdout.splitlines()[0]
