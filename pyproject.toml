@@ -43,55 +43,21 @@ dependencies = [
     "pymisp>=2.5.34.4",
     # The MCP server (`opentide mcp start`) imports `mcp.server.fastmcp`, which
     # mcp 2.x removed in favour of MCPServer. Standalone `fastmcp` is a
-    # different package and unused. Shipped in the base install so
-    # `pip install opentide` gives a working `opentide mcp start`.
+    # different package and unused.
     "mcp>=1.28.1,<2",
-]
-
-[project.optional-dependencies]
-# Live query validation and deployment against Azure Monitor / Sentinel.
-# `validate query --live` needs these. A bare `validate query` refuses.
-sentinel = [
+    # Platform SDKs. `pip install opentide` is the only install: there are no
+    # extras, so live query validation, deploy and import work for every
+    # platform out of the box, including in generated CI pipelines.
+    # Sentinel deploys through the ARM REST API directly (no
+    # azure-mgmt-securityinsight: it is pre-release only, and uv refuses a
+    # transitive pre-release).
     "azure-identity>=1.17",
     "azure-monitor-query>=1.4",
-    # The deployer needs models.AlertPropertyMapping, first shipped in
-    # 2.0.0b2; 1.0.0 (the newest stable release) lacks it (#545). 2.0 is
-    # pre-release only, so the pre-release is named in the specifier for
-    # pip and uv to select it. 2.0.0b3 renamed the client to
-    # SecurityInsightsMgmtClient; opentide accepts either spelling.
-    "azure-mgmt-securityinsight>=2.0.0b2",
-]
-splunk = ["splunk-sdk>=2.0", "pandas>=2.0"]
-crowdstrike = []
-carbon-black = ["carbon-black-cloud-sdk>=1.0"]
-# Kept for backwards compatibility with `pip install opentide[cli]`.
-cli = []
-# `mcp` is now a base dependency, so `pip install opentide` already ships the
-# MCP server. This extra is kept empty so existing `pip install opentide[mcp]`
-# commands and configs keep working.
-mcp = []
-dev = [
-    "tomli>=2.0",
-    "pytest>=8.0",
-    "pytest-cov>=5.0",
-    "pytest-console-scripts>=1.4",
-    # The E2E suite is 722 tests that mostly shell out to the console script or
-    # drive a scaffolded repo, so it is dominated by process startup rather than
-    # by any one slow test. xdist spreads it across cores within a runner;
-    # pytest-split spreads it across runners, which is the larger win because
-    # each xdist worker re-pays import and scaffold cost. See ci.yml.
-    "pytest-xdist>=3.6",
-    "pytest-split>=0.9",
-    # Drives the setup wizard on a real PTY; CliRunner never presents a TTY, so
-    # the interactive path had no e2e coverage (#260).
-    "pexpect>=4.9",
-    "syrupy>=5.5.3,<7",
-    "ruff>=0.16.1",
-    "ty>=0.0.65",
-    "pre-commit>=4.0",
+    "splunk-sdk>=2.0",
     "pandas>=2.0",
+    # pandas writes the playbook map export (`to_excel`) through openpyxl.
     "openpyxl>=3.1",
-    "azure-mgmt-securityinsight>=2.0.0b2",
+    "carbon-black-cloud-sdk>=1.0",
 ]
 
 [dependency-groups]
@@ -109,11 +75,6 @@ dev = [
     "ruff>=0.16.1",
     "ty>=0.0.65",
     "pre-commit>=4.0",
-    "pandas>=2.0",
-    "openpyxl>=3.1",
-    # The Sentinel deployer's model layer, so tests compile and serialise real
-    # alert rules against the SDK the sentinel extra resolves (#545).
-    "azure-mgmt-securityinsight>=2.0.0b2",
 ]
 
 [project.urls]

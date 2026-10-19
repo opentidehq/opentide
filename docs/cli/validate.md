@@ -173,12 +173,13 @@ opentide --json validate query --platform sentinel
 
 ### `--live`
 
-`--live` builds the platform client and submits the catalogue queries, so it needs the
-matching extra (`pip install 'opentide[sentinel]'`) and tenant credentials. When
-the SDK is absent the command fails with the extra to install rather than a
-`ModuleNotFoundError` traceback: the `advice` field in `--json`, an
-`advice: install opentide[sentinel] …` line under the `FATAL` line otherwise.
-A missing SDK or a missing plan is a failed live check.
+`--live` builds the platform client and submits the catalogue queries, so it needs
+tenant credentials. The vendor SDKs ship with `pip install opentide`; there are no
+extras. If an SDK will not import, the environment is damaged and the command
+fails with the remedy rather than a `ModuleNotFoundError` traceback: the `advice`
+field in `--json`, an `advice: reinstall opentide: pip install --force-reinstall
+opentide` line under the `FATAL` line otherwise. A missing plan is a failed live
+check.
 Only the requested platform's engine is
 loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
 modules. A platform with no `[[tenants]]` entry fails the same way, before the

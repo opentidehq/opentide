@@ -7,7 +7,7 @@ description: Install opentide and start the stdio server with opentide mcp start
 
 ## PyPI
 
-The server ships in the base package — no extra:
+The server ships in the base package:
 
 ```bash
 pip install 'opentide==0.15.0'
@@ -20,9 +20,9 @@ Command: **`opentide mcp start`**. It calls `opentide.mcp_server.launcher:main`,
 web-server stack (`starlette`, `httpx`, `sse-starlette`, `uvicorn`) that a CI
 pipeline running `opentide validate` has no use for. That traded a few
 megabytes for a first-class CLI command that did not work on a plain install,
-so `mcp` is now a base dependency. The `[mcp]` extra is kept as an **empty
-alias**, so an existing `pip install opentide[mcp]` or an editor config naming
-it keeps resolving.
+so `mcp` is now a base dependency. Since 0.16.0 opentide declares no extras at
+all; an existing `pip install opentide[mcp]` or an editor config naming it still
+installs opentide, with a warning from pip or uv about the unknown extra.
 
 The base dependency pins `mcp>=1.28.1,<2`. `mcp` 2.x replaced
 `mcp.server.fastmcp` with `MCPServer`; OpenTide has not migrated yet, so the

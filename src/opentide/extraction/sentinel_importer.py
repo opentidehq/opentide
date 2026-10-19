@@ -1,12 +1,6 @@
 import json
 from pathlib import Path
 
-# Fail at import without the sentinel extra: the CLI turns this
-# ModuleNotFoundError into "install opentide[sentinel]" (#242). The client
-# module itself imports the SDK lazily.
-import azure.identity  # noqa: F401
-import azure.mgmt.securityinsight  # noqa: F401
-
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 from opentide.platforms.sentinel.client import (
@@ -217,7 +211,9 @@ def _import_sentinel_rules() -> None:
             status = "PRODUCTION" if rule.get("enabled", False) is True else "DISABLED"
 
             # Trigger and Scheduling
-            if rule.get("kind") == "nrt":
+            # ARM spells the kind "NRT"; the importer compared it to "nrt", so
+            # every near-real-time rule was skipped as an unsupported kind.
+            if str(rule.get("kind", "")).upper() == "NRT":
                 trigger = TRIGGER_TEMPLATE
                 scheduling = NRT_SCHEDULING
             elif rule.get("kind") == "Scheduled":

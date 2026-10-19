@@ -16,7 +16,7 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide setup mcp --cursor --yes
 ```
 
-No extra is required — `mcp` is a base dependency since 0.14.0. See [Installation](./installation.md).
+`pip install opentide` is all it takes — `mcp` is a base dependency since 0.14.0. See [Installation](./installation.md).
 
 Start manually:
 
@@ -61,7 +61,7 @@ chaining, coverage, dry-run deploy) is fully functional.
 
 | Page | Content |
 |------|---------|
-| [Installation](./installation.md) | PyPI extra and host requirements |
+| [Installation](./installation.md) | PyPI install and host requirements |
 | [Configuration](./configuration.md) | Editor config files and environment |
 | [Tools](./tools.md) | Tool parameters and response shapes |
 | [Resources](./resources.md) | URI catalogue and JSON payloads |

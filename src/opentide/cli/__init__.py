@@ -365,7 +365,7 @@ def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
 
 @extract_app.command("sentinel")
 def generate_extract_sentinel(ctx: typer.Context) -> None:
-    """Import Sentinel analytics rules (needs opentide\\[sentinel] and tenant credentials)."""
+    """Import Sentinel analytics rules (needs Sentinel tenant credentials)."""
     _run_extract_command(ctx, ExtractImport.sentinel)
 
 

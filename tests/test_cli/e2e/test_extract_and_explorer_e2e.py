@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
-from tests.test_cli.e2e.helpers import hidden_modules
+from tests.test_cli.e2e.helpers import hidden_modules, uncomment_tenants
 
 from opentide.cli.enums import DetectionPlatform
 from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
@@ -49,14 +49,23 @@ def test_generate_extract_emits_one_json_document(invoke_cli, tmp_path: Path, ta
     assert "KeyError" not in combined
 
 
-def test_generate_extract_sentinel_names_the_missing_extra(invoke_cli, tmp_path: Path) -> None:
-    """A missing vendor SDK is not a missing module (#242)."""
-    repo = _fresh_repo(tmp_path, "extract-extra")
+def test_generate_extract_sentinel_with_a_broken_sdk_advises_a_reinstall(
+    invoke_cli, tmp_path: Path
+) -> None:
+    """An SDK that will not import is not a missing module (#242), and there is no extra."""
+    repo = _repo_with_platform(tmp_path, "extract-broken-sdk", DetectionPlatform.sentinel)
+    config = repo / ".opentide/configurations/platforms/sentinel.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace("enabled = false", "enabled = true"),
+        encoding="utf-8",
+    )
+    uncomment_tenants(config)
     purge = ("opentide.extraction.sentinel_importer", "opentide.platforms.sentinel")
     with hidden_modules("azure", purge=purge):
         result = invoke_cli("generate", "extract", "sentinel", repo=repo)
     message = parse_cli_json(result)["error"]
-    assert "opentide[sentinel]" in message
+    assert "pip install --force-reinstall opentide" in message
+    assert "opentide[" not in message
     assert "Extraction module not found" not in message
 
 

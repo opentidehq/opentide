@@ -58,7 +58,7 @@ def read_only_tenant_resolution() -> Iterator[None]:
 
 
 def _json_normalize(data: Any) -> Any:
-    """Lazy pandas import so platform ``declare()`` works without the Splunk extra."""
+    """Import pandas on first use: it is slow to import and most commands never need it."""
     import pandas as pd
 
     return pd.json_normalize(data)

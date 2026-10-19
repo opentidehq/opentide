@@ -110,25 +110,6 @@ def test_sentinel_preview_reports_a_compile_failure(
     assert os.environ.get("DEPLOYMENT_ERROR_RAISED") == "1"
 
 
-def test_sentinel_preview_falls_back_to_config_without_the_sdk(
-    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Without the sentinel extra the preview stays the configuration block (documented)."""
-    monkeypatch.delenv("DEPLOYMENT_ERROR_RAISED", raising=False)
-
-    def _missing_sdk() -> None:
-        raise ModuleNotFoundError("No module named 'azure'", name="azure")
-
-    monkeypatch.setattr("opentide.platforms.sentinel.client.securityinsight_models", _missing_sdk)
-    rule = _sentinel_rule()
-
-    preview = preview_rule_deployment("sentinel", rule)
-
-    assert preview["api_request"]["query"].startswith("SecurityEvent")
-    assert "status" not in preview
-    assert not os.environ.get("DEPLOYMENT_ERROR_RAISED")
-
-
 def test_sentinel_preview_fails_when_grouping_alert_is_missing(
     tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

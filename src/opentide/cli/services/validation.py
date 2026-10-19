@@ -259,27 +259,23 @@ def run_validate(
     return result
 
 
-#: Vendor SDKs each live query validator imports, and the extra that installs them.
-QUERY_VALIDATION_EXTRAS: dict[str, tuple[str, tuple[str, ...]]] = {
-    "sentinel": ("opentide[sentinel]", ("azure-identity", "azure-monitor-query")),
-    "splunk": ("opentide[splunk]", ("splunk-sdk",)),
-    "carbon_black_cloud": ("opentide[carbon-black]", ("carbon-black-cloud-sdk",)),
-}
+#: Every vendor SDK ships with ``pip install opentide``: there are no extras. An
+#: SDK that will not import means the environment is incomplete or damaged.
+INCOMPLETE_INSTALL_ADVICE = "reinstall opentide: pip install --force-reinstall opentide"
 
 
 def _missing_sdk_result(platform: str, exc: ModuleNotFoundError) -> dict[str, object]:
-    """Structured result for a live check whose vendor SDK is not installed."""
-    extra, packages = QUERY_VALIDATION_EXTRAS.get(platform, (f"opentide[{platform}]", ()))
-    advice = f"install {extra}"
-    if packages:
-        advice += f" (provides {', '.join(packages)})"
+    """Structured result for a live check whose vendor SDK will not import."""
     return {
         "platform": platform,
         "mode": "live",
         "supported": True,
         "status": "failed",
-        "message": f"Live query validation for {platform} needs a vendor SDK: {exc}",
-        "advice": advice,
+        "message": (
+            f"Live query validation for {platform} could not import {exc.name or exc}: "
+            "the opentide install is incomplete"
+        ),
+        "advice": INCOMPLETE_INSTALL_ADVICE,
         "_exit_code": 1,
     }
 

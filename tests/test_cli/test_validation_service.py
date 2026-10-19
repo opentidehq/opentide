@@ -425,10 +425,12 @@ def test_validate_query_live_without_tenants_fails_before_loading_a_validator(
     }
 
 
-def test_validate_query_live_without_the_sdk_names_the_extra() -> None:
+def test_validate_query_live_with_a_broken_sdk_advises_a_reinstall() -> None:
+    """Every SDK ships with ``pip install opentide``; one that will not import is a damaged
+    environment, so the advice is a reinstall and never an extra (the Monflo report)."""
     ctx = CliContext(json_output=True)
     validator = MagicMock()
-    validator.validate.side_effect = ModuleNotFoundError("No module named 'azure'")
+    validator.validate.side_effect = ModuleNotFoundError("No module named 'azure'", name="azure")
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
         patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
@@ -440,10 +442,9 @@ def test_validate_query_live_without_the_sdk_names_the_extra() -> None:
         result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     assert result["status"] == "failed"
     assert result["_exit_code"] == 1
-    assert (
-        result["advice"]
-        == "install opentide[sentinel] (provides azure-identity, azure-monitor-query)"
-    )
+    assert result["advice"] == "reinstall opentide: pip install --force-reinstall opentide"
+    assert "could not import azure" in str(result["message"])
+    assert "[" not in str(result["advice"]) + str(result["message"])
 
 
 def test_run_validate_emits_console_issues_when_not_json() -> None:

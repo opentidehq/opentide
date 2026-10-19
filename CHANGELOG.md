@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **`pip install opentide` is the only install: every optional extra is removed.** The vendor SDKs (`azure-identity`, `azure-monitor-query`, `splunk-sdk`, `pandas`, `openpyxl`, `carbon-black-cloud-sdk`) are base dependencies, so live query validation, deploy and the importers work for every platform on a stock install. Generated CI pipelines install exactly `opentide==<version>`, so through 0.15.0 the pipeline's `validate query --live` for Sentinel failed with `Live query validation for sentinel needs a vendor SDK: No module named 'azure'` and staging and production never deployed. The `sentinel`, `splunk`, `carbon-black`, `crowdstrike`, `cli`, `mcp` and `dev` extras no longer exist: pip and uv warn about the unknown extra and install opentide with everything, so an existing `pip install 'opentide[sentinel]'` keeps working. Contributors use `uv sync --group dev` ([#576](https://github.com/OpenTideHQ/opentide/issues/576)).
+- **Sentinel deploys through the ARM `alertRules` REST API directly**, with an `azure-identity` token, instead of `azure-mgmt-securityinsight`. That SDK has published only pre-releases since 2.0, and uv refuses a transitive pre-release, so it could not become a base dependency without breaking `uv tool install opentide` and `uvx opentide`. The request body, the API version (`2025-10-01-preview`, the only one that accepts `NRT` rules) and the dry-run preview are unchanged: the bodies of the 0.15.0 deployer were captured and are asserted byte-for-byte. An ARM error now fails the rule with `SentinelApiError`, naming the HTTP status, the ARM error code and its message. `deploy --dry-run` always previews the compiled ARM body; the fallback to the configuration block when the SDK was missing is gone ([#576](https://github.com/OpenTideHQ/opentide/issues/576)).
+- When a vendor SDK will not import, `validate query --live` and `generate extract` report an incomplete install and advise `pip install --force-reinstall opentide`, instead of naming an extra ([#576](https://github.com/OpenTideHQ/opentide/issues/576)).
+
+### Fixed
+
+- `opentide generate extract sentinel` imports near-real-time rules. ARM lists them as kind `NRT`, and the importer compared the kind with `nrt`, so every NRT rule was skipped as an unsupported kind ([#577](https://github.com/OpenTideHQ/opentide/issues/577)).
+
 ## [0.15.0] — 2026-10-16
 
 Minor release: two things need action after upgrading.

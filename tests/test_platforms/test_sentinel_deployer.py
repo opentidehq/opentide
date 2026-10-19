@@ -1,84 +1,100 @@
-"""Sentinel deployer against the locked azure-mgmt-securityinsight SDK (#545).
+"""Sentinel deployer against the ARM alert-rules REST API (#545).
 
-These tests compile real SDK models and push them through the client's own
-``create_or_update`` pipeline with a capturing transport, so the body asserted
-here is exactly what a deploy would send to ARM. Nothing leaves the process.
+The deployer compiles the ARM request body itself and sends it with
+``requests``. These tests push rules through the real client with a capturing
+transport adapter, so the body asserted here is exactly what a deploy would
+send to ARM. Nothing leaves the process.
 """
 
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+import requests
 import yaml
+from requests.adapters import BaseAdapter
 from tests.corpus_support import TIDE_CORPUS_ROOT
 
 from opentide.loading.rule_loader import load_rule_from_dict
 from opentide.models.rule import DetectionRule
 from opentide.platforms.sentinel.client import (
+    ALERT_RULES_API_VERSION,
+    ARM_SCOPE,
+    SentinelApiError,
+    SentinelClient,
     alert_rule_as_flat_dict,
-    alert_rule_request_body,
-    securityinsights_client_class,
+    duration_isoformat,
 )
 from opentide.platforms.sentinel.deployer import SentinelDeploy
 
-pytest.importorskip("azure.mgmt.securityinsight")
-
-from azure.core.credentials import AccessToken  # noqa: E402
-from azure.core.pipeline.transport import HttpTransport  # noqa: E402
-
 CORPUS_SENTINEL_RULE = TIDE_CORPUS_ROOT / "Objects/Detection Rules/rule-0001-sentinel-kql.yaml"
 SUBSCRIPTION = "00000000-0000-0000-0000-000000000000"
+RULES_URL = (
+    f"https://management.azure.com/subscriptions/{SUBSCRIPTION}/resourceGroups/rg"
+    "/providers/Microsoft.OperationalInsights/workspaces/ws"
+    "/providers/Microsoft.SecurityInsights/alertRules"
+)
 
 
 class _FakeCredential:
-    def get_token(self, *scopes: str, **kwargs: Any) -> AccessToken:
-        return AccessToken("x", 9999999999)
-
-
-class _Captured(Exception):
-    """Raised by the transport once the request is recorded, so nothing is sent."""
-
-
-class _CapturingTransport(HttpTransport):
     def __init__(self) -> None:
-        self.requests: list[Any] = []
+        self.scopes: list[str] = []
 
-    def __enter__(self) -> _CapturingTransport:
-        return self
+    def get_token(self, *scopes: str, **kwargs: Any) -> Any:
+        self.scopes.extend(scopes)
+        return SimpleNamespace(token="token-x", expires_on=9999999999)
 
-    def __exit__(self, *args: object) -> None:
-        return None
 
-    def open(self) -> None:
-        return None
+class _CapturingAdapter(BaseAdapter):
+    """Records each request and answers from a queue of (status, json) replies."""
+
+    def __init__(self, *replies: tuple[int, Any]) -> None:
+        super().__init__()
+        self.requests: list[requests.PreparedRequest] = []
+        self.replies = list(replies)
+
+    def send(self, request: requests.PreparedRequest, **kwargs: Any) -> requests.Response:  # type: ignore[override]
+        self.requests.append(request)
+        status, payload = self.replies.pop(0) if self.replies else (200, {})
+        response = requests.Response()
+        response.status_code = status
+        response._content = b"" if payload is None else json.dumps(payload).encode()
+        response.url = request.url or ""
+        response.request = request
+        return response
 
     def close(self) -> None:
         return None
 
-    def send(self, request: Any, **kwargs: Any) -> Any:
-        self.requests.append(request)
-        raise _Captured
+
+def _client(*replies: tuple[int, Any]) -> tuple[SentinelClient, _CapturingAdapter, _FakeCredential]:
+    credential = _FakeCredential()
+    client = SentinelClient(credential, SUBSCRIPTION)
+    adapter = _CapturingAdapter(*replies)
+    client.alert_rules._session.mount("https://", adapter)
+    return client, adapter, credential
 
 
-def _sent_body(rule: DetectionRule) -> tuple[dict[str, Any], Any]:
+_TENANT = SimpleNamespace(
+    name="tenant-a",
+    setup=SimpleNamespace(resource_group="rg", workspace_name="ws"),
+)
+
+
+def _sent_body(rule: DetectionRule) -> tuple[dict[str, Any], requests.PreparedRequest]:
     """Deploy *rule* through the real client and return the captured ARM body."""
-    transport = _CapturingTransport()
-    client = securityinsights_client_class()(_FakeCredential(), SUBSCRIPTION, transport=transport)
-    tenant = SimpleNamespace(
-        name="tenant-a",
-        setup=SimpleNamespace(resource_group="rg", workspace_name="ws"),
-    )
-    with pytest.raises(_Captured):
-        SentinelDeploy().deploy_mdr(data=rule, service=client, tenant_config=tenant)  # type: ignore[arg-type]
-    (request,) = transport.requests
+    client, adapter, _ = _client((201, {}))
+    SentinelDeploy().deploy_mdr(data=rule, service=client, tenant_config=_TENANT)  # type: ignore[arg-type]
+    (request,) = adapter.requests
     assert request.method == "PUT"
-    assert f"/alertRules/{rule.metadata.uuid}?" in request.url
-    body = request.content if hasattr(request, "content") else request.body
-    return json.loads(body), request
+    assert request.url == f"{RULES_URL}/{rule.metadata.uuid}?api-version={ALERT_RULES_API_VERSION}"
+    assert request.headers["Authorization"] == "Bearer token-x"
+    return json.loads(request.body or b"{}"), request
 
 
 def _corpus_rule(**sentinel_overrides: Any) -> DetectionRule:
@@ -183,13 +199,13 @@ def test_deploy_compiles_and_serialises_a_full_rule(tide_corpus_repo: Path) -> N
     ]
 
 
-def test_request_body_helper_matches_what_the_client_sends(tide_corpus_repo: Path) -> None:
+def test_dry_run_body_is_what_the_client_sends(tide_corpus_repo: Path) -> None:
     rule = _corpus_rule(alert=FULL_ALERT, grouping=FULL_GROUPING, entities=FULL_ENTITIES)
     body, _ = _sent_body(rule)
 
     compiled = SentinelDeploy().compile_deployment(service=None, data=rule, tenant="tenant-a")
 
-    assert alert_rule_request_body(compiled) == body
+    assert compiled == body
 
 
 def test_nrt_rule_is_sent_as_kind_nrt_without_schedule(tide_corpus_repo: Path) -> None:
@@ -217,49 +233,9 @@ def test_alert_rule_as_flat_dict_keeps_custom_detail_keys(tide_corpus_repo: Path
     assert flat["entity_mappings"][0]["field_mappings"][0]["column_name"] == "AccountUpn"
 
 
-def test_client_class_accepts_either_sdk_spelling(monkeypatch: pytest.MonkeyPatch) -> None:
-    import azure.mgmt.securityinsight as securityinsight
-
-    class Legacy:
-        pass
-
-    class Renamed:
-        pass
-
-    monkeypatch.delattr(securityinsight, "SecurityInsightsMgmtClient", raising=False)
-    monkeypatch.setattr(securityinsight, "SecurityInsights", Legacy, raising=False)
-    assert securityinsights_client_class() is Legacy
-
-    monkeypatch.setattr(securityinsight, "SecurityInsightsMgmtClient", Renamed, raising=False)
-    assert securityinsights_client_class() is Renamed
-
-    monkeypatch.delattr(securityinsight, "SecurityInsightsMgmtClient")
-    monkeypatch.delattr(securityinsight, "SecurityInsights")
-    with pytest.raises(ImportError, match="SecurityInsightsMgmtClient"):
-        securityinsights_client_class()
-
-
-def test_locked_sdk_has_every_model_the_deployer_uses() -> None:
-    from azure.mgmt.securityinsight import models
-
-    for name in (
-        "ScheduledAlertRule",
-        "AlertDetailsOverride",
-        "AlertPropertyMapping",
-        "EventGroupingSettings",
-        "IncidentConfiguration",
-        "GroupingConfiguration",
-        "EntityMapping",
-        "FieldMapping",
-    ):
-        assert hasattr(models, name), name
-
-
 def test_alert_rule_as_flat_dict_reads_a_listed_rule_for_the_importer() -> None:
-    """The importer reads snake_case keys from listed rules on either SDK generation."""
-    from azure.mgmt.securityinsight import models
-
-    response = {
+    """The importer reads snake_case keys from the rules ARM lists."""
+    rule = {
         "id": "/subscriptions/x/alertRules/rule-1",
         "name": "rule-1",
         "kind": "Scheduled",
@@ -288,11 +264,6 @@ def test_alert_rule_as_flat_dict_reads_a_listed_rule_for_the_importer() -> None:
             },
         },
     }
-    if hasattr(models.ScheduledAlertRule, "deserialize"):
-        rule = models.ScheduledAlertRule.deserialize(response)
-    else:
-        rule = models.ScheduledAlertRule(response)
-
     flat = alert_rule_as_flat_dict(rule)
 
     assert flat["kind"] == "Scheduled"
@@ -343,3 +314,120 @@ def test_missing_grouping_fails_with_the_rule_and_field(
     message = str(excinfo.value)
     assert rule.metadata.uuid in message
     assert field in message
+
+
+def test_full_rule_body_matches_the_sdk_era_request(tide_corpus_repo: Path) -> None:
+    """Byte-for-byte the body azure-mgmt-securityinsight 2.0.0b4 sent for this rule.
+
+    Captured from the 0.15.0 deployer before the SDK was dropped, so the move to
+    the REST API changes nothing on the wire or in the dry-run preview.
+    """
+    rule = _corpus_rule(
+        alert={**FULL_ALERT, "suppression": "PT2H30M"},
+        grouping=FULL_GROUPING,
+        scheduling={"frequency": "30m", "lookback": "2d"},
+    )
+
+    body, _ = _sent_body(rule)
+
+    props = body["properties"]
+    assert props["queryFrequency"] == "PT30M00S"
+    assert props["queryPeriod"] == "P2D"
+    assert props["suppressionEnabled"] is True
+    assert props["suppressionDuration"] == "PT02H30M00S"
+    assert props["incidentConfiguration"]["groupingConfiguration"] == {
+        "enabled": True,
+        "groupByEntities": ["Account", "Host"],
+        "lookbackDuration": "PT05H00M00S",
+        "matchingMethod": "Selected",
+        "reopenClosedIncident": True,
+    }
+    assert sorted(props) == [
+        "alertDetailsOverride",
+        "customDetails",
+        "description",
+        "displayName",
+        "enabled",
+        "eventGroupingSettings",
+        "incidentConfiguration",
+        "query",
+        "queryFrequency",
+        "queryPeriod",
+        "severity",
+        "suppressionDuration",
+        "suppressionEnabled",
+        "tactics",
+        "techniques",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("duration", "expected"),
+    [
+        (timedelta(hours=1), "PT01H00M00S"),
+        (timedelta(minutes=30), "PT30M00S"),
+        (timedelta(hours=1, minutes=10), "PT01H10M00S"),
+        (timedelta(days=1), "P1D"),
+        (timedelta(weeks=2), "P14D"),
+        (timedelta(days=1, hours=2), "P1DT02H00M00S"),
+        (timedelta(days=1, minutes=5), "P1DT00H05M00S"),
+        (timedelta(seconds=45), "PT45S"),
+        (timedelta(minutes=1, seconds=5), "PT01M05S"),
+        (timedelta(0), "PT0S"),
+    ],
+)
+def test_duration_isoformat_matches_the_sdk_serialiser(duration: timedelta, expected: str) -> None:
+    assert duration_isoformat(duration) == expected
+
+
+def test_delete_sends_a_delete_for_the_rule() -> None:
+    client, adapter, credential = _client((204, None))
+
+    client.alert_rules.delete(resource_group_name="rg", workspace_name="ws", rule_id="rule-1")
+
+    (request,) = adapter.requests
+    assert request.method == "DELETE"
+    assert request.url == f"{RULES_URL}/rule-1?api-version={ALERT_RULES_API_VERSION}"
+    assert credential.scopes == [ARM_SCOPE]
+
+
+def test_list_follows_next_link() -> None:
+    next_link = f"{RULES_URL}?api-version={ALERT_RULES_API_VERSION}&$skipToken=page2"
+    client, adapter, _ = _client(
+        (200, {"value": [{"name": "a"}], "nextLink": next_link}),
+        (200, {"value": [{"name": "b"}]}),
+    )
+
+    rules = list(client.alert_rules.list(resource_group_name="rg", workspace_name="ws"))
+
+    assert [rule["name"] for rule in rules] == ["a", "b"]
+    first, second = adapter.requests
+    assert first.url == f"{RULES_URL}?api-version={ALERT_RULES_API_VERSION}"
+    # The nextLink already carries the api-version; it is not appended twice.
+    assert second.url == next_link
+
+
+def test_arm_error_raises_with_status_code_and_message(tide_corpus_repo: Path) -> None:
+    rule = _corpus_rule()
+    client, _, _ = _client((400, {"error": {"code": "BadRequest", "message": "Query is invalid"}}))
+
+    with pytest.raises(SentinelApiError) as excinfo:
+        SentinelDeploy().deploy_mdr(data=rule, service=client, tenant_config=_TENANT)  # type: ignore[arg-type]
+
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.code == "BadRequest"
+    assert "HTTP 400 BadRequest: Query is invalid" in str(excinfo.value)
+    # The bearer token never ends up in the error text.
+    assert "token-x" not in str(excinfo.value)
+
+
+def test_names_in_the_url_are_quoted() -> None:
+    client, adapter, _ = _client((204, None))
+
+    client.alert_rules.delete(
+        resource_group_name="rg with space", workspace_name="ws/x", rule_id="rule-1"
+    )
+
+    (request,) = adapter.requests
+    assert "/resourceGroups/rg%20with%20space/" in (request.url or "")
+    assert "/workspaces/ws%2Fx/" in (request.url or "")

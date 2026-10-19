@@ -1,8 +1,9 @@
 """Platform import extraction services.
 
-Importers talk to a vendor API, so they need that vendor's SDK. The CLI has to
-tell the two failure modes apart: a genuinely missing extraction module is a
-packaging bug, while a missing SDK is one `pip install` away. Collapsing both
+Importers talk to a vendor API, so they need that vendor's SDK, which ships with
+``pip install opentide``. The CLI still tells the two failure modes apart: a
+missing extraction module is a packaging bug, while an SDK that will not import
+means the environment is incomplete and a reinstall fixes it. Collapsing both
 into "Extraction module not found" sent users looking for a file that was
 there all along (#242).
 """
@@ -25,18 +26,22 @@ _IMPORT_MODULES: dict[ExtractImport, str] = {
     ExtractImport.elastic: "opentide.extraction.elastic_importer",
 }
 
-#: Extra that provides the vendor SDK each importer needs, keyed by target.
-_IMPORT_EXTRAS: dict[ExtractImport, str] = {
-    ExtractImport.sentinel: "opentide[sentinel]",
-}
-
 
 class ExtractionDependencyError(RuntimeError):
-    """An importer is installed but the SDK it imports is not."""
+    """An importer is installed but the SDK it imports will not import."""
 
 
 def _root_package(exc: ModuleNotFoundError) -> str:
     return (exc.name or "").split(".", 1)[0]
+
+
+def _dependency_error(target: ExtractImport, exc: ModuleNotFoundError) -> ExtractionDependencyError:
+    from opentide.cli.services.validation import INCOMPLETE_INSTALL_ADVICE
+
+    return ExtractionDependencyError(
+        f"{target.value} import could not import {exc.name}: the opentide install is "
+        f"incomplete; {INCOMPLETE_INSTALL_ADVICE}"
+    )
 
 
 def _run_engine_module(module_name: str, target: ExtractImport, **kwargs: object) -> Any:
@@ -46,16 +51,15 @@ def _run_engine_module(module_name: str, target: ExtractImport, **kwargs: object
     except ModuleNotFoundError as exc:
         if _root_package(exc) == module_name.split(".", 1)[0]:
             raise FileNotFoundError(f"Extraction module not found: {module_name}") from exc
-        extra = _IMPORT_EXTRAS.get(target)
-        advice = f"install {extra}" if extra else f"install the {_root_package(exc)} package"
-        raise ExtractionDependencyError(
-            f"{target.value} import needs a vendor SDK that is not installed ({exc.name}); {advice}"
-        ) from exc
+        raise _dependency_error(target, exc) from exc
     runner = getattr(module, "run", None)
     if runner is None:
         raise FileNotFoundError(f"Extraction module has no run(): {module_name}")
     try:
         return runner(**kwargs)
+    except ModuleNotFoundError as exc:
+        # Vendor SDKs are imported where the importer first talks to the tenant.
+        raise _dependency_error(target, exc) from exc
     except TypeError as exc:
         raise TypeError(
             f"Extraction module runner in {module_name} failed with arguments {list(kwargs.keys())}: {exc}"

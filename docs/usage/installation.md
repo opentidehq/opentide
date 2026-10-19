@@ -65,19 +65,19 @@ uv pip install 'opentide==0.15.0'    # pin the current release
 
 </Tabs>
 
-That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, and all eight platforms. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, and all eight platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
 ### MCP server
 
 For agent/MCP hosts, remember the path to this environment's `opentide` binary — you point the host at `opentide mcp start` in [MCP configuration](../mcp/configuration.md).
 
-The base install above already ships the MCP server. There is no extra step and no extra to install:
+The base install above already ships the MCP server. There is no extra step:
 
 ```bash
 opentide mcp start        # mcp (>=1.28.1,<2) is a base dependency since 0.14.0
 ```
 
-`pip install 'opentide[mcp]'` still resolves — the extra is kept as an empty alias so existing commands and editor configurations keep working — but it adds nothing. See [MCP installation](../mcp/installation.md).
+An older command such as `pip install 'opentide[mcp]'` still installs opentide: pip and uv warn that the extra does not exist and install the package anyway. Drop the brackets when you next touch it. See [MCP installation](../mcp/installation.md).
 
 ### Windows and PowerShell
 
@@ -133,28 +133,24 @@ opentide info         # concise tabular view
 
 Expected: package version, rule/threat/objective counts, and per-platform capability flags.
 
-### Live deploy SDKs (when needed)
+### Vendor SDKs
 
-OpenTide ships platform logic in the wheel. **Third-party SDKs** are only required for live API deploy to some vendors — install them separately in the same environment if you use live deploy (not for validate, generate, or dry-run):
+Every vendor SDK a platform calls ships with `pip install opentide`, so live deploy, `opentide validate query --live` and the importers work for every platform on a stock install, including in the pipelines `opentide setup ci` generates:
 
-| Live target | Extra | Packages |
-|-------------|-------|----------|
-| Microsoft Sentinel | `opentide[sentinel]` | `azure-identity` `azure-monitor-query` `azure-mgmt-securityinsight` |
-| Splunk | `opentide[splunk]` | `splunk-sdk` `pandas` |
-| Carbon Black Cloud | `opentide[carbon-black]` | `carbon-black-cloud-sdk` |
+| Platform | Packages |
+|----------|----------|
+| Microsoft Sentinel | `azure-identity` `azure-monitor-query`. Rules are deployed through the ARM `alertRules` REST API directly. |
+| Splunk | `splunk-sdk` `pandas` |
+| Carbon Black Cloud | `carbon-black-cloud-sdk` |
+| Defender, Elastic, CrowdStrike, SentinelOne, HarfangLab | HTTP clients bundled with opentide |
 
-The `sentinel` extra installs an `azure-mgmt-securityinsight` 2.0 pre-release (2.0.0b2 or later). The 1.0.0 stable release lacks models the deployer sends, such as `AlertPropertyMapping`. With the extra installed, `deploy --dry-run` compiles each Sentinel rule into the request a live deploy would send; without it, the dry-run previews the configuration block.
+`deploy --dry-run` compiles each Sentinel rule into the exact request a live deploy sends. A bare `opentide validate query` refuses and names `--live`; `generate`, `validate`, and dry-run deploy need no credentials. If a live check reports that an SDK will not import, the environment is damaged: reinstall with `pip install --force-reinstall opentide`.
 
-Defender, CrowdStrike, SentinelOne, and HarfangLab use HTTP clients bundled with opentide.
-
-Extras are only needed for live API calls — live deploy, and `opentide validate
-query --live`. A bare `opentide validate query` refuses and names `--live`.
-`generate`, `validate`, and dry-run deploy work on a stock install. If a live
-check hits a missing SDK, the command names the extra to install.
+Releases up to 0.15.0 shipped the SDKs as extras (`opentide[sentinel]`, `opentide[splunk]`, `opentide[carbon-black]`). Those names are gone; an install command that still names one installs opentide with every SDK and a warning about the unknown extra.
 
 ### Platform identifiers
 
-These `--platform` values are built into the package — **no separate PyPI extra**:
+These `--platform` values are built into the package:
 
 | `--platform` | Product |
 |--------------|---------|

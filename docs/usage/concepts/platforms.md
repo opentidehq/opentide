@@ -20,7 +20,7 @@ OpenTide integrates with **eight detection platforms** through built-in adapters
 | CrowdStrike Falcon | `crowdstrike` | yes | no | correlation filter |
 | HarfangLab | `harfanglab` | yes | no | Sigma or YARA |
 
-CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers — not pip install extras.
+CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
 
 CrowdStrike stores a correlation filter. HarfangLab stores a Sigma rule or a YARA rule. Neither language is syntax-checked: `opentide validate query` reports `supported: false`.
 
@@ -69,8 +69,8 @@ opentide validate query --platform crowdstrike   # reports unsupported
 
 For the five that can, query validation is the tenant check. A bare
 `opentide validate query` refuses and names `--live`. `--live` submits the
-catalogue queries and requires the matching extra and credentials. A missing
-SDK or a missing plan fails that check. Only the requested platform's engine
+catalogue queries and requires tenant credentials; every vendor SDK ships with
+`pip install opentide`. A missing plan fails that check. Only the requested platform's engine
 is imported, so a Sentinel run never loads the CrowdStrike or HarfangLab
 modules. See [`validate`](../../cli/validate.md#query-validation).
 

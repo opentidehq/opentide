@@ -61,7 +61,7 @@ opentide validate --strict   # warnings also fail (exit 1) — use in CI
 
 On success the process exits `0`. For structured detail add `--json`, which writes one result document to stdout (see [Exit codes](../cli/exit-codes.md)). If validation fails, see [Troubleshooting](./troubleshooting.md).
 
-Check a platform's catalogue queries against the tenant. This needs the matching extra and credentials. Without `--live` the command exits `1` and names the flag:
+Check a platform's catalogue queries against the tenant. This needs tenant credentials; the vendor SDKs ship with the package. Without `--live` the command exits `1` and names the flag:
 
 ```bash
 opentide validate query --platform sentinel --live

@@ -98,7 +98,7 @@ Three entry points, three behaviours — pick deliberately:
 
 | Entry point | Behaviour |
 |---|---|
-| `rule.validate_query(platform)` | Live vendor call. Needs the extra and a tenant. |
+| `rule.validate_query(platform)` | Live vendor call. Needs a configured tenant. |
 | `opentide validate query` | Refuses until you pass `--live`. |
 | MCP `validate_query` | Refuses until you pass `live: true`, which calls the tenant. |
 

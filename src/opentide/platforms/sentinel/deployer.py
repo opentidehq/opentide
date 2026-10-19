@@ -25,19 +25,18 @@ def _missing_field(data: DetectionRule, field: str, requirement: str) -> Errors.
 
 class SentinelDeploy(RuleDeployer):
 
-    def compile_deployment(self, service: Any, data: DetectionRule, tenant: str):
-        """Compile a rule into an SDK alert-rule model for one tenant.
+    def compile_deployment(self, service: Any, data: DetectionRule, tenant: str) -> dict[str, Any]:
+        """Compile a rule into the ARM alert-rule request body for one tenant.
 
-        Models come from ``azure.mgmt.securityinsight.models`` rather than the
-        client: TypeSpec-generated SDKs (2.0.0b3+) no longer expose them on the
-        operation group. ``service`` is kept for API compatibility.
+        The body is the ``Microsoft.SecurityInsights/alertRules`` PUT payload:
+        ``kind`` plus camelCase ``properties``, with unset fields left out.
+        ``service`` is kept for API compatibility.
         """
-        from opentide.platforms.sentinel.client import alert_rule_request_body, iso_duration_timedelta, securityinsight_models
-        models = securityinsight_models()
-        rule = models.ScheduledAlertRule()
-        # TypeSpec models leave the discriminator unset when no properties are
-        # passed to the constructor, which would send a body without `kind`.
-        rule.kind = 'Scheduled'
+        from opentide.platforms.sentinel.client import duration_isoformat, iso_duration_timedelta
+
+        def duration(value: str) -> str:
+            return duration_isoformat(iso_duration_timedelta(value))
+
         configuration = data.configurations.sentinel
         if not configuration:
             raise Errors.TideMDRDataModelErrors(
@@ -49,112 +48,101 @@ class SentinelDeploy(RuleDeployer):
             raise _missing_field(data, 'grouping', 'Sentinel deploy requires grouping.event and grouping.alert')
         if not configuration.grouping.alert:
             raise _missing_field(data, 'grouping.alert', 'Sentinel deploy requires incident grouping (grouping.alert.enabled)')
+        rule: dict[str, Any] = {'kind': 'Scheduled'}
+        properties: dict[str, Any] = {}
         status = configuration.status
-        rule.enabled = True
+        properties['enabled'] = True
         query = compile_kql_query(configuration.query, configuration.exclusions, tenant)
         logger.info('final_compiled_query', arg0=query)
-        rule.query = query
+        properties['query'] = query
         if check_status(status) is StatusStrategy.DISABLEMENT:
-            rule.enabled = False
+            properties['enabled'] = False
         if configuration.template:
-            rule.alert_rule_template_name = configuration.template.uuid
-            rule.template_version = configuration.template.version
+            properties['alertRuleTemplateName'] = configuration.template.uuid
+            properties['templateVersion'] = configuration.template.version
         suppression = configuration.alert.suppression
         if type(suppression) is str:
-            rule.suppression_enabled = True
-            rule.suppression_duration = iso_duration_timedelta(suppression)
+            properties['suppressionEnabled'] = True
+            properties['suppressionDuration'] = duration(suppression)
         elif suppression is False:
-            rule.suppression_enabled = False
-            rule.suppression_duration = iso_duration_timedelta('1h')
+            properties['suppressionEnabled'] = False
+            properties['suppressionDuration'] = duration('1h')
         else:
             raise Errors.TideMDRDataModelErrors('Suppression set to true, must be false or int')
         if configuration.scheduling.nrt is True:
-            rule.kind = 'NRT'
+            rule['kind'] = 'NRT'
         else:
             if not configuration.scheduling.frequency:
                 raise _missing_field(data, 'scheduling.frequency', 'required unless scheduling.nrt is true')
             if not configuration.scheduling.lookback:
                 raise _missing_field(data, 'scheduling.lookback', 'required unless scheduling.nrt is true')
-            rule.query_frequency = iso_duration_timedelta(configuration.scheduling.frequency)
-            rule.query_period = iso_duration_timedelta(configuration.scheduling.lookback)
+            properties['queryFrequency'] = duration(configuration.scheduling.frequency)
+            properties['queryPeriod'] = duration(configuration.scheduling.lookback)
             if configuration.trigger:
-                rule.trigger_threshold = configuration.trigger.threshold
-                rule.trigger_operator = configuration.trigger.operator
-        details_overrides = models.AlertDetailsOverride()
+                properties['triggerThreshold'] = configuration.trigger.threshold
+                properties['triggerOperator'] = configuration.trigger.operator
+        details_overrides: dict[str, Any] = {}
         if (alert_title := configuration.alert.title):
-            details_overrides.alert_display_name_format = alert_title
+            details_overrides['alertDisplayNameFormat'] = alert_title
         if (alert_description := configuration.alert.description):
-            details_overrides.alert_description_format = alert_description
+            details_overrides['alertDescriptionFormat'] = alert_description
         if (dynamic_properties := configuration.alert.dynamic_properties):
             alert_dynamic_properties = []
             for property in dynamic_properties:
                 if property.property == 'Tactics':
-                    details_overrides.alert_tactics_column_name = property.column
+                    details_overrides['alertTacticsColumnName'] = property.column
                     continue
                 if property.property == 'Severity':
-                    details_overrides.alert_severity_column_name = property.column
+                    details_overrides['alertSeverityColumnName'] = property.column
                     continue
-                alert_dynamic_property = models.AlertPropertyMapping()
-                alert_dynamic_property.alert_property = property.property
-                alert_dynamic_property.value = property.column
-                alert_dynamic_properties.append(alert_dynamic_property)
+                alert_dynamic_properties.append({'alertProperty': property.property, 'value': property.column})
             if alert_dynamic_properties:
-                details_overrides.alert_dynamic_properties = alert_dynamic_properties
-        rule.alert_details_override = details_overrides
+                details_overrides['alertDynamicProperties'] = alert_dynamic_properties
+        properties['alertDetailsOverride'] = details_overrides
         if (techniques := configuration.alert.techniques):
-            rule.techniques = techniques
+            properties['techniques'] = techniques
         if (tactics := configuration.alert.tactics):
-            rule.tactics = tactics
+            properties['tactics'] = tactics
         if (custom_details := configuration.alert.custom_details):
-            rule.custom_details = {detail.key: detail.column for detail in custom_details}
+            properties['customDetails'] = {detail.key: detail.column for detail in custom_details}
         logger.info('event_grouping_configuration', detail=configuration.grouping.event)
-        event_grouping = models.EventGroupingSettings()
-        event_grouping.aggregation_kind = configuration.grouping.event
-        rule.event_grouping_settings = event_grouping
+        properties['eventGroupingSettings'] = {'aggregationKind': configuration.grouping.event}
         alert_enabled = configuration.alert.create_incident
         logger.info('alert_enabled', detail=str(alert_enabled))
-        incident_configuration = models.IncidentConfiguration(create_incident=alert_enabled)
         grouping_enabled = configuration.grouping.alert.enabled
         logger.info('alert_grouping_enabled', detail=str(grouping_enabled))
         grouping_lookback = configuration.grouping.alert.grouping_lookback
-        if grouping_enabled:
-            if not grouping_lookback:
-                raise _missing_field(data, 'grouping.alert.grouping_lookback', 'required when grouping.alert.enabled is true')
-            grouping_lookback = iso_duration_timedelta(grouping_lookback)
-        elif not grouping_lookback:
-            grouping_lookback = iso_duration_timedelta('1h')
-        else:
-            grouping_lookback = iso_duration_timedelta(grouping_lookback)
-        reopen_closed_incident = configuration.grouping.alert.reopen_closed_incidents or False
-        matching_method = configuration.grouping.alert.matching or 'AllEntities'
-        group_by_entities = configuration.grouping.alert.group_by_entities
-        group_by_alert_details = configuration.grouping.alert.group_by_alert_details
-        group_by_custom_details = configuration.grouping.alert.group_by_custom_details
-        grouping_configuration = models.GroupingConfiguration(enabled=grouping_enabled, lookback_duration=grouping_lookback, reopen_closed_incident=reopen_closed_incident, matching_method=matching_method, group_by_entities=group_by_entities, group_by_alert_details=group_by_alert_details, group_by_custom_details=group_by_custom_details)
-        incident_configuration.grouping_configuration = grouping_configuration
-        rule.incident_configuration = incident_configuration
+        if grouping_enabled and not grouping_lookback:
+            raise _missing_field(data, 'grouping.alert.grouping_lookback', 'required when grouping.alert.enabled is true')
+        grouping_configuration = {
+            'enabled': grouping_enabled,
+            'lookbackDuration': duration(grouping_lookback or '1h'),
+            'reopenClosedIncident': configuration.grouping.alert.reopen_closed_incidents or False,
+            'matchingMethod': configuration.grouping.alert.matching or 'AllEntities',
+            'groupByEntities': configuration.grouping.alert.group_by_entities,
+            'groupByAlertDetails': configuration.grouping.alert.group_by_alert_details,
+            'groupByCustomDetails': configuration.grouping.alert.group_by_custom_details,
+        }
+        properties['incidentConfiguration'] = {
+            'createIncident': alert_enabled,
+            'groupingConfiguration': {key: value for key, value in grouping_configuration.items() if value is not None},
+        }
         # ARM rejects an empty entityMappings list (length must be 1-10), so a
         # rule without entities leaves the property unset (#549).
         if (entity_data := configuration.entities):
-            entity_mappings = []
-            for entity in entity_data:
-                mappings = models.EntityMapping()
-                mappings.entity_type = entity.entity
-                field_mappings = []
-                for field in entity.mappings:
-                    field_mapping = models.FieldMapping()
-                    field_mapping.identifier = field.identifier
-                    field_mapping.column_name = field.column
-                    field_mappings.append(field_mapping)
-                mappings.field_mappings = field_mappings
-                entity_mappings.append(mappings)
-            rule.entity_mappings = entity_mappings
+            properties['entityMappings'] = [
+                {
+                    'entityType': entity.entity,
+                    'fieldMappings': [{'identifier': field.identifier, 'columnName': field.column} for field in entity.mappings],
+                }
+                for entity in entity_data
+            ]
         severity = configuration.alert.severity or data.response.alert_severity
         if severity == 'Critical':
             severity = 'High'
-        rule.severity = severity
-        rule.display_name = data.name
-        rule.description = data.description
+        properties['severity'] = severity
+        properties['displayName'] = data.name
+        properties['description'] = data.description
         techniques = techniques_resolver(data.metadata.uuid)
         if techniques:
             tactics = list()
@@ -164,9 +152,10 @@ class SentinelDeploy(RuleDeployer):
             techniques = [t.split('.')[0] for t in techniques]
             techniques = list(dict.fromkeys(techniques))
             tactics = list(dict.fromkeys(tactics))
-            rule.tactics = tactics
-            rule.techniques = techniques
-        logger.info('compiled_rule', detail=json.dumps(alert_rule_request_body(rule)))
+            properties['tactics'] = tactics
+            properties['techniques'] = techniques
+        rule['properties'] = {key: value for key, value in properties.items() if value is not None}
+        logger.info('compiled_rule', detail=json.dumps(rule))
         return rule
 
     def deploy_mdr(self, data: DetectionRule, service: Any, tenant_config: ConfigurationModels.Systems.Sentinel.Tenant):

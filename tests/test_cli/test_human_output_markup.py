@@ -1,7 +1,7 @@
 """Human output prints payload text verbatim (#292).
 
 Every emit helper writes through a Rich console, and Rich parses ``[...]`` as
-markup. A message carrying ``[error]`` or ``opentide[sentinel]`` lost the
+markup. A message carrying ``[error]`` or ``package[extra]`` lost the
 bracketed part in human output while ``--json`` kept it, ``--no-color``
 included, and a stray ``[/]`` raised ``MarkupError`` instead of printing.
 """
@@ -34,7 +34,7 @@ REMEDIATION_FIELDS = ("detail", "advice")
 
 #: Strings Rich would eat, restyle, or choke on if they reached it as markup.
 MARKUP_LOOKALIKES = (
-    "install opentide[sentinel]",
+    "pip install 'package[extra]'",
     "[error] detection_model: unknown reference",
     "enabled=True [deploy, validate]",
     "[bold]not bold[/bold]",
@@ -82,11 +82,11 @@ def test_emit_result_prints_every_field_verbatim(
 
 @pytest.mark.parametrize("status", ["completed", "skipped", "failed", "issues"])
 def test_emit_result_prints_advice_json_carries(rendered: StringIO, status: str) -> None:
-    """``--live`` without the SDK printed the FATAL line and dropped the extra (#292)."""
+    """``--live`` with a broken SDK printed the FATAL line and dropped the advice (#292)."""
     payload = {
         "status": status,
-        "message": "Live query validation for sentinel needs a vendor SDK",
-        "advice": "install opentide[sentinel] (provides azure-identity, azure-monitor-query)",
+        "message": "Live query validation for sentinel could not import azure [incomplete]",
+        "advice": "reinstall opentide: pip install --force-reinstall opentide",
     }
     emit_result(CliContext(json_output=False), CommandResult.from_payload(payload))
     output = rendered.getvalue()
@@ -139,7 +139,7 @@ def _help_texts() -> Iterator[tuple[str, str]]:
 
 
 def test_help_text_renders_its_brackets() -> None:
-    """Typer renders help as Rich markup: `opentide[sentinel]` and `[deprecated]` vanished.
+    """Typer renders help as Rich markup: `package[extra]` and `[deprecated]` vanished.
 
     Write a literal bracket in help text as ``\\[``.
     """

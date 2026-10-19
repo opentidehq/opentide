@@ -38,7 +38,7 @@ Add runtime deps with `uv add <package>`. Add dev tools with `uv add --group dev
 - **Always** `uv run …` — do not activate `.venv` manually or call bare `python` / `pip`.
 - Lockfile: `uv.lock` — commit when dependencies change.
 - Python: `requires-python = ">=3.10"`; CI matrix 3.10–3.14.
-- Optional extras (`cli`, `mcp`, platform names) exist for client installs; day-to-day dev uses `--group dev`.
+- There are no optional extras: `pip install opentide` ships every platform SDK. Day-to-day dev uses `--group dev`. Never add an extra; a new runtime dependency goes in `[project] dependencies`.
 
 ## Hooks
 

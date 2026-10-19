@@ -272,7 +272,7 @@ opentide validate query --platform sentinel
 FATAL: Query validation checks the tenant. Re-run with --live.
 ```
 
-`--live` sends the catalogue queries to Azure Monitor. That needs `opentide[sentinel]` and credentials. Then dry-run the deploy:
+`--live` sends the catalogue queries to Azure Monitor. That needs tenant credentials; the Azure SDK ships with opentide. Then dry-run the deploy:
 
 ```bash
 opentide deploy --platform sentinel --dry-run
