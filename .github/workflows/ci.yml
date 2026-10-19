@@ -54,7 +54,7 @@ jobs:
       - name: Twine check
         run: uvx twine check dist/*
 
-      - name: Detect vocabulary bundle or lockfile changes
+      - name: Detect vocabulary bundle, pin or lockfile changes
         id: vocab_changes
         run: |
           set -euo pipefail
@@ -70,13 +70,15 @@ jobs:
           fi
 
           changed_files="$(git diff --name-only "$base_ref" "${{ github.sha }}")"
-          if rg -n "^(src/opentide/data/vocabulary/.*\\.vocab\\.toml|data/specifications\\.lock\\.json)$" <<<"$changed_files" >/dev/null; then
+          # grep, not rg: ripgrep is not installed on GitHub-hosted runners, and a
+          # missing command in an `if` reads as "no match" and skips the gate.
+          if grep -qE "^(src/opentide/data/vocabulary/.*\\.vocab\\.toml|src/opentide/data/pins/.*\\.toml|data/specifications\\.lock\\.json|scripts/build/sync_vocabularies\\.py)$" <<<"$changed_files"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check vocabulary sync drift
+      - name: Check vocabulary and pin sync drift
         if: steps.vocab_changes.outputs.changed == 'true'
         run: uv run python scripts/build/sync_vocabularies.py --check
 

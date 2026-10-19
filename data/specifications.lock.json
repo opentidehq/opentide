@@ -1,6 +1,7 @@
 {
-  "bundled_vocabulary_sha256": "186b2414de51f747ac2d04d8d549da8781ca5d6a13101c48f9b182171131b4d4",
-  "lock_version": 1,
+  "bundled_pins_sha256": "f12c8a0fac95c1932f8b47c1059d9028548f93cf0f0c0b25065e436b5c12429e",
+  "bundled_vocabulary_sha256": "317e505d2226a3be4dca5ac26c46aa9ae7f9308d30b7fc8e22bbb69bbf2dd2a4",
+  "lock_version": 2,
   "managed_files": [
     "actors.vocab.toml",
     "alert_severity.vocab.toml",
@@ -25,7 +26,6 @@
     "objectives.vocab.toml",
     "pap.vocab.toml",
     "resources.vocab.toml",
-    "responders.vocab.toml",
     "rsit.vocab.toml",
     "scheduling.vocab.toml",
     "sectors.vocab.toml",
@@ -39,7 +39,13 @@
     "viability.vocab.toml",
     "violation.vocab.toml"
   ],
+  "managed_pin_files": [
+    "objective.toml",
+    "rule.toml",
+    "threat.toml"
+  ],
+  "pins_source_glob": "schemas/pins/*.toml",
   "source_glob": "vocabularies/*.vocab.toml",
-  "specifications_git_sha": "baseline-bundled-state",
+  "specifications_git_sha": "17f2cb7b17652f376bc76c4219cbd6e0aecece1c",
   "specifications_repo": "OpenTideHQ/specifications"
 }

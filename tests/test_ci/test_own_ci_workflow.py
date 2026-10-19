@@ -12,6 +12,10 @@ Also pins the concurrency of the long jobs. ``cli-e2e`` used to declare
 longest job in the workflow (~980 s) for a ~22 min wall clock. They share no
 artifact, so the dependency bought nothing; restoring it would quietly undo
 most of the win.
+
+Also covers the vocabulary drift gate's path filter. It used ``rg``, which
+GitHub-hosted runners do not ship; inside ``if`` the missing command read as
+"no match", so ``sync_vocabularies.py --check`` never ran.
 """
 
 from __future__ import annotations
@@ -118,3 +122,30 @@ def test_sysmon_coverage_cell_is_new_enough(workflow: dict[str, Any]) -> None:
         f"sys.monitoring (PEP 669) only exists on 3.12+. Either raise "
         f"COVERAGE_PYTHON back to 3.12 or newer, or drop the COVERAGE_CORE env."
     )
+
+
+def _vocab_gate_pattern(workflow: dict[str, Any]) -> str:
+    """The ERE the ``vocab_changes`` step greps changed paths with."""
+    steps = workflow["jobs"]["lint"]["steps"]
+    runs = [str(step.get("run", "")) for step in steps if step.get("id") == "vocab_changes"]
+    assert len(runs) == 1, "expected exactly one vocab_changes step in the lint job"
+    match = re.search(r'grep -qE "([^"]+)"', runs[0])
+    assert match is not None, "vocab_changes must filter paths with grep -qE (rg is not installed)"
+    # Bash double quotes turn the workflow's ``\\.`` into ``\.``.
+    return match.group(1).replace("\\\\", "\\")
+
+
+@pytest.mark.parametrize(
+    ("path", "gated"),
+    [
+        ("src/opentide/data/vocabulary/att&ck.vocab.toml", True),
+        ("src/opentide/data/pins/threat.toml", True),
+        ("data/specifications.lock.json", True),
+        ("scripts/build/sync_vocabularies.py", True),
+        ("src/opentide/models/vocab_pins.py", False),
+    ],
+)
+def test_vocab_drift_gate_watches_bundle_pins_and_lockfile(
+    workflow: dict[str, Any], path: str, gated: bool
+) -> None:
+    assert bool(re.search(_vocab_gate_pattern(workflow), path)) is gated
