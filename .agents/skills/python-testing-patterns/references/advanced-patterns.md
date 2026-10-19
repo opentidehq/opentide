@@ -351,7 +351,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
+          uv sync --group dev
           pip install pytest pytest-cov
 
       - name: Run tests

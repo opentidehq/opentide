@@ -41,8 +41,10 @@ def test_run_engine_module_missing() -> None:
         extraction_service._run_engine_module("opentide.extraction.missing", ExtractImport.sentinel)
 
 
-def test_run_engine_module_names_the_missing_extra(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A missing vendor SDK names the extra rather than the importer (#242)."""
+def test_run_engine_module_tells_a_missing_sdk_from_a_missing_importer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An SDK that will not import is an incomplete install, not a missing importer (#242)."""
 
     def _no_sdk(name: str) -> types.ModuleType:
         raise ModuleNotFoundError("No module named 'azure'", name="azure")
@@ -52,8 +54,11 @@ def test_run_engine_module_names_the_missing_extra(monkeypatch: pytest.MonkeyPat
         extraction_service._run_engine_module(
             "opentide.extraction.sentinel_importer", ExtractImport.sentinel
         )
-    assert "opentide[sentinel]" in str(excinfo.value)
-    assert "Extraction module not found" not in str(excinfo.value)
+    message = str(excinfo.value)
+    assert "could not import azure" in message
+    assert "pip install --force-reinstall opentide" in message
+    assert "opentide[" not in message
+    assert "Extraction module not found" not in message
 
 
 def test_run_engine_module_requires_a_run_entry_point(monkeypatch: pytest.MonkeyPatch) -> None:

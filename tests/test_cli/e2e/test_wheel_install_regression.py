@@ -307,14 +307,16 @@ def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
     assert cli.returncode == 0, cli.stdout + cli.stderr
 
 
-def test_wheel_with_mcp_extra_answers_a_stdio_initialize(
+def test_wheel_installed_with_a_retired_extra_still_answers_a_stdio_initialize(
     tmp_path: Path, tide_corpus_repo: Path
 ) -> None:
-    """Issue #262: prove the advertised extra actually starts the server.
+    """An install command written for an older release still installs a working server.
 
-    Issue #460: the process is ``opentide mcp start``. Issue #526: ``[mcp]`` is
-    now an EMPTY alias kept for backward compatibility, so this also proves an
-    existing ``opentide[mcp]`` command or editor config still resolves and runs.
+    Issue #262 proved the ``[mcp]`` extra started the server and #460 made the
+    process ``opentide mcp start``. opentide has no extras since 0.16.0: pip and
+    uv warn about an extra a package does not declare and install the package
+    anyway, so an existing ``opentide[mcp]`` command or editor config keeps
+    working without a change.
     """
     uv = shutil.which("uv")
     if uv is None:
@@ -344,6 +346,51 @@ def test_wheel_with_mcp_extra_answers_a_stdio_initialize(
     response = _initialize_response(result)
     assert response is not None, f"no JSON-RPC response for initialize:\n{combined}"
     assert response["result"]["serverInfo"]["name"] == "OpenTide"
+
+
+#: Every vendor SDK a platform imports. A bare ``pip install opentide`` must
+#: carry all of them: there are no extras, and a generated CI pipeline installs
+#: exactly ``opentide==<version>`` (the 0.14.2 Sentinel live-validation failure).
+_PLATFORM_SDK_IMPORTS = (
+    "azure.identity",
+    "azure.monitor.query",
+    "splunklib.client",
+    "cbc_sdk.rest_api",
+    "pandas",
+    "openpyxl",
+)
+
+
+def test_bare_wheel_imports_every_platform_sdk(tmp_path: Path) -> None:
+    """A bare install, resolved with uv's default pre-release policy, has every SDK.
+
+    uv refuses a transitive pre-release, so a pre-release-only dependency (as
+    ``azure-mgmt-securityinsight`` is) would fail this install outright.
+    """
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is required to build and install the wheel")
+
+    wheel = _build_wheel(uv, tmp_path / "dist")
+    python = _install(uv, tmp_path / "sdk-venv", str(wheel))
+
+    import_every_sdk = "\n".join(
+        [
+            "import importlib, sys",
+            "for name in sys.argv[1:]:",
+            "    importlib.import_module(name)",
+            "import opentide.platforms.sentinel.client as client",
+            "assert client.ALERT_RULES_API_VERSION",
+        ]
+    )
+    probe = _run([str(python), "-c", import_every_sdk, *_PLATFORM_SDK_IMPORTS], timeout=120)
+    assert probe.returncode == 0, probe.stdout + probe.stderr
+    print_extras = (
+        "from importlib.metadata import metadata; "
+        + "print(metadata('opentide').get_all('Provides-Extra') or [])"
+    )
+    metadata = _run([str(python), "-c", print_extras], timeout=60)
+    assert metadata.stdout.strip() == "[]", metadata.stdout + metadata.stderr
 
 
 def _assert_json_ok(result: subprocess.CompletedProcess[str]) -> None:

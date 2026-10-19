@@ -31,7 +31,7 @@ opentide --repo /path/to/detections validate --strict
 
 ### The command `opentide` is not found
 
-The CLI ships as an extra. Install it:
+The CLI ships with the package. Install it:
 
 ```bash
 pip install 'opentide==0.15.0'
@@ -374,15 +374,19 @@ CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query sy
 ### MCP `validate_query` refuses
 
 The default does not scan the query string. Pass `live: true` to check the
-catalogue rules against the tenant. A missing SDK or a missing plan fails that
-check. `run_query` is not implemented and returns `stub: true` with `rows: null`.
+catalogue rules against the tenant. A missing plan fails that check. `run_query` is not implemented and returns `stub: true` with `rows: null`.
 See [Agentic setup](./workflows/agentic-setup.md).
 
 ### `opentide validate query` fails before it reaches the tenant
 
 A bare `validate query` exits `1` and tells you to re-run with `--live`. That
-flag needs the vendor SDK and tenant credentials. Install the extra the error
-names (for example `pip install 'opentide[sentinel]'`).
+flag needs tenant credentials; the vendor SDKs ship with `pip install opentide`.
+
+Through 0.15.0 the SDKs were extras, so a pipeline that installed only
+`opentide==<version>` failed `--live` with `needs a vendor SDK: No module named
+'azure'`. Upgrade to 0.16.0 or later; there is no extra to add. If a current
+release still reports that an SDK will not import, the environment is damaged:
+run `pip install --force-reinstall opentide`.
 
 ## Platforms and deployment
 

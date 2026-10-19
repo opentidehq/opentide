@@ -20,9 +20,9 @@ MCP_IMPORT = "mcp.server.fastmcp"
 MCP_PACKAGE = "mcp"
 
 MCP_SPECIFIER = "mcp>=1.28.1,<2"
-#: Remedy for both failure modes. ``mcp`` is a base dependency since 0.14.0, so
-#: the ``[mcp]`` extra is now an empty alias — advising it would install nothing
-#: and leave the user exactly where they started.
+#: Remedy for both failure modes. ``mcp`` is a base dependency since 0.14.0 and
+#: opentide has no extras, so naming the package itself is the only advice that
+#: changes anything.
 MCP_INSTALL_HINT = f"pip install '{MCP_SPECIFIER}'"
 
 

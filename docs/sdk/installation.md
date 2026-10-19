@@ -16,11 +16,11 @@ dependencies = ["opentide==0.15.0"]
 pip install 'opentide==0.15.0'
 ```
 
-Includes the CLI, all platform adapters, the MCP server, and core dependencies (`pydantic`, `pyyaml`, `structlog`, `rich`, `dulwich`, `typer`, `mcp`). Start the server with `opentide mcp start` — no extra required since 0.14.0; see [MCP installation](../mcp/installation.md).
+Includes the CLI, all platform adapters with every vendor SDK they call, the MCP server, and core dependencies (`pydantic`, `pyyaml`, `structlog`, `rich`, `dulwich`, `typer`, `mcp`). There are no extras. Start the server with `opentide mcp start`; see [MCP installation](../mcp/installation.md).
 
-## Live deploy SDKs
+## Vendor SDKs
 
-For programmatic live deploy to Splunk or Carbon Black, install vendor SDKs alongside opentide — see [Usage: Installation](../usage/installation.md).
+Programmatic live deploy and query validation work for every platform on the base install. The SDKs each platform calls are listed in [Usage: Installation](../usage/installation.md#vendor-sdks).
 
 ## Environment
 

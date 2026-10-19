@@ -43,27 +43,17 @@ def _compile_failure(rule: DetectionRule, exc: Exception) -> dict[str, Any]:
     }
 
 
-def _sentinel_compile_preview(rule: DetectionRule) -> dict[str, Any] | None:
-    """Compile and serialise the ARM request body, offline, with the real SDK models.
+def _sentinel_compile_preview(rule: DetectionRule) -> dict[str, Any]:
+    """Compile the ARM request body offline, exactly as a deploy would send it.
 
-    Returns ``None`` only when the ``sentinel`` extra is not installed, so the
-    caller falls back to the configuration block. Any compilation or
-    serialisation error is a failure for the rule, never a silent fallback.
+    Any compilation error is a failure for the rule, never a silent fallback.
     """
-    from opentide.platforms.sentinel.client import alert_rule_request_body, securityinsight_models
-
-    try:
-        securityinsight_models()
-    except ImportError as exc:
-        logger.debug("sentinel_preview_sdk_unavailable", error=str(exc))
-        return None
     from opentide.platforms.sentinel.deployer import SentinelDeploy
 
     try:
-        compiled = SentinelDeploy().compile_deployment(
+        payload = SentinelDeploy().compile_deployment(
             service=None, data=rule, tenant=_PREVIEW_TENANT
         )
-        payload = alert_rule_request_body(compiled)
     except Exception as exc:
         return _compile_failure(rule, exc)
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
@@ -86,9 +76,7 @@ def _elastic_compile_preview(rule: DetectionRule) -> dict[str, Any] | None:
 def preview_rule_deployment(platform: str, rule: DetectionRule) -> dict[str, Any]:
     """Return a serialisable preview of the API payload for one rule on a platform."""
     if platform == "sentinel":
-        compiled = _sentinel_compile_preview(rule)
-        if compiled is not None:
-            return compiled
+        return _sentinel_compile_preview(rule)
     if platform == "elastic":
         compiled = _elastic_compile_preview(rule)
         if compiled is not None:

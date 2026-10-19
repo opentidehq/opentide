@@ -28,7 +28,7 @@ Additional APIs are importable from subpackages (`opentide.validation`, `opentid
 
 | Page | Topic |
 |------|-------|
-| [Installation](./installation.md) | Extras and typing support |
+| [Installation](./installation.md) | Install, vendor SDKs and typing support |
 | [Registry](./registry.md) | Lifecycle, accessors, lookup |
 | [Validation](./validation.md) | `run_validation`, scopes, reports |
 | [Documentation API](./documentation.md) | Render and write markdown pages |

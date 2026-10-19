@@ -103,7 +103,7 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 ### Phase 9 ([#71](https://github.com/OpenTideHQ/CoreTide/issues/71))
 
 ```bash
-pip install -e ".[dev]"
+uv sync --group dev
 pytest --cov=opentide --cov-fail-under=80
 ruff check src/opentide
 uv run ty check src/opentide

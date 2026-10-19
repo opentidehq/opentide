@@ -1,66 +1,101 @@
-"""Pure helper coverage for the Sentinel importer script.
+"""Sentinel importer: pure helpers and the listing-to-YAML path.
 
-The helpers under test are string manipulation, but importing the module they
-live in pulls in the Azure SDK. Stubs stand in when ``opentide[sentinel]`` is
-absent — installed through ``patch.dict`` so they are torn down again. A
-module-level ``sys.modules.setdefault`` left a non-package ``azure`` behind for
-the rest of the session, which silently changed what every later test saw
-about the installed SDK.
+The importer needs no SDK stubs: it lists rules through the ARM REST client,
+which ships with ``pip install opentide``.
 """
 
 from __future__ import annotations
 
-import sys
-from collections.abc import Iterator
-from types import ModuleType
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 
-AZURE_STUBS = ("azure", "azure.mgmt", "azure.mgmt.securityinsight", "azure.identity")
+from opentide.extraction import sentinel_importer
 
 
-def _stub_modules() -> dict[str, Any]:
-    """Minimal stand-ins for the Azure names the importer binds at module scope."""
-    azure = ModuleType("azure")
-    azure.__path__ = []  # type: ignore[attr-defined]
-    mgmt = ModuleType("azure.mgmt")
-    mgmt.__path__ = []  # type: ignore[attr-defined]
+def test_convert_period_strips_iso_prefix() -> None:
+    assert sentinel_importer.convert_period("PT5M") == "5m"
+    assert sentinel_importer.convert_period("P1D") == "1d"
+
+
+def test_sanitize_filename_replaces_invalid_chars() -> None:
+    assert sentinel_importer.sanitize_filename('rule<>:"/\\|?*name') == "rule         name"
+
+
+def _listed(kind: str, name: str, **properties: Any) -> dict[str, Any]:
     return {
-        "azure": azure,
-        "azure.mgmt": mgmt,
-        "azure.mgmt.securityinsight": MagicMock(),
-        "azure.identity": MagicMock(),
+        "name": name,
+        "kind": kind,
+        "properties": {
+            "displayName": f"{kind} rule",
+            "description": "d",
+            "enabled": True,
+            "query": "SecurityEvent",
+            "suppressionEnabled": False,
+            "suppressionDuration": "PT1H",
+            "severity": "High",
+            "lastModifiedUtc": "2026-10-01T10:00:00Z",
+            "incidentConfiguration": {
+                "createIncident": True,
+                "groupingConfiguration": {
+                    "enabled": False,
+                    "lookbackDuration": "PT1H",
+                    "matchingMethod": "AllEntities",
+                },
+            },
+            **properties,
+        },
     }
 
 
-@pytest.fixture
-def sentinel_helpers() -> Iterator[ModuleType]:
-    stubs = {name: value for name, value in _stub_modules().items() if name not in sys.modules}
-    # Re-import under the stubs, then drop the stub-bound module so nothing
-    # downstream inherits a MagicMock where the real SDK belongs.
-    sys.modules.pop("opentide.extraction.sentinel_importer", None)
-    try:
-        with patch.dict(sys.modules, stubs):
-            import opentide.extraction.sentinel_importer as module
+def test_import_writes_scheduled_and_nrt_rules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ARM lists near-real-time rules as kind ``NRT``; they used to be skipped as unknown."""
+    listed = [
+        _listed(
+            "Scheduled",
+            "11111111-1111-4111-8111-111111111111",
+            queryFrequency="PT1H",
+            queryPeriod="PT2H",
+            triggerOperator="GreaterThan",
+            triggerThreshold=0,
+        ),
+        _listed("NRT", "22222222-2222-4222-8222-222222222222"),
+        _listed("Fusion", "33333333-3333-4333-8333-333333333333"),
+    ]
+    tenant = SimpleNamespace(
+        name="tenant-a", setup=SimpleNamespace(resource_group="rg", workspace_name="ws")
+    )
+    service = SimpleNamespace(alert_rules=SimpleNamespace(list=lambda **_: iter(listed)))
+    monkeypatch.setattr(
+        sentinel_importer,
+        "OpenTide",
+        SimpleNamespace(
+            Configurations=SimpleNamespace(
+                Systems=SimpleNamespace(Sentinel=SimpleNamespace(tenants=[tenant]))
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        sentinel_importer,
+        "SentinelService",
+        lambda _tenant: SimpleNamespace(connect=lambda: service),
+    )
+    monkeypatch.chdir(tmp_path)
 
-            yield module
-    finally:
-        sys.modules.pop("opentide.extraction.sentinel_importer", None)
+    sentinel_importer.run()
 
-
-def test_convert_period_strips_iso_prefix(sentinel_helpers: ModuleType) -> None:
-    assert sentinel_helpers.convert_period("PT5M") == "5m"
-    assert sentinel_helpers.convert_period("P1D") == "1d"
-
-
-def test_sanitize_filename_replaces_invalid_chars(sentinel_helpers: ModuleType) -> None:
-    assert sentinel_helpers.sanitize_filename('rule<>:"/\\|?*name') == "rule         name"
-
-
-def test_azure_stubs_do_not_leak_into_the_session() -> None:
-    """Regression guard: the stubs above must not outlive their fixture."""
-    for name in AZURE_STUBS:
-        module = sys.modules.get(name)
-        assert not isinstance(module, MagicMock), f"{name} left stubbed in sys.modules"
+    # The quoted rule name is sanitised: quotes become spaces in the file name.
+    written = sorted(path.name for path in (tmp_path / "Imported").iterdir())
+    assert written == [" NRT rule - tenant-a .yaml", " Scheduled rule - tenant-a .yaml"]
+    nrt = (tmp_path / "Imported" / " NRT rule - tenant-a .yaml").read_text(encoding="utf-8")
+    assert "nrt: true" in nrt
+    assert "uuid: 22222222-2222-4222-8222-222222222222" in nrt
+    scheduled = (tmp_path / "Imported" / " Scheduled rule - tenant-a .yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "frequency: 1h" in scheduled
+    assert "lookback: 2h" in scheduled

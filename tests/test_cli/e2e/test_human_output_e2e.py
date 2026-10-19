@@ -158,27 +158,27 @@ def test_failing_validate_keeps_the_severity_tag(tutorial: Path) -> None:
     assert "detection_model: Unknown objective or signal reference" in collapsed
 
 
-def test_extract_without_sdk_names_the_extra(tutorial: Path) -> None:
-    """#292: `install opentide[sentinel]` rendered as `install opentide`."""
+def test_extract_with_a_broken_sdk_prints_the_reinstall_advice(tutorial: Path) -> None:
+    """#292: human output once dropped bracketed advice; it now prints the reinstall line."""
+    uncomment_tenants(tutorial / ".opentide/configurations/platforms/sentinel.toml")
     with _without_azure():
         output = _human(tutorial, "generate", "extract", "sentinel")
-    assert "install opentide[sentinel]" in output
+    assert "pip install --force-reinstall opentide" in output
+    assert "opentide[" not in output
 
 
-def test_live_validation_without_sdk_prints_the_advice(tutorial: Path) -> None:
+def test_live_validation_with_a_broken_sdk_prints_the_advice(tutorial: Path) -> None:
     """#292: human `--live` printed the message and dropped the advice.
 
     The tutorial scaffold leaves ``[[tenants]]`` commented out, which stops
-    ``--live`` before the SDK check (#314). Uncomment it so this guard still
-    reaches the missing-extra advice.
+    ``--live`` before the SDK import (#314). Uncomment it so this guard still
+    reaches the advice.
     """
     uncomment_tenants(tutorial / ".opentide/configurations/platforms/sentinel.toml")
     with _without_azure():
         output = _human(tutorial, "validate", "query", "--platform", "sentinel", "--live", "--wide")
-    assert (
-        "advice: install opentide[sentinel] (provides azure-identity, azure-monitor-query)"
-        in output
-    )
+    assert "advice: reinstall opentide: pip install --force-reinstall opentide" in output
+    assert "opentide[" not in output
 
 
 @pytest.mark.parametrize(

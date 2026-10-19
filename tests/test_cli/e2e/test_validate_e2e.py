@@ -99,7 +99,7 @@ def sentinel_tenant(tide_corpus_repo: Path) -> None:
 
 
 @pytest.mark.usefixtures("sentinel_tenant")
-def test_validate_query_live_without_sdk_reports_the_extra(invoke_cli) -> None:
+def test_validate_query_live_with_a_broken_sdk_advises_a_reinstall(invoke_cli) -> None:
     """--live is allowed to fail, but with advice instead of a traceback (#239)."""
     with hidden_modules("azure", purge=("opentide.platforms.sentinel",)):
         result = invoke_cli("validate", "query", "--platform", "sentinel", "--live", "--wide")
@@ -107,7 +107,7 @@ def test_validate_query_live_without_sdk_reports_the_extra(invoke_cli) -> None:
     payload = parse_cli_json(result)
     assert payload["mode"] == "live"
     assert payload["status"] == "failed"
-    assert "opentide[sentinel]" in payload["advice"]
+    assert payload["advice"] == "reinstall opentide: pip install --force-reinstall opentide"
 
 
 @pytest.mark.usefixtures("sentinel_tenant")
