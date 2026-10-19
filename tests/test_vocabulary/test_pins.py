@@ -95,8 +95,8 @@ def test_bundled_object_pins_use_mitre_attack_and_alert_severity() -> None:
 
     threat = get_pins("threat::1.0")
     objective = get_pins("objective::1.0")
-    assert threat["threat.mitre_attack"] == "att&ck::1.1"
-    assert objective["objective.mitre_attack"] == "att&ck::1.1"
+    assert threat["threat.mitre_attack"] == "att&ck::1.2"
+    assert objective["objective.mitre_attack"] == "att&ck::1.2"
     assert objective["objective.signals.severity"] == "alert_severity::1.0"
     assert "objective.signals.data.logsources" not in objective
     assert "threat.att&ck" not in threat

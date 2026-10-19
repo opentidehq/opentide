@@ -13,6 +13,7 @@ from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 import requests
@@ -22,6 +23,7 @@ from tests.corpus_support import TIDE_CORPUS_ROOT
 
 from opentide.loading.rule_loader import load_rule_from_dict
 from opentide.models.rule import DetectionRule
+from opentide.platforms.sentinel import deployer as deployer_module
 from opentide.platforms.sentinel.client import (
     ALERT_RULES_API_VERSION,
     ARM_SCOPE,
@@ -30,7 +32,12 @@ from opentide.platforms.sentinel.client import (
     alert_rule_as_flat_dict,
     duration_isoformat,
 )
-from opentide.platforms.sentinel.deployer import SentinelDeploy
+from opentide.platforms.sentinel.deployer import (
+    SENTINEL_TACTIC_ALIASES,
+    SENTINEL_TACTICS,
+    SentinelDeploy,
+    sentinel_tactic,
+)
 
 CORPUS_SENTINEL_RULE = TIDE_CORPUS_ROOT / "Objects/Detection Rules/rule-0001-sentinel-kql.yaml"
 SUBSCRIPTION = "00000000-0000-0000-0000-000000000000"
@@ -431,3 +438,62 @@ def test_names_in_the_url_are_quoted() -> None:
     (request,) = adapter.requests
     assert "/resourceGroups/rg%20with%20space/" in (request.url or "")
     assert "/workspaces/ws%2Fx/" in (request.url or "")
+
+
+@pytest.mark.parametrize(
+    ("stage", "tactic"),
+    [
+        ("Execution", "Execution"),
+        ("Command and Control", "CommandAndControl"),
+        ("Inhibit Response Function", "InhibitResponseFunction"),
+        ("Defense Evasion", "DefenseEvasion"),
+        # ATT&CK v19 split TA0005; Sentinel's AttackTactic enum predates it (#568).
+        ("Stealth", "DefenseEvasion"),
+        ("Defense Impairment", "DefenseEvasion"),
+        # ICS names the tactic Evasion, which is not in the enum either.
+        ("Evasion", "DefenseEvasion"),
+        ("Not A Tactic", None),
+    ],
+)
+def test_sentinel_tactic_maps_attack_stages_to_the_arm_enum(stage: str, tactic: str | None) -> None:
+    assert sentinel_tactic(stage) == tactic
+
+
+def test_every_mapped_tactic_is_in_the_arm_enum() -> None:
+    assert set(SENTINEL_TACTIC_ALIASES.values()) <= SENTINEL_TACTICS
+
+
+def test_new_attack_stages_are_sent_as_defense_evasion(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stealth, Defense Impairment and ICS Evasion techniques deploy as DefenseEvasion."""
+    techniques = ["T1059", "T1027", "T1685.002", "T1562.001", "T0820"]
+    monkeypatch.setattr(deployer_module, "techniques_resolver", lambda uuid: techniques)
+
+    body, _ = _sent_body(_corpus_rule())
+
+    assert body["properties"]["tactics"] == ["Execution", "DefenseEvasion"]
+    assert body["properties"]["techniques"] == ["T1059", "T1027", "T1685", "T1562", "T0820"]
+
+
+def test_stage_without_a_sentinel_tactic_is_dropped_with_a_warning(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(deployer_module, "techniques_resolver", lambda uuid: ["T1059"])
+    monkeypatch.setattr(
+        deployer_module,
+        "get_vocab_entry",
+        lambda vocab, identifier, field=None: ["Not A Tactic", "Execution"],
+    )
+    # Recorded at the deployer: loggers cached on first use bypass capture_logs.
+    logger = MagicMock()
+    monkeypatch.setattr(deployer_module, "logger", logger)
+
+    compiled = SentinelDeploy().compile_deployment(
+        service=None, data=_corpus_rule(), tenant="tenant-a"
+    )
+
+    assert compiled["properties"]["tactics"] == ["Execution"]
+    logger.warning.assert_called_once_with(
+        "dropping_attack_stage_without_sentinel_tactic", technique="T1059", stage="Not A Tactic"
+    )

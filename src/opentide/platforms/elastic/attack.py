@@ -23,7 +23,8 @@ TACTIC_ORDER = [
     ("Execution", "TA0002"),
     ("Persistence", "TA0003"),
     ("Privilege Escalation", "TA0004"),
-    ("Defense Evasion", "TA0005"),
+    ("Stealth", "TA0005"),
+    ("Defense Impairment", "TA0112"),
     ("Credential Access", "TA0006"),
     ("Discovery", "TA0007"),
     ("Lateral Movement", "TA0008"),
@@ -37,6 +38,11 @@ TACTIC_MAP: dict[str, tuple[str, str]] = {
     stage.lower(): (stage, tactic_id) for stage, tactic_id in TACTIC_ORDER
 }
 TACTIC_MAP["priviledge escalation"] = ("Privilege Escalation", "TA0004")
+# ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense
+# Impairment (TA0112) out of it. Keys revoked since (T1562.*, T1070.001/.002, ...)
+# stay valid under att&ck::1.x with their last published stage, which RFC 0007
+# maps to the stage that now holds TA0005.
+TACTIC_MAP["defense evasion"] = ("Stealth", "TA0005")
 
 
 def find_non_enterprise_techniques(data: DetectionRule) -> list[tuple[str, str]]:
@@ -106,6 +112,7 @@ def resolve_elastic_threat(data: DetectionRule) -> list[dict[str, Any]]:
         for stage in raw_stages:
             stage_key = stage.strip().lower()
             if stage_key not in TACTIC_MAP:
+                logger.warning("skipping_unmapped_attack_stage", technique=tech_id, stage=stage)
                 continue
             canonical_stage, _ = TACTIC_MAP[stage_key]
             subs = grouped.setdefault(canonical_stage, {}).setdefault(parent_id, set())

@@ -10,7 +10,7 @@
 "threat.leverage" = "leverage::1.0"
 "threat.viability" = "viability::1.0"
 "threat.surface" = "surface::1.0"
-"threat.mitre_attack" = "att&ck::1.1"
+"threat.mitre_attack" = "att&ck::1.2"
 "threat.actors.name" = "actors::1.1"
 "threat.killchain" = "killchain::1.0"
 "threat.chaining" = "chaining_relations::1.0"
