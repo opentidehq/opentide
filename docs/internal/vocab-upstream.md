@@ -68,6 +68,10 @@ ATT&CK groups **are** version-gated on threat objects through `threat.actors.nam
 Existing objects keep validating: disappeared ATT&CK/MISP ids stay in the
 current major (`removed = 2.0`). New techniques and actors land at the next
 minor (for example `1.1`) and the pin files in the PR propose that contract on
-`threat::1.0`, `threat::2.1`, `objective::1.0`, and `rule::1.0`. Reviewers can
-edit or drop pin hunks before merge if a given ingest should not ship to live
-schemas.
+the live schema revisions (`threat::1.0`, `objective::1.0`, `rule::1.0`,
+`rule::1.1`). Only live schemas are pinned. Reviewers can edit or drop pin hunks
+before merge if a given ingest should not ship to live schemas.
+
+The bundled pins must match `specifications/schemas/pins/` table by table. CI
+fails the OpenTide PR when they drift; see
+[`scripts/build/README.md`](../../scripts/build/README.md).
