@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner
 
 from opentide.cli import app
+from opentide.cli.services import migrate_objects
 from opentide.cli.services.migrate_objects import _fix_destination_case, run_migrate_objects
 
 runner = CliRunner()
@@ -22,6 +24,23 @@ def _case_insensitive(directory: Path) -> bool:
         return (directory / "caseprobe").exists()
     finally:
         probe.rmdir()
+
+
+def _alias_objects(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``objects`` find ``Objects`` as on a case-insensitive filesystem.
+
+    A symlink that ``os.listdir`` hides stands in for the case-insensitive lookup.
+    """
+    try:
+        (root / "objects").symlink_to("Objects", target_is_directory=True)
+    except OSError:
+        pytest.skip("cannot create symlinks here")
+    listdir = os.listdir
+    monkeypatch.setattr(
+        os,
+        "listdir",
+        lambda path: [name for name in listdir(path) if not Path(path, name).is_symlink()],
+    )
 
 
 def _legacy_repo(tmp_path: Path) -> Path:
@@ -287,38 +306,72 @@ def test_case_fix_renames_through_a_temporary_name(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A symlink that ``os.listdir`` hides stands in for a case-insensitive lookup."""
     if _case_insensitive(tmp_path):
         pytest.skip("real case-insensitive filesystem: covered by the test above")
     root = tmp_path / "repo"
     (root / "Objects" / "threats").mkdir(parents=True)
-    try:
-        (root / "objects").symlink_to("Objects", target_is_directory=True)
-    except OSError:
-        pytest.skip("cannot create symlinks here")
-    listdir = os.listdir
-    monkeypatch.setattr(
-        os,
-        "listdir",
-        lambda path: [name for name in listdir(path) if not Path(path, name).is_symlink()],
-    )
+    _alias_objects(root, monkeypatch)
     destinations = ["objects/threats", "objects/rules"]
 
-    assert _fix_destination_case(root, destinations, apply=False) == [
-        {"from": "Objects", "to": "objects"}
-    ]
+    assert _fix_destination_case(root, destinations, apply=False) == (
+        [{"from": "Objects", "to": "objects"}],
+        [],
+    )
 
     renames: list[tuple[str, str]] = []
     monkeypatch.setattr(
         Path, "rename", lambda self, target: renames.append((self.name, Path(target).name))
     )
-    assert _fix_destination_case(root, destinations, apply=True) == [
-        {"from": "Objects", "to": "objects"}
-    ]
+    assert _fix_destination_case(root, destinations, apply=True) == (
+        [{"from": "Objects", "to": "objects"}],
+        [],
+    )
     assert renames == [
         ("Objects", "Objects.opentide-case-rename"),
         ("Objects.opentide-case-rename", "objects"),
     ]
+
+
+def test_migrate_objects_warns_once_when_the_case_rename_is_blocked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A leftover temporary name keeps ``Objects``; ``--json`` readers see why."""
+    if _case_insensitive(tmp_path):
+        pytest.skip("real case-insensitive filesystem: covered by the test above")
+    root = _legacy_repo(tmp_path)
+    _alias_objects(root, monkeypatch)
+    (root / "Objects.opentide-case-rename").mkdir()
+    # Recorded at the logger: loggers cached on first use bypass capture_logs.
+    blocked: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        migrate_objects,
+        "logger",
+        SimpleNamespace(
+            debug=lambda event, **fields: None,
+            warning=lambda event, **fields: blocked.append({"event": event, **fields}),
+        ),
+    )
+    warning = (
+        "Left Objects as it is instead of renaming it to objects: "
+        "Objects.opentide-case-rename is in the way. "
+        "Remove it and run `opentide migrate objects --apply` again"
+    )
+    staged = str(root.resolve() / "Objects.opentide-case-rename")
+
+    planned = run_migrate_objects(root, apply=False)
+    assert "case_renamed" not in planned
+    assert planned["warnings"] == [warning]
+    assert blocked == [{"event": "migrate_case_rename_blocked", "path": staged}]
+
+    blocked.clear()
+    result = run_migrate_objects(root, apply=True)
+    assert "case_renamed" not in result
+    assert "advice" not in result
+    assert result["warnings"] == [warning]
+    assert blocked == [{"event": "migrate_case_rename_blocked", "path": staged}]
+    assert (root / "Objects" / "threats" / "threat.yaml").is_file()
+    assert "Objects" in os.listdir(root)
 
 
 def test_case_fix_leaves_a_case_sensitive_layout_alone(tmp_path: Path) -> None:
@@ -327,7 +380,7 @@ def test_case_fix_leaves_a_case_sensitive_layout_alone(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     (root / "Objects" / "Other").mkdir(parents=True)
     (root / "objects" / "threats").mkdir(parents=True)
-    assert _fix_destination_case(root, ["objects/threats"], apply=True) == []
+    assert _fix_destination_case(root, ["objects/threats"], apply=True) == ([], [])
     assert sorted(os.listdir(root)) == ["Objects", "objects"]
 
 

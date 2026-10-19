@@ -168,7 +168,7 @@ def _fix_destination_case(
     destinations: list[str],
     *,
     apply: bool,
-) -> list[dict[str, str]]:
+) -> tuple[list[dict[str, str]], list[str]]:
     """Give destination folders their exact names on a case-insensitive filesystem.
 
     On macOS and Windows ``Objects`` and ``objects`` are one folder, so a move
@@ -176,29 +176,41 @@ def _fix_destination_case(
     stays. Git adds new files under the on-disk name, and a case-sensitive
     checkout (Linux CI) then has no ``objects/``. A case-only rename is a
     no-op on some filesystems, so it goes through a temporary name.
+
+    Returns the renames, and a warning for each folder left alone because its
+    temporary name is taken.
     """
     renamed: list[dict[str, str]] = []
+    warnings: list[str] = []
     seen: set[str] = set()
+    blocked: set[str] = set()
     for destination in destinations:
         parent = root
         for name in PurePosixPath(destination).parts:
-            variant = _case_variant(parent, name)
             target = parent / name
             relative = target.relative_to(root).as_posix()
+            if relative in blocked:
+                break
+            variant = _case_variant(parent, name)
             if variant is not None and relative not in seen:
+                legacy = (parent / variant).relative_to(root).as_posix()
+                staged = parent / f"{variant}{_CASE_RENAME_SUFFIX}"
+                if os.path.lexists(staged):
+                    logger.warning("migrate_case_rename_blocked", path=str(staged))
+                    blocked.add(relative)
+                    warnings.append(
+                        f"Left {legacy} as it is instead of renaming it to {relative}: "
+                        f"{staged.relative_to(root).as_posix()} is in the way. "
+                        "Remove it and run `opentide migrate objects --apply` again"
+                    )
+                    break
                 if apply:
-                    staged = parent / f"{variant}{_CASE_RENAME_SUFFIX}"
-                    if os.path.lexists(staged):
-                        logger.warning("migrate_case_rename_blocked", path=str(staged))
-                        break
                     (parent / variant).rename(staged)
                     staged.rename(target)
                 seen.add(relative)
-                renamed.append(
-                    {"from": (parent / variant).relative_to(root).as_posix(), "to": relative}
-                )
+                renamed.append({"from": legacy, "to": relative})
             parent = target
-    return renamed
+    return renamed, warnings
 
 
 def _case_rename_advice(renamed: list[dict[str, str]]) -> str:
@@ -276,7 +288,7 @@ def run_migrate_objects(
         for operation in actionable:
             _apply_operation(target, operation, copy=copy)
     destinations = list(dict.fromkeys(str(item["to"]) for item in actionable))
-    case_renamed = _fix_destination_case(target, destinations, apply=apply)
+    case_renamed, warnings = _fix_destination_case(target, destinations, apply=apply)
     if apply and not copy:
         removed = _cleanup_empty_parents(target)
     logger.debug(
@@ -311,4 +323,6 @@ def run_migrate_objects(
             result["advice"] = _case_rename_advice(case_renamed)
     if removed:
         result["removed_empty"] = removed
+    if warnings:
+        result["warnings"] = warnings
     return result
