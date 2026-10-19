@@ -58,6 +58,15 @@ def _no_color_before_help(value: bool) -> bool:
     return value
 
 
+def _print_version(value: bool) -> None:
+    """Eager, so ``opentide --version`` answers before the workspace is resolved."""
+    if value:
+        from opentide import __version__
+
+        typer.echo(f"opentide {__version__}")
+        raise typer.Exit()
+
+
 def _came_from_command_line(ctx: typer.Context, name: str) -> bool:
     """Whether *name* was typed as a flag rather than read from its envvar.
 
@@ -94,6 +103,14 @@ def main_callback(
         None,
         "--proxy",
         help="HTTP(S) proxy URL (http://\\[user:pass@\\]host:port). Overrides HTTP_PROXY and HTTPS_PROXY.",
+    ),
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        is_eager=True,
+        callback=_print_version,
+        help="Print the installed opentide version and exit",
     ),
 ) -> None:
     from pathlib import Path

@@ -46,6 +46,7 @@ All commands inherit [global options](./global-options.md):
 | `--debug` | `DEBUG` | Debug logging |
 | `--no-color` | `NO_COLOR` | Disable Rich colour |
 | `--json` | — | Machine-readable JSON output |
+| `--version`, `-V` | — | Print the installed version and exit |
 
 ## Typical CI sequence
 
