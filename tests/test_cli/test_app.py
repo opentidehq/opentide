@@ -45,11 +45,16 @@ def test_cli_help_lists_commands() -> None:
         assert command in result.stdout
 
 
-@pytest.mark.parametrize("flag", ["--version", "-V"])
-def test_version_flag_prints_installed_version(flag: str) -> None:
+@pytest.mark.parametrize(
+    "args",
+    [["--version"], ["-V"], ["--json", "--version"], ["--version", "--json"]],
+    ids=["long", "short", "json-first", "json-last"],
+)
+def test_version_flag_prints_installed_version(args: list[str]) -> None:
+    """Plain text even with ``--json``, as docs/cli/global-options.md promises."""
     from opentide import __version__
 
-    result = runner.invoke(app, [flag])
+    result = runner.invoke(app, args)
     assert result.exit_code == 0, result.output
     assert result.stdout == f"opentide {__version__}\n"
 
