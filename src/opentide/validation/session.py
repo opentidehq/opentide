@@ -13,10 +13,7 @@ from pydantic import ValidationError
 
 from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.core.registry import OpenTide
-from opentide.models.base import TideModel
-from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
+from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.validation.checks.cross_object import (
     check_chaining_for_object,
     check_references_for_object,
@@ -37,12 +34,6 @@ from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.parallel import resolve_worker_count, sort_issues
 from opentide.validation.preflight import PreflightGraph
 from opentide.validation.scope import ValidationScope
-
-_MODEL_BY_TYPE: dict[str, type[TideModel]] = {
-    "rule": DetectionRule,
-    "objective": DetectionObjective,
-    "threat": ThreatVector,
-}
 
 _DEFAULT_CHECKS = frozenset(
     {
@@ -271,7 +262,7 @@ def _collect_work_items(
 ) -> list[ObjectWorkItem]:
     items: list[ObjectWorkItem] = []
     for object_type, registry in objects.items():
-        if object_type not in _MODEL_BY_TYPE:
+        if object_type not in CORE_OBJECT_TYPES:
             continue
         for uuid, body in registry.items():
             file_name = files_index.get(uuid)
@@ -355,7 +346,7 @@ def _validate_work_item(
         issues.extend(_uuid_issue_for_object(item, graph, file_path))
 
     if ValidateCheck.schema in checks:
-        from opentide.loading.object_loader import load_object_for_validation
+        from opentide.loading.object_loader import SchemaMissingError, load_object_for_validation
 
         shape_rejections: frozenset[tuple[tuple[str, ...], str]] = frozenset()
         try:
@@ -373,6 +364,18 @@ def _validate_work_item(
 
             bucket = [issue for issue in bucket if not is_superseded_extra_key(issue)]
             issues.extend(attach_yaml_lines(bucket, item.body, file_path=file_path))
+        except SchemaMissingError as exc:
+            issues.append(
+                ValidationIssue(
+                    code=exc.code,
+                    severity="error",
+                    object_uuid=item.uuid,
+                    object_type=item.object_type,
+                    file_path=file_path,
+                    field_path=("metadata", "schema"),
+                    message=str(exc),
+                )
+            )
         except Exception as exc:
             issues.append(
                 ValidationIssue(

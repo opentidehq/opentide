@@ -185,6 +185,8 @@ from opentide.loading.object_loader import load_object_for_validation
 
 Prefer registry access for interactive work; these loaders are used internally by validation and indexing.
 
+Both pick the model from `metadata.schema`. A missing identifier raises `SchemaMissingError` (a `ValueError` from `opentide.loading.object_loader`). An unknown identifier, or one of another object type, raises `LookupError`. Neither falls back to the newest revision.
+
 ## Source
 
 `src/opentide/models/`, `src/opentide/models/results.py`, `src/opentide/core/errors.py`

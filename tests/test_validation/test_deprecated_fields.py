@@ -18,6 +18,12 @@ def test_resolve_metaschema_prefers_metadata_schema() -> None:
     assert schema is metaschemas["rule::1.0"]
 
 
+def test_resolve_metaschema_never_substitutes_the_newest_revision() -> None:
+    metaschemas = {"rule::1.0": {"properties": {}}, "rule::1.1": {"properties": {}}}
+    assert resolve_metaschema(metaschemas, {"metadata": {}}, "rule") is None
+    assert resolve_metaschema(metaschemas, {"metadata": {"schema": "rule::9.9"}}, "rule") is None
+
+
 def test_deprecated_field_emits_warning() -> None:
     metaschemas = {
         "rule::1.0": {

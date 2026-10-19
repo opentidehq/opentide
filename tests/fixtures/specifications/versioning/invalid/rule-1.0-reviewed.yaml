@@ -1,0 +1,12 @@
+name: Rule 1.0 With Review Date
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000104
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  reviewed: "2026-09-01"
+  tlp: clear
+
+description: rule::1.0 does not define metadata.reviewed.

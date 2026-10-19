@@ -316,7 +316,7 @@ opentide --json validate
 
 ### `unknown schema identifier` / object won't load
 
-`metadata.schema` must be a registered identifier such as `rule::1.0` or `rule::1.1`. A typo (`rule:1.0`, `rule::1`, `rules::1.0`) means no model matches. Fix the value; the valid identifiers are `threat::1.0`, `objective::1.0`, `rule::1.0`, and `rule::1.1`. `metadata.reviewed` is valid only on `rule::1.1`. See [Schema revision](./concepts/schema-revision.md).
+`metadata.schema` must be a registered identifier such as `rule::1.0` or `rule::1.1`. A typo (`rule:1.0`, `rule::1`, `rules::1.0`) means no model matches. Fix the value; the valid identifiers are `threat::1.0`, `objective::1.0`, `rule::1.0`, and `rule::1.1`. `metadata.reviewed` is valid only on `rule::1.1`. A `schema_missing` issue means the file has no `metadata.schema` at all: add the identifier the object follows, because OpenTide does not assume the newest revision. See [Schema revision](./concepts/schema-revision.md).
 
 ### Threat `impact` / `leverage`: `Input should be a valid string`, `must be a YAML list`, or `packs several vocabulary names`
 

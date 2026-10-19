@@ -1,0 +1,11 @@
+name: Rule With Unknown Schema
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000099
+  schema: rule::9.9
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+
+description: Uses an unregistered schema identifier.

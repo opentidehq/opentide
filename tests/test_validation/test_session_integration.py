@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from opentide.validation.checks.kinds import ValidateCheck
+from opentide.validation.issues import ValidationReport
 from opentide.validation.session import run_validation
 
 
-def test_run_validation_schema_check_on_rule() -> None:
+def _run_schema_check(body: dict[str, Any]) -> ValidationReport:
     index = {
         "objects": {
-            "rule": {
-                "00000000-0000-4000-8000-000000000001": {
-                    "name": "Incomplete",
-                }
-            },
+            "rule": {"00000000-0000-4000-8000-000000000001": body},
             "objective": {},
             "threat": {},
         },
@@ -43,10 +41,28 @@ def test_run_validation_schema_check_on_rule() -> None:
             return_value=[],
         ),
     ):
-        report = run_validation(
+        return run_validation(
             checks=frozenset({ValidateCheck.schema}),
             index=index,
             workers=0,
         )
+
+
+def test_run_validation_schema_check_on_rule() -> None:
+    report = _run_schema_check({"name": "Incomplete", "metadata": {"schema": "rule::1.0"}})
     assert not report.ok
     assert report.stats["objects_checked"] == 1
+
+
+def test_run_validation_reports_missing_schema_without_a_model() -> None:
+    report = _run_schema_check({"name": "Incomplete", "metadata": {"tlp": "clear"}})
+    assert [(i.code, i.field_path) for i in report.errors] == [
+        ("schema_missing", ("metadata", "schema"))
+    ]
+
+
+def test_run_validation_rejects_an_unknown_schema_without_a_model() -> None:
+    report = _run_schema_check({"name": "Incomplete", "metadata": {"schema": "rule::9.9"}})
+    assert [(i.code, i.message) for i in report.errors] == [
+        ("schema_validation", "unknown schema identifier: 'rule::9.9'")
+    ]
