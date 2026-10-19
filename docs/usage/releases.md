@@ -7,6 +7,42 @@ description: Public package versions of the OpenTide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.16.0 — 19 October 2026
+
+Minor release. `pip install opentide` is the only install: every optional extra is gone, and every vendor SDK is part of the base install. After upgrading, regenerate your CI pipeline (security fix), then regenerate schemas for ATT&CK 20.0.
+
+**Install**
+
+```bash
+pip install opentide==0.16.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide setup ci <github|gitlab|azure> --yes
+opentide generate schemas
+opentide validate --strict
+```
+
+**What changes for authors and scripts**
+
+- **No more extras.** Generated pipelines install `opentide==<version>` with no extras. Live Sentinel query validation in those pipelines failed with `No module named 'azure'`; it now works on a stock install. An old `pip install 'opentide[sentinel]'` still installs, with a warning about the unknown extra.
+- **Security.** Generated pipelines take `.opentide/configurations` from the default branch before live query validation and the staging deploy, so a pull request cannot redirect platform credentials. Regenerate with `opentide setup ci <provider> --yes`.
+- **ATT&CK 20.0.** Technique pins are `att&ck::1.2`, and 19.2 is restored at `att&ck::1.1`. Run `opentide generate schemas`. Elastic and Sentinel tactics follow ATT&CK's split of Defense Evasion into Stealth and Defense Impairment.
+- **Stricter failures.**
+  - `generate` exits `1` when a phase raises an error or logs one, for example on a malformed object file. It names the phase and the object.
+  - A missing or unknown `metadata.schema` fails validation instead of being checked against the newest revision.
+- **New:**
+  - `opentide --version`.
+  - `opentide setup platforms --elastic`.
+  - Lint findings carry `uuid`, `severity` and `yaml_line`. Human lint lines read `[check/severity] path[:line]: message`.
+  - A `platform_not_enabled` warning for imported blocks on platforms you have not enabled. It does not fail `--strict`.
+- **One-time diff.** The ATT&CK Navigator layer is now written in a fixed order, so expect one reorder diff on the first regeneration.
+- See the CHANGELOG for the full list of fixes, including the community Elastic, Splunk and duration fixes from @jonny-mcc.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.16.0/)
+- [GitHub Release](https://github.com/OpenTideHQ/opentide/releases/tag/v0.16.0)
+- [CHANGELOG](https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md)
+
 ## 0.15.0 — 16 October 2026
 
 Minor release. Vendor rule ids move out of rule YAML into committed deployment state shards (RFC 0010), and generated pipelines must be regenerated. Elastic Security joins as a supported platform.
