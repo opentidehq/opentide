@@ -19,6 +19,24 @@ def test_validate_full_passes(invoke_cli) -> None:
     assert payload["report"]["ok"] is True
 
 
+@pytest.mark.parametrize("check", [(), ("--check", "schema")])
+def test_validate_without_metadata_schema_fails_the_schema_check(
+    invoke_cli, tide_corpus_repo: Path, check: tuple[str, ...]
+) -> None:
+    """#582: ``schema_missing`` fails ``checks.schema``, not only the run."""
+    rule = tide_corpus_repo / "Objects" / "Detection Rules" / "rule-0001-sentinel-kql.yaml"
+    text = rule.read_text(encoding="utf-8")
+    assert "  schema: rule::1.0\n" in text
+    rule.write_text(text.replace("  schema: rule::1.0\n", ""), encoding="utf-8")
+    result = invoke_cli("validate", "--file", rule.name, *check)
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["checks"]["schema"]["status"] == "failed"
+    assert [(i["code"], i["field_path"]) for i in payload["report"]["issues"]] == [
+        ("schema_missing", ["metadata", "schema"])
+    ]
+
+
 def test_validate_scoped_by_uuid(invoke_cli, corpus_rule_uuids) -> None:
     sentinel_uuid = corpus_rule_uuids["sentinel"]
     result = invoke_cli("validate", "--uuid", sentinel_uuid)

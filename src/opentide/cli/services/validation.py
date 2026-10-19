@@ -87,6 +87,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
     ValidateCheck.schema.value: frozenset(
         {
             "schema_validation",
+            "schema_missing",
             "yaml_parse",
             "missing_uuid",
             "invalid_ref",
