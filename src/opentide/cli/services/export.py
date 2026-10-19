@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING
 import structlog
 
 from opentide.cli.enums import ExportTarget
+from opentide.cli.services.generation import phase_failure
 from opentide.core.logging.console import emit_section
+from opentide.generation.errors import GenerationPhaseError, failing_phase
 
 logger = structlog.get_logger("opentide.cli.services.export")
 if TYPE_CHECKING:
@@ -45,5 +47,9 @@ def run_export(ctx: CliContext, *, target: ExportTarget) -> dict[str, object]:
     """Entry point for export command."""
     ctx.apply_environment()
     emit_section(f"Export — {target.value}")
-    run_export_target(target)
+    try:
+        with failing_phase("exports"):
+            run_export_target(target)
+    except GenerationPhaseError as exc:
+        return {**phase_failure(exc), "target": target.value}
     return {"message": f"Export {target.value} completed", "target": target.value}

@@ -50,6 +50,10 @@ Filters only narrow the selection. An unknown `--target`, a disabled block named
 opentide share push --changed
 ```
 
+A rule passes a block's `rule_statuses` (default `["PRODUCTION"]`) when an enabled platform block (`configurations.<platform>` with `enabled: true`) has a status in that list. The root `status` counts only when no enabled platform block has one. A rule that does not pass is `skipped_status`.
+
+Block statuses are the ones deploy uses and promotion rewrites, so once promotion's write-back has landed, a rule whose enabled block reads `PRODUCTION` is shared even though its root `status` still reads `STAGING`. Every enabled block counts, including blocks for platforms the repository has not enabled, which deploy skips. The CI share job reads the commit that triggered it, before the production deploy promotes, so a rule promoted by that deploy is shared the next time a push changes it, or by a `share push` run without `--changed`.
+
 `push` and `preview` validate each object that passes the type, status, and TLP filters. `sharing-config` runs as part of loading `sharing.toml`. A literal API key is a warning and is replaced with `[REDACTED]` if it would otherwise appear.
 
 ## State

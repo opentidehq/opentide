@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from structlog.testing import capture_logs
 
 from opentide.loading.rule_loader import load_rule_from_dict
 from opentide.models.system_config import ConfigurationModels, SystemConfig
@@ -292,15 +293,21 @@ def test_correlation_search_includes_direct_rule_techniques_and_survives_unindex
     splunk_rule_payload["configurations"]["splunk"]["correlation_search"] = True
     rule = load_rule_from_dict(splunk_rule_payload)
 
-    # Without patching techniques_resolver, an unindexed UUID must not crash config_mdr
-    config = _deployer().config_mdr(rule, _tenant().setup)
+    # Without patching techniques_resolver, an unindexed UUID must not crash config_mdr,
+    # and must not log the resolver's CRITICAL lookup failure either.
+    with capture_logs() as logs:
+        config = _deployer().config_mdr(rule, _tenant().setup)
     assert config["action.correlationsearch.enabled"] == "true"
     assert config["action.correlationsearch.annotations.mitre_attack"] == "T1059.001, T1003"
+    assert not [entry for entry in logs if entry["log_level"] == "critical"], logs
 
     # When techniques_resolver also returns inherited techniques, union in order without duplicates
-    with patch(
-        "opentide.platforms.splunk.deployer.techniques_resolver",
-        return_value=["T1003", "T1059.003"],
+    with (
+        patch("opentide.platforms.splunk.deployer.get_type", return_value="rule"),
+        patch(
+            "opentide.platforms.splunk.deployer.techniques_resolver",
+            return_value=["T1003", "T1059.003"],
+        ),
     ):
         config_with_inherited = _deployer().config_mdr(rule, _tenant().setup)
     assert (

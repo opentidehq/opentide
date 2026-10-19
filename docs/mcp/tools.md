@@ -179,8 +179,8 @@ Tenant query check, the same path as `opentide validate query --live`.
 | `live` | boolean | `false` | `true` calls the tenant |
 
 The default refuses and does not scan `query`. Pass `live: true` to check the
-catalogue rules for `platform`. A missing SDK or a missing plan is a failed
-live check.
+catalogue rules for `platform`. A missing SDK, a missing plan or a tenant it
+cannot reach is a failed live check.
 
 ```json
 {
@@ -350,6 +350,6 @@ get_chaining(uuid=<rule>)                 → inspect related objects in chainin
 ## Troubleshooting
 
 - **Empty results everywhere** — the server likely started with the wrong `OPENTIDE_REPO_ROOT`, or schemas were never generated. See [Configuration](./configuration.md) and run `opentide generate` in the repo.
-- **`validate_query` refuses** — the default does not scan. Pass `live: true` to check the catalogue rules against the tenant. A missing SDK or a missing plan fails that check.
+- **`validate_query` refuses** — the default does not scan. Pass `live: true` to check the catalogue rules against the tenant. A missing SDK, a missing plan or an unreachable tenant fails that check.
 - **A resource returns `{"error": "… not found"}`** — the UUID is wrong or the object type does not match; confirm with `search`.
 - **`deploy_rule` crashes, or `deployment_status` says an undeployed rule is deployed** — through 0.6.3 an unknown platform raised `KeyError`, and any authoring config counted as deployed. 0.6.4 returns a structured failure for an unknown platform or a platform with no tenants. `deployed` is false when the config has no `external_id` and no tenants.

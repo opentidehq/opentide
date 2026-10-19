@@ -162,6 +162,50 @@ def test_build_tactic_name_map() -> None:
     assert mapping["discovery"] == "Discovery"
 
 
+def test_parse_matrix_tactics_follows_matrix_order() -> None:
+    def tactic(ref: str, name: str, **extra: object) -> dict[str, object]:
+        return {"type": "x-mitre-tactic", "id": ref, "name": name, **extra}
+
+    objects = [
+        tactic("x-mitre-tactic--a", "Persistence"),
+        tactic("x-mitre-tactic--b", "Stealth"),
+        tactic("x-mitre-tactic--c", "Defense Impairment"),
+        tactic("x-mitre-tactic--d", "Defense Evasion", revoked=True),
+        tactic("x-mitre-tactic--e", "Initial Access"),
+        {
+            "type": "x-mitre-matrix",
+            "name": "Old matrix",
+            "x_mitre_deprecated": True,
+            "tactic_refs": ["x-mitre-tactic--d"],
+        },
+        {
+            "type": "x-mitre-matrix",
+            "name": "Enterprise ATT&CK",
+            "tactic_refs": [
+                "x-mitre-tactic--e",
+                "x-mitre-tactic--a",
+                "x-mitre-tactic--d",
+                "x-mitre-tactic--b",
+                "x-mitre-tactic--c",
+                "x-mitre-tactic--missing",
+            ],
+        },
+    ]
+
+    assert stix_attack.parse_matrix_tactics(objects) == [
+        "Initial Access",
+        "Persistence",
+        "Stealth",
+        "Defense Impairment",
+    ]
+
+
+def test_parse_matrix_tactics_without_a_matrix_is_empty() -> None:
+    objects = [{"type": "x-mitre-tactic", "id": "x-mitre-tactic--a", "name": "Execution"}]
+
+    assert stix_attack.parse_matrix_tactics(objects) == []
+
+
 def test_parse_datasources_skips_sources_without_external_id() -> None:
     objects = [
         {
@@ -208,6 +252,57 @@ def test_parse_techniques_extracts_entries() -> None:
     assert entries
     assert entries[0]["id"] == "T1059"
     assert entries[0]["link"] == "https://example.com"
+
+
+def _technique(ext_id: str, name: str, **extra: object) -> dict[str, object]:
+    return {
+        "type": "attack-pattern",
+        "name": name,
+        "external_references": [{"source_name": "mitre-attack", "external_id": ext_id}],
+        **extra,
+    }
+
+
+def test_parse_techniques_prefixes_enterprise_subtechniques_with_parent_name() -> None:
+    # STIX names sub-techniques without their parent; the canonical att&ck
+    # vocabulary (and RFC 0007) uses "Parent: Sub". Order must not matter.
+    objects = [
+        _technique("T1685.002", "Disable or Modify Cloud Log"),
+        _technique("T1685", "Disable or Modify Tools"),
+        _technique("T1059.013", "Container CLI/API"),
+        _technique("T1059", "Command and Scripting Interpreter"),
+    ]
+    names = {entry["id"]: entry["name"] for entry in stix_attack.parse_techniques(objects)}
+    assert names == {
+        "T1685": "Disable or Modify Tools",
+        "T1685.002": "Disable or Modify Tools: Disable or Modify Cloud Log",
+        "T1059": "Command and Scripting Interpreter",
+        "T1059.013": "Command and Scripting Interpreter: Container CLI/API",
+    }
+
+
+def test_parse_techniques_ignores_revoked_parent_names() -> None:
+    objects = [
+        _technique("T1562", "Impair Defenses", revoked=True),
+        _technique("T1562.001", "Disable or Modify Tools"),
+    ]
+    entries = stix_attack.parse_techniques(objects)
+    assert [entry["name"] for entry in entries] == ["Disable or Modify Tools"]
+
+
+def test_parse_techniques_keeps_prefix_only_names_for_mobile_and_ics() -> None:
+    objects = [
+        _technique("T1406", "Obfuscated Files or Information"),
+        _technique("T1406.001", "Steganography"),
+    ]
+    names = {
+        entry["id"]: entry["name"]
+        for entry in stix_attack.parse_techniques(objects, prefix="Mobile")
+    }
+    assert names == {
+        "T1406": "Mobile : Obfuscated Files or Information",
+        "T1406.001": "Mobile : Steganography",
+    }
 
 
 def test_parse_groups_extracts_intrusion_sets() -> None:

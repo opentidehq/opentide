@@ -22,6 +22,7 @@ from opentide.platforms.splunk.client import (
     connect_splunk,
     create_query,
 )
+from opentide.platforms.transport import reaching_tenant, transport_error
 
 logger = structlog.get_logger(__name__)
 
@@ -67,6 +68,8 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
             else:
                 logger.critical("unexpected_splunk_validation_response", response=str(response))
         except Exception as exc:
+            if transport_error(exc) is not None:
+                raise  # An unreachable tenant is reported once, by the caller.
             logger.critical("splunk_query_validation_failed", error=repr(exc))
             traceback.print_exc()
             raise
@@ -93,20 +96,26 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
         )
         for tenant_deployment in tide_deployment.rule_deployment:
             tenant = tenant_deployment.tenant
-            service = connect_splunk(
-                host=tenant.setup.url,
-                port=tenant.setup.port,
-                token=tenant.setup.token,
-                app=tenant.setup.app,
-                allow_http_errors=True,
-                ssl_enabled=tenant.setup.ssl,
-            )
-            for mdr in tenant_deployment.rules:
-                if mdr.configurations.splunk:
-                    logger.info("validating_spl_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
-                    self.check_query(mdr, service)
-                else:
-                    logger.info("mdr_skipped", mdr_name=mdr.name, reason="no Splunk configuration")
+            host = f"{tenant.setup.url}:{tenant.setup.port}"
+            with reaching_tenant("splunk", tenant.name, host):
+                service = connect_splunk(
+                    host=tenant.setup.url,
+                    port=tenant.setup.port,
+                    token=tenant.setup.token,
+                    app=tenant.setup.app,
+                    allow_http_errors=True,
+                    ssl_enabled=tenant.setup.ssl,
+                )
+                for mdr in tenant_deployment.rules:
+                    if mdr.configurations.splunk:
+                        logger.info(
+                            "validating_spl_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid
+                        )
+                        self.check_query(mdr, service)
+                    else:
+                        logger.info(
+                            "mdr_skipped", mdr_name=mdr.name, reason="no Splunk configuration"
+                        )
 
 
 def declare():

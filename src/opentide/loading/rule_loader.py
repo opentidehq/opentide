@@ -6,12 +6,12 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 
+from opentide.loading.object_loader import resolve_family_model, schema_id_from_body
 from opentide.loading.platform_loader import load_platform_config
 from opentide.models.metadata import ObjectReferences
 from opentide.models.platform import PLATFORM_CONFIG_MODELS, RuleConfigurations
 from opentide.models.response import ResponseProcedure, ResponseSearch, RuleResponse
 from opentide.models.rule import DetectionRule
-from opentide.models.schema_registry import is_registered, resolve_model
 
 
 def _load_response(response_config: dict[str, Any]) -> RuleResponse:
@@ -40,13 +40,14 @@ def _load_configurations(system_configurations: dict[str, Any]) -> RuleConfigura
 
 
 def _rule_model(metadata_raw: Any) -> type[DetectionRule]:
-    """Select ``rule::1.0`` or ``rule::1.1`` from ``metadata.schema``."""
-    schema_id = metadata_raw.get("schema") if isinstance(metadata_raw, dict) else None
-    if isinstance(schema_id, str) and is_registered(schema_id):
-        model = resolve_model(schema_id)
-        if issubclass(model, DetectionRule):
-            return model
-    return DetectionRule
+    """Select the rule revision ``metadata.schema`` names.
+
+    A missing identifier raises ``SchemaMissingError`` and an unknown one
+    ``SchemaIdentifierError`` (a ``LookupError``); neither falls back to a
+    default revision (versioning 1.1).
+    """
+    schema_id = schema_id_from_body({"metadata": metadata_raw})
+    return cast(type[DetectionRule], resolve_family_model(schema_id, "rule"))
 
 
 def load_rule_from_dict(mdr: dict[str, Any], *, file: Path | None = None) -> DetectionRule:

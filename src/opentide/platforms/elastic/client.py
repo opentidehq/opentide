@@ -135,7 +135,12 @@ class ElasticClient:
         return resp.json()
 
     def find_managed(self, tag: str = "OpenTide") -> list[dict[str, Any]]:
-        """List rules managed by OpenTide using the tag filter."""
+        """List every rule managed by OpenTide, using the tag filter.
+
+        Raises ``requests.HTTPError`` when a page fails rather than returning the
+        rules collected so far: a partial listing is indistinguishable from a
+        complete one to the caller (#566).
+        """
         url = self._kibana_url("/api/detection_engine/rules/_find")
         per_page = 1000
         page = 1
@@ -150,8 +155,7 @@ class ElasticClient:
                 },
                 timeout=self.timeout,
             )
-            if resp.status_code != 200:
-                break
+            resp.raise_for_status()
             body = resp.json()
             batch = body.get("data", [])
             if not batch:

@@ -237,6 +237,56 @@ def test_deploy_loads_only_the_requested_engine(
     assert imported == ["opentide.platforms.sentinel.deployer"]
 
 
+def _disable_splunk(repo: Path) -> None:
+    config = repo / ".opentide/configurations/systems/splunk.toml"
+    text = config.read_text(encoding="utf-8")
+    assert "[tide]\nenabled = true\n" in text
+    config.write_text(
+        text.replace("[tide]\nenabled = true\n", "[tide]\nenabled = false\n"), encoding="utf-8"
+    )
+
+
+@pytest.mark.parametrize("wide", [False, True], ids=["plan", "wide"])
+def test_deploy_to_a_disabled_platform_loads_no_engine(
+    invoke_cli, tide_corpus_repo: Path, refuse_deployment_engines: list[str], wide: bool
+) -> None:
+    """#414: the corpus Splunk rule says ``enabled: true``; the workspace does not."""
+    _disable_splunk(tide_corpus_repo)
+    argv = ["deploy", "--platform", "splunk", "--plan", "FULL"]
+    result = invoke_cli(*argv, *(["--wide"] if wide else []))
+    payload = assert_json_ok(result)
+    assert payload["status"] == "skipped"
+    assert payload["message"] == "No rules to deploy for this platform"
+    assert payload["plan"] == {}
+    assert refuse_deployment_engines == []
+    (event,) = _log_events(result.stderr, "system_disabled_for_deploy")
+    assert event["advice"] == "enable it with 'opentide setup platforms --splunk'"
+
+
+def test_wide_dry_run_never_builds_a_disabled_platform_engine(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#414: the other platforms still plan and load; Splunk is neither planned nor built."""
+    from opentide.platforms import plugins
+
+    _disable_splunk(tide_corpus_repo)
+    imported: list[str] = []
+    original = plugins.PlatformLoader.import_engine
+
+    def _record(module_path: str):
+        imported.append(module_path)
+        return original(module_path)
+
+    monkeypatch.setattr(plugins.PlatformLoader, "import_engine", staticmethod(_record))
+    result = invoke_cli("deploy", "--dry-run", "--plan", "FULL", "--wide", "--skip-promotion")
+    payload = assert_json_ok(result)
+    assert "splunk" not in payload["plan"]
+    assert "splunk" not in payload["payloads"]
+    assert "sentinel" in payload["plan"]
+    assert "opentide.platforms.sentinel.deployer" in imported
+    assert not [path for path in imported if "splunk" in path]
+
+
 @pytest.mark.parametrize("json_output", [True, False], ids=["json", "human"])
 def test_deploy_dry_run_without_rules_folder_reports_no_rules(
     invoke_cli,

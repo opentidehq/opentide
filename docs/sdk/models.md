@@ -33,7 +33,7 @@ DetectionRule.__schema_identifier__  # "rule::1.0"
 | `techniques` | `list[str]` | ATT&CK technique IDs |
 | `configurations` | `RuleConfigurations` | Typed per-platform blocks (preferred) |
 | `platforms` | `dict` | Legacy flat platform dict |
-| `detection_model` | `str \| None` | Objective UUID this rule implements |
+| `detection_model` | `str \| None` | UUID of the objective, or of a signal under it, that this rule implements |
 | `response` | `RuleResponse \| None` | Alert + response playbook |
 
 The YAML you author maps one-to-one onto these attributes:
@@ -43,7 +43,7 @@ rule = OpenTide.Rules["00000000-0000-4000-8003-000000000001"]
 rule.name                       # "Sentinel KQL Rule"
 rule.metadata.schema_id         # "rule::1.0"  (YAML `metadata.schema`)
 rule.metadata.schema            # "rule::1.0"  (read-only alias of schema_id)
-rule.detection_model            # objective UUID
+rule.detection_model            # objective UUID (or a signal UUID under one)
 rule.configurations.sentinel.query
 ```
 
@@ -158,7 +158,7 @@ Exceptions live under `opentide.core.errors.Errors` (aliased `TideErrors`). Catc
 | `Errors.TideMDRDataModelErrors` | Invalid MDR (rule) data structure |
 | `Errors.TideQueryValidationError` | A rule query fails validation |
 | `Errors.TideDeploymentErrors` | Any failure during deployment |
-| `Errors.TenantConnectionError` | Cannot connect to the target tenant |
+| `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host` |
 | `Errors.DetectionRuleCreationFailed` / `…UpdateFailed` / `…DeletionFailed` | Platform API operation failed |
 | `Errors.TideConfigurationErrors` | Invalid OpenTide configuration files |
 | `Errors.TenantNonExistingDeploymentPlan` | A tenant references a missing deployment plan |
@@ -184,6 +184,8 @@ from opentide.loading.object_loader import load_object_for_validation
 ```
 
 Prefer registry access for interactive work; these loaders are used internally by validation and indexing.
+
+Both pick the model from `metadata.schema`. A missing identifier raises `SchemaMissingError` (a `ValueError` from `opentide.loading.object_loader`). An unknown identifier, or one of another object type, raises `SchemaIdentifierError` (a `LookupError` from the same module). Neither falls back to the newest revision.
 
 ## Source
 

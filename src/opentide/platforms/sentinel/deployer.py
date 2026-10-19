@@ -17,6 +17,50 @@ logger = structlog.get_logger('opentide.platforms.sentinel.deployer')
 if TYPE_CHECKING:
     from opentide.models.system_config import TenantDeployment
 
+# The ARM ``AttackTactic`` enum (Microsoft.SecurityInsights alertRules).
+SENTINEL_TACTICS = frozenset({
+    'Reconnaissance', 'ResourceDevelopment', 'InitialAccess', 'Execution', 'Persistence',
+    'PrivilegeEscalation', 'DefenseEvasion', 'CredentialAccess', 'Discovery', 'LateralMovement',
+    'Collection', 'Exfiltration', 'CommandAndControl', 'Impact', 'PreAttack',
+    'ImpairProcessControl', 'InhibitResponseFunction',
+})
+# ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense
+# Impairment (TA0112) out of it; ICS calls the tactic Evasion. Sentinel only
+# knows DefenseEvasion for all three.
+SENTINEL_TACTIC_ALIASES = {
+    'Stealth': 'DefenseEvasion',
+    'DefenseImpairment': 'DefenseEvasion',
+    'Evasion': 'DefenseEvasion',
+}
+
+
+def sentinel_tactic(stage: str) -> str | None:
+    """Map an ``att&ck`` vocabulary stage to a Sentinel ``AttackTactic``.
+
+    Returns ``None`` when Sentinel has no tactic for the stage.
+    """
+    tactic = stage.title().replace(' ', '').strip()
+    tactic = SENTINEL_TACTIC_ALIASES.get(tactic, tactic)
+    return tactic if tactic in SENTINEL_TACTICS else None
+
+
+def _technique_tactics(technique: str) -> list[str]:
+    """Sentinel tactics for one technique; stages Sentinel lacks are dropped with a warning."""
+    stages = get_vocab_entry('att&ck', technique, 'tide.vocab.stages') or []
+    if isinstance(stages, str):
+        stages = [stages]
+    tactics: list[str] = []
+    for stage in stages:
+        tactic = sentinel_tactic(stage)
+        if tactic is None:
+            logger.warning(
+                'dropping_attack_stage_without_sentinel_tactic', technique=technique, stage=stage
+            )
+            continue
+        tactics.append(tactic)
+    return tactics
+
+
 def _missing_field(data: DetectionRule, field: str, requirement: str) -> Errors.TideMDRDataModelErrors:
     return Errors.TideMDRDataModelErrors(
         f'Rule {data.metadata.uuid} ({data.name}): configurations.sentinel.{field} is missing; {requirement}'
@@ -147,8 +191,7 @@ class SentinelDeploy(RuleDeployer):
         if techniques:
             tactics = list()
             for t in techniques:
-                vocab_tactics = [t.title().replace(' ', '').strip() for t in get_vocab_entry('att&ck', t, 'tide.vocab.stages')]
-                tactics.extend(vocab_tactics)
+                tactics.extend(_technique_tactics(t))
             techniques = [t.split('.')[0] for t in techniques]
             techniques = list(dict.fromkeys(techniques))
             tactics = list(dict.fromkeys(tactics))

@@ -26,9 +26,9 @@ opentide validate --check schema
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)). Repeatable: each `--file` adds a file to the scope |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
-| `--strict` | Treat warnings as failures (exit `1`) |
+| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` |
 
-`--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Validation failures in `--json` mode include the complete report before the process exits.
+`--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. The one exception is `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), which `--strict` reports without failing. Validation failures in `--json` mode include the complete report before the process exits.
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
@@ -112,9 +112,24 @@ Every issue reports the `file_path` of the object it concerns, so issues from tw
 
 An object file that is not valid YAML is reported as a `yaml_parse` issue against that path (exit `1`, and a complete report in `--json` mode) instead of raising a parser traceback. The file is not indexed, so no other check can see it — the issue is emitted regardless of `--check`.
 
+### Schema identifier
+
+The `schema` check validates each object against the revision its `metadata.schema` names, so `rule::1.0` and `rule::1.1` rules validate side by side. An object without `metadata.schema` fails with `schema_missing` at that field. An identifier that is not registered, or that names another object type (a rule declaring `threat::1.0`), fails with `schema_validation` at that field. Neither case is checked against the newest revision instead. Through 0.15.0 an object without `metadata.schema` was checked against the newest revision of its type, and a rule declaring another type's identifier was checked as that type.
+
 ### Vendor rule ids
 
 `rule_id`, `rule_id_bundle` and `rule_id::<tenant>` are not keys of any platform block. A rule that still carries one fails the `schema` check with `external_id_in_rule` at that field. Vendor ids belong in [deployment state](../usage/concepts/deployment-state.md); move them with [`opentide deploy migrate-state`](./deploy.md#deploy-migrate-state). A full-workspace run also checks every `*.json` under `.opentide/states/deployment/`, including orphan shards whose rule was deleted, and fails each unusable one with its `deployment_state_*` code (a non-canonical file name, a second file for the same rule, or a tenant key with surrounding spaces included). A run narrowed with `--file`, `--uuid` or `--type` checks the shards of the selected rules only. A rule without a shard is fine.
+
+### Platforms this workspace has not enabled
+
+A rule may carry a block for a platform this workspace has not enabled, for example a rule imported from a repository that deploys to Splunk. The block is still validated against that platform's model: an empty `query`, an unknown key, or a missing required field fails, and so does a key that is not a platform (`configurations.splnk`). A well-formed block passes with one `platform_not_enabled` warning per disabled platform, at `configurations.<platform>`:
+
+```text illustrative
+OK Validation passed
+WARNING /repo/objects/rules/imported.yaml:24: configurations.splunk: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
+```
+
+In `--json` mode the line is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.
 
 ### CVE check
 
@@ -184,6 +199,29 @@ Only the requested platform's engine is
 loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
 modules. A platform with no `[[tenants]]` entry fails the same way, before the
 client is built, and names the file to edit.
+
+A tenant the check cannot reach (a refused connection, a DNS or TLS failure, a
+timeout, or a proxy that will not connect) fails the check with exit `1`, not a
+traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Defender for
+Endpoint, `--json` names the `tenant` and the `host` that failed, and `message`
+carries the network error; Sentinel reports it in its own failed result. The human output prints the same line under `FATAL`,
+with the `advice`. The platform's remaining tenants are not checked after the
+first one that cannot be reached. The sample is illustrative, because it needs a
+configured tenant:
+
+```json illustrative
+{
+  "platform": "splunk",
+  "mode": "live",
+  "supported": true,
+  "tenant": "Production",
+  "host": "splunk.example.com:8089",
+  "advice": "check the 'Production' tenant in .opentide/configurations/platforms/splunk.toml and the network path to splunk.example.com:8089; behind a proxy, pass opentide --proxy",
+  "ok": false,
+  "status": "failed",
+  "message": "Cannot reach splunk tenant 'Production' at splunk.example.com:8089: <urlopen error [Errno 111] Connection refused>"
+}
+```
 
 ### Which tenants are checked
 

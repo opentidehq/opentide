@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shlex
+
 from opentide.ci.gates import azure_premerge_condition
 from opentide.ci.inflight import azure_inflight_job, azure_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
@@ -11,8 +13,9 @@ from opentide.ci.stages import (
     object_validate_commands,
     pip_install,
     production_deploy_steps,
-    query_validation_command,
+    reviewed_query_validation_command,
     staging_deploy_steps,
+    trusted_platform_config_commands,
 )
 from opentide.ci.text import indent
 from opentide.ci.writeback import (
@@ -47,13 +50,17 @@ def _bash_script(commands: list[str]) -> str:
 
 
 def _checkout_step(*, persist_credentials: bool, full_history: bool = False) -> str:
-    """Azure clones with throwaway credentials unless asked otherwise."""
+    """Azure clones with throwaway credentials unless asked otherwise.
+
+    Persisted credentials alone keep the pipeline's fetch depth: a job that
+    only fetches one path does not need the full history.
+    """
     if not persist_credentials and not full_history:
         return ""
     lines = ["- checkout: self"]
     if persist_credentials:
         lines.append("  persistCredentials: true")
-    if full_history or persist_credentials:
+    if full_history:
         lines.append("  fetchDepth: 0")
     return "\n".join(lines) + "\n"
 
@@ -145,6 +152,7 @@ def _azure_job(
 
 def render_azure(options: CiRenderOptions) -> str:
     branch = options.default_branch
+    restore = trusted_platform_config_commands(shlex.quote(branch))
 
     query_jobs: list[str] = []
     for platform in options.platforms:
@@ -155,7 +163,13 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 f"validate_query_{safe}",
                 display_name=f"Validate query ({platform})",
-                steps=_job_steps(options, [query_validation_command(platform, repo=options.repo)]),
+                steps=_job_steps(
+                    options,
+                    [*restore, reviewed_query_validation_command(platform, repo=options.repo)],
+                    # The checkout token is removed before later steps unless it
+                    # is persisted, and the endpoint restore has to fetch.
+                    persist_credentials=True,
+                ),
             )
         )
 
@@ -181,7 +195,12 @@ def render_azure(options: CiRenderOptions) -> str:
                 "deploy_staging",
                 display_name="Deploy Staging",
                 condition=azure_premerge_condition(branch),
-                steps=_job_steps(options, staging_deploy_steps(options), full_history=True),
+                steps=_job_steps(
+                    options,
+                    [*restore, *staging_deploy_steps(options)],
+                    persist_credentials=True,
+                    full_history=True,
+                ),
             )
         )
     if options.inflight:
@@ -205,7 +224,12 @@ def render_azure(options: CiRenderOptions) -> str:
             display_name="Deploy Production",
             condition=f"eq(variables['Build.SourceBranch'], 'refs/heads/{branch}')",
             # Persisted credentials let the write-back step push.
-            steps=_job_steps(options, _production_commands(options), persist_credentials=True)
+            steps=_job_steps(
+                options,
+                _production_commands(options),
+                persist_credentials=True,
+                full_history=True,
+            )
             + "\n"
             + _writeback_step(options),
         )

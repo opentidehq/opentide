@@ -16,6 +16,7 @@ from opentide.platforms.carbon_black.client import (
     CarbonBlackCloudService,
 )
 from opentide.platforms.plugins import QueryValidator
+from opentide.platforms.transport import reaching_tenant
 
 if TYPE_CHECKING:
     from cbc_sdk.rest_api import CBCloudAPI
@@ -72,17 +73,21 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
             strategy=deployment_plan,
         )
         for tenant_deployment in tide_deployment.rule_deployment:
-            cbc_service = CarbonBlackCloudService(tenant_deployment.tenant)
-            for mdr in tenant_deployment.rules:
-                if mdr.configurations.carbon_black_cloud:
-                    logger.info("validating_cbc_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
-                    self.check_query(mdr, cbc_service.service)
-                else:
-                    logger.info(
-                        "mdr_skipped",
-                        mdr_name=mdr.name,
-                        reason="no Carbon Black Cloud configuration section",
-                    )
+            tenant = tenant_deployment.tenant
+            with reaching_tenant("carbon_black_cloud", tenant.name, tenant.setup.url):
+                cbc_service = CarbonBlackCloudService(tenant)
+                for mdr in tenant_deployment.rules:
+                    if mdr.configurations.carbon_black_cloud:
+                        logger.info(
+                            "validating_cbc_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid
+                        )
+                        self.check_query(mdr, cbc_service.service)
+                    else:
+                        logger.info(
+                            "mdr_skipped",
+                            mdr_name=mdr.name,
+                            reason="no Carbon Black Cloud configuration section",
+                        )
 
 
 def declare():

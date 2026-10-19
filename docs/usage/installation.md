@@ -124,9 +124,9 @@ opentide --help
 
 ```bash
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo     # see Repository setup for other ways
+opentide --version         # opentide <version>
 opentide validate          # should return OK
 opentide generate
-opentide --json info | python -c "import sys,json; print(json.load(sys.stdin)['version'])"
 opentide --json info
 opentide info         # concise tabular view
 ```

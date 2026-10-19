@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING
 import structlog
 
 from opentide.cli.enums import DocumentScope
+from opentide.cli.services.generation import phase_failure
 from opentide.core.logging.console import emit_section
+from opentide.generation.errors import GenerationPhaseError, failing_phase
 
 logger = structlog.get_logger("opentide.cli.services.document")
 if TYPE_CHECKING:
@@ -39,8 +41,11 @@ def run_document(
 ) -> dict[str, object]:
     """Entry point for document command."""
     ctx.apply_environment()
-    if scope is None:
-        emit_section("Documentation — full pipeline")
-        return run_document_all(output=output, flavor=flavor)
-    emit_section(f"Documentation — {scope.value}")
-    return run_document_scope(scope, output=output, flavor=flavor)
+    emit_section(f"Documentation — {'full pipeline' if scope is None else scope.value}")
+    try:
+        with failing_phase("docs"):
+            if scope is None:
+                return run_document_all(output=output, flavor=flavor)
+            return run_document_scope(scope, output=output, flavor=flavor)
+    except GenerationPhaseError as exc:
+        return phase_failure(exc)

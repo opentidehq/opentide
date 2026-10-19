@@ -54,7 +54,7 @@ jobs:
       - name: Twine check
         run: uvx twine check dist/*
 
-      - name: Detect vocabulary bundle or lockfile changes
+      - name: Detect vocabulary bundle, pin or lockfile changes
         id: vocab_changes
         run: |
           set -euo pipefail
@@ -70,14 +70,29 @@ jobs:
           fi
 
           changed_files="$(git diff --name-only "$base_ref" "${{ github.sha }}")"
-          if rg -n "^(src/opentide/data/vocabulary/.*\\.vocab\\.toml|data/specifications\\.lock\\.json)$" <<<"$changed_files" >/dev/null; then
+          # grep, not rg: ripgrep is not installed on GitHub-hosted runners, and a
+          # missing command in an `if` reads as "no match" and skips the gate.
+          if grep -qE "^(src/opentide/data/vocabulary/.*\\.vocab\\.toml|src/opentide/data/pins/.*\\.toml|data/specifications\\.lock\\.json|scripts/build/sync_vocabularies\\.py)$" <<<"$changed_files"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check vocabulary sync drift
+      # Without a specifications clone, --check only compares the lockfile with the
+      # bundle, so pins edited by hand and relocked would pass.
+      - name: Checkout specifications
         if: steps.vocab_changes.outputs.changed == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: OpenTideHQ/specifications
+          ref: main
+          path: specifications
+          persist-credentials: false
+
+      - name: Check vocabulary and pin sync drift
+        if: steps.vocab_changes.outputs.changed == 'true'
+        env:
+          OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
         run: uv run python scripts/build/sync_vocabularies.py --check
 
   test:
@@ -277,8 +292,8 @@ jobs:
     name: CLI Windows smoke
     runs-on: windows-latest
     # Also not gated on `test`: a 36 s job that waited ~5 min for a matrix it
-    # shares nothing with. Left serial — one test file, so workers would only
-    # add startup cost.
+    # shares nothing with. Left serial — two small test files, so workers would
+    # only add startup cost.
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -298,3 +313,8 @@ jobs:
         run: >-
           uv run pytest tests/test_cli/e2e/test_console_script_smoke.py
           -m cli_smoke -q --no-cov
+
+      # NTFS is case-insensitive, so `Objects` and `objects` are one folder.
+      # Linux runners cannot exercise that path of `migrate objects` (#522).
+      - name: Layout migration on a case-insensitive filesystem
+        run: uv run pytest tests/test_cli/test_migrate_objects.py -q --no-cov

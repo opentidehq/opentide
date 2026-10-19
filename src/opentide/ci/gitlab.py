@@ -17,8 +17,9 @@ from opentide.ci.stages import (
     object_validate_commands,
     pip_install,
     production_deploy_steps,
-    query_validation_command,
+    reviewed_query_validation_command,
     staging_deploy_steps,
+    trusted_platform_config_commands,
 )
 from opentide.ci.text import indent
 from opentide.ci.writeback import (
@@ -28,6 +29,9 @@ from opentide.ci.writeback import (
     writeback_after_cancel,
 )
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
+
+#: The project's default branch as GitLab reports it, as in ``GITLAB_FETCH``.
+_DEFAULT_BRANCH = '"$CI_DEFAULT_BRANCH"'
 
 
 def _need_lines(needs: str | list[str] | None) -> list[str]:
@@ -131,7 +135,12 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 job_name,
                 options=options,
                 stage="validate",
-                script=[query_validation_command(platform, repo=options.repo)],
+                script=[
+                    *trusted_platform_config_commands(_DEFAULT_BRANCH),
+                    reviewed_query_validation_command(platform, repo=options.repo),
+                ],
+                # python slim has no git; without it the endpoint checkout cannot run.
+                before=[GITLAB_INSTALL_GIT],
             )
         )
 
@@ -143,10 +152,14 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 "deploy_staging",
                 options=options,
                 stage="deploy",
-                script=staging_deploy_steps(options),
+                script=[
+                    *trusted_platform_config_commands(_DEFAULT_BRANCH),
+                    *staging_deploy_steps(options),
+                ],
                 needs="generate",
                 rules=gitlab_premerge_rule(),
                 extra_lines=full_history,
+                before=[GITLAB_INSTALL_GIT],
             )
         )
 

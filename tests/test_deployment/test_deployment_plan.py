@@ -388,3 +388,130 @@ def test_full_plan_accounts_for_every_indexed_rule(catalogue: Path) -> None:
     assert set(CORPUS_RULE_UUIDS.values()) <= scope["planned"]
     assert scope["status"] == {INERT_RULE_UUID}
     assert scope["warned"] == set(SUBFOLDER_RULE_UUIDS.values())
+
+
+GATED_RULE_UUID = "00000000-0000-4000-8003-000000000414"
+_GATED_RULE = """\
+name: Gated Rule
+metadata:
+  uuid: {uuid}
+  schema: rule::1.0
+configurations:
+  {platform}:
+    enabled: true
+    status: {status}
+    query: index=main | head 1
+"""
+_SPLUNK_PLATFORM = """\
+[platform]
+enabled = {enabled}
+identifier = "splunk"
+name = "Splunk Enterprise"
+description = "Splunk"
+
+[[tenants]]
+name = "Default"
+description = "Default Splunk deployment target"
+deployment = "ALWAYS"
+[tenants.setup]
+url = "https://splunk.example"
+port = "8089"
+token = "token"
+app = "search"
+"""
+
+
+def _write_gated_rule(
+    root: Path, *, status: str, splunk_enabled: bool, platform: str = "splunk"
+) -> None:
+    """One rule whose own block says ``enabled: true``, and a Splunk toml with a tenant.
+
+    Only the workspace ``enabled`` flag differs between the gated and planned cases.
+    """
+    rules = root / "objects" / "rules"
+    rules.mkdir(parents=True, exist_ok=True)
+    (rules / "gated.yaml").write_text(
+        _GATED_RULE.format(uuid=GATED_RULE_UUID, platform=platform, status=status),
+        encoding="utf-8",
+    )
+    config = root / ".opentide" / "configurations" / "platforms" / "splunk.toml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(
+        _SPLUNK_PLATFORM.format(enabled=str(splunk_enabled).lower()), encoding="utf-8"
+    )
+
+
+def _disabled_skips(events: list[LoggedEvent]) -> list[dict[str, object]]:
+    return [fields for _, event, fields in events if event == "system_disabled_for_deploy"]
+
+
+#: Each plan with a status it deploys, so the enabled control is planned.
+_GATE_CASES = [
+    pytest.param(DeploymentStrategy.FULL, "PRODUCTION", False, id="FULL"),
+    pytest.param(DeploymentStrategy.STAGING, "STAGING", False, id="STAGING"),
+    pytest.param(DeploymentStrategy.PRODUCTION, "PRODUCTION", False, id="PRODUCTION"),
+    pytest.param(DeploymentStrategy.ALWAYS, "PRODUCTION", False, id="ALWAYS"),
+    pytest.param(DeploymentStrategy.STAGING, "PRODUCTION", True, id="STAGING-wide"),
+]
+
+
+@pytest.fixture
+def local_workspace(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Plan from the local rules folder, not a CI diff."""
+    for name in CI_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    return workspace
+
+
+@pytest.mark.parametrize(("plan", "status", "wide"), _GATE_CASES)
+def test_disabled_platform_is_never_planned(
+    local_workspace: Path,
+    plan_log: list[LoggedEvent],
+    plan: DeploymentStrategy,
+    status: str,
+    wide: bool,
+) -> None:
+    """#414: the workspace flag gates deploy. The block's own ``enabled: true`` does not."""
+    from opentide.deployment import make_deploy_plan
+
+    _write_gated_rule(local_workspace, status=status, splunk_enabled=False)
+    assert make_deploy_plan(plan, wide_scope=wide) == {}
+    assert _disabled_skips(plan_log) == [
+        {
+            "system": "SPLUNK",
+            "rule": "Gated Rule",
+            "advice": "enable it with 'opentide setup platforms --splunk'",
+        }
+    ]
+
+
+@pytest.mark.parametrize(("plan", "status", "wide"), _GATE_CASES)
+def test_enabling_the_platform_plans_the_same_rule(
+    local_workspace: Path,
+    plan_log: list[LoggedEvent],
+    plan: DeploymentStrategy,
+    status: str,
+    wide: bool,
+) -> None:
+    from opentide.deployment import make_deploy_plan
+
+    _write_gated_rule(local_workspace, status=status, splunk_enabled=True)
+    assert make_deploy_plan(plan, wide_scope=wide) == {"splunk": [GATED_RULE_UUID]}
+    assert _disabled_skips(plan_log) == []
+
+
+def test_disabled_platform_advice_spells_the_flag_with_dashes(
+    local_workspace: Path, plan_log: list[LoggedEvent]
+) -> None:
+    """The advice named ``--defender_for_endpoint``, which ``setup platforms`` rejects."""
+    from opentide.deployment import make_deploy_plan
+
+    _write_gated_rule(
+        local_workspace,
+        status="PRODUCTION",
+        splunk_enabled=True,
+        platform="defender_for_endpoint",
+    )
+    assert make_deploy_plan(DeploymentStrategy.FULL) == {}
+    ((fields),) = _disabled_skips(plan_log)
+    assert fields["advice"] == "enable it with 'opentide setup platforms --defender-for-endpoint'"

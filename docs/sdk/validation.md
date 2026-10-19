@@ -69,6 +69,18 @@ rule = OpenTide.Rules[uuid]
 result = OpenTide.validate_rule(rule)
 ```
 
+`validate_rule` checks the rule against the revision its `metadata.schema` names, so a `rule::1.1` rule may carry `metadata.reviewed` and a `rule::1.0` rule may not. Through 0.15.0 `validate_rule` checked every rule against `rule::1.0`, so a valid `rule::1.1` rule that carried `metadata.reviewed` failed.
+
+A loaded rule always declares a registered identifier: `OpenTide.Rules` and `load_rule_from_dict` raise `SchemaMissingError` or `SchemaIdentifierError` instead (see [Loading without the registry](./models.md#loading-without-the-registry)). To check a raw YAML body, use `validate_raw_payload`:
+
+```python
+from opentide.validation import validate_raw_payload
+
+result = validate_raw_payload(body, "rule")
+```
+
+It checks the body against the revision its `metadata.schema` names. A body without `metadata.schema` fails with `schema_missing: missing metadata.schema on object`. An unknown identifier, or one of another object type, fails on `('metadata', 'schema')`. Neither is checked against the newest revision. [`opentide validate`](../cli/validate.md#schema-identifier) reports the same cases as issues.
+
 ## Query validation
 
 Query validation is a **platform plugin** concern, separate from object validation above. Two Python paths exist:

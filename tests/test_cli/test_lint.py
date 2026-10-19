@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from opentide.cli import app
 from opentide.cli.enums import LintCheck
-from opentide.cli.services.lint import run_lint
+from opentide.cli.services.lint import _top_level_key_lines, run_lint
 
 runner = CliRunner()
 
@@ -159,7 +160,7 @@ def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
     assert result.exit_code == 0, result.output
     assert (
-        "[filenames] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml'"
+        "[filenames/warning] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml'"
         " does not match slugify(name)='simulated-actor'"
     ) in result.output
     assert "ISSUES Catalogue lint found issues" in result.output
@@ -170,7 +171,7 @@ def test_lint_cli_human_names_the_renamed_file(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint", "--fix"])
     assert result.exit_code == 0, result.output
     assert (
-        "[filenames] objects/threats/simulated-actor.yaml: Filename 'Simulated Actor.yaml'"
+        "[filenames/warning] objects/threats/simulated-actor.yaml: Filename 'Simulated Actor.yaml'"
         " does not match slugify(name)='simulated-actor'"
         " (renamed from objects/threats/Simulated Actor.yaml)"
     ) in result.output
@@ -184,3 +185,215 @@ def test_lint_cli_strict(tmp_path: Path) -> None:
     )
     assert result.exit_code == 1
     assert '"ok": false' in result.stdout
+
+
+_NO_METADATA = """\
+name: Simulated Actor
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000001
+  schema: threat::1.0
+"""
+
+
+def test_lint_metadata_finding_carries_uuid_severity_and_line(tmp_path: Path) -> None:
+    """#488: a finding had only check, path and message, so it could not be triaged."""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", "# header\n" + _NO_METADATA)
+    (finding,) = run_lint(tmp_path)["findings"]
+    assert finding == {
+        "check": "metadata",
+        "severity": "info",
+        "path": "objects/threats/simulated-actor.yaml",
+        "yaml_line": 2,
+        "uuid": "00000000-0000-4000-8001-000000000001",
+        "message": "Recommended metadata missing: author, organisation",
+    }
+
+
+def test_lint_metadata_finding_without_a_metadata_block_has_no_line(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", "name: Simulated Actor\n")
+    (finding,) = run_lint(tmp_path)["findings"]
+    assert finding["yaml_line"] is None
+    assert finding["uuid"] is None
+
+
+def test_lint_filename_finding_carries_uuid_and_severity(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "Simulated Actor.yaml", _THREAT)
+    (finding,) = run_lint(tmp_path)["findings"]
+    assert finding == {
+        "check": "filenames",
+        "severity": "warning",
+        "path": "objects/threats/Simulated Actor.yaml",
+        "yaml_line": None,
+        "uuid": "00000000-0000-4000-8001-000000000001",
+        "expected": "objects/threats/simulated-actor.yaml",
+        "message": "Filename 'Simulated Actor.yaml' does not match slugify(name)='simulated-actor'",
+    }
+
+
+def test_lint_fixed_filename_finding_keeps_its_uuid(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "Simulated Actor.yaml", _THREAT)
+    (finding,) = run_lint(tmp_path, fix=True)["findings"]
+    assert set(finding) == {
+        "check",
+        "severity",
+        "path",
+        "yaml_line",
+        "uuid",
+        "expected",
+        "message",
+        "fixed",
+        "from",
+    }
+    assert finding["uuid"] == "00000000-0000-4000-8001-000000000001"
+    assert finding["severity"] == "warning"
+
+
+def test_lint_parse_error_is_an_error_without_uuid_or_line(tmp_path: Path) -> None:
+    _write_object(tmp_path, "rules", "broken.yaml", "name: [unclosed\n")
+    (finding,) = run_lint(tmp_path)["findings"]
+    assert set(finding) == {"check", "severity", "path", "yaml_line", "uuid", "message"}
+    assert finding["severity"] == "error"
+    assert finding["uuid"] is None
+    assert finding["yaml_line"] is None
+
+
+@pytest.mark.parametrize("name", ['""', "123"], ids=["empty", "not-a-string"])
+def test_lint_unnamed_object_points_at_its_name_key(tmp_path: Path, name: str) -> None:
+    body = f"""\
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000001
+name: {name}
+"""
+    _write_object(tmp_path, "threats", "unnamed.yaml", body)
+    (finding,) = run_lint(tmp_path)["findings"]
+    assert finding == {
+        "check": "filenames",
+        "severity": "error",
+        "path": "objects/threats/unnamed.yaml",
+        "yaml_line": 2,
+        "uuid": "00000000-0000-4000-8001-000000000001",
+        "message": "Object has no name; cannot check filename slug",
+    }
+
+
+def test_lint_cli_json_payload(tmp_path: Path) -> None:
+    """Pin the ``--json lint`` document: one finding of each kind, in emitted order."""
+    _write_object(tmp_path, "threats", "Simulated Actor.yaml", _NO_METADATA)
+    _write_object(tmp_path, "rules", "broken.yaml", "- not a mapping\n")
+    _write_object(tmp_path, "objectives", "unnamed.yaml", "metadata:\n  author: SOC\n")
+    result = runner.invoke(app, ["--json", "--repo", str(tmp_path), "lint"])
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "path": str(tmp_path.resolve()),
+        "checks": ["filenames", "metadata"],
+        "findings": [
+            {
+                "check": "metadata",
+                "severity": "info",
+                "path": "objects/threats/Simulated Actor.yaml",
+                "yaml_line": 1,
+                "uuid": "00000000-0000-4000-8001-000000000001",
+                "message": "Recommended metadata missing: author, organisation",
+            },
+            {
+                "check": "filenames",
+                "severity": "warning",
+                "path": "objects/threats/Simulated Actor.yaml",
+                "yaml_line": None,
+                "uuid": "00000000-0000-4000-8001-000000000001",
+                "expected": "objects/threats/simulated-actor.yaml",
+                "message": (
+                    "Filename 'Simulated Actor.yaml' does not match slugify(name)='simulated-actor'"
+                ),
+            },
+            {
+                "check": "filenames",
+                "severity": "error",
+                "path": "objects/objectives/unnamed.yaml",
+                "yaml_line": None,
+                "uuid": None,
+                "message": "Object has no name; cannot check filename slug",
+            },
+            {
+                "check": "filenames",
+                "severity": "error",
+                "path": "objects/rules/broken.yaml",
+                "yaml_line": None,
+                "uuid": None,
+                "message": "Could not parse object YAML: object YAML is not a mapping",
+            },
+        ],
+        "count": 4,
+        "fixed": 0,
+        "ok": True,
+        "status": "issues",
+        "message": "Catalogue lint found issues",
+    }
+    assert list(payload["findings"][1]) == [
+        "check",
+        "severity",
+        "path",
+        "yaml_line",
+        "uuid",
+        "expected",
+        "message",
+    ]
+
+
+def test_lint_cli_human_shows_severity_and_line(tmp_path: Path) -> None:
+    """The human line carries the severity and a one-based ``path:line``, like validate."""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _NO_METADATA)
+    result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
+    assert result.exit_code == 0, result.output
+    assert (
+        "[metadata/info] objects/threats/simulated-actor.yaml:2:"
+        " Recommended metadata missing: author, organisation"
+    ) in result.output
+
+
+def test_lint_metadata_merged_from_an_anchor_has_no_line(tmp_path: Path) -> None:
+    """A ``<<:`` merge key has no line of its own; lint must not crash on it."""
+    body = """\
+base: &base
+  metadata:
+    uuid: 00000000-0000-4000-8001-000000000001
+<<: *base
+name: Simulated Actor
+"""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", body)
+    (finding,) = run_lint(tmp_path)["findings"]
+    assert finding["check"] == "metadata"
+    assert finding["yaml_line"] is None
+
+
+def test_lint_object_built_only_from_a_merge_has_no_lines(tmp_path: Path) -> None:
+    """With every key merged in, no key starts in column 0, so no finding has a line."""
+    uuid = "00000000-0000-4000-8001-000000000001"
+    _write_object(tmp_path, "threats", "a.yaml", f'<<: {{name: "", metadata: {{uuid: {uuid}}}}}\n')
+    _write_object(tmp_path, "threats", "b.yaml", f"<<: {{name: B, metadata: {{uuid: {uuid}}}}}\n")
+    findings = run_lint(tmp_path)["findings"]
+    assert [(f["path"], f["check"], f["yaml_line"]) for f in findings] == [
+        ("objects/threats/b.yaml", "metadata", None),
+        ("objects/threats/a.yaml", "filenames", None),
+    ]
+
+
+def test_top_level_key_lines_reads_column_zero_keys_only() -> None:
+    text = (
+        "# name: commented out\n"
+        '"name": Quoted\n'
+        "metadata:\n"
+        "  name: nested\n"
+        "'tide.vocab': x\n"
+        "description: |\n"
+        "  uuid: inside a block scalar\n"
+        "name: duplicate\n"
+        "<<: {uuid: merged}\n"
+    )
+    assert _top_level_key_lines(text) == {
+        "name": 1,
+        "metadata": 2,
+        "tide.vocab": 4,
+        "description": 5,
+    }

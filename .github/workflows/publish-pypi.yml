@@ -4,9 +4,12 @@
 #
 # After a successful upload, dispatch OpenTideHQ/website so docs/changelog/specs
 # rebuild immediately. The landing version number is fetched live from PyPI and
-# does not wait on that rebuild. Uses GH_APP_ID / GH_APP_KEY (same GitHub App as
-# vocab-upstream). If notify fails, publish still succeeds; website hourly cron
-# is the backup:
+# does not wait on that rebuild. Uses GH_APP_ID / GH_APP_KEY, the secret names
+# vocab-upstream also reads; the App must be installed on OpenTideHQ/website with
+# contents: write, which repository_dispatch requires (contents: read mints a
+# token and then 403s). If notify is skipped or fails, publish still succeeds,
+# the last step warns "Website not notified", and the website's hourly cron is
+# the backup:
 #   gh api repos/OpenTideHQ/website/dispatches -f event_type=opentide-released
 #
 # Build with `uv build` (same as CI). Do not use `hatch build`: hatch 1.18.1 +
@@ -54,6 +57,7 @@ jobs:
     # and GitHub treats that as a workflow-file error (release triggers never register).
     env:
       HAS_WEBSITE_APP: ${{ secrets.GH_APP_ID != '' && secrets.GH_APP_KEY != '' }}
+      RELEASE_TAG: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.event.release.tag_name || github.ref_name }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -163,14 +167,45 @@ jobs:
           repositories: website
 
       - name: Notify website to sync docs
+        id: notify
         if: steps.website.outcome == 'success' && steps.website.outputs.token != ''
         continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.website.outputs.token }}
-          RELEASE_TAG: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.event.release.tag_name || github.ref_name }}
         run: |
           set -euo pipefail
           gh api repos/OpenTideHQ/website/dispatches \
             -f event_type=opentide-released \
             -f client_payload[source]=publish-pypi \
             -f client_payload[tag]="${RELEASE_TAG}"
+
+      # Both notify steps are continue-on-error so the website never fails a
+      # publish that already succeeded, and a skipped notify looks identical to
+      # a working one in the run summary (#540). Say so. No status function in
+      # `if`: GitHub prepends success(), so a failed publish adds no warning.
+      - name: Warn when the website was not notified
+        if: steps.notify.outcome != 'success'
+        env:
+          HAS_GH_APP_ID: ${{ secrets.GH_APP_ID != '' }}
+          HAS_GH_APP_KEY: ${{ secrets.GH_APP_KEY != '' }}
+          WEBSITE_TOKEN_OUTCOME: ${{ steps.website.outcome }}
+          NOTIFY_OUTCOME: ${{ steps.notify.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "${HAS_WEBSITE_APP}" != "true" ]]; then
+            if [[ "${HAS_GH_APP_ID}" == "true" ]]; then
+              reason="GH_APP_KEY is not set for this workflow"
+            elif [[ "${HAS_GH_APP_KEY}" == "true" ]]; then
+              reason="GH_APP_ID is not set for this workflow"
+            else
+              reason="GH_APP_ID and GH_APP_KEY are not set for this workflow"
+            fi
+          elif [[ "${WEBSITE_TOKEN_OUTCOME}" == "failure" ]]; then
+            reason="it could not mint a GitHub App token for OpenTideHQ/website (is the App installed there?)"
+          elif [[ "${NOTIFY_OUTCOME}" == "failure" ]]; then
+            reason="the dispatch to OpenTideHQ/website failed (the App needs contents: write there)"
+          else
+            reason="the GitHub App token was empty"
+          fi
+          echo "::warning title=Website not notified::${RELEASE_TAG} is on PyPI, but ${reason}. The website's hourly sync will pick it up; to rebuild sooner, run the command in this step's log."
+          echo "gh api repos/OpenTideHQ/website/dispatches -f event_type=opentide-released"

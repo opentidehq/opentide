@@ -25,6 +25,7 @@ from opentide.platforms.elastic.es_checks import (
     run_elasticsearch_checks,
 )
 from opentide.platforms.plugins import QueryValidator
+from opentide.platforms.transport import reaching_tenant
 
 logger = structlog.get_logger(__name__)
 
@@ -209,26 +210,27 @@ class ElasticValidator(QueryValidator):
                 space=getattr(tenant.setup, "space", "default"),
                 verify_ssl=getattr(tenant.setup, "ssl", True),
             )
-            for rule in batch.rules:
-                try:
-                    self._validate_rule(rule, client, tenant)
-                except ElasticTenantError as exc:
-                    logger.critical(
-                        "elastic_tenant_validation_failed",
-                        rule=rule.name,
-                        uuid=_rule_uuid(rule),
-                        error=str(exc),
-                    )
-                    _flag_error()
-                    break
-                except ElasticRuleCheckError as exc:
-                    logger.critical(
-                        "elastic_rule_validation_failed",
-                        rule=rule.name,
-                        uuid=_rule_uuid(rule),
-                        error=str(exc),
-                    )
-                    _flag_error()
+            with reaching_tenant("elastic", tenant.name, tenant.setup.url):
+                for rule in batch.rules:
+                    try:
+                        self._validate_rule(rule, client, tenant)
+                    except ElasticTenantError as exc:
+                        logger.critical(
+                            "elastic_tenant_validation_failed",
+                            rule=rule.name,
+                            uuid=_rule_uuid(rule),
+                            error=str(exc),
+                        )
+                        _flag_error()
+                        break
+                    except ElasticRuleCheckError as exc:
+                        logger.critical(
+                            "elastic_rule_validation_failed",
+                            rule=rule.name,
+                            uuid=_rule_uuid(rule),
+                            error=str(exc),
+                        )
+                        _flag_error()
 
     def _validate_rule(
         self,

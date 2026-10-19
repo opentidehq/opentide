@@ -3,6 +3,7 @@ from pathlib import Path
 
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
+from opentide.platforms.enabled import enable_platform_command
 from opentide.platforms.sentinel.client import (
     SentinelService,
     alert_rule_as_flat_dict,
@@ -189,7 +190,7 @@ def _import_sentinel_rules() -> None:
         logger.critical(
             "sentinel_tenants_not_configured",
             detail="You must first have Sentinel tenants configured to initiate the import",
-            advice="run 'opentide setup platforms --sentinel'",
+            advice=f"run '{enable_platform_command('sentinel')}'",
         )
         # A bare ``raise Exception`` escapes the CLI's error handler and prints a
         # Rich traceback instead of the JSON document --json promised (#242).

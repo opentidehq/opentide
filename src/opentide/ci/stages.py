@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 from opentide.ci.discovery import platforms_config_dir
@@ -11,10 +12,60 @@ from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
 
 _ENV_REF = re.compile(r"\$([A-Z][A-Z0-9_]*)")
 _PLATFORMS_DIR = Path(__file__).resolve().parents[1] / "data" / "configurations" / "platforms"
+# Tenant URLs and ``$VAR`` references live anywhere under this directory
+# (``platforms/``, legacy ``systems/``, and a root ``platforms.toml``).
+_WORKSPACE_CONFIG_DIR = ".opentide/configurations"
 
 
 def pip_install(options: CiRenderOptions) -> str:
     return f'pip install "opentide=={options.opentide_version}"'
+
+
+#: Printed when the default branch has no configuration to restore.
+NO_REVIEWED_CONFIG_NOTE = (
+    "The default branch has no .opentide/configurations yet, so no tenant is reviewed."
+    " Skipped without using platform credentials."
+)
+
+#: Printed for a platform whose file on the default branch declares no tenant.
+NO_REVIEWED_TENANT_NOTE = (
+    "The default branch has no {platform} tenant yet, so no tenant is reviewed."
+    " Skipped {platform} live query validation without using platform credentials."
+)
+
+
+def trusted_platform_config_commands(branch: str) -> list[str]:
+    """Replace workspace configuration with the default branch's copy.
+
+    ``branch`` is a shell word naming the default branch: a name passed
+    through :func:`shlex.quote`, or a quoted CI variable such as
+    ``"$CI_DEFAULT_BRANCH"``.
+
+    Pull-request jobs check out the pull request. A tenant ``url`` in that
+    tree, or a ``$VAR`` reference pointed at any credential the job exported,
+    is where the next live validation or staging deploy sends the secret.
+    Deleting the directory first drops files that exist only on the pull
+    request. ``git checkout`` then writes the reviewed tree.
+
+    The fetch is shallow only when the checkout already is. ``--depth`` on a
+    full clone makes it shallow, and the staging deploy can then no longer
+    find the pull request's merge base.
+
+    When the default branch has no configuration yet (the pull request that
+    adds it), the commands print :data:`NO_REVIEWED_CONFIG_NOTE` and
+    ``exit 0``. They must therefore share one shell with the commands they
+    guard, so that the exit skips those too.
+    """
+    path = shlex.quote(_WORKSPACE_CONFIG_DIR)
+    reviewed = f"FETCH_HEAD:{_WORKSPACE_CONFIG_DIR}"
+    return [
+        f"rm -rf -- {path}",
+        'if [ "$(git rev-parse --is-shallow-repository)" = true ]; '
+        f"then git fetch --depth=1 origin {branch}; else git fetch origin {branch}; fi",
+        f"if ! git cat-file -e {shlex.quote(reviewed)} 2>/dev/null; "
+        f'then echo "{NO_REVIEWED_CONFIG_NOTE}"; exit 0; fi',
+        f"git checkout FETCH_HEAD -- {path}",
+    ]
 
 
 def query_platforms(options: CiRenderOptions) -> list[str]:
@@ -104,6 +155,27 @@ def query_validation_command(platform: str, *, repo: Path | None = None) -> str:
     listed = " ".join(names)
     skip = f"echo skip {platform} live query validation {listed}; exit 2"
     return f"if {clauses}; then {skip}; else {live}; fi"
+
+
+def reviewed_query_validation_command(platform: str, *, repo: Path | None = None) -> str:
+    """:func:`query_validation_command` for a tenant the default branch has.
+
+    Runs after :func:`trusted_platform_config_commands`. A platform's first
+    tenant reaches the default branch through a pull request, and that pull
+    request's check reads the default branch's file, where ``[[tenants]]`` is
+    still commented out as setup writes it. The live check would fail there
+    and tell the author to add the tenant they just added, so the step prints
+    :data:`NO_REVIEWED_TENANT_NOTE` and exits 0 instead, as
+    ``deploy --skip-unconfigured`` does.
+
+    Any uncommented line that mentions ``tenants`` runs the check, which then
+    fails as before if it declares no tenant. Only a file with no such line,
+    or no file, is skipped.
+    """
+    config = shlex.quote(f"{_WORKSPACE_CONFIG_DIR}/platforms/{platform}.toml")
+    note = NO_REVIEWED_TENANT_NOTE.format(platform=platform)
+    check = query_validation_command(platform, repo=repo)
+    return f"if grep -qs '^[^#]*tenants' {config}; then {check}; else echo \"{note}\"; fi"
 
 
 def object_validate_commands() -> list[str]:

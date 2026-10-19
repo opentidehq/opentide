@@ -121,6 +121,24 @@ def test_run_validate_all_schema_failure_does_not_fail_other_checks() -> None:
     assert results["schema"]["issues"]
 
 
+def test_run_validate_all_counts_schema_missing_against_schema() -> None:
+    """#582: an object without ``metadata.schema`` fails the schema check."""
+    report = ValidationReport(
+        ok=False,
+        issues=[
+            ValidationIssue(
+                code="schema_missing",
+                message="missing metadata.schema on object",
+                field_path=("metadata", "schema"),
+            )
+        ],
+    )
+    with patch.object(validation_service, "run_validation", return_value=report):
+        results = validation_service.run_validate_all()
+    assert results["schema"]["status"] == "failed"
+    assert [issue["code"] for issue in results["schema"]["issues"]] == ["schema_missing"]
+
+
 def test_run_validate_check_id_uniqueness() -> None:
     report = ValidationReport(ok=True)
     with patch.object(validation_service, "run_validation", return_value=report):

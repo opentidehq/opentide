@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "publish-pypi.yml"
 VERIFY_STEP = "Verify PyPI lists every built file"
+WEBSITE_WARNING_STEP = "Warn when the website was not notified"
 WHEEL = "opentide-9.9.9-py3-none-any.whl"
 SDIST = "opentide-9.9.9.tar.gz"
 
@@ -101,6 +103,85 @@ def test_publish_job_does_not_run_scripts_from_the_checkout() -> None:
         if "scripts/" in str(step.get("run", ""))
     ]
     assert offenders == []
+
+
+def test_website_notify_never_fails_the_publish() -> None:
+    steps = _steps()
+    token = _step_index(lambda step: step.get("id") == "website")
+    notify = _step_index(lambda step: step.get("id") == "notify")
+    assert token < notify
+    assert steps[token]["continue-on-error"] is True
+    assert steps[notify]["continue-on-error"] is True
+
+
+def test_warns_last_whenever_the_website_was_not_notified() -> None:
+    # Both notify steps swallow failures, and a gated-off token step looks
+    # identical to a working notify in the run summary (#540).
+    steps = _steps()
+    warn = _step_index(lambda step: step.get("name") == WEBSITE_WARNING_STEP)
+    assert warn == len(steps) - 1
+    # No status function: GitHub prepends success(), so a failed publish does
+    # not also report a website warning.
+    assert steps[warn]["if"] == "steps.notify.outcome != 'success'"
+    assert "continue-on-error" not in steps[warn]
+
+
+def test_website_warning_step_gets_every_variable_it_reads() -> None:
+    # The warning runs under `set -u` after the upload and without
+    # continue-on-error, so a variable the workflow stops passing would turn a
+    # release that is already on PyPI red. _run_website_warning sets them all
+    # itself and cannot notice.
+    job = _workflow()["jobs"]["publish"]
+    step = job["steps"][_step_index(lambda step: step.get("name") == WEBSITE_WARNING_STEP)]
+    read = set(re.findall(r"\$\{?([A-Z][A-Z0-9_]*)", step["run"]))
+    assert {"RELEASE_TAG", "HAS_WEBSITE_APP", "WEBSITE_TOKEN_OUTCOME", "NOTIFY_OUTCOME"} <= read
+    provided = job["env"].keys() | step.get("env", {}).keys()
+    assert sorted(read - provided) == []
+
+
+def _run_website_warning(**env: str) -> subprocess.CompletedProcess[str]:
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is required to run the workflow step")
+    script = _steps()[_step_index(lambda step: step.get("name") == WEBSITE_WARNING_STEP)]["run"]
+    return subprocess.run(
+        [bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+        env={"PATH": os.environ.get("PATH", ""), "RELEASE_TAG": "v9.9.9", **env},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("has_id", "has_key", "token", "notify", "reason"),
+    [
+        ("false", "false", "skipped", "skipped", "but GH_APP_ID and GH_APP_KEY are not set"),
+        ("true", "false", "skipped", "skipped", "but GH_APP_KEY is not set"),
+        ("false", "true", "skipped", "skipped", "but GH_APP_ID is not set"),
+        ("true", "true", "failure", "skipped", "could not mint a GitHub App token"),
+        ("true", "true", "success", "failure", "needs contents: write"),
+        ("true", "true", "success", "skipped", "token was empty"),
+    ],
+)
+def test_website_warning_names_the_reason_and_the_manual_dispatch(
+    has_id: str, has_key: str, token: str, notify: str, reason: str
+) -> None:
+    result = _run_website_warning(
+        # Mirrors the job-level HAS_WEBSITE_APP expression.
+        HAS_WEBSITE_APP="true" if has_id == has_key == "true" else "false",
+        HAS_GH_APP_ID=has_id,
+        HAS_GH_APP_KEY=has_key,
+        WEBSITE_TOKEN_OUTCOME=token,
+        NOTIFY_OUTCOME=notify,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    warning = result.stdout.splitlines()[0]
+    assert warning.startswith("::warning title=Website not notified::v9.9.9 is on PyPI")
+    assert reason in warning
+    assert "gh api repos/OpenTideHQ/website/dispatches" in result.stdout
+    assert "event_type=opentide-released" in result.stdout
 
 
 class _FakePyPI:

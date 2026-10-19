@@ -121,30 +121,39 @@ def format_issues_for_console(issues: list[ValidationIssue]) -> str:
     return "\n".join(lines)
 
 
+def load_yaml_with_lines(file_path: Path) -> Any:
+    """Round-trip load *file_path* so its mappings and lists carry line markers.
+
+    ``ruamel.yaml`` ships with ``opentide``; the import guard keeps line hints
+    best-effort. Returns ``None`` when the module or the file cannot be loaded.
+    """
+    try:
+        from ruamel.yaml import YAML
+    except ImportError:
+        return None
+
+    if not file_path.is_file():
+        return None
+
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    try:
+        return yaml.load(file_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def attach_yaml_lines(
     issues: list[ValidationIssue],
     payload: dict[str, Any],
     *,
     file_path: Path | None = None,
 ) -> list[ValidationIssue]:
-    """Best-effort YAML line hints when ``ruamel.yaml`` is installed.
-
-    ``ruamel.yaml`` ships with ``opentide``, so line-level validation hints are normally present;
-    without ruamel, issues are returned unchanged.
-    """
-    try:
-        from ruamel.yaml import YAML
-    except ImportError:
+    """Best-effort YAML line hints; issues are returned unchanged when the file cannot be loaded."""
+    if file_path is None:
         return issues
-
-    if file_path is None or not file_path.is_file():
-        return issues
-
-    yaml = YAML()
-    yaml.preserve_quotes = True
-    try:
-        data = yaml.load(file_path.read_text(encoding="utf-8"))
-    except Exception:
+    data = load_yaml_with_lines(file_path)
+    if data is None:
         return issues
 
     updated: list[ValidationIssue] = []
@@ -188,17 +197,21 @@ def _container_child_line(node: Any, head: str) -> int | None:
     return line if isinstance(line, int) else None
 
 
+def _child(node: Any, head: str) -> Any:
+    if isinstance(node, dict) and head in node:
+        return node[head]
+    if isinstance(node, list) and head.isdigit():
+        index = int(head)
+        if 0 <= index < len(node):
+            return node[index]
+    return None
+
+
 def _find_line(node: Any, path: tuple[str, ...]) -> int | None:
     if not path:
         return _line_marker(node)
     head, *tail = path
-    child: Any = None
-    if isinstance(node, dict) and head in node:
-        child = node[head]
-    elif isinstance(node, list) and head.isdigit():
-        index = int(head)
-        if 0 <= index < len(node):
-            child = node[index]
+    child = _child(node, head)
     if child is None:
         return None
     if tail:

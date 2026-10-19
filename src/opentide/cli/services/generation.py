@@ -15,6 +15,7 @@ from opentide.core.index_manager import IndexManager
 from opentide.core.logging.console import emit_section
 from opentide.core.registry import OpenTide
 from opentide.core.root import get_repo_root
+from opentide.generation.errors import GenerationPhaseError, failing_phase
 
 logger = structlog.get_logger("opentide.cli.services.generation")
 
@@ -154,32 +155,18 @@ def run_generate_docs(
     emit_section("Documentation generation")
     if changed and (scope is not None or rules or threats or objectives):
         raise ValueError("--changed cannot be combined with scoped docs generation")
-    if scope == DocumentScope.index.value:
-        return run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
-    if rules:
-        return run_docs(
-            scope=DocumentScope.rules.value,
-            output=output,
-            flavor=flavor,
-            changed=changed,
-        )
-    if threats:
-        return run_docs(
-            scope=DocumentScope.threats.value,
-            output=output,
-            flavor=flavor,
-            changed=changed,
-        )
-    if objectives:
-        return run_docs(
-            scope=DocumentScope.objectives.value,
-            output=output,
-            flavor=flavor,
-            changed=changed,
-        )
-    if scope:
-        return run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
-    return run_docs(output=output, flavor=flavor, changed=changed)
+    if scope != DocumentScope.index.value:
+        if rules:
+            scope = DocumentScope.rules.value
+        elif threats:
+            scope = DocumentScope.threats.value
+        elif objectives:
+            scope = DocumentScope.objectives.value
+    try:
+        with failing_phase("docs"):
+            return run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
+    except GenerationPhaseError as exc:
+        return phase_failure(exc)
 
 
 def run_generate_all() -> None:
@@ -195,7 +182,8 @@ def run_generate_all() -> None:
     for phase in _PHASE_ORDER:
         phase_started = time.monotonic()
         try:
-            run_generate_phase(phase)
+            with failing_phase(phase):
+                run_generate_phase(phase)
         finally:
             # Timed in `finally` so a phase that raises still reports its
             # cost -- that reading is exactly what a killed job needs.
@@ -225,13 +213,22 @@ def run_generate(
     try:
         if phases:
             for name in phases:
-                run_generate_phase(name)
+                with failing_phase(name):
+                    run_generate_phase(name)
             return {"message": "Generation phases completed", "phases": list(phases)}
         if phase is None:
             run_generate_all()
             return {"message": "Full generation pipeline completed", "phases": list(_PHASE_ORDER)}
-        run_generate_phase(phase)
-    except Exception as exc:
-        message = str(exc).strip() or "Generation failed"
-        return {"message": message, "status": "failed", "_exit_code": 1}
+        with failing_phase(phase):
+            run_generate_phase(phase)
+    except GenerationPhaseError as exc:
+        return phase_failure(exc)
     return {"message": f"Generation phase {phase} completed", "phase": phase}
+
+
+def phase_failure(exc: GenerationPhaseError) -> dict[str, object]:
+    """The failed result for a phase: exit ``1``, and the phase named twice.
+
+    Once in ``phase`` for automation, once leading ``message`` for a person.
+    """
+    return {"message": str(exc), "status": "failed", "phase": exc.phase, "_exit_code": 1}

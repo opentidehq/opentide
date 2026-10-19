@@ -13,22 +13,25 @@ def resolve_metaschema(
     payload: dict[str, Any],
     object_type: str,
 ) -> dict[str, Any] | None:
-    """Pick the metaschema for *payload*, preferring ``metadata.schema``."""
+    """Pick the metaschema ``metadata.schema`` names.
+
+    A missing or unknown identifier, or one of another family, selects nothing
+    rather than the family's newest revision (versioning 1.1); the schema
+    check reports it.
+    """
     metadata = payload.get("metadata") or payload.get("meta") or {}
-    schema_id = metadata.get("schema")
+    schema_id = metadata.get("schema") if isinstance(metadata, dict) else None
     if isinstance(schema_id, str) and schema_id in metaschemas:
+        if "::" in schema_id and SchemaVersion.parse(schema_id).family != object_type:
+            return None
         return metaschemas[schema_id]
-    family_matches = [
-        (key, value)
-        for key, value in metaschemas.items()
-        if isinstance(key, str) and "::" in key and SchemaVersion.parse(key).family == object_type
-    ]
-    if not family_matches:
-        legacy = metaschemas.get(object_type)
-        return legacy if isinstance(legacy, dict) else None
-    latest_key = max(family_matches, key=lambda item: SchemaVersion.parse(item[0]).sort_key())[0]
-    schema = metaschemas.get(latest_key)
-    return schema if isinstance(schema, dict) else None
+    if any(
+        isinstance(key, str) and "::" in key and SchemaVersion.parse(key).family == object_type
+        for key in metaschemas
+    ):
+        return None
+    legacy = metaschemas.get(object_type)
+    return legacy if isinstance(legacy, dict) else None
 
 
 def walk_deprecated_fields(

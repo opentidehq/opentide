@@ -6,17 +6,14 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from opentide.loading.object_loader import (
+    SchemaIdentifierError,
+    SchemaMissingError,
+    load_object_for_validation,
+)
 from opentide.models.base import TideModel
-from opentide.models.objective import DetectionObjective
+from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.models.results import ValidationResult
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
-
-_MODEL_BY_TYPE: dict[str, type[TideModel]] = {
-    "rule": DetectionRule,
-    "objective": DetectionObjective,
-    "threat": ThreatVector,
-}
 
 
 def validate_object(
@@ -25,17 +22,10 @@ def validate_object(
     *,
     graph: Any = None,
 ) -> ValidationResult:
-    """Re-validate a typed model instance (identity check via model_validate)."""
-    cls = _MODEL_BY_TYPE.get(object_type)
-    if cls is None:
+    """Re-validate a typed model against the revision its ``metadata.schema`` names."""
+    if object_type not in CORE_OBJECT_TYPES:
         return ValidationResult(ok=False, errors=[f"Unknown object type {object_type!r}"])
-    try:
-        _ = cls.model_validate(model.model_dump(by_alias=True))
-        return ValidationResult(ok=True)
-    except ValidationError as exc:
-        return ValidationResult(
-            ok=False, errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()]
-        )
+    return _validate_body(model.model_dump(by_alias=True), object_type)
 
 
 def validate_raw_payload(
@@ -44,22 +34,24 @@ def validate_raw_payload(
     *,
     graph: Any = None,
 ) -> ValidationResult:
-    """Validate a raw YAML dict against the Pydantic model for its type."""
-    cls = _MODEL_BY_TYPE.get(object_type)
-    if cls is None:
+    """Validate a raw YAML dict against the revision its ``metadata.schema`` names."""
+    if object_type not in CORE_OBJECT_TYPES:
         return ValidationResult(ok=False, errors=[f"Unknown object type {object_type!r}"])
+    return _validate_body(payload, object_type)
+
+
+def _validate_body(body: dict[str, Any], object_type: str) -> ValidationResult:
     try:
-        if object_type == "rule":
-            _ = DetectionRule.from_yaml_dict(payload)
-        elif object_type == "objective":
-            _ = DetectionObjective.from_yaml_dict(payload)
-        else:
-            _ = ThreatVector.from_yaml_dict(payload)
-        return ValidationResult(ok=True)
+        load_object_for_validation(body, object_type)
     except ValidationError as exc:
         return ValidationResult(
             ok=False, errors=[f"{err['loc']}: {err['msg']}" for err in exc.errors()]
         )
+    except SchemaMissingError as exc:
+        return ValidationResult(ok=False, errors=[f"{exc.code}: {exc}"])
+    except SchemaIdentifierError as exc:
+        return ValidationResult(ok=False, errors=[f"('metadata', 'schema'): {exc}"])
+    return ValidationResult(ok=True)
 
 
 def validate_all_objects(

@@ -11,6 +11,7 @@ from pathlib import Path
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
 from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService
+from opentide.platforms.enabled import enable_platform_command
 from opentide.states.deployment import record_external_id
 
 logger = get_logger(__name__)
@@ -227,7 +228,7 @@ def _import_defender_rules() -> None:
         logger.critical(
             "defender_tenants_not_configured",
             detail="You must first have Defender for Endpoint tenants configured to initiate the import",
-            advice="run 'opentide setup platforms --defender'",
+            advice=f"run '{enable_platform_command('defender_for_endpoint')}'",
         )
         raise RuntimeError("No Defender for Endpoint tenants are configured")
     destination = Path("Imported")

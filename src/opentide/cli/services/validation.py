@@ -20,6 +20,7 @@ from opentide.validation.session import run_validation
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
+    from opentide.platforms.transport import TenantUnreachableError
 
 
 def _reset_validation_env() -> None:
@@ -87,6 +88,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
     ValidateCheck.schema.value: frozenset(
         {
             "schema_validation",
+            "schema_missing",
             "yaml_parse",
             "missing_uuid",
             "invalid_ref",
@@ -253,10 +255,27 @@ def run_validate(
         )
     else:
         result["message"] = "Validation passed"
-    if outcome.warned:
-        result["warnings"] = ["Validation reported warnings"]
+    warnings = ["Validation reported warnings"] if outcome.warned else []
+    warnings.extend(_exempt_warning_lines(report))
+    if warnings:
+        result["warnings"] = warnings
     result["_exit_code"] = outcome.exit_code
     return result
+
+
+def _exempt_warning_lines(report: ValidationReport) -> list[str]:
+    """Spell out warnings that ``--strict`` ignores, which nothing else would print (#413)."""
+    from opentide.validation.disabled_platforms import STRICT_EXEMPT_WARNINGS
+
+    lines: list[str] = []
+    for warning in report.warnings:
+        if warning.code not in STRICT_EXEMPT_WARNINGS:
+            continue
+        location = str(warning.file_path or warning.object_uuid)
+        if warning.file_path is not None and warning.yaml_line is not None:
+            location = f"{location}:{warning.yaml_line + 1}"
+        lines.append(f"{location}: {'.'.join(warning.field_path)}: {warning.message}")
+    return lines
 
 
 #: Every vendor SDK ships with ``pip install opentide``: there are no extras. An
@@ -276,6 +295,26 @@ def _missing_sdk_result(platform: str, exc: ModuleNotFoundError) -> dict[str, ob
             "the opentide install is incomplete"
         ),
         "advice": INCOMPLETE_INSTALL_ADVICE,
+        "_exit_code": 1,
+    }
+
+
+def _unreachable_tenant_result(exc: TenantUnreachableError) -> dict[str, object]:
+    """A tenant the live check could not reach (DNS, refused, TLS, timeout): no traceback."""
+    from opentide.platforms.enabled import platform_config_path
+
+    return {
+        "platform": exc.platform,
+        "mode": "live",
+        "supported": True,
+        "status": "failed",
+        "tenant": exc.tenant,
+        "host": exc.host,
+        "message": str(exc),
+        "advice": (
+            f"check the '{exc.tenant}' tenant in {platform_config_path(exc.platform)} and the "
+            f"network path to {exc.host}; behind a proxy, pass opentide --proxy"
+        ),
         "_exit_code": 1,
     }
 
@@ -348,7 +387,7 @@ def validate_query_platform(
             "_exit_code": 1,
         }
     if platform not in deployment_list:
-        from opentide.platforms.enabled import enabled_systems
+        from opentide.platforms.enabled import enable_platform_command, enabled_systems
 
         if platform not in set(enabled_systems()):
             return {
@@ -360,7 +399,7 @@ def validate_query_platform(
                     f"Platform {platform} is disabled in configurations, so the "
                     "deployment plan contains no rules for it"
                 ),
-                "advice": f"enable it with 'opentide setup platforms --{platform}'",
+                "advice": f"enable it with '{enable_platform_command(platform)}'",
             }
         return {
             "platform": platform,
@@ -482,6 +521,7 @@ def _run_live_validator(
 ) -> dict[str, object]:
     from opentide.core.registry import OpenTide as LegacyOpenTide
     from opentide.platforms.plugins import DeployTide
+    from opentide.platforms.transport import TenantUnreachableError
 
     counts: dict[str, object] = {
         "plan": deployment_plan.name,
@@ -522,6 +562,8 @@ def _run_live_validator(
             validator.validate(deployment=rules)
     except ModuleNotFoundError as exc:
         return _missing_sdk_result(platform, exc)
+    except TenantUnreachableError as exc:
+        return _unreachable_tenant_result(exc)
     except ValueError as exc:
         # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
         # TypeError stays uncaught here so the legacy validator signature retry works.

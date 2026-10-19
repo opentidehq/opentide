@@ -34,6 +34,15 @@ def enabled_systems() -> list[str]:
     return enabled
 
 
+def enable_platform_command(system: str) -> str:
+    """The ``setup platforms`` call that enables *system*.
+
+    Flags spell the identifier with dashes. ``--defender_for_endpoint`` is not
+    an option, so advice built from the raw identifier failed when pasted.
+    """
+    return f"opentide setup platforms --{system.replace('_', '-')}"
+
+
 def systems_without_tenants(systems: Iterable[str]) -> list[str]:
     """Return the *systems* whose merged configuration declares no ``[[tenants]]`` table."""
     configs = resolve_configurations().get("systems", {})

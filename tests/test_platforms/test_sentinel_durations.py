@@ -27,6 +27,8 @@ from opentide.platforms.sentinel.client import iso_duration_timedelta
         ("14d", timedelta(days=14)),
         ("1h10m", timedelta(hours=1, minutes=10)),
         ("1d2h", timedelta(days=1, hours=2)),
+        ("2m30s", timedelta(minutes=2, seconds=30)),
+        ("30s", timedelta(seconds=30)),
     ],
 )
 def test_iso_duration_timedelta_parses_iso_and_shorthand(
@@ -43,9 +45,15 @@ def test_elastic_duration_seconds_parses_compound_shorthand() -> None:
     assert date_math("1h10m") == "70m"
     assert duration_seconds("1d2h") == 93600
     assert date_math("1d2h") == "26h"
+    for malformed in ("10m1h", "1d1d", "1H"):
+        with pytest.raises(ValueError):
+            duration_seconds(malformed)
 
 
-@pytest.mark.parametrize("duration", ["", "1", "1x", "P", "PT", "P1DT", "PT1.5H", "one hour"])
+@pytest.mark.parametrize(
+    "duration",
+    ["", "1", "1x", "P", "PT", "P1DT", "PT1.5H", "one hour", "10m1h", "1d1d", "1H", "1M"],
+)
 def test_iso_duration_timedelta_rejects_malformed_values(duration: str) -> None:
     with pytest.raises(Errors.TideMDRDataModelErrors, match="not an ISO 8601 duration"):
         iso_duration_timedelta(duration)

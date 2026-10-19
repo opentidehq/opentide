@@ -13,6 +13,7 @@ from opentide.documentation.markdown.links import (
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentRecord, DocumentScope, PublishTarget
 from opentide.generation import framework as fw
+from opentide.generation.errors import rendering
 
 _INDEX_ICON_BY_SCOPE = {
     "rules": ":shield:",
@@ -115,7 +116,8 @@ def render_index(
         )
         row = [link, record.uuid, *_extra_cells(record)]
         if ctx.index_relation_counts:
-            row.append(str(_relation_count(record, ctx)))
+            with rendering(record.uuid):
+                row.append(str(_relation_count(record, ctx)))
         rows.append(row)
     toc = formatter.table_of_contents()
     headers = ["Name", "UUID", *extra_headers]

@@ -107,7 +107,7 @@ objective:
 
 ### 3. Rule — how we detect it
 
-The rule references the objective by UUID via `detection_model`, and carries one configuration block per platform it deploys to.
+The rule references what it implements by UUID via `detection_model`: the whole objective, or one signal defined under it. It carries one configuration block per platform it deploys to.
 
 ```yaml
 name: Sentinel KQL Rule

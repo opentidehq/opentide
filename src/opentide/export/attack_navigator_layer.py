@@ -4,6 +4,7 @@ from typing import Literal
 
 from opentide.core.logging import get_logger
 from opentide.core.registry import OpenTide
+from opentide.generation.errors import rendering
 from opentide.generation.framework import techniques_resolver
 
 logger = get_logger(__name__)
@@ -67,10 +68,15 @@ class AttackNavigatorLayer:
             case "rule":
                 index = OpenTide.Models.rules
         technique_mapping: dict[str, TechniqueIndexEntry] = {}
-        for object in index:
-            techniques = techniques_resolver(object)
-            name = index[object]["name"]
-            uuid = index[object]["metadata"]["uuid"]
+        # Visit objects by name, not index order: the index follows file paths,
+        # so a rename or move would otherwise reorder every comment.
+        for object in sorted(
+            index, key=lambda object_id: (str(index[object_id].get("name") or "").casefold(), object_id)
+        ):
+            with rendering(object):
+                techniques = techniques_resolver(object)
+                name = index[object]["name"]
+                uuid = index[object]["metadata"]["uuid"]
             for technique in techniques:
                 if technique in technique_mapping:
                     technique_mapping[technique].objects_names.append(
@@ -136,7 +142,8 @@ class AttackNavigatorLayer:
                     comment=", ".join(mdr_mapping_detail.objects_names),
                 )
             )
-        return technique_layer
+        # Sorted by ID so the exported layer does not depend on object order.
+        return sorted(technique_layer, key=lambda layer: layer.techniqueID)
 
     def assemble_full_layer(self, technique_layer: list[TechniqueLayer]) -> NavigatorLayer:
         legend = list()

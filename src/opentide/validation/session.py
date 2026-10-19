@@ -13,15 +13,16 @@ from pydantic import ValidationError
 
 from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.core.registry import OpenTide
-from opentide.models.base import TideModel
-from opentide.models.objective import DetectionObjective
-from opentide.models.rule import DetectionRule
-from opentide.models.threat import ThreatVector
+from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.validation.checks.cross_object import (
     check_chaining_for_object,
     check_references_for_object,
 )
 from opentide.validation.checks.kinds import ValidateCheck
+from opentide.validation.disabled_platforms import (
+    STRICT_EXEMPT_WARNINGS,
+    platform_not_enabled_warnings,
+)
 from opentide.validation.errors import (
     attach_yaml_lines,
     is_vocab_shape_duplicate,
@@ -33,12 +34,6 @@ from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.parallel import resolve_worker_count, sort_issues
 from opentide.validation.preflight import PreflightGraph
 from opentide.validation.scope import ValidationScope
-
-_MODEL_BY_TYPE: dict[str, type[TideModel]] = {
-    "rule": DetectionRule,
-    "objective": DetectionObjective,
-    "threat": ThreatVector,
-}
 
 _DEFAULT_CHECKS = frozenset(
     {
@@ -167,6 +162,7 @@ def run_validation(
         warnings.extend(sharing_warnings)
 
     if object_checks:
+        enabled_platforms = _enabled_platforms(work_items, object_checks)
         if object_workers > 0:
             from concurrent.futures import ThreadPoolExecutor
 
@@ -179,6 +175,7 @@ def run_validation(
                     metaschemas=metaschemas,
                     checks=object_checks,
                     check_shard=scope.mode != "full",
+                    enabled_platforms=enabled_platforms,
                 )
 
             with ThreadPoolExecutor(max_workers=object_workers) as pool:
@@ -193,6 +190,7 @@ def run_validation(
                     metaschemas=metaschemas,
                     checks=object_checks,
                     check_shard=scope.mode != "full",
+                    enabled_platforms=enabled_platforms,
                 )
                 issues.extend(item_issues)
                 warnings.extend(item_warnings)
@@ -211,10 +209,22 @@ def run_validation(
 
     if issues:
         os.environ["VALIDATION_ERROR_RAISED"] = "1"
-    if warnings:
+    # The flag fails --strict. A disabled platform's block is reported, not failed.
+    if any(warning.code not in STRICT_EXEMPT_WARNINGS for warning in warnings):
         os.environ["VALIDATION_WARNING_RAISED"] = "1"
 
     return ValidationReport(ok=not issues, issues=issues, warnings=warnings, stats=stats)
+
+
+def _enabled_platforms(
+    work_items: list[ObjectWorkItem], checks: frozenset[ValidateCheck]
+) -> frozenset[str] | None:
+    """Platforms deploy sends to, read once per run. ``None`` when no rule is schema-checked."""
+    if ValidateCheck.schema not in checks or not any(i.object_type == "rule" for i in work_items):
+        return None
+    from opentide.platforms.enabled import enabled_systems
+
+    return frozenset(enabled_systems())
 
 
 def _sharing_config_issues() -> tuple[list[ValidationIssue], list[ValidationIssue]]:
@@ -252,7 +262,7 @@ def _collect_work_items(
 ) -> list[ObjectWorkItem]:
     items: list[ObjectWorkItem] = []
     for object_type, registry in objects.items():
-        if object_type not in _MODEL_BY_TYPE:
+        if object_type not in CORE_OBJECT_TYPES:
             continue
         for uuid, body in registry.items():
             file_name = files_index.get(uuid)
@@ -325,6 +335,7 @@ def _validate_work_item(
     metaschemas: dict[str, Any],
     checks: frozenset[ValidateCheck],
     check_shard: bool = True,
+    enabled_platforms: frozenset[str] | None = None,
 ) -> tuple[list[ValidationIssue], list[ValidationIssue]]:
     issues: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []
@@ -335,7 +346,11 @@ def _validate_work_item(
         issues.extend(_uuid_issue_for_object(item, graph, file_path))
 
     if ValidateCheck.schema in checks:
-        from opentide.loading.object_loader import load_object_for_validation
+        from opentide.loading.object_loader import (
+            SchemaIdentifierError,
+            SchemaMissingError,
+            load_object_for_validation,
+        )
 
         shape_rejections: frozenset[tuple[tuple[str, ...], str]] = frozenset()
         try:
@@ -353,6 +368,17 @@ def _validate_work_item(
 
             bucket = [issue for issue in bucket if not is_superseded_extra_key(issue)]
             issues.extend(attach_yaml_lines(bucket, item.body, file_path=file_path))
+        except (SchemaMissingError, SchemaIdentifierError) as exc:
+            issue = ValidationIssue(
+                code=exc.code,
+                severity="error",
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+                field_path=("metadata", "schema"),
+                message=str(exc),
+            )
+            issues.extend(attach_yaml_lines([issue], item.body, file_path=file_path))
         except Exception as exc:
             issues.append(
                 ValidationIssue(
@@ -387,6 +413,14 @@ def _validate_work_item(
         )
         for issue in deprecated_issues:
             warnings.append(issue.model_copy(update={"file_path": file_path}))
+
+        if item.object_type == "rule" and enabled_platforms is not None:
+            warnings.extend(
+                issue.model_copy(update={"file_path": file_path})
+                for issue in platform_not_enabled_warnings(
+                    item.body, enabled_platforms, object_uuid=item.uuid
+                )
+            )
 
         from opentide.validation.external_ids import external_id_issues
 
@@ -567,7 +601,10 @@ def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | _IdScanParseError 
         )
     if not isinstance(model_body, dict):
         return None
-    uuid = model_body.get("metadata", {}).get("uuid")
+    metadata = model_body.get("metadata")
+    # A scalar `metadata` is a schema error the schema check reports; here it
+    # only means there is no uuid to compare.
+    uuid = metadata.get("uuid") if isinstance(metadata, dict) else None
     if not uuid:
         return None
     return _IdScanRow(

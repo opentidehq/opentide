@@ -45,6 +45,33 @@ def test_cli_help_lists_commands() -> None:
         assert command in result.stdout
 
 
+@pytest.mark.parametrize(
+    "args",
+    [["--version"], ["-V"], ["--json", "--version"], ["--version", "--json"]],
+    ids=["long", "short", "json-first", "json-last"],
+)
+def test_version_flag_prints_installed_version(args: list[str]) -> None:
+    """Plain text even with ``--json``, as docs/cli/global-options.md promises."""
+    from opentide import __version__
+
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0, result.output
+    assert result.stdout == f"opentide {__version__}\n"
+
+
+def test_version_flag_exits_before_the_command_runs() -> None:
+    """A pipeline logs which version it installed without needing a workspace."""
+    with (
+        patch("opentide.cli.run_validate") as mock_validate,
+        patch("opentide.cli.init_logging") as mock_logging,
+    ):
+        result = runner.invoke(app, ["--version", "--repo", "/nonexistent", "validate"])
+    assert result.exit_code == 0, result.output
+    assert result.stdout.startswith("opentide ")
+    mock_validate.assert_not_called()
+    mock_logging.assert_not_called()
+
+
 def test_validate_query_crowdstrike_not_supported() -> None:
     result = runner.invoke(app, ["--json", "validate", "query", "--platform", "crowdstrike"])
     assert result.exit_code != 0

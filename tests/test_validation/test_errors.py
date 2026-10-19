@@ -16,6 +16,7 @@ from opentide.validation.errors import (
     format_issues_for_console,
     is_vocab_shape_duplicate,
     issues_from_pydantic,
+    load_yaml_with_lines,
     vocab_shape_rejections,
 )
 from opentide.validation.issues import ValidationIssue
@@ -371,3 +372,9 @@ def test_attach_yaml_lines_missing_file() -> None:
     issue = ValidationIssue(code="x", field_path=("name",), message="bad")
     result = attach_yaml_lines([issue], {"name": "x"}, file_path=Path("/no/such/file.yaml"))
     assert result == [issue]
+
+
+def test_load_yaml_with_lines_returns_none_for_invalid_yaml(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "broken.yaml"
+    yaml_path.write_text("name: [unclosed\n", encoding="utf-8")
+    assert load_yaml_with_lines(yaml_path) is None

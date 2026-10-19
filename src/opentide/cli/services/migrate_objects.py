@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import structlog
@@ -56,6 +57,8 @@ _PATH_DESTINATIONS = {
 _MERGE_DESTINATIONS = frozenset(_PATH_DESTINATIONS.values())
 
 _EMPTY_PARENTS = ("Objects", "Models Library", ".opentide/framework")
+
+_CASE_RENAME_SUFFIX = ".opentide-case-rename"
 
 
 def _is_empty_dir(path: Path) -> bool:
@@ -146,6 +149,81 @@ def _apply_operation(root: Path, operation: dict[str, object], *, copy: bool) ->
     shutil.move(str(src), str(dest))
 
 
+def _case_variant(parent: Path, name: str) -> str | None:
+    """Return the on-disk name that *name* resolves to when only the case differs."""
+    path = parent / name
+    if not path.exists():
+        return None
+    entries = os.listdir(parent)
+    if name in entries:
+        return None
+    for entry in entries:
+        if entry.casefold() == name.casefold() and (parent / entry).samefile(path):
+            return entry
+    return None
+
+
+def _fix_destination_case(
+    root: Path,
+    destinations: list[str],
+    *,
+    apply: bool,
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Give destination folders their exact names on a case-insensitive filesystem.
+
+    On macOS and Windows ``Objects`` and ``objects`` are one folder, so a move
+    into ``objects/threats`` lands in ``Objects/threats`` and the legacy name
+    stays. Git adds new files under the on-disk name, and a case-sensitive
+    checkout (Linux CI) then has no ``objects/``. A case-only rename is a
+    no-op on some filesystems, so it goes through a temporary name.
+
+    Returns the renames, and a warning for each folder left alone because its
+    temporary name is taken.
+    """
+    renamed: list[dict[str, str]] = []
+    warnings: list[str] = []
+    seen: set[str] = set()
+    blocked: set[str] = set()
+    for destination in destinations:
+        parent = root
+        for name in PurePosixPath(destination).parts:
+            target = parent / name
+            relative = target.relative_to(root).as_posix()
+            if relative in blocked:
+                break
+            variant = _case_variant(parent, name)
+            if variant is not None and relative not in seen:
+                legacy = (parent / variant).relative_to(root).as_posix()
+                staged = parent / f"{variant}{_CASE_RENAME_SUFFIX}"
+                if os.path.lexists(staged):
+                    logger.warning("migrate_case_rename_blocked", path=str(staged))
+                    blocked.add(relative)
+                    warnings.append(
+                        f"Left {legacy} as it is instead of renaming it to {relative}: "
+                        f"{staged.relative_to(root).as_posix()} is in the way. "
+                        "Move anything you still need out of it, delete it, "
+                        "and run `opentide migrate objects --apply` again"
+                    )
+                    break
+                if apply:
+                    (parent / variant).rename(staged)
+                    staged.rename(target)
+                seen.add(relative)
+                renamed.append({"from": legacy, "to": relative})
+            parent = target
+    return renamed, warnings
+
+
+def _case_rename_advice(renamed: list[dict[str, str]]) -> str:
+    """Git keeps the case it recorded for a folder that still has tracked files."""
+    steps = "; ".join(
+        f"{item['from']} is now {item['to']}: if `git ls-files {item['from']}` lists files, "
+        f"run `git rm -r --cached -q {item['from']}` then `git add {item['to']}`"
+        for item in renamed
+    )
+    return f"Git keeps the folder case it already tracks. {steps}"
+
+
 def _cleanup_empty_parents(root: Path) -> list[str]:
     removed: list[str] = []
     for relative in _EMPTY_PARENTS:
@@ -210,8 +288,13 @@ def run_migrate_objects(
     if apply:
         for operation in actionable:
             _apply_operation(target, operation, copy=copy)
-        if not copy:
-            removed = _cleanup_empty_parents(target)
+    # A repository an earlier release migrated on macOS or Windows has no
+    # legacy sources left, but its object folders can still sit in ``Objects/``.
+    migrated = [folder for folder in sorted(_MERGE_DESTINATIONS) if (target / folder).is_dir()]
+    destinations = list(dict.fromkeys([*(str(item["to"]) for item in actionable), *migrated]))
+    case_renamed, warnings = _fix_destination_case(target, destinations, apply=apply)
+    if apply and not copy:
+        removed = _cleanup_empty_parents(target)
     logger.debug(
         "migrate_objects",
         path=str(target),
@@ -219,7 +302,14 @@ def run_migrate_objects(
         copy=copy,
         planned=len(actionable),
     )
-    if not actionable:
+    if not actionable and case_renamed:
+        message = (
+            f"Renamed {len(case_renamed)} folder(s) to the exact case"
+            if apply
+            else f"Planned {len(case_renamed)} folder case rename(s) "
+            "(dry-run; pass --apply to execute)"
+        )
+    elif not actionable:
         message = "No legacy layout paths to migrate"
     elif apply:
         verb = "Copied" if copy else "Migrated"
@@ -236,8 +326,14 @@ def run_migrate_objects(
         "operations": operations,
         "planned": len(actionable),
         "skipped": len(skipped),
-        "applied": bool(apply and actionable),
+        "applied": bool(apply and (actionable or case_renamed)),
     }
+    if case_renamed:
+        result["case_renamed"] = case_renamed
+        if apply:
+            result["advice"] = _case_rename_advice(case_renamed)
     if removed:
         result["removed_empty"] = removed
+    if warnings:
+        result["warnings"] = warnings
     return result

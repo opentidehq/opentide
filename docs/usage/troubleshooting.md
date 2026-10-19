@@ -316,7 +316,7 @@ opentide --json validate
 
 ### `unknown schema identifier` / object won't load
 
-`metadata.schema` must be a registered identifier such as `rule::1.0` or `rule::1.1`. A typo (`rule:1.0`, `rule::1`, `rules::1.0`) means no model matches. Fix the value; the valid identifiers are `threat::1.0`, `objective::1.0`, `rule::1.0`, and `rule::1.1`. `metadata.reviewed` is valid only on `rule::1.1`. See [Schema revision](./concepts/schema-revision.md).
+`metadata.schema` must be a registered identifier such as `rule::1.0` or `rule::1.1`. A typo (`rule:1.0`, `rule::1`, `rules::1.0`) means no model matches. Fix the value; the valid identifiers are `threat::1.0`, `objective::1.0`, `rule::1.0`, and `rule::1.1`. `metadata.reviewed` is valid only on `rule::1.1`. A `schema_missing` issue means the file has no `metadata.schema` at all: add the identifier the object follows, because OpenTide does not assume the newest revision. See [Schema revision](./concepts/schema-revision.md).
 
 ### Threat `impact` / `leverage`: `Input should be a valid string`, `must be a YAML list`, or `packs several vocabulary names`
 
@@ -357,7 +357,7 @@ A rule's `status` (or a platform block's `status`) is not defined in the merged 
 
 ### Warnings fail my build but pass locally
 
-Warnings alone exit `0` by default and are listed in `--json` output under `warnings`. Pass `--strict` to fail the run with exit `1`. If your pipeline uses `--strict`, reproduce it locally with the same flag:
+Warnings alone exit `0` by default and are listed in `--json` output under `warnings`. Pass `--strict` to fail the run with exit `1`; `platform_not_enabled` is the one warning `--strict` ignores. If your pipeline uses `--strict`, reproduce it locally with the same flag:
 
 ```bash
 opentide validate --strict
@@ -591,7 +591,15 @@ Through **0.8.2** no schema accepted `metadata.reviewed`. **0.9.0** accepts an I
 
 ### A technique or log source that validated on 0.8.2 now fails
 
-**0.9.0** pins techniques to `att&ck::1.1` and objective logsources to `datasources::1.1` ([#392](https://github.com/OpenTideHQ/opentide/issues/392), [#445](https://github.com/OpenTideHQ/opentide/pull/445)). The catalogues are ATT&CK 19.2. An identifier that is not in that catalogue fails validation. Regenerate schemas if the editor still offers the previous list: `opentide generate schemas`.
+**0.9.0** pins techniques to `att&ck::1.1` and objective logsources to `datasources::1.1` ([#392](https://github.com/OpenTideHQ/opentide/issues/392), [#445](https://github.com/OpenTideHQ/opentide/pull/445)). The catalogues were ATT&CK 19.2. An identifier that is not in the pinned catalogue fails validation. Regenerate schemas if the editor still offers the previous list: `opentide generate schemas`.
+
+### A recent ATT&CK technique such as T1685 or T1059.013 fails validation
+
+**0.13.0** through **0.15.0** bundled an ATT&CK v17 catalogue under the `att&ck::1.1` pin. [#504](https://github.com/OpenTideHQ/opentide/pull/504) re-synced the bundle from a specifications copy that never had the 19.2 refresh, so T1685–T1690, T1059.013 and the other ATT&CK v18 and v19 techniques failed validation ([#568](https://github.com/OpenTideHQ/opentide/issues/568)). **0.16.0** restores ATT&CK 19.2 as `att&ck::1.1`, adds ATT&CK 20.0 as `att&ck::1.2` (T1696–T1701 and others), and pins threats, objectives and rules to `att&ck::1.2`. Run `opentide generate schemas` so the editor offers the new list.
+
+Techniques that MITRE has revoked since then, such as T1562.001 (now T1685) and T1070.001, stay valid under every `att&ck::1.x` pin. They are marked `removed = "2.0"`. T1574.002 is not in any bundled catalogue: MITRE merged it into T1574.001, so use that ID.
+
+ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense Impairment (TA0112) out of it. Elastic rules carry TA0005 Stealth and TA0112 Defense Impairment. The Sentinel tactic list has no such tactics, so Sentinel rules carry `DefenseEvasion` for Stealth, Defense Impairment and the ICS Evasion tactic.
 
 ## Still stuck?
 

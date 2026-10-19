@@ -444,3 +444,22 @@ def test_install_generic_renders_the_package_agents_template(
     text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     assert "# remote agents" not in text
     assert "SOC Detections" in text
+
+
+def test_rendered_entrypoints_name_mcp_start_not_the_removed_script(tmp_path: Path) -> None:
+    """0.12.0 removed ``opentide-mcp``; the entrypoints still told agents to use it (#460)."""
+    result = run_skills_setup(
+        SkillsSetupOptions(
+            path=tmp_path,
+            targets=[SkillTarget.claude_code, SkillTarget.github_copilot],
+            name="SOC",
+            yes=True,
+        )
+    )
+    files = result["files"]
+    assert isinstance(files, list)
+    for rel in files:
+        assert "opentide-mcp" not in (tmp_path / rel).read_text(encoding="utf-8"), rel
+    for entrypoint in ("AGENTS.md", "CLAUDE.md"):
+        text = (tmp_path / entrypoint).read_text(encoding="utf-8")
+        assert "`opentide mcp start`" in text, entrypoint

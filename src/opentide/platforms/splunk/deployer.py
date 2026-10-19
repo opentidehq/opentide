@@ -11,7 +11,7 @@ from opentide.core.registry import DetectionPlatforms, OpenTide
 from opentide.core.responders import resolve_responders
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
-from opentide.generation.framework import techniques_resolver
+from opentide.generation.framework import get_type, techniques_resolver
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels
@@ -142,12 +142,10 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             config["action.correlationsearch.enabled"] = "true"
             config["action.correlationsearch.label"] = name + " - Rule"
             raw_techniques: list[str] = list(data.techniques or [])
-            try:
-                inherited = techniques_resolver(uuid)
-                if inherited:
-                    raw_techniques.extend(inherited)
-            except Exception:
-                pass
+            # A rule deployed on its own (SDK, MCP) need not be in the catalogue
+            # index; asking the resolver would log a CRITICAL lookup failure.
+            if get_type(uuid, mute=True) is not None:
+                raw_techniques.extend(techniques_resolver(uuid) or [])
             techniques = list(dict.fromkeys(raw_techniques))
             if techniques:
                 config["action.correlationsearch.annotations.mitre_attack"] = ", ".join(techniques)

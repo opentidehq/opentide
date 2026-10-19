@@ -517,3 +517,17 @@ def test_find_managed_paginates_past_1000_rules() -> None:
     assert len(managed) == 2691
     assert mock_get.call_count == 3
     assert [call.kwargs["params"]["page"] for call in mock_get.call_args_list] == [1, 2, 3]
+
+
+def test_find_managed_raises_instead_of_returning_a_truncated_listing() -> None:
+    """A failed page must not read as the end of the list (#566)."""
+    client = ElasticClient(url="https://kibana.test", api_key="k")
+    page_1 = [{"rule_id": f"r-{i}"} for i in range(1000)]
+
+    with patch.object(client.session, "get") as mock_get:
+        mock_get.side_effect = [
+            _mock_response(200, {"total": 2500, "data": page_1}),
+            _mock_response(503, text="unavailable"),
+        ]
+        with pytest.raises(requests.HTTPError):
+            client.find_managed("OpenTide")

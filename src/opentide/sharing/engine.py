@@ -484,11 +484,11 @@ def _split_local(
         if document.family not in block.object_types:
             local.append(_record(document, block, "skipped_type", reason="object_type"))
             continue
-        if document.family == "rule":
-            status = document.body.get("status")
-            if not isinstance(status, str) or status not in block.rule_statuses:
-                local.append(_record(document, block, "skipped_status", reason="rule_status"))
-                continue
+        if document.family == "rule" and not any(
+            status in block.rule_statuses for status in _rule_statuses(document.body)
+        ):
+            local.append(_record(document, block, "skipped_status", reason="rule_status"))
+            continue
         tlp = document.metadata.get("tlp")
         if isinstance(tlp, str) and tlp in TLP_ORDER and tlp not in _allowed(block.max_tlp):
             local.append(_record(document, block, "skipped_tlp", reason="max_tlp"))
@@ -500,6 +500,33 @@ def _split_local(
                 continue
         shareable.append(document)
     return local, shareable
+
+
+def _rule_statuses(body: Mapping[str, Any]) -> list[str]:
+    """The statuses a block's ``rule_statuses`` is matched against.
+
+    Deploy and promotion read the status on each platform block, and promotion
+    rewrites only those, so a promoted ``rule::1.0`` file keeps its root
+    ``status`` at ``STAGING``. Matching the root skipped rules that were
+    deployed to production (#583). The statuses of the enabled blocks under
+    ``configurations`` count, as RFC 0012 proposes for ``rule::2.0``; the root
+    ``status`` is used only when no enabled block has one. Sharing does not
+    read the platform configuration, so a block for a platform the repository
+    has not enabled counts too, although deploy skips it.
+    """
+    configurations = body.get("configurations")
+    blocks = configurations.values() if isinstance(configurations, Mapping) else ()
+    statuses = [
+        block["status"]
+        for block in blocks
+        if isinstance(block, Mapping)
+        and block.get("enabled") is True
+        and isinstance(block.get("status"), str)
+    ]
+    if statuses:
+        return statuses
+    root = body.get("status")
+    return [root] if isinstance(root, str) else []
 
 
 def _allowed(max_tlp: str) -> set[str]:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from opentide.generation.pydantic_metaschema import (
     apply_vocab_pins,
     build_schema_source_for_identifier,
@@ -14,6 +16,7 @@ from opentide.generation.vocabulary import (
     VocabularyMetadata,
     VocabularyRevisionResolver,
 )
+from opentide.models import vocab_pins
 from opentide.models.schema_registry import register_model, unregister_model
 from opentide.models.threat import ThreatVector
 from opentide.models.vocab_pins import get_pins
@@ -23,6 +26,17 @@ class ThreatVector_v2_1(ThreatVector):
     """Test-only registration. ``threat::2.1`` is not a shipped model."""
 
     __schema_identifier__ = "threat::2.1"
+
+
+@pytest.fixture
+def threat_v2_1_pins(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the test-only ``threat::2.1`` revision one killchain minor ahead of ``threat::1.0``.
+
+    The bundled pins mirror specifications, which only pins live schemas.
+    """
+    pins = dict(vocab_pins._load_all_pins())
+    pins["threat::2.1"] = {**pins["threat::1.0"], "threat.killchain": "killchain::1.1"}
+    monkeypatch.setattr(vocab_pins, "_load_all_pins", lambda: pins)
 
 
 def _union_string_enum(node: dict) -> list:
@@ -69,6 +83,7 @@ def test_removed_key_excluded_at_and_after_removal_pin() -> None:
     assert "Retired" not in at_11
 
 
+@pytest.mark.usefixtures("threat_v2_1_pins")
 def test_apply_vocab_pins_sets_nested_contracts() -> None:
     schema: dict = {
         "properties": {
@@ -90,15 +105,12 @@ def test_apply_vocab_pins_sets_nested_contracts() -> None:
     )
 
 
-def test_get_pins_for_threat_revisions_differ_on_killchain() -> None:
+def test_get_pins_for_shipped_threat_revision() -> None:
     pins_10 = get_pins("threat::1.0")
-    pins_21 = get_pins("threat::2.1")
     assert pins_10["threat.killchain"] == "killchain::1.0"
-    assert pins_21["threat.killchain"] == "killchain::1.1"
     assert pins_10["threat.actors.name"] == "actors::1.1"
-    assert pins_21["threat.actors.name"] == "actors::1.1"
     assert "threat.actors" not in pins_10
-    assert "threat.actors" not in pins_21
+    assert get_pins("threat::2.1") == {}
 
 
 def test_threat_schema_pins_actors_name_on_object_items() -> None:
@@ -112,6 +124,7 @@ def test_threat_schema_pins_actors_name_on_object_items() -> None:
     assert cve_field.get("title") == "CVE"
 
 
+@pytest.mark.usefixtures("threat_v2_1_pins")
 def test_threat_schema_identifiers_compile_different_killchain_enums() -> None:
     from unittest.mock import patch
 
@@ -135,12 +148,14 @@ def test_threat_schema_identifiers_compile_different_killchain_enums() -> None:
         enum_21 = _union_string_enum(schema_21["$defs"]["ThreatBody"]["properties"]["killchain"])
         assert "NewStage" not in enum_10
         assert "NewStage" in enum_21
+        assert "Retired" not in enum_21
         array_21 = _union_array_enum(schema_21["$defs"]["ThreatBody"]["properties"]["killchain"])
         assert "NewStage" in array_21
     finally:
         unregister_model("threat::2.1")
 
 
+@pytest.mark.usefixtures("threat_v2_1_pins")
 def test_generate_schema_for_identifier_uses_registered_revision() -> None:
     from unittest.mock import patch
 
@@ -157,6 +172,7 @@ def test_generate_schema_for_identifier_uses_registered_revision() -> None:
             schema = generate_schema_for_identifier("threat::2.1")
         killchain = schema["$defs"]["ThreatBody"]["properties"]["killchain"]
         assert "NewStage" in _union_string_enum(killchain)
+        assert "Retired" not in _union_string_enum(killchain)
         assert "NewStage" in _union_array_enum(killchain)
         assert schema["properties"]["metadata"]["properties"]["schema"]["const"] == "threat::2.1"
     finally:

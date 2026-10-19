@@ -19,13 +19,13 @@ The terms and acronyms you will meet across the OpenTide docs, defined once. Whe
 : A *detection goal* and the **signals** that satisfy it. An objective references the threats it covers. Schema identifier `objective::1.0`.
 
 **Rule (MDR — Managed Detection Rule)**
-: A *deployable detection*, carrying per-platform query configurations and a status. A rule references the objective it implements via `detection_model`. Schema identifier `rule::1.0`.
+: A *deployable detection*, carrying per-platform query configurations and a status. A rule references the objective it implements, or one signal under that objective, via `detection_model`. Schema identifier `rule::1.0`.
 
 **Signal**
 : A discrete piece of evidence inside an objective (e.g. "suspicious logon"), with methodology, entities, and data requirements.
 
 **Chaining**
-: The reference graph between objects. Rules point at objectives (`detection_model`); objectives point at threats (`objective.threats`). Coverage flows the opposite way: threats are covered by objectives, which are implemented by rules. See [Object model](./object-model.md#chaining).
+: The reference graph between objects. Rules point at objectives or their signals (`detection_model`); objectives point at threats (`objective.threats`). Coverage flows the opposite way: threats are covered by objectives, which are implemented by rules. See [Object model](./object-model.md#chaining).
 
 **Coverage**
 : What detection exists for a given threat or ATT&CK technique, derived by walking the chaining graph. Reported by `opentide info` and `generate docs`.

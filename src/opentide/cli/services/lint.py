@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 import yaml
@@ -20,6 +21,9 @@ logger = structlog.get_logger("opentide.cli.services.lint")
 _OBJECT_FAMILIES = ("threats", "objectives", "rules")
 _YAML_SUFFIXES = {".yaml", ".yml"}
 
+#: How much a finding matters. ``--strict`` still fails on any finding.
+Severity = Literal["error", "warning", "info"]
+
 
 @dataclass
 class _ObjectRecord:
@@ -31,6 +35,7 @@ class _ObjectRecord:
     organisation: str | None = None
     parse_error: str | None = None
     expected_stem: str | None = None
+    key_lines: dict[str, int] = field(default_factory=dict)
 
 
 def _object_files(root: Path) -> list[Path]:
@@ -64,14 +69,33 @@ def _organisation_name(value: object) -> str | None:
     return None
 
 
+#: A top-level key starts in column 0, optionally quoted, followed by a colon.
+_TOP_LEVEL_KEY = re.compile(r"""^(?:"([^"]+)"|'([^']+)'|([A-Za-z_][\w.-]*))\s*:(?:\s|$)""")
+
+
+def _top_level_key_lines(text: str) -> dict[str, int]:
+    """Zero-based line of each top-level key, as ``validate`` records ``yaml_line``.
+
+    Read from the text already in hand: a round-trip parse per finding made lint
+    roughly 13 times slower on a catalogue where most objects have a finding.
+    """
+    lines: dict[str, int] = {}
+    for number, line in enumerate(text.splitlines()):
+        if (match := _TOP_LEVEL_KEY.match(line)) is not None:
+            lines.setdefault(next(group for group in match.groups() if group), number)
+    return lines
+
+
 def _load_record(root: Path, path: Path) -> _ObjectRecord:
     relative = path.relative_to(root).as_posix()
     record = _ObjectRecord(path=path, relative=relative)
     try:
-        data: Any = parse_yaml(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        data: Any = parse_yaml(text)
     except (yaml.YAMLError, UnicodeDecodeError, OSError) as exc:
         record.parse_error = str(exc)
         return record
+    record.key_lines = _top_level_key_lines(text)
     if not isinstance(data, dict):
         record.parse_error = "object YAML is not a mapping"
         return record
@@ -84,6 +108,32 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
             metadata.get("organisation")
         ) or _organisation_name(metadata.get("organization"))
     return record
+
+
+def _key_line(record: _ObjectRecord, key: str) -> int | None:
+    """Zero-based line of a top-level *key*, as ``validate`` records ``yaml_line``."""
+    return record.key_lines.get(key)
+
+
+def _finding(
+    check: LintCheck,
+    severity: Severity,
+    record: _ObjectRecord,
+    message: str,
+    *,
+    yaml_line: int | None = None,
+    **extra: object,
+) -> dict[str, object]:
+    """One finding. ``uuid`` and ``yaml_line`` are ``None`` when the file does not say."""
+    return {
+        "check": check.value,
+        "severity": severity,
+        "path": record.relative,
+        "yaml_line": yaml_line,
+        "uuid": record.uuid,
+        **extra,
+        "message": message,
+    }
 
 
 def _assign_expected_stems(records: list[_ObjectRecord]) -> None:
@@ -124,32 +174,36 @@ def _filename_findings(
     for record in records:
         if record.parse_error:
             findings.append(
-                {
-                    "check": LintCheck.filenames.value,
-                    "path": record.relative,
-                    "message": f"Could not parse object YAML: {record.parse_error}",
-                }
+                _finding(
+                    LintCheck.filenames,
+                    "error",
+                    record,
+                    f"Could not parse object YAML: {record.parse_error}",
+                )
             )
             continue
         if not record.name:
             findings.append(
-                {
-                    "check": LintCheck.filenames.value,
-                    "path": record.relative,
-                    "message": "Object has no name; cannot check filename slug",
-                }
+                _finding(
+                    LintCheck.filenames,
+                    "error",
+                    record,
+                    "Object has no name; cannot check filename slug",
+                    yaml_line=_key_line(record, "name"),
+                )
             )
             continue
         expected = record.expected_stem
         if expected is None or expected == record.path.stem:
             continue
         dest = record.path.with_name(f"{expected}{record.path.suffix}")
-        finding: dict[str, object] = {
-            "check": LintCheck.filenames.value,
-            "path": record.relative,
-            "expected": dest.relative_to(root).as_posix(),
-            "message": (f"Filename {record.path.name!r} does not match slugify(name)={expected!r}"),
-        }
+        finding = _finding(
+            LintCheck.filenames,
+            "warning",
+            record,
+            f"Filename {record.path.name!r} does not match slugify(name)={expected!r}",
+            expected=dest.relative_to(root).as_posix(),
+        )
         if fix:
             if dest.exists():
                 finding["fixed"] = False
@@ -177,11 +231,13 @@ def _metadata_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
             missing.append("organisation")
         if missing:
             findings.append(
-                {
-                    "check": LintCheck.metadata.value,
-                    "path": record.relative,
-                    "message": "Recommended metadata missing: " + ", ".join(missing),
-                }
+                _finding(
+                    LintCheck.metadata,
+                    "info",
+                    record,
+                    "Recommended metadata missing: " + ", ".join(missing),
+                    yaml_line=_key_line(record, "metadata"),
+                )
             )
     return findings
 
@@ -248,8 +304,10 @@ def render_findings(findings: list[dict[str, object]]) -> None:
     console = get_stdout_console()
     for finding in findings:
         renamed = f" (renamed from {finding['from']})" if finding.get("fixed") is True else ""
+        line = finding.get("yaml_line")
+        where = f"{finding['path']}:{line + 1}" if isinstance(line, int) else finding["path"]
         console.print(
-            f"[{finding['check']}] {finding['path']}: {finding['message']}{renamed}",
+            f"[{finding['check']}/{finding['severity']}] {where}: {finding['message']}{renamed}",
             markup=False,
             soft_wrap=True,
         )

@@ -6,19 +6,59 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
+from pydantic import ValidationError
+
 from opentide.models.base import TideModel
 from opentide.models.migration import stamp_schema_identifier
-from opentide.models.schema_registry import core_object_schemas, get_chain, resolve_model
+from opentide.models.schema_registry import get_chain, resolve_model
 from opentide.models.version import SchemaVersion
 
 
+class SchemaMissingError(ValueError):
+    """An object declares no ``metadata.schema``, so no model can check it."""
+
+    code = "schema_missing"
+
+
+class SchemaIdentifierError(LookupError):
+    """``metadata.schema`` names no registered revision of the expected object type."""
+
+    code = "schema_validation"
+
+
 def schema_id_from_body(body: dict[str, Any]) -> str:
-    """Extract schema identifier from object YAML body."""
+    """Extract schema identifier from object YAML body.
+
+    Raises ``SchemaMissingError`` when there is none. A ``metadata`` that is
+    not a mapping raises a ``ValidationError`` at that key instead: its shape
+    needs fixing, not a missing key.
+    """
     metadata = body.get("metadata") or body.get("meta") or {}
+    if not isinstance(metadata, dict):
+        key = "metadata" if body.get("metadata") else "meta"
+        raise ValidationError.from_exception_data(
+            key, [{"type": "dict_type", "loc": (key,), "input": metadata}]
+        )
     schema_id = metadata.get("schema")
     if not schema_id:
-        raise ValueError("missing metadata.schema on object")
+        raise SchemaMissingError("missing metadata.schema on object")
     return str(schema_id)
+
+
+def resolve_family_model(schema_id: str, family: str) -> type[TideModel]:
+    """Return the model for *schema_id*, which must be a revision of *family*.
+
+    Raises ``SchemaIdentifierError`` (a ``LookupError``) for an unregistered
+    identifier or one of another family. Neither falls back to the family's
+    newest revision (versioning 1.1).
+    """
+    try:
+        model_cls = resolve_model(schema_id)
+    except LookupError as exc:
+        raise SchemaIdentifierError(str(exc)) from exc
+    if SchemaVersion.parse(schema_id).family != family:
+        raise SchemaIdentifierError(f"{schema_id!r} is not a {family} schema identifier")
+    return model_cls
 
 
 def _maybe_migrate_body(
@@ -68,28 +108,16 @@ def load_object(
     return _instantiate_model(model_cls, migrated, file=file)
 
 
-def load_object_by_type(
-    body: dict[str, Any],
-    object_type: str,
-    *,
-    file: Path | None = None,
-) -> TideModel:
-    """Fallback: load by index object_type when schema missing (legacy)."""
-    models = core_object_schemas()
-    model_cls = models.get(object_type)
-    if model_cls is None:
-        raise ValueError(f"unknown object type: {object_type!r}")
-    return _instantiate_model(model_cls, body, file=file)
-
-
 def load_object_for_validation(
     body: dict[str, Any],
     object_type: str,
     *,
     file: Path | None = None,
 ) -> TideModel:
-    """Validate object body via Pydantic, preferring metadata.schema routing."""
-    metadata = body.get("metadata") or body.get("meta") or {}
-    if metadata.get("schema"):
-        return load_object(body, file=file)
-    return load_object_by_type(body, object_type, file=file)
+    """Check *body* against the *object_type* revision its ``metadata.schema`` names.
+
+    Raises ``SchemaMissingError`` when the identifier is absent and
+    ``SchemaIdentifierError`` when it is unknown or of another family.
+    """
+    model_cls = resolve_family_model(schema_id_from_body(body), object_type)
+    return _instantiate_model(model_cls, body, file=file)

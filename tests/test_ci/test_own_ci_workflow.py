@@ -12,6 +12,12 @@ Also pins the concurrency of the long jobs. ``cli-e2e`` used to declare
 longest job in the workflow (~980 s) for a ~22 min wall clock. They share no
 artifact, so the dependency bought nothing; restoring it would quietly undo
 most of the win.
+
+Also covers the vocabulary drift gate's path filter. It used ``rg``, which
+GitHub-hosted runners do not ship; inside ``if`` the missing command read as
+"no match", so ``sync_vocabularies.py --check`` never ran. When the gate fires,
+``--check`` must see a specifications checkout: without one it only compares the
+lockfile with the bundle, and hand-edited pins pass once relocked.
 """
 
 from __future__ import annotations
@@ -118,3 +124,51 @@ def test_sysmon_coverage_cell_is_new_enough(workflow: dict[str, Any]) -> None:
         f"sys.monitoring (PEP 669) only exists on 3.12+. Either raise "
         f"COVERAGE_PYTHON back to 3.12 or newer, or drop the COVERAGE_CORE env."
     )
+
+
+def _vocab_gate_pattern(workflow: dict[str, Any]) -> str:
+    """The ERE the ``vocab_changes`` step greps changed paths with."""
+    steps = workflow["jobs"]["lint"]["steps"]
+    runs = [str(step.get("run", "")) for step in steps if step.get("id") == "vocab_changes"]
+    assert len(runs) == 1, "expected exactly one vocab_changes step in the lint job"
+    match = re.search(r'grep -qE "([^"]+)"', runs[0])
+    assert match is not None, "vocab_changes must filter paths with grep -qE (rg is not installed)"
+    # Bash double quotes turn the workflow's ``\\.`` into ``\.``.
+    return match.group(1).replace("\\\\", "\\")
+
+
+@pytest.mark.parametrize(
+    ("path", "gated"),
+    [
+        ("src/opentide/data/vocabulary/att&ck.vocab.toml", True),
+        ("src/opentide/data/pins/threat.toml", True),
+        ("data/specifications.lock.json", True),
+        ("scripts/build/sync_vocabularies.py", True),
+        ("src/opentide/models/vocab_pins.py", False),
+    ],
+)
+def test_vocab_drift_gate_watches_bundle_pins_and_lockfile(
+    workflow: dict[str, Any], path: str, gated: bool
+) -> None:
+    assert bool(re.search(_vocab_gate_pattern(workflow), path)) is gated
+
+
+def test_vocab_drift_check_compares_against_a_specifications_checkout(
+    workflow: dict[str, Any],
+) -> None:
+    steps = workflow["jobs"]["lint"]["steps"]
+    checks = [step for step in steps if "sync_vocabularies.py --check" in str(step.get("run", ""))]
+    assert len(checks) == 1, "expected exactly one sync_vocabularies.py --check step in lint"
+    root = checks[0].get("env", {}).get("OPENTIDE_SPECIFICATIONS_ROOT", "")
+    assert root == "${{ github.workspace }}/specifications"
+
+    checkouts = [
+        step
+        for step in steps[: steps.index(checks[0])]
+        if step.get("with", {}).get("repository") == "OpenTideHQ/specifications"
+    ]
+    assert len(checkouts) == 1, "the drift check needs a specifications checkout before it"
+    assert checkouts[0]["with"]["path"] == "specifications"
+    assert checkouts[0]["with"].get("ref") == "main"
+    # Gated like the check, so the check never runs without the clone.
+    assert checkouts[0].get("if") == checks[0].get("if")

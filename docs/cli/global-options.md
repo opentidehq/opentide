@@ -1,6 +1,6 @@
 ---
 title: Global options
-description: Repository root, data root, debug logging, colour, and JSON output flags shared by all CLI commands.
+description: Repository root, data root, debug logging, colour, JSON output, and version flags shared by all CLI commands.
 ---
 
 # Global options
@@ -21,6 +21,17 @@ opentide --debug --no-color generate
 | `--debug` | `DEBUG` | off | Enable structlog debug logging |
 | `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable Rich colour output |
 | `--json` | — | off | Emit JSON instead of Rich tables / logs |
+| `--version`, `-V` | — | — | Print `opentide <version>` and exit |
+
+## Version
+
+`opentide --version` (or `-V`) prints the installed package version as `opentide <version>` and exits 0. It runs before the repository root is resolved and before any command, so it works outside a detection workspace and is cheap enough to log at the start of a pipeline job:
+
+```bash
+opentide --version
+```
+
+The output is plain text even with `--json`. For the version inside a JSON document, read `version` from `opentide --json info`.
 
 ## Repository root resolution
 

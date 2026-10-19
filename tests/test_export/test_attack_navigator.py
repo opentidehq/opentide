@@ -124,3 +124,74 @@ def test_create_layer_orchestrates_pipeline(monkeypatch) -> None:
     monkeypatch.setattr(layer, "export_layer", lambda layer: captured.update({"layer": layer}))
     layer.create_layer()
     assert "layer" in captured
+
+
+def _export_layer_text(tmp_path: Path, objects: dict[str, dict], name: str) -> str:
+    from opentide import OpenTide
+
+    OpenTide._index = {
+        "objects": {
+            model_type: {
+                uuid: {"name": body["name"], "metadata": {"uuid": uuid}}
+                for uuid, body in objects.items()
+                if body["type"] == model_type
+            }
+            for model_type in ("threat", "rule")
+        },
+        "configurations": {"global": {"exports": {"attack_layer": name}}},
+    }
+    OpenTide._initialised = True
+    layer = AttackNavigatorLayer()
+    layer.EXPORT_FILE_PATH = tmp_path / name
+    with patch(
+        "opentide.export.attack_navigator_layer.techniques_resolver",
+        side_effect=lambda uuid: objects[uuid]["techniques"],
+    ):
+        layer.create_layer()
+    return (tmp_path / name).read_text(encoding="utf-8")
+
+
+def test_export_is_independent_of_object_order(tmp_path: Path) -> None:
+    """#521: renaming or moving object files must not reshuffle the layer.
+
+    UUID order is the reverse of name order within each family, so the
+    comment order below proves objects are visited by name, not by UUID.
+    """
+    objects = {
+        "00000000-0000-4000-8000-000000000001": {
+            "type": "threat",
+            "name": "Threat B",
+            "techniques": ["T1059", "T1003"],
+        },
+        "00000000-0000-4000-8000-000000000003": {
+            "type": "threat",
+            "name": "threat a",
+            "techniques": ["T1566", "T1059"],
+        },
+        "00000000-0000-4000-8000-000000000002": {
+            "type": "rule",
+            "name": "Rule D",
+            "techniques": ["T1111", "T1059"],
+        },
+        "00000000-0000-4000-8000-000000000004": {
+            "type": "rule",
+            "name": "Rule C",
+            "techniques": ["T1059.001", "T1059"],
+        },
+    }
+    forward = _export_layer_text(tmp_path, objects, "forward.json")
+    backward = _export_layer_text(tmp_path, dict(reversed(objects.items())), "backward.json")
+
+    assert forward == backward
+    techniques = json.loads(forward)["techniques"]
+    assert [t["techniqueID"] for t in techniques] == [
+        "T1003",
+        "T1059",
+        "T1059.001",
+        "T1111",
+        "T1566",
+    ]
+    t1059 = next(t for t in techniques if t["techniqueID"] == "T1059")
+    assert t1059["comment"] == (
+        "[THREAT] threat a, [THREAT] Threat B, [RULE] Rule C, [RULE] Rule D"
+    )

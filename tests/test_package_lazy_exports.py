@@ -69,10 +69,54 @@ for module in (utils, ci, git_repo, planning):
     assert isinstance(module.SYSTEMS_CONFIGS_INDEX, dict), module.__name__
 """
 
+# #539: #536 left reads in class bodies, which run at import just like module
+# level ones. DebugEnvironment read the deployment config that way, and every
+# platform client, deployer and validator imports it, so loading any engine
+# built the index. Import every module in the package and check after each one.
+# A module that needs a third-party package the environment lacks is skipped;
+# a missing opentide module is still a failure.
+_ALL_MODULES_SCRIPT = """
+import importlib
+import pkgutil
+
+import opentide
+from opentide.core.index_manager import IndexManager
+from opentide.core.registry import OpenTide
+
+imported = 0
+for info in pkgutil.walk_packages(opentide.__path__, "opentide."):
+    if info.name.endswith(".__main__"):
+        continue
+    try:
+        importlib.import_module(info.name)
+    except ModuleNotFoundError as exc:
+        if (exc.name or "").partition(".")[0] == "opentide":
+            raise
+        continue
+    imported += 1
+    assert OpenTide.is_initialised is False, info.name + " import initialised the registry"
+    assert IndexManager._cache is None, info.name + " import built the registry index"
+
+assert imported > 200, imported
+
+# The debug settings still resolve, and only now is the index built.
+from opentide.core.debug import DebugEnvironment
+
+assert isinstance(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, list)
+assert isinstance(DebugEnvironment.SSL_ENABLED, bool)
+assert IndexManager._cache is not None
+"""
+
 
 @pytest.mark.parametrize(
     "script",
-    [_DOCUMENTATION_SCRIPT, _GENERATION_SCRIPT, _DEPLOYMENT_SCRIPT, _DEPLOYMENT_SUBMODULE_SCRIPT],
+    [
+        _DOCUMENTATION_SCRIPT,
+        _GENERATION_SCRIPT,
+        _DEPLOYMENT_SCRIPT,
+        _DEPLOYMENT_SUBMODULE_SCRIPT,
+        _ALL_MODULES_SCRIPT,
+    ],
 )
 def test_public_package_exports_are_lazy(script: str) -> None:
     result = subprocess.run(

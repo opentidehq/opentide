@@ -38,6 +38,7 @@ def test_generate_attack_vocabs_writes_files(
     monkeypatch.setattr(generate_attack, "parse_groups", lambda _b, prefix="": [])
     monkeypatch.setattr(generate_attack, "parse_mitigations", lambda _b, prefix="": [])
     monkeypatch.setattr(generate_attack, "parse_datasources", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "parse_matrix_tactics", lambda _b: [])
     monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
     monkeypatch.setattr(generate_attack, "write_vocab_file", lambda _p, _d: None)
 
@@ -126,6 +127,7 @@ def test_generate_attack_vocabs_with_fetch_flag(
         lambda _b, prefix="": [{"id": prefix}],
     )
     monkeypatch.setattr(generate_attack, "parse_datasources", lambda _b: [{"name": "ds"}])
+    monkeypatch.setattr(generate_attack, "parse_matrix_tactics", lambda _b: [])
     monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
     monkeypatch.setattr(generate_attack, "write_vocab_file", lambda _p, _d: None)
     monkeypatch.setattr(
@@ -182,6 +184,7 @@ def test_generate_attack_merges_and_versions_keys(
     monkeypatch.setattr(generate_attack, "parse_groups", lambda _b, prefix="": [])
     monkeypatch.setattr(generate_attack, "parse_mitigations", lambda _b, prefix="": [])
     monkeypatch.setattr(generate_attack, "parse_datasources", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "parse_matrix_tactics", lambda _b: [])
     monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
 
     report = generate_attack.generate_attack_vocabs(vocab_dir=vocab_dir)
@@ -218,6 +221,7 @@ def test_generate_attack_vocabs_uses_explicit_vocab_dir(
     monkeypatch.setattr(generate_attack, "parse_groups", lambda _b, prefix="": [])
     monkeypatch.setattr(generate_attack, "parse_mitigations", lambda _b, prefix="": [])
     monkeypatch.setattr(generate_attack, "parse_datasources", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "parse_matrix_tactics", lambda _b: [])
     monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
     monkeypatch.setattr(
         generate_attack,
@@ -256,8 +260,53 @@ def test_generate_attack_write_false_keeps_disk_unchanged(
     monkeypatch.setattr(generate_attack, "parse_groups", lambda _b, prefix="": [])
     monkeypatch.setattr(generate_attack, "parse_mitigations", lambda _b, prefix="": [])
     monkeypatch.setattr(generate_attack, "parse_datasources", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "parse_matrix_tactics", lambda _b: [])
     monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
 
     report = generate_attack.generate_attack_vocabs(vocab_dir=vocab_dir, write=False)
     assert report.lifecycles["att&ck"].added == ("T1001",)
     assert (vocab_dir / "att&ck.vocab.toml").read_text(encoding="utf-8") == original
+
+
+@pytest.mark.parametrize(
+    ("matrix", "expected"),
+    [
+        (
+            ["Initial Access", "Stealth", "Defense Impairment"],
+            ["Initial Access", "Stealth", "Defense Impairment"],
+        ),
+        ([], ["Initial Access", "Defense Evasion"]),
+    ],
+    ids=["matrix-replaces-header", "no-matrix-keeps-header"],
+)
+def test_generate_attack_header_stages_follow_the_enterprise_matrix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, matrix: list[str], expected: list[str]
+) -> None:
+    stix_dir = tmp_path / "attack" / "stix"
+    vocab_dir = tmp_path / "vocabs"
+    stix_dir.mkdir(parents=True)
+    vocab_dir.mkdir()
+    bundle = {"type": "bundle", "objects": []}
+    (stix_dir / "enterprise-attack.json").write_text(json.dumps(bundle), encoding="utf-8")
+    (vocab_dir / "att&ck.vocab.toml").write_text(
+        'name = "MITRE ATT&CK"\nfield = "att&ck"\n'
+        'stages = ["Initial Access", "Defense Evasion"]\nkey = "id"\nkeys = []\n',
+        encoding="utf-8",
+    )
+    for field in ("att&ck.groups", "mitigations", "datasources"):
+        (vocab_dir / f"{field}.vocab.toml").write_text(
+            f'name = "{field}"\nfield = "{field}"\nkeys = []\n',
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(generate_attack, "_stix_dir", lambda: stix_dir)
+    monkeypatch.setattr(generate_attack, "merge_technique_bundles", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "parse_groups", lambda _b, prefix="": [])
+    monkeypatch.setattr(generate_attack, "parse_mitigations", lambda _b, prefix="": [])
+    monkeypatch.setattr(generate_attack, "parse_datasources", lambda _b: [])
+    monkeypatch.setattr(generate_attack, "parse_matrix_tactics", lambda _b: matrix)
+    monkeypatch.setattr(generate_attack, "load_stix_bundle", lambda _p: bundle)
+
+    generate_attack.generate_attack_vocabs(vocab_dir=vocab_dir)
+
+    written = read_vocab_document(vocab_dir / "att&ck.vocab.toml")
+    assert written["stages"] == expected
