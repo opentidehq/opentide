@@ -44,7 +44,7 @@ dependencies = [
     # The MCP server (`opentide mcp start`) imports `mcp.server.fastmcp`, which
     # mcp 2.x removed in favour of MCPServer. Standalone `fastmcp` is a
     # different package and unused.
-    "mcp>=1.28.1,<2",
+    "mcp>=1.28.1,<3",
     # Platform SDKs. `pip install opentide` is the only install: there are no
     # extras, so live query validation, deploy and import work for every
     # platform out of the box, including in generated CI pipelines.
