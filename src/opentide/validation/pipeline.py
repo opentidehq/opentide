@@ -6,7 +6,11 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from opentide.loading.object_loader import SchemaMissingError, load_object_for_validation
+from opentide.loading.object_loader import (
+    SchemaIdentifierError,
+    SchemaMissingError,
+    load_object_for_validation,
+)
 from opentide.models.base import TideModel
 from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.models.results import ValidationResult
@@ -45,7 +49,7 @@ def _validate_body(body: dict[str, Any], object_type: str) -> ValidationResult:
         )
     except SchemaMissingError as exc:
         return ValidationResult(ok=False, errors=[f"{exc.code}: {exc}"])
-    except LookupError as exc:
+    except SchemaIdentifierError as exc:
         return ValidationResult(ok=False, errors=[f"('metadata', 'schema'): {exc}"])
     return ValidationResult(ok=True)
 

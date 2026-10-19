@@ -114,7 +114,7 @@ An object file that is not valid YAML is reported as a `yaml_parse` issue agains
 
 ### Schema identifier
 
-The `schema` check validates each object against the revision its `metadata.schema` names, so `rule::1.0` and `rule::1.1` rules validate side by side. An object without `metadata.schema` fails with `schema_missing` at that field. An identifier that is not registered, or that names another object type (a rule declaring `threat::1.0`), fails with `schema_validation`. Neither case is checked against the newest revision instead. Through 0.15.0 an object without `metadata.schema` was checked against the newest revision of its type, and a rule declaring another type's identifier was checked as that type.
+The `schema` check validates each object against the revision its `metadata.schema` names, so `rule::1.0` and `rule::1.1` rules validate side by side. An object without `metadata.schema` fails with `schema_missing` at that field. An identifier that is not registered, or that names another object type (a rule declaring `threat::1.0`), fails with `schema_validation` at that field. Neither case is checked against the newest revision instead. Through 0.15.0 an object without `metadata.schema` was checked against the newest revision of its type, and a rule declaring another type's identifier was checked as that type.
 
 ### Vendor rule ids
 

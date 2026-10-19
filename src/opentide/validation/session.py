@@ -346,7 +346,11 @@ def _validate_work_item(
         issues.extend(_uuid_issue_for_object(item, graph, file_path))
 
     if ValidateCheck.schema in checks:
-        from opentide.loading.object_loader import SchemaMissingError, load_object_for_validation
+        from opentide.loading.object_loader import (
+            SchemaIdentifierError,
+            SchemaMissingError,
+            load_object_for_validation,
+        )
 
         shape_rejections: frozenset[tuple[tuple[str, ...], str]] = frozenset()
         try:
@@ -364,18 +368,17 @@ def _validate_work_item(
 
             bucket = [issue for issue in bucket if not is_superseded_extra_key(issue)]
             issues.extend(attach_yaml_lines(bucket, item.body, file_path=file_path))
-        except SchemaMissingError as exc:
-            issues.append(
-                ValidationIssue(
-                    code=exc.code,
-                    severity="error",
-                    object_uuid=item.uuid,
-                    object_type=item.object_type,
-                    file_path=file_path,
-                    field_path=("metadata", "schema"),
-                    message=str(exc),
-                )
+        except (SchemaMissingError, SchemaIdentifierError) as exc:
+            issue = ValidationIssue(
+                code=exc.code,
+                severity="error",
+                object_uuid=item.uuid,
+                object_type=item.object_type,
+                file_path=file_path,
+                field_path=("metadata", "schema"),
+                message=str(exc),
             )
+            issues.extend(attach_yaml_lines([issue], item.body, file_path=file_path))
         except Exception as exc:
             issues.append(
                 ValidationIssue(

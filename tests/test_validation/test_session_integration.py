@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from opentide.validation.checks.kinds import ValidateCheck
 from opentide.validation.issues import ValidationReport
 from opentide.validation.session import run_validation
@@ -61,8 +63,17 @@ def test_run_validation_reports_missing_schema_without_a_model() -> None:
     ]
 
 
-def test_run_validation_rejects_an_unknown_schema_without_a_model() -> None:
-    report = _run_schema_check({"name": "Incomplete", "metadata": {"schema": "rule::9.9"}})
-    assert [(i.code, i.message) for i in report.errors] == [
-        ("schema_validation", "unknown schema identifier: 'rule::9.9'")
+@pytest.mark.parametrize(
+    ("schema", "message"),
+    [
+        ("rule::9.9", "unknown schema identifier: 'rule::9.9'"),
+        ("threat::1.0", "'threat::1.0' is not a rule schema identifier"),
+    ],
+)
+def test_run_validation_rejects_an_unknown_schema_without_a_model(
+    schema: str, message: str
+) -> None:
+    report = _run_schema_check({"name": "Incomplete", "metadata": {"schema": schema}})
+    assert [(i.code, i.field_path, i.message) for i in report.errors] == [
+        ("schema_validation", ("metadata", "schema"), message)
     ]

@@ -18,6 +18,12 @@ class SchemaMissingError(ValueError):
     code = "schema_missing"
 
 
+class SchemaIdentifierError(LookupError):
+    """``metadata.schema`` names no registered revision of the expected object type."""
+
+    code = "schema_validation"
+
+
 def schema_id_from_body(body: dict[str, Any]) -> str:
     """Extract schema identifier from object YAML body."""
     metadata = body.get("metadata") or body.get("meta") or {}
@@ -30,12 +36,16 @@ def schema_id_from_body(body: dict[str, Any]) -> str:
 def resolve_family_model(schema_id: str, family: str) -> type[TideModel]:
     """Return the model for *schema_id*, which must be a revision of *family*.
 
-    Raises ``LookupError`` for an unregistered identifier or one of another
-    family. Neither falls back to the family's newest revision (versioning 1.1).
+    Raises ``SchemaIdentifierError`` (a ``LookupError``) for an unregistered
+    identifier or one of another family. Neither falls back to the family's
+    newest revision (versioning 1.1).
     """
-    model_cls = resolve_model(schema_id)
+    try:
+        model_cls = resolve_model(schema_id)
+    except LookupError as exc:
+        raise SchemaIdentifierError(str(exc)) from exc
     if SchemaVersion.parse(schema_id).family != family:
-        raise LookupError(f"{schema_id!r} is not a {family} schema identifier")
+        raise SchemaIdentifierError(f"{schema_id!r} is not a {family} schema identifier")
     return model_cls
 
 
@@ -95,7 +105,7 @@ def load_object_for_validation(
     """Check *body* against the *object_type* revision its ``metadata.schema`` names.
 
     Raises ``SchemaMissingError`` when the identifier is absent and
-    ``LookupError`` when it is unknown or of another family.
+    ``SchemaIdentifierError`` when it is unknown or of another family.
     """
     model_cls = resolve_family_model(schema_id_from_body(body), object_type)
     return _instantiate_model(model_cls, body, file=file)

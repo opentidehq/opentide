@@ -89,3 +89,12 @@ def test_schema_of_another_family_is_rejected() -> None:
     assert result.errors == [
         "('metadata', 'schema'): 'threat::1.0' is not a rule schema identifier"
     ]
+
+
+def test_a_lookup_error_from_the_model_is_not_blamed_on_metadata_schema() -> None:
+    """Only schema resolution maps to ``('metadata', 'schema')``."""
+    with (
+        patch("opentide.loading.object_loader._instantiate_model", side_effect=KeyError("tlp")),
+        pytest.raises(KeyError, match="tlp"),
+    ):
+        validate_raw_payload(_fixture("valid/rule-1.0.yaml"), "rule")
