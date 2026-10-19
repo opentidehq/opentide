@@ -202,8 +202,9 @@ client is built, and names the file to edit.
 
 A tenant the check cannot reach (a refused connection, a DNS or TLS failure, a
 timeout, or a proxy that will not connect) fails the check with exit `1`, not a
-traceback. `--json` names the `tenant` and the `host` that failed, and `message`
-carries the network error. The human output prints the same line under `FATAL`,
+traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Defender for
+Endpoint, `--json` names the `tenant` and the `host` that failed, and `message`
+carries the network error; Sentinel reports it in its own failed result. The human output prints the same line under `FATAL`,
 with the `advice`. The platform's remaining tenants are not checked after the
 first one that cannot be reached. The sample is illustrative, because it needs a
 configured tenant:

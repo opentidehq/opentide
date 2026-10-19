@@ -17,6 +17,8 @@ from urllib.parse import urlsplit
 
 import requests
 
+from opentide.core.errors import Errors
+
 #: ``OSError`` itself is not listed: a missing file is not a network failure.
 _TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
     URLError,
@@ -30,8 +32,12 @@ _TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
 )
 
 
-class TenantUnreachableError(Exception):
-    """A live check could not reach *host*, the address of *tenant* on *platform*."""
+class TenantUnreachableError(Errors.TenantConnectionError):
+    """A live check could not reach *host*, the address of *tenant* on *platform*.
+
+    A :class:`Errors.TenantConnectionError`, so code that catches the documented
+    class around a validator catches this too.
+    """
 
     def __init__(self, platform: str, tenant: str, host: str, error: BaseException) -> None:
         self.platform = platform

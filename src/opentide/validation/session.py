@@ -601,7 +601,10 @@ def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | _IdScanParseError 
         )
     if not isinstance(model_body, dict):
         return None
-    uuid = model_body.get("metadata", {}).get("uuid")
+    metadata = model_body.get("metadata")
+    # A scalar `metadata` is a schema error the schema check reports; here it
+    # only means there is no uuid to compare.
+    uuid = metadata.get("uuid") if isinstance(metadata, dict) else None
     if not uuid:
         return None
     return _IdScanRow(

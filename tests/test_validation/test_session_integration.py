@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -85,3 +86,14 @@ def test_run_validation_rejects_an_unknown_schema_without_a_model(
     assert [(i.code, i.field_path, i.message) for i in report.errors] == [
         ("schema_validation", ("metadata", "schema"), message)
     ]
+
+
+def test_id_scan_skips_a_non_mapping_metadata(tmp_path: Path) -> None:
+    """The id-uniqueness scan used to crash on `metadata: <scalar>` with AttributeError."""
+    from opentide.validation.session import _scan_id_file
+
+    rule = tmp_path / "rule.yaml"
+    rule.write_text(
+        "name: Scalar\nuuid: 00000000-0000-4000-8003-000000000001\nmetadata: rule::1.0\n"
+    )
+    assert _scan_id_file((rule, "rule")) is None

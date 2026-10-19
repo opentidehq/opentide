@@ -43,7 +43,8 @@ def _rule_model(metadata_raw: Any) -> type[DetectionRule]:
     """Select the rule revision ``metadata.schema`` names.
 
     A missing identifier raises ``SchemaMissingError`` and an unknown one
-    ``LookupError``; neither falls back to a default revision (versioning 1.1).
+    ``SchemaIdentifierError`` (a ``LookupError``); neither falls back to a
+    default revision (versioning 1.1).
     """
     schema_id = schema_id_from_body({"metadata": metadata_raw})
     return cast(type[DetectionRule], resolve_family_model(schema_id, "rule"))
