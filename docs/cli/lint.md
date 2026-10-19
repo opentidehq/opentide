@@ -71,7 +71,7 @@ A filename mismatch adds `expected`, the path the file should have. Under `--fix
 | Finding | `severity` | `yaml_line` |
 |---------|------------|-------------|
 | Object YAML does not parse, or is not a mapping | `error` | `null` |
-| Object has no `name` | `error` | The `name:` key when it is present but empty, else `null` |
+| Object has no `name` | `error` | The `name:` key when it is present but empty or not a string, else `null` |
 | Filename is not `slugify(name)` | `warning` | `null` |
 | `metadata.author` or `metadata.organisation` missing | `info` | The `metadata:` key, or `null` when there is no `metadata` block |
 

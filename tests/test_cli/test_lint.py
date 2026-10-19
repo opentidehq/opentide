@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from opentide.cli import app
@@ -256,11 +257,12 @@ def test_lint_parse_error_is_an_error_without_uuid_or_line(tmp_path: Path) -> No
     assert finding["yaml_line"] is None
 
 
-def test_lint_unnamed_object_points_at_its_empty_name(tmp_path: Path) -> None:
-    body = """\
+@pytest.mark.parametrize("name", ['""', "123"], ids=["empty", "not-a-string"])
+def test_lint_unnamed_object_points_at_its_name_key(tmp_path: Path, name: str) -> None:
+    body = f"""\
 metadata:
   uuid: 00000000-0000-4000-8001-000000000001
-name: ""
+name: {name}
 """
     _write_object(tmp_path, "threats", "unnamed.yaml", body)
     (finding,) = run_lint(tmp_path)["findings"]
