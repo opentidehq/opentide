@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -14,7 +15,6 @@ from opentide.cli.enums import LintCheck
 from opentide.core.io import parse_yaml
 from opentide.core.logging.config import get_stdout_console
 from opentide.documentation.markdown.links import slugify
-from opentide.validation.errors import find_key_line, load_yaml_with_lines
 
 logger = structlog.get_logger("opentide.cli.services.lint")
 
@@ -35,6 +35,7 @@ class _ObjectRecord:
     organisation: str | None = None
     parse_error: str | None = None
     expected_stem: str | None = None
+    key_lines: dict[str, int] = field(default_factory=dict)
 
 
 def _object_files(root: Path) -> list[Path]:
@@ -68,14 +69,33 @@ def _organisation_name(value: object) -> str | None:
     return None
 
 
+#: A top-level key starts in column 0, optionally quoted, followed by a colon.
+_TOP_LEVEL_KEY = re.compile(r"""^(?:"([^"]+)"|'([^']+)'|([A-Za-z_][\w.-]*))\s*:(?:\s|$)""")
+
+
+def _top_level_key_lines(text: str) -> dict[str, int]:
+    """Zero-based line of each top-level key, as ``validate`` records ``yaml_line``.
+
+    Read from the text already in hand: a round-trip parse per finding made lint
+    roughly 13 times slower on a catalogue where most objects have a finding.
+    """
+    lines: dict[str, int] = {}
+    for number, line in enumerate(text.splitlines()):
+        if (match := _TOP_LEVEL_KEY.match(line)) is not None:
+            lines.setdefault(next(group for group in match.groups() if group), number)
+    return lines
+
+
 def _load_record(root: Path, path: Path) -> _ObjectRecord:
     relative = path.relative_to(root).as_posix()
     record = _ObjectRecord(path=path, relative=relative)
     try:
-        data: Any = parse_yaml(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        data: Any = parse_yaml(text)
     except (yaml.YAMLError, UnicodeDecodeError, OSError) as exc:
         record.parse_error = str(exc)
         return record
+    record.key_lines = _top_level_key_lines(text)
     if not isinstance(data, dict):
         record.parse_error = "object YAML is not a mapping"
         return record
@@ -92,7 +112,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
 
 def _key_line(record: _ObjectRecord, key: str) -> int | None:
     """Zero-based line of a top-level *key*, as ``validate`` records ``yaml_line``."""
-    return find_key_line(load_yaml_with_lines(record.path), (key,))
+    return record.key_lines.get(key)
 
 
 def _finding(
