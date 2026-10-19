@@ -55,6 +55,22 @@ With `changed=True`, `run()` computes changed object YAMLs from the git merge-ba
 
 `changed=True` is only supported for full docs generation (`scope=None`) and cannot be combined with scoped CLI filters such as `--rules`, `--threats`, or `--objectives`.
 
+## When an object fails to render
+
+`run()` raises `ObjectGenerationError` when an object page, or an object's relation count on an index page, fails to render. `write_all(include_index=True)` raises it for a relation count only; an object page that fails there raises the original exception. The message names the object, as in `KeyError: 'tlp' while rendering <uuid>`. The UUID is `.uuid`, and the original exception is `.cause`, which is also its `__cause__`. An `except KeyError` around `run()` does not catch it; catch `ObjectGenerationError` and test `.cause`:
+
+```python
+from opentide.documentation import run
+from opentide.generation.errors import ObjectGenerationError
+
+try:
+    run(output="docs")
+except ObjectGenerationError as exc:
+    if not isinstance(exc.cause, KeyError):
+        raise
+    print(f"{exc.uuid}: {exc.cause!r}")
+```
+
 ## Context and flavors
 
 ```python
@@ -123,4 +139,4 @@ From `opentide.documentation`:
 
 ## Source
 
-`src/opentide/documentation/api.py`, `src/opentide/documentation/__init__.py`
+`src/opentide/documentation/api.py`, `src/opentide/documentation/__init__.py`, `src/opentide/generation/errors.py`
