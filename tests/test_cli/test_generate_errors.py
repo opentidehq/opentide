@@ -119,6 +119,22 @@ def test_a_phase_that_logs_an_error_fails_the_run(tmp_path: Path) -> None:
     assert str(broken) in message
 
 
+def test_a_raise_after_a_logged_error_reports_both(tmp_path: Path) -> None:
+    """The rule's dangling reference is the symptom; the skipped objective is the cause."""
+    repo = _tutorial(tmp_path)
+    objective = repo / "objects" / "objectives" / "credential-access-objective.yaml"
+    text = objective.read_text(encoding="utf-8")
+    objective.write_text(f"{text}\nbroken: [unclosed\n", encoding="utf-8")
+    payload = _failure(_invoke(repo, "generate", "docs"))
+    message = str(payload["message"])
+    assert message.startswith(
+        "docs: Exception: detection_model 00000000-0000-4000-8002-000000000001 does not exist "
+        f"in the catalogue while rendering {_RULE}; "
+        "logged an error: malformed_object_yaml (path="
+    )
+    assert str(objective) in message
+
+
 def test_a_healthy_tutorial_still_generates(tmp_path: Path) -> None:
     result = _invoke(_tutorial(tmp_path), "generate")
     assert result.exit_code == 0, result.stdout + result.stderr

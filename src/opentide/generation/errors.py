@@ -89,13 +89,20 @@ def failing_phase(phase: str) -> Generator[None, None, None]:
     except GenerationPhaseError:
         raise
     except Exception as exc:
-        raise GenerationPhaseError(phase, describe_exception(exc)) from exc
+        detail = describe_exception(exc)
+        if errors.records:
+            # What the phase logged before it raised is often the cause: an
+            # object skipped as malformed, then a reference to it failing.
+            detail = f"{detail}; {_describe_logged(errors.records)}"
+        raise GenerationPhaseError(phase, detail) from exc
     finally:
         root.removeHandler(errors)
     if errors.records:
-        first = _describe_record(errors.records[0])
-        count = len(errors.records)
-        detail = (
-            f"logged an error: {first}" if count == 1 else f"logged {count} errors, first: {first}"
-        )
-        raise GenerationPhaseError(phase, detail)
+        raise GenerationPhaseError(phase, _describe_logged(errors.records))
+
+
+def _describe_logged(records: list[logging.LogRecord]) -> str:
+    first = _describe_record(records[0])
+    if len(records) == 1:
+        return f"logged an error: {first}"
+    return f"logged {len(records)} errors, first: {first}"

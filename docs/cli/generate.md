@@ -52,7 +52,7 @@ opentide --json generate docs
 }
 ```
 
-A phase that logged errors reports the first one, as `docs: logged an error: malformed_object_yaml (path=…, error=…)` or `logged 3 errors, first: …`. Every error is on stderr. Run [`opentide validate`](./validate.md) to list every broken object at once.
+A phase that logged errors reports the first one, as `docs: logged an error: malformed_object_yaml (path=…, error=…)` or `logged 3 errors, first: …`. A phase that logged an error and then raised reports both, the logged error after a `;`, because the skipped object is often what broke the later one. Every error is on stderr. Run [`opentide validate`](./validate.md) to list every broken object at once.
 
 ## generate templates
 
