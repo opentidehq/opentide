@@ -15,7 +15,8 @@ from opentide.ci.stages import (
     object_validate_commands,
     pip_install,
     production_deploy_steps,
-    query_validation_commands,
+    query_platforms,
+    reviewed_query_validation_command,
     staging_deploy_steps,
     trusted_platform_config_commands,
 )
@@ -244,12 +245,13 @@ def render_github(options: CiRenderOptions) -> str:
     setup = _setup_steps(options)
     # Object validation reads the pull request's own configuration. Only the
     # steps that send credentials use the default branch's copy.
+    queries = [
+        reviewed_query_validation_command(p, repo=options.repo) for p in query_platforms(options)
+    ]
     validate_steps = join_blocks(
         setup,
         _run_steps(object_validate_commands()),
-        _reviewed_tenants_step(
-            "Validate queries on reviewed tenants", branch, query_validation_commands(options)
-        ),
+        _reviewed_tenants_step("Validate queries on reviewed tenants", branch, queries),
     )
     deploy_env = github_deploy_env()
     generate_steps = join_blocks(setup, _run_steps(["opentide generate"]))

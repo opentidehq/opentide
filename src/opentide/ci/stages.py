@@ -27,6 +27,12 @@ NO_REVIEWED_CONFIG_NOTE = (
     " Skipped without using platform credentials."
 )
 
+#: Printed for a platform whose file on the default branch declares no tenant.
+NO_REVIEWED_TENANT_NOTE = (
+    "The default branch has no {platform} tenant yet, so no tenant is reviewed."
+    " Skipped {platform} live query validation without using platform credentials."
+)
+
 
 def trusted_platform_config_commands(branch: str) -> list[str]:
     """Replace workspace configuration with the default branch's copy.
@@ -151,17 +157,37 @@ def query_validation_command(platform: str, *, repo: Path | None = None) -> str:
     return f"if {clauses}; then {skip}; else {live}; fi"
 
 
+def reviewed_query_validation_command(platform: str, *, repo: Path | None = None) -> str:
+    """:func:`query_validation_command` for a tenant the default branch has.
+
+    Runs after :func:`trusted_platform_config_commands`. A platform's first
+    tenant reaches the default branch through a pull request, and that pull
+    request's check reads the default branch's file, where ``[[tenants]]`` is
+    still commented out as setup writes it. The live check would fail there
+    and tell the author to add the tenant they just added, so the step prints
+    :data:`NO_REVIEWED_TENANT_NOTE` and exits 0 instead, as
+    ``deploy --skip-unconfigured`` does.
+
+    Any uncommented line that mentions ``tenants`` runs the check, which then
+    fails as before if it declares no tenant. Only a file with no such line,
+    or no file, is skipped.
+    """
+    config = shlex.quote(f"{_WORKSPACE_CONFIG_DIR}/platforms/{platform}.toml")
+    note = NO_REVIEWED_TENANT_NOTE.format(platform=platform)
+    check = query_validation_command(platform, repo=repo)
+    return f"if grep -qs '^[^#]*tenants' {config}; then {check}; else echo \"{note}\"; fi"
+
+
 def object_validate_commands() -> list[str]:
     """The catalogue gate. Warnings fail, and a misnamed file fails too."""
     return ["opentide validate --strict", "opentide lint --strict"]
 
 
-def query_validation_commands(options: CiRenderOptions) -> list[str]:
-    return [query_validation_command(p, repo=options.repo) for p in query_platforms(options)]
-
-
 def validate_commands(options: CiRenderOptions) -> list[str]:
-    return [*object_validate_commands(), *query_validation_commands(options)]
+    steps = object_validate_commands()
+    for platform in query_platforms(options):
+        steps.append(query_validation_command(platform, repo=options.repo))
+    return steps
 
 
 def core_cli_steps(options: CiRenderOptions) -> list[str]:

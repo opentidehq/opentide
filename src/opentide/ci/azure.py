@@ -13,7 +13,7 @@ from opentide.ci.stages import (
     object_validate_commands,
     pip_install,
     production_deploy_steps,
-    query_validation_command,
+    reviewed_query_validation_command,
     staging_deploy_steps,
     trusted_platform_config_commands,
 )
@@ -165,7 +165,7 @@ def render_azure(options: CiRenderOptions) -> str:
                 display_name=f"Validate query ({platform})",
                 steps=_job_steps(
                     options,
-                    [*restore, query_validation_command(platform, repo=options.repo)],
+                    [*restore, reviewed_query_validation_command(platform, repo=options.repo)],
                     # The checkout token is removed before later steps unless it
                     # is persisted, and the endpoint restore has to fetch.
                     persist_credentials=True,

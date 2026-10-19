@@ -17,7 +17,7 @@ from opentide.ci.stages import (
     object_validate_commands,
     pip_install,
     production_deploy_steps,
-    query_validation_command,
+    reviewed_query_validation_command,
     staging_deploy_steps,
     trusted_platform_config_commands,
 )
@@ -137,7 +137,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 stage="validate",
                 script=[
                     *trusted_platform_config_commands(_DEFAULT_BRANCH),
-                    query_validation_command(platform, repo=options.repo),
+                    reviewed_query_validation_command(platform, repo=options.repo),
                 ],
                 # python slim has no git; without it the endpoint checkout cannot run.
                 before=[GITLAB_INSTALL_GIT],

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,7 +15,14 @@ from opentide.ci.azure import render_azure
 from opentide.ci.github import render_github
 from opentide.ci.gitlab import render_gitlab
 from opentide.ci.models import CiRenderOptions
-from opentide.ci.stages import NO_REVIEWED_CONFIG_NOTE, trusted_platform_config_commands
+from opentide.ci.stages import (
+    NO_REVIEWED_CONFIG_NOTE,
+    NO_REVIEWED_TENANT_NOTE,
+    reviewed_query_validation_command,
+    trusted_platform_config_commands,
+)
+from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
+from opentide.core.root import get_data_root
 from opentide.deployment.git_backend import open_repo
 
 RESTORE = "git checkout FETCH_HEAD -- .opentide/configurations"
@@ -60,8 +68,8 @@ def test_github_secret_jobs_pin_endpoints_and_production_does_not() -> None:
     restore = trusted_platform_config_commands("development")
     assert validate[-1].splitlines() == [
         *restore,
-        "opentide validate query --platform elastic --live",
-        "opentide validate query --platform splunk --live",
+        reviewed_query_validation_command("elastic"),
+        reviewed_query_validation_command("splunk"),
     ]
     assert _runs(jobs["deploy_staging"]["steps"])[-1].splitlines() == [
         *restore,
@@ -95,7 +103,7 @@ def test_gitlab_query_and_staging_jobs_pin_endpoints() -> None:
     restore = trusted_platform_config_commands('"$CI_DEFAULT_BRANCH"')
     query = parsed["validate_query_elastic"]
     assert "apt-get install -y -qq --no-install-recommends git" in "\n".join(query["before_script"])
-    assert query["script"] == [*restore, "opentide validate query --platform elastic --live"]
+    assert query["script"] == [*restore, reviewed_query_validation_command("elastic")]
     staging = parsed["deploy_staging"]
     assert staging["script"][: len(restore)] == restore
     assert staging["variables"] == {"GIT_DEPTH": "0"}
@@ -117,7 +125,7 @@ def test_azure_query_and_staging_jobs_pin_endpoints() -> None:
     jobs = {job["job"]: job for stage in parsed["stages"] for job in stage["jobs"]}
     restore = "\n".join(trusted_platform_config_commands("main"))
     query = jobs["validate_query_elastic"]
-    assert restore in _azure_script(query)
+    assert f"{restore}\n{reviewed_query_validation_command('elastic')}" in _azure_script(query)
     # The restore fetches, so the token is kept; one path needs no full history.
     assert query["steps"][0] == {"checkout": "self", "persistCredentials": True}
     staging = jobs["deploy_staging"]
@@ -132,8 +140,10 @@ def test_azure_query_and_staging_jobs_pin_endpoints() -> None:
 
 # --- The commands in a real checkout ------------------------------------------
 
-REVIEWED = 'url = "https://splunk.reviewed.example"\n'
-ATTACKER = 'url = "https://attacker.example"\n'
+REVIEWED = '[[tenants]]\nurl = "https://splunk.reviewed.example"\n'
+ATTACKER = '[[tenants]]\nurl = "https://attacker.example"\n'
+# What ``setup`` writes: the platform enabled, its tenant still commented out.
+SCAFFOLD = '[platform]\nenabled = true\n\n# [[tenants]]\n# url = "$SPLUNK_URL"\n'
 SPLUNK = Path(".opentide/configurations/platforms/splunk.toml")
 PR_ONLY = Path(".opentide/configurations/platforms/elastic.toml")
 
@@ -170,9 +180,11 @@ def remote(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return bare
 
 
-def _branches(remote: Path, *, reviewed: bool) -> None:
+def _branches(remote: Path, *, reviewed: str | None) -> None:
+    """``reviewed`` is ``splunk.toml`` on ``main``; ``None`` leaves out the configuration."""
     seed = remote.parent / "seed"
-    _commit(seed, {SPLUNK: REVIEWED} if reviewed else {Path("README.md"): "rules\n"}, "base")
+    base = {SPLUNK: reviewed} if reviewed is not None else {Path("README.md"): "rules\n"}
+    _commit(seed, base, "base")
     _git(seed, "push", "-q", "origin", "HEAD:main")
     _git(seed, "checkout", "-q", "-b", "feature")
     _commit(seed, {SPLUNK: ATTACKER, PR_ONLY: ATTACKER}, "pull request")
@@ -191,19 +203,33 @@ def _checkout(remote: Path, *, shallow: bool) -> Path:
     return work
 
 
-def _run(work: Path) -> subprocess.CompletedProcess[str]:
-    """The restore, then a command standing in for the credentialed one."""
+def _run(work: Path, command: str = "touch credentialed") -> subprocess.CompletedProcess[str]:
+    """The restore, then ``command``; the default stands in for a credentialed one."""
+    return _bash(work, "\n".join([*trusted_platform_config_commands("main"), command]))
+
+
+def _bash(cwd: Path, script: str) -> subprocess.CompletedProcess[str]:
     bash = shutil.which("bash")
     assert bash is not None
-    script = "\n".join([*trusted_platform_config_commands("main"), "touch credentialed"])
     return subprocess.run(
-        [bash, "-e", "-c", script], cwd=work, capture_output=True, text=True, check=False
+        [bash, "-e", "-c", script], cwd=cwd, capture_output=True, text=True, check=False
     )
+
+
+@pytest.fixture
+def stub_opentide(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An ``opentide`` on PATH that records its arguments in ``./credentialed``."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "opentide"
+    stub.write_text('#!/bin/sh\necho "$*" >> credentialed\n', encoding="utf-8")
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
 
 
 def test_a_full_clone_stays_full_and_keeps_its_merge_base(remote: Path) -> None:
     """``--depth`` here made the staging deploy fail to find the merge base."""
-    _branches(remote, reviewed=True)
+    _branches(remote, reviewed=REVIEWED)
     work = _checkout(remote, shallow=False)
     base = _git(work, "merge-base", "origin/main", "origin/feature")
 
@@ -220,7 +246,7 @@ def test_a_full_clone_stays_full_and_keeps_its_merge_base(remote: Path) -> None:
 
 
 def test_a_shallow_clone_fetches_only_the_tip(remote: Path) -> None:
-    _branches(remote, reviewed=True)
+    _branches(remote, reviewed=REVIEWED)
     work = _checkout(remote, shallow=True)
 
     done = _run(work)
@@ -234,7 +260,7 @@ def test_a_shallow_clone_fetches_only_the_tip(remote: Path) -> None:
 
 def test_without_a_reviewed_configuration_nothing_uses_credentials(remote: Path) -> None:
     """The pull request that adds the configuration has nothing to restore."""
-    _branches(remote, reviewed=False)
+    _branches(remote, reviewed=None)
     work = _checkout(remote, shallow=False)
 
     done = _run(work)
@@ -244,6 +270,58 @@ def test_without_a_reviewed_configuration_nothing_uses_credentials(remote: Path)
     assert "pathspec" not in done.stderr
     assert not (work / ".opentide" / "configurations").exists()
     assert not (work / "credentialed").exists()
+
+
+@pytest.mark.usefixtures("stub_opentide")
+def test_the_pull_request_adding_the_first_tenant_skips_live_validation(remote: Path) -> None:
+    """``main`` has the scaffold; the live check would fail on the tenant the PR adds."""
+    _branches(remote, reviewed=SCAFFOLD)
+    work = _checkout(remote, shallow=True)
+
+    done = _run(work, reviewed_query_validation_command("splunk"))
+
+    assert done.returncode == 0, done.stderr
+    assert NO_REVIEWED_TENANT_NOTE.format(platform="splunk") in done.stdout
+    assert (work / SPLUNK).read_text(encoding="utf-8") == SCAFFOLD
+    assert not (work / "credentialed").exists()
+
+
+@pytest.mark.usefixtures("stub_opentide")
+def test_a_reviewed_tenant_is_validated_live(remote: Path) -> None:
+    _branches(remote, reviewed=REVIEWED)
+    work = _checkout(remote, shallow=True)
+
+    done = _run(work, reviewed_query_validation_command("splunk"))
+
+    assert done.returncode == 0, done.stderr
+    assert NO_REVIEWED_TENANT_NOTE.format(platform="splunk") not in done.stdout
+    assert (work / "credentialed").read_text(encoding="utf-8") == (
+        "validate query --platform splunk --live\n"
+    )
+
+
+@pytest.mark.usefixtures("stub_opentide")
+@pytest.mark.parametrize("platform", sorted(QUERY_VALIDATION_PLATFORMS))
+def test_only_an_uncommented_tenant_runs_live_validation(platform: str, tmp_path: Path) -> None:
+    """Each bundled template, as setup writes it, has no tenant until one is uncommented."""
+    template = get_data_root() / "configurations" / "platforms" / f"{platform}.toml"
+    scaffold = template.read_text(encoding="utf-8")
+    config = tmp_path / ".opentide" / "configurations" / "platforms" / f"{platform}.toml"
+    config.parent.mkdir(parents=True)
+    command = reviewed_query_validation_command(platform)
+
+    config.write_text(scaffold, encoding="utf-8")
+    skipped = _bash(tmp_path, command)
+    assert NO_REVIEWED_TENANT_NOTE.format(platform=platform) in skipped.stdout
+    assert not (tmp_path / "credentialed").exists()
+
+    uncommented = re.sub(r"^#\s*\[\[tenants\]\]", "[[tenants]]", scaffold, flags=re.MULTILINE)
+    config.write_text(uncommented, encoding="utf-8")
+    ran = _bash(tmp_path, command)
+    assert ran.returncode == 0, ran.stderr
+    assert (tmp_path / "credentialed").read_text(encoding="utf-8") == (
+        f"validate query --platform {platform} --live\n"
+    )
 
 
 def _runs(steps: list[dict[str, object]]) -> list[str]:
