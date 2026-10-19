@@ -377,7 +377,7 @@ class ElasticConfig(PlatformConfigBase):
                 if not isinstance(entry, dict):
                     codes.add("filter_shape")
                     continue
-                shorthand = entry.get("field") is not None or entry.get("value") is not None
+                shorthand = any(entry.get(key) is not None for key in ("field", "value", "negate"))
                 raw_filter = entry.get("meta") is not None or entry.get("query") is not None
                 # Exactly one shape, and that shape complete: {field, value, negate?}
                 # or {meta, query}. An empty entry is neither.

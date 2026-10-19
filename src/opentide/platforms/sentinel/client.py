@@ -199,9 +199,9 @@ class SentinelService:
         return SentinelClient(credentials, self.setup.azure_subscription_id, verify=self.setup.ssl)
 
 
+# Case-sensitive, like the Elastic parser: an upper-case `M` reads as months.
 _SHORTHAND_DURATION = re.compile(
-    r'^(?:(?P<days>\d+)d)?(?:(?P<hours>\d+)h)?(?:(?P<minutes>\d+)m)?$',
-    re.IGNORECASE,
+    r'^(?:(?P<days>\d+)d)?(?:(?P<hours>\d+)h)?(?:(?P<minutes>\d+)m)?(?:(?P<seconds>\d+)s)?$'
 )
 _ISO_DURATION = re.compile(
     r'^P(?:(?P<weeks>\d+)W)?(?:(?P<days>\d+)D)?'
@@ -231,5 +231,5 @@ def iso_duration_timedelta(duration: str) -> timedelta:
             return timedelta(**parts)
     raise Errors.TideMDRDataModelErrors(
         f'Duration {duration!r} is not an ISO 8601 duration (PT1H, PT30M, P1D) '
-        'or a shorthand duration (30m, 1h, 1d)'
+        'or a shorthand duration (30m, 1h, 1d, 1h10m)'
     )

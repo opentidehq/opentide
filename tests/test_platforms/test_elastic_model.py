@@ -195,6 +195,12 @@ _BASE = {"status": "STAGING", "type": "query", "query": "process.name: *"}
         ),
         ({"filters": [{}]}, "filter_shape"),
         ({"filters": [{"meta": {}}]}, "filter_shape"),
+        # A raw filter carries its negation in meta.negate; a top-level negate
+        # mixes the two shapes, and Kibana would ignore it (RFC 0007 filter_shape).
+        (
+            {"filters": [{"meta": {"negate": False}, "query": {"match_all": {}}, "negate": True}]},
+            "filter_shape",
+        ),
         ({"severity": "Hgh"}, "severity"),
         ({"severity": {"default": "urgent"}}, "severity"),
         ({"suppression": "1h"}, "suppression_shape"),
