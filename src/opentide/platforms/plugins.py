@@ -67,10 +67,10 @@ class PlatformLoader:
     def _load_engines(self, tier: PlatformEngineBase, identifier: str, only: Sequence[str] | None=None) -> dict[str, type]:
         logger.info('initiating_platform_engine_loading')
         engines: dict[str, type] = {}
-        from opentide.core.registry import OpenTide
+        from opentide.core.registry import Opentide
         requested = set(only) if only is not None else None
         validation_tier = isinstance(tier, ValidationEngine)
-        for system in OpenTide.Configuration.Systems.Index:
+        for system in Opentide.Configuration.Systems.Index:
             if requested is not None and system not in requested:
                 continue
             if validation_tier and system not in QUERY_VALIDATION_PLATFORMS:
@@ -129,7 +129,7 @@ class Platform:
         return self.validator is not None
 
 class _PlatformsAccessor:
-    """First-class platform access on OpenTide.
+    """First-class platform access on opentide.
 
     .. deprecated::
         Use :class:`opentide.platforms.registry.PlatformsRegistry` instead.
@@ -147,14 +147,14 @@ class _PlatformsAccessor:
         )
         if self._deployers is None:
             from opentide.deployment import enabled_systems
-            from opentide.core.registry import OpenTide
+            from opentide.core.registry import Opentide
             loader = PlatformLoader()
             self._deployers = loader.rule_deployers()
             self._validators = loader.query_validators()
             self._instances = {}
-            systems_index = OpenTide.Configuration.Systems.Index
+            systems_index = Opentide.Configuration.Systems.Index
             for name in systems_index:
-                self._instances[name] = Platform(name=name, enabled=name in enabled_systems(), config=getattr(OpenTide.Configuration.Systems, _class_name(name), None), deployer=self._deployers.get(name), validator=self._validators.get(name))
+                self._instances[name] = Platform(name=name, enabled=name in enabled_systems(), config=getattr(Opentide.Configuration.Systems, _class_name(name), None), deployer=self._deployers.get(name), validator=self._validators.get(name))
 
     def __getitem__(self, name: str) -> Platform:
         self._ensure_loaded()
@@ -203,7 +203,7 @@ ValidateQuery = QueryValidator
 PluginEnginesLoader = PlatformLoader
 
 class DeployTide:
-    """Deprecated — use OpenTide.Platforms."""
+    """Deprecated — use Opentide.Platforms."""
 
     @staticmethod
     def _enabled_keys() -> set[str]:

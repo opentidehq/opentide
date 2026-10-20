@@ -167,10 +167,10 @@ def check_page(fences: list[Fence], namespace: dict[str, Any]) -> PageReport:
 
 @pytest.fixture
 def sdk_namespace(tide_corpus_repo: Path) -> Iterator[dict[str, Any]]:
-    from opentide import OpenTide
+    from opentide import Opentide
 
-    OpenTide.initialise()
-    yield {"OpenTide": OpenTide, **PLACEHOLDERS}
+    Opentide.initialise()
+    yield {"Opentide": Opentide, **PLACEHOLDERS}
 
 
 # --------------------------------------------------------------------------
@@ -221,28 +221,28 @@ def _fence(source: str) -> list[Fence]:
 
 
 def test_an_attribute_that_is_a_method_is_reported(sdk_namespace: dict[str, Any]) -> None:
-    source = "rule = OpenTide.Rules[uuid]\nrule.metadata.model_dump"
+    source = "rule = Opentide.Rules[uuid]\nrule.metadata.model_dump"
     (problem,) = check_page(_fence(source), sdk_namespace).problems
     assert "a method the reader would print" in problem
 
 
 def test_a_documented_value_that_differs_is_reported(sdk_namespace: dict[str, Any]) -> None:
-    source = 'rule = OpenTide.Rules[uuid]\nrule.name  # "Some Other Rule"'
+    source = 'rule = Opentide.Rules[uuid]\nrule.name  # "Some Other Rule"'
     (problem,) = check_page(_fence(source), sdk_namespace).problems
     assert "documented 'Some Other Rule'" in problem
 
 
 def test_a_missing_attribute_is_reported(sdk_namespace: dict[str, Any]) -> None:
-    source = "rule = OpenTide.Rules[uuid]\nrule.metadata.schema_version"
+    source = "rule = Opentide.Rules[uuid]\nrule.metadata.schema_version"
     (problem,) = check_page(_fence(source), sdk_namespace).problems
     assert "AttributeError" in problem
 
 
 def test_calls_and_names_they_bind_are_skipped(sdk_namespace: dict[str, Any]) -> None:
-    source = 'result = rule.deploy("sentinel")\nresult.dry_run\nOpenTide.debug'
+    source = 'result = rule.deploy("sentinel")\nresult.dry_run\nOpentide.debug'
     report = check_page(_fence(source), sdk_namespace)
     assert report.problems == []
-    assert [line.split(": ", 1)[1] for line in report.checked] == ["OpenTide.debug"]
+    assert [line.split(": ", 1)[1] for line in report.checked] == ["Opentide.debug"]
 
 
 @pytest.mark.parametrize(

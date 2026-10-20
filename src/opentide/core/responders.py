@@ -28,10 +28,10 @@ def configured_responders() -> list[str]:
     An empty list means the instance has declared none, and therefore that
     ``response.responders`` is unconstrained.
     """
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
 
     try:
-        configured = OpenTide.Configurations.Deployment.responders or []
+        configured = Opentide.Configurations.Deployment.responders or []
     except (KeyError, AttributeError):
         return []
     names: list[str] = []
@@ -48,10 +48,10 @@ def default_responders() -> str:
     """Return ``[deployment] default_responders``, or ``""`` when unset."""
     # Imported lazily: the registry builds configuration from the repository
     # index, which is not available at module import time.
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
 
     try:
-        return OpenTide.Configurations.Deployment.default_responders
+        return Opentide.Configurations.Deployment.default_responders
     except (KeyError, AttributeError):
         # A repository with no deployment configuration block is legitimate --
         # documentation generation must not require one.

@@ -2,7 +2,7 @@ import os
 from typing import Sequence, Union
 from opentide.core.debug import DebugEnvironment
 from opentide.platforms.plugins import QueryValidator
-from opentide.core.registry import OpenTide, DetectionPlatforms
+from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.deployment import TideDeployment
@@ -39,7 +39,7 @@ class SentinelOneQueryValidator(QueryValidator):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr

@@ -66,7 +66,7 @@ def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | N
 
 
 class RegistryBuilder:
-    """Construct the monolithic index dict consumed by OpenTideRegistry."""
+    """Construct the monolithic index dict consumed by OpentideRegistry."""
 
     SKIPS = frozenset({"ram", "mdrv2"})
 

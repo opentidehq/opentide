@@ -19,5 +19,5 @@ def is_ci() -> bool:
 
 
 def repo_root() -> Path:
-    """Absolute path to the OpenTide repository root."""
+    """Absolute path to the opentide repository root."""
     return repository_root()

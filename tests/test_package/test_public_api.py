@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from opentide import OpenTide, __version__
+from opentide import Opentide, __version__
 from opentide.core.root import get_data_root, get_repo_root
 from opentide.schemas.store import (
     bundled_data_exists,
@@ -25,14 +25,14 @@ def test_import_opentide() -> None:
 
 
 def test_import_opentide_public_api() -> None:
-    assert OpenTide is not None
+    assert Opentide is not None
     assert __version__
 
 
 def test_import_opentide_core_registry() -> None:
-    from opentide.core.registry import OpenTide as RegistryOpenTide
+    from opentide.core.registry import Opentide as RegistryOpentide
 
-    assert RegistryOpenTide is not None
+    assert RegistryOpentide is not None
 
 
 def test_bundled_data_via_importlib_resources() -> None:
@@ -96,9 +96,9 @@ def test_platform_entry_points_registered() -> None:
 
 
 def test_package_import_has_no_auto_load_side_effects() -> None:
-    from opentide.core.registry import OpenTide as RegistryOpenTide
+    from opentide.core.registry import Opentide as RegistryOpentide
 
-    assert not RegistryOpenTide.is_initialised
+    assert not RegistryOpentide.is_initialised
     opentide = importlib.import_module("opentide")
     assert hasattr(opentide, "__version__")
-    assert not RegistryOpenTide.is_initialised
+    assert not RegistryOpentide.is_initialised

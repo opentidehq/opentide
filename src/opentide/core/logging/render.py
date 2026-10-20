@@ -17,7 +17,7 @@ _LEVEL_STYLE: dict[str, str] = {
 }
 
 
-class OpenTideConsoleRenderer:
+class OpentideConsoleRenderer:
     """Render structured events into Rich-formatted console lines."""
 
     def __init__(self, *, use_color: bool = True) -> None:

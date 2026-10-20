@@ -77,7 +77,7 @@ def raw_rule_document(object_uuid: str) -> Mapping[str, Any] | None:
     from opentide.core import registry
 
     try:
-        body = registry.OpenTide.Models.rules.get(object_uuid)
+        body = registry.Opentide.Models.rules.get(object_uuid)
     except Exception:
         return None
     return body if isinstance(body, Mapping) else None

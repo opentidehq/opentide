@@ -86,7 +86,7 @@ def test_importer_tenant_advice_comes_from_the_shared_command(
         "Configurations.Systems.DefenderForEndpoint.tenants": [],
         "Configurations.Systems.Sentinel.tenants": [],
     }
-    monkeypatch.setattr(importer, "OpenTide", MagicMock(**no_tenants))
+    monkeypatch.setattr(importer, "Opentide", MagicMock(**no_tenants))
     monkeypatch.setattr(
         importer, "logger", MagicMock(critical=lambda _event, **fields: logged.append(fields))
     )

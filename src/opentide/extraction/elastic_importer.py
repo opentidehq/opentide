@@ -1,4 +1,4 @@
-"""Export detection rules from Elastic Security and convert to OpenTide rules (RFC 0007)."""
+"""Export detection rules from Elastic Security and convert to opentide rules (RFC 0007)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import yaml
 
 logger = structlog.get_logger(__name__)
 
-# Dedicated OpenTide namespace for UUIDs derived from prebuilt Elastic rule_ids.
+# Dedicated opentide namespace for UUIDs derived from prebuilt Elastic rule_ids.
 OPENTIDE_MIGRATION_NS = uuid.uuid5(
     uuid.NAMESPACE_URL, "https://opentide.org/ns/elastic-rule-migration"
 )
@@ -142,7 +142,7 @@ def kibana_to_opentide(
     uuid_override: str | None = None,
     name_suffix: str = " (Custom)",
 ) -> dict[str, Any]:
-    """Convert an exported Kibana detection engine rule dict into an OpenTide DetectionRule dict."""
+    """Convert an exported Kibana detection engine rule dict into an opentide DetectionRule dict."""
     rule_type = rule.get("type", "query")
     prebuilt = _is_prebuilt(rule)
 
@@ -496,7 +496,7 @@ def kibana_to_opentide(
     if rule.get("building_block_type") == "default":
         elastic_block["building_block"] = True
 
-    # Assemble OpenTide rule document
+    # Assemble opentide rule document
     refs_dict: dict[str, str] = {}
     if rule.get("references"):
         for i, ref in enumerate(rule["references"], start=1):
@@ -553,11 +553,11 @@ def run(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Execute rule extraction from Elastic Security cluster."""
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.platforms.elastic.client import ElasticClient
 
-    OpenTide.initialise()
-    elastic_config = getattr(OpenTide.Configuration.Systems, "Elastic", None)
+    Opentide.initialise()
+    elastic_config = getattr(Opentide.Configuration.Systems, "Elastic", None)
     if not elastic_config or not elastic_config.tenants:
         raise RuntimeError(
             "No tenants configured for Elastic in .opentide/configurations/platforms/elastic.toml"

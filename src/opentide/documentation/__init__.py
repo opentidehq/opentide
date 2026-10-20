@@ -1,4 +1,4 @@
-"""Public API for OpenTide documentation rendering.
+"""Public API for opentide documentation rendering.
 
 Exports are resolved lazily so importing ``DocumentScope`` / ``DocumentFlavor``
 (for the CLI) does not build the detection registry or pull the full render stack.

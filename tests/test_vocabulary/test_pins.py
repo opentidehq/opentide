@@ -115,7 +115,7 @@ def test_bundled_pins_cover_every_shipped_schema() -> None:
     """Each registered revision has a pin table.
 
     The reverse does not hold: pins mirror specifications, which may pin a revision
-    (``objective::1.1``) before OpenTide ships it. ``get_pins`` only reads the table of
+    (``objective::1.1``) before opentide ships it. ``get_pins`` only reads the table of
     the schema being generated, so such a table is unused until then.
     """
     from opentide.models.schema_registry import identifiers_for_families

@@ -22,7 +22,7 @@ REQUIRED_ROOT_DIRS = {
 }
 
 FORBIDDEN_WORKFLOW_TOKENS = (
-    "OpenTideHQ/CoreTide",
+    "opentidehq/CoreTide",
     "coretide/Orchestration",
     "TIDE_CORE_REPO",
     "Engines/requirements.txt",

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import pytest
 
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.generation.framework import (
     get_vocab_entry,
     resolve_vocab_identifier,
@@ -36,7 +36,7 @@ MISSING = ("Security::TLS", "Security::OAuth", "Security::OpenID Connect")
 
 
 def _surface_keys() -> set[str]:
-    return set(OpenTide.Vocabularies.Index["surface"].entries)
+    return set(Opentide.Vocabularies.Index["surface"].entries)
 
 
 class TestTheBundledVocabularyStillHasTheseShapes:
@@ -126,7 +126,7 @@ class TestTheAuthoredFormWasNeverBroken:
     @pytest.mark.parametrize("key", COLLIDING + MISSING)
     def test_the_authored_value_is_what_validation_accepts(self, key: str) -> None:
         resolver = RuntimeEnumResolver(
-            {"surface": OpenTide.Vocabularies.Index["surface"]}, object_types=("surface",)
+            {"surface": Opentide.Vocabularies.Index["surface"]}, object_types=("surface",)
         )
         assert resolver.is_valid(f"Protocol::{key}", "surface", scoped=True)
         # The bare key is NOT a valid authored value in a scoped vocabulary.

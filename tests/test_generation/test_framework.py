@@ -45,21 +45,21 @@ def test_get_type_from_schema(rule_payload: dict) -> None:
     uuid = rule_payload["metadata"]["uuid"]
     with (
         patch.object(fw, "MODELS_INDEX", {"rule": {uuid: rule_payload}}),
-        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        patch("opentide.generation.framework.Opentide") as mock_ot,
     ):
         mock_ot.Models.FlatIndex.get.return_value = rule_payload
         assert fw.get_type(uuid) == "rule"
 
 
 def test_get_type_mute_returns_none_for_missing() -> None:
-    with patch("opentide.generation.framework.OpenTide") as mock_ot:
+    with patch("opentide.generation.framework.Opentide") as mock_ot:
         mock_ot.Models.FlatIndex.get.return_value = {}
         assert fw.get_type("missing", mute=True) is None
 
 
 def test_get_type_missing_uuid_names_it() -> None:
     with (
-        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        patch("opentide.generation.framework.Opentide") as mock_ot,
         pytest.raises(Exception, match="UUID missing-uuid does not exist in the catalogue"),
     ):
         mock_ot.Models.FlatIndex.get.return_value = {}
@@ -77,7 +77,7 @@ def test_parents_missing_detection_model_names_the_uuid() -> None:
     flat = {rule_uuid: rule}
     with (
         patch.object(fw, "MODELS_INDEX", {"rule": {rule_uuid: rule}}),
-        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        patch("opentide.generation.framework.Opentide") as mock_ot,
         pytest.raises(
             Exception, match=f"detection_model {missing} does not exist in the catalogue"
         ),
@@ -96,7 +96,7 @@ def test_parents_for_objective(rule_payload: dict) -> None:
     }
     with (
         patch.object(fw, "MODELS_INDEX", {"objective": {objective_uuid: objective}}),
-        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        patch("opentide.generation.framework.Opentide") as mock_ot,
     ):
         mock_ot.Models.FlatIndex.get.return_value = objective
         assert fw.parents(objective_uuid) == [threat_uuid]
@@ -130,7 +130,7 @@ def test_techniques_resolver_signal_walks_parent_objective() -> None:
 
     with (
         patch.object(fw, "MODELS_INDEX", index),
-        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        patch("opentide.generation.framework.Opentide") as mock_ot,
     ):
         mock_ot.Models.FlatIndex.get.side_effect = lambda model_uuid, default=None: bodies.get(
             model_uuid, default
@@ -154,7 +154,7 @@ def test_techniques_resolver_threat() -> None:
     }
     with (
         patch.object(fw, "MODELS_INDEX", {"threat": {threat_uuid: threat}}),
-        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        patch("opentide.generation.framework.Opentide") as mock_ot,
     ):
         mock_ot.Models.FlatIndex.get.return_value = threat
         techniques = fw.techniques_resolver(threat_uuid, recursive=False)
@@ -176,7 +176,7 @@ def test_childs_for_threat() -> None:
                 "objective": {objective_uuid: objective},
             },
         ),
-        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        patch("opentide.generation.framework.Opentide") as mock_ot,
     ):
         mock_ot.Models.FlatIndex.get.side_effect = lambda u, default=None: (
             {"metadata": {"schema": "threat::1.0"}}

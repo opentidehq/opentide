@@ -29,10 +29,10 @@ dependencies = ["opentide==0.16.0"]
 ```
 
 ```python
-from opentide import OpenTide
+from opentide import Opentide
 
-OpenTide.initialise()
-rule = OpenTide.Rules[uuid]
+Opentide.initialise()
+rule = Opentide.Rules[uuid]
 rule.deploy("sentinel")
 ```
 
@@ -78,10 +78,10 @@ rm -rf .git/modules/CoreTide
 
 | Legacy | New |
 |--------|-----|
-| `DataTide` | `OpenTide` |
+| `DataTide` | `Opentide` |
 | `IndexTide` | `IndexManager` |
 | `TideModels.MDR` | `DetectionRule` |
-| `DeployTide` | `OpenTide.Platforms` |
+| `DeployTide` | `Opentide.Platforms` |
 
 v0.x: legacy imports warn via `DeprecationWarning`. **v1.0 removes shims.**
 

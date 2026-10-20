@@ -5,7 +5,7 @@ description: Master test plan for Project TideKit migration phases.
 
 # Master Test Plan — Project TideKit
 
-Epic: [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) · Agent guide: [`AGENTS.md`](https://github.com/OpenTideHQ/opentide/blob/development/AGENTS.md)
+Epic: [#60](https://github.com/opentidehq/CoreTide/issues/60) · Agent guide: [`AGENTS.md`](https://github.com/opentidehq/opentide/blob/development/AGENTS.md)
 
 ---
 
@@ -13,16 +13,16 @@ Epic: [#60](https://github.com/OpenTideHQ/CoreTide/issues/60) · Agent guide: [`
 
 | Phase | Issue | Primary test type | Verification |
 |-------|-------|-------------------|--------------|
-| 0 | [#61](https://github.com/OpenTideHQ/CoreTide/issues/61) | Smoke + grep | `rg` counts, pipeline scripts |
-| 1 | [#62](https://github.com/OpenTideHQ/CoreTide/issues/62) | Import smoke | Shim imports, no circular deps |
-| 2 | [#63](https://github.com/OpenTideHQ/CoreTide/issues/63) | Invariant | `OpenTide` + legacy shims, capability flags |
-| 3 | [#64](https://github.com/OpenTideHQ/CoreTide/issues/64) | Regression | Schema regen, EnumResolver fixes |
-| 4 | [#65](https://github.com/OpenTideHQ/CoreTide/issues/65) | Inventory + diff | `behaviour-inventory.md`, byte diff |
-| 5 | [#66](https://github.com/OpenTideHQ/CoreTide/issues/66) | Install smoke | `pip install -e .` |
-| 6 | [#67](https://github.com/OpenTideHQ/CoreTide/issues/67) | CLI | Typer CliRunner |
-| 7 | [#68](https://github.com/OpenTideHQ/CoreTide/issues/68) | MCP | Tool/resource smoke |
-| 8 | [#69](https://github.com/OpenTideHQ/CoreTide/issues/69) | Packaging | `hatch build`, `twine check` |
-| 9 | [#71](https://github.com/OpenTideHQ/CoreTide/issues/71) | Full pytest | ≥80% cov, ruff, ty, mkdocs |
+| 0 | [#61](https://github.com/opentidehq/CoreTide/issues/61) | Smoke + grep | `rg` counts, pipeline scripts |
+| 1 | [#62](https://github.com/opentidehq/CoreTide/issues/62) | Import smoke | Shim imports, no circular deps |
+| 2 | [#63](https://github.com/opentidehq/CoreTide/issues/63) | Invariant | `Opentide` + legacy shims, capability flags |
+| 3 | [#64](https://github.com/opentidehq/CoreTide/issues/64) | Regression | Schema regen, EnumResolver fixes |
+| 4 | [#65](https://github.com/opentidehq/CoreTide/issues/65) | Inventory + diff | `behaviour-inventory.md`, byte diff |
+| 5 | [#66](https://github.com/opentidehq/CoreTide/issues/66) | Install smoke | `pip install -e .` |
+| 6 | [#67](https://github.com/opentidehq/CoreTide/issues/67) | CLI | Typer CliRunner |
+| 7 | [#68](https://github.com/opentidehq/CoreTide/issues/68) | MCP | Tool/resource smoke |
+| 8 | [#69](https://github.com/opentidehq/CoreTide/issues/69) | Packaging | `hatch build`, `twine check` |
+| 9 | [#71](https://github.com/opentidehq/CoreTide/issues/71) | Full pytest | ≥80% cov, ruff, ty, mkdocs |
 
 ---
 
@@ -45,39 +45,39 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 
 ## Phase Details
 
-### Phase 0 ([#61](https://github.com/OpenTideHQ/CoreTide/issues/61))
+### Phase 0 ([#61](https://github.com/opentidehq/CoreTide/issues/61))
 
 - Remove CDM/BDR/lookups; fix `Templates.dom` bug (L1286)
 - Verify: zero deprecated refs; all `Orchestration/*.py` import clean
 - Future: `test_generation/test_templates_dom_key.py`
 
-### Phase 1 ([#62](https://github.com/OpenTideHQ/CoreTide/issues/62))
+### Phase 1 ([#62](https://github.com/opentidehq/CoreTide/issues/62))
 
 - Decompose monoliths; re-export shims only
 - Future: `test_core/test_legacy_shims.py`, `test_no_circular_imports.py`
 
-### Phase 2 ([#63](https://github.com/OpenTideHQ/CoreTide/issues/63))
+### Phase 2 ([#63](https://github.com/opentidehq/CoreTide/issues/63))
 
-- `DataTide` → `OpenTide`; platform-centric API
+- `DataTide` → `Opentide`; platform-centric API
 - Future: `test_open_tide_registry.py`, `test_platform_access.py`
 
-### Phase 3 ([#64](https://github.com/OpenTideHQ/CoreTide/issues/64))
+### Phase 3 ([#64](https://github.com/opentidehq/CoreTide/issues/64))
 
 - Typed vocabularies; fix `json_schemas.py` L241, L752
 - Future: `test_vocabulary_loader.py`, `test_enum_resolver_finalise.py`
 
-### Phase 4 ([#65](https://github.com/OpenTideHQ/CoreTide/issues/65))
+### Phase 4 ([#65](https://github.com/opentidehq/CoreTide/issues/65))
 
 - **Gating**: commit `docs/migration/behaviour-inventory.md`
 - Pydantic models; delegation methods; byte-equivalent schema output
 - Future: parametrised `test_behaviour_inventory.py`, `test_delegation.py`
 
-### Phase 5 ([#66](https://github.com/OpenTideHQ/CoreTide/issues/66))
+### Phase 5 ([#66](https://github.com/opentidehq/CoreTide/issues/66))
 
 - `src/opentide/` layout; 7 deployers, 5 validators
 - Future: `test_package_import.py`, `test_data_paths.py`
 
-### Phase 6 ([#67](https://github.com/OpenTideHQ/CoreTide/issues/67))
+### Phase 6 ([#67](https://github.com/opentidehq/CoreTide/issues/67))
 
 - `opentide` CLI; 5-platform query validation only
 - **CLI E2E** (`tests/test_cli/e2e/`): Typer `CliRunner` tests backed by `tests/fixtures/tide_corpus/` (threat/objective/rule naming, `*::1.0` baseline)
@@ -90,17 +90,17 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 - YAML shape guard: `tests/test_cli/test_simulation_yaml_shape.py` fails if tutorial/corpus quote metadata dates
 - **Published commands** (`tests/test_docs/test_docs_commands_golden.py`): extracts every `opentide …` invocation from the shell fences in `docs/` (`tests/docs_commands.py`) and resolves it against the live Typer tree, executes the read-only subset against a scaffolded repo, and runs the command each `output-of="opentide …"` `text`/`json` fence names (deployers stubbed), comparing the sample and its `exit=` code to real output (#299). `state=NAME` edits the repository first, for samples of a failure. A guard fails any fence under `docs/cli/` or `docs/usage/` that reads like CLI output yet carries neither `output-of=` nor `illustrative`, so pairing cannot be skipped. The YAML-fence tutorial test covers the objects; this covers the commands, which is the half that let #247 ship.
 
-### Phase 7 ([#68](https://github.com/OpenTideHQ/CoreTide/issues/68))
+### Phase 7 ([#68](https://github.com/opentidehq/CoreTide/issues/68))
 
 - MCP: 13 resources, 8 tools; `dry_run=True` default
 - Future: `tests/test_mcp/test_*.py`
 
-### Phase 8 ([#69](https://github.com/OpenTideHQ/CoreTide/issues/69))
+### Phase 8 ([#69](https://github.com/opentidehq/CoreTide/issues/69))
 
 - PyPI publish; migration guide; deprecation shims
 - See [Migration guide](../usage/migration/index.md)
 
-### Phase 9 ([#71](https://github.com/OpenTideHQ/CoreTide/issues/71))
+### Phase 9 ([#71](https://github.com/opentidehq/CoreTide/issues/71))
 
 ```bash
 uv sync --group dev

@@ -1,6 +1,6 @@
 """Deprecated interim VS Code setup.
 
-Superseded by the OpenTide VS Code extension (bundled language server and templates).
+Superseded by the opentide VS Code extension (bundled language server and templates).
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def _load_jsonc(path: Path) -> Any:
 
 
 DEPRECATION_MESSAGE = (
-    "opentide setup vscode is deprecated and will be removed when the OpenTide "
+    "opentide setup vscode is deprecated and will be removed when the opentide "
     "VS Code extension ships with a bundled language server and template actions."
 )
 
@@ -171,7 +171,7 @@ def _is_stale_revision_mapping(
 
 
 def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
-    """Write or merge .vscode/settings.json with OpenTide yaml.schemas.
+    """Write or merge .vscode/settings.json with opentide yaml.schemas.
 
     Merging keeps unrelated settings and user mappings, and drops the
     per-folder revision mappings earlier releases generated.

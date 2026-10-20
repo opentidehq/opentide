@@ -14,7 +14,7 @@ GITIGNORE_PATH = ".gitignore"
 ENV_IGNORE_LINE = ".env"
 
 ENV_EXAMPLE_CONTENT = """\
-# OpenTide environment template. Copy to .env and adjust as needed.
+# opentide environment template. Copy to .env and adjust as needed.
 # The CLI, MCP server, and SDK honour OPENTIDE_REPO_ROOT (same as --repo).
 OPENTIDE_REPO_ROOT=.
 """

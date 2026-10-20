@@ -17,14 +17,14 @@ def __getattr__(name: str) -> Any:
     """Resolve registry-backed globals on access rather than at import (#536).
 
     Evaluating this at module level built the whole registry index as an import
-    side effect, and bound whatever ``opentide.core.registry.OpenTide`` happened
+    side effect, and bound whatever ``opentide.core.registry.Opentide`` happened
     to be at the time -- so a module first imported under ``patch()`` kept the
     mock permanently.
     """
     if name == "SYSTEMS_CONFIGS_INDEX":
         from opentide.core import registry
 
-        return registry.OpenTide.Configurations.Systems.Index
+        return registry.Opentide.Configurations.Systems.Index
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

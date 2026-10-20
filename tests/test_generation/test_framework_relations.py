@@ -21,7 +21,7 @@ def test_keep_active_rules_filters_deprecated() -> None:
         },
     }
     with (
-        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        patch("opentide.generation.framework.Opentide") as mock_ot,
         patch("opentide.deployment.utils.check_status", side_effect=lambda s: s),
         patch("opentide.deployment.utils.DEPRECATED_STATUSES", {"DEPRECATED"}),
     ):
@@ -42,7 +42,7 @@ def test_relations_list_downstream_flat_mode() -> None:
 
 def test_get_type_returns_signal_for_signal_index() -> None:
     uuid = "00000000-0000-4000-8000-000000000080"
-    with patch("opentide.generation.framework.OpenTide") as mock_ot:
+    with patch("opentide.generation.framework.Opentide") as mock_ot:
         mock_ot.Models.FlatIndex.get.return_value = {"metadata": {}, "name": "Signal"}
         mock_ot.Models.signals = {uuid: {}}
         assert fw.get_type(uuid, mute=True) == "signal"

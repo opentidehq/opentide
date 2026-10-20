@@ -18,7 +18,7 @@ from opentide.validation.session import run_validation
 @pytest.fixture
 def validation_session_mocks() -> MagicMock:
     with (
-        patch("opentide.validation.session.OpenTide.initialise"),
+        patch("opentide.validation.session.Opentide.initialise"),
         patch(
             "opentide.validation.session.PreflightGraph.build",
             return_value=MagicMock(),
@@ -228,7 +228,7 @@ def test_run_validation_checks_exactly_the_targeted_twin_and_blames_its_own_file
     """Class guard for #297: same basename at depth 1-3, across object types."""
     real_paths = {uuid: (tmp_path / rel).resolve() for rel, (_, uuid) in _TWIN_LAYOUT.items()}
     scope = ValidationScope.narrow(files=frozenset({target}), roots=(tmp_path,))
-    with patch("opentide.validation.session.OpenTide.initialise"):
+    with patch("opentide.validation.session.Opentide.initialise"):
         report = run_validation(
             scope=scope,
             checks=frozenset({ValidateCheck.schema}),

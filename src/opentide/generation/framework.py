@@ -2,7 +2,7 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import Any, Literal, TypeVar, overload
 
 from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 
 logger = get_logger(__name__)
 DEFINITIONS_INDEX: dict[str, Any] = {}
@@ -42,9 +42,9 @@ class _LazyMapping(Mapping[_KT, _VT]):
         return self._data().get(key, default)
 
 
-VOCAB_INDEX: Mapping[str, Any] = _LazyMapping(lambda: OpenTide.Vocabularies.Index)
-MODELS_INDEX: Mapping[str, Any] = _LazyMapping(lambda: OpenTide.Models.Index)
-CHAINING_INDEX: Mapping[str, Any] = _LazyMapping(lambda: OpenTide.Models.chaining)
+VOCAB_INDEX: Mapping[str, Any] = _LazyMapping(lambda: Opentide.Vocabularies.Index)
+MODELS_INDEX: Mapping[str, Any] = _LazyMapping(lambda: Opentide.Models.Index)
+CHAINING_INDEX: Mapping[str, Any] = _LazyMapping(lambda: Opentide.Models.chaining)
 
 
 def unroll_dot_dict(dot_dict, separator="."):
@@ -312,7 +312,7 @@ def parents(id: str) -> list:
         parents = [parents]
     if model_type == "rule":
         missing = [
-            parent for parent in parents if parent and parent not in OpenTide.Models.FlatIndex
+            parent for parent in parents if parent and parent not in Opentide.Models.FlatIndex
         ]
         if missing:
             raise Exception(f"detection_model {', '.join(missing)} does not exist in the catalogue")
@@ -430,7 +430,7 @@ def _referenced_uuids(value: Any) -> list[str]:
 
 def childs(model_id: str) -> list:
     """
-    Returns the list of direct descendants for any given OpenTide Object,
+    Returns the list of direct descendants for any given opentide Object,
     by performing a forward search.
 
     If the object can not have descendants, or in other word is a last-line
@@ -462,7 +462,7 @@ def get_type(model_uuid: str, mute: bool = False):
     """
     Return the model type based on the schema identifier format.
     """
-    model_body = OpenTide.Models.FlatIndex.get(model_uuid, {})
+    model_body = Opentide.Models.FlatIndex.get(model_uuid, {})
     if not model_body:
         if mute:
             return None
@@ -471,7 +471,7 @@ def get_type(model_uuid: str, mute: bool = False):
             raise Exception(f"UUID {model_uuid} does not exist in the catalogue")
     schema = model_body.get("metadata", {}).get("schema")
     if not schema:
-        if model_uuid in OpenTide.Models.signals:
+        if model_uuid in Opentide.Models.signals:
             return "signal"
         if model_body.get("configurations"):
             return "rule"
@@ -495,7 +495,7 @@ def keep_active_rules(rule_list: list[str]) -> list[str]:
     active_rules = []
     for mdr in rule_list:
         try:
-            mdr_data = OpenTide.Models.Index["rule"][mdr]
+            mdr_data = Opentide.Models.Index["rule"][mdr]
         except Exception:
             logger.error("could_not_retrieve_uuid_in_mdr_index", detail=mdr)
             continue

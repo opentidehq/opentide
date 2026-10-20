@@ -485,7 +485,7 @@ class VocabularyLoader:
 
         Memoized per vocabs mapping, because the callers read this through
         properties that re-resolve on every access.
-        ``OpenTide.Vocabularies.Index`` is a property that calls this, and
+        ``Opentide.Vocabularies.Index`` is a property that calls this, and
         ``generation.framework.VOCAB_INDEX`` is a lazy view whose ``_data()``
         re-reads that property for every lookup, ``in`` test and iteration. So
         one ``get_vocab_entry`` call used to rebuild every vocabulary from

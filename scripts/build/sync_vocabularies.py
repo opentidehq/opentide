@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize bundled vocabularies and schema pins from OpenTide specifications."""
+"""Synchronize bundled vocabularies and schema pins from opentide specifications."""
 
 from __future__ import annotations
 
@@ -190,7 +190,7 @@ def make_lock_payload(
     """Construct lockfile payload."""
     return {
         "lock_version": 2,
-        "specifications_repo": "OpenTideHQ/specifications",
+        "specifications_repo": "opentidehq/specifications",
         "specifications_git_sha": specifications_sha,
         "source_glob": "vocabularies/*.vocab.toml",
         "bundled_vocabulary_sha256": bundled_digest,

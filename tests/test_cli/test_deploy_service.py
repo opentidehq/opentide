@@ -27,7 +27,7 @@ def tenantless() -> Iterator[MagicMock]:
 def test_run_deploy_skips_when_platform_has_no_rules() -> None:
     ctx = CliContext(json_output=True)
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -49,7 +49,7 @@ def test_run_deploy_empty_plan_github_actions_warning(
         lambda self: CIEnvironment.CIPlatforms.GitHubActions,
     )
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -76,7 +76,7 @@ def test_run_deploy_empty_plan_gitlab_exits_cleanly(
         lambda self: CIEnvironment.CIPlatforms.GitlabCI,
     )
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -93,7 +93,7 @@ def test_run_deploy_dry_run_collects_payloads() -> None:
     deployer = MagicMock()
     preview = [{"uuid": "u1"}]
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -119,7 +119,7 @@ def test_run_deploy_invokes_deployer() -> None:
     ctx = CliContext(json_output=True)
     deployer = MagicMock()
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -143,7 +143,7 @@ def test_run_deploy_reports_an_engine_that_fails_to_load() -> None:
     """A broken engine in the plan was an uncaught exception and a traceback."""
     ctx = CliContext(json_output=True)
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -166,7 +166,7 @@ def test_run_deploy_warning_marks_result_with_warnings() -> None:
     ctx = CliContext(json_output=True)
     warned = CiOutcome(exit_code=0, failed=False, warned=True)
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -187,7 +187,7 @@ def test_run_deploy_error_marks_result_failed() -> None:
     ctx = CliContext(json_output=True)
     errored = CiOutcome(exit_code=1, failed=True, warned=False)
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -206,7 +206,7 @@ def test_run_deploy_error_marks_result_failed() -> None:
 def test_run_deploy_invalid_plan_returns_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     ctx = CliContext(json_output=True)
     monkeypatch.setenv("DEPLOYMENT_PLAN", "None")
-    with patch("opentide.core.registry.OpenTide.reload"):
+    with patch("opentide.core.registry.Opentide.reload"):
         result = deploy_service.run_deploy(ctx, dry_run=True)
     assert result["status"] == "failed"
     assert "Unsupported deployment plan" in str(result["message"])
@@ -218,7 +218,7 @@ def test_run_deploy_dry_run_skips_production_promotion() -> None:
 
     ctx = CliContext(json_output=True)
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=DeploymentStrategy.PRODUCTION,
@@ -250,7 +250,7 @@ def test_run_deploy_local_debug_skips_production_promotion(
         lambda self: CIEnvironment.CIPlatforms.LocalDebug,
     )
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=DeploymentStrategy.PRODUCTION,
@@ -274,7 +274,7 @@ def test_run_deploy_without_tenants_fails_before_loading_engines(tenantless: Mag
     ctx = CliContext(json_output=True)
     tenantless.return_value = ["splunk"]
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -307,7 +307,7 @@ def test_run_deploy_dry_run_does_not_claim_a_platform_without_tenants(
     tenantless.return_value = ["splunk"]
     deployers = {"sentinel": MagicMock(), "splunk": MagicMock()}
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -344,7 +344,7 @@ def test_run_deploy_dry_run_keeps_rule_warnings_next_to_tenant_warnings(
     tenantless.return_value = ["splunk"]
     warned = CiOutcome(exit_code=0, failed=False, warned=True)
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -368,7 +368,7 @@ def test_run_deploy_dry_run_keeps_rule_warnings_next_to_tenant_warnings(
 def test_run_deploy_empty_exception_does_not_advise_full_plan() -> None:
     ctx = CliContext(json_output=True)
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),
@@ -434,7 +434,7 @@ def test_run_deploy_reports_plan_warnings_in_every_result(
         return plan
 
     with (
-        patch("opentide.core.registry.OpenTide.reload"),
+        patch("opentide.core.registry.Opentide.reload"),
         patch(
             "opentide.deployment.DeploymentStrategy.load_from_environment",
             return_value=MagicMock(),

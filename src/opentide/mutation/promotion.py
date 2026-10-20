@@ -28,7 +28,7 @@ else:
     DEBUG = False
 
 
-# TODO Rework Promotion to consume from OpenTide
+# TODO Rework Promotion to consume from opentide
 def get_valid_statuses() -> list[str]:
     """
     Retrieve a list of all valid status names from the deployment configuration.

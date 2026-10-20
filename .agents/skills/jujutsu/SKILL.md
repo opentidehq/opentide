@@ -1,6 +1,6 @@
 # Jujutsu (jj) — primary version control
 
-Use for **all** version control in OpenTide: daily work, amends, rebases, pushes, and stacked PRs.
+Use for **all** version control in opentide: daily work, amends, rebases, pushes, and stacked PRs.
 
 **Git is transport only** — sync and publish to GitHub via `jj git fetch` / `jj git push --bookmark`. Coding agents must **not** use `git commit`, `git checkout -b`, `git branch`, `git merge`, `git rebase`, or Graphite (`gt`).
 

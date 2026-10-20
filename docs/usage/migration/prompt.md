@@ -5,7 +5,7 @@ description: Copy-paste LLM prompt for migrating legacy CoreTide submodule repos
 
 # CoreTide migration prompt
 
-OpenTide does not automatically remove a CoreTide git submodule. For that work, paste the prompt below into your agent (Cursor, Claude Code, Copilot, and so on) and review every diff. For directory layout only (`Configurations/` → `.opentide/configurations/`, `Objects/` → `objects/`), run `opentide migrate objects` first (dry-run, then `--apply`).
+opentide does not automatically remove a CoreTide git submodule. For that work, paste the prompt below into your agent (Cursor, Claude Code, Copilot, and so on) and review every diff. For directory layout only (`Configurations/` → `.opentide/configurations/`, `Objects/` → `objects/`), run `opentide migrate objects` first (dry-run, then `--apply`).
 
 See also the [migration guide](./index.md) for background and verification steps.
 
@@ -27,9 +27,9 @@ Steps:
    - Set OPENTIDE_REPO_ROOT to the detection content root in CI and local dev.
 
 2. Replace imports
-   - Engines.modules.tide.DataTide / IndexTide → from opentide import OpenTide; OpenTide.initialise()
+   - Engines.modules.tide.DataTide / IndexTide → from opentide import Opentide; Opentide.initialise()
    - TideModels / MDR types → opentide.models (DetectionRule, etc.)
-   - DeployTide → OpenTide.Platforms or opentide deploy CLI
+   - DeployTide → Opentide.Platforms or opentide deploy CLI
    - Remove: import sys, git; sys.path.append(...)
 
 3. Replace Orchestration scripts

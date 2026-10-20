@@ -135,7 +135,7 @@ class ElasticClient:
         return resp.json()
 
     def find_managed(self, tag: str = "OpenTide") -> list[dict[str, Any]]:
-        """List every rule managed by OpenTide, using the tag filter.
+        """List every rule managed by opentide, using the tag filter.
 
         Raises ``requests.HTTPError`` when a page fails rather than returning the
         rules collected so far: a partial listing is indistinguishable from a

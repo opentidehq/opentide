@@ -1,4 +1,4 @@
-# OpenTide — GitHub Copilot
+# opentide — GitHub Copilot
 
 Read [`AGENTS.md`](../AGENTS.md) first — it is the coding-agent entry point for this repository.
 

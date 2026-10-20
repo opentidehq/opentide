@@ -1,4 +1,4 @@
-"""Configuration merge and path resolution for OpenTide instances."""
+"""Configuration merge and path resolution for opentide instances."""
 
 from __future__ import annotations
 

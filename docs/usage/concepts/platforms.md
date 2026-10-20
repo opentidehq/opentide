@@ -5,7 +5,7 @@ description: Eight deployment platforms, six query validators, and where each pl
 
 # Platforms
 
-OpenTide integrates with **eight detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
+opentide integrates with **eight detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
 
 ## Capability matrix
 
@@ -53,9 +53,9 @@ opentide --json info --platform sentinel
 MCP resource: `opentide://platforms`
 
 ```python
-from opentide import OpenTide
-OpenTide.initialise()
-for name, plat in OpenTide.Platforms.items():
+from opentide import Opentide
+Opentide.initialise()
+for name, plat in Opentide.Platforms.items():
     print(name, plat.enabled, plat.can_deploy, plat.can_validate)
 ```
 
@@ -102,4 +102,4 @@ Validate, generate, and dry-run deploy work with `pip install opentide` alone. *
 
 ## SDK access
 
-Deploy and validate programmatically via `OpenTide.Platforms` — see [SDK platforms](../../sdk/platforms.md).
+Deploy and validate programmatically via `Opentide.Platforms` — see [SDK platforms](../../sdk/platforms.md).

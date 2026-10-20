@@ -519,7 +519,7 @@ def _run_live_validator(
     deployment_plan: Any,
     reach: dict[str, int],
 ) -> dict[str, object]:
-    from opentide.core.registry import OpenTide as LegacyOpenTide
+    from opentide.core.registry import Opentide as LegacyOpentide
     from opentide.platforms.plugins import DeployTide
     from opentide.platforms.transport import TenantUnreachableError
 
@@ -549,9 +549,9 @@ def _run_live_validator(
             "message": f"No query validation engine for {platform}",
         }
     try:
-        system_name = LegacyOpenTide.Configurations.Systems.Index[platform]["tide"]["name"]
+        system_name = LegacyOpentide.Configurations.Systems.Index[platform]["tide"]["name"]
     except Exception:
-        system_name = LegacyOpenTide.Configurations.Systems.Index[platform]["platform"]["name"]
+        system_name = LegacyOpentide.Configurations.Systems.Index[platform]["platform"]["name"]
     emit_section(f"Query Validation - {system_name}")
     validator = cast(Any, query_validators[platform])
     try:

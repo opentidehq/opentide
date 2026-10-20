@@ -1,15 +1,15 @@
 ---
-title: How OpenTide works
+title: How opentide works
 description: The end-to-end DetectionOps lifecycle — from authoring objects to deploying and documenting detections in CI.
 ---
 
-# How OpenTide works
+# How opentide works
 
 This page is the mental model. Everything else in the docs is a detail of one of these steps. Read it once and the CLI, SDK, and MCP surfaces will make sense.
 
 ## The lifecycle
 
-OpenTide turns a repository of detection **objects** into validated, deployed, and documented detections. The engine sits between your YAML and your platforms.
+opentide turns a repository of detection **objects** into validated, deployed, and documented detections. The engine sits between your YAML and your platforms.
 
 ```mermaid
 flowchart TD
@@ -85,14 +85,14 @@ The same operations are available three ways. Pick per task — see [Choosing an
 | Interface | Best for | Reference |
 |-----------|----------|-----------|
 | **CLI** (`opentide`) | Humans, CI pipelines, scripts | [CLI](../cli/index.md) |
-| **SDK** (`from opentide import OpenTide`) | Embedding in Python tools and tests | [SDK](../sdk/index.md) |
+| **SDK** (`from opentide import Opentide`) | Embedding in Python tools and tests | [SDK](../sdk/index.md) |
 | **MCP** (`opentide mcp start`) | AI agents in editors | [MCP](../mcp/index.md) |
 
 ## Where generation and deployment differ
 
 A common point of confusion:
 
-- **`generate`** produces *framework scaffolding* (schemas, templates, router) inside `.opentide/`. Run it after upgrading OpenTide or changing schema revisions.
+- **`generate`** produces *framework scaffolding* (schemas, templates, router) inside `.opentide/`. Run it after upgrading opentide or changing schema revisions.
 - **`generate docs`** produces *human wiki pages* from your loaded objects. Run it after content changes.
 - **`deploy`** pushes *rules to platforms*. It reads objects; it does not regenerate scaffolding.
 

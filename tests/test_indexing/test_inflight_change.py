@@ -38,7 +38,7 @@ def test_github_metadata_from_event_and_env(
     event = {
         "pull_request": {
             "number": 116,
-            "html_url": "https://github.com/OpenTideHQ/opentide/pull/116",
+            "html_url": "https://github.com/opentidehq/opentide/pull/116",
             "title": "feat(indexing): inflight preview shards",
             "head": {"ref": "feat/inflight-shards", "sha": "from_event_sha"},
             "base": {"ref": "development"},
@@ -59,7 +59,7 @@ def test_github_metadata_from_event_and_env(
 
     assert meta["platform"] == "github"
     assert meta["number"] == 116
-    assert meta["url"] == "https://github.com/OpenTideHQ/opentide/pull/116"
+    assert meta["url"] == "https://github.com/opentidehq/opentide/pull/116"
     assert meta["title"] == "feat(indexing): inflight preview shards"
     assert meta["head_ref"] == "feat/inflight-shards"
     assert meta["base_ref"] == "development"
@@ -74,7 +74,7 @@ def test_gitlab_metadata_from_env(
     _clear_ci_env(monkeypatch)
     monkeypatch.setenv("CI", "true")
     monkeypatch.setenv("CI_MERGE_REQUEST_IID", "42")
-    monkeypatch.setenv("CI_PROJECT_URL", "https://gitlab.com/OpenTideHQ/library")
+    monkeypatch.setenv("CI_PROJECT_URL", "https://gitlab.com/opentidehq/library")
     monkeypatch.setenv("CI_MERGE_REQUEST_TITLE", "Add inflight example")
     monkeypatch.setenv("CI_MERGE_REQUEST_SOURCE_BRANCH_NAME", "example/inflight-preview")
     monkeypatch.setenv("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", "main")
@@ -85,7 +85,7 @@ def test_gitlab_metadata_from_env(
 
     assert meta["platform"] == "gitlab"
     assert meta["number"] == 42
-    assert meta["url"] == "https://gitlab.com/OpenTideHQ/library/-/merge_requests/42"
+    assert meta["url"] == "https://gitlab.com/opentidehq/library/-/merge_requests/42"
     assert meta["title"] == "Add inflight example"
     assert meta["head_ref"] == "example/inflight-preview"
     assert meta["base_ref"] == "main"

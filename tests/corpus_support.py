@@ -83,7 +83,7 @@ def migrate_tide_corpus_layout(dest: Path) -> None:
 
 def clear_runtime_caches() -> None:
     from opentide.core.index_manager import IndexManager
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.core.root import get_data_root, get_repo_root
     from opentide.generation import schema_pipeline
 
@@ -93,12 +93,12 @@ def clear_runtime_caches() -> None:
     get_repo_root.cache_clear()
     get_data_root.cache_clear()
     IndexManager._cache = None  # noqa: SLF001
-    OpenTide._initialised = False  # noqa: SLF001
-    OpenTide._objects_loaded = False  # noqa: SLF001
-    OpenTide._index = None  # noqa: SLF001
-    OpenTide._rules = {}
-    OpenTide._threats = {}
-    OpenTide._objectives = {}
+    Opentide._initialised = False  # noqa: SLF001
+    Opentide._objects_loaded = False  # noqa: SLF001
+    Opentide._index = None  # noqa: SLF001
+    Opentide._rules = {}
+    Opentide._threats = {}
+    Opentide._objectives = {}
 
 
 def materialise_corpus(dest: Path) -> Path:
@@ -190,7 +190,7 @@ def classify_deploy_scope(
 
 
 def corpus_env(repo: Path) -> dict[str, str]:
-    """Environment overrides that point OpenTide at a materialised corpus."""
+    """Environment overrides that point opentide at a materialised corpus."""
     return {
         "OPENTIDE_REPO_ROOT": str(repo),
         "OPENTIDE_TIDE_WORKSPACE": str(repo),
@@ -207,7 +207,7 @@ def tide_corpus_root() -> Path:
 def tide_corpus_repo(
     tide_corpus_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[Path]:
-    """Copy tide_corpus into an isolated repo and wire OpenTide path env vars."""
+    """Copy tide_corpus into an isolated repo and wire opentide path env vars."""
     dest = materialise_corpus(tmp_path / "corpus")
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(dest))
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(dest))

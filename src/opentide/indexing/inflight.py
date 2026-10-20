@@ -307,10 +307,10 @@ def prune_inflight_shards(inflight_dir: Path | None = None) -> dict[str, Any]:
 
 def run(inflight_dir: Path | None = None) -> dict[str, Any]:
     """CLI entry: write inflight shards for the current change set."""
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.models.deployment_enums import DeploymentStrategy
 
-    OpenTide.initialise()
+    Opentide.initialise()
     plan_name = os.getenv("DEPLOYMENT_PLAN", DeploymentStrategy.STAGING.name)
     try:
         plan = DeploymentStrategy[plan_name]
@@ -321,7 +321,7 @@ def run(inflight_dir: Path | None = None) -> dict[str, Any]:
 
 def run_prune(inflight_dir: Path | None = None) -> dict[str, Any]:
     """CLI entry: prune inflight shards superseded on the default branch."""
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
 
-    OpenTide.initialise()
+    Opentide.initialise()
     return prune_inflight_shards(inflight_dir=inflight_dir)

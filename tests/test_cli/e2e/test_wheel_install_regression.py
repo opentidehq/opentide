@@ -345,7 +345,7 @@ def test_wheel_installed_with_a_retired_extra_still_answers_a_stdio_initialize(
     assert "ModuleNotFoundError" not in combined, combined
     response = _initialize_response(result)
     assert response is not None, f"no JSON-RPC response for initialize:\n{combined}"
-    assert response["result"]["serverInfo"]["name"] == "OpenTide"
+    assert response["result"]["serverInfo"]["name"] == "opentide"
 
 
 #: Every vendor SDK a platform imports. A bare ``pip install opentide`` must

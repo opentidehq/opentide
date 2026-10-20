@@ -10,7 +10,7 @@ import pytest
 from structlog.testing import CapturingLogger
 from tests.corpus_support import clear_runtime_caches
 
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.platforms.registry import PlatformsRegistry
 from opentide.platforms.splunk import client as splunk_client
 from opentide.platforms.splunk.client import correct_timerange_mode
@@ -123,7 +123,7 @@ def splunk_frequency(
         writer = _tenant_setup(tide_corpus_repo, monkeypatch)
     else:
         writer = _legacy_setup(tide_corpus_repo, monkeypatch)
-    monkeypatch.setattr(OpenTide, "Platforms", PlatformsRegistry())
+    monkeypatch.setattr(Opentide, "Platforms", PlatformsRegistry())
 
     def _apply(value: str | None) -> None:
         writer(value)
@@ -136,7 +136,7 @@ def test_enabled_tenant_with_invalid_frequency_warns_once(
     splunk_frequency, splunk_log: CapturingLogger
 ) -> None:
     splunk_frequency("bogus")
-    platform = OpenTide.Platforms["splunk"]
+    platform = Opentide.Platforms["splunk"]
     assert platform.enabled is True
     assert splunk_log.calls == []
     deployer = platform.deployer
@@ -149,7 +149,7 @@ def test_enabled_tenant_without_frequency_keeps_its_default_silently(
     splunk_frequency, splunk_log: CapturingLogger, request: pytest.FixtureRequest
 ) -> None:
     splunk_frequency(None)
-    deployer = OpenTide.Platforms["splunk"].deployer
+    deployer = Opentide.Platforms["splunk"].deployer
     expected = _UNSET_FREQUENCY[request.node.callspec.params["splunk_frequency"]]
     assert getattr(deployer, "TIMERANGE_MODE", None) == expected
     assert _warnings(splunk_log) == []

@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.platforms.enabled import enable_platform_command
 from opentide.platforms.sentinel.client import (
     SentinelService,
@@ -186,7 +186,7 @@ def sanitize_filename(name):
 
 
 def _import_sentinel_rules() -> None:
-    if not OpenTide.Configurations.Systems.Sentinel.tenants:
+    if not Opentide.Configurations.Systems.Sentinel.tenants:
         logger.critical(
             "sentinel_tenants_not_configured",
             detail="You must first have Sentinel tenants configured to initiate the import",
@@ -195,7 +195,7 @@ def _import_sentinel_rules() -> None:
         # A bare ``raise Exception`` escapes the CLI's error handler and prints a
         # Rich traceback instead of the JSON document --json promised (#242).
         raise RuntimeError("No Sentinel tenants are configured")
-    for tenant in OpenTide.Configurations.Systems.Sentinel.tenants:  # type: ignore
+    for tenant in Opentide.Configurations.Systems.Sentinel.tenants:  # type: ignore
         service = SentinelService(tenant).connect()  # type: ignore
         rules = service.alert_rules.list(
             resource_group_name=tenant.setup.resource_group,  # type: ignore
@@ -381,7 +381,7 @@ def _import_sentinel_rules() -> None:
             rule_description = "\n  ".join(rule["description"].split("\n"))
             rule_creation = rule_modified = rule["last_modified_utc"].split("T")[0]
             rule_severity = rule["severity"]
-            rule_author = "OpenTide Sentinel Importer"
+            rule_author = "opentide Sentinel Importer"
             mdr = MDR.format(**locals()).strip("\n")
             mdr = "\n".join([line for line in mdr.split("\n") if "OPENTIDE::REMOVE" not in line])
 

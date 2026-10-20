@@ -1,4 +1,4 @@
-# Ruff — OpenTide
+# Ruff — opentide
 
 Lint and format for `tests/` and typed core under `src/opentide/`. Large ported modules are excluded until actively cleaned up.
 

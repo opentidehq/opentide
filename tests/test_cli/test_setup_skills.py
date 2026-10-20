@@ -179,7 +179,7 @@ def test_download_skill_uses_manifest_ref(monkeypatch: pytest.MonkeyPatch, tmp_p
     skill_calls = [item for item in captured if item[0].endswith("SKILL.md")]
     assert skill_calls
     _, source, ref = skill_calls[0]
-    assert source == "OpenTideHQ/skills"
+    assert source == "opentidehq/skills"
     assert ref == "pin-ref"
 
 
@@ -256,7 +256,7 @@ def test_run_skills_setup_raises_when_manifest_unavailable(
 ) -> None:
     monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
     registry.clear_manifest_cache()
-    with pytest.raises(SkillsManifestError, match="OpenTideHQ/skills"):
+    with pytest.raises(SkillsManifestError, match="opentidehq/skills"):
         run_skills_setup(SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.generic], yes=True))
 
 
@@ -288,7 +288,7 @@ def test_skill_reachable_when_github_returns_skill_md(monkeypatch: pytest.Monkey
         lambda path, **_: b"# skill\n" if str(path).endswith("SKILL.md") else None,
     )
     assert skills_mod._skill_reachable(
-        "kusto-query-language", source="OpenTideHQ/skills", ref="main"
+        "kusto-query-language", source="opentidehq/skills", ref="main"
     )
     missing = skills_mod.unavailable_skills(
         SkillsSetupOptions(targets=[SkillTarget.generic], install_all=True, yes=True)
@@ -318,7 +318,7 @@ def test_download_skill_writes_every_file_in_the_github_tree(
         ],
     )
     dest = tmp_path / "downloaded"
-    written = skills_mod._download_skill("demo-skill", dest, source="OpenTideHQ/skills", ref="main")
+    written = skills_mod._download_skill("demo-skill", dest, source="opentidehq/skills", ref="main")
     assert written == [
         "SKILL.md",
         "references/Best-Practices.md",
@@ -343,7 +343,7 @@ def test_download_skill_refuses_paths_that_leave_the_skill_directory(
     )
     dest = tmp_path / ".agents" / "skills" / "demo-skill"
     with pytest.raises(SkillsDownloadError, match="Refusing skill path"):
-        skills_mod._download_skill("demo-skill", dest, source="OpenTideHQ/skills", ref="main")
+        skills_mod._download_skill("demo-skill", dest, source="opentidehq/skills", ref="main")
     assert not (tmp_path / ".git").exists()
     assert not dest.exists()
 
@@ -354,7 +354,7 @@ def test_download_skill_refuses_a_slug_that_leaves_the_skills_directory(
     monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
     dest = tmp_path / ".agents" / "skills" / ".." / ".." / ".git" / "hooks"
     with pytest.raises(SkillsDownloadError, match="Refusing skill slug"):
-        skills_mod._download_skill("../.git", dest, source="OpenTideHQ/skills", ref="main")
+        skills_mod._download_skill("../.git", dest, source="opentidehq/skills", ref="main")
     assert not (tmp_path / ".git").exists()
 
 
@@ -379,7 +379,7 @@ def test_download_skill_keeps_the_previous_tree_when_a_later_file_is_missing(
         lambda prefix, **_: [f"{prefix}/SKILL.md", f"{prefix}/references/Examples.md"],
     )
     with pytest.raises(SkillsDownloadError, match="network access"):
-        skills_mod._download_skill("demo-skill", dest, source="OpenTideHQ/skills", ref="main")
+        skills_mod._download_skill("demo-skill", dest, source="opentidehq/skills", ref="main")
     assert (dest / "SKILL.md").read_text(encoding="utf-8") == "previous\n"
     assert (dest / "references" / "Old.md").read_text(encoding="utf-8") == "old\n"
     assert not (dest / "references" / "Examples.md").exists()

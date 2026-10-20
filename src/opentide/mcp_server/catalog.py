@@ -13,7 +13,7 @@ from opentide.core.object_fields import (
     object_techniques,
     technique_covers,
 )
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 
 _UUID_RE = re.compile(
     "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", re.IGNORECASE
@@ -21,7 +21,7 @@ _UUID_RE = re.compile(
 
 
 def ensure_initialised() -> None:
-    OpenTide.initialise()
+    Opentide.initialise()
 
 
 def object_summary(uuid: str, object_type: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -35,9 +35,9 @@ def get_object(uuid: str) -> dict[str, Any] | None:
     needle = uuid.strip()
     folded = needle.lower()
     for object_type, bucket in (
-        ("rule", OpenTide.Models.rules),
-        ("threat", OpenTide.Models.threats),
-        ("objective", OpenTide.Models.objectives),
+        ("rule", Opentide.Models.rules),
+        ("threat", Opentide.Models.threats),
+        ("objective", Opentide.Models.objectives),
     ):
         if needle in bucket:
             return {"type": object_type, "uuid": needle, "body": bucket[needle]}
@@ -83,9 +83,9 @@ def search_catalog(
     query_lower = query.lower()
     results: list[dict[str, Any]] = []
     for bucket_type, bucket in [
-        ("rule", OpenTide.Models.rules),
-        ("threat", OpenTide.Models.threats),
-        ("objective", OpenTide.Models.objectives),
+        ("rule", Opentide.Models.rules),
+        ("threat", Opentide.Models.threats),
+        ("objective", Opentide.Models.objectives),
     ]:
         if object_type and object_type != bucket_type:
             continue
@@ -109,11 +109,11 @@ def _string_ids(value: object) -> list[str]:
 
 
 def _catalogue_family(uuid: str) -> str | None:
-    if uuid in OpenTide.Models.threats:
+    if uuid in Opentide.Models.threats:
         return "threats"
-    if uuid in OpenTide.Models.objectives:
+    if uuid in Opentide.Models.objectives:
         return "objectives"
-    if uuid in OpenTide.Models.rules:
+    if uuid in Opentide.Models.rules:
         return "rules"
     return None
 
@@ -129,7 +129,7 @@ def _lineage_block(members: list[str], families: dict[str, str]) -> dict[str, li
 def _lineage_by_uuid(relations: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
     """Connected sets reached through objective.threats, detection_model, and threat.chaining.
 
-    ``OpenTide.Models.chaining`` stays the threat-to-threat relation map. This
+    ``Opentide.Models.chaining`` stays the threat-to-threat relation map. This
     index is only for MCP responses.
     """
     parent: dict[str, str] = {}
@@ -149,13 +149,13 @@ def _lineage_by_uuid(relations: dict[str, Any]) -> dict[str, dict[str, list[str]
         if left_root != right_root:
             parent[right_root] = left_root
 
-    for uuid, entry in OpenTide.Models.objectives.items():
+    for uuid, entry in Opentide.Models.objectives.items():
         nested = as_body(entry).get("objective")
         threats = _string_ids(nested.get("threats")) if isinstance(nested, dict) else []
         for threat in threats:
             unite(str(uuid), "objectives", threat, "threats")
 
-    for uuid, entry in OpenTide.Models.rules.items():
+    for uuid, entry in Opentide.Models.rules.items():
         for parent_id in _string_ids(as_body(entry).get("detection_model")):
             unite(str(uuid), "rules", parent_id, "objectives")
 
@@ -198,7 +198,7 @@ def get_chaining_graph(uuid: str) -> dict[str, Any]:
     node = get_object(uuid)
     if node is None:
         return {"uuid": uuid, "found": False, "graph": {}}
-    relations = OpenTide.Models.chaining
+    relations = Opentide.Models.chaining
     lineages = _lineage_by_uuid(relations if isinstance(relations, dict) else {})
     node_uuid = node["uuid"]
     relation = relations.get(node_uuid, {}) if isinstance(relations, dict) else {}
@@ -224,7 +224,7 @@ def get_chaining_graph(uuid: str) -> dict[str, Any]:
 def coverage_analysis(*, technique: str = "", tactic: str = "") -> dict[str, Any]:
     ensure_initialised()
     covered: dict[str, list[str]] = {}
-    for uuid, entry in OpenTide.Models.rules.items():
+    for uuid, entry in Opentide.Models.rules.items():
         for tech in sorted(object_techniques(entry)):
             covered.setdefault(tech, []).append(uuid)
     if technique:

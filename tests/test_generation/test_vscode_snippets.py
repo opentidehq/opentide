@@ -123,7 +123,7 @@ def test_run_uses_legacy_subschemas_when_platform_templates_missing(tmp_path: Pa
         tmp_path,
         core=SimpleNamespace(subschemas=str(tmp_path / "legacy-subschemas")),
     )
-    with patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot):
+    with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
         vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
     assert "Detection Rules Template" in payload
@@ -138,7 +138,7 @@ def test_run_uses_platform_templates_when_subschemas_missing(tmp_path: Path) -> 
         tmp_path,
         core=SimpleNamespace(platform_templates=str(tmp_path / "platform_templates")),
     )
-    with patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot):
+    with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
         vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
     assert "Detection Rules Template" in payload
@@ -157,7 +157,7 @@ def test_run_raises_when_enabled_platform_template_missing(tmp_path: Path) -> No
         },
     )
     with (
-        patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot),
+        patch("opentide.generation.vscode_snippets.Opentide", mocked.ot),
         pytest.raises(FileNotFoundError, match="platform sentinel"),
     ):
         vscode_snippets.run()
@@ -170,7 +170,7 @@ def test_run_raises_when_core_template_missing(tmp_path: Path) -> None:
         templates={"rule": "missing-rule.yaml"},
     )
     with (
-        patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot),
+        patch("opentide.generation.vscode_snippets.Opentide", mocked.ot),
         pytest.raises(FileNotFoundError, match="core rule"),
     ):
         vscode_snippets.run()
@@ -189,7 +189,7 @@ def test_run_emits_enabled_platform_snippets(tmp_path: Path) -> None:
             }
         },
     )
-    with patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot):
+    with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
         vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
     key = "MDR Systems Deployment : Microsoft Sentinel Template"
@@ -208,7 +208,7 @@ def test_run_honors_snippets_path_override(tmp_path: Path) -> None:
     override = tmp_path / "custom" / "override.code-snippets"
     vscode_snippets.SNIPPETS_PATH = str(override)
     try:
-        with patch("opentide.generation.vscode_snippets.OpenTide", mocked.ot):
+        with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
             vscode_snippets.run()
         assert override.is_file()
         payload = json.loads(override.read_text(encoding="utf-8"))
@@ -223,7 +223,7 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
     from tests.corpus_support import clear_runtime_caches
 
     from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.generation.pydantic_templates import generate_core_template
 
     vscode_snippets.SNIPPETS_PATH = None
@@ -233,7 +233,7 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(fresh))
     monkeypatch.delenv("OPENTIDE_DATA_ROOT", raising=False)
     clear_runtime_caches()
-    OpenTide.initialise()
+    Opentide.initialise()
     templates_dir = fresh / ".opentide" / "templates"
     templates_dir.mkdir(parents=True, exist_ok=True)
     for key in ("rule", "threat", "objective"):

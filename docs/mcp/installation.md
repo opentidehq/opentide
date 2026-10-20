@@ -25,7 +25,7 @@ all; an existing `pip install opentide[mcp]` or an editor config naming it still
 installs opentide, with a warning from pip or uv about the unknown extra.
 
 The base dependency pins `mcp>=1.28.1,<2`. `mcp` 2.x replaced
-`mcp.server.fastmcp` with `MCPServer`; OpenTide has not migrated yet, so the
+`mcp.server.fastmcp` with `MCPServer`; opentide has not migrated yet, so the
 launcher tells those two failures apart rather than reporting both as missing.
 </Callout>
 

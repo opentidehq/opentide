@@ -121,7 +121,7 @@ def test_find_workspace_root_ignores_the_git_object_store(tmp_path: Path) -> Non
 
 
 def test_find_workspace_root_ignores_a_python_package_named_objects(tmp_path: Path) -> None:
-    """OpenTide's own ``src/opentide/documentation/objects`` is source, not a catalogue."""
+    """opentide's own ``src/opentide/documentation/objects`` is source, not a catalogue."""
     repo = tmp_path.resolve() / "repo"
     _dirs(repo, ".git", ".opentide", "src/pkg/objects")
     (repo / "src" / "pkg" / "objects" / "__init__.py").write_text("", encoding="utf-8")

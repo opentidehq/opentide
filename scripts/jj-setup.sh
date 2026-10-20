@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bootstrap Jujutsu for OpenTide. Optionally remove Graphite.
+# Bootstrap Jujutsu for opentide. Optionally remove Graphite.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,7 +39,7 @@ if [[ "$REMOVE_GRAPHITE" == 1 ]]; then
 fi
 
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
-  echo "Not a git repository — run from an OpenTide clone or worktree" >&2
+  echo "Not a git repository — run from an opentide clone or worktree" >&2
   exit 1
 fi
 

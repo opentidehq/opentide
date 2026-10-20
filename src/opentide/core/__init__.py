@@ -1,5 +1,5 @@
-"""OpenTide runtime core — registry, index, and lifecycle."""
+"""opentide runtime core — registry, index, and lifecycle."""
 
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 
-__all__ = ["OpenTide"]
+__all__ = ["Opentide"]

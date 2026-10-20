@@ -19,7 +19,7 @@ def test_run_env_setup_writes_example_and_gitignore(tmp_path: Path) -> None:
     assert example.is_file()
     text = example.read_text(encoding="utf-8")
     assert "OPENTIDE_REPO_ROOT=." in text
-    assert "# OpenTide" in text
+    assert "# opentide" in text
     assert gitignore.is_file()
     assert ".env\n" in gitignore.read_text(encoding="utf-8")
     assert ".env.example" not in gitignore.read_text(encoding="utf-8")

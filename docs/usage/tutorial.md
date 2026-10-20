@@ -10,7 +10,7 @@ The [quickstart](./quickstart.md) runs commands against an existing repo. This t
 Budget 15–20 minutes. You need Python 3.10+ and `opentide` installed — see [Installation](./installation.md).
 
 <Callout type="info">
-Everything here mirrors the conformance [fixtures](https://github.com/OpenTideHQ/specifications/blob/main/fixtures/valid). If you get stuck, those files are known-good references.
+Everything here mirrors the conformance [fixtures](https://github.com/opentidehq/specifications/blob/main/fixtures/valid). If you get stuck, those files are known-good references.
 </Callout>
 
 ## 1. Scaffold a repository

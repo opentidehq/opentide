@@ -18,7 +18,7 @@ FORBIDDEN = (
     "Orchestration",
     "Engines/requirements",
     "TIDE_CORE_REPO",
-    "raw.githubusercontent.com/OpenTideHQ/CoreTide",
+    "raw.githubusercontent.com/opentidehq/CoreTide",
 )
 
 REQUIRED = (

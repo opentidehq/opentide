@@ -33,7 +33,7 @@ def _python_setup(options: CiRenderOptions) -> str:
         "  inputs:\n"
         f"    versionSpec: '{options.python_version}'\n"
         f"- script: {pip_install(options)}\n"
-        "  displayName: Install OpenTide"
+        "  displayName: Install opentide"
     )
 
 

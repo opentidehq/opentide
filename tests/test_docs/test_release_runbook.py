@@ -21,7 +21,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "publish-pypi.yml"
 SKILL = ROOT / ".agents" / "skills" / "release-management" / "SKILL.md"
 RUNBOOKS = [SKILL, ROOT / "docs" / "internal" / "pypi-trusted-publishing.md"]
 
-_DISPATCH = re.compile(r"repos/OpenTideHQ/opentide/dispatches((?:\s+-f\s+[^\s`]+)+)")
+_DISPATCH = re.compile(r"repos/opentidehq/opentide/dispatches((?:\s+-f\s+[^\s`]+)+)")
 _FIELD = re.compile(r"-f\s+(\S+?)=")
 
 
@@ -106,6 +106,6 @@ def test_release_create_parser_reads_fenced_multiline_commands(tmp_path: Path) -
 
 def test_skill_verifies_the_latest_flag_and_both_pypi_files() -> None:
     text = _text(SKILL)
-    assert "gh release list --repo OpenTideHQ/opentide" in text
+    assert "gh release list --repo opentidehq/opentide" in text
     assert "https://pypi.org/pypi/opentide/0.x.y/json" in text
     assert "bdist_wheel" in text and "sdist" in text

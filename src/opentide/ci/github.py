@@ -164,13 +164,13 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
               with:
                 app-id: ${{{{ secrets.GH_APP_ID }}}}
                 private-key: ${{{{ secrets.GH_APP_KEY }}}}
-                owner: OpenTideHQ
+                owner: opentidehq
                 repositories: opentide
 
             - name: Checkout opentide
               uses: actions/checkout@v4
               with:
-                repository: OpenTideHQ/opentide
+                repository: opentidehq/opentide
                 ref: development
                 path: opentide
                 token: ${{{{ steps.generate_token.outputs.token || secrets.OPENTIDE_REPO_TOKEN }}}}
@@ -178,7 +178,7 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
             - name: Checkout explorer
               uses: actions/checkout@v4
               with:
-                repository: OpenTideHQ/explorer
+                repository: opentidehq/explorer
                 ref: main
                 path: explorer
 
@@ -369,7 +369,7 @@ def render_github(options: CiRenderOptions) -> str:
         )
 
     preamble = (
-        "name: OpenTide\n"
+        "name: opentide\n"
         "\n"
         "on:\n"
         "  pull_request:\n"

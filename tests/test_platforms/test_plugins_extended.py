@@ -52,7 +52,7 @@ def test_platform_loader_load_engines_deploy_tier() -> None:
     mock_module.declare.return_value = MagicMock()
     with (
         patch.object(loader, "import_engine", return_value=mock_module),
-        patch("opentide.core.registry.OpenTide") as mock_tide,
+        patch("opentide.core.registry.Opentide") as mock_tide,
     ):
         mock_tide.Configuration.Systems.Index = ["sentinel"]
         engines = loader._load_engines(tier=plugins.PlatformEngine(), identifier="")
@@ -65,7 +65,7 @@ def test_platform_loader_load_engines_validation_tier() -> None:
     mock_module.declare.return_value = MagicMock()
     with (
         patch.object(loader, "import_engine", return_value=mock_module),
-        patch("opentide.core.registry.OpenTide") as mock_tide,
+        patch("opentide.core.registry.Opentide") as mock_tide,
     ):
         mock_tide.Configuration.Systems.Index = ["splunk"]
         engines = loader._load_engines(tier=plugins.ValidationEngine(), identifier="_query")
@@ -79,7 +79,7 @@ def test_load_engines_skips_platforms_with_no_query_validator() -> None:
     mock_module.declare.return_value = MagicMock()
     with (
         patch.object(loader, "import_engine", return_value=mock_module) as import_engine,
-        patch("opentide.core.registry.OpenTide") as mock_tide,
+        patch("opentide.core.registry.Opentide") as mock_tide,
     ):
         mock_tide.Configuration.Systems.Index = ["sentinel", "crowdstrike", "harfanglab"]
         engines = loader._load_engines(tier=plugins.ValidationEngine(), identifier="_query")
@@ -94,7 +94,7 @@ def test_load_engines_honours_the_only_filter() -> None:
     mock_module.declare.return_value = MagicMock()
     with (
         patch.object(loader, "import_engine", return_value=mock_module),
-        patch("opentide.core.registry.OpenTide") as mock_tide,
+        patch("opentide.core.registry.Opentide") as mock_tide,
     ):
         mock_tide.Configuration.Systems.Index = ["sentinel", "splunk"]
         engines = loader._load_engines(
@@ -112,7 +112,7 @@ def test_config_valueerror_is_not_rewritten_as_missing_declare() -> None:
     )
     with (
         patch.object(loader, "import_engine", return_value=mock_module),
-        patch("opentide.core.registry.OpenTide") as mock_tide,
+        patch("opentide.core.registry.Opentide") as mock_tide,
     ):
         mock_tide.Configuration.Systems.Index = ["splunk"]
         with pytest.raises(ValueError, match="dictionary update sequence"):
@@ -125,7 +125,7 @@ def test_an_engine_without_declare_is_named_in_the_error() -> None:
     mock_module.declare.side_effect = AttributeError("declare")
     with (
         patch.object(loader, "import_engine", return_value=mock_module),
-        patch("opentide.core.registry.OpenTide") as mock_tide,
+        patch("opentide.core.registry.Opentide") as mock_tide,
     ):
         mock_tide.Configuration.Systems.Index = ["sentinel"]
         with pytest.raises(Exception, match="PLATFORM ENGINE IMPORT ERROR: sentinel"):

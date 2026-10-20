@@ -10,7 +10,7 @@ from typing import Any
 
 from opentide.core.io import json_timestamp_default, stringify_yaml_temporals
 from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.generation.errors import rendering
 from opentide.generation.framework import childs, get_vocab_entry, parents
 
@@ -36,11 +36,11 @@ class TableEntry:
 
 class TableExporter:
     def __init__(self) -> None:
-        OpenTide.initialise()
-        self.exports_path = Path(OpenTide.Configurations.Global.Paths.Tide.exports)
-        self.object_scope = OpenTide.Configurations.Global.objects
-        self.object_names = OpenTide.Configurations.Documentation.object_names
-        self.export_name = OpenTide.Configurations.Global.exports.objects
+        Opentide.initialise()
+        self.exports_path = Path(Opentide.Configurations.Global.Paths.Tide.exports)
+        self.object_scope = Opentide.Configurations.Global.objects
+        self.object_names = Opentide.Configurations.Documentation.object_names
+        self.export_name = Opentide.Configurations.Global.exports.objects
         self.export_path = self.exports_path / self.export_name
 
     def run(self) -> None:
@@ -89,7 +89,7 @@ class TableExporter:
         return flat_chains
 
     def _create_entry(self, object_uuid: str, object_type: str) -> TableEntry:
-        object_data = OpenTide.Models.Index[object_type][object_uuid]
+        object_data = Opentide.Models.Index[object_type][object_uuid]
         name = object_data["name"]
         object_type_name = self.object_names[object_type]
         metadata = object_data["metadata"]
@@ -137,7 +137,7 @@ class TableExporter:
     def _create_dataset(self) -> Sequence[TableEntry]:
         dataset: list[TableEntry] = []
         for object_type in self.object_scope:
-            object_index = OpenTide.Models.Index.get(object_type) or {}
+            object_index = Opentide.Models.Index.get(object_type) or {}
             if not object_index:
                 logger.debug(
                     "object_index_empty",

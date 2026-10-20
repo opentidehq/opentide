@@ -61,14 +61,14 @@ def emit_fatal(message: str, *, detail: str = "", advice: str = "") -> None:
 
 
 def print_banner() -> str:
-    """Return the OpenTide ASCII banner, rendering it when appropriate."""
+    """Return the opentide ASCII banner, rendering it when appropriate."""
     banner = """\
             :--==-:.
          -+*###*####*+:
        -=:   .:  =-*##*.
      -=.  .:.     .+.*=:+
   .-+:  .-:  :  .-- :  .
-+*#+   -=.  -:  : :=              The engine powering OpenTIDE Instances
++*#+   -=.  -:  : :=              The engine powering opentide Instances
 #*-  .==.  :=  .-  +            Part of the OpenThreat Informed Detection Engineering Initiative
 :   :==:   =-  .=. .+
    :==-   :=-   --  .+:

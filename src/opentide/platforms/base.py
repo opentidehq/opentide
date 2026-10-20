@@ -44,11 +44,11 @@ class BaseRuleDeployer(ABC):
         self,
         mdr_deployment: Sequence[DetectionRule] | list[str],
     ) -> list[DetectionRule]:
-        from opentide.core.registry import OpenTide
+        from opentide.core.registry import Opentide
 
         if not mdr_deployment:
             return []
         first = mdr_deployment[0]
         if isinstance(first, DetectionRule):
             return list(cast(Sequence[DetectionRule], mdr_deployment))
-        return [OpenTide.Rules[uuid] for uuid in cast(list[str], mdr_deployment)]
+        return [Opentide.Rules[uuid] for uuid in cast(list[str], mdr_deployment)]

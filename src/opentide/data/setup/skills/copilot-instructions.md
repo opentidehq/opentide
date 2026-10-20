@@ -4,7 +4,7 @@
 
 **Organisation:** {org}
 
-Read [`AGENTS.md`](AGENTS.md) for detection-as-code workflows with OpenTide.
+Read [`AGENTS.md`](AGENTS.md) for detection-as-code workflows with opentide.
 
 ## Skills
 

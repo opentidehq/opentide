@@ -1,6 +1,6 @@
 # Fumadocs integration
 
-Public docs are built and deployed by **[OpenTideHQ/website](https://github.com/OpenTideHQ/website)** at [opentide.org/docs](https://opentide.org/docs). This folder is authoring notes for that site. Content lives in the parent `docs/` directory.
+Public docs are built and deployed by **[opentidehq/website](https://github.com/opentidehq/website)** at [opentide.org/docs](https://opentide.org/docs). This folder is authoring notes for that site. Content lives in the parent `docs/` directory.
 
 The website copies this tree with `pnpm sync:content` into `content/docs/{usage,cli,mcp,sdk}` and commits the snapshot so GitHub Pages can build without private-repo access. A weekly Actions job bumps the `vendor/opentide` submodule; the committed snapshot still needs an explicit sync.
 
@@ -41,7 +41,7 @@ Run validation before publishing:
 scripts/validate-docs.sh
 ```
 
-## Website layout (OpenTideHQ/website)
+## Website layout (opentidehq/website)
 
 ```
 website/

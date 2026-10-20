@@ -1,6 +1,6 @@
 """SDK: loaded objects point at the file they were read from (issue #297).
 
-``OpenTide.Rules`` built each rule's ``file`` as ``<rules folder>/<basename>``,
+``Opentide.Rules`` built each rule's ``file`` as ``<rules folder>/<basename>``,
 so a rule in ``objects/rules/team-a/x.yaml`` pointed at ``objects/rules/x.yaml``:
 another rule's file, or one that does not exist.
 """
@@ -17,33 +17,33 @@ from tests.validation_support import (
     write_nested_twins,
 )
 
-from opentide import OpenTide
-from opentide.core.registry import OpenTideRegistry
+from opentide import Opentide
+from opentide.core.registry import OpentideRegistry
 
 
 def _twins(object_type: str) -> set[str]:
     return {uuid for kind, uuid in NESTED_TWIN_LAYOUT.values() if kind == object_type}
 
 
-@pytest.mark.parametrize("accessor", ["OpenTide.Rules", "OpenTide.Models.Rules"])
+@pytest.mark.parametrize("accessor", ["Opentide.Rules", "Opentide.Models.Rules"])
 def test_every_loaded_object_points_at_the_file_that_declares_it(
     tide_corpus_repo: Path, accessor: str
 ) -> None:
     real_paths = write_nested_twins(tide_corpus_repo)
 
-    rules = OpenTide.Rules if accessor == "OpenTide.Rules" else OpenTide.Models.Rules
+    rules = Opentide.Rules if accessor == "Opentide.Rules" else Opentide.Models.Rules
 
     assert _twins("rule") <= set(rules)
     assert assert_objects_point_at_their_files(rules) == len(rules)
     for uuid in _twins("rule"):
         assert Path(rules[uuid].file or "").resolve() == real_paths[uuid]
-    for object_type, loaded in (("threat", OpenTide.Threats), ("objective", OpenTide.Objectives)):
+    for object_type, loaded in (("threat", Opentide.Threats), ("objective", Opentide.Objectives)):
         assert _twins(object_type) <= set(loaded)
         assert_objects_point_at_their_files(loaded)
 
 
-def _registry(index: dict[str, Any]) -> OpenTideRegistry:
-    registry = OpenTideRegistry()
+def _registry(index: dict[str, Any]) -> OpentideRegistry:
+    registry = OpentideRegistry()
     registry._index = index
     registry._initialised = True
     return registry

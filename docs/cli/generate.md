@@ -215,7 +215,7 @@ Exports the detection rules of one Kibana space and writes each one to `Imported
 - A rule's Kibana `rule_id` becomes `metadata.uuid`. A custom rule whose `rule_id` is not a UUID is skipped, because deploying it under a new id would create a duplicate.
 - An enabled rule gets `status: PRODUCTION`, a disabled one `status: DISABLED`, so a deploy keeps it disabled.
 - The rule's `note` becomes `guide.investigation`.
-- Every file is loaded as an OpenTide rule before it is written. A rule that would not load (for example a `saved_query` rule) is skipped with `elastic_import_rule_skipped` and listed under `skipped` in the JSON result, with the reason.
+- Every file is loaded as an opentide rule before it is written. A rule that would not load (for example a `saved_query` rule) is skipped with `elastic_import_rule_skipped` and listed under `skipped` in the JSON result, with the reason.
 - Two rules with the same name do not overwrite each other: the second file name gets the first eight characters of its UUID.
 - A look-back window that RFC 0007 cannot express is logged as `elastic_import_window_widened` or `elastic_import_schedule_defaulted`.
 - No deployment state is written: Elastic addresses rules by `metadata.uuid`.
@@ -228,7 +228,7 @@ Exports the detection rules of one Kibana space and writes each one to `Imported
 
 ## Side effects
 
-Schema and template phases reload `IndexManager` and `OpenTide` registry caches.
+Schema and template phases reload `IndexManager` and `Opentide` registry caches.
 
 ## Deprecated shims
 

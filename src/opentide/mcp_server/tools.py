@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.mcp_server.catalog import (
     coverage_analysis,
     ensure_initialised,
@@ -41,8 +41,8 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 
-    _ = OpenTide.Rules
-    rule = OpenTide.Rules.get(uuid)
+    _ = Opentide.Rules
+    rule = Opentide.Rules.get(uuid)
     if rule is None:
         return {"valid": False, "errors": [f"Rule {uuid} not found"], "warnings": [], "issues": []}
     report = run_validation(scope=ValidationScope.narrow(uuids=frozenset({uuid})))
@@ -162,8 +162,8 @@ def _missing_tenants(uuid: str, platform: str) -> dict[str, Any] | None:
 
 def tool_deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict[str, Any]:
     ensure_initialised()
-    _ = OpenTide.Rules
-    rule = OpenTide.Rules.get(uuid)
+    _ = Opentide.Rules
+    rule = Opentide.Rules.get(uuid)
     if rule is None:
         return {
             "action": "error",
@@ -172,7 +172,7 @@ def tool_deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict[str
             "status": "not_found",
             "dry_run": dry_run,
         }
-    if platform not in OpenTide.Platforms:
+    if platform not in Opentide.Platforms:
         return _unknown_platform(uuid, platform, dry_run=dry_run)
     if not dry_run:
         missing = _missing_tenants(uuid, platform)
@@ -247,7 +247,7 @@ def _platform_deployment_state(
 
 def tool_deployment_status(uuid: str) -> dict[str, Any]:
     ensure_initialised()
-    body = OpenTide.Models.rules.get(uuid)
+    body = Opentide.Models.rules.get(uuid)
     if body is None:
         return {"platforms": {}, "uuid": uuid, "found": False}
     if not isinstance(body, dict):

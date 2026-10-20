@@ -7,16 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core.io import json_timestamp_default, stringify_yaml_temporals
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 
 
 def build_revisions_export() -> dict[str, Any]:
     """Snapshot current object metadata versions (git remains source of history)."""
-    OpenTide.initialise()
+    Opentide.initialise()
     export: dict[str, Any] = {}
-    object_names = OpenTide.Configurations.Documentation.object_names
-    for object_type in OpenTide.Configurations.Global.objects:
-        for uuid, body in OpenTide.Models.Index.get(object_type, {}).items():
+    object_names = Opentide.Configurations.Documentation.object_names
+    for object_type in Opentide.Configurations.Global.objects:
+        for uuid, body in Opentide.Models.Index.get(object_type, {}).items():
             metadata = body.get("metadata") or {}
             version = str(metadata.get("version", ""))
             if not version:
@@ -50,9 +50,9 @@ def _description(body: dict[str, Any], object_type: str) -> str:
 
 
 def run() -> None:
-    OpenTide.initialise()
-    export_name = OpenTide.Configurations.Global.exports.revisions
-    export_path = Path(OpenTide.Configurations.Global.Paths.Tide.exports) / export_name
+    Opentide.initialise()
+    export_name = Opentide.Configurations.Global.exports.revisions
+    export_path = Path(Opentide.Configurations.Global.Paths.Tide.exports) / export_name
     export_path.parent.mkdir(parents=True, exist_ok=True)
     payload = build_revisions_export()
     export_path.write_text(

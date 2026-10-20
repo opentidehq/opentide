@@ -13,7 +13,7 @@
       "tlp": "clear",
       "organisation": {
         "uuid": "56b0a0f0-b0bc-47d9-bb46-02f80ae2065a",
-        "name": "OpenTide Example"
+        "name": "opentide Example"
       }
     },
     "threat": {
@@ -40,7 +40,7 @@
   "change": {
     "platform": "github",
     "number": 4,
-    "url": "https://github.com/OpenTideHQ/library/pull/4",
+    "url": "https://github.com/opentidehq/library/pull/4",
     "title": "example/inflight-preview",
     "head_ref": "example/inflight-preview",
     "base_ref": "main",

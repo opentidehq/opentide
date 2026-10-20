@@ -4,7 +4,7 @@ from dataclasses import dataclass, asdict
 from typing import Optional
 from enum import Enum
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
 import structlog
@@ -51,7 +51,7 @@ def remove_none_values(data: dict) -> dict:
 class SigmaRule:
     """
     Dataclass representing a HarfangLab Sigma rule for the API.
-    Maps OpenTide's HarfangLab configuration to HarfangLab's API format.
+    Maps opentide's HarfangLab configuration to HarfangLab's API format.
     """
     name: str
     content: str
@@ -81,8 +81,8 @@ class YaraRule:
 
 class SigmaRuleBuilder:
     """
-    Builds a Sigma-compliant YAML string from OpenTide's selection-based format.
-    Transforms the OpenTide format to standard Sigma format.
+    Builds a Sigma-compliant YAML string from opentide's selection-based format.
+    Transforms the opentide format to standard Sigma format.
     """
 
     @staticmethod
@@ -177,7 +177,7 @@ class HarfangLabService:
 
     def __init__(self, tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant) -> None:
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = OpenTide.Configurations.Systems.HarfangLab.platform.identifier
+        self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.HarfangLab.platform.identifier
         self.tenant_config = tenant_config
         base_url = self.tenant_config.setup.url.rstrip('/')
         self.SIGMA_RULES_ENDPOINT = f'{base_url}/api/data/threat_intelligence/SigmaRule/'
@@ -284,10 +284,10 @@ class HarfangLabService:
     @staticmethod
     def map_action_to_global_state(action: str) -> str:
         """
-        Map OpenTide action values to HarfangLab global_state values.
+        Map opentide action values to HarfangLab global_state values.
         
         Args:
-            action: OpenTide action string (Alert, Alert & Block, etc.)
+            action: opentide action string (Alert, Alert & Block, etc.)
             
         Returns:
             HarfangLab global_state value
@@ -298,10 +298,10 @@ class HarfangLabService:
     @staticmethod
     def map_maturity_to_hl_status(maturity: str) -> str:
         """
-        Map OpenTide maturity values to HarfangLab hl_status values.
+        Map opentide maturity values to HarfangLab hl_status values.
         
         Args:
-            maturity: OpenTide maturity string (Stable, Testing, Experimental)
+            maturity: opentide maturity string (Stable, Testing, Experimental)
             
         Returns:
             HarfangLab hl_status value
@@ -312,10 +312,10 @@ class HarfangLabService:
     @staticmethod
     def map_confidence(confidence: str) -> str:
         """
-        Map OpenTide confidence values to HarfangLab rule_confidence_override values.
+        Map opentide confidence values to HarfangLab rule_confidence_override values.
         
         Args:
-            confidence: OpenTide confidence string (Weak, Moderate, Strong)
+            confidence: opentide confidence string (Weak, Moderate, Strong)
             
         Returns:
             HarfangLab rule_confidence_override value

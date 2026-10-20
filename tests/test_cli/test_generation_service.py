@@ -28,7 +28,7 @@ def test_run_generate_templates_phase(monkeypatch: pytest.MonkeyPatch) -> None:
     reload = MagicMock()
     monkeypatch.setattr("opentide.generation.template.run", generate)
     monkeypatch.setattr(generation.IndexManager, "reload", reload)
-    monkeypatch.setattr(generation.OpenTide, "reload", MagicMock())
+    monkeypatch.setattr(generation.Opentide, "reload", MagicMock())
     generation.run_generate_phase(GeneratePhase.templates)
     generate.assert_called_once()
     reload.assert_called_once()

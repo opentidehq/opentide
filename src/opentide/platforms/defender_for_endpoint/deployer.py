@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.logging import get_logger
-from opentide.core.registry import DetectionPlatforms, OpenTide
+from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import (
     ExternalIdAction,
@@ -249,7 +249,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
                 report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
 
     def deploy(self, mdr_deployment: Sequence[DetectionRule], deployment_plan: DeploymentStrategy):
-        mdr_deployment = [OpenTide.Rules[uuid] for uuid in mdr_deployment]
+        mdr_deployment = [Opentide.Rules[uuid] for uuid in mdr_deployment]
         deployment = TideDeployment(
             deployment=mdr_deployment,
             system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,

@@ -28,7 +28,7 @@ def test_run_prints_stats_when_validation_passes() -> None:
     mock_opentide.Index = mock_index
 
     with (
-        patch("opentide.validation.tide_schema.OpenTide", mock_opentide),
+        patch("opentide.validation.tide_schema.Opentide", mock_opentide),
         patch("opentide.validation.tide_schema.run_validation", return_value=report),
         patch("opentide.validation.tide_schema.emit_section"),
         # Logging configuration is process-global: an earlier `--json` CLI test
@@ -56,7 +56,7 @@ def test_run_sets_validation_error_flag_when_issues_present() -> None:
     mock_opentide.Index = mock_index
 
     with (
-        patch("opentide.validation.tide_schema.OpenTide", mock_opentide),
+        patch("opentide.validation.tide_schema.Opentide", mock_opentide),
         patch("opentide.validation.tide_schema.run_validation", return_value=report),
         patch("opentide.validation.tide_schema.emit_section"),
         patch("opentide.validation.tide_schema.format_issues_for_console", return_value="issues"),

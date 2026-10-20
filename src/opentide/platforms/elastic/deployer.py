@@ -10,7 +10,7 @@ from typing import Any
 import requests
 import structlog
 
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.models.deployment_enums import (
@@ -303,7 +303,7 @@ class ElasticDeploy:
         loaded_mdr: list[DetectionRule] = []
         for mdr in mdr_deployment:
             if isinstance(mdr, str):
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         loaded_mdr = without_legacy_external_ids(loaded_mdr, platform="elastic")

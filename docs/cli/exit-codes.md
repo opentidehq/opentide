@@ -7,7 +7,7 @@ description: What each opentide exit code means, and how to gate CI on them.
 
 Every `opentide` command sets a process exit code so pipelines can gate on results without parsing output. Combine these with `--json` for structured detail.
 
-OpenTide uses the same result semantics in human and JSON modes: presentation follows `ok` / `status`, while the process exit code is CI policy.
+opentide uses the same result semantics in human and JSON modes: presentation follows `ok` / `status`, while the process exit code is CI policy.
 
 ## Codes
 

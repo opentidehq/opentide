@@ -5,11 +5,11 @@ description: What lives in .opentide/configurations/ — enabling platforms, cre
 
 # Configuration
 
-OpenTide ships sensible defaults inside the package. Your repository customises them under `.opentide/configurations/`. This guide is the practical tour of that directory; the normative merge rules live in the [Configuration spec](/docs/specifications/specs/configuration/).
+opentide ships sensible defaults inside the package. Your repository customises them under `.opentide/configurations/`. This guide is the practical tour of that directory; the normative merge rules live in the [Configuration spec](/docs/specifications/specs/configuration/).
 
 ## How configuration is layered
 
-OpenTide deep-merges configuration from several sources. Later layers win; nested tables merge, scalars replace.
+opentide deep-merges configuration from several sources. Later layers win; nested tables merge, scalars replace.
 
 ```mermaid
 flowchart LR
@@ -35,7 +35,7 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 <Callout type="warn">
 Do not put vocabulary files here, and do not try to extend a vocabulary locally. Vocabularies are canonical in the [specifications](/docs/specifications/specs/vocabularies/format/) and are **not** locally extensible: a missing entry is added upstream, never injected from your repository. The CoreTIDE-era `[vocabulary]` block in `schema.toml` was removed in 0.13.0 — if you carried one, it was silently ignored by validation and is now simply dropped.
 
-`threat.surface` is covered by that rule like every other vocabulary. Earlier releases harvested an extra surface value from a `visibility.toml` asset that named a technology, so an instance could effectively invent one; that no longer happens, and it was never a supported mechanism. A technology the catalogue does not yet name is [proposed upstream](https://github.com/OpenTideHQ/specifications) — which is what makes a surface value mean the same thing in every OpenTide instance. Where a local system needs naming, the asset itself is the place for it.
+`threat.surface` is covered by that rule like every other vocabulary. Earlier releases harvested an extra surface value from a `visibility.toml` asset that named a technology, so an instance could effectively invent one; that no longer happens, and it was never a supported mechanism. A technology the catalogue does not yet name is [proposed upstream](https://github.com/opentidehq/specifications) — which is what makes a surface value mean the same thing in every opentide instance. Where a local system needs naming, the asset itself is the place for it.
 
 Two fields are deliberately **not** vocabularies, because their values are per-organisation rather than shared: `response.responders` (your alert handling teams) and `configurations.<platform>.status` (your deployment statuses). Both are *configuration enums* — you declare the allowed values in `deployment.toml`, the generated schema offers them in your editor, and `validate` holds authored objects to them. Declaring none leaves the field unconstrained.
 </Callout>
@@ -95,7 +95,7 @@ opentide --proxy http://user:pass@proxy.internal:8080 validate --strict
 
 ## Deployment statuses and strategies
 
-Every rule's `status` must match a status defined in the merged `deployment.toml`. That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and OpenTide does not enforce an order between them. OpenTide ships this set out of the box:
+Every rule's `status` must match a status defined in the merged `deployment.toml`. That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. opentide ships this set out of the box:
 
 | Status | Strategy | What it does |
 |--------|----------|--------------|

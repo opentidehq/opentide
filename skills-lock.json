@@ -20,49 +20,49 @@
       "computedHash": "1306eea409e7eff2288d7658806cb508f18339a0ee9a686d324a0fd2570eae55"
     },
     "jujutsu": {
-      "source": "OpenTideHQ/opentide",
+      "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/jujutsu/SKILL.md",
       "computedHash": "project-local"
     },
     "jujutsu-stacked-prs": {
-      "source": "OpenTideHQ/opentide",
+      "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/jujutsu-stacked-prs/SKILL.md",
       "computedHash": "project-local-stub"
     },
     "uv": {
-      "source": "OpenTideHQ/opentide",
+      "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/uv/SKILL.md",
       "computedHash": "project-local"
     },
     "uv-package-manager": {
-      "source": "OpenTideHQ/opentide",
+      "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/uv-package-manager/SKILL.md",
       "computedHash": "project-local-stub"
     },
     "ruff": {
-      "source": "OpenTideHQ/opentide",
+      "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/ruff/SKILL.md",
       "computedHash": "project-local"
     },
     "ruff-recursive-fix": {
-      "source": "OpenTideHQ/opentide",
+      "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/ruff-recursive-fix/SKILL.md",
       "computedHash": "project-local-stub"
     },
     "python-typing": {
-      "source": "OpenTideHQ/opentide",
+      "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/python-typing/SKILL.md",
       "computedHash": "project-local"
     },
     "codeql": {
-      "source": "OpenTideHQ/opentide",
+      "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/codeql/SKILL.md",
       "computedHash": "project-local"

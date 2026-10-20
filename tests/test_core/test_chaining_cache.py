@@ -1,6 +1,6 @@
 """The threat chaining graph must be memoized per snapshot, like ``FlatIndex``.
 
-``OpenTide.Models.chaining`` recomputed the whole graph on every read, and
+``Opentide.Models.chaining`` recomputed the whole graph on every read, and
 ``generation.framework.CHAINING_INDEX`` is a lazy view whose ``_data()``
 re-reads that property for every lookup. Rendering a 265-object corpus measured
 **4,273** ``compute_chains`` calls costing 1.5s of a 3.5s run -- the dominant
@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 
 from opentide.core import index_manager as index_mod
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 
 
 def _index(*threat_names: str) -> dict[str, Any]:
@@ -40,23 +40,23 @@ def _index(*threat_names: str) -> dict[str, Any]:
 def _reset_registry() -> Any:
     """Leave no snapshot or memo behind for the rest of the suite."""
     yield
-    OpenTide._index = None
+    Opentide._index = None
     index_mod.IndexManager._cache = None
 
 
 def _install(index: dict[str, Any]) -> None:
-    OpenTide._rules = {}
-    OpenTide._threats = {}
-    OpenTide._objectives = {}
-    OpenTide._initialised = True
-    OpenTide._index = index
+    Opentide._rules = {}
+    Opentide._threats = {}
+    Opentide._objectives = {}
+    Opentide._initialised = True
+    Opentide._index = index
     index_mod.IndexManager._cache = index
 
 
 def test_chaining_is_memoized_per_snapshot() -> None:
     _install(_index("t1", "t2"))
-    chains = OpenTide.Models.chaining
-    assert OpenTide.Models.chaining is chains, "second access must return the cached graph"
+    chains = Opentide.Models.chaining
+    assert Opentide.Models.chaining is chains, "second access must return the cached graph"
 
 
 def test_chaining_recomputed_once_across_many_accesses(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -87,24 +87,24 @@ def test_chaining_recomputed_once_across_many_accesses(monkeypatch: pytest.Monke
 def test_chaining_not_stale_after_cache_drop() -> None:
     """A cache drop, not reload(), must not serve the previous graph."""
     _install(_index("old-threat"))
-    assert "old-threat" in OpenTide.Models.chaining or OpenTide.Models.chaining == {}
-    first = OpenTide.Models.chaining
+    assert "old-threat" in Opentide.Models.chaining or Opentide.Models.chaining == {}
+    first = Opentide.Models.chaining
 
     # The same drop the CLI and corpus helpers use.
-    OpenTide._index = None
+    Opentide._index = None
     index_mod.IndexManager._cache = None
     assert index_mod.IndexManager._chain_cache is None
     assert index_mod.IndexManager._chain_cache_index is None
 
     _install(_index("new-threat"))
-    second = OpenTide.Models.chaining
+    second = Opentide.Models.chaining
     assert second is not first, "a fresh snapshot must rebuild the graph"
 
 
 def test_reload_clears_the_chaining_memo() -> None:
     """`reload()` goes through `_cache = None`, so the metaclass must clear it."""
     _install(_index("t1"))
-    primed = OpenTide.Models.chaining
+    primed = Opentide.Models.chaining
     assert primed is not None
     assert index_mod.IndexManager._chain_cache is not None
 

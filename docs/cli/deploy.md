@@ -167,7 +167,7 @@ FATAL: Metadata deployment is not implemented for splunk
 ## Per-rule deployment via SDK or MCP
 
 ```python
-rule = OpenTide.Rules[uuid]
+rule = Opentide.Rules[uuid]
 result = rule.deploy("sentinel", dry_run=True)
 ```
 

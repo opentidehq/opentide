@@ -10,7 +10,7 @@ from typing import Any
 import structlog
 
 from opentide.core.logging.console import emit_section
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 
 logger = structlog.get_logger("opentide.generation.vscode_snippets")
 
@@ -144,15 +144,15 @@ def _require_template(path: Path, *, kind: str) -> None:
 def run() -> None:
     emit_section("Generate VSCode Snippets")
     logger.info("converts_the_templates_into_vscode_formatted_snippets_inproject")
-    paths = OpenTide.Configurations.Global.Paths
+    paths = Opentide.Configurations.Global.Paths
     snippets_path = _snippets_output_path(paths)
     templates_dir = Path(str(paths.Tide.templates))
     subschemas_folder = _platform_templates_dir(paths.Core)
-    recomposition = OpenTide.Configurations.Global.recomposition
-    config_index = OpenTide.Configurations.Index
-    metaschemas = OpenTide.Configurations.Global.metaschemas
-    templates = OpenTide.Configurations.Global.templates
-    object_names = OpenTide.Configurations.Documentation.object_names
+    recomposition = Opentide.Configurations.Global.recomposition
+    config_index = Opentide.Configurations.Index
+    metaschemas = Opentide.Configurations.Global.metaschemas
+    templates = Opentide.Configurations.Global.templates
+    object_names = Opentide.Configurations.Documentation.object_names
 
     snippets: dict[str, Any] = {}
     for model in metaschemas:

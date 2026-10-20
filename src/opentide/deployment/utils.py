@@ -13,7 +13,7 @@ from opentide.platforms.enabled import enable_platform_command, enabled_systems
 logger = get_logger(__name__)
 
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
-NESTED_RULES_ISSUE = "https://github.com/OpenTideHQ/opentide/issues/312"
+NESTED_RULES_ISSUE = "https://github.com/opentidehq/opentide/issues/312"
 NESTED_RULES_SHOWN = 5
 
 
@@ -23,11 +23,11 @@ def __getattr__(name: str) -> Any:
     This module is the canonical home of ``SYSTEMS_CONFIGS_INDEX``; the
     deployment package re-exports it from here. Binding it at import time built
     the entire registry index as a side effect of importing this module (~271 ms)
-    and captured whichever ``opentide.core.registry.OpenTide`` was live, so a
+    and captured whichever ``opentide.core.registry.Opentide`` was live, so a
     first import under ``patch()`` left a dead mock here for the whole process.
     """
     if name == "SYSTEMS_CONFIGS_INDEX":
-        return registry.OpenTide.Configurations.Systems.Index
+        return registry.Opentide.Configurations.Systems.Index
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
@@ -79,7 +79,7 @@ def check_status(status_name: str) -> StatusStrategy:
     This resolves the label to the strategy, which is what the deploy planner
     filters on.
     """
-    statuses_definitions = registry.OpenTide.Configurations.Deployment.statuses
+    statuses_definitions = registry.Opentide.Configurations.Deployment.statuses
     for status in statuses_definitions:
         if status.name == status_name:
             if isinstance(status.strategy, StatusStrategy):

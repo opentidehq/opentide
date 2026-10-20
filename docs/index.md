@@ -1,11 +1,11 @@
 ---
-title: OpenTide
+title: opentide
 description: DetectionOps engine — validate, generate, deploy, and document detection rules across eight security platforms.
 ---
 
-# OpenTide
+# opentide
 
-OpenTide is the **DetectionOps engine** for detection-as-code repositories. Install it from PyPI, point it at your content repository, and use the CLI, MCP server, or Python SDK to validate objects, generate schemas, deploy rules, and publish documentation.
+opentide is the **DetectionOps engine** for detection-as-code repositories. Install it from PyPI, point it at your content repository, and use the CLI, MCP server, or Python SDK to validate objects, generate schemas, deploy rules, and publish documentation.
 
 ## Choose your path
 
@@ -14,7 +14,7 @@ OpenTide is the **DetectionOps engine** for detection-as-code repositories. Inst
 | [Usage](./usage/index.md) | Detection engineers setting up and operating repos | [Installation](./usage/installation.md) |
 | [CLI](./cli/index.md) | Operators and CI pipelines | [Global options](./cli/global-options.md) |
 | [MCP](./mcp/index.md) | AI agents and editor integrations | [Installation](./mcp/installation.md) |
-| [SDK](./sdk/index.md) | Python developers embedding OpenTide | [Registry API](./sdk/registry.md) |
+| [SDK](./sdk/index.md) | Python developers embedding opentide | [Registry API](./sdk/registry.md) |
 
 ## Quick start
 
@@ -32,7 +32,7 @@ opentide deploy --platform sentinel --dry-run
 
 ## Platform coverage
 
-OpenTide supports **eight deployment platforms** and **six query validators**. CrowdStrike and HarfangLab deploy but do not support query syntax validation — OpenTide never fakes validation for those platforms.
+opentide supports **eight deployment platforms** and **six query validators**. CrowdStrike and HarfangLab deploy but do not support query syntax validation — opentide never fakes validation for those platforms.
 
 See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 
@@ -42,7 +42,7 @@ See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 |---------|-------|------------|
 | CLI | `opentide` | `pip install opentide` |
 | MCP server | `opentide mcp start` | `pip install opentide` |
-| Python SDK | `from opentide import OpenTide` | `pip install opentide` |
+| Python SDK | `from opentide import Opentide` | `pip install opentide` |
 | Platform adapters | entry points under `opentide.platforms` | `pip install opentide` |
 
 ## For doc site maintainers

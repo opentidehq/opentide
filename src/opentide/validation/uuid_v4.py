@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from opentide.core.logging import get_logger
 from opentide.core.logging.console import emit_section
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.validation.checks.kinds import ValidateCheck
 from opentide.validation.session import run_validation
 
@@ -15,7 +15,7 @@ def run() -> None:
     """Run UUID format validation via the shared validation session."""
     emit_section("TIDE Objects UUIDv4 Validation")
     logger.info("uuid_v4_validation_start")
-    OpenTide.initialise()
+    Opentide.initialise()
     report = run_validation(checks=frozenset({ValidateCheck.uuid_format}))
     if not report.ok:
         for issue in report.errors:

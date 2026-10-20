@@ -72,13 +72,13 @@ def decompose_tide() -> None:
 """Backward-compatibility re-export shim for tide module."""
 
 from opentide.models.legacy import DetectionPlatforms
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.core.index_legacy import IndexManager
 from opentide.core.environment import DebugHelpers
 from opentide.loading.compat import ObjectLoader
 
 __all__ = [
-    "OpenTide",
+    "Opentide",
     "IndexManager",
     "DebugHelpers",
     "ObjectLoader",
@@ -159,7 +159,7 @@ def decompose_deployment() -> None:
 
     utils_extra = "\n".join(
         [
-            "from opentide.core.registry import OpenTide, DebugHelpers",
+            "from opentide.core.registry import Opentide, DebugHelpers",
             "from opentide.models.legacy import StatusStrategy, DeploymentStrategy",
             "from opentide.deployment.ci import CIEnvironment",
             "from opentide.deployment.git_repo import (",
@@ -168,7 +168,7 @@ def decompose_deployment() -> None:
             "    diff_calculation,",
             ")",
             "",
-            "SYSTEMS_CONFIGS_INDEX = OpenTide.Configurations.Systems.Index",
+            "SYSTEMS_CONFIGS_INDEX = Opentide.Configurations.Systems.Index",
             "DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)",
         ]
     )
@@ -184,7 +184,7 @@ def decompose_deployment() -> None:
         slice_lines(lines, 625, None),
         "\n".join(
             [
-                "from opentide.core.registry import OpenTide, ObjectLoader",
+                "from opentide.core.registry import Opentide, ObjectLoader",
                 "from opentide.models.legacy import (",
                 "    SharedModels,",
                 "    TideModels,",

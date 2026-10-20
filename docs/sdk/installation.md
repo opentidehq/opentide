@@ -30,8 +30,8 @@ Library code respects the same environment variables as the CLI:
 import os
 os.environ["OPENTIDE_REPO_ROOT"] = "/path/to/detection-repo"
 
-from opentide import OpenTide
-OpenTide.initialise()
+from opentide import Opentide
+Opentide.initialise()
 ```
 
 ## Typing
@@ -46,7 +46,7 @@ from opentide.models.results import ValidationResult, DeploymentResult
 ## Editable install (development)
 
 ```bash
-git clone https://github.com/OpenTideHQ/opentide.git
+git clone https://github.com/opentidehq/opentide.git
 cd opentide
 uv sync --group dev
 ```

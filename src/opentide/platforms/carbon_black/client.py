@@ -3,7 +3,7 @@ from abc import ABC
 import structlog
 
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import DebugHelpers, OpenTide
+from opentide.core.registry import DebugHelpers, Opentide
 from opentide.models.system_config import ConfigurationModels
 
 logger = structlog.get_logger("opentide.platforms.carbon_black.client")
@@ -15,7 +15,7 @@ class CarbonBlackCloudConnection(ABC):
     def __init__(self):
         self.DEBUG = DebugEnvironment.ENABLED
         self.DEPLOYER_IDENTIFIER = "carbon_black_cloud"
-        CBC_CONFIG = OpenTide.Configurations.Systems.CarbonBlackCloud
+        CBC_CONFIG = Opentide.Configurations.Systems.CarbonBlackCloud
 
         self.SEVERITY_MAPPING = {
             "Informational": 1,

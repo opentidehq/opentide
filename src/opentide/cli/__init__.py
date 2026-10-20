@@ -1,4 +1,4 @@
-"""OpenTide Typer CLI application."""
+"""opentide Typer CLI application."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ from opentide.core.root import get_repo_root
 logger = structlog.get_logger("opentide.cli.__init__")
 app = typer.Typer(
     name="opentide",
-    help="OpenTide — DetectionOps Engine",
+    help="opentide — DetectionOps Engine",
     rich_markup_mode="rich",
     no_args_is_help=True,
 )

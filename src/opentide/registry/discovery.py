@@ -1,4 +1,4 @@
-"""Detect OpenTide detection workspaces."""
+"""Detect opentide detection workspaces."""
 
 from __future__ import annotations
 

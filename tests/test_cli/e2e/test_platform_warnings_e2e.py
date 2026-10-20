@@ -21,7 +21,7 @@ from tests.test_cli.e2e.helpers import write_tutorial_objects
 from typer.testing import Result
 
 from opentide.core.logging import LoggingConfig, init_logging
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.mcp_server.resources import resource_platforms
 from opentide.platforms.registry import PlatformsRegistry
 
@@ -57,7 +57,7 @@ frequency_scheduling = "bogus"
 @pytest.fixture(autouse=True)
 def _fresh_platforms(monkeypatch: pytest.MonkeyPatch) -> None:
     """A registry an earlier test already loaded builds nothing and would hide a regression."""
-    monkeypatch.setattr(OpenTide, "Platforms", PlatformsRegistry())
+    monkeypatch.setattr(Opentide, "Platforms", PlatformsRegistry())
 
 
 @pytest.fixture
@@ -161,7 +161,7 @@ class _Records(logging.Handler):
 def test_initialise_and_platforms_resource_build_no_client(
     tutorial_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The SDK and MCP path: ``OpenTide.initialise()`` then ``opentide://platforms``.
+    """The SDK and MCP path: ``Opentide.initialise()`` then ``opentide://platforms``.
 
     Records are read from the stdlib root logger: ``capture_logs`` misses a
     logger that was cached before an earlier CLI call reconfigured structlog.
@@ -173,7 +173,7 @@ def test_initialise_and_platforms_resource_build_no_client(
     captured = _Records()
     logging.getLogger().addHandler(captured)
 
-    OpenTide.initialise()
+    Opentide.initialise()
     platforms = {row["name"]: row for row in json.loads(resource_platforms())}
 
     assert platforms["splunk"]["enabled"] is False

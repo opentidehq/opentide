@@ -96,7 +96,7 @@ CORPUS: dict[str, Any] = {
 def corpus(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Point the framework's lazy models view at CORPUS and clear the index.
 
-    `get_type()` resolves through `OpenTide.Models.FlatIndex` rather than the
+    `get_type()` resolves through `Opentide.Models.FlatIndex` rather than the
     lazy view, so it is stubbed against the same corpus. Type resolution has
     its own cover; these tests are about the relation traversal.
     """
@@ -194,7 +194,7 @@ class TestIndexLifecycle:
         self, monkeypatch: pytest.MonkeyPatch, corpus: dict[str, Any]
     ) -> None:
         assert fw.childs("t-1") == _reference_childs("t-1", corpus)
-        # `OpenTide.reload()` swaps in a fresh mapping; staleness is detected by
+        # `Opentide.reload()` swaps in a fresh mapping; staleness is detected by
         # identity, so a DIFFERENT object with different content must be seen.
         replacement: dict[str, Any] = {
             "threat": {"t-1": {}},

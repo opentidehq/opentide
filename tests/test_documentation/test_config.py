@@ -18,7 +18,7 @@ def test_load_settings_defaults() -> None:
         "index": {"relation_counts": True, "icons": True},
     }
     global_cfg = {"paths": {"core": {"docs_folder": "docs"}}}
-    with patch("opentide.documentation.config.OpenTide") as mock_ot:
+    with patch("opentide.documentation.config.Opentide") as mock_ot:
         mock_ot.Configurations.Documentation.Index = docs_cfg
         mock_ot.Configurations.Global.Index = global_cfg
         settings = load_settings()
@@ -33,7 +33,7 @@ def test_load_settings_defaults() -> None:
 
 
 def test_load_settings_cli_overrides() -> None:
-    with patch("opentide.documentation.config.OpenTide") as mock_ot:
+    with patch("opentide.documentation.config.Opentide") as mock_ot:
         mock_ot.Configurations.Documentation.Index = {"flavor": "generic"}
         mock_ot.Configurations.Global.Index = {"paths": {"core": {}}}
         settings = load_settings(output="/tmp/out", flavor="gitlab")
@@ -51,7 +51,7 @@ def test_load_settings_uuid_permalinks_are_gitlab_only() -> None:
         "gitlab": {"uuid_permalinks": True},
     }
     global_cfg = {"paths": {"core": {"docs_folder": "docs"}}}
-    with patch("opentide.documentation.config.OpenTide") as mock_ot:
+    with patch("opentide.documentation.config.Opentide") as mock_ot:
         mock_ot.Configurations.Documentation.Index = docs_cfg
         mock_ot.Configurations.Global.Index = global_cfg
         github = load_settings(flavor="github")

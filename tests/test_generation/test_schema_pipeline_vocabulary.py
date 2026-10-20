@@ -47,7 +47,7 @@ def test_vocabulary_resolver_visibility_missing_asset() -> None:
 
 
 def test_refresh_runtime_context_rebinds_globals() -> None:
-    with patch("opentide.generation.schema_pipeline.OpenTide") as mock_ot:
+    with patch("opentide.generation.schema_pipeline.Opentide") as mock_ot:
         mock_ot.Configurations.Global.objects = ["rule"]
         mock_ot.Vocabularies.Index = {}
         mock_ot.Configurations.Index = {"schema": {"vocabulary": {}}}

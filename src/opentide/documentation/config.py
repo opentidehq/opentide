@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.documentation.context import resolve_flavor
 from opentide.documentation.types import DocumentFlavor
 
@@ -26,8 +26,8 @@ class DocumentationSettings:
 
 def load_settings(*, output: str | None = None, flavor: str | None = None) -> DocumentationSettings:
     """Load documentation settings from config with CLI overrides."""
-    docs_cfg = OpenTide.Configurations.Documentation.Index
-    global_cfg = OpenTide.Configurations.Global.Index
+    docs_cfg = Opentide.Configurations.Documentation.Index
+    global_cfg = Opentide.Configurations.Global.Index
     core_paths = global_cfg.get("paths", {}).get("core", {})
 
     configured_output = docs_cfg.get("output") or core_paths.get("docs_folder") or "docs"

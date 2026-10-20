@@ -1,17 +1,17 @@
 ---
 title: Deployment state
-description: Where OpenTide keeps the vendor rule ids that Defender for Endpoint, SentinelOne and CrowdStrike assign, and why the files must be committed.
+description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne and CrowdStrike assign, and why the files must be committed.
 ---
 
 # Deployment state
 
 Microsoft Defender for Endpoint, SentinelOne and CrowdStrike give every rule
-OpenTide creates an id of their own. The next deploy has to update or delete the
-remote rule by that id. OpenTide keeps it in a per-rule JSON file under
+opentide creates an id of their own. The next deploy has to update or delete the
+remote rule by that id. opentide keeps it in a per-rule JSON file under
 `.opentide/states/`, not in the rule YAML.
 
-The normative definition is [`specs/deployment-state.md`](https://github.com/OpenTideHQ/specifications/blob/main/specs/deployment-state.md)
-(`deployment.state::1.0`) in OpenTideHQ/specifications, accepted with RFC 0010.
+The normative definition is [`specs/deployment-state.md`](https://github.com/opentidehq/specifications/blob/main/specs/deployment-state.md)
+(`deployment.state::1.0`) in opentidehq/specifications, accepted with RFC 0010.
 
 ## What lives under `.opentide/states/`
 

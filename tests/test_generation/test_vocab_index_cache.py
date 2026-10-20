@@ -1,7 +1,7 @@
 """The vocabulary index must be built once per snapshot, not per access.
 
 `generation.framework.VOCAB_INDEX` is a `_LazyMapping` whose `_data()` re-reads
-`OpenTide.Vocabularies.Index`, and that is a *property* calling
+`Opentide.Vocabularies.Index`, and that is a *property* calling
 `VocabularyLoader.load_index(...)`. Neither layer memoized anything, so every
 `[]`, `in`, `.get` and iteration rebuilt every vocabulary from scratch.
 

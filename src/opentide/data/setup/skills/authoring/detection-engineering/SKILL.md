@@ -1,6 +1,6 @@
 # Detection engineering
 
-OpenTide content is three object families:
+opentide content is three object families:
 
 | Object | Schema | Directory |
 |--------|--------|-----------|

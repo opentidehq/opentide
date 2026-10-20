@@ -3,7 +3,7 @@ from dataclasses import asdict, dataclass
 from typing import Literal
 
 from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.generation.errors import rendering
 from opentide.generation.framework import techniques_resolver
 
@@ -50,8 +50,8 @@ class TechniqueIndexEntry:
 
 class AttackNavigatorLayer:
     def __init__(self):
-        self.EXPORT_PATH = OpenTide.Configurations.Global.Paths.Tide.exports
-        self.EXPORT_FILE_NAME = OpenTide.Configurations.Global.exports.attack_layer
+        self.EXPORT_PATH = Opentide.Configurations.Global.Paths.Tide.exports
+        self.EXPORT_FILE_NAME = Opentide.Configurations.Global.exports.attack_layer
         self.EXPORT_FILE_PATH = self.EXPORT_PATH / self.EXPORT_FILE_NAME
 
     def create_layer(self):
@@ -64,9 +64,9 @@ class AttackNavigatorLayer:
     ) -> dict[str, TechniqueIndexEntry]:
         match model_type:
             case "threat":
-                index = OpenTide.Models.threats
+                index = Opentide.Models.threats
             case "rule":
-                index = OpenTide.Models.rules
+                index = Opentide.Models.rules
         technique_mapping: dict[str, TechniqueIndexEntry] = {}
         # Visit objects by name, not index order: the index follows file paths,
         # so a rename or move would otherwise reorder every comment.

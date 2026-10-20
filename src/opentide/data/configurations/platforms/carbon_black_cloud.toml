@@ -17,7 +17,7 @@ flags = []
 # url = "$CBC_URL"
 # org_key = "$CBC_ORG_KEY"
 # token = "$CBC_TOKEN"
-# watchlist = "OpenTide"
+# watchlist = "opentide"
 
 # [[modifiers]]
 # name = "example_modifier"

@@ -49,7 +49,7 @@ def test_model_value_reads_nested_key() -> None:
     payload = {"metadata": {"schema": "rule::1.0"}, "description": "Detects"}
     with (
         patch.object(fw, "MODELS_INDEX", {"rule": {uuid: payload}}),
-        patch("opentide.generation.framework.OpenTide") as mock_ot,
+        patch("opentide.generation.framework.Opentide") as mock_ot,
     ):
         mock_ot.Models.FlatIndex.get.return_value = payload
         assert fw.model_value(uuid, "description") == "Detects"

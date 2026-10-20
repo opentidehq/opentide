@@ -12,8 +12,8 @@ import pytest
 #
 # The test below nulls the accessor's caches to force `_ensure_loaded`, which
 # does `from opentide.deployment import enabled_systems` *inside* the method --
-# so that import runs while `opentide.core.registry.OpenTide` is patched with a
-# MagicMock. `opentide.deployment.utils` binds `OpenTide` at module level and
+# so that import runs while `opentide.core.registry.Opentide` is patched with a
+# MagicMock. `opentide.deployment.utils` binds `Opentide` at module level and
 # evaluates `SYSTEMS_CONFIGS_INDEX` at import time, so whichever test imports it
 # first under that patch leaves the module holding a dead mock for the rest of
 # the process. Every later deployment test then reads statuses off the mock,
@@ -38,7 +38,7 @@ def test_platforms_accessor_emits_deprecation_warning(monkeypatch: pytest.Monkey
         warnings.simplefilter("always")
         with (
             patch("opentide.platforms.plugins.PlatformLoader") as mock_loader,
-            patch("opentide.core.registry.OpenTide") as mock_tide,
+            patch("opentide.core.registry.Opentide") as mock_tide,
             patch("opentide.deployment.enabled_systems", return_value=[]),
         ):
             mock_loader.return_value.rule_deployers.return_value = {}
@@ -53,14 +53,14 @@ def test_platforms_accessor_emits_deprecation_warning(monkeypatch: pytest.Monkey
     # worker: xdist distributes individual tests, so it could land elsewhere and
     # never see the leak.
     #
-    # Since #536 utils resolves `registry.OpenTide` at call time instead of
+    # Since #536 utils resolves `registry.Opentide` at call time instead of
     # binding its own name, so a patch can no longer be captured by an import.
     # This asserts the property that actually matters -- what the code under
     # test will read -- and so keeps holding whichever way the seam is spelled.
     import opentide.deployment.utils as deployment_utils
-    from opentide.core.registry import OpenTideRegistry
+    from opentide.core.registry import OpentideRegistry
 
-    assert isinstance(deployment_utils.registry.OpenTide, OpenTideRegistry), (
+    assert isinstance(deployment_utils.registry.Opentide, OpentideRegistry), (
         "a mocked registry is still visible to opentide.deployment.utils after the "
-        "patch exited; it must resolve registry.OpenTide at call time (#530, #536)"
+        "patch exited; it must resolve registry.Opentide at call time (#530, #536)"
     )

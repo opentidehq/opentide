@@ -1,4 +1,4 @@
-"""Structured logging for OpenTide — structlog processors with Rich console output."""
+"""Structured logging for opentide — structlog processors with Rich console output."""
 
 from opentide.core.logging.config import (
     LoggingConfig,

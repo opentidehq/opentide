@@ -342,7 +342,7 @@ def test_validate_query_platform_runs_validator(monkeypatch) -> None:
         patch(
             "opentide.platforms.plugins.DeployTide",
         ) as mock_tide,
-        patch("opentide.core.registry.OpenTide") as mock_ot,
+        patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=CLEAN_OUTCOME),
     ):
         mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
@@ -367,7 +367,7 @@ def test_validate_query_platform_fails_on_unsubstituted_credentials() -> None:
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
         patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
-        patch("opentide.core.registry.OpenTide") as mock_ot,
+        patch("opentide.core.registry.Opentide") as mock_ot,
     ):
         mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
         mock_ot.Configurations.Systems.Index = {"sentinel": {"tide": {"name": "Sentinel"}}}
@@ -453,7 +453,7 @@ def test_validate_query_live_with_a_broken_sdk_advises_a_reinstall() -> None:
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
         patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
-        patch("opentide.core.registry.OpenTide") as mock_ot,
+        patch("opentide.core.registry.Opentide") as mock_ot,
     ):
         mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
         mock_ot.Configurations.Systems.Index = {"sentinel": {"tide": {"name": "Sentinel"}}}
@@ -491,7 +491,7 @@ def test_validate_query_platform_legacy_validator_signature() -> None:
         ),
         patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
-        patch("opentide.core.registry.OpenTide") as mock_ot,
+        patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=CLEAN_OUTCOME),
     ):
         mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
@@ -514,7 +514,7 @@ def test_validate_query_platform_warnings_are_not_fatal() -> None:
         ),
         patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
-        patch("opentide.core.registry.OpenTide") as mock_ot,
+        patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=warned),
     ):
         mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}

@@ -47,5 +47,5 @@
   "pins_source_glob": "schemas/pins/*.toml",
   "source_glob": "vocabularies/*.vocab.toml",
   "specifications_git_sha": "959762d5e6e5387e265204285165168cea1b952d",
-  "specifications_repo": "OpenTideHQ/specifications"
+  "specifications_repo": "opentidehq/specifications"
 }

@@ -129,7 +129,7 @@ def test_setup_skills_discover_fails_when_catalogue_unavailable(tmp_path, monkey
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
-    assert "OpenTideHQ/skills" in payload["error"]
+    assert "opentidehq/skills" in payload["error"]
 
 
 def test_setup_skills_install_fails_when_catalogue_unavailable(tmp_path, monkeypatch) -> None:
@@ -152,7 +152,7 @@ def test_setup_skills_install_fails_when_catalogue_unavailable(tmp_path, monkeyp
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
-    assert "OpenTideHQ/skills" in payload["error"]
+    assert "opentidehq/skills" in payload["error"]
     assert not (tmp_path / ".agents").exists()
 
 
@@ -166,7 +166,7 @@ def test_setup_skills_discover_human_table(tmp_path, monkeypatch) -> None:
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     combined = result.stdout + result.stderr
-    assert "opentide-detection-rule" in combined or "OpenTide Skills" in combined
+    assert "opentide-detection-rule" in combined or "opentide Skills" in combined
     assert "DEPRECATED" not in combined
 
 

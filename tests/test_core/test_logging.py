@@ -224,9 +224,9 @@ def test_print_banner_returns_text() -> None:
 
 
 def test_console_renderer_uses_level_styling_only() -> None:
-    from opentide.core.logging.render import OpenTideConsoleRenderer
+    from opentide.core.logging.render import OpentideConsoleRenderer
 
-    renderer = OpenTideConsoleRenderer(use_color=False)
+    renderer = OpentideConsoleRenderer(use_color=False)
     rendered = renderer.render(
         {
             "event": "deploying_rule",
@@ -242,9 +242,9 @@ def test_console_renderer_uses_level_styling_only() -> None:
 
 
 def test_console_renderer_does_not_force_ansi_into_redirects() -> None:
-    from opentide.core.logging.render import OpenTideConsoleRenderer
+    from opentide.core.logging.render import OpentideConsoleRenderer
 
-    rendered = OpenTideConsoleRenderer(use_color=True).render(
+    rendered = OpentideConsoleRenderer(use_color=True).render(
         {"event": "setup_complete", "level": "info"},
         "info",
     )

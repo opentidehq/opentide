@@ -1,7 +1,7 @@
 {
   "root": true,
   "title": "SDK",
-  "description": "Python package API for embedding OpenTide",
+  "description": "Python package API for embedding opentide",
   "icon": "Code",
   "pages": [
     "index",

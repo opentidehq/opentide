@@ -7,7 +7,7 @@ from typing import Any, cast
 from opentide.core.files import resolve_paths
 from opentide.core.logging import get_logger, is_debug_enabled
 from opentide.core.logging.console import emit_section
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.generation.framework import get_type, get_vocab_entry
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
@@ -43,13 +43,13 @@ def _refresh_runtime_context() -> None:
     global JSON_SCHEMA_FOLDER
     global ICONS, OBJECT_TYPES
 
-    GLOBAL_CONFIG = OpenTide.Configurations.Global
-    VOCAB_INDEX = OpenTide.Vocabularies.Index
-    CONFIG_INDEX = OpenTide.Configurations.Index
+    GLOBAL_CONFIG = Opentide.Configurations.Global
+    VOCAB_INDEX = Opentide.Vocabularies.Index
+    CONFIG_INDEX = Opentide.Configurations.Index
     paths = resolve_paths()
     JSON_SCHEMA_FOLDER = Path(paths["json_schemas"])
     ICONS = {}
-    OBJECT_TYPES = OpenTide.Configurations.Global.objects
+    OBJECT_TYPES = Opentide.Configurations.Global.objects
     _runtime_ready = True
 
 
@@ -88,7 +88,7 @@ class VocabularyResolver:
     def _visibility():
         """Return the visibility configuration, or ``None``."""
         _ensure_runtime_context()
-        return OpenTide.Configurations.Visibility.visibility
+        return Opentide.Configurations.Visibility.visibility
 
     @staticmethod
     def _asset_map(visibility_data):
@@ -452,7 +452,7 @@ _Vocabulary_ : `{source_vocab}`
             _ensure_runtime_context()
             enums: list[str] = []
             descriptions: list[str] = []
-            for status in OpenTide.Configurations.Deployment.statuses:
+            for status in Opentide.Configurations.Deployment.statuses:
                 enums.append(status.name)
                 strategy = status.strategy.name
                 desc = (
@@ -483,7 +483,7 @@ _Vocabulary_ : `{source_vocab}`
         def resolve(self) -> tuple[list[str], list[str]]:
             _ensure_runtime_context()
             try:
-                configured = OpenTide.Configurations.Deployment.responders or []
+                configured = Opentide.Configurations.Deployment.responders or []
             except (KeyError, AttributeError):
                 # No deployment block at all is legitimate; documentation
                 # generation must not require one.
@@ -515,7 +515,7 @@ _Vocabulary_ : `{source_vocab}`
 
         def resolve(self) -> list:
             _ensure_runtime_context()
-            config_index = OpenTide.Configurations.Index
+            config_index = Opentide.Configurations.Index
             parts = self.dot_path.split(".")
             key = parts[0]
             while key != parts[-1]:
@@ -554,7 +554,7 @@ _Vocabulary_ : `{source_vocab}`
 
         def resolve(self) -> tuple[list[str], list[str]]:
             _ensure_runtime_context()
-            config = OpenTide.Configurations.Index
+            config = Opentide.Configurations.Index
             system_config = config.get("systems", {}).get(self.system)
             if not system_config:
                 logger.critical(
@@ -672,7 +672,7 @@ def _apply_vocab_enum(field_schema: dict, temp: dict) -> None:
 
 
 def gen_json_schema(dictionary, *, schema_id: str | None = None):
-    """Recursively resolve OpenTide metaschema keywords into JSON Schema.
+    """Recursively resolve opentide metaschema keywords into JSON Schema.
 
     Walks *dictionary* depth-first and replaces ``tide.*`` annotated
     fields with concrete JSON Schema constructs.  Vocabulary references

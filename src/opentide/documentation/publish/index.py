@@ -184,7 +184,7 @@ def write_index(
         headers = ["Section", "Folder"]
         if ctx.index_relation_counts:
             headers.append("Objects")
-        root = ctx.formatter.heading(1, "OpenTide Documentation") + ctx.formatter.index_table(
+        root = ctx.formatter.heading(1, "opentide Documentation") + ctx.formatter.index_table(
             headers, root_rows
         )
         write_page(catalog_targets.output_root / "README.md", root)

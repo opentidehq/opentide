@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Sequence
 from datetime import timedelta
 from opentide.platforms.plugins import QueryValidator
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels, TenantDeployment
 from opentide.core.errors import Errors
@@ -57,7 +57,7 @@ class SentinelQueryValidator(QueryValidator):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr

@@ -12,7 +12,7 @@ def test_playbook_map_run_with_mocks(tmp_path: Path) -> None:
 
     output = tmp_path / "playbook.xlsx"
     with (
-        patch.object(playbook_map, "OpenTide") as mock_tide,
+        patch.object(playbook_map, "Opentide") as mock_tide,
         patch.dict(sys.modules, {"pandas": MagicMock()}),
     ):
         mock_pd = sys.modules["pandas"]

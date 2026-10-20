@@ -1,4 +1,4 @@
-"""OpenTide programmatic registry — explicit lifecycle and typed object access."""
+"""opentide programmatic registry — explicit lifecycle and typed object access."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ IndexManager = index_mod.IndexManager
 TideObject = DetectionRule | DetectionObjective | ThreatVector
 
 
-class OpenTideRegistry:
+class OpentideRegistry:
     """Unified programmatic interface with explicit initialisation lifecycle."""
 
     def __init__(self) -> None:
@@ -198,7 +198,7 @@ class OpenTideRegistry:
         return _ModelsAccessor(self._index, self._rules, self._objectives, self._threats)
 
 
-OpenTide = OpenTideRegistry()
+Opentide = OpentideRegistry()
 
 
 def _resolve_file(category: str, uuid: str, index: Mapping[str, Any]) -> Path | None:

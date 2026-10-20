@@ -22,7 +22,7 @@ def _clear_manifest_cache() -> None:
 
 def test_load_manifest_requires_remote(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry, "_fetch_remote_manifest", lambda **_: None)
-    with pytest.raises(SkillsManifestError, match="OpenTideHQ/skills"):
+    with pytest.raises(SkillsManifestError, match="opentidehq/skills"):
         registry.load_manifest()
 
 
@@ -78,7 +78,7 @@ def test_parse_manifest_rejects_foreign_source() -> None:
             "skills": [{"slug": "x", "name": "X", "description": ""}],
         }
     )
-    assert source == "OpenTideHQ/skills"
+    assert source == "opentidehq/skills"
     assert ref == "main"
     assert [e.slug for e in entries] == ["x"]
 
@@ -86,7 +86,7 @@ def test_parse_manifest_rejects_foreign_source() -> None:
 def test_parse_manifest_rejects_ref_and_slug_that_escape_the_repo() -> None:
     source, ref, entries = registry._parse_manifest(
         {
-            "source": "OpenTideHQ/skills",
+            "source": "opentidehq/skills",
             "ref": "../../../attacker/payload/main",
             "skills": [
                 {"slug": "../.git", "name": "Escape", "description": ""},
@@ -94,7 +94,7 @@ def test_parse_manifest_rejects_ref_and_slug_that_escape_the_repo() -> None:
             ],
         }
     )
-    assert source == "OpenTideHQ/skills"
+    assert source == "opentidehq/skills"
     assert ref == "main"
     assert [e.slug for e in entries] == ["ok"]
 
@@ -120,7 +120,7 @@ def test_manifest_ttl_cache_avoids_double_fetch(monkeypatch: pytest.MonkeyPatch)
         nonlocal calls
         calls += 1
         return (
-            "OpenTideHQ/skills",
+            "opentidehq/skills",
             "main",
             [registry.SkillEntry(name="One", slug="one", description="")],
         )
@@ -152,7 +152,7 @@ def test_discover_skills_filters_by_query(tmp_path: Path, monkeypatch: pytest.Mo
         registry,
         "load_manifest",
         lambda **_: registry.ManifestLoadResult(
-            source="OpenTideHQ/skills",
+            source="opentidehq/skills",
             ref="main",
             entries=entries,
             manifest_source="remote",
@@ -191,19 +191,19 @@ def test_show_skill_found_and_missing(tmp_path: Path, monkeypatch: pytest.Monkey
 def test_parse_manifest_skips_invalid_skill_rows() -> None:
     source, ref, entries = registry._parse_manifest(
         {
-            "source": "OpenTideHQ/skills",
+            "source": "opentidehq/skills",
             "ref": "main",
             "skills": [{"slug": "valid", "name": "Valid", "description": "ok"}, "bad", {}],
         }
     )
-    assert source == "OpenTideHQ/skills"
+    assert source == "opentidehq/skills"
     assert ref == "main"
     assert [e.slug for e in entries] == ["valid"]
 
 
 def test_fetch_remote_manifest_parses_json(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = {
-        "source": "OpenTideHQ/skills",
+        "source": "opentidehq/skills",
         "ref": "release-1",
         "skills": [{"slug": "alpha", "name": "Alpha", "description": "first"}],
     }
@@ -216,7 +216,7 @@ def test_fetch_remote_manifest_parses_json(monkeypatch: pytest.MonkeyPatch) -> N
     result = registry._fetch_remote_manifest()
     assert result is not None
     source, ref, entries = result
-    assert source == "OpenTideHQ/skills"
+    assert source == "opentidehq/skills"
     assert ref == "release-1"
     assert entries[0].slug == "alpha"
 
@@ -325,7 +325,7 @@ def test_known_skill_slugs_include_the_live_catalogue_and_the_bundled_skills(
     """Bundled authoring skills stay nameable when upstream stops listing them.
 
     This test previously asserted ``known_skill_slugs() == {"live-only"}``,
-    which encoded the defect: when ``OpenTideHQ/skills`` dropped three
+    which encoded the defect: when ``opentidehq/skills`` dropped three
     authoring skills from its manifest, the CLI refused
     ``--install opentide-detection-rule`` as unknown while still installing
     that slug as part of its default starter set.

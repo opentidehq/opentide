@@ -9,39 +9,39 @@ import sys
 import pytest
 
 _DOCUMENTATION_SCRIPT = """
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 import opentide.documentation as documentation
 
-assert OpenTide.is_initialised is False
+assert Opentide.is_initialised is False
 assert documentation.DocumentFlavor.github.value == "github"
 assert callable(documentation.render_rule)
-assert OpenTide.is_initialised is False
+assert Opentide.is_initialised is False
 assert {"DocumentFlavor", "render_rule", "__name__"} <= set(dir(documentation))
 """
 
 _GENERATION_SCRIPT = """
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 import opentide.generation as generation
 
-assert OpenTide.is_initialised is False
+assert Opentide.is_initialised is False
 assert callable(generation.generate_schemas)
 assert callable(generation.generate_templates)
-assert OpenTide.is_initialised is False
+assert Opentide.is_initialised is False
 assert {"generate_schemas", "generate_templates", "__name__"} <= set(dir(generation))
 """
 
-# #536: these modules used to evaluate `OpenTide.Configurations.Systems.Index`
+# #536: these modules used to evaluate `Opentide.Configurations.Systems.Index`
 # at module level, so importing them built the whole registry index (~271 ms)
-# and bound whichever OpenTide was live at the time -- which is how a test that
+# and bound whichever opentide was live at the time -- which is how a test that
 # imported one under patch() left a dead MagicMock behind for the process.
 # Importing the deployment package must touch no registry state; only reading
 # SYSTEMS_CONFIGS_INDEX may.
 _DEPLOYMENT_SCRIPT = """
 from opentide.core.index_manager import IndexManager
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 import opentide.deployment as deployment
 
-assert OpenTide.is_initialised is False, "importing opentide.deployment initialised the registry"
+assert Opentide.is_initialised is False, "importing opentide.deployment initialised the registry"
 assert IndexManager._cache is None, "importing opentide.deployment built the registry index"
 
 # The re-export still resolves, and only now is the index built.
@@ -52,11 +52,11 @@ assert {"SYSTEMS_CONFIGS_INDEX", "check_status", "__name__"} <= set(dir(deployme
 
 _DEPLOYMENT_SUBMODULE_SCRIPT = """
 from opentide.core.index_manager import IndexManager
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 
 for name in ("utils", "ci", "git_repo", "planning"):
     __import__("opentide.deployment." + name)
-    assert OpenTide.is_initialised is False, name + " import initialised the registry"
+    assert Opentide.is_initialised is False, name + " import initialised the registry"
     assert IndexManager._cache is None, name + " import built the registry index"
 
 # Each module still serves the name it used to define at import time.
@@ -81,7 +81,7 @@ import pkgutil
 
 import opentide
 from opentide.core.index_manager import IndexManager
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 
 imported = 0
 for info in pkgutil.walk_packages(opentide.__path__, "opentide."):
@@ -94,7 +94,7 @@ for info in pkgutil.walk_packages(opentide.__path__, "opentide."):
             raise
         continue
     imported += 1
-    assert OpenTide.is_initialised is False, info.name + " import initialised the registry"
+    assert Opentide.is_initialised is False, info.name + " import initialised the registry"
     assert IndexManager._cache is None, info.name + " import built the registry index"
 
 assert imported > 200, imported

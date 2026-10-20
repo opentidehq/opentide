@@ -157,10 +157,10 @@ def test_resolver_emits_nothing_when_none_configured(monkeypatch: pytest.MonkeyP
     class _Configurations:
         Deployment = _Deployment
 
-    class _OpenTide:
+    class _Opentide:
         Configurations = _Configurations
 
-    monkeypatch.setattr(schema_pipeline, "OpenTide", _OpenTide)
+    monkeypatch.setattr(schema_pipeline, "Opentide", _Opentide)
     values, descriptions = schema_pipeline.VocabularyResolver.Responders().resolve()
     assert values == []
     assert descriptions == []
@@ -181,10 +181,10 @@ def test_resolver_reads_names_and_descriptions(monkeypatch: pytest.MonkeyPatch) 
     class _Configurations:
         Deployment = _Deployment
 
-    class _OpenTide:
+    class _Opentide:
         Configurations = _Configurations
 
-    monkeypatch.setattr(schema_pipeline, "OpenTide", _OpenTide)
+    monkeypatch.setattr(schema_pipeline, "Opentide", _Opentide)
     values, descriptions = schema_pipeline.VocabularyResolver.Responders().resolve()
     assert values == ["CSIRC", "CATCH"]
     assert descriptions == ["First line", "Escalation"]

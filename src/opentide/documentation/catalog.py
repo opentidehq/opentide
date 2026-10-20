@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.documentation.types import DocumentRecord, DocumentScope
 from opentide.generation import framework as fw
 from opentide.models.objective import DetectionObjective
@@ -101,7 +101,7 @@ class DocumentationCatalog:
         signal = self.resolve_signal(uuid)
         if signal is not None:
             return signal.name
-        obj = OpenTide.lookup(uuid)
+        obj = Opentide.lookup(uuid)
         if obj is not None:
             return obj.name
         return uuid
@@ -161,7 +161,7 @@ class DocumentationCatalog:
 
     def chaining_entries(self, threat_uuid: str) -> list[DiagramEntry]:
         """Linear chaining entries from threat chaining config."""
-        threat = OpenTide.Threats.get(threat_uuid)
+        threat = Opentide.Threats.get(threat_uuid)
         if threat is None or not threat.threat.chaining:
             return []
         chain: list[DiagramEntry] = []
@@ -200,7 +200,7 @@ class DocumentationCatalog:
         """Inbound + outbound threat chaining graph for Mermaid."""
         chain: dict[str, dict[str, list[str]]] = {}
         try:
-            index = dict(OpenTide.Models.chaining or {})
+            index = dict(Opentide.Models.chaining or {})
         except Exception:
             index = {}
         for vector, links in index.items():
@@ -369,15 +369,15 @@ def build_catalog() -> DocumentationCatalog:
     """Build a deterministic catalog for rule/objective/threat objects."""
     rules = [
         DocumentRecord(DocumentScope.rules, obj.metadata.uuid, obj.name, obj)
-        for obj in sorted(OpenTide.Rules.values(), key=lambda item: item.name.lower())
+        for obj in sorted(Opentide.Rules.values(), key=lambda item: item.name.lower())
     ]
     objectives = [
         DocumentRecord(DocumentScope.objectives, obj.metadata.uuid, obj.name, obj)
-        for obj in sorted(OpenTide.Objectives.values(), key=lambda item: item.name.lower())
+        for obj in sorted(Opentide.Objectives.values(), key=lambda item: item.name.lower())
     ]
     threats = [
         DocumentRecord(DocumentScope.threats, obj.metadata.uuid, obj.name, obj)
-        for obj in sorted(OpenTide.Threats.values(), key=lambda item: item.name.lower())
+        for obj in sorted(Opentide.Threats.values(), key=lambda item: item.name.lower())
     ]
     signals: list[SignalRecord] = []
     for record in objectives:

@@ -1,6 +1,6 @@
 from typing import Sequence
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide, DetectionPlatforms
+from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy
@@ -91,7 +91,7 @@ class CrowdstrikeDeploy(RuleDeployer):
         contributors = configuration.contributors
         author = contributors or [data.metadata.author]
         author = ', '.join(author)
-        comment = f'Updated by OpenTide Crowdstrike Deployer - Author(s) : {author}'
+        comment = f'Updated by opentide Crowdstrike Deployer - Author(s) : {author}'
         return CrowdstrikeRule(name=name, description=description, customer_id=customer_id, tactic=tactic, technique=technique, status=status, severity=severity, search=search, operation=operation, comment=comment)
 
     def deploy_mdr(self, data: DetectionRule, service: CrowdstrikeService, tenant_config: ConfigurationModels.Systems.Crowdstrike.Tenant, action: ExternalIdAction | None=None):
@@ -135,7 +135,7 @@ class CrowdstrikeDeploy(RuleDeployer):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr

@@ -16,7 +16,7 @@ opentide setup
 
 The wizard uses arrow-key menus and checkboxes for repository metadata, platforms, CI workflow features, MCP hosts, and agent skill targets. Only the repository name is inferred from the current directory. Platforms are explicitly selected, CI starts at **Configure later**, and MCP/skills are opt-in.
 
-Before writing, OpenTide displays the target and selected steps and asks for one confirmation. Existing destinations are therefore visible before setup updates them.
+Before writing, opentide displays the target and selected steps and asks for one confirmation. Existing destinations are therefore visible before setup updates them.
 
 ## Scripted onboarding
 
@@ -56,7 +56,7 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 | `setup env` | `.env.example` with `OPENTIDE_REPO_ROOT`; ignores `.env` |
 | `setup hooks` | `.pre-commit-config.yaml` plus validate-on-commit Git hook |
 | `setup mcp` | Editor MCP config that runs `opentide mcp start` |
-| `setup skills` | Agent skills: four authoring skills from the package, other slugs as the full OpenTideHQ/skills tree (`discover`, `show`, install) |
+| `setup skills` | Agent skills: four authoring skills from the package, other slugs as the full opentidehq/skills tree (`discover`, `show`, install) |
 
 ### Expected layout after setup + generate
 
@@ -119,7 +119,7 @@ See [Agentic setup](./workflows/agentic-setup.md) for details.
 
 ## VS Code settings (deprecated)
 
-`opentide setup vscode` generates templates and JSON schemas, then maps `objects/**/*.yaml` to the `.opentide/schemas/opentide.schema.json` router in `yaml.schemas` (see [Schema revision](concepts/schema-revision.md)), writes `.vscode/extensions.json`, and writes snippets — interim scaffolding until the OpenTide VS Code extension ships. Pass `--mcp` to also write `.vscode/mcp.json` via the same helper as `opentide setup mcp --vscode`. Both paths are valid; parent `--vscode-setup` does not imply MCP. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
+`opentide setup vscode` generates templates and JSON schemas, then maps `objects/**/*.yaml` to the `.opentide/schemas/opentide.schema.json` router in `yaml.schemas` (see [Schema revision](concepts/schema-revision.md)), writes `.vscode/extensions.json`, and writes snippets — interim scaffolding until the opentide VS Code extension ships. Pass `--mcp` to also write `.vscode/mcp.json` via the same helper as `opentide setup mcp --vscode`. Both paths are valid; parent `--vscode-setup` does not imply MCP. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
 
 ## CLI reference
 
