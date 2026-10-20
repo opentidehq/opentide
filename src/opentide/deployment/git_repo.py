@@ -243,6 +243,25 @@ def _production_base(repo: DulwichRepo) -> str | None:
     return parent
 
 
+def _merge_ref_base(repo: DulwichRepo, merge_sha: str | None) -> list | None:
+    """The merge base of a pull request merge commit's two parents.
+
+    ``refs/pull/<n>/merge`` has the base branch tip as first parent and the
+    pull request head as second, so it yields the request's base without the
+    head branch existing on origin, as for a pull request from a fork.
+    ``None`` when *merge_sha* is not a two-parent commit in the checkout.
+    """
+    if not merge_sha:
+        return None
+    try:
+        parents = repo.commit(merge_sha).parents
+    except Exception:
+        return None
+    if len(parents) != 2:
+        return None
+    return repo.merge_base(parents[0].hexsha, parents[1].hexsha)
+
+
 def _require_origin_ref(repo: DulwichRepo, ref: str) -> None:
     try:
         repo._resolve_sha(ref)
@@ -313,8 +332,16 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                     detail=f"source: {source_branch} -> target: {target_branch}",
                 )
                 _require_origin_ref(repo, target_branch)
-                _require_origin_ref(repo, source_branch)
-                base_commit = repo.merge_base(target_branch, source_branch)
+                try:
+                    _require_origin_ref(repo, source_branch)
+                except Exception:
+                    # A fork's branch is not on origin. The pull request's merge
+                    # ref, which actions/checkout checks out, has both sides.
+                    base_commit = _merge_ref_base(repo, os.getenv("GITHUB_SHA"))
+                    if base_commit is None:
+                        raise
+                else:
+                    base_commit = repo.merge_base(target_branch, source_branch)
 
                 if base_commit:
                     BASE_COMMIT = base_commit[0].hexsha

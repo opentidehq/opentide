@@ -297,7 +297,8 @@ steps:
   - script: opentide validate --strict
   - script: opentide validate query --platform sentinel --live --changed
   - script: opentide deploy --plan PRODUCTION
-    condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+    # A custom condition replaces the default succeeded(): keep it, or a failed check still deploys.
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
 ```
 
 ## JSON output for gates

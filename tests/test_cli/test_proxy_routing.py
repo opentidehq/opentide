@@ -97,7 +97,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, closed_port: int) -> I
     clear_runtime_caches()
     # ``--proxy`` writes these into the process environment, which CliRunner
     # does not restore; the monkeypatch teardown then puts back the originals.
-    for name in ("HTTP_PROXY", "HTTPS_PROXY"):
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
         os.environ.pop(name, None)
 
 
@@ -129,3 +129,23 @@ def test_no_proxy_reaches_an_internal_tenant_directly(
     # The tenant itself refused the connection: it was tried directly.
     assert payload["host"] == f"127.0.0.1:{closed_port}"
     assert "refused" in str(payload["message"]).lower()
+
+
+@pytest.mark.usefixtures("repo")
+def test_opentide_proxy_wins_over_an_inherited_lowercase_proxy(proxy: _CountingProxy) -> None:
+    """urllib prefers ``http_proxy`` to ``HTTP_PROXY``: setting only the capitals lost to it."""
+    inherited = _CountingProxy()
+    try:
+        code, payload = _validate_splunk(
+            {
+                "OPENTIDE_PROXY": f"http://127.0.0.1:{proxy.port}",
+                "http_proxy": f"http://127.0.0.1:{inherited.port}",
+                "https_proxy": f"http://127.0.0.1:{inherited.port}",
+            }
+        )
+    finally:
+        inherited.close()
+
+    assert code == 1, payload
+    assert proxy.connections > 0
+    assert inherited.connections == 0

@@ -331,3 +331,33 @@ def test_a_selected_rule_with_no_block_for_the_platform_is_skipped(
     assert payload["status"] == "skipped"
     assert payload["scope"] == "selected"
     azure_client.query_workspace.assert_not_called()
+
+
+def test_changed_on_a_fork_pull_request_diffs_from_the_merge_ref(
+    repo: Path, azure_client: MagicMock, tmp_path: Path
+) -> None:
+    """A fork's head branch is not on origin; the pull request merge ref has both sides."""
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "checkout", "-q", "-b", "fork-feature")
+    _change_a_production_rule(repo)
+    # The shape of refs/pull/<n>/merge that actions/checkout checks out.
+    _git(repo, "checkout", "-q", "--detach", "main")
+    _git(repo, "merge", "--no-ff", "-q", "-m", "merge fork", "fork-feature")
+    merge = _git(repo, "rev-parse", "HEAD")
+    env = {
+        "GITHUB_ACTIONS": "true",
+        "GITHUB_EVENT_NAME": "pull_request",
+        "GITHUB_WORKSPACE": str(repo),
+        "GITHUB_HEAD_REF": "fork-feature",
+        "GITHUB_BASE_REF": "main",
+        "GITHUB_SHA": merge,
+    }
+
+    code, payload = _validate("--changed", env=env)
+
+    assert code == 0, payload
+    assert payload["scope"] == "changed"
+    assert payload["queries_per_tenant"] == {"Staging": 1, "Production": 1}
