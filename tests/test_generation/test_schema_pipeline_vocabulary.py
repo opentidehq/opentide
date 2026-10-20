@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from opentide.generation import schema_pipeline as sp
 from opentide.generation.vocabulary import VocabularyDefinition, VocabularyEntry, VocabularyMetadata
 
@@ -53,3 +55,53 @@ def test_refresh_runtime_context_rebinds_globals() -> None:
         mock_ot.Configurations.Index = {"schema": {"vocabulary": {}}}
         sp._refresh_runtime_context()
     assert sp.OBJECT_TYPES == ["rule"]
+
+
+def test_object_levels_render_as_authored_without_a_vocabulary_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An objective's ``priority: Critical`` is not a ``criticality`` value.
+
+    Each objective entry was looked up in the ``criticality`` vocabulary for an
+    ``icon`` none of its entries defines: ``High`` logged ``Vocab parameter not
+    found``, ``Critical`` ``Vocab identifier not found``, once per schema on
+    every ``opentide generate``.
+    """
+    from opentide.generation import framework
+
+    events: list[tuple[str, str]] = []
+
+    class _Recorder:
+        def __getattr__(self, level: str):
+            return lambda event, **_fields: events.append((level, event))
+
+    monkeypatch.setattr(framework, "logger", _Recorder())
+    kinds = {"objective-1": "objective", "threat-1": "threat", "rule-1": "rule"}
+    with (
+        patch.object(sp, "_runtime_ready", True),
+        patch.object(sp, "VOCAB_INDEX", {}),
+        patch.object(sp, "OBJECT_TYPES", ["threat", "objective", "rule"]),
+        patch.object(sp, "get_type", lambda identifier, mute=False: kinds[identifier]),
+    ):
+        resolver = sp.VocabularyResolver.Vocabulary("objective")
+        objective = resolver._dropdown("objective-1", {"name": "O", "priority": "Critical"})
+        threat = resolver._dropdown("threat-1", {"name": "T", "criticality": "High"})
+        rule = resolver._dropdown("rule-1", {"name": "R"})
+
+    assert "**Priority**: Critical" in objective
+    assert "Criticality" not in objective
+    assert "**Criticality**: High" in threat
+    assert "**Criticality**: No Criticality Assigned" in rule
+    assert not [event for level, event in events if level == "warning"]
+
+
+def test_runtime_resolver_labels_object_levels_by_field() -> None:
+    from opentide.validation.vocab_resolver import _VocabEnumBuilder
+
+    builder = _VocabEnumBuilder("objective", {}, object_types=["objective"], icons={})
+    objective = builder._dropdown("o1", {"name": "O", "priority": "Critical"})
+    signal = builder._dropdown("s1", {"name": "O::S", "severity": "Medium"})
+
+    assert "**Priority**: Critical" in objective
+    assert "**Severity**: Medium" in signal
+    assert "Criticality" not in objective + signal
