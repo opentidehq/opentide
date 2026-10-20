@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -20,7 +21,7 @@ from tests.corpus_support import (
     write_rule_variant,
 )
 from tests.test_cli.conftest import LOCAL_SHELL_UNSET, assert_json_ok
-from tests.test_cli.e2e.helpers import uncomment_tenants
+from tests.test_cli.e2e.helpers import EVERY_RULE, uncomment_tenants
 
 from opentide.core.root import find_repo_root
 from opentide.models.deployment_enums import StatusStrategy
@@ -64,13 +65,13 @@ def test_deploy_dry_run_returns_plan_and_payloads(
         "--dry-run",
         "--platform",
         platform,
-        "--plan",
-        "FULL",
+        *EVERY_RULE,
         "--wide",
         "--skip-promotion",
     )
     payload = assert_json_ok(result)
     assert payload["dry_run"] is True
+    assert payload["strategies"] == ["PREVIEW", "RELEASE"]
     expected_uuid = corpus_rule_uuids[platform]
     assert expected_uuid in payload["plan"][platform]
     previews = payload["payloads"][platform]
@@ -79,32 +80,96 @@ def test_deploy_dry_run_returns_plan_and_payloads(
     deployer.deploy.assert_not_called()
 
 
-def test_deploy_dry_run_without_plan_or_wide(
+def test_deploy_dry_run_without_strategy_or_wide_asks_for_a_strategy(
     invoke_cli,
-    corpus_rule_uuids,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Local CLI: unset DEPLOYMENT_PLAN must not traceback (issue #164)."""
+    """Local CLI: a deploy naming no strategy is a usage error, not a traceback (#164)."""
+    from opentide.cli.services.deploy import STRATEGY_REQUIRED
+
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.delenv("TF_BUILD", raising=False)
     deployer = _mock_deployer(monkeypatch, "sentinel")
-    result = invoke_cli(
-        "deploy",
-        "--dry-run",
-        "--platform",
-        "sentinel",
-        "--skip-promotion",
-        extra_env={"DEPLOYMENT_PLAN": ""},
-    )
-    payload = assert_json_ok(result)
-    assert payload["dry_run"] is True
-    expected_uuid = corpus_rule_uuids["sentinel"]
-    assert expected_uuid in payload["plan"]["sentinel"]
+    result = invoke_cli("deploy", "--dry-run", "--platform", "sentinel", "--skip-promotion")
+    assert result.exit_code == 2, result.stdout + result.stderr
+    assert "Traceback" not in result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "failed"
+    assert payload["message"] == STRATEGY_REQUIRED
     deployer.deploy.assert_not_called()
 
 
-def test_deploy_dry_run_staging_without_wide_does_not_traceback(
+@pytest.mark.parametrize(
+    ("argv", "env", "replacement"),
+    [
+        pytest.param(
+            ("--plan", "FULL"), {}, "--strategy PREVIEW --strategy RELEASE --all", id="flag"
+        ),
+        pytest.param(("--plan", "STAGING"), {}, "--strategy PREVIEW", id="flag-staging"),
+        pytest.param(
+            ("--strategy", "PREVIEW"),
+            {"DEPLOYMENT_PLAN": "PRODUCTION"},
+            "--strategy RELEASE",
+            id="environment",
+        ),
+    ],
+)
+def test_deploy_refuses_the_removed_deployment_plan(
+    invoke_cli,
+    refuse_deployment_engines: list[str],
+    argv: tuple[str, ...],
+    env: dict[str, str],
+    replacement: str,
+) -> None:
+    """0.17.0 hard-removed ``--plan`` and ``DEPLOYMENT_PLAN``: both name their replacement."""
+    result = invoke_cli("deploy", "--dry-run", *argv, extra_env=env)
+    output = result.stdout + result.stderr
+    assert result.exit_code == 2, output
+    assert "Traceback" not in output
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "failed"
+    assert "removed in 0.17.0" in payload["message"]
+    assert f"Use {replacement}." in payload["message"]
+    if env:
+        assert "Unset DEPLOYMENT_PLAN" in payload["message"]
+    assert refuse_deployment_engines == []
+
+
+@pytest.mark.parametrize(
+    ("value", "hint"),
+    [
+        pytest.param("PRODUCTION", "PRODUCTION was a deployment plan", id="old-plan"),
+        pytest.param("UNIVERSAL", "UNIVERSAL", id="status-strategy"),
+        pytest.param("BOGUS", "Use PREVIEW or RELEASE", id="unknown"),
+    ],
+)
+def test_deploy_refuses_a_strategy_it_cannot_run(
+    invoke_cli, refuse_deployment_engines: list[str], value: str, hint: str
+) -> None:
+    result = invoke_cli("deploy", "--dry-run", "--strategy", value, "--all")
+    output = result.stdout + result.stderr
+    assert result.exit_code == 2, output
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "failed"
+    assert f"--strategy '{value}' is not a deployable strategy" in payload["message"]
+    assert hint in payload["message"]
+    assert refuse_deployment_engines == []
+
+
+def test_deploy_strategy_is_case_insensitive_and_accepts_a_list(
+    invoke_cli, corpus_rule_uuids, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _mock_deployer(monkeypatch, "sentinel")
+    result = invoke_cli(
+        "deploy", "--dry-run", "--platform", "sentinel", "--strategy", "release,preview", "--all"
+    )
+    payload = assert_json_ok(result)
+    assert payload["strategies"] == ["PREVIEW", "RELEASE"]
+    assert corpus_rule_uuids["sentinel"] in payload["plan"]["sentinel"]
+
+
+def test_deploy_dry_run_preview_without_wide_does_not_traceback(
     invoke_cli,
     corpus_rule_uuids,
     monkeypatch: pytest.MonkeyPatch,
@@ -118,8 +183,9 @@ def test_deploy_dry_run_staging_without_wide_does_not_traceback(
         "--dry-run",
         "--platform",
         "sentinel",
-        "--plan",
-        "STAGING",
+        "--strategy",
+        "PREVIEW",
+        "--all",
         "--skip-promotion",
     )
     payload = assert_json_ok(result)
@@ -141,8 +207,7 @@ def test_deploy_dry_run_sentinel_payload_contains_query(
         "--dry-run",
         "--platform",
         platform,
-        "--plan",
-        "FULL",
+        *EVERY_RULE,
         "--wide",
         "--skip-promotion",
     )
@@ -174,8 +239,7 @@ def test_deploy_dry_run_fails_when_a_sentinel_rule_does_not_compile(
         "--dry-run",
         "--platform",
         "sentinel",
-        "--plan",
-        "FULL",
+        *EVERY_RULE,
         "--wide",
         "--skip-promotion",
         # Click restores keys it was given, so the flag the preview raises
@@ -227,8 +291,7 @@ def test_deploy_loads_only_the_requested_engine(
         "--dry-run",
         "--platform",
         "sentinel",
-        "--plan",
-        "FULL",
+        *EVERY_RULE,
         "--wide",
         "--skip-promotion",
     )
@@ -246,13 +309,13 @@ def _disable_splunk(repo: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("wide", [False, True], ids=["plan", "wide"])
+@pytest.mark.parametrize("wide", [False, True], ids=["status", "wide"])
 def test_deploy_to_a_disabled_platform_loads_no_engine(
     invoke_cli, tide_corpus_repo: Path, refuse_deployment_engines: list[str], wide: bool
 ) -> None:
     """#414: the corpus Splunk rule says ``enabled: true``; the workspace does not."""
     _disable_splunk(tide_corpus_repo)
-    argv = ["deploy", "--platform", "splunk", "--plan", "FULL"]
+    argv = ["deploy", "--platform", "splunk", *EVERY_RULE]
     result = invoke_cli(*argv, *(["--wide"] if wide else []))
     payload = assert_json_ok(result)
     assert payload["status"] == "skipped"
@@ -278,7 +341,7 @@ def test_wide_dry_run_never_builds_a_disabled_platform_engine(
         return original(module_path)
 
     monkeypatch.setattr(plugins.PlatformLoader, "import_engine", staticmethod(_record))
-    result = invoke_cli("deploy", "--dry-run", "--plan", "FULL", "--wide", "--skip-promotion")
+    result = invoke_cli("deploy", "--dry-run", *EVERY_RULE, "--wide", "--skip-promotion")
     payload = assert_json_ok(result)
     assert "splunk" not in payload["plan"]
     assert "splunk" not in payload["payloads"]
@@ -305,9 +368,9 @@ def test_deploy_dry_run_without_rules_folder_reports_no_rules(
         "--platform",
         "sentinel",
         "--dry-run",
+        *EVERY_RULE,
         repo=workspace,
         json_output=json_output,
-        extra_env={"DEPLOYMENT_PLAN": ""},
     )
     output = result.stdout + result.stderr
     assert result.exit_code == 0, output
@@ -340,7 +403,7 @@ def test_deploy_dry_run_in_an_empty_directory_on_console_script(
     workspace.mkdir()
     assert find_repo_root(workspace) == workspace.resolve(), "a parent directory is a git tree"
     env = {k: v for k, v in os.environ.items() if k not in LOCAL_SHELL_UNSET}
-    argv = ["opentide", "deploy", "--platform", "sentinel", "--dry-run"]
+    argv = ["opentide", "deploy", "--platform", "sentinel", "--dry-run", *EVERY_RULE]
 
     human = script_runner.run(argv, cwd=workspace, env=env, print_result=False)
     assert human.returncode == 0, human.stdout + human.stderr
@@ -380,8 +443,8 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
         "--platform",
         "sentinel",
         "--dry-run",
+        *EVERY_RULE,
         json_output=json_output,
-        extra_env={"DEPLOYMENT_PLAN": ""},
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     deployer.deploy.assert_not_called()
@@ -412,7 +475,12 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
             "No rules to deploy for this platform",
             id="one-platform",
         ),
-        pytest.param((), {}, "No rules matched this deployment plan", id="every-platform"),
+        pytest.param(
+            (),
+            {},
+            "No rule this run read has a status that maps to its strategies",
+            id="every-platform",
+        ),
     ],
 )
 def test_deploy_dry_run_with_rules_only_in_subfolders_is_skipped_with_the_warning(
@@ -431,9 +499,7 @@ def test_deploy_dry_run_with_rules_only_in_subfolders_is_skipped_with_the_warnin
     (rules / "team-a").mkdir()
     for path in sorted(rules.glob("*.yaml")):
         path.rename(rules / "team-a" / path.name)
-    result = invoke_cli(
-        "deploy", *argv, "--dry-run", json_output=json_output, extra_env={"DEPLOYMENT_PLAN": ""}
-    )
+    result = invoke_cli("deploy", *argv, "--dry-run", *EVERY_RULE, json_output=json_output)
     assert result.exit_code == 0, result.stdout + result.stderr
     assert refuse_deployment_engines == []
     warning = f"9 {SUBFOLDER_RULES_LEAD}" + ", ".join(
@@ -477,9 +543,7 @@ def test_full_dry_run_accounts_for_every_indexed_rule(
         real_rules_folder(tide_corpus_repo)
     add_unplanned_rules(tide_corpus_repo / "objects" / "rules")
     indexed = assert_json_ok(invoke_cli("info", "rules"))["rules"]
-    payload = assert_json_ok(
-        invoke_cli("deploy", "--dry-run", "--plan", "FULL", extra_env={"DEPLOYMENT_PLAN": ""})
-    )
+    payload = assert_json_ok(invoke_cli("deploy", "--dry-run", *EVERY_RULE))
     scope = classify_deploy_scope(
         tide_corpus_repo,
         indexed,
@@ -493,3 +557,168 @@ def test_full_dry_run_accounts_for_every_indexed_rule(
     assert set(CORPUS_RULE_UUIDS.values()) <= scope["planned"]
     assert scope["status"] == {INERT_RULE_UUID}
     assert scope["warned"] == set(SUBFOLDER_RULE_UUIDS.values())
+
+
+def _sentinel_tenants(repo: Path, *tenants: tuple[str, str]) -> None:
+    """Replace the corpus Sentinel tenant example with *tenants* ``(name, keys)``."""
+    config = repo / ".opentide/configurations/systems/sentinel.toml"
+    template, example = config.read_text(encoding="utf-8").split("#[[tenants]]")
+    setup = example[example.index("#[tenants.setup]") :].replace("#", "")
+    blocks = [f'[[tenants]]\nname = "{name}"\n{keys}\n{setup}' for name, keys in tenants]
+    config.write_text(template + "\n".join(blocks), encoding="utf-8")
+
+
+def _rule_for_tenants(rules: Path, relative: str, uuid: str, status: str, tenants=()) -> None:
+    path = write_rule_variant(rules, relative, uuid, status=status)
+    if tenants:
+        listed = "".join(f"      - {name}\n" for name in tenants)
+        text = path.read_text(encoding="utf-8")
+        text = text.replace("    status: STAGING\n", f"    status: {status}\n")
+        text = text.replace("    enabled: true\n", f"    enabled: true\n    tenants:\n{listed}", 1)
+        path.write_text(text, encoding="utf-8")
+
+
+#: A Sentinel rule in each strategy a run deploys; the corpus rule is STAGING (PREVIEW).
+RELEASE_RULE = "00000000-0000-4000-8003-000000000201"
+MANUAL_RULE = "00000000-0000-4000-8003-000000000202"
+
+
+@pytest.mark.parametrize(
+    ("strategies", "expected"),
+    [
+        pytest.param(
+            ("PREVIEW",),
+            {"preview-only": [CORPUS_RULE_UUIDS["sentinel"]], "manual": [MANUAL_RULE]},
+            id="preview",
+        ),
+        pytest.param(("RELEASE",), {"release-only": [RELEASE_RULE]}, id="release"),
+        pytest.param(
+            ("PREVIEW", "RELEASE"),
+            {
+                "preview-only": [CORPUS_RULE_UUIDS["sentinel"]],
+                "release-only": [RELEASE_RULE],
+                "manual": [MANUAL_RULE],
+            },
+            id="both",
+        ),
+    ],
+)
+def test_dry_run_reports_which_tenants_each_strategy_reaches(
+    invoke_cli,
+    tide_corpus_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    strategies: tuple[str, ...],
+    expected: dict[str, list[str]],
+) -> None:
+    """Tenant ``strategies`` filter by the rule's status strategy; ``manual`` needs a listing."""
+    rules = real_rules_folder(tide_corpus_repo)
+    for path in rules.glob("*.yaml"):
+        if path.name != "rule-0001-sentinel-kql.yaml":
+            path.unlink()
+    _rule_for_tenants(rules, "rule-0201-release.yaml", RELEASE_RULE, "PRODUCTION")
+    _rule_for_tenants(rules, "rule-0202-manual.yaml", MANUAL_RULE, "STAGING", tenants=["manual"])
+    _sentinel_tenants(
+        tide_corpus_repo,
+        ("preview-only", 'strategies = ["PREVIEW"]'),
+        ("release-only", 'strategies = ["RELEASE"]'),
+        ("manual", "manual = true"),
+    )
+    _mock_deployer(monkeypatch, "sentinel")
+    flags = [arg for strategy in strategies for arg in ("--strategy", strategy)]
+    result = invoke_cli(
+        "deploy", "--dry-run", "--platform", "sentinel", *flags, "--all", "--skip-promotion"
+    )
+    payload = assert_json_ok(result)
+    assert payload["strategies"] == list(strategies)
+    assert {tenant: sorted(uuids) for tenant, uuids in payload["tenants"]["sentinel"].items()} == {
+        tenant: sorted(uuids) for tenant, uuids in expected.items()
+    }
+    assert sorted(payload["plan"]["sentinel"]) == sorted(
+        {uuid for uuids in expected.values() for uuid in uuids}
+    )
+
+
+def test_a_tenant_with_the_removed_deployment_key_names_its_replacement(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """0.17.0 removed the tenant key ``deployment``; loading it says what replaces it."""
+    _sentinel_tenants(tide_corpus_repo, ("legacy", 'deployment = "STAGING"'))
+    replacement = (
+        "sentinel tenant 'legacy': the tenant key 'deployment' was removed in 0.17.0. "
+        "A tenant now lists the status strategies it accepts. "
+        "Replace deployment = 'STAGING' with strategies = [\"PREVIEW\"]."
+    )
+    live = invoke_cli("validate", "query", "--platform", "sentinel", "--live")
+    assert live.exit_code == 1, live.stdout + live.stderr
+    payload = json.loads(live.stdout)
+    assert payload["status"] == "failed"
+    assert payload["message"] == replacement
+
+    deployer = _mock_deployer(monkeypatch, "sentinel")
+    for dry_run in (("--dry-run",), ()):
+        result = invoke_cli(
+            "deploy", *dry_run, "--platform", "sentinel", *EVERY_RULE, "--skip-promotion"
+        )
+        output = result.stdout + result.stderr
+        assert "Traceback" not in output
+        assert result.exit_code == 1, output
+        payload = json.loads(result.stdout)
+        assert payload["status"] == "failed"
+        assert payload["message"] == replacement
+        assert payload["deployed"] == []
+    deployer.deploy.assert_not_called()
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+
+def test_local_deploy_reads_the_files_the_last_commit_changed(
+    invoke_cli,
+    git_home: Path,
+    tide_corpus_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Outside CI and without ``--all``, a deploy reads ``HEAD^1..HEAD`` of the checkout."""
+    for name in LOCAL_SHELL_UNSET:
+        monkeypatch.delenv(name, raising=False)
+    rules = real_rules_folder(tide_corpus_repo)
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
+    _git(tide_corpus_repo, "init", "-q", "-b", "main")
+    _git(tide_corpus_repo, "add", "-A")
+    _git(tide_corpus_repo, "commit", "-q", "-m", "corpus")
+    changed = rules / "rule-0001-sentinel-kql.yaml"
+    changed.write_text(
+        changed.read_text(encoding="utf-8").replace("take 1", "take 2"), encoding="utf-8"
+    )
+    _git(tide_corpus_repo, "commit", "-q", "-am", "tune the sentinel rule")
+    # An uncommitted change is not part of the last commit.
+    other = rules / "rule-0002-defender-kql.yaml"
+    other.write_text(other.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    _mock_deployer(monkeypatch, "sentinel")
+
+    payload = assert_json_ok(invoke_cli("deploy", "--dry-run", "--strategy", "PREVIEW"))
+    assert payload["plan"] == {"sentinel": [CORPUS_RULE_UUIDS["sentinel"]]}
+    assert payload["strategies"] == ["PREVIEW"]
+
+    # The same commit read by a RELEASE run: a STAGING rule maps to PREVIEW.
+    skipped = assert_json_ok(invoke_cli("deploy", "--dry-run", "--strategy", "RELEASE"))
+    assert skipped["status"] == "skipped"
+    assert skipped["message"] == "No rule this run read has a status that maps to its strategies"
+
+
+def test_local_deploy_without_a_checkout_points_at_all(
+    invoke_cli,
+    tide_corpus_repo: Path,
+    refuse_deployment_engines: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in LOCAL_SHELL_UNSET:
+        monkeypatch.delenv(name, raising=False)
+    result = invoke_cli("deploy", "--dry-run", "--strategy", "PREVIEW")
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "failed"
+    assert "git checkout" in payload["message"]
+    assert "--all" in payload["message"]
+    assert refuse_deployment_engines == []

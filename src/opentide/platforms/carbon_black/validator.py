@@ -9,7 +9,7 @@ import structlog
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.platforms.carbon_black.client import (
     CarbonBlackCloudConnection,
@@ -55,10 +55,10 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
     def validate(
         self,
         mdr_deployment: Sequence[DetectionRule] | list[str],
-        deployment_plan: DeploymentStrategy | None = None,
+        strategies: RunStrategies | None = None,
     ) -> None:
-        if not deployment_plan:
-            raise ValueError("deployment_plan is required for CBC validation")
+        if not strategies:
+            raise ValueError("run strategies are required for CBC validation")
 
         loaded_mdr: list[DetectionRule] = []
         for mdr in mdr_deployment:
@@ -70,7 +70,7 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
         tide_deployment = TideDeployment(
             deployment=loaded_mdr,
             system=DetectionPlatforms.CARBON_BLACK_CLOUD,
-            strategy=deployment_plan,
+            strategies=strategies,
         )
         for tenant_deployment in tide_deployment.rule_deployment:
             tenant = tenant_deployment.tenant
@@ -96,5 +96,5 @@ def declare():
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
     CarbonBlackCloudQueryValidator().validate(
-        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG
+        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, (StatusStrategy.PREVIEW,)
     )

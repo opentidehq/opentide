@@ -27,7 +27,7 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide setup --yes --platform sentinel --ci github
 opentide generate
 opentide validate --strict
-opentide deploy --platform sentinel --dry-run
+opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
 ## Platform coverage

@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from tests.test_cli.e2e.helpers import uncomment_tenants
+from tests.test_cli.e2e.helpers import EVERY_RULE, uncomment_tenants
 
 from opentide.deployment.external_ids import PERSIST_EXTERNALLY_ENV
 
@@ -34,9 +34,7 @@ def seen(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> list[str | 
 
 
 def _deploy(invoke_cli, *extra: str):
-    return invoke_cli(
-        "deploy", "--platform", "sentinel", "--plan", "FULL", "--skip-promotion", *extra
-    )
+    return invoke_cli("deploy", "--platform", "sentinel", *EVERY_RULE, "--skip-promotion", *extra)
 
 
 def test_the_flag_reaches_the_deployers(invoke_cli, seen: list[str | None]) -> None:

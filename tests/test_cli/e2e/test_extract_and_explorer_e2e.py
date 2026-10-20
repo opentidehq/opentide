@@ -80,7 +80,6 @@ DEFENDER_TENANT = """
 [[tenants]]
 name = "Contoso"
 description = "Test tenant"
-deployment = "ALWAYS"
 [tenants.setup]
 ssl = true
 tenant_id = "tid"
@@ -94,7 +93,6 @@ DEFENDER_TENANT_WITHOUT_CREDENTIALS = """
 [[tenants]]
 name = "Contoso"
 description = "Test tenant"
-deployment = "ALWAYS"
 [tenants.setup]
 tenant_id = "tid"
 """

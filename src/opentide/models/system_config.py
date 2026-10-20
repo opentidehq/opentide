@@ -6,7 +6,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.models.deployment_enums import (
+    DEPLOYABLE_STRATEGIES,
+    RunStrategies,
+    StatusStrategy,
+    deploys,
+)
 from opentide.models.rule import DetectionRule
 
 
@@ -72,13 +77,19 @@ class SystemConfig:
 
         name: str
         description: str
-        deployment: DeploymentStrategy | str
         setup: Setup
         parameters: Parameters | None = None
+        #: The run strategies this tenant accepts (``PREVIEW``, ``RELEASE``);
+        #: every one when the platform file omits ``strategies``.
+        strategies: RunStrategies = DEPLOYABLE_STRATEGIES
+        #: Only the rules whose platform block lists this tenant reach it.
+        manual: bool = False
 
-        def __post_init__(self) -> None:
-            if isinstance(self.deployment, str):
-                self.deployment = DeploymentStrategy[self.deployment]
+        def accepts(self, rule_strategy: StatusStrategy, run: RunStrategies) -> bool:
+            """Whether a run with strategies *run* deploys a *rule_strategy* rule here."""
+            return any(
+                deploys(rule_strategy, strategy) for strategy in run if strategy in self.strategies
+            )
 
     platform: Platform
     tenants: Sequence[Tenant] | None

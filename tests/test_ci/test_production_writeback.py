@@ -41,7 +41,7 @@ from opentide.ci.writeback import (
     writeback_after_cancel,
 )
 
-DEPLOY = "opentide deploy --plan PRODUCTION --keep-deprecated --skip-unconfigured"
+DEPLOY = "opentide deploy --strategy RELEASE --skip-unconfigured"
 GITLAB_PUSH = (
     'git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/'
     '${CI_PROJECT_PATH}.git" "HEAD:$CI_DEFAULT_BRANCH"'
@@ -111,7 +111,7 @@ def test_github_production_jobs_never_cancel_and_read_the_tip_state() -> None:
     assert "concurrency" not in job
     runs = [step.get("run", "") for step in job["steps"]]
     overlay = next(i for i, run in enumerate(runs) if STATE_BASE_MESSAGE in run)
-    dry_run = runs.index("opentide deploy --dry-run --plan PRODUCTION --keep-deprecated")
+    dry_run = runs.index("opentide deploy --dry-run --strategy RELEASE")
     assert overlay < dry_run < runs.index(DEPLOY)
     assert "git fetch origin main" in runs[overlay]
     assert runs[overlay].index("git config user.name") < runs[overlay].index("commit-tree")
@@ -128,7 +128,7 @@ def test_gitlab_deploy_and_writeback_share_one_block() -> None:
     assert job["before_script"][0] == GITLAB_INSTALL_GIT
     assert job["resource_group"] == "opentide-production"
     script = job["script"]
-    dry_run = script.index("opentide deploy --dry-run --plan PRODUCTION --keep-deprecated")
+    dry_run = script.index("opentide deploy --dry-run --strategy RELEASE")
     overlay = next(i for i, line in enumerate(script) if STATE_BASE_MESSAGE in line)
     assert script.index('git config user.name "gitlab-ci"') < overlay < dry_run
     assert 'git fetch origin "$CI_DEFAULT_BRANCH"' in script[overlay]
@@ -166,10 +166,13 @@ def test_azure_writeback_step_runs_after_a_failed_deploy() -> None:
 
 @pytest.mark.parametrize("render", [render_github, render_gitlab, render_azure])
 def test_production_deploys_disabled_and_removed_rules(render) -> None:
+    """A RELEASE run retires DISABLEMENT and DELETION rules; nothing may drop them."""
     rendered = render(_options(render.__name__.removeprefix("render_")))
-    assert "opentide deploy --dry-run --plan PRODUCTION --keep-deprecated" in rendered
+    assert "opentide deploy --dry-run --strategy RELEASE" in rendered
     assert DEPLOY in rendered
-    assert "--plan STAGING --keep-deprecated" not in rendered
+    # --all would read every rule file and drop deprecated rules by default.
+    assert "--drop-deprecated" not in rendered
+    assert "--strategy RELEASE --all" not in rendered
 
 
 @pytest.mark.parametrize("render", [render_github, render_gitlab, render_azure])
@@ -312,7 +315,7 @@ def _writeback(work: Path, **env: str) -> subprocess.CompletedProcess[str]:
 
 def _gitlab_block(work: Path, **env: str) -> subprocess.CompletedProcess[str]:
     script = deploy_then_writeback(
-        deploy="opentide deploy --plan PRODUCTION",
+        deploy="opentide deploy --strategy RELEASE",
         rules="objects/rules",
         push='git push -q origin "HEAD:main"',
         fetch="git fetch -q origin main",

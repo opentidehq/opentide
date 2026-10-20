@@ -71,7 +71,7 @@ For each rule and tenant, before any HTTP call:
 A delete removes the tenant entry, then the platform when it has no tenants
 left, then the file when it is empty.
 
-The first row applies whatever platform is being deployed: a rule with a vendor id key on any block is left out of the whole deployment plan, `deploy --dry-run` and `validate query --live` included.
+The first row applies whatever platform is being deployed: a rule with a vendor id key on any block is left out of the whole deploy, `deploy --dry-run` and `validate query --live` included.
 
 Refusals are per rule: the run continues with other rules, and exits `1` if any rule reported one of the error codes below. `external_id_missing` is a warning and does not fail the run.
 
@@ -80,7 +80,7 @@ Refusals are per rule: the run continues with other rules, and exits `1` if any 
 | `external_id_in_rule` | The rule still carries a vendor id key. Run `opentide deploy migrate-state` |
 | `external_id_missing` | Warning. A deletion or disablement has no stored id for that tenant, so nothing is known to exist there and nothing is called. If a remote copy exists, remove it by hand |
 | `deployment_state_ignored` | `.gitignore` hides `.opentide/states/deployment/`, so deploy refuses to create a rule. Updates and deletes that find an existing shard still run, with a warning |
-| `deployment_state_unpersisted` | A CI run other than `--plan PRODUCTION` would create a rule whose id nothing commits. The create is refused before any vendor call. See [Creates outside the production job](#creates-outside-the-production-job) |
+| `deployment_state_unpersisted` | A CI run other than `--strategy RELEASE` on a push would create a rule whose id nothing commits. The create is refused before any vendor call. See [Creates outside the production job](#creates-outside-the-production-job) |
 | `deployment_state_write_failed` | The vendor created the rule but the shard could not be written. The message carries the id; add it to the shard by hand. The remote rule is not rolled back |
 | `deployment_state_uuid_mismatch` | The shard's file name is not the lowercase canonical uuid, its `object_uuid` is not exactly its file name, or another file names the same rule. No create runs for that rule |
 | `deployment_state_platform` | The shard names a platform that does not store vendor ids |
@@ -113,10 +113,10 @@ and every new id is in the log as `external_id_recorded`. See
 ## Creates outside the production job
 
 Only the generated production job commits shards. Any other CI run, such as
-the pull-request staging job (`opentide deploy --plan STAGING`) or a `FULL`,
-`ALWAYS` or `MANUAL` run, would leave the id of a rule it creates on a runner
-that is thrown away, and the next run would create the rule again. In CI, a
-run whose plan is not `PRODUCTION` therefore refuses to create a Defender for
+the pull-request staging job (`opentide deploy --strategy PREVIEW`), would
+leave the id of a rule it creates on a runner that is thrown away, and the
+next run would create the rule again. In CI, a run other than
+`--strategy RELEASE` on a push therefore refuses to create a Defender for
 Endpoint, SentinelOne or CrowdStrike rule that has no shard entry, with
 `deployment_state_unpersisted` and before any vendor call. The run exits `1`.
 
@@ -131,6 +131,6 @@ Endpoint, SentinelOne or CrowdStrike rule that has no shard entry, with
 A new rule for those platforms is therefore first created by the production
 job after merge. A staging job that targets one of them reports
 `deployment_state_unpersisted` for every new rule until then; give such
-platforms no `STAGING` tenant, or accept that the staging job fails for new
-rules. A tenant with `deployment = "ALWAYS"` gets the rule from the production
-job, once.
+platforms no tenant accepting `PREVIEW`, or accept that the staging job fails
+for new rules. A tenant accepting both strategies gets the rule from the
+production job, once.

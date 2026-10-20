@@ -10,12 +10,12 @@ The point of detection-as-code is that a machine enforces quality. A good openti
 ```mermaid
 flowchart LR
   pr["Pull request"] --> validate["validate --strict + lint --strict + validate query --changed"]
-  validate -->|pass| preview["deploy --plan STAGING: PREVIEW rules to STAGING tenants"]
+  validate -->|pass| preview["deploy --strategy PREVIEW: changed PREVIEW rules to tenants accepting PREVIEW"]
   preview -->|review, merge| merge["Push to the default branch"]
-  merge --> release["deploy --plan PRODUCTION: promotion, then RELEASE rules to PRODUCTION tenants"]
+  merge --> release["deploy --strategy RELEASE: promotion, then changed RELEASE rules to tenants accepting RELEASE"]
 ```
 
-The plan names the pipeline, not a status. `STAGING` runs on the pull request and deploys the rules whose status strategy is `PREVIEW`; `PRODUCTION` runs on the default branch and deploys `RELEASE`, `DISABLEMENT` and `DELETION` rules. A rule in the bundled `DEVELOPMENT` status is therefore deployed by `--plan STAGING`. See [Configuration → deployment plan](../configuration.md#deployment-plan).
+Each job names the strategy it deploys. The pull request job runs `--strategy PREVIEW` and deploys the changed rules whose status maps to `PREVIEW`; the default-branch job runs `--strategy RELEASE`, deploys the changed rules whose status maps to `RELEASE`, and disables or deletes those mapping to `DISABLEMENT` or `DELETION`. Both deploy `UNIVERSAL` rules. A rule in the default `DEVELOPMENT` status is therefore deployed by the pull request job, and a tenant only receives the runs its `strategies` accept. Status names, `STAGING` and `PRODUCTION` included, never decide anything. See [Statuses, strategies and tenants](../concepts/statuses-and-strategies.md).
 
 ## Scaffold with setup
 
@@ -53,11 +53,11 @@ opentide share push --changed
 
 GitHub runs that job when `github.event_name == 'push'` and the ref is the default branch. GitLab runs it when `CI_COMMIT_BRANCH` is `CI_DEFAULT_BRANCH` and the pipeline is not a merge request. Azure runs it when `Build.SourceBranch` is the default branch and `Build.Reason` is not `PullRequest`. The job needs generate. Deploy still needs only generate, so a share failure does not block deploy and deploy does not block share. Setup does not write `.opentide/configurations/sharing.toml`.
 
-`opentide setup ci` writes the gate from the diagram: `opentide validate --strict`, `opentide lint --strict`, and query validation for each supported platform. A generated live job guards only the `$VAR` names in that platform's enabled file under `.opentide/configurations/platforms/` (comments and literal values do not count). If one of those variables is unset the step prints the names and exits 2. The step runs `opentide validate query --platform <platform> --live --changed --plan FULL`: it checks only the rule files the pull request, merge request or push changed, the files the deploy job of the same run reads ([which rules are checked](../../cli/validate.md#which-rules-are-checked)), so the jobs check out full history. Under `--plan FULL` each changed rule whose strategy is `PREVIEW` or `RELEASE` is checked on every tenant it can reach, `STAGING` and `PRODUCTION` alike ([which tenants are checked](../../cli/validate.md#which-tenants-are-checked)); `INERT`, `DISABLED` and `REMOVED` rules send no query. The plan is explicit because an omitted `--plan` reads `DEPLOYMENT_PLAN`, and a project-wide value would narrow the gate. Through 0.16.1 the step checked every rule in the catalogue on every run; regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. The CLI also exits 2 when the platform has rules but none reaches a configured tenant, so no query was sent. Exit 0 means queries were sent and passed, no changed rule has a block for the platform, or the default branch has no `.opentide/configurations` or no tenant for the platform yet, so nothing was sent ([tenant configuration on pull requests](#tenant-configuration-on-pull-requests)). Exit 1 is the check's own failure. On GitLab, `generate` needs the object validate job and every query-validation job, so deploy cannot start after a failed `opentide validate query`. Deploy jobs preview with `--dry-run`, then run `opentide deploy --plan STAGING` or `PRODUCTION` with `--skip-unconfigured`, so a repository whose `[[tenants]]` block is still commented out exits 0 instead of failing the pipeline. The header lists every credential variable the bundled platform files reference. GitHub deploy jobs map those names from `secrets`. GitLab and Azure read the same names from the project variable store. There is no `OPENTIDE_SECRETS` variable.
+`opentide setup ci` writes the gate from the diagram: `opentide validate --strict`, `opentide lint --strict`, and query validation for each supported platform. A generated live job guards only the `$VAR` names in that platform's enabled file under `.opentide/configurations/platforms/` (comments and literal values do not count). If one of those variables is unset the step prints the names and exits 2. The step runs `opentide validate query --platform <platform> --live --changed`: it checks only the rule files the pull request, merge request or push changed, the files the deploy job of the same run reads ([which rules are checked](../../cli/validate.md#which-rules-are-checked)), so the jobs check out full history. Each changed rule whose status maps to `PREVIEW`, `RELEASE` or `UNIVERSAL` is checked on the tenants a deploy sends it to ([which tenants are checked](../../cli/validate.md#which-tenants-are-checked)), so a pull request that edits a rule in `PRODUCTION` status checks it on the tenants accepting `RELEASE` before it merges; rules that map to `INERT`, `DISABLEMENT` or `DELETION` send no query. Through 0.16.1 the step checked every rule in the catalogue on every run; regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. The CLI also exits 2 when the platform has rules but none reaches a configured tenant, so no query was sent. Exit 0 means queries were sent and passed, no changed rule has a block for the platform, or the default branch has no `.opentide/configurations` or no tenant for the platform yet, so nothing was sent ([tenant configuration on pull requests](#tenant-configuration-on-pull-requests)). Exit 1 is the check's own failure. On GitLab, `generate` needs the object validate job and every query-validation job, so deploy cannot start after a failed `opentide validate query`. Deploy jobs preview with `--dry-run`, then run `opentide deploy --strategy PREVIEW` or `--strategy RELEASE` with `--skip-unconfigured`, so a repository whose `[[tenants]]` block is still commented out exits 0 instead of failing the pipeline. The header lists every credential variable the bundled platform files reference. GitHub deploy jobs map those names from `secrets`. GitLab and Azure read the same names from the project variable store. There is no `OPENTIDE_SECRETS` variable.
 
 On GitLab the file sets `workflow:rules` so that pipelines run for merge requests and for the default branch only. Every job then runs in merge request pipelines, and a push to a branch with an open merge request starts one pipeline, not a branch pipeline beside it. A branch is validated once it has a merge request, as GitHub validates pull requests: a push to a branch with no merge request starts no pipeline, so open a draft merge request to validate work in progress. Through 0.16.1 the file had no `workflow:rules`, and a GitLab job with no `rules` defaults to `except: merge_requests`: the merge request pipeline held only `deploy_staging` and `inflight_shards`, whose `needs: generate` named a job that was not added, so GitLab refused to start it (`'deploy_staging' job needs 'generate' job, but it was not added to the pipeline`) and the staging deploy never ran.
 
-The staging job commits nothing. In CI, a deploy whose plan is not `PRODUCTION` therefore refuses to create a Defender for Endpoint, SentinelOne or CrowdStrike rule that has no recorded id (`deployment_state_unpersisted`, before any vendor call), because the id would be lost with the runner and the next run would create the rule again. Updates and deletes of rules that already have an id still run. See [Creates outside the production job](../concepts/deployment-state.md#creates-outside-the-production-job).
+The staging job commits nothing. In CI, a deploy other than `--strategy RELEASE` on a push therefore refuses to create a Defender for Endpoint, SentinelOne or CrowdStrike rule that has no recorded id (`deployment_state_unpersisted`, before any vendor call), because the id would be lost with the runner and the next run would create the rule again. Updates and deletes of rules that already have an id still run. See [Creates outside the production job](../concepts/deployment-state.md#creates-outside-the-production-job).
 
 ### Tenant configuration on pull requests
 
@@ -67,14 +67,14 @@ Live query validation and the staging deploy send platform credentials to the te
 - That pull request's live query validation and staging deploy use the default branch's tenants instead. Pipelines use the new tenant once it is on the default branch. The same holds for every other file in the directory, such as `deployment.toml` and `paths.toml`.
 - When the default branch has no `.opentide/configurations` yet, as on the pull request that adds it, the step prints `The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials.` and exits 0 without running the live commands.
 - When the default branch's `.opentide/configurations/platforms/<platform>.toml` has no uncommented line that mentions `tenants`, as with the commented-out `[[tenants]]` block `setup` writes, or the file is missing, the live query step for that platform prints `The default branch has no <platform> tenant yet, so no tenant is reviewed. Skipped <platform> live query validation without using platform credentials.` and exits 0 without connecting. The pull request that uncomments a platform's first tenant therefore passes the gate. Its queries are first checked live by the pipeline that runs on the default branch after the merge.
-- The staging deploy of a pull request that adds a platform's first tenant reads the default branch's copy too. With `--skip-unconfigured` it exits 0 when no platform in the plan has a tenant yet. When another platform in the plan has one, it fails with `Cannot deploy: <platform> has no tenants configured in …`, as a deploy on the default branch does until the tenant is merged. Commit the first tenant with the platform's scaffold to avoid that.
+- The staging deploy of a pull request that adds a platform's first tenant reads the default branch's copy too. With `--skip-unconfigured` it exits 0 when no platform with rules to deploy has a tenant yet. When another such platform has one, it fails with `Cannot deploy: <platform> has no tenants configured in …`, as a deploy on the default branch does until the tenant is merged. Commit the first tenant with the platform's scaffold to avoid that.
 - The production job restores nothing: it runs on the default branch.
 
 The step restores only the repository root's `.opentide/configurations`. Configuration read from anywhere else in the checkout still comes from the pull request, so this closes that one configuration-file route only. A pull request can also edit the pipeline file itself (`.github/workflows/*.yml`, `.gitlab-ci.yml` or `azure-pipelines.yml`), and that file runs with the same secrets. Scope platform secrets to a protected environment: GitHub environments with required reviewers, GitLab protected variables and environments, or Azure environment approvals. Through 0.15.0 the generated jobs used the pull request's own `.opentide/configurations`. Regenerate existing pipelines with `opentide setup ci <github|gitlab|azure> --yes`.
 
 ### Production write-back
 
-The generated production job runs `opentide deploy --plan PRODUCTION --keep-deprecated`. A rule whose status maps to `DISABLEMENT` (bundled `DISABLED`) or `DELETION` (bundled `REMOVED`) is therefore disabled or deleted on the platform, as the [deployment spec](/docs/specifications/specs/deployment/) defines; `--keep-deprecated` is also the CLI default for the `PRODUCTION` plan, and `--drop-deprecated` turns it off.
+The generated production job runs `opentide deploy --strategy RELEASE`. A changed rule whose status maps to `DISABLEMENT` (default `DISABLED`) or `DELETION` (default `REMOVED`) is therefore disabled or deleted on the tenants accepting `RELEASE`, as the [deployment spec](/docs/specifications/specs/deployment/) defines; `--drop-deprecated` turns that off.
 
 A production deploy changes the checkout: promotion rewrites the `status` of the rules it deploys, and Defender, SentinelOne and CrowdStrike record the vendor id each create returns, in `.opentide/states/deployment/`. The job reads the newest deployment state before it deploys and commits those changes to the default branch afterwards.
 
@@ -96,7 +96,7 @@ The write-back script needs bash (`read -d ''`). GitHub `run:` steps and Azure `
 
 Production deploys are queued where the provider can queue without dropping runs:
 
-- **GitHub**: the job has **no** `concurrency` group. GitHub keeps only one run pending per group and cancels an older *pending* run when a newer one queues; the production plan deploys only its own commit's diff, so a cancelled run's rules would silently never deploy. Overlapping runs are tolerated instead: each starts from the default branch's newest deployment state, and if two overlapping runs both create the same new rule, the write-back reports `deployment_state_conflict` with both ids and fails the job, so the duplicate is removed by hand.
+- **GitHub**: the job has **no** `concurrency` group. GitHub keeps only one run pending per group and cancels an older *pending* run when a newer one queues; the production job deploys only its own commit's diff, so a cancelled run's rules would silently never deploy. Overlapping runs are tolerated instead: each starts from the default branch's newest deployment state, and if two overlapping runs both create the same new rule, the write-back reports `deployment_state_conflict` with both ids and fails the job, so the duplicate is removed by hand.
 - **GitLab**: the job has `resource_group: opentide-production`, which queues every production job.
 - **Azure**: a YAML pipeline cannot serialise a job on its own. The pipeline sets `lockBehavior: sequential`; add an **Exclusive lock** check to a protected resource the Deploy stage uses (for example an environment or the agent pool), and runs then queue in order. Without that check, Azure production deploys can overlap.
 
@@ -160,12 +160,12 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install 'opentide==0.17.0'
       - run: opentide validate --strict
-      - run: opentide validate query --platform sentinel --live --changed --plan FULL
+      - run: opentide validate query --platform sentinel --live --changed
 ```
 
-## Stage 2 — preview on the pull request (`--plan STAGING`)
+## Stage 2 — preview on the pull request (`--strategy PREVIEW`)
 
-The `STAGING` plan deploys the pull request's changed rules whose status strategy is `PREVIEW` (the bundled `DEVELOPMENT`, `IMPROVING`, `STAGING` and `ACCEPTANCE`) to the tenants whose `deployment` is `STAGING`. It reads the pull request's diff, so it runs on pull requests only and checks out full history. Add the job to the same workflow:
+`--strategy PREVIEW` deploys the pull request's changed rules whose status maps to `PREVIEW` (the default `DEVELOPMENT`, `IMPROVING`, `STAGING` and `ACCEPTANCE`) or `UNIVERSAL`, to the tenants whose `strategies` accept `PREVIEW`. In a pull request pipeline it reads the request's diff from its merge base, so the job checks out full history. Add the job to the same workflow:
 
 ```yaml
   deploy-staging:
@@ -186,15 +186,15 @@ The `STAGING` plan deploys the pull request's changed rules whose status strateg
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install 'opentide==0.17.0'
-      - run: opentide deploy --plan STAGING --dry-run   # preview in logs
-      - run: opentide deploy --plan STAGING
+      - run: opentide deploy --strategy PREVIEW --dry-run   # preview in logs
+      - run: opentide deploy --strategy PREVIEW
 ```
 
 A rule whose status maps to `RELEASE` is not deployed here: it is released on merge.
 
-## Stage 3 — release on merge (`--plan PRODUCTION`)
+## Stage 3 — release on merge (`--strategy RELEASE`)
 
-The `PRODUCTION` plan runs on a push to the default branch and reads the pushed commit's diff. When promotion is enabled (the default), it first rewrites the status of each merged rule whose strategy is not `RELEASE`, `DISABLEMENT` or `DELETION` to `promotion_target` (`PRODUCTION`), so merging a rule releases it. It then deploys the `RELEASE` rules to the tenants whose `deployment` is `PRODUCTION`, and disables or deletes the `DISABLEMENT` and `DELETION` ones. Gate it behind a protected environment.
+`--strategy RELEASE` on a push to the default branch reads the pushed commit's diff. When promotion is enabled (the default), it first rewrites the status of each changed rule whose status maps to `INERT`, `PREVIEW` or `UNIVERSAL` to `promotion_target` (`PRODUCTION`), so merging a rule releases it. It then deploys the rules mapping to `RELEASE` or `UNIVERSAL` to the tenants whose `strategies` accept `RELEASE`, and disables or deletes those mapping to `DISABLEMENT` or `DELETION` there. Gate it behind a protected environment.
 
 ```yaml
 # .github/workflows/deploy.yml
@@ -219,8 +219,8 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install 'opentide==0.17.0'
-      - run: opentide deploy --plan PRODUCTION --dry-run
-      - run: opentide deploy --plan PRODUCTION
+      - run: opentide deploy --strategy RELEASE --dry-run
+      - run: opentide deploy --strategy RELEASE
 ```
 
 Promotion rewrites rule files, and Defender for Endpoint, SentinelOne and CrowdStrike record each new rule's id under `.opentide/states/deployment/`. This sketch leaves both on the runner; the generated production job commits them back to the default branch ([production write-back](#production-write-back)).
@@ -261,21 +261,21 @@ validate:
   stage: validate
   script:
     - opentide validate --strict
-    - opentide validate query --platform sentinel --live --changed --plan FULL
+    - opentide validate query --platform sentinel --live --changed
 
 deploy-staging:
   stage: deploy
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
   script:
-    - opentide deploy --plan STAGING
+    - opentide deploy --strategy PREVIEW
 
 deploy-production:
   stage: deploy
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - opentide deploy --plan PRODUCTION
+    - opentide deploy --strategy RELEASE
 ```
 
 Without `workflow:rules`, a GitLab job with no `rules` (here `validate`) is left out of merge request pipelines.
@@ -295,8 +295,8 @@ steps:
     inputs: { versionSpec: '3.12' }
   - script: pip install 'opentide==0.17.0'
   - script: opentide validate --strict
-  - script: opentide validate query --platform sentinel --live --changed --plan FULL
-  - script: opentide deploy --plan PRODUCTION
+  - script: opentide validate query --platform sentinel --live --changed
+  - script: opentide deploy --strategy RELEASE
     # A custom condition replaces the default succeeded(): keep it, or a failed check still deploys.
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
 ```

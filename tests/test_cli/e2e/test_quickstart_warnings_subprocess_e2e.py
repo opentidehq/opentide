@@ -43,7 +43,6 @@ flags = []
 [[tenants]]
 name = "Default"
 description = "Default Splunk deployment target"
-deployment = "ALWAYS"
 [tenants.setup]
 url = "$SPLUNK_URL"
 port = "$SPLUNK_PORT"

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.elastic.client import ElasticClient
@@ -39,7 +39,6 @@ def _make_tenant() -> ConfigurationModels.Systems.Elastic.Tenant:
     return ConfigurationModels.Systems.Elastic.Tenant(
         name="test-tenant",
         description="test",
-        deployment=DeploymentStrategy.ALWAYS,
         setup=setup,
     )
 
@@ -484,19 +483,19 @@ def test_deploy_create_401_through_deploy_fails_the_run(
         "opentide.platforms.elastic.deployer.without_legacy_external_ids",
         lambda rules, platform: rules,
     )
-    monkeypatch.setattr(
-        "opentide.platforms.elastic.deployer.TideDeployment",
-        MagicMock(return_value=MagicMock(rule_deployment=[batch])),
-    )
+    tide_deployment = MagicMock(return_value=MagicMock(rule_deployment=[batch]))
+    monkeypatch.setattr("opentide.platforms.elastic.deployer.TideDeployment", tide_deployment)
     with (
         patch("requests.Session.get") as mock_get,
         patch("requests.Session.post") as mock_post,
     ):
         mock_get.return_value = _mock_response(404, {"message": "Not found"})
         mock_post.return_value = _mock_response(401, {"message": "unauthorized"})
-        ElasticDeploy().deploy(list(batch.rules), DeploymentStrategy.STAGING)
+        ElasticDeploy().deploy(list(batch.rules), (StatusStrategy.PREVIEW,))
 
         assert mock_post.call_count == 1
+    # The run's strategies reach tenant resolution unchanged.
+    assert tide_deployment.call_args.args[2] == (StatusStrategy.PREVIEW,)
     assert os.environ.get("DEPLOYMENT_ERROR_RAISED") == "1"
 
 

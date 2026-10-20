@@ -6,7 +6,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.logging import get_logger
 from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService
 from opentide.platforms.plugins import QueryValidator
@@ -174,14 +174,14 @@ class DefenderForEndpointQueryValidator(QueryValidator):
     def validate(
         self,
         mdr_deployment: Sequence[DetectionRule] | Sequence[str],
-        deployment_plan: DeploymentStrategy,
+        strategies: RunStrategies,
     ):
         if type(mdr_deployment[0]) is str:
             mdr_deployment = [Opentide.Rules[uuid] for uuid in mdr_deployment]
         deployment = TideDeployment(
             deployment=mdr_deployment,
             system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,
-            strategy=deployment_plan,
+            strategies=strategies,
         )
         for tenant_deployment in deployment.rule_deployment:
             tenant = tenant_deployment.tenant
@@ -199,5 +199,5 @@ def declare():
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
     DefenderForEndpointQueryValidator().validate(
-        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG
+        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, (StatusStrategy.PREVIEW,)
     )

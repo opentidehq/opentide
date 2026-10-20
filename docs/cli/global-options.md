@@ -64,7 +64,7 @@ Hosts listed in `NO_PROXY` (or `no_proxy`) are reached directly, with or without
 
 ```bash
 export NO_PROXY=splunk.internal.example
-opentide --proxy http://proxy.internal.example:8080 deploy --plan PRODUCTION
+opentide --proxy http://proxy.internal.example:8080 deploy --strategy RELEASE
 ```
 
 A `proxy` key under a tenant's `[tenants.setup]`, in `deployment.toml` `[proxy]` or in `[cve]` is retired: the command fails and names `opentide --proxy`. For pipelines behind a proxy, see [CI/CD → Behind a proxy or a private CA](../usage/workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
@@ -85,14 +85,14 @@ Without `--json`, a result prints its `message` first, then any `detail` and `ad
 
 `--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits non-zero with a JSON error naming the flags to pass instead — `--yes` plus the explicit selections. Without `--json` the same commands open the wizard as before.
 
-## Deployment plan
+## Strategy
 
-Some subcommands read `DEPLOYMENT_PLAN` from the environment or `--plan`. The plans are `STAGING`, `PRODUCTION` and `FULL`; they name a pipeline, not a status. What each one deploys is in [Configuration → deployment plan](../usage/configuration.md#deployment-plan).
+`opentide deploy` takes `--strategy PREVIEW` or `--strategy RELEASE` (repeatable): the status strategy the run deploys. `validate query --live` takes the same option to narrow its check. There is no environment variable for it. See [Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md).
 
-- `opentide deploy --plan STAGING`
-- `opentide validate query --platform sentinel --live --plan STAGING`
+- `opentide deploy --strategy PREVIEW`
+- `opentide validate query --platform sentinel --live --strategy RELEASE`
 
-`--plan` is unused by a bare `validate query`, which refuses and names `--live`. The plan applies to `validate query --live` and to `deploy`.
+`--plan` and `DEPLOYMENT_PLAN` were removed in 0.17.0. Passing `--plan`, or running `deploy` or `validate query --live` with `DEPLOYMENT_PLAN` set, fails with exit `2` and names the `--strategy` to use.
 
 ## Related
 

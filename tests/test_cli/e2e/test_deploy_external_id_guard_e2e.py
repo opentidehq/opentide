@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 from tests.corpus_support import CORPUS_RULE_UUIDS, write_rule_variant
 from tests.test_cli.conftest import parse_cli_json
-from tests.test_cli.e2e.helpers import uncomment_tenants
+from tests.test_cli.e2e.helpers import EVERY_RULE, uncomment_tenants
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -59,9 +59,7 @@ def _mock_sentinel(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
 
 def _deploy(invoke_cli, *extra: str):
-    return invoke_cli(
-        "deploy", "--platform", "sentinel", "--plan", "FULL", "--skip-promotion", *extra
-    )
+    return invoke_cli("deploy", "--platform", "sentinel", *EVERY_RULE, "--skip-promotion", *extra)
 
 
 def test_sentinel_deploy_refuses_a_rule_with_a_defender_rule_id(
@@ -121,12 +119,15 @@ def test_dry_run_plan_excludes_the_rule_and_fails(
 
 
 def test_live_query_validation_plan_excludes_the_rule(tide_corpus_repo: Path) -> None:
-    from opentide.deployment import DeploymentStrategy, make_deploy_plan
+    from opentide.deployment import make_deploy_plan
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     _give_sentinel_rule_a_defender_rule_id(tide_corpus_repo)
     write_rule_variant(_rules(tide_corpus_repo), "rule-0301-clean.yaml", CLEAN)
 
-    plan = make_deploy_plan(DeploymentStrategy.FULL, wide_scope=True, keep_deprecated=False)
+    plan = make_deploy_plan(
+        DEPLOYABLE_STRATEGIES, wide_scope=True, keep_deprecated=False, all_files=True
+    )
 
     assert all(REFUSED not in uuids for uuids in plan.values())
     assert CLEAN in plan["sentinel"]
@@ -148,7 +149,7 @@ def test_platform_left_empty_by_the_guard_fails(
     _mock_sentinel(monkeypatch)
 
     result = invoke_cli(
-        "deploy", "--platform", "defender_for_endpoint", "--plan", "FULL", "--skip-promotion"
+        "deploy", "--platform", "defender_for_endpoint", *EVERY_RULE, "--skip-promotion"
     )
 
     assert result.exit_code == 1, result.stdout + result.stderr
@@ -203,7 +204,7 @@ def test_direct_deployer_calls_refuse_a_legacy_key(
 
     from tests.corpus_support import clear_runtime_caches
 
-    from opentide.deployment import DeploymentStrategy
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     _give_sentinel_rule_a_defender_rule_id(tide_corpus_repo)
     clear_runtime_caches()
@@ -214,6 +215,6 @@ def test_direct_deployer_calls_refuse_a_legacy_key(
     if hasattr(deployer_module, "TideDeployment"):
         monkeypatch.setattr(deployer_module, "TideDeployment", built)
 
-    getattr(deployer_module, engine)().deploy([REFUSED], DeploymentStrategy.FULL)
+    getattr(deployer_module, engine)().deploy([REFUSED], DEPLOYABLE_STRATEGIES)
 
     built.assert_not_called()

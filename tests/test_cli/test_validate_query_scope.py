@@ -1,10 +1,12 @@
 """``validate query --changed``, ``--file`` and ``--uuid`` narrow the rule files, not the tenants.
 
 The generated pipelines sent every rule in the catalogue on every run: 45
-minutes for a 467-rule Splunk catalogue. ``--plan STAGING`` would have cut
-that too, but it also narrows the check to ``PREVIEW`` rules and ``STAGING``
-tenants, so a merge request that edits a ``PRODUCTION`` rule's query would
-merge it unchecked, and the push pipeline has no merge request to diff.
+minutes for a 467-rule Splunk catalogue. ``--strategy PREVIEW`` would cut
+that too, but it also narrows the check to ``PREVIEW`` rules, so a merge
+request that edits a ``PRODUCTION`` rule's query would merge it unchecked.
+Without ``--strategy`` each rule is checked on the tenants a deploy sends it
+to: here a ``STAGING`` rule on the ``PREVIEW`` tenant and a ``PRODUCTION``
+rule on the ``RELEASE`` tenant.
 
 The vendor SDK is replaced by stand-in modules, as in
 ``test_validate_query_tenants``: the real Sentinel validator runs.
@@ -34,8 +36,8 @@ from opentide.cli import app
 
 runner = CliRunner()
 
-STAGING_WORKSPACE = "11111111-1111-4111-8111-111111111111"
-PRODUCTION_WORKSPACE = "22222222-2222-4222-8222-222222222222"
+PREVIEW_WORKSPACE = "11111111-1111-4111-8111-111111111111"
+RELEASE_WORKSPACE = "22222222-2222-4222-8222-222222222222"
 SENTINEL_RULE = CORPUS_RULE_UUIDS["sentinel"]
 CHANGED_RULE = "00000000-0000-4000-8003-000000000301"
 ZERO_SHA = "0" * 40
@@ -64,12 +66,12 @@ _HIDDEN = (
 )
 
 
-def _tenant(name: str, deployment: str, workspace_id: str) -> str:
+def _tenant(name: str, strategy: str, workspace_id: str) -> str:
     return f"""
 [[tenants]]
 name = "{name}"
 description = "{name} workspace"
-deployment = "{deployment}"
+strategies = ["{strategy}"]
 [tenants.setup]
 ssl = true
 resource_group = "rg-{name.lower()}"
@@ -95,7 +97,7 @@ def _commit(repo: Path, message: str) -> str:
 
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path) -> Path:
-    """The corpus catalogue with a staging and a production Sentinel tenant, committed."""
+    """The corpus catalogue with a preview and a release Sentinel tenant, committed."""
     del git_home
     corpus = materialise_corpus(tmp_path / "corpus")
     repo = tmp_path / "repo"
@@ -109,8 +111,8 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path) -> Pat
     config = repo / ".opentide/configurations/systems/sentinel.toml"
     config.write_text(
         config.read_text(encoding="utf-8")
-        + _tenant("Staging", "STAGING", STAGING_WORKSPACE)
-        + _tenant("Production", "PRODUCTION", PRODUCTION_WORKSPACE),
+        + _tenant("Preview", "PREVIEW", PREVIEW_WORKSPACE)
+        + _tenant("Release", "RELEASE", RELEASE_WORKSPACE),
         encoding="utf-8",
     )
     _git(repo, "init", "-q", "-b", "main")
@@ -222,15 +224,17 @@ def test_without_a_scope_every_rule_is_checked(repo: Path, azure_client: MagicMo
 
     assert code == 0, payload
     assert "scope" not in payload
-    # rule-0001, rule-0008 and the new rule, on both tenants.
-    assert payload["queries_per_tenant"] == {"Staging": 3, "Production": 3}
+    assert payload["strategies"] == ["PREVIEW", "RELEASE"]
+    # rule-0001 and rule-0008 (STAGING) on the preview tenant, the new
+    # PRODUCTION rule on the release tenant.
+    assert payload["queries_per_tenant"] == {"Preview": 2, "Release": 1}
 
 
 @pytest.mark.parametrize(
     "provider",
     ["gitlab-merge-request", "gitlab-push", "gitlab-manual", "github-push", "azure-push"],
 )
-def test_changed_checks_only_the_rules_the_run_changed_on_every_tenant(
+def test_changed_checks_only_the_rules_the_run_changed_where_they_deploy(
     repo: Path, azure_client: MagicMock, provider: str
 ) -> None:
     base, head = _change_a_production_rule(repo)
@@ -240,11 +244,11 @@ def test_changed_checks_only_the_rules_the_run_changed_on_every_tenant(
     assert code == 0, payload
     assert payload["status"] == "passed"
     assert payload["scope"] == "changed"
-    # No plan: the changed PRODUCTION rule is checked on the staging tenant too,
-    # including on a merge request, which --plan STAGING would have skipped.
-    assert payload["plan"] == "FULL"
-    assert payload["queries_per_tenant"] == {"Staging": 1, "Production": 1}
-    assert sorted(_queried_workspaces(azure_client)) == [STAGING_WORKSPACE, PRODUCTION_WORKSPACE]
+    # No --strategy: the changed PRODUCTION rule is checked on the release tenant,
+    # including on a merge request, which --strategy PREVIEW would have skipped.
+    assert payload["strategies"] == ["PREVIEW", "RELEASE"]
+    assert payload["queries_per_tenant"] == {"Release": 1}
+    assert _queried_workspaces(azure_client) == [RELEASE_WORKSPACE]
 
 
 def test_changed_with_no_changed_rule_skips_without_a_query(
@@ -260,19 +264,48 @@ def test_changed_with_no_changed_rule_skips_without_a_query(
     assert payload["status"] == "skipped"
     assert payload["scope"] == "changed"
     assert payload["message"] == (
-        "No changed rules to validate for this platform in the current plan"
+        "No changed rule for this platform has a status that maps to the run's strategies"
     )
     azure_client.query_workspace.assert_not_called()
 
 
-def test_changed_outside_ci_refuses_and_names_file_and_uuid(
-    repo: Path, azure_client: MagicMock
-) -> None:
+def test_changed_outside_ci_checks_the_last_commit(repo: Path, azure_client: MagicMock) -> None:
+    """Outside CI ``--changed`` reads the local checkout's last commit (``HEAD^1..HEAD``)."""
+    _change_a_production_rule(repo)
+
     code, payload = _validate("--changed")
 
-    assert code == 2, payload
+    assert code == 0, payload
+    assert payload["status"] == "passed"
+    assert payload["scope"] == "changed"
+    assert payload["queries_per_tenant"] == {"Release": 1}
+    assert _queried_workspaces(azure_client) == [RELEASE_WORKSPACE]
+
+
+def test_changed_outside_ci_reads_only_the_last_commit(repo: Path, azure_client: MagicMock) -> None:
+    """A rule changed by an earlier commit is not in the last commit's diff."""
+    _change_a_production_rule(repo)
+    (repo / "README.md").write_text("no rule changed\n", encoding="utf-8")
+    _commit(repo, "readme")
+
+    code, payload = _validate("--changed")
+
+    assert code == 0, payload
+    assert payload["status"] == "skipped"
+    assert payload["scope"] == "changed"
+    azure_client.query_workspace.assert_not_called()
+
+
+def test_changed_outside_a_git_checkout_names_the_missing_checkout(
+    repo: Path, azure_client: MagicMock
+) -> None:
+    shutil.rmtree(repo / ".git")
+
+    code, payload = _validate("--changed")
+
+    assert code == 1, payload
     assert payload["status"] == "failed"
-    assert "--file or --uuid" in str(payload["message"])
+    assert "--changed needs a git checkout" in str(payload["message"])
     azure_client.query_workspace.assert_not_called()
 
 
@@ -287,23 +320,50 @@ def test_changed_cannot_be_combined_with_file(repo: Path, azure_client: MagicMoc
 @pytest.mark.parametrize(
     ("args", "per_tenant"),
     [
-        (("--file", "rule-0008-staging-promote.yaml"), 1),
-        (("--file", "objects/rules/rule-0008-staging-promote.yaml"), 1),
-        (("--uuid", SENTINEL_RULE), 1),
-        (("--uuid", SENTINEL_RULE.upper()), 1),
-        (("--file", "rule-0008-staging-promote.yaml", "--uuid", SENTINEL_RULE), 2),
+        (("--file", "rule-0008-staging-promote.yaml"), {"Preview": 1}),
+        (("--file", "objects/rules/rule-0008-staging-promote.yaml"), {"Preview": 1}),
+        (("--uuid", SENTINEL_RULE), {"Preview": 1}),
+        (("--uuid", SENTINEL_RULE.upper()), {"Preview": 1}),
+        (("--file", "rule-0008-staging-promote.yaml", "--uuid", SENTINEL_RULE), {"Preview": 2}),
+        (("--uuid", CHANGED_RULE), {"Release": 1}),
+        (("--uuid", SENTINEL_RULE, "--uuid", CHANGED_RULE), {"Preview": 1, "Release": 1}),
     ],
-    ids=["file-name", "file-path", "uuid", "uuid-uppercase", "file-and-uuid"],
+    ids=[
+        "file-name",
+        "file-path",
+        "uuid",
+        "uuid-uppercase",
+        "file-and-uuid",
+        "release-rule",
+        "preview-and-release-rules",
+    ],
 )
 def test_file_and_uuid_check_only_the_selected_rules(
-    repo: Path, azure_client: MagicMock, args: tuple[str, ...], per_tenant: int
+    repo: Path, azure_client: MagicMock, args: tuple[str, ...], per_tenant: dict[str, int]
 ) -> None:
+    _change_a_production_rule(repo)
+
     code, payload = _validate(*args)
 
     assert code == 0, payload
     assert payload["scope"] == "selected"
-    assert payload["plan"] == "FULL"
-    assert payload["queries_per_tenant"] == {"Staging": per_tenant, "Production": per_tenant}
+    assert payload["strategies"] == ["PREVIEW", "RELEASE"]
+    assert payload["queries_per_tenant"] == per_tenant
+
+
+def test_an_explicit_strategy_narrows_the_selected_rules(
+    repo: Path, azure_client: MagicMock
+) -> None:
+    _change_a_production_rule(repo)
+
+    code, payload = _validate(
+        "--strategy", "release", "--uuid", SENTINEL_RULE, "--uuid", CHANGED_RULE
+    )
+
+    assert code == 0, payload
+    assert payload["strategies"] == ["RELEASE"]
+    assert payload["queries_per_tenant"] == {"Release": 1}
+    assert _queried_workspaces(azure_client) == [RELEASE_WORKSPACE]
 
 
 def test_a_target_that_selects_no_rule_fails_before_any_query(
@@ -360,22 +420,54 @@ def test_changed_on_a_fork_pull_request_diffs_from_the_merge_ref(
 
     assert code == 0, payload
     assert payload["scope"] == "changed"
-    assert payload["queries_per_tenant"] == {"Staging": 1, "Production": 1}
+    assert payload["queries_per_tenant"] == {"Release": 1}
 
 
-def test_the_generated_gate_is_not_narrowed_by_an_inherited_plan(
+def test_the_generated_gate_checks_the_changed_rules_where_they_deploy(
     repo: Path, azure_client: MagicMock
 ) -> None:
-    """A project-wide ``DEPLOYMENT_PLAN`` must not narrow the generated live gate."""
     from opentide.ci.stages import query_validation_command
 
     base, head = _change_a_production_rule(repo)
-    env = {**_ci_env("gitlab-merge-request", repo, base, head), "DEPLOYMENT_PLAN": "STAGING"}
+    command = query_validation_command("sentinel")
+    assert command == "opentide validate query --platform sentinel --live --changed"
+    argv = command.split()[1:]
+
+    result = runner.invoke(
+        app, ["--json", *argv], env=_ci_env("gitlab-merge-request", repo, base, head)
+    )
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 0, payload
+    assert payload["strategies"] == ["PREVIEW", "RELEASE"]
+    assert payload["queries_per_tenant"] == {"Release": 1}
+
+
+@pytest.mark.parametrize(
+    ("plan", "replacement"),
+    [
+        ("STAGING", "--strategy PREVIEW"),
+        ("PRODUCTION", "--strategy RELEASE"),
+        ("FULL", "--strategy PREVIEW --strategy RELEASE --all"),
+    ],
+)
+def test_an_inherited_deployment_plan_fails_the_generated_gate(
+    repo: Path, azure_client: MagicMock, plan: str, replacement: str
+) -> None:
+    """``DEPLOYMENT_PLAN`` was removed in 0.17.0: a pipeline still setting it fails loudly."""
+    from opentide.ci.stages import query_validation_command
+    from opentide.models.deployment_enums import removed_plan_message
+
+    base, head = _change_a_production_rule(repo)
+    env = {**_ci_env("gitlab-merge-request", repo, base, head), "DEPLOYMENT_PLAN": plan}
     argv = query_validation_command("sentinel").split()[1:]
 
     result = runner.invoke(app, ["--json", *argv], env=env)
     payload = json.loads(result.stdout)
 
-    assert result.exit_code == 0, payload
-    assert payload["plan"] == "FULL"
-    assert payload["queries_per_tenant"] == {"Staging": 1, "Production": 1}
+    assert result.exit_code == 2, payload
+    assert payload["status"] == "failed"
+    assert payload["message"] == removed_plan_message(plan)
+    assert "DEPLOYMENT_PLAN was removed in 0.17.0" in str(payload["message"])
+    assert f"Use {replacement}." in str(payload["message"])
+    azure_client.query_workspace.assert_not_called()

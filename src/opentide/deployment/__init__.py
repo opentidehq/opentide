@@ -13,7 +13,7 @@ from opentide.deployment.utils import (
     enabled_systems,
     make_deploy_plan,
 )
-from opentide.models.deployment_enums import DeploymentStrategy, DetectionPlatforms
+from opentide.models.deployment_enums import DetectionPlatforms, StatusStrategy
 
 if TYPE_CHECKING:
     from opentide.deployment.planning import TideDeployment
@@ -34,7 +34,7 @@ __all__ = [
     "enabled_systems",
     "Proxy",
     "TideDeployment",
-    "DeploymentStrategy",
+    "StatusStrategy",
     "DetectionPlatforms",
     "DetectionSystems",
 ]

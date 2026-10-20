@@ -18,7 +18,6 @@ from opentide.platforms.enabled import (
 TENANT = """
 [[tenants]]
 name = "Primary"
-deployment = "ALWAYS"
 """
 
 

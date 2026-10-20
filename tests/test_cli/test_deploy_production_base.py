@@ -1,4 +1,4 @@
-"""The PRODUCTION plan diffs against HEAD's first parent (#546).
+"""A push run (the RELEASE job) diffs against HEAD's first parent (#546).
 
 The base used to be the second commit of a date-ordered walk from HEAD. On a
 merge commit that is usually the merged branch's head, so the rules the merge
@@ -43,6 +43,8 @@ _HIDDEN = (
     "CI_COMMIT_SHA",
     "CI_COMMIT_BEFORE_SHA",
     "DEPLOYMENT_PLAN",
+    "GITHUB_EVENT_NAME",
+    "BUILD_REASON",
 )
 
 
@@ -151,7 +153,7 @@ def test_production_base_is_the_first_parent(
 
 @pytest.mark.parametrize("ci", ["github", "azure"])
 @pytest.mark.parametrize("detached", [True, False], ids=["pull-request-merge-ref", "branch-merge"])
-def test_production_plan_deploys_the_rules_a_merge_changed(
+def test_release_push_deploys_the_rules_a_merge_changed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path, detached: bool, ci: str
 ) -> None:
     del git_home
@@ -160,19 +162,41 @@ def test_production_plan_deploys_the_rules_a_merge_changed(
 
     result = runner.invoke(
         app,
-        ["--json", "deploy", "--dry-run", "--plan", "PRODUCTION"],
+        ["--json", "deploy", "--dry-run", "--strategy", "RELEASE"],
         env=_env(repo, head, ci),
     )
 
     assert result.exit_code == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["status"] == "completed", payload
+    assert payload["strategies"] == ["RELEASE"]
     # Only the merged branch's rule: the trunk rule was already deployed by
     # the trunk's own production run.
     assert payload["plan"] == {"sentinel": [FEATURE_RULE_UUID]}
 
 
-def test_production_plan_on_the_first_commit_is_empty(
+def test_a_preview_push_reads_the_same_diff_but_skips_release_rules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path
+) -> None:
+    """The CI context picks the diff; the strategy only picks the statuses it deploys."""
+    del git_home
+    repo, head = _merged_catalogue(tmp_path, detached=False)
+    monkeypatch.chdir(repo)
+
+    result = runner.invoke(
+        app,
+        ["--json", "deploy", "--dry-run", "--strategy", "PREVIEW"],
+        env=_env(repo, head),
+    )
+
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "skipped", payload
+    assert payload["plan"] == {}
+    assert payload["message"] == "No rule this run read has a status that maps to its strategies"
+
+
+def test_release_push_on_the_first_commit_is_empty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path
 ) -> None:
     del git_home
@@ -183,7 +207,7 @@ def test_production_plan_on_the_first_commit_is_empty(
 
     result = runner.invoke(
         app,
-        ["--json", "deploy", "--dry-run", "--plan", "PRODUCTION"],
+        ["--json", "deploy", "--dry-run", "--strategy", "RELEASE"],
         env=_env(repo, _git(repo, "rev-parse", "HEAD")),
     )
 

@@ -62,10 +62,6 @@ class CliContext:
         """Register this context for nested Typer subcommand resolution."""
         _cli_context.set(self)
 
-    def set_deployment_plan(self, plan: str | None) -> None:
-        if plan is not None:
-            os.environ["DEPLOYMENT_PLAN"] = plan.upper()
-
 
 def sync_typer_rendering(*, no_color: bool) -> None:
     """Apply colour preferences to Typer's help and error panels.

@@ -8,7 +8,8 @@ from opentide.core.registry import Opentide
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels, TenantDeployment
 from opentide.core.errors import Errors
-from opentide.deployment import DetectionPlatforms, DeploymentStrategy
+from opentide.deployment import DetectionPlatforms
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel.validator')
 
@@ -53,7 +54,7 @@ class SentinelQueryValidator(QueryValidator):
             logger.critical('fatal_error', detail=f'Unexpected error during query validation for : {mdr.name} ({mdr_uuid})', context_1=f'{type(error).__name__}: {error}', advice='An unhandled exception occurred. Review the error details above.')
             os.environ['VALIDATION_ERROR_RAISED'] = 'True'
 
-    def validate(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan: DeploymentStrategy):
+    def validate(self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
@@ -65,7 +66,7 @@ class SentinelQueryValidator(QueryValidator):
         from azure.identity import ClientSecretCredential
         from azure.monitor.query import LogsQueryClient
         from opentide.deployment import TideDeployment
-        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL, strategy=deployment_plan)
+        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL, strategies=strategies)
         for tenant_deployment in deployment.rule_deployment:
             tenant_deployment: TenantDeployment.Sentinel
             tenant_setup = tenant_deployment.tenant.setup
@@ -89,4 +90,4 @@ class SentinelQueryValidator(QueryValidator):
 def declare():
     return SentinelQueryValidator()
 if __name__ == '__main__' and DebugEnvironment.ENABLED:
-    SentinelQueryValidator().validate(['5e791284-684c-4245-9ac7-cf00a1d041d6'], DeploymentStrategy.DEBUG)
+    SentinelQueryValidator().validate(['5e791284-684c-4245-9ac7-cf00a1d041d6'], (StatusStrategy.PREVIEW,))

@@ -16,5 +16,5 @@ Do not create `Schemas/Templates`, `Configurations/systems`, or `mdr::2.1` docum
 opentide validate --strict
 opentide lint --strict
 opentide generate
-opentide deploy --dry-run
+opentide deploy --dry-run --strategy PREVIEW --all
 ```

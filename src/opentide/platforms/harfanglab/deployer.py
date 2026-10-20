@@ -3,7 +3,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.models.system_config import ConfigurationModels
@@ -191,7 +191,7 @@ class HarfangLabDeploy(RuleDeployer):
             logger.info('deploying_yara_rule', detail=rule.name, advice=str(rule_id))
             service.create_or_update_yara_rule(rule=rule, rule_id=rule_id)
 
-    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan: DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies):
         """
         Triggers the deployment sequence for a series of MDR uuids or DetectionRule Objects
         """
@@ -203,7 +203,7 @@ class HarfangLabDeploy(RuleDeployer):
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = without_legacy_external_ids(loaded_mdr, platform='harfanglab')
-        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.HARFANGLAB, strategy=deployment_plan)
+        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.HARFANGLAB, strategies=strategies)
         for tenant_deployment in deployment.rule_deployment:
             logger.info('currently_targeting_tenant', detail=tenant_deployment.tenant.name)
             service = HarfangLabService(tenant_deployment.tenant)
@@ -225,4 +225,4 @@ class HarfangLabDeploy(RuleDeployer):
 def declare():
     return HarfangLabDeploy()
 if __name__ == '__main__' and DebugEnvironment.ENABLED:
-    HarfangLabDeploy().deploy(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG)
+    HarfangLabDeploy().deploy(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, (StatusStrategy.PREVIEW,))

@@ -96,8 +96,10 @@ def test_validate_query_platform_matrix(
         "query",
         "--platform",
         platform,
-        "--plan",
-        "FULL",
+        "--strategy",
+        "PREVIEW",
+        "--strategy",
+        "RELEASE",
         "--wide",
     )
     assert result.exit_code == 1, result.stdout + result.stderr
@@ -112,20 +114,34 @@ def test_validate_query_platform_matrix(
             assert "not supported" in body.get("message", "")
 
 
-def test_validate_query_without_plan_or_wide(invoke_cli) -> None:
-    """Unset DEPLOYMENT_PLAN must not traceback on validate query (issue #164)."""
-    result = invoke_cli(
-        "validate",
-        "query",
-        "--platform",
-        "sentinel",
-        extra_env={"DEPLOYMENT_PLAN": ""},
-    )
+def test_validate_query_without_strategy_or_wide(invoke_cli) -> None:
+    """No ``--strategy`` must not traceback on validate query (issue #164)."""
+    result = invoke_cli("validate", "query", "--platform", "sentinel")
     assert result.exit_code == 1, result.stdout + result.stderr
     payload = parse_cli_json(result)
     assert payload.get("supported") is True
     assert payload.get("status") == "failed"
     assert "--live" in payload["message"]
+
+
+def test_validate_query_live_refuses_the_removed_deployment_plan(
+    invoke_cli, refuse_deployment_engines: list[str]
+) -> None:
+    """``DEPLOYMENT_PLAN`` was removed in 0.17.0; a pipeline still setting it fails loudly."""
+    result = invoke_cli(
+        "validate",
+        "query",
+        "--platform",
+        "sentinel",
+        "--live",
+        extra_env={"DEPLOYMENT_PLAN": "FULL"},
+    )
+    assert result.exit_code == 2, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["status"] == "failed"
+    assert payload["message"].startswith("DEPLOYMENT_PLAN was removed in 0.17.0")
+    assert "Unset DEPLOYMENT_PLAN" in payload["message"]
+    assert refuse_deployment_engines == []
 
 
 def test_validate_query_bare_needs_no_vendor_sdk(invoke_cli) -> None:
@@ -163,6 +179,8 @@ def test_validate_query_live_uses_the_platform_engine(invoke_cli, mock_query_val
     payload = assert_json_ok(result)
     assert payload["mode"] == "live"
     assert payload["status"] == "passed"
+    assert payload["strategies"] == ["PREVIEW", "RELEASE"]
+    assert "plan" not in payload
 
 
 @pytest.mark.usefixtures("sentinel_tenant")

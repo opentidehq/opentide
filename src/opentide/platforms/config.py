@@ -35,6 +35,49 @@ _SYSTEM_MODELS: dict[str, Any] = {
 #: bundled TOML treats them as optional.
 _SETUP_DEFAULTS: dict[str, Any] = {"ssl": True}
 
+#: What replaces each value of the tenant ``deployment`` key, removed in 0.17.0.
+_DEPLOYMENT_KEY_REPLACEMENT = {
+    "STAGING": 'strategies = ["PREVIEW"]',
+    "PRODUCTION": 'strategies = ["RELEASE"]',
+    "ALWAYS": "no key at all (a tenant accepts every strategy by default)",
+    "FULL": "no key at all (a tenant accepts every strategy by default)",
+    "MANUAL": "manual = true",
+    "DEBUG": 'strategies = ["PREVIEW"]',
+}
+
+
+def _tenant_targeting(data: dict[str, Any], *, where: str) -> dict[str, Any]:
+    """Read a tenant's ``strategies`` and ``manual``; refuse the removed ``deployment`` key."""
+    from opentide.models.deployment_enums import parse_strategies
+
+    if "deployment" in data:
+        value = str(data["deployment"]).strip().upper()
+        replacement = _DEPLOYMENT_KEY_REPLACEMENT.get(
+            value, 'strategies = ["PREVIEW"] or strategies = ["RELEASE"]'
+        )
+        raise ValueError(
+            f"{where}: the tenant key 'deployment' was removed in 0.17.0. A tenant now lists "
+            f"the status strategies it accepts. Replace deployment = {data['deployment']!r} "
+            f"with {replacement}."
+        )
+    targeting: dict[str, Any] = {}
+    if "strategies" in data:
+        raw = data["strategies"]
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list) or not raw:
+            raise ValueError(
+                f"{where}: strategies must list PREVIEW, RELEASE, or both; "
+                "omit it to accept every strategy"
+            )
+        targeting["strategies"] = parse_strategies(raw, source=f"{where} strategies:")
+    if "manual" in data:
+        if not isinstance(data["manual"], bool):
+            raise ValueError(f"{where}: manual must be true or false")
+        targeting["manual"] = data["manual"]
+    return targeting
+
+
 _PROXY_RETIRED = (
     "The proxy key is retired. Pass the URL with `opentide --proxy http://[user:pass@]host:port`."
 )
@@ -95,7 +138,7 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
         kwargs: dict[str, Any] = {
             "name": data["name"],
             "description": data.get("description", ""),
-            "deployment": data.get("deployment", "ALWAYS"),
+            **_tenant_targeting(data, where=where),
             "setup": _build_section(tenant_cls.Setup, setup_raw, where=f"{where} setup"),
         }
         parameters_cls = getattr(tenant_cls, "Parameters", None)
@@ -170,8 +213,10 @@ def _load_splunk_tenants(
             ConfigurationModels.Systems.Splunk.Tenant(
                 name=tenant_data["name"],
                 description=tenant_data.get("description", ""),
-                deployment=tenant_data.get("deployment", "ALWAYS"),
                 setup=setup,
+                **_tenant_targeting(
+                    tenant_data, where=f"splunk tenant {tenant_data.get('name', '<unnamed>')!r}"
+                ),
             )
         )
     return tenants
@@ -204,8 +249,11 @@ def _load_cbc_tenants(
             ConfigurationModels.Systems.CarbonBlackCloud.Tenant(
                 name=tenant_data["name"],
                 description=tenant_data.get("description", ""),
-                deployment=tenant_data.get("deployment", "ALWAYS"),
                 setup=setup,
+                **_tenant_targeting(
+                    tenant_data,
+                    where=f"carbon_black_cloud tenant {tenant_data.get('name', '<unnamed>')!r}",
+                ),
             )
         )
     return tenants

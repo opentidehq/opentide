@@ -12,7 +12,7 @@ from opentide.core.responders import resolve_responders
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.generation.framework import get_type, techniques_resolver
-from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.plugins import RuleDeployer
@@ -428,11 +428,11 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
     def deploy(
         self,
         mdr_deployment: Sequence[DetectionRule] | list[str],
-        deployment_plan: DeploymentStrategy | None = None,
+        strategies: RunStrategies | None = None,
     ) -> None:
         """Deploy Splunk MDRs through TideDeployment tenant routing."""
-        if not deployment_plan:
-            raise ValueError("deployment_plan is required for Splunk deployment")
+        if not strategies:
+            raise ValueError("run strategies are required for Splunk deployment")
 
         loaded_mdr: list[DetectionRule] = []
         for mdr in mdr_deployment:
@@ -451,7 +451,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         tide_deployment = TideDeployment(
             deployment=loaded_mdr,
             system=DetectionPlatforms.SPLUNK,
-            strategy=deployment_plan,
+            strategies=strategies,
         )
         for tenant_deployment in tide_deployment.rule_deployment:
             tenant = tenant_deployment.tenant
@@ -473,4 +473,4 @@ def declare():
 
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    SplunkDeploy().deploy(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG)
+    SplunkDeploy().deploy(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, (StatusStrategy.PREVIEW,))

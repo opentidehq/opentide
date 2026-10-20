@@ -160,17 +160,17 @@ opentide validate query --platform sentinel
 opentide validate query --platform sentinel --live
 opentide validate query --platform splunk --live --changed
 opentide validate query --platform splunk --live --file objects/rules/example.yaml
-opentide validate query --platform splunk --live --plan STAGING --wide
+opentide validate query --platform splunk --live --strategy RELEASE --wide
 ```
 
 | Flag | Purpose |
 |------|---------|
 | `--platform` | **Required.** Platform enum value |
 | `--live` | Check the catalogue queries against the tenant (needs SDKs + credentials) |
-| `--changed` | In CI, check only the rule files this pull request, merge request or push changed (see [Which rules are checked](#which-rules-are-checked)) — `--live` only |
+| `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) — `--live` only |
 | `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). Repeatable — `--live` only |
 | `--uuid` | Check only the rule with this UUID. Repeatable — `--live` only |
-| `--plan` | [Deployment plan](../usage/configuration.md#deployment-plan) (`DEPLOYMENT_PLAN` env) — `--live` only |
+| `--strategy` | Check only the rules a run with this strategy deploys, on the tenants that accept it: `PREVIEW` or `RELEASE`, repeatable. Default: both — `--live` only |
 | `--wide` | Ignore each rule's status: check every status except `DISABLEMENT` and `DELETION`, `INERT` included — `--live` only |
 
 ### The tenant check is `--live`
@@ -198,8 +198,7 @@ tenant credentials. The vendor SDKs ship with `pip install opentide`; there are 
 extras. If an SDK will not import, the environment is damaged and the command
 fails with the remedy rather than a `ModuleNotFoundError` traceback: the `advice`
 field in `--json`, an `advice: reinstall opentide: pip install --force-reinstall
-opentide` line under the `FATAL` line otherwise. A missing plan is a failed live
-check.
+opentide` line under the `FATAL` line otherwise.
 Only the requested platform's engine is
 loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
 modules. A platform with no `[[tenants]]` entry fails the same way, before the
@@ -230,12 +229,14 @@ configured tenant:
 
 ### Which rules are checked
 
-By default the live check reads the rule files a deploy under the same plan reads: every rule file directly in the rules folder for the `FULL` plan (no `--plan`), or the CI diff for `--plan STAGING` and `--plan PRODUCTION`. Of those, it checks the rules whose status strategy the plan [deploys](../usage/configuration.md#deployment-plan), except `DISABLEMENT` and `DELETION`. `--wide` drops the strategy filter, so `INERT` rules are checked too.
+A live check sends each rule's query to the tenants a deploy would send the rule to. By default it reads every rule file directly in the rules folder, and checks each rule whose status maps to a strategy a `PREVIEW` or `RELEASE` run deploys: `PREVIEW`, `RELEASE` and `UNIVERSAL`. Rules whose status maps to `DISABLEMENT` or `DELETION` send no query: they are disabled or deleted, not deployed active. `--wide` drops the strategy filter, so `INERT` rules are checked too, on every tenant accepting the run's strategies.
 
-Three flags narrow the rule files and leave the plan alone, so the strategies and the tenants stay the plan's:
+`--strategy PREVIEW` or `--strategy RELEASE` narrows the check to the rules that run deploys, on the tenants that accept it. See [Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md).
 
-- `--changed` reads the rule files the current CI run changed. On a pull or merge request those are the files `deploy --plan STAGING` reads: the diff from the request's merge base. On any other GitHub Actions, GitLab CI or Azure Pipelines run they are the files `deploy --plan PRODUCTION` reads: the pushed commit's diff. Outside CI the flag refuses with exit `2`; select rules with `--file` or `--uuid` instead. The [generated pipelines](../usage/workflows/ci-cd.md) pass `--changed --plan FULL`, so a pull request that edits one rule sends that rule's queries, not the whole catalogue's. A changed rule in `PRODUCTION` status is still checked on the pull request, on every tenant it can reach. `--plan STAGING` would check neither: it keeps only `PREVIEW` rules and `STAGING` tenants. When no changed rule has a block for the platform, the result is `skipped` with exit `0`.
-- `--file` and `--uuid` select rules by file or UUID, for a check outside CI. Each target must select a rule file directly in the rules folder. A target that selects none fails the run with exit `1` before any query is sent, and `--json` lists it under `unmatched`. `--changed` cannot be combined with either (exit `2`).
+Three flags narrow the rule files and leave the rest alone:
+
+- `--changed` reads the rule files a deploy of the same run reads. On a pull or merge request: the diff from the request's merge base. On any other GitHub Actions, GitLab CI or Azure Pipelines run: the pushed commit's diff. Outside CI: the last commit. The [generated pipelines](../usage/workflows/ci-cd.md) pass `--changed`, so a pull request that edits one rule sends that rule's queries, not the whole catalogue's. A changed rule in `PRODUCTION` status is checked on the pull request, on the tenants that accept `RELEASE`, before it merges. When no changed rule has a block for the platform, the result is `skipped` with exit `0`.
+- `--file` and `--uuid` select rules by file or UUID. Each target must select a rule file directly in the rules folder. A target that selects none fails the run with exit `1` before any query is sent, and `--json` lists it under `unmatched`. `--changed` cannot be combined with either (exit `2`).
 
 `--json` names the narrowing in `scope`: `changed` or `selected`.
 
@@ -243,40 +244,35 @@ Through 0.16.1 the generated pipelines passed none of these flags, so every run 
 
 ### Which tenants are checked
 
-A live check only reads, so it is not bound by the tenant `deployment`
-strategy the way `deploy` is. With no `--plan` (the `FULL` plan), every
-tenant a rule can reach is checked: `STAGING`, `PRODUCTION` and `ALWAYS`
-tenants, and a `MANUAL` tenant when the rule lists it under `tenants`. A
-rule's `tenants` list still limits it to those tenants. `--plan STAGING` or
-`--plan PRODUCTION` narrows the check to the tenants that plan deploys to.
-When that leaves every rule without a tenant (for example, only staging-only
-rules under `--plan PRODUCTION`), nothing needed checking: the result is
-`skipped` with exit `0`. Exit `2` is kept for rules that reach no configured
-tenant at all, where the check could never run.
-`deploy` itself is unchanged: a `FULL` deploy still targets only `ALWAYS`,
-listed `MANUAL` and plan-equal tenants.
+A rule is checked on the tenants a deploy sends it to: those whose `strategies` accept a run strategy that deploys the strategy its status maps to. A rule in `DEVELOPMENT` (`PREVIEW`) is checked on the tenants accepting `PREVIEW`; one in `PRODUCTION` (`RELEASE`) on those accepting `RELEASE`. A `manual` tenant is checked only for the rules that list it under `tenants`, and a rule's `tenants` list limits it to those tenants.
 
-`--json` reports the plan and how many queries each tenant received. The sample is illustrative, because a live run needs tenant credentials:
+When an explicit `--strategy` leaves every rule without a tenant (for example, only `PREVIEW` rules under `--strategy RELEASE`), nothing needed checking: the result is `skipped` with exit `0`. Exit `2` is kept for rules that reach no configured tenant at all, where the check could never run.
+
+Through 0.16.1 a live check without `--plan` reached every tenant a rule could reach, whatever the tenant's `deployment` class. Since 0.17.0 it follows deploy: a `PREVIEW` rule is not checked on a tenant that only accepts `RELEASE`. The pull request that moves the rule to a `RELEASE` status checks it there, before that change merges.
+
+`--json` reports the run's strategies and how many queries each tenant received. The sample is illustrative, because a live run needs tenant credentials:
 
 ```json illustrative
 {
   "platform": "sentinel",
   "mode": "live",
   "status": "passed",
-  "plan": "FULL",
+  "strategies": ["PREVIEW", "RELEASE"],
   "queries_validated": 4,
   "queries_per_tenant": { "Staging": 2, "Production": 2 }
 }
 ```
 
-A run that sends no query never reports `passed`. When the plan has rules for
+A run that sends no query never reports `passed`. When there are rules for
 the platform but none of them resolves to a configured tenant, the command
 reports `skipped`, names the reason in `message` and `advice`, and exits `2`,
 the same code the generated CI credential guard uses for a check that did not
 run. Through 0.14.2 that case printed `Query validation passed` with zero
-queries sent, which made the generated pipeline's live gate a no-op for the
-usual `STAGING` + `PRODUCTION` tenant layout. A plan with no rules for the
-platform at all is still `skipped` with exit `0`: there is nothing to check.
+queries sent, which made the generated pipeline's live gate a no-op. With no
+rules for the platform at all, the result is still `skipped` with exit `0`:
+there is nothing to check.
+
+`--plan` and `DEPLOYMENT_PLAN` were removed in 0.17.0; either fails with exit `2` and names the `--strategy` to use.
 
 ### Supported platforms
 

@@ -37,7 +37,7 @@ SUBFOLDER_RULE_UUIDS = {
     "team-a/rule-0101-subfolder.yaml": "00000000-0000-4000-8003-000000000101",
     "team-a/deep/rule-0001-sentinel-kql.yaml": "00000000-0000-4000-8003-000000000102",
 }
-#: A top-level rule no plan deploys: ``DESIGN`` maps to the ``INERT`` strategy.
+#: A top-level rule no run strategy deploys: ``DESIGN`` maps to the ``INERT`` strategy.
 INERT_RULE_UUID = "00000000-0000-4000-8003-000000000103"
 CORPUS_THREAT_UUID = "00000000-0000-4000-8001-000000000001"
 CORPUS_OBJECTIVE_UUID = "00000000-0000-4000-8002-000000000001"
@@ -134,7 +134,7 @@ def write_rule_variant(rules: Path, relative: str, uuid: str, *, status: str = "
 
 
 def add_unplanned_rules(rules: Path) -> None:
-    """Add the rules a FULL plan leaves out: in subfolders, and ``INERT``."""
+    """Add the rules a PREVIEW+RELEASE ``--all`` run leaves out: in subfolders, and ``INERT``."""
     for relative, uuid in SUBFOLDER_RULE_UUIDS.items():
         write_rule_variant(rules, relative, uuid)
     write_rule_variant(rules, "rule-0103-design.yaml", INERT_RULE_UUID, status="DESIGN")
@@ -194,7 +194,6 @@ def corpus_env(repo: Path) -> dict[str, str]:
     return {
         "OPENTIDE_REPO_ROOT": str(repo),
         "OPENTIDE_TIDE_WORKSPACE": str(repo),
-        "DEPLOYMENT_PLAN": "FULL",
     }
 
 
@@ -211,7 +210,7 @@ def tide_corpus_repo(
     dest = materialise_corpus(tmp_path / "corpus")
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(dest))
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(dest))
-    monkeypatch.setenv("DEPLOYMENT_PLAN", "FULL")
+    monkeypatch.delenv("DEPLOYMENT_PLAN", raising=False)
     monkeypatch.setenv("CI", "true")
     clear_runtime_caches()
     yield dest

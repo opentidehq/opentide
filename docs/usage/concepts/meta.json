@@ -1,4 +1,4 @@
 {
   "title": "Concepts",
-  "pages": ["object-model", "platforms", "schema-revision", "deployment-state"]
+  "pages": ["object-model", "platforms", "statuses-and-strategies", "schema-revision", "deployment-state"]
 }

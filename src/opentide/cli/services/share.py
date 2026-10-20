@@ -244,11 +244,10 @@ def _changed_files(
     The second value is ``None`` when *filters* is ready, ``"empty"`` when the
     diff selects nothing, or the diff error text.
     """
-    from opentide.deployment.git_repo import diff_calculation
-    from opentide.models.deployment_enums import DeploymentStrategy
+    from opentide.deployment.git_repo import DiffSource, diff_calculation
 
     try:
-        changed = diff_calculation(DeploymentStrategy.PRODUCTION)
+        changed = diff_calculation(DiffSource.PUSH)
     except Exception as exc:
         text = str(exc).strip()
         return None, text or _PREFLIGHT["changed_diff"]

@@ -17,7 +17,7 @@ flags = []
 #[[tenants]]
 #name = "elastic-staging"
 #description = "Serverless Security project, staging space"
-#deployment = "STAGING"
+#strategies = ["PREVIEW"]
 #[tenants.setup]
 #ssl = true
 #url = "https://soc-staging.kb.eu-west-1.aws.elastic.cloud"
@@ -28,7 +28,7 @@ flags = []
 #[[tenants]]
 #name = "elastic-prod"
 #description = "Self-managed cluster on a Basic licence, default space"
-#deployment = "PRODUCTION"
+#strategies = ["RELEASE"]
 #[tenants.setup]
 #ssl = true
 #url = "https://kibana.soc.example.internal:5601"

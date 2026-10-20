@@ -1,10 +1,10 @@
-"""A PRODUCTION deploy retires DISABLED and REMOVED rules by default (#548).
+"""A RELEASE deploy retires DISABLED and REMOVED rules by default (#548).
 
 The deployment spec defines ``DISABLEMENT`` as "any active deployment of the
-rule is disabled" and ``DELETION`` as removal from the platform, and the
-PRODUCTION allow-list includes both. ``--keep-deprecated`` defaulted to off,
-so those rules were dropped before the allow-list was consulted and a
-retirement never reached the platform.
+rule is disabled" and ``DELETION`` as removal from the platform, and a
+``RELEASE`` run acts on both. ``--keep-deprecated`` defaulted to off, so those
+rules were dropped before the strategy was consulted and a retirement never
+reached the platform. It now defaults on, and off only with ``--all``.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from typer.testing import CliRunner
 
 from opentide.cli import app
 from opentide.cli.services.deploy import keeps_deprecated
-from opentide.models.deployment_enums import DeploymentStrategy
 
 runner = CliRunner()
 
@@ -48,7 +47,7 @@ def _fresh_registry() -> object:
 
 
 @pytest.mark.parametrize("status", ["DISABLED", "REMOVED"])
-def test_production_plan_deploys_a_retired_rule(
+def test_release_run_deploys_a_retired_rule(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path, status: str
 ) -> None:
     del git_home
@@ -56,7 +55,7 @@ def test_production_plan_deploys_a_retired_rule(
     monkeypatch.chdir(repo)
 
     result = runner.invoke(
-        app, ["--json", "deploy", "--dry-run", "--plan", "PRODUCTION"], env=_env(repo, head)
+        app, ["--json", "deploy", "--dry-run", "--strategy", "RELEASE"], env=_env(repo, head)
     )
 
     assert result.exit_code == 0, result.stdout + result.stderr
@@ -64,7 +63,28 @@ def test_production_plan_deploys_a_retired_rule(
     assert payload["plan"] == {"sentinel": [SENTINEL_RULE]}
 
 
-def test_drop_deprecated_restores_the_old_production_behaviour(
+@pytest.mark.parametrize("status", ["DISABLED", "REMOVED"])
+def test_preview_run_never_retires_a_rule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path, status: str
+) -> None:
+    """Only a RELEASE run acts on DISABLEMENT and DELETION rules."""
+    del git_home
+    repo, head = _retire(tmp_path, status)
+    monkeypatch.chdir(repo)
+
+    result = runner.invoke(
+        app,
+        ["--json", "deploy", "--dry-run", "--strategy", "PREVIEW", "--keep-deprecated"],
+        env=_env(repo, head),
+    )
+
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "skipped"
+    assert payload["plan"] == {}
+
+
+def test_drop_deprecated_leaves_retired_rules_alone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path
 ) -> None:
     del git_home
@@ -73,7 +93,7 @@ def test_drop_deprecated_restores_the_old_production_behaviour(
 
     result = runner.invoke(
         app,
-        ["--json", "deploy", "--dry-run", "--plan", "PRODUCTION", "--drop-deprecated"],
+        ["--json", "deploy", "--dry-run", "--strategy", "RELEASE", "--drop-deprecated"],
         env=_env(repo, head),
     )
 
@@ -84,16 +104,43 @@ def test_drop_deprecated_restores_the_old_production_behaviour(
 
 
 @pytest.mark.parametrize(
-    ("plan", "requested", "expected"),
+    ("all_files", "requested", "expected"),
     [
-        (DeploymentStrategy.PRODUCTION, None, True),
-        (DeploymentStrategy.STAGING, None, False),
-        (DeploymentStrategy.FULL, None, False),
-        (DeploymentStrategy.PRODUCTION, False, False),
-        (DeploymentStrategy.FULL, True, True),
+        (False, None, True),
+        (True, None, False),
+        (False, False, False),
+        (True, True, True),
     ],
+    ids=["diff", "all", "diff-drop-deprecated", "all-keep-deprecated"],
 )
-def test_keep_deprecated_defaults_on_for_production_only(
-    plan: DeploymentStrategy, requested: bool | None, expected: bool
+def test_keep_deprecated_defaults_on_unless_every_rule_file_is_read(
+    all_files: bool, requested: bool | None, expected: bool
 ) -> None:
-    assert keeps_deprecated(plan, requested) is expected
+    assert keeps_deprecated(all_files, requested) is expected
+
+
+def test_every_rule_file_leaves_the_retired_catalogue_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path
+) -> None:
+    """``--all`` must not disable or delete every retired rule by accident."""
+    del git_home
+    repo, head = _retire(tmp_path, "REMOVED")
+    monkeypatch.chdir(repo)
+
+    result = runner.invoke(
+        app,
+        ["--json", "deploy", "--dry-run", "--strategy", "RELEASE", "--all"],
+        env=_env(repo, head),
+    )
+
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert SENTINEL_RULE not in payload["plan"].get("sentinel", [])
+
+    kept = runner.invoke(
+        app,
+        ["--json", "deploy", "--dry-run", "--strategy", "RELEASE", "--all", "--keep-deprecated"],
+        env=_env(repo, head),
+    )
+    assert kept.exit_code == 0, kept.stdout + kept.stderr
+    assert SENTINEL_RULE in json.loads(kept.stdout)["plan"]["sentinel"]

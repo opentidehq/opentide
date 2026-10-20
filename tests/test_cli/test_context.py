@@ -138,10 +138,15 @@ def test_explicit_repo_overrides_an_exported_workspace(
     assert os.environ["OPENTIDE_TIDE_WORKSPACE"] == str(tmp_path)
 
 
-def test_cli_context_set_deployment_plan() -> None:
-    ctx = CliContext()
-    ctx.set_deployment_plan("staging")
-    assert os.environ["DEPLOYMENT_PLAN"] == "STAGING"
+def test_cli_context_no_longer_exports_a_deployment_plan(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``DEPLOYMENT_PLAN`` was removed in 0.17.0: a run passes ``--strategy`` instead."""
+    monkeypatch.delenv("DEPLOYMENT_PLAN", raising=False)
+    ctx = CliContext(repo=tmp_path, repo_explicit=True)
+    assert not hasattr(ctx, "set_deployment_plan")
+    ctx.apply_environment()
+    assert "DEPLOYMENT_PLAN" not in os.environ
 
 
 def test_get_context_from_contextvar() -> None:

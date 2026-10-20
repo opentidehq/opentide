@@ -1,4 +1,4 @@
-"""GitHub STAGING without pull-request refs (#334)."""
+"""A GitHub pull request run without pull-request refs (#334)."""
 
 from __future__ import annotations
 
@@ -37,6 +37,7 @@ _HIDDEN = (
     "OPENTIDE_REPO_ROOT",
     "OPENTIDE_TIDE_WORKSPACE",
     "DEPLOYMENT_PLAN",
+    "GITHUB_EVENT_NAME",
 )
 
 
@@ -58,6 +59,8 @@ def _github_env(repo: Path, head: str) -> dict[str, str | None]:
             "GITHUB_ACTIONS": "true",
             "GITHUB_WORKSPACE": str(repo),
             "GITHUB_SHA": head,
+            # A pull request run reads its request's diff.
+            "GITHUB_EVENT_NAME": "pull_request",
             "OPENTIDE_REPO_ROOT": str(repo),
             "OPENTIDE_TIDE_WORKSPACE": str(repo),
         }
@@ -73,7 +76,7 @@ def _visible(result: object) -> str:
 
 
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
-def test_github_staging_without_pr_refs_names_github_variables(
+def test_github_pull_request_without_pr_refs_names_github_variables(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     git_home: Path,
@@ -92,7 +95,7 @@ def test_github_staging_without_pr_refs_names_github_variables(
     _git(tmp_path, "init", "-q", "--bare", str(origin))
     _git(repo, "remote", "add", "origin", str(origin))
     monkeypatch.chdir(repo)
-    argv = [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", "STAGING"]
+    argv = [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", "PREVIEW"]
     result = runner.invoke(app, argv, env=_github_env(repo, head))
 
     assert result.exit_code == 1, result.stdout + result.stderr

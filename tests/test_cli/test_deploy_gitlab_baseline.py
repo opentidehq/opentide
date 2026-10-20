@@ -1,4 +1,8 @@
-"""GitLab STAGING/PRODUCTION when the base SHA is missing (#333)."""
+"""GitLab merge request and push runs when the base SHA is missing (#333).
+
+A merge request pipeline (``CI_PIPELINE_SOURCE=merge_request_event``) diffs from
+``CI_MERGE_REQUEST_DIFF_BASE_SHA``; any other pipeline from ``CI_COMMIT_BEFORE_SHA``.
+"""
 
 from __future__ import annotations
 
@@ -35,7 +39,18 @@ _HIDDEN = (
     "OPENTIDE_REPO_ROOT",
     "OPENTIDE_TIDE_WORKSPACE",
     "DEPLOYMENT_PLAN",
+    "CI_PIPELINE_SOURCE",
 )
+
+#: run -> (``--strategy`` of the generated job, variables, the base SHA variable).
+_RUNS = {
+    "merge-request": (
+        "PREVIEW",
+        {"CI_PIPELINE_SOURCE": "merge_request_event"},
+        "CI_MERGE_REQUEST_DIFF_BASE_SHA",
+    ),
+    "push": ("RELEASE", {"CI_PIPELINE_SOURCE": "push"}, "CI_COMMIT_BEFORE_SHA"),
+}
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -80,21 +95,21 @@ def _visible(result: object) -> str:
 
 
 @pytest.mark.parametrize(
-    ("plan", "base"),
+    ("run", "base"),
     [
-        ("STAGING", None),
-        ("STAGING", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        ("merge-request", None),
+        ("merge-request", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
         # An unset or all-zeros CI_COMMIT_BEFORE_SHA diffs from HEAD's parent instead.
-        ("PRODUCTION", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        ("push", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
     ],
-    ids=["unset-STAGING", "unknown-STAGING", "unknown-PRODUCTION"],
+    ids=["unset-merge-request", "unknown-merge-request", "unknown-push"],
 )
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
 def test_gitlab_missing_base_names_no_source_commit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     git_home: Path,
-    plan: str,
+    run: str,
     base: str | None,
     json_output: bool,
 ) -> None:
@@ -104,9 +119,9 @@ def test_gitlab_missing_base_names_no_source_commit(
     repo.mkdir()
     head = _init_repo(repo)
     monkeypatch.chdir(repo)
-    base_var = "CI_MERGE_REQUEST_DIFF_BASE_SHA" if plan == "STAGING" else "CI_COMMIT_BEFORE_SHA"
-    argv = [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", plan]
-    result = runner.invoke(app, argv, env=_gitlab_env(repo, head, **{base_var: base}))
+    strategy, variables, base_var = _RUNS[run]
+    argv = [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", strategy]
+    result = runner.invoke(app, argv, env=_gitlab_env(repo, head, **variables, **{base_var: base}))
 
     assert result.exit_code == 1, result.stdout + result.stderr
     rendered = result.stdout + result.stderr
@@ -120,12 +135,12 @@ def test_gitlab_missing_base_names_no_source_commit(
         assert "No Source Commit Found" in _visible(result)
 
 
-@pytest.mark.parametrize("plan", ["STAGING", "PRODUCTION"])
-def test_gitlab_plan_succeeds_when_both_shas_are_in_the_checkout(
+@pytest.mark.parametrize("run", list(_RUNS))
+def test_gitlab_run_succeeds_when_both_shas_are_in_the_checkout(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     git_home: Path,
-    plan: str,
+    run: str,
 ) -> None:
     """The same command already succeeds when the base commit is in the repo."""
     del git_home
@@ -137,11 +152,11 @@ def test_gitlab_plan_succeeds_when_both_shas_are_in_the_checkout(
     _git(repo, "commit", "-q", "-m", "second")
     head = _git(repo, "rev-parse", "HEAD")
     monkeypatch.chdir(repo)
-    base_var = "CI_MERGE_REQUEST_DIFF_BASE_SHA" if plan == "STAGING" else "CI_COMMIT_BEFORE_SHA"
+    strategy, variables, base_var = _RUNS[run]
     result = runner.invoke(
         app,
-        ["--json", "deploy", "--dry-run", "--plan", plan],
-        env=_gitlab_env(repo, head, **{base_var: base}),
+        ["--json", "deploy", "--dry-run", "--strategy", strategy],
+        env=_gitlab_env(repo, head, **variables, **{base_var: base}),
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
@@ -150,7 +165,7 @@ def test_gitlab_plan_succeeds_when_both_shas_are_in_the_checkout(
 
 
 @pytest.mark.parametrize("base", [None, "0" * 40], ids=["unset", "zeros"])
-def test_gitlab_production_without_a_previous_tip_diffs_from_the_parent(
+def test_gitlab_push_without_a_previous_tip_diffs_from_the_parent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     git_home: Path,
@@ -158,12 +173,11 @@ def test_gitlab_production_without_a_previous_tip_diffs_from_the_parent(
 ) -> None:
     """GitLab sends all zeros on a branch's first push, a manual run and a schedule.
 
-    There is no previous tip to diff from, so the plan diffs from HEAD's first
+    There is no previous tip to diff from, so the push diffs from HEAD's first
     parent, as on GitHub and Azure, instead of failing with No Source Commit Found.
     """
     del git_home
-    from opentide.deployment.git_repo import diff_calculation
-    from opentide.models.deployment_enums import DeploymentStrategy
+    from opentide.deployment.git_repo import DiffSource, diff_calculation, run_diff_source
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -180,7 +194,8 @@ def test_gitlab_production_without_a_previous_tip_diffs_from_the_parent(
         else:
             monkeypatch.setenv(name, value)
 
-    assert diff_calculation(DeploymentStrategy.PRODUCTION) == ["objects/rules/changed.yaml"]
+    assert run_diff_source() is DiffSource.PUSH
+    assert diff_calculation(DiffSource.PUSH) == ["objects/rules/changed.yaml"]
 
 
 def test_gitlab_unknown_base_still_names_no_source_when_origin_main_exists(
@@ -200,10 +215,11 @@ def test_gitlab_unknown_base_still_names_no_source_when_origin_main_exists(
     monkeypatch.chdir(repo)
     result = runner.invoke(
         app,
-        ["--json", "deploy", "--dry-run", "--plan", "STAGING"],
+        ["--json", "deploy", "--dry-run", "--strategy", "PREVIEW"],
         env=_gitlab_env(
             repo,
             head,
+            CI_PIPELINE_SOURCE="merge_request_event",
             CI_MERGE_REQUEST_DIFF_BASE_SHA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         ),
     )
@@ -211,3 +227,36 @@ def test_gitlab_unknown_base_still_names_no_source_when_origin_main_exists(
     payload = json.loads(result.stdout)
     assert payload["message"] == "No Source Commit Found"
     assert "lookup_ref" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("strategy", "source"),
+    [("PREVIEW", "merge_request_event"), ("RELEASE", "merge_request_event"), ("PREVIEW", "push")],
+    ids=["PREVIEW-merge-request", "RELEASE-merge-request", "PREVIEW-push"],
+)
+def test_the_pipeline_not_the_strategy_picks_the_gitlab_base(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    git_home: Path,
+    strategy: str,
+    source: str,
+) -> None:
+    """A merge request pipeline reads ``CI_MERGE_REQUEST_DIFF_BASE_SHA`` whatever ``--strategy``."""
+    del git_home
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    head = _init_repo(repo)
+    monkeypatch.chdir(repo)
+    unknown = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    # Only the base the pipeline reads is unknown; the other one is the tip.
+    if source == "merge_request_event":
+        bases = {"CI_MERGE_REQUEST_DIFF_BASE_SHA": unknown, "CI_COMMIT_BEFORE_SHA": head}
+    else:
+        bases = {"CI_MERGE_REQUEST_DIFF_BASE_SHA": head, "CI_COMMIT_BEFORE_SHA": unknown}
+    result = runner.invoke(
+        app,
+        ["--json", "deploy", "--dry-run", "--strategy", strategy],
+        env=_gitlab_env(repo, head, CI_PIPELINE_SOURCE=source, **bases),
+    )
+    assert result.exit_code == 1, result.stdout + result.stderr
+    assert json.loads(result.stdout)["message"] == "No Source Commit Found"

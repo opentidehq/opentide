@@ -86,7 +86,7 @@ opentide --json info --technique T1059 coverage
 ### Dry-run deployment
 
 ```bash
-opentide deploy --platform sentinel --dry-run
+opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
 </Step>

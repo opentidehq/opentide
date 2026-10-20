@@ -6,7 +6,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
-from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.system_config import ConfigurationModels
 from opentide.deployment import check_status
 from opentide.platforms.kql import compile_kql_query
@@ -221,7 +221,7 @@ class SentinelDeploy(RuleDeployer):
         logger.info('deployed_mdr_successfully', arg0=mdr_name)
         return True
 
-    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan: DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies):
         """
         Triggers the deployment sequence for a series of MDR uuids or DetectionRule Objects
         """
@@ -240,7 +240,7 @@ class SentinelDeploy(RuleDeployer):
             return
         from opentide.deployment import TideDeployment
         from opentide.platforms.sentinel.client import SentinelService
-        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL, strategy=deployment_plan)
+        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL, strategies=strategies)
         for tenant_deployment in deployment.rule_deployment:
             tenant_deployment: TenantDeployment.Sentinel
             logger.info('currently_targeting_tenant', detail=tenant_deployment.tenant.name)
@@ -252,4 +252,4 @@ class SentinelDeploy(RuleDeployer):
 def declare():
     return SentinelDeploy()
 if __name__ == '__main__' and DebugEnvironment.ENABLED:
-    SentinelDeploy().deploy(['5e791284-684c-4245-9ac7-cf00a1d041d6'], DeploymentStrategy.DEBUG)
+    SentinelDeploy().deploy(['5e791284-684c-4245-9ac7-cf00a1d041d6'], (StatusStrategy.PREVIEW,))

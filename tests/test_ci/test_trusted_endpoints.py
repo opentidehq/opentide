@@ -73,8 +73,8 @@ def test_github_secret_jobs_pin_endpoints_and_production_does_not() -> None:
     ]
     assert _runs(jobs["deploy_staging"]["steps"])[-1].splitlines() == [
         *restore,
-        "opentide deploy --dry-run --plan STAGING",
-        "opentide deploy --plan STAGING --skip-unconfigured",
+        "opentide deploy --dry-run --strategy PREVIEW",
+        "opentide deploy --strategy PREVIEW --skip-unconfigured",
     ]
     production = "\n".join(_runs(jobs["deploy_production"]["steps"]))
     assert REMOVE not in production
@@ -139,8 +139,8 @@ def test_azure_query_and_staging_jobs_pin_endpoints() -> None:
     assert _azure_scripts(staging)[-1].splitlines() == [
         "set -e",
         *restore,
-        "opentide deploy --dry-run --plan STAGING",
-        "opentide deploy --plan STAGING --skip-unconfigured",
+        "opentide deploy --dry-run --strategy PREVIEW",
+        "opentide deploy --strategy PREVIEW --skip-unconfigured",
     ]
     assert staging["steps"][0] == {"checkout": "self", "persistCredentials": True, "fetchDepth": 0}
     # Jobs that rebase or diff still ask for full history explicitly.
@@ -308,7 +308,7 @@ def test_a_reviewed_tenant_is_validated_live(remote: Path) -> None:
     assert done.returncode == 0, done.stderr
     assert NO_REVIEWED_TENANT_NOTE.format(platform="splunk") not in done.stdout
     assert (work / "credentialed").read_text(encoding="utf-8") == (
-        "validate query --platform splunk --live --changed --plan FULL\n"
+        "validate query --platform splunk --live --changed\n"
     )
 
 
@@ -332,7 +332,7 @@ def test_only_an_uncommented_tenant_runs_live_validation(platform: str, tmp_path
     ran = _bash(tmp_path, command)
     assert ran.returncode == 0, ran.stderr
     assert (tmp_path / "credentialed").read_text(encoding="utf-8") == (
-        f"validate query --platform {platform} --live --changed --plan FULL\n"
+        f"validate query --platform {platform} --live --changed\n"
     )
 
 

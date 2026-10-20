@@ -40,6 +40,8 @@ def test_render_gitlab_inflight_job_when_enabled() -> None:
     assert "inflight_prune:" in content
     assert "opentide generate inflight" in content
     assert "opentide generate inflight prune" in content
+    # Removed in 0.17.0: the inflight diff is the pull request's, whatever the env.
+    assert "DEPLOYMENT_PLAN" not in content
 
 
 def test_render_gitlab_no_inflight_skips_inflight_job() -> None:

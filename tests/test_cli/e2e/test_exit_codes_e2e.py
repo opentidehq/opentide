@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from tests.test_cli.conftest import LOCAL_SHELL_UNSET
+from tests.test_cli.e2e.helpers import EVERY_RULE
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -33,14 +34,22 @@ EMPTY_CATALOGUE_COMMANDS: tuple[tuple[tuple[str, ...], int], ...] = (
     (("generate", "exports"), 0),
     (("validate", "query", "--platform", "sentinel"), 1),
     (("validate", "query", "--platform", "sentinel", "--live"), 0),
-    *((("deploy", "--dry-run", "--platform", platform), 0) for platform in DEPLOY_PLATFORMS),
-    (("deploy", "--dry-run"), 0),
-    (("deploy", "--dry-run", "--plan", "STAGING"), 0),
-    (("deploy", "--dry-run", "--plan", "PRODUCTION"), 0),
-    (("deploy", "--platform", "sentinel"), 0),
-    (("deploy",), 0),
-    (("deploy", "--plan", "PRODUCTION"), 0),
+    *(
+        (("deploy", "--dry-run", *EVERY_RULE, "--platform", platform), 0)
+        for platform in DEPLOY_PLATFORMS
+    ),
+    (("deploy", "--dry-run", *EVERY_RULE), 0),
+    (("deploy", "--dry-run", "--strategy", "PREVIEW", "--all"), 0),
+    (("deploy", "--dry-run", "--strategy", "RELEASE", "--all"), 0),
+    (("deploy", *EVERY_RULE, "--platform", "sentinel"), 0),
+    (("deploy", *EVERY_RULE), 0),
+    (("deploy", "--strategy", "RELEASE", "--all"), 0),
     (("deploy", "metadata", "--platform", "sentinel"), 2),
+    # 0.17.0: a deploy names its strategy, and outside CI without --all it reads
+    # the last commit, which an empty folder that is no git checkout lacks.
+    (("deploy", "--dry-run"), 2),
+    (("deploy", "--dry-run", "--plan", "STAGING"), 2),
+    (("deploy", "--dry-run", "--strategy", "PREVIEW"), 1),
 )
 
 
@@ -129,7 +138,10 @@ def test_catalogue_commands_in_an_empty_workspace(
     payload = json.loads(result.stdout)
     assert {"ok", "status", "message"} <= payload.keys()
     assert payload["ok"] is (expected_exit == 0)
-    if argv[0] == "deploy" and "metadata" not in argv:
+    if argv[0] == "deploy" and "metadata" not in argv and expected_exit != 0:
+        assert payload["status"] == "failed"
+        assert ("--strategy" if "--strategy" not in argv else "--all") in payload["message"]
+    elif argv[0] == "deploy" and "metadata" not in argv:
         assert payload["status"] == "skipped"
         assert payload["dry_run"] is ("--dry-run" in argv)
         assert payload["plan"] == {}

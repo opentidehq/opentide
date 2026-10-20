@@ -194,7 +194,7 @@ opentide --json setup --yes --platform sentinel --ci github
 
 ### `deploy` or `validate query --live` crashes locally with `illegal_deployment_plan`
 
-`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly. A bare `validate query` refuses before it reads the plan, so only `--live` can reach this.
+`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. This was fixed in **0.1.3**. Since 0.17.0 there are no deployment plans: `deploy` takes `--strategy`, and `DEPLOYMENT_PLAN` fails with a message naming the replacement ([below](#--plan-or-deployment_plan-was-removed)).
 
 ### Tutorial objects fail `validate --strict` or `lint --strict`
 
@@ -410,7 +410,7 @@ run `pip install --force-reinstall opentide`.
 
 ### Live query validation in CI takes most of an hour
 
-Through 0.16.1 the generated pipelines ran `opentide validate query --platform <platform> --live` with no scope, so every run sent every rule in the catalogue to the tenant. The step now passes `--changed --plan FULL` and checks only the rule files the pull request, merge request or push changed, still on every tenant they can reach ([which rules are checked](../cli/validate.md#which-rules-are-checked)). Regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. Do not add `--plan STAGING` instead: it also drops rules in a `RELEASE` status and every tenant but the staging ones. To check particular rules by hand, pass `--file` or `--uuid`.
+Through 0.16.1 the generated pipelines ran `opentide validate query --platform <platform> --live` with no scope, so every run sent every rule in the catalogue to the tenant. The step now passes `--changed` and checks only the rule files the pull request, merge request or push changed, on the tenants a deploy sends them to ([which rules are checked](../cli/validate.md#which-rules-are-checked)). Regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. Do not add `--strategy PREVIEW` to it: that drops the changed rules in a `RELEASE` status from the pull request's check. To check particular rules by hand, pass `--file` or `--uuid`.
 
 ## Platforms and deployment
 
@@ -430,9 +430,27 @@ Verify with `opentide info --platform sentinel`. See [Configuration → enabling
 
 The request went through the proxy, and the proxy answered with its own error page. An internal tenant must not be reached through the corporate proxy: add its host to `NO_PROXY` and `no_proxy` (`NO_PROXY=splunk.internal.example`). opentide's platform clients honour it, so the same run still reaches a cloud tenant such as Sentinel through the proxy, and the deploy does not have to be split per platform. See [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
 
-### `--plan PREVIEW` or `--plan RELEASE` is rejected
+### `--plan` or `DEPLOYMENT_PLAN` was removed
 
-`PREVIEW` and `RELEASE` are status strategies, not plans. A plan names the pipeline: `--plan STAGING` (pull or merge request) deploys the rules whose status strategy is `PREVIEW`, and `--plan PRODUCTION` (the default branch) the `RELEASE`, `DISABLEMENT` and `DELETION` ones, whatever your statuses are called. The error names the plan to use. See [Configuration → deployment plan](./configuration.md#deployment-plan).
+opentide 0.17.0 removed deployment plans. A run now names the status strategy it deploys: `--strategy PREVIEW` in the pull or merge request job, `--strategy RELEASE` in the default-branch job. `--plan STAGING` becomes `--strategy PREVIEW`, `--plan PRODUCTION` becomes `--strategy RELEASE`, and `--plan FULL` (or no plan) becomes `--strategy PREVIEW --strategy RELEASE --all`. Unset `DEPLOYMENT_PLAN` in your CI variables, and regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. See [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier).
+
+### `--strategy 'STAGING' is not a deployable strategy`
+
+`STAGING` and `PRODUCTION` are default status names, not strategies. A status maps to a strategy in `deployment.toml`; with the defaults, `STAGING` maps to `PREVIEW` and `PRODUCTION` to `RELEASE`. Pass the strategy: `--strategy PREVIEW` or `--strategy RELEASE`. The error names the strategy any status in your configuration maps to.
+
+### `the tenant key 'deployment' was removed in 0.17.0`
+
+A tenant now lists the strategies it accepts. Replace the `deployment` line the error names: `deployment = "STAGING"` becomes `strategies = ["PREVIEW"]`, `"PRODUCTION"` becomes `strategies = ["RELEASE"]`, `"ALWAYS"` is removed (a tenant accepts both by default), and `"MANUAL"` becomes `manual = true`.
+
+### A changed rule was not deployed
+
+Check three things, all named in the `mdr_skipped_for_strategy` and `skipping_tenant` log lines:
+
+1. The strategy its status maps to. A `PREVIEW` run skips a rule in `PRODUCTION` (it maps to `RELEASE`); a `RELEASE` run skips one in `DEVELOPMENT` (`PREVIEW`) unless promotion rewrites it first; `INERT` rules never deploy.
+2. The tenant's `strategies`. A tenant with `strategies = ["RELEASE"]` never receives a `PREVIEW` run, and a `manual` tenant only receives rules that list it.
+3. The rule files the run read. Outside CI, `deploy` reads only the last commit: commit the rule, or pass `--all`.
+
+`opentide --json deploy --dry-run --strategy <S>` lists, per platform, the tenants each rule would reach. See [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md).
 
 ### Deploy fails with an authentication error
 
@@ -465,7 +483,7 @@ Through **0.6.2** several CI diff arms still leaked an exception after the GitLa
 - An unset tip SHA names `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION`.
 - Azure `STAGING` without `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME` names those variables, before it fetches `origin`.
 - A pull-request ref that is not on `origin` names `origin/<name>`.
-- `DEBUG`, `MANUAL`, and `ALWAYS` say the plan is not a CI diff plan. Use `STAGING`, `PRODUCTION`, or `FULL`. `ALWAYS` is no longer treated as `FULL`.
+- `DEBUG`, `MANUAL`, and `ALWAYS` said the plan was not a CI diff plan. Plans were removed in 0.17.0; the CI context now decides which diff a run reads.
 - A GitLab merged-result commit with only one parent keeps `CI_COMMIT_SHA` and exits `0` when both SHAs are in the checkout.
 
 ### GitLab `STAGING` or `PRODUCTION` crashes with `lookup_ref`
@@ -478,7 +496,7 @@ Through **0.6.1** a GitHub Actions `STAGING` plan without `GITHUB_HEAD_REF` and 
 
 ### `deploy --plan STAGING` says no git repository was found at `None`
 
-Through **0.6.0** a `STAGING` or `PRODUCTION` plan with `GITHUB_ACTIONS`, `CI`, or `TF_BUILD` set and no checkout exited `1` with `FATAL: No git repository was found at None`. **0.6.1** still exits `1`. The message names the plan and the directory it searched, and points at `--plan FULL`. `FULL` does not need a checkout ([#310](https://github.com/opentidehq/opentide/issues/310)). Run the command inside the repository, or use `FULL` when every top-level rule should be planned.
+Through **0.6.0** a `STAGING` or `PRODUCTION` plan with `GITHUB_ACTIONS`, `CI`, or `TF_BUILD` set and no checkout exited `1` with `FATAL: No git repository was found at None`. **0.6.1** still exits `1`. The message names the directory it searched ([#310](https://github.com/opentidehq/opentide/issues/310)). Since 0.17.0 every deploy without `--all` reads a diff, outside CI too (the last commit). Run the command inside the repository, or pass `--all`, which does not need a checkout.
 
 ### `setup --path .` writes the scaffold at the git root
 

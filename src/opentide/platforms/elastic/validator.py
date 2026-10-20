@@ -12,7 +12,7 @@ import structlog
 
 from opentide.core.registry import DetectionPlatforms
 from opentide.deployment import TideDeployment
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.elastic.attack import find_non_enterprise_techniques
@@ -198,9 +198,9 @@ class ElasticValidator(QueryValidator):
     def validate(
         self,
         mdr_deployment: Sequence[DetectionRule] | list[str],
-        deployment_plan: DeploymentStrategy | None = None,
+        strategies: RunStrategies | None = None,
     ) -> None:
-        deployment = TideDeployment(mdr_deployment, DetectionPlatforms.ELASTIC, deployment_plan)
+        deployment = TideDeployment(mdr_deployment, DetectionPlatforms.ELASTIC, strategies)
         for batch in deployment.rule_deployment:
             tenant: ConfigurationModels.Systems.Elastic.Tenant = batch.tenant
             client = ElasticClient(

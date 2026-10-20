@@ -85,7 +85,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, closed_port: int) -> I
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(repo))
     config = repo / ".opentide/configurations/systems/splunk.toml"
     tenant = (
-        '\n[[tenants]]\nname = "internal"\ndeployment = "ALWAYS"\n'
+        '\n[[tenants]]\nname = "internal"\n'
         f'[tenants.setup]\nssl = false\nurl = "127.0.0.1"\nport = {closed_port}\n'
         'app = "search"\ntoken = "token"\n'
     )

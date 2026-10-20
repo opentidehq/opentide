@@ -29,7 +29,7 @@ flowchart TD
 | **Objects** | Threats, objectives, and rules — the detection content you author | `objects/{threats,objectives,rules}/*.yaml` |
 | **Specifications** | The normative contract every object must satisfy | [opentide.org/docs/specifications](/docs/specifications/) |
 | **Generated artifacts** | JSON Schemas, templates, IDE router, indexes derived from specs + objects | `.opentide/schemas/`, `.opentide/templates/` |
-| **Configuration** | Client overrides: enabled platforms, credentials, deployment plan, promotion | `.opentide/configurations/` |
+| **Configuration** | Client overrides: enabled platforms, credentials, tenant strategies, promotion | `.opentide/configurations/` |
 | **Platforms** | The SIEM/EDR targets you deploy to and (sometimes) validate against | plugin registry, see [Platforms](./concepts/platforms.md) |
 
 ## The steps
@@ -64,7 +64,7 @@ You write **objects** as YAML in `objects/`. A [threat](./concepts/object-model.
 
 ### Deploy
 
-`opentide deploy` pushes rules to a platform, honoring each rule's `status` (e.g. `STAGING`, `PRODUCTION`) and your deployment plan. Deploys are typically staged first, then **promoted**. Use `--dry-run` to preview. See [`deploy`](../cli/deploy.md) and [Configuration](./configuration.md).
+`opentide deploy --strategy PREVIEW` or `--strategy RELEASE` pushes the changed rules whose status maps to that strategy to the tenants that accept it. Rules are typically previewed from a pull request first, then released and **promoted** on merge. See [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md). Use `--dry-run` to preview. See [`deploy`](../cli/deploy.md) and [Configuration](./configuration.md).
 
 </Step>
 

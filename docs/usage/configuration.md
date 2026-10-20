@@ -71,7 +71,7 @@ enabled = true
 [[tenants]]
 name = "Primary"
 description = "Production Sentinel workspace"
-deployment = "ALWAYS"
+strategies = ["RELEASE"]   # omit to accept PREVIEW and RELEASE
 
 [tenants.setup]
 resource_group = "rg-soc"
@@ -95,9 +95,9 @@ opentide --proxy http://user:pass@proxy.internal:8080 validate --strict
 
 ## Deployment statuses and strategies
 
-Every rule's `status` must match a status defined in the merged `deployment.toml`. That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. opentide ships this set out of the box:
+Every rule's `status` must match a status defined in the merged `deployment.toml`. That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. Each status maps to a **strategy**, and the strategy alone decides what deploy does. opentide ships this default set; none of these names is special:
 
-| Status | Strategy | What it does |
+| Default status | Strategy | What it does |
 |--------|----------|--------------|
 | `DESIGN` | `INERT` | Functional design only — never deployed |
 | `DEVELOPMENT` | `PREVIEW` | Under technical implementation |
@@ -108,7 +108,9 @@ Every rule's `status` must match a status defined in the merged `deployment.toml
 | `DISABLED` | `DISABLEMENT` | Present but inactive |
 | `REMOVED` | `DELETION` | Removed from platforms |
 
-The **strategy** decides how `deploy` treats a rule: `INERT` never deploys, `PREVIEW` targets staging, `RELEASE` goes to production, `DISABLEMENT`/`DELETION` tear down. You can add or rename statuses by overriding `deployment.toml`:
+`INERT` never deploys. A `PREVIEW` run (`opentide deploy --strategy PREVIEW`, the pull or merge request job) deploys `PREVIEW` rules. A `RELEASE` run (`--strategy RELEASE`, the default-branch job) deploys `RELEASE` rules and disables or deletes `DISABLEMENT` and `DELETION` ones. Both deploy `UNIVERSAL` rules. Each rule goes to the tenants whose `strategies` accept the run's strategy. [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md) explains this with worked examples.
+
+You can add or rename statuses by overriding `deployment.toml`:
 
 ```toml
 # .opentide/configurations/deployment.toml
@@ -118,7 +120,24 @@ description = "Limited rollout to a pilot workspace"
 strategy = "PREVIEW"
 ```
 
+A `PREVIEW` run deploys a `PILOT` rule, exactly as it deploys a `DEVELOPMENT` one.
+
 Full field contract: [Deployment spec](/docs/specifications/specs/deployment/).
+
+### Which tenants a rule reaches
+
+A tenant in a platform file lists the strategies it accepts, `PREVIEW`, `RELEASE`, or both (the default when `strategies` is omitted). `manual = true` keeps a tenant to the rules that name it under their block's `tenants`.
+
+```toml
+# .opentide/configurations/platforms/sentinel.toml
+[[tenants]]
+name = "Test"
+strategies = ["PREVIEW"]
+
+[[tenants]]
+name = "Primary"
+strategies = ["RELEASE"]
+```
 
 ## Promotion
 
@@ -133,42 +152,11 @@ promotion_target = "PRODUCTION"
 
 `opentide setup --no-promotion` or `--promotion-target <STATUS>` writes this table, with or without `--ci`; see [setup](../cli/setup.md#default-callback-flags).
 
-There is no separate promote command. Edit a rule's `status` in YAML for deliberate changes, then run `opentide deploy` — when promotion is enabled, deploy applies the promotion target to every status whose strategy is not `RELEASE`, `DISABLEMENT`, or `DELETION`. See [`deploy`](../cli/deploy.md) and the [detection-as-code workflow](./workflows/detection-as-code.md#status-and-deployment-strategy).
+There is no separate promote command. Edit a rule's `status` in YAML for deliberate changes. When promotion is enabled, the default-branch `opentide deploy --strategy RELEASE` job applies the promotion target to each changed rule whose status maps to a strategy other than `RELEASE`, `DISABLEMENT`, or `DELETION`, then deploys it. See [`deploy`](../cli/deploy.md) and the [detection-as-code workflow](./workflows/detection-as-code.md#status-and-deployment-strategy).
 
-## Deployment plan
+## Deployment plans (removed)
 
-Three words sound alike and mean different things:
-
-| Term | What it is | Who defines it | Examples |
-|------|------------|----------------|----------|
-| **Status** | A rule block's lifecycle label (`status:` in the YAML) | You, in `deployment.toml` `[[statuses]]` | `DEVELOPMENT`, `STAGING`, `PRODUCTION` |
-| **Strategy** | What deploy does with a rule in that status | The [deployment spec](/docs/specifications/specs/deployment/): fixed | `INERT`, `PREVIEW`, `RELEASE`, `DISABLEMENT`, `DELETION` |
-| **Plan** | Which pipeline a run is, chosen with `--plan` or `DEPLOYMENT_PLAN` | The deployment spec: fixed | `STAGING`, `PRODUCTION`, `FULL` |
-
-A plan is not a status. It names a pipeline, and selects rules by the **strategy** of their status, never by the status name:
-
-| Plan | Pipeline | Rule files read | Deploys rules whose strategy is | To tenants whose `deployment` is |
-|------|----------|-----------------|---------------------------------|----------------------------------|
-| `STAGING` | Pull or merge request | Those the request changed | `PREVIEW` (and `UNIVERSAL`) | `STAGING`, `ALWAYS`, or `MANUAL` when the rule lists it |
-| `PRODUCTION` | Push to the default branch | Those the push changed | `RELEASE`, `DISABLEMENT`, `DELETION` (and `UNIVERSAL`) | `PRODUCTION`, `ALWAYS`, or `MANUAL` when the rule lists it |
-| `FULL` | Any; the default outside CI | Every rule file | `PREVIEW`, `RELEASE` (and `UNIVERSAL`); `DISABLEMENT` and `DELETION` only with `--keep-deprecated` | `ALWAYS`, or `MANUAL` when the rule lists it |
-
-`PRODUCTION` disables and deletes the `DISABLEMENT` and `DELETION` rules unless you pass `--drop-deprecated`; `FULL` leaves them out unless you pass `--keep-deprecated`, so a full redeploy does not retire your archived rules by accident.
-
-So with the bundled statuses, `--plan STAGING` deploys a rule in `DEVELOPMENT`, `IMPROVING`, `STAGING` or `ACCEPTANCE` (all `PREVIEW`) and skips one in `PRODUCTION` (`RELEASE`). If you add a status named `CANARY` with strategy `PREVIEW`, `--plan STAGING` deploys it too; the plan names never have to match your status names. The tenant `deployment` key uses the plan names: a `STAGING` tenant receives the `STAGING` plan's deploys.
-
-`PREVIEW` and `RELEASE` are not plan names. `opentide deploy --plan PREVIEW` fails and names the plan that deploys `PREVIEW` rules. A skipped rule's `mdr_skipped_for_plan` log line names its status, its strategy and the strategies the plan deploys.
-
-`validate query --live` reads the same plans, with one difference: it only reads, so under `FULL` it checks every tenant a rule can reach, `STAGING` and `PRODUCTION` included ([which tenants are checked](../cli/validate.md#which-tenants-are-checked)). A bare `validate query` refuses and does not read the plan.
-
-`DEPLOYMENT_PLAN` sets the plan when `--plan` is omitted:
-
-```bash
-export DEPLOYMENT_PLAN=production
-opentide deploy --platform sentinel
-```
-
-See [CLI global options](../cli/global-options.md) for how it resolves.
+opentide 0.17.0 removed deployment plans: `--plan`, `DEPLOYMENT_PLAN`, and the tenant `deployment` key fail with a message naming the replacement. A run now names the strategy it deploys with `--strategy`, and a tenant lists the strategies it accepts. The [migration table](./concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier) maps each old value.
 
 ## Visibility and documentation
 

@@ -3,7 +3,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import ExternalIdAction, plan_external_id, record_created, record_deleted, report_failure, screen_tenant
 from opentide.states.deployment import DeploymentStateError
@@ -128,7 +128,7 @@ class CrowdstrikeDeploy(RuleDeployer):
             except DeploymentStateError as error:
                 report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
 
-    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan: DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies):
         """
         Triggers the deployment sequence for a series of MDR uuids or DetectionRule Objects
         """
@@ -139,12 +139,12 @@ class CrowdstrikeDeploy(RuleDeployer):
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
-        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.CROWDSTRIKE, strategy=deployment_plan)
+        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.CROWDSTRIKE, strategies=strategies)
         for tenant_deployment in deployment.rule_deployment:
             logger.info('currently_targeting_tenant', detail=tenant_deployment.tenant.name)
             # Plan against the deployment state before the client exists, so a
             # refused rule makes no HTTP call.
-            planned = screen_tenant(list(tenant_deployment.rules), platform=PLATFORM, tenant_name=tenant_deployment.tenant.name, status_of=lambda mdr: mdr.configurations.crowdstrike.status, plan=deployment_plan)
+            planned = screen_tenant(list(tenant_deployment.rules), platform=PLATFORM, tenant_name=tenant_deployment.tenant.name, status_of=lambda mdr: mdr.configurations.crowdstrike.status, strategies=strategies)
             if not planned:
                 continue
             service = CrowdstrikeService(tenant_deployment.tenant)
@@ -155,4 +155,4 @@ class CrowdstrikeDeploy(RuleDeployer):
 def declare():
     return CrowdstrikeDeploy()
 if __name__ == '__main__' and DebugEnvironment.ENABLED:
-    CrowdstrikeDeploy().deploy(['8e9d2ad5-6488-48b5-bedd-f971303f5d38'], DeploymentStrategy.DEBUG)
+    CrowdstrikeDeploy().deploy(['8e9d2ad5-6488-48b5-bedd-f971303f5d38'], (StatusStrategy.PREVIEW,))

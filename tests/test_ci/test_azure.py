@@ -41,7 +41,7 @@ def test_render_azure_includes_validate_stage() -> None:
     assert "Validate" in content
     assert "opentide validate --strict" in content
     assert "opentide lint --strict" in content
-    assert "opentide deploy --plan PRODUCTION --keep-deprecated --skip-unconfigured" in content
+    assert "opentide deploy --strategy RELEASE --skip-unconfigured" in content
     assert "OPENTIDE_SECRETS" not in content
     assert "#   AZURE_CLIENT_SECRET" in content
 
@@ -59,6 +59,8 @@ def test_render_azure_inflight_job_when_enabled() -> None:
     assert "inflight_prune" in content
     assert "opentide generate inflight" in content
     assert "opentide generate inflight prune" in content
+    # Removed in 0.17.0: the inflight diff is the pull request's, whatever the env.
+    assert "DEPLOYMENT_PLAN" not in content
 
 
 def test_render_azure_no_inflight_skips_inflight_job() -> None:

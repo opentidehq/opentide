@@ -154,7 +154,6 @@ def invoke_cli(cli_runner: CliRunner, tide_corpus_repo: Path) -> Callable[..., R
             env = {
                 "OPENTIDE_REPO_ROOT": repo_path,
                 "OPENTIDE_TIDE_WORKSPACE": repo_path,
-                "DEPLOYMENT_PLAN": "FULL",
             }
             if "PATH" in os.environ:
                 env["PATH"] = os.environ["PATH"]

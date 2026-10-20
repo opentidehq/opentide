@@ -1,21 +1,31 @@
 ---
 title: opentide deploy
-description: Deploy detection rules to configured platforms with dry-run, promotion, and plan controls.
+description: Deploy the changed rules whose status maps to a strategy, to the tenants that accept it.
 ---
 
 # opentide deploy
 
-Deploy detection rules to configured platforms, honoring each rule's `status` and your deployment plan.
+Deploy the rules a run changed whose status maps to the run's `--strategy`, to the tenants that accept that strategy.
 
 ```bash
-opentide deploy --platform sentinel --dry-run
-opentide deploy --platform splunk --plan STAGING
+opentide deploy --strategy PREVIEW --dry-run          # pull or merge request job
+opentide deploy --strategy RELEASE --platform splunk  # default-branch job
+opentide deploy --strategy PREVIEW --strategy RELEASE --all --dry-run   # every rule file
 ```
+
+Three things decide what is sent:
+
+1. **The rule's status maps to a strategy** in `deployment.toml`. With the default statuses, `DEVELOPMENT`, `IMPROVING`, `STAGING` and `ACCEPTANCE` map to `PREVIEW`, and `PRODUCTION` maps to `RELEASE`. Status names never matter, only the strategy they map to.
+2. **The run deploys a strategy.** `--strategy PREVIEW` deploys rules mapping to `PREVIEW` or `UNIVERSAL`. `--strategy RELEASE` deploys rules mapping to `RELEASE` or `UNIVERSAL`, and disables or deletes rules mapping to `DISABLEMENT` or `DELETION`.
+3. **The tenant accepts the strategy.** A tenant's `strategies` (default: both) decide which runs reach it.
+
+[Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md) walks through this with examples.
 
 ## When to use it
 
-- On merge to `main` in CI, to push validated rules to a platform.
-- Locally with `--dry-run` to preview exactly what a deploy would change.
+- In a pull or merge request pipeline, with `--strategy PREVIEW`, to deploy the changed rules to the tenants that take previews.
+- On merge to the default branch, with `--strategy RELEASE`, to deploy, disable or delete the changed rules on the tenants that take releases.
+- Locally with `--dry-run` to preview what a deploy would send, and to which tenants.
 
 Always `--dry-run` first, and always [validate](./validate.md) before deploying.
 
@@ -30,37 +40,40 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 
 ## Options
 
-| Flag | Env | Purpose |
-|------|-----|---------|
-| `--platform` | — | Target platform (see [platforms](../usage/concepts/platforms.md)) |
-| `--plan` | `DEPLOYMENT_PLAN` | Deployment plan: `STAGING`, `PRODUCTION` or `FULL` (default). A plan names a pipeline and selects rules by their status's strategy, not by status name; see [Deployment plan](../usage/configuration.md#deployment-plan) |
-| `--wide` | — | Deploy the plan's rule files whatever their status strategy, `INERT` included. `DISABLEMENT` and `DELETION` still follow `--keep-deprecated` |
-| `--dry-run` | — | Simulate deployment without writes |
-| `--keep-deprecated` / `--drop-deprecated` | — | Include rules whose status strategy is `DISABLEMENT` or `DELETION`, so the deploy disables or deletes them. Default: on for `--plan PRODUCTION`, off for other plans |
-| `--skip-promotion` | — | Skip promotion step |
-| `--skip-unconfigured` | — | Exit 0 when every platform in the plan has no `[[tenants]]` block |
-| `--persist-state-externally` | — | In CI, allow a run whose plan is not `PRODUCTION` to create Defender for Endpoint, SentinelOne and CrowdStrike rules. Pass it only when the pipeline commits `.opentide/states/deployment/` itself; see [Creates outside the production job](../usage/concepts/deployment-state.md#creates-outside-the-production-job) |
+| Flag | Purpose |
+|------|---------|
+| `--strategy` | Required, repeatable. `PREVIEW`: rules whose status maps to `PREVIEW` or `UNIVERSAL`. `RELEASE`: rules whose status maps to `RELEASE` or `UNIVERSAL`; also disables `DISABLEMENT` rules and deletes `DELETION` rules. Each rule goes to the tenants whose `strategies` accept the run's strategy. A status name such as `STAGING` is refused, and the message names the strategy it maps to |
+| `--all` | Read every rule file. Without it, deploy reads the rule files the run changed: the pull or merge request (from its merge base), the push, or outside CI the last commit |
+| `--platform` | Target platform (see [platforms](../usage/concepts/platforms.md)) |
+| `--wide` | Deploy the rule files read whatever their status strategy, `INERT` included, to the tenants accepting the run's strategies. `DISABLEMENT` and `DELETION` still follow `--keep-deprecated` |
+| `--dry-run` | Simulate deployment without writes. `--json` lists the tenants each rule would reach |
+| `--keep-deprecated` / `--drop-deprecated` | Include rules whose status maps to `DISABLEMENT` or `DELETION`, so a `RELEASE` run disables or deletes them. Default: on, off with `--all` |
+| `--skip-promotion` | Skip the promotion step of a `RELEASE` run on a push |
+| `--skip-unconfigured` | Exit 0 when every platform with rules to deploy has no `[[tenants]]` block |
+| `--persist-state-externally` | In CI, allow a run other than `--strategy RELEASE` on a push to create Defender for Endpoint, SentinelOne and CrowdStrike rules. Pass it only when the pipeline commits `.opentide/states/deployment/` itself; see [Creates outside the production job](../usage/concepts/deployment-state.md#creates-outside-the-production-job) |
+
+`--plan` and `DEPLOYMENT_PLAN` were removed in 0.17.0. Either now fails with exit `2` and names the `--strategy` to pass: `STAGING` became `--strategy PREVIEW`, `PRODUCTION` became `--strategy RELEASE`, and `FULL` became `--strategy PREVIEW --strategy RELEASE --all`. A platform file whose tenant still sets `deployment` fails to load and names the `strategies` or `manual` line that replaces it ([migration table](../usage/concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier)).
 
 ## Output
 
 A dry-run in the [tutorial](../usage/tutorial.md) repository prints the section header on stderr and the result on stdout:
 
 ```bash
-opentide deploy --platform sentinel --dry-run
+opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
-```text output-of="opentide deploy --platform sentinel --dry-run"
+```text output-of="opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all"
 == MDR Deployment ==
 OK Deployment completed
 ```
 
-A colour terminal draws the header as a rule. Human output does not list the rules; `DEBUG=1` logs each selected rule to stderr, and `--json` returns the plan:
+A colour terminal draws the header as a rule. Human output does not list the rules; `DEBUG=1` logs each selected rule to stderr, and `--json` returns the selection:
 
 ```bash
-opentide --json deploy --platform sentinel --dry-run
+opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
-```json output-of="opentide --json deploy --platform sentinel --dry-run"
+```json output-of="opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all"
 {
   "deployed": [],
   "dry_run": true,
@@ -87,9 +100,9 @@ opentide --json deploy --platform sentinel --dry-run
 }
 ```
 
-`plan` lists the rule UUIDs selected for each platform. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request body the deployer would send: the ARM alert-rule body for Sentinel, the Kibana rule body for Elastic, and the rule's platform configuration block for the other platforms. A Sentinel rule that would fail to deploy (an unparseable duration, or a missing `grouping` or `grouping.alert`) is listed with `"status": "failed"`, an `error` naming the cause, and a null `api_request`; the error is also logged with the rule's name and UUID, and the dry-run reports `failed` and exits `1`. The [tutorial](../usage/tutorial.md) scaffold leaves `[[tenants]]` commented out, so this dry-run previews the payload, leaves `deployed` empty, and warns that a real deploy would stop. After you uncomment a tenant, `deployed` lists the platform and the warning is gone. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
+`plan` lists the rule UUIDs selected for each platform, and `strategies` the run's strategies. On a dry-run, `tenants` maps each platform to the tenants a real deploy would reach and the rules each would receive. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request body the deployer would send: the ARM alert-rule body for Sentinel, the Kibana rule body for Elastic, and the rule's platform configuration block for the other platforms. A Sentinel rule that would fail to deploy (an unparseable duration, or a missing `grouping` or `grouping.alert`) is listed with `"status": "failed"`, an `error` naming the cause, and a null `api_request`; the error is also logged with the rule's name and UUID, and the dry-run reports `failed` and exits `1`. The [tutorial](../usage/tutorial.md) scaffold leaves `[[tenants]]` commented out, so this dry-run previews the payload, leaves `deployed` empty, and warns that a real deploy would stop. After you uncomment a tenant, `deployed` lists the platform and the warning is gone. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 
-When no rules match the selected plan, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
+When no rule the run read has a status mapping to its strategies, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 
 ## Subcommands
 
@@ -147,32 +160,37 @@ FATAL: Metadata deployment is not implemented for splunk
 - **Authentication error** — credentials missing/wrong; see [Troubleshooting](../usage/troubleshooting.md#deploy-fails-with-an-authentication-error).
 - **`AttributeError: module 'azure.mgmt.securityinsight.models' has no attribute 'AlertPropertyMapping'`** — through 0.14.2 the `sentinel` extra resolved `azure-mgmt-securityinsight` 1.0.0, which lacks that model, so every rule with `alert.dynamic_properties` failed to deploy while the dry-run still passed. Since 0.16.0 opentide calls the ARM REST API directly and no longer uses that SDK; upgrade with `pip install -U opentide`.
 - **`configurations.sentinel.grouping.alert is missing`** — Sentinel deploy needs `grouping.event` and `grouping.alert`. The error names the rule UUID, and `deploy --dry-run` reports it too. Through 0.14.2 it was `AttributeError: 'NoneType' object has no attribute 'enabled'`.
-- **A rule did not deploy** — check its `status` strategy; `INERT` statuses never deploy. See [Configuration → deployment statuses](../usage/configuration.md#deployment-statuses-and-strategies).
+- **A rule did not deploy** — check the strategy its status maps to, the run's `--strategy`, and the tenant's `strategies`. A `PREVIEW` run skips a rule in `PRODUCTION` (it maps to `RELEASE`), a `RELEASE` run skips a rule in `DEVELOPMENT` (it maps to `PREVIEW`, unless promotion rewrites it first), `INERT` rules never deploy, and a tenant with `strategies = ["RELEASE"]` never receives a `PREVIEW` run. The `mdr_skipped_for_strategy` and `skipping_tenant` log lines name all three. Outside CI, deploy reads the last commit only: commit the rule, or pass `--all`. See [Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md).
+- **`--strategy 'STAGING' is not a deployable strategy`** — `STAGING` is a default status name (and was a deployment plan). Pass `--strategy PREVIEW`. The message names the strategy any configured status maps to.
+- **`the tenant key 'deployment' was removed in 0.17.0`** — replace the tenant's `deployment` line as the message says: `STAGING` becomes `strategies = ["PREVIEW"]`, `PRODUCTION` becomes `strategies = ["RELEASE"]`, `ALWAYS` is dropped, `MANUAL` becomes `manual = true`.
+- **`--plan was removed` / `DEPLOYMENT_PLAN was removed`** — use `--strategy`, and unset `DEPLOYMENT_PLAN` in your CI variables. Regenerate the pipeline with `opentide setup ci <github|gitlab|azure>`.
+- **`deploy reads the rule files the last commit, push or pull request changed, which needs a git checkout`** — run inside the repository, or pass `--all`.
 - **`WARNING … rule file(s) in subfolders of objects/rules are not deployed`** — a rule file has to sit directly in `objects/rules/`. A file in a subdirectory is outside the rule catalogue and is not deployed. Move it up into `objects/rules/` to deploy it. In CI, the warning names only the subdirectory files the change touched.
-- **Platform not found**, or **`system_disabled_for_deploy`** in the log — the platform is not enabled in your workspace config. A disabled platform is never planned and its engine never loads, for every `--plan` and with `--wide`, even when the rule's own block says `enabled: true`. The log names the command that enables it, such as `opentide setup platforms --defender-for-endpoint`. `opentide validate` reports such a block as a `platform_not_enabled` warning.
-- **`external_id_in_rule`** — the rule still carries `rule_id`, `rule_id_bundle` or `rule_id::<tenant>` on some platform block. The deployment plan leaves it out for every platform, `--dry-run` included, before any HTTP call, and the run exits `1`; other rules still deploy. Run [`deploy migrate-state`](#deploy-migrate-state) and commit the result.
+- **Platform not found**, or **`system_disabled_for_deploy`** in the log — the platform is not enabled in your workspace config. A disabled platform is never selected and its engine never loads, for every `--strategy` and with `--wide`, even when the rule's own block says `enabled: true`. The log names the command that enables it, such as `opentide setup platforms --defender-for-endpoint`. `opentide validate` reports such a block as a `platform_not_enabled` warning.
+- **`external_id_in_rule`** — the rule still carries `rule_id`, `rule_id_bundle` or `rule_id::<tenant>` on some platform block. Deploy leaves it out for every platform, `--dry-run` included, before any HTTP call, and the run exits `1`; other rules still deploy. Run [`deploy migrate-state`](#deploy-migrate-state) and commit the result.
 - **`external_id_missing`** (warning) — a deletion or disablement found no id for that tenant in `.opentide/states/deployment/`, so nothing is known to exist there and nothing is called. The run does not fail on it: retiring a rule that never reached a tenant is normal. If a remote copy does exist, remove or disable it by hand.
-- **`deployment_state_unpersisted`** — a CI run whose plan is not `PRODUCTION` (the pull-request staging job, for example) would create a Defender for Endpoint, SentinelOne or CrowdStrike rule, and nothing would commit the id it returns. The create was refused before any vendor call and the run exits `1`; updates and deletes of rules that already have an id still ran. The production job creates the rule after merge. Pass `--persist-state-externally` only if your pipeline commits `.opentide/states/deployment/` itself.
+- **`deployment_state_unpersisted`** — a CI run other than `--strategy RELEASE` on a push (the pull-request `PREVIEW` job, for example) would create a Defender for Endpoint, SentinelOne or CrowdStrike rule, and nothing would commit the id it returns. The create was refused before any vendor call and the run exits `1`; updates and deletes of rules that already have an id still ran. The production job creates the rule after merge. Pass `--persist-state-externally` only if your pipeline commits `.opentide/states/deployment/` itself.
 - **`deployment_state_ignored`** — `.gitignore` hides `.opentide/states/deployment/`, so deploy will not create a Defender, SentinelOne or CrowdStrike rule whose id git would never see. Ignore `.opentide/states/sharing.jsonl` instead. See [Deployment state](../usage/concepts/deployment-state.md) for the other `deployment_state_*` codes.
 - **`skipped` with no rules in a new repository** — git does not keep empty folders, so a fresh clone has no `objects/rules/` until the first rule is committed. Deploy treats the missing folder as an empty catalogue: it reports `skipped` with exit `0`, an empty `plan`, and the `dry_run` flag, and contacts no platform.
 - **No tenants** — `setup repo` enables a platform and leaves the `[[tenants]]` example commented out. A real `deploy` of rules for that platform exits `1` before any engine loads, and names the file to edit. `--dry-run` still previews the payloads and warns that a real deploy would stop.
-- **GitLab `No Source Commit Found`** — a `STAGING` or `PRODUCTION` plan whose base SHA is not in the checkout, or a `STAGING` plan with no `CI_MERGE_REQUEST_DIFF_BASE_SHA`, exits `1` with that sentence. Fetch full history (`GIT_DEPTH: "0"`), as the generated jobs do. Through 0.6.1 the same case crashed with `'Repo' object has no attribute 'lookup_ref'`.
-- **GitLab `PRODUCTION` on a manual run, a schedule or a branch's first push** — GitLab sets `CI_COMMIT_BEFORE_SHA` to all zeros when there is no previous tip. The plan then diffs from HEAD's first parent, as on GitHub and Azure. Through 0.16.1 it failed with `No Source Commit Found`.
-- **GitHub `STAGING` without pull-request refs** — the failure names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`. Through 0.6.1 it asked for Azure `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME`, then `KeyError`.
-- **Other CI diff failures** — a missing tip SHA names `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION`. Azure `STAGING` without its pull-request variables names those variables before fetching. A ref that is not on `origin` names `origin/<name>`. `DEBUG`, `MANUAL`, and `ALWAYS` say they are not a CI diff plan. A one-parent GitLab merged result keeps the tip SHA.
+- **GitLab `No Source Commit Found`** — a run whose base SHA is not in the checkout, or a merge request pipeline with no `CI_MERGE_REQUEST_DIFF_BASE_SHA`, exits `1` with that sentence. Fetch full history (`GIT_DEPTH: "0"`), as the generated jobs do. Through 0.6.1 the same case crashed with `'Repo' object has no attribute 'lookup_ref'`.
+- **GitLab push diff on a manual run, a schedule or a branch's first push** — GitLab sets `CI_COMMIT_BEFORE_SHA` to all zeros when there is no previous tip. The run then diffs from HEAD's first parent, as on GitHub and Azure. Through 0.16.1 it failed with `No Source Commit Found`.
+- **GitHub pull request diff without pull-request refs** — the failure names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF`. Through 0.6.1 it asked for Azure `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME`, then `KeyError`.
+- **Other CI diff failures** — a missing tip SHA names `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION`. An Azure pull request without its pull-request variables names those variables before fetching. A ref that is not on `origin` names `origin/<name>`. A one-parent GitLab merged result keeps the tip SHA.
 - **GitHub production deploy skipped** — through 0.6.3 the generated production job needed `deploy_staging`, which runs only on a pull request, so a push to the default branch skipped production. 0.6.4 needs `generate` and still runs only on that push. Regenerate with `opentide setup ci github --yes`.
-- **`DISABLED` or `REMOVED` rule never retired** — through 0.14.2 `--keep-deprecated` defaulted to off for every plan, so a `PRODUCTION` deploy dropped those rules before its allow-list, which includes both strategies, was consulted. `PRODUCTION` now keeps them by default; pass `--drop-deprecated` for the old behaviour. Other plans are unchanged.
-- **`PRODUCTION` plan empty or wrong after a merge commit** — the GitHub and Azure `PRODUCTION` diff runs from HEAD's first parent (`HEAD^1`), the default branch before the merge. Through 0.14.2 the base was the second commit by date, which on a merge commit is usually the merged branch's head: the rules the merge changed were not deployed, and a pull-request job on the synthetic merge ref reported `skipped`. GitLab uses `CI_COMMIT_BEFORE_SHA` and was not affected.
+- **`DISABLED` or `REMOVED` rule never retired** — through 0.14.2 `--keep-deprecated` defaulted to off, so the default-branch deploy dropped those rules. A `RELEASE` run now keeps them by default; pass `--drop-deprecated` for the old behaviour. With `--all` they are left out unless you pass `--keep-deprecated`.
+- **Default-branch deploy empty or wrong after a merge commit** — the GitHub and Azure push diff runs from HEAD's first parent (`HEAD^1`), the default branch before the merge. Through 0.14.2 the base was the second commit by date, which on a merge commit is usually the merged branch's head: the rules the merge changed were not deployed, and a pull-request job on the synthetic merge ref reported `skipped`. GitLab uses `CI_COMMIT_BEFORE_SHA` and was not affected.
 - **Shallow checkout** — deploy jobs fetch full history. A missing parent commit is named. Through 0.6.3 a depth-1 checkout exited `1` with the parent SHA and no sentence.
 
 ## Per-rule deployment via SDK or MCP
 
 ```python
 rule = Opentide.Rules[uuid]
-result = rule.deploy("sentinel", dry_run=True)
+result = rule.deploy("sentinel", dry_run=True)                       # as its status says
+result = rule.deploy("sentinel", dry_run=True, strategies=["PREVIEW"])
 ```
 
-MCP: `deploy_rule(uuid, platform, dry_run=True)` (defaults to dry-run).
+Without `strategies`, the rule is deployed by the run strategies that deploy the strategy its `sentinel` status maps to, to the tenants that accept them. MCP: `deploy_rule(uuid, platform, dry_run=True)` (defaults to dry-run) deploys the same way.
 
 ## Source
 

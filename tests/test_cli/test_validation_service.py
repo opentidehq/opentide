@@ -26,8 +26,14 @@ def tenantless() -> Iterator[MagicMock]:
 
 
 @pytest.fixture(autouse=True)
+def no_inherited_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``DEPLOYMENT_PLAN`` was removed in 0.17.0; a set one fails ``validate query``."""
+    monkeypatch.delenv("DEPLOYMENT_PLAN", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def reached() -> Iterator[MagicMock]:
-    """Every planned rule reaches one tenant unless a test says otherwise."""
+    """Every selected rule reaches one tenant unless a test says otherwise."""
     with patch.object(
         validation_service, "queries_per_tenant", return_value={"tenant-a": 1}
     ) as mock:
@@ -320,12 +326,76 @@ def test_validate_query_platform_skips_when_no_rules(monkeypatch) -> None:
             "opentide.deployment.make_deploy_plan",
             return_value={},
         ),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-        ),
     ):
         result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     assert result["status"] == "skipped"
+    assert result["strategies"] == ["PREVIEW", "RELEASE"]
+
+
+def test_validate_query_platform_reads_every_rule_for_both_strategies_by_default() -> None:
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+
+    ctx = CliContext(json_output=True)
+    with patch("opentide.deployment.make_deploy_plan", return_value={}) as plan:
+        validation_service.validate_query_platform(ctx, "sentinel", live=True)
+    plan.assert_called_once()
+    assert plan.call_args.args[0] == DEPLOYABLE_STRATEGIES
+    assert plan.call_args.kwargs["all_files"] is True
+    assert plan.call_args.kwargs["scope"] is None
+    # A query check never sends DISABLEMENT or DELETION rules.
+    assert plan.call_args.kwargs["keep_deprecated"] is False
+
+
+def test_validate_query_platform_narrows_to_an_explicit_strategy() -> None:
+    from opentide.models.deployment_enums import StatusStrategy
+
+    ctx = CliContext(json_output=True)
+    with patch("opentide.deployment.make_deploy_plan", return_value={}) as plan:
+        result = validation_service.validate_query_platform(
+            ctx, "sentinel", live=True, strategies=["release"]
+        )
+    assert plan.call_args.args[0] == (StatusStrategy.RELEASE,)
+    assert result["strategies"] == ["RELEASE"]
+
+
+@pytest.mark.parametrize(
+    ("value", "hint"),
+    [
+        ("STAGING", "STAGING was a deployment plan, removed in 0.17.0: pass PREVIEW"),
+        ("PRODUCTION", "PRODUCTION was a deployment plan, removed in 0.17.0: pass RELEASE"),
+        ("FULL", "--strategy PREVIEW --strategy RELEASE --all"),
+        ("DELETION", "pass RELEASE"),
+    ],
+)
+def test_validate_query_platform_refuses_a_strategy_that_is_not_deployable(
+    value: str, hint: str
+) -> None:
+    ctx = CliContext(json_output=True)
+    with patch("opentide.deployment.make_deploy_plan") as plan:
+        result = validation_service.validate_query_platform(
+            ctx, "sentinel", live=True, strategies=[value]
+        )
+    plan.assert_not_called()
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 2
+    assert "is not a deployable strategy" in str(result["message"])
+    assert hint in str(result["message"])
+
+
+def test_validate_query_platform_refuses_an_inherited_deployment_plan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from opentide.models.deployment_enums import removed_plan_message
+
+    monkeypatch.setenv("DEPLOYMENT_PLAN", "STAGING")
+    ctx = CliContext(json_output=True)
+    with patch("opentide.deployment.make_deploy_plan") as plan:
+        result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
+    plan.assert_not_called()
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 2
+    assert result["message"] == removed_plan_message("STAGING")
+    assert "Use --strategy PREVIEW." in str(result["message"])
 
 
 def test_validate_query_platform_runs_validator(monkeypatch) -> None:
@@ -335,9 +405,6 @@ def test_validate_query_platform_runs_validator(monkeypatch) -> None:
         patch(
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"]},
-        ),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
         ),
         patch(
             "opentide.platforms.plugins.DeployTide",
@@ -351,8 +418,12 @@ def test_validate_query_platform_runs_validator(monkeypatch) -> None:
         }
         result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     validator.validate.assert_called_once()
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+
+    assert validator.validate.call_args.kwargs["strategies"] == DEPLOYABLE_STRATEGIES
     assert result["status"] == "passed"
     assert result["mode"] == "live"
+    assert result["strategies"] == ["PREVIEW", "RELEASE"]
 
 
 def test_validate_query_platform_fails_on_unsubstituted_credentials() -> None:
@@ -365,7 +436,6 @@ def test_validate_query_platform_fails_on_unsubstituted_credentials() -> None:
     )
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
     ):
@@ -388,7 +458,6 @@ def test_validate_query_platform_surfaces_retired_tenant_proxy() -> None:
     )
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u1"]}),
-        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
     ):
         mock_tide.return_value.query_validation_for.side_effect = ValueError(message)
@@ -401,11 +470,11 @@ def test_validate_query_platform_surfaces_retired_tenant_proxy() -> None:
 
 
 def test_validate_query_platform_refuses_without_live() -> None:
-    """A bare call names ``--live`` and does not build a deployment plan."""
+    """A bare call names ``--live`` and does not select rules to deploy."""
     ctx = CliContext(json_output=True)
 
     def _explode(*args: object, **kwargs: object) -> None:
-        raise AssertionError("a bare validate query must not build a deployment plan")
+        raise AssertionError("a bare validate query must not select rules to deploy")
 
     with patch("opentide.deployment.make_deploy_plan", side_effect=_explode):
         result = validation_service.validate_query_platform(ctx, "sentinel")
@@ -424,7 +493,6 @@ def test_validate_query_live_without_tenants_fails_before_loading_a_validator(
     tenantless.return_value = ["splunk"]
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u1"]}),
-        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.platforms.enabled.platform_config_path", return_value=config),
     ):
@@ -451,7 +519,6 @@ def test_validate_query_live_with_a_broken_sdk_advises_a_reinstall() -> None:
     validator.validate.side_effect = ModuleNotFoundError("No module named 'azure'", name="azure")
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
     ):
@@ -489,7 +556,6 @@ def test_validate_query_platform_legacy_validator_signature() -> None:
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"]},
         ),
-        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=CLEAN_OUTCOME),
@@ -512,7 +578,6 @@ def test_validate_query_platform_warnings_are_not_fatal() -> None:
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"]},
         ),
-        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=warned),
@@ -527,15 +592,15 @@ def test_validate_query_platform_warnings_are_not_fatal() -> None:
     assert result["warnings"]
 
 
-def test_validate_query_empty_exception_does_not_advise_full_plan() -> None:
+def test_validate_query_empty_exception_names_the_exception_not_a_plan() -> None:
     ctx = CliContext(json_output=True)
     with (
-        patch("opentide.deployment.DeploymentStrategy.load_from_environment"),
         patch("opentide.deployment.make_deploy_plan", side_effect=KeyError()),
     ):
         result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     assert result["status"] == "failed"
     assert "FULL" not in str(result["message"])
+    assert "plan" not in str(result["message"])
     assert "KeyError" in str(result["message"])
 
 

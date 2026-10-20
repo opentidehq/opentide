@@ -434,19 +434,27 @@ def generate_extract_elastic(
 validate_app = typer.Typer(help="Object and query validation")
 app.add_typer(validate_app, name="validate")
 
-#: Plans name a pipeline, not a status, and select rules by their status's
-#: strategy: the bundled DEVELOPMENT status (PREVIEW) deploys under STAGING.
-DEPLOY_PLAN_HELP = (
-    "STAGING (pull or merge request): rules whose status strategy is PREVIEW, to STAGING "
-    "tenants. PRODUCTION (default branch): RELEASE, DISABLEMENT and DELETION rules, to "
-    "PRODUCTION tenants. FULL (default): every rule file, PREVIEW and RELEASE rules. Plans "
-    "select rules by their status's strategy, not by status name"
+#: A status (DEVELOPMENT, STAGING, PRODUCTION, ... in the default configuration)
+#: maps to a strategy; a run names the strategy it deploys, never a status.
+DEPLOY_STRATEGY_HELP = (
+    "Status strategy this run deploys (repeatable). PREVIEW: rules whose status maps to "
+    "PREVIEW or UNIVERSAL. RELEASE: rules whose status maps to RELEASE or UNIVERSAL, and "
+    "disables or deletes those mapping to DISABLEMENT or DELETION. Each rule goes to the "
+    "tenants whose 'strategies' accept the run's strategy. Status names such as STAGING or "
+    "PRODUCTION are not strategies"
 )
-QUERY_PLAN_HELP = (
-    "Narrow the check to a deployment plan: STAGING (PREVIEW rules, STAGING tenants) or "
-    "PRODUCTION (RELEASE rules, PRODUCTION tenants). Default FULL: PREVIEW and RELEASE "
-    "rules, on every tenant a rule can reach"
+QUERY_STRATEGY_HELP = (
+    "Check only rules a run with this strategy deploys (repeatable), on the tenants that "
+    "accept it. Default: PREVIEW and RELEASE"
 )
+REMOVED_PLAN_HELP = "Removed in 0.17.0; use --strategy"
+
+
+def _refuse_removed_plan(cli: Any, plan: str | None) -> None:
+    if plan is not None:
+        from opentide.models.deployment_enums import removed_plan_message
+
+        emit_error(cli, removed_plan_message(plan, option=True), exit_code=2)
 
 
 @validate_app.callback(invoke_without_command=True)
@@ -508,7 +516,8 @@ def lint_cmd(
 def validate_query_cmd(
     ctx: typer.Context,
     platform: DetectionPlatform = typer.Option(..., "--platform"),
-    plan: str | None = typer.Option(None, "--plan", envvar="DEPLOYMENT_PLAN", help=QUERY_PLAN_HELP),
+    strategy: list[str] | None = typer.Option(None, "--strategy", help=QUERY_STRATEGY_HELP),
+    plan: str | None = typer.Option(None, "--plan", hidden=True, help=REMOVED_PLAN_HELP),
     wide: bool = typer.Option(
         False, "--wide", help="Check every status strategy but DISABLEMENT and DELETION"
     ),
@@ -521,8 +530,8 @@ def validate_query_cmd(
         False,
         "--changed",
         help=(
-            "In CI, check only the rule files this pull request, merge request or push "
-            "changed. The plan still decides strategies and tenants"
+            "Check only the rule files this run changed: the pull or merge request, the "
+            "push, or outside CI the last commit (the files deploy reads)"
         ),
     ),
     file: list[str] | None = typer.Option(
@@ -534,10 +543,11 @@ def validate_query_cmd(
 ) -> None:
     """Query validation checks the tenant. Pass --live."""
     cli = get_context(ctx)
+    _refuse_removed_plan(cli, plan)
     result = validate_query_platform(
         cli,
         platform.value,
-        plan=plan,
+        strategies=strategy or (),
         wide=wide,
         live=live,
         changed=changed,
@@ -555,46 +565,62 @@ app.add_typer(deploy_app, name="deploy")
 def deploy_cmd(
     ctx: typer.Context,
     platform: DetectionPlatform | None = typer.Option(None, "--platform"),
-    plan: str | None = typer.Option(
-        None, "--plan", envvar="DEPLOYMENT_PLAN", help=DEPLOY_PLAN_HELP
+    strategy: list[str] | None = typer.Option(None, "--strategy", help=DEPLOY_STRATEGY_HELP),
+    all_files: bool = typer.Option(
+        False,
+        "--all",
+        help=(
+            "Read every rule file, not only those the run changed (the pull or merge "
+            "request, the push, or outside CI the last commit)"
+        ),
     ),
+    plan: str | None = typer.Option(None, "--plan", hidden=True, help=REMOVED_PLAN_HELP),
     wide: bool = typer.Option(
         False,
         "--wide",
-        help="Deploy the plan's rule files whatever their status strategy, INERT included",
+        help="Deploy the rule files read whatever their status strategy, INERT included",
     ),
     dry_run: bool = typer.Option(False, "--dry-run"),
     keep_deprecated: bool | None = typer.Option(
         None,
         "--keep-deprecated/--drop-deprecated",
         help=(
-            "Include rules whose status disables or deletes them, so the deploy does. "
-            "Default: on for --plan PRODUCTION, off for other plans"
+            "Include rules whose status maps to DISABLEMENT or DELETION, so a RELEASE run "
+            "disables or deletes them. Default: on, off with --all"
         ),
     ),
     skip_promotion: bool = typer.Option(False, "--skip-promotion"),
     skip_unconfigured: bool = typer.Option(
         False,
         "--skip-unconfigured",
-        help="Exit 0 when every platform in the plan has no \\[\\[tenants]] block",
+        help="Exit 0 when every platform with rules to deploy has no \\[\\[tenants]] block",
     ),
     persist_state_externally: bool = typer.Option(
         False,
         "--persist-state-externally",
         help=(
-            "Allow Defender, SentinelOne and CrowdStrike creates in a CI run other than "
-            "--plan PRODUCTION; this pipeline must commit .opentide/states/deployment/ itself"
+            "Allow Defender, SentinelOne and CrowdStrike creates in a CI run other than a "
+            "RELEASE run on a push; this pipeline must commit .opentide/states/deployment/ itself"
         ),
     ),
 ) -> None:
-    """Deploy detection rules to configured platforms."""
+    """Deploy the changed rules whose status maps to --strategy.
+
+    A status (DEVELOPMENT, STAGING, PRODUCTION, ... in the default
+    configuration) maps to a strategy in deployment.toml. A run deploys the
+    rule files it changed whose status maps to its --strategy, to the tenants
+    whose 'strategies' accept it. The pull or merge request job runs
+    --strategy PREVIEW; the default-branch job runs --strategy RELEASE.
+    """
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
+    _refuse_removed_plan(cli, plan)
     result = run_deploy(
         cli,
+        strategies=strategy or (),
+        all_files=all_files,
         platform=platform,
-        plan=plan,
         dry_run=dry_run,
         skip_promotion=skip_promotion,
         keep_deprecated=keep_deprecated,

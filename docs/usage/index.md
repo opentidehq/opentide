@@ -53,7 +53,7 @@ flowchart LR
 
 ## Everyday reference
 
-- [Configuration](./configuration.md) — credentials, enabling platforms, deployment plans, promotion.
+- [Configuration](./configuration.md) — credentials, enabling platforms, statuses and strategies, promotion.
 - [Troubleshooting](./troubleshooting.md) — what to do when `validate` or `generate` fails.
 - [CLI](../cli/index.md) · [MCP](../mcp/index.md) · [SDK](../sdk/index.md) — the three interfaces to the same engine.
 - [Specifications](/docs/specifications/) — the normative contract behind every object and field.

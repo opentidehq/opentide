@@ -15,7 +15,7 @@ Author rules as `rule::1.0` YAML under `objects/rules/`.
 opentide validate --strict
 opentide lint --strict
 opentide validate query --platform <platform> --live --file <rule file>
-opentide deploy --dry-run
+opentide deploy --dry-run --strategy PREVIEW --all
 ```
 
 `validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.

@@ -7,8 +7,8 @@ from opentide.core.logging import get_logger
 from opentide.core import registry
 from opentide.generation.framework import unroll_dot_dict
 from opentide.models.deployment_enums import (
-    DeploymentStrategy,
     DetectionPlatforms,
+    RunStrategies,
     StatusStrategy,
 )
 from opentide.models.platform import PLATFORM_CONFIG_MODELS, PlatformConfigBase
@@ -32,29 +32,22 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-_READ_ONLY_RESOLUTION: ContextVar[bool] = ContextVar("opentide_read_only_resolution", default=False)
+_WIDE_SCOPE: ContextVar[bool] = ContextVar("opentide_wide_scope", default=False)
 
 
 @contextmanager
-def read_only_tenant_resolution() -> Iterator[None]:
-    """Resolve tenants for a check that writes nothing to them (#547).
+def wide_scope() -> Iterator[None]:
+    """Resolve tenants for ``--wide``, which deploys rules whatever their status.
 
-    A tenant's ``deployment`` strategy says when a rule may be *deployed* to
-    it. Live query validation only reads, so under the ``FULL`` plan every
-    tenant a rule can reach is checked: the ``STAGING`` and ``PRODUCTION``
-    tenants that a deploy would leave to its own pipeline included. A
-    ``MANUAL`` tenant is still reached only when the rule names it, and an
-    explicit ``STAGING`` or ``PRODUCTION`` plan still narrows the check to
-    the tenants that plan deploys to.
-
-    Deployment never enters this context, so what ``deploy`` targets is
-    unchanged.
+    A rule's status strategy normally decides which tenants take it. Under
+    ``--wide`` it may be one no run deploys (``INERT``), so a tenant is reached
+    when it accepts any of the run's strategies.
     """
-    token = _READ_ONLY_RESOLUTION.set(True)
+    token = _WIDE_SCOPE.set(True)
     try:
         yield
     finally:
-        _READ_ONLY_RESOLUTION.reset(token)
+        _WIDE_SCOPE.reset(token)
 
 
 def _json_normalize(data: Any) -> Any:
@@ -78,39 +71,39 @@ def _typed_platform_config_roots(system_identifier: str) -> set[str]:
 
 
 class TideDeployment:
-    def __init__(self, deployment, system: DetectionPlatforms, strategy):
+    def __init__(self, deployment, system: DetectionPlatforms, strategies: RunStrategies | None):
         match system:
             case DetectionPlatforms.SPLUNK:
                 self.rule_deployment: Sequence[TenantDeployment.Splunk] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategy)
+                    self.deployment_resolver(deployment, system, strategies)
                 )
             case DetectionPlatforms.SENTINEL:
                 self.rule_deployment: Sequence[TenantDeployment.Sentinel] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategy)
+                    self.deployment_resolver(deployment, system, strategies)
                 )
             case DetectionPlatforms.CARBON_BLACK_CLOUD:
                 self.rule_deployment: Sequence[TenantDeployment.CarbonBlackCloud] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategy)
+                    self.deployment_resolver(deployment, system, strategies)
                 )
             case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
                 self.rule_deployment: Sequence[TenantDeployment.DefenderForEndpoint] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategy)
+                    self.deployment_resolver(deployment, system, strategies)
                 )
             case DetectionPlatforms.SENTINEL_ONE:
                 self.rule_deployment: Sequence[TenantDeployment.SentinelOne] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategy)
+                    self.deployment_resolver(deployment, system, strategies)
                 )
             case DetectionPlatforms.CROWDSTRIKE:
                 self.rule_deployment: Sequence[TenantDeployment.Crowdstrike] = (
-                    self.deployment_resolver(deployment, system, strategy)  # type:ignore
+                    self.deployment_resolver(deployment, system, strategies)  # type:ignore
                 )
             case DetectionPlatforms.HARFANGLAB:
                 self.rule_deployment: Sequence[TenantDeployment.HarfangLab] = (
-                    self.deployment_resolver(deployment, system, strategy)  # type:ignore
+                    self.deployment_resolver(deployment, system, strategies)  # type:ignore
                 )
             case DetectionPlatforms.ELASTIC:
                 self.rule_deployment: Sequence[TenantDeployment.Elastic] = (
-                    self.deployment_resolver(deployment, system, strategy)  # type:ignore
+                    self.deployment_resolver(deployment, system, strategies)  # type:ignore
                 )
             case _:
                 raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
@@ -176,27 +169,27 @@ class TideDeployment:
         self,
         data: DetectionRule,
         system: DetectionPlatforms,
-        deployment_strategy: DeploymentStrategy,
+        strategies: RunStrategies | None,
     ) -> Sequence[SystemConfig.Tenant]:
-        """
-        Returns a list of all the tenants configurations, if they are allowed to be targeted.
-        - If ALWAYS, will be targeted on every deployment
-        - If MANUAL, can only be targeted if defined in the MDR
-        - If STAGING or PRODUCTION, can only be targeted if the current deployment plan alligns with it
-        - Inside :func:`read_only_tenant_resolution` the FULL plan reaches every
-          tenant above, whatever its strategy
-        """
-        tenants = self.system_configuration_resolver(system).tenants  # type: ignore
-        mdr_tenants = self.mdr_configuration_resolver(data, system).tenants
-        target_tenants = list()
-        reach_every_tenant = (
-            _READ_ONLY_RESOLUTION.get() and deployment_strategy is DeploymentStrategy.FULL
-        )
+        """The tenants a run with *strategies* deploys *data* to on *system*.
 
-        logger.info(
-            "currently_resolving_available_tenant_deployments_for_rule",
-            detail=str(data.name) + " | " + str(data.metadata.uuid),
-        )
+        - A tenant takes the rule when it accepts a run strategy that deploys
+          the rule's status strategy (``Tenant.accepts``): a ``PREVIEW`` run
+          reaches the tenants listing ``PREVIEW``, a ``RELEASE`` run those
+          listing ``RELEASE``, also for the ``DISABLEMENT`` and ``DELETION``
+          rules it retires.
+        - A rule whose platform block lists ``tenants`` reaches only those.
+        - A ``manual`` tenant is reached only by the rules that list it.
+        """
+        from opentide.deployment.utils import check_status
+
+        tenants = self.system_configuration_resolver(system).tenants  # type: ignore
+        mdr_config = self.mdr_configuration_resolver(data, system)
+        mdr_tenants = mdr_config.tenants
+        run = tuple(strategies or ())
+        rule_strategy = check_status(str(mdr_config.status))
+        wide = _WIDE_SCOPE.get()
+        target_tenants = list()
 
         if not tenants:
             logger.critical(
@@ -208,61 +201,38 @@ class TideDeployment:
             raise MissingTenantsError(system.name.lower())
 
         for tenant in tenants:
-            # Resolve tenant deployments when they are specific or not in the MDR spec
+            fields = {
+                "rule": data.name,
+                "uuid": str(data.metadata.uuid),
+                "tenant": tenant.name,
+                "rule_strategy": rule_strategy.name,
+                "tenant_strategies": [s.name for s in tenant.strategies],
+                "run_strategies": [s.name for s in run],
+            }
             if mdr_tenants:
+                if tenant.name not in mdr_tenants:
+                    logger.info("skipping_tenant", reason="not listed by the rule", **fields)
+                    continue
+            elif tenant.manual:
                 logger.info(
-                    "found_specific_tenants_targeted_by_rule",
-                    detail=str(data.name) + " | " + str(str(mdr_tenants)),
+                    "skipping_tenant",
+                    reason="manual tenant: only rules that list it under tenants reach it",
+                    **fields,
                 )
-
-                if tenant.name in mdr_tenants:
-                    if (
-                        reach_every_tenant
-                        or (tenant.deployment is DeploymentStrategy.MANUAL)
-                        or (tenant.deployment is DeploymentStrategy.ALWAYS)
-                        or (tenant.deployment is deployment_strategy)
-                    ):
-                        target_tenants.append(tenant)
-                        logger.info(
-                            "adding_tenant",
-                            detail=f"Compatible with current deployment plan : {deployment_strategy!s}",
-                        )
-                    else:
-                        logger.info(
-                            "skipping_tenant",
-                            detail=f"Tenant deployment plan : {tenant.deployment!s}, current deployment plan : {deployment_strategy.name}",
-                        )
-                else:
-                    logger.info("skipping_tenant", detail=str(mdr_tenants))
-
+                continue
+            if wide:
+                accepted = any(strategy in tenant.strategies for strategy in run)
+            else:
+                accepted = tenant.accepts(rule_strategy, run)
+            if accepted:
+                target_tenants.append(tenant)
+                logger.info("adding_tenant", **fields)
             else:
                 logger.info(
-                    "did_not_find_tenants_specified_in_detection_rule_will_resolve_available_ones",
-                    detail=data.name,
+                    "skipping_tenant",
+                    reason="the tenant accepts none of the run strategies that deploy this rule",
+                    **fields,
                 )
-
-                if tenant.deployment is DeploymentStrategy.MANUAL:
-                    logger.info(
-                        "skipping_tenant",
-                        detail="You can define custom target tenants under the tenants keyword",
-                    )
-                    continue
-
-                elif (
-                    reach_every_tenant
-                    or (tenant.deployment is deployment_strategy)
-                    or (tenant.deployment is DeploymentStrategy.ALWAYS)
-                ):
-                    target_tenants.append(tenant)
-                    logger.info(
-                        "adding_tenant",
-                        detail=f"Compatible with current deployment plan : {deployment_strategy!s}",
-                    )
-                else:
-                    logger.info(
-                        "skipping_tenant",
-                        detail=f"Tenant deployment plan : {tenant.deployment!s}, current deployment plan : {deployment_strategy.name}",
-                    )
 
         return target_tenants
 
@@ -394,7 +364,7 @@ class TideDeployment:
         self,
         mdr_deployment: Sequence[DetectionRule],
         system: DetectionPlatforms,
-        deployment_strategy: DeploymentStrategy,
+        strategies: RunStrategies | None,
     ) -> Sequence[DeploymentBatch]:
         deployment = list()
         tenants_data = dict()
@@ -404,7 +374,7 @@ class TideDeployment:
             if type(mdr) is str:
                 mdr = registry.Opentide.Rules[mdr]
 
-            tenants = self.tenants_resolver(mdr, system, deployment_strategy)
+            tenants = self.tenants_resolver(mdr, system, strategies)
 
             for tenant in tenants:
                 tenants_data[tenant.name] = tenant

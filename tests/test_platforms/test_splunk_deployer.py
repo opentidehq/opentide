@@ -44,7 +44,6 @@ def _tenant(
     return ConfigurationModels.Systems.Splunk.Tenant(
         name=name,
         description="Primary tenant",
-        deployment="ALWAYS",
         setup=ConfigurationModels.Systems.Splunk.Tenant.Setup(
             ssl=True,
             url="https://splunk.example",
@@ -314,3 +313,22 @@ def test_correlation_search_includes_direct_rule_techniques_and_survives_unindex
         config_with_inherited["action.correlationsearch.annotations.mitre_attack"]
         == "T1059.001, T1003, T1059.003"
     )
+
+
+@pytest.mark.parametrize("strategies", [None, ()])
+def test_deploy_without_run_strategies_is_refused(strategies: tuple | None) -> None:
+    with pytest.raises(ValueError, match="run strategies are required for Splunk deployment"):
+        _deployer().deploy(["any-uuid"], strategies)
+
+
+def test_deploy_routes_tenants_with_the_run_strategies(splunk_rule_payload: dict) -> None:
+    from opentide.models.deployment_enums import StatusStrategy
+
+    rule = load_rule_from_dict(splunk_rule_payload)
+    run = (StatusStrategy.PREVIEW,)
+    with patch(
+        "opentide.platforms.splunk.deployer.TideDeployment",
+        return_value=MagicMock(rule_deployment=[]),
+    ) as tide_deployment:
+        _deployer().deploy([rule], run)
+    assert tide_deployment.call_args.kwargs["strategies"] == run

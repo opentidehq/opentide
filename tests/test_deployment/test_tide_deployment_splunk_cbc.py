@@ -9,7 +9,7 @@ import pytest
 
 from opentide.deployment.planning import TideDeployment, _typed_platform_config_roots
 from opentide.loading.rule_loader import load_rule_from_dict
-from opentide.models.deployment_enums import DeploymentStrategy, DetectionPlatforms
+from opentide.models.deployment_enums import DetectionPlatforms, StatusStrategy
 from opentide.models.system_config import SystemConfig
 from opentide.platforms.enabled import MissingTenantsError
 
@@ -124,6 +124,6 @@ def test_tenants_resolver_names_the_platform_when_it_has_no_tenants(metadata: di
     tide = TideDeployment.__new__(TideDeployment)
     tide.system_configuration_resolver = MagicMock(return_value=SimpleNamespace(tenants=None))
     with pytest.raises(MissingTenantsError, match=r"^splunk has no tenants configured in ") as info:
-        tide.tenants_resolver(rule, DetectionPlatforms.SPLUNK, DeploymentStrategy.STAGING)
+        tide.tenants_resolver(rule, DetectionPlatforms.SPLUNK, (StatusStrategy.PREVIEW,))
     assert info.value.system == "splunk"
     assert "[[tenants]]" in info.value.advice
