@@ -83,6 +83,15 @@ def test_parse_manifest_rejects_foreign_source() -> None:
     assert [e.slug for e in entries] == ["x"]
 
 
+@pytest.mark.parametrize("spelling", ["OpenTideHQ/skills", "opentidehq/SKILLS"])
+def test_parse_manifest_accepts_the_catalogue_in_any_case(spelling: str) -> None:
+    source, _ref, entries = registry._parse_manifest(
+        {"source": spelling, "ref": "main", "skills": [{"slug": "x", "name": "X"}]}
+    )
+    assert source == "opentidehq/skills"
+    assert [e.slug for e in entries] == ["x"]
+
+
 def test_parse_manifest_rejects_ref_and_slug_that_escape_the_repo() -> None:
     source, ref, entries = registry._parse_manifest(
         {

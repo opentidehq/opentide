@@ -247,12 +247,16 @@ def clear_manifest_cache() -> None:
 
 
 def _normalise_source(raw: object) -> str:
-    """Accept only the public opentidehq/skills repo; ignore redirect attempts."""
+    """Accept only the public opentidehq/skills repo; ignore redirect attempts.
+
+    GitHub owner and repo names are case-insensitive, and the catalogue manifest has
+    spelled itself ``OpenTideHQ/skills`` as well as ``opentidehq/skills``, so the
+    comparison ignores case and the result is always the canonical spelling.
+    """
     source = str(raw or _DEFAULT_SOURCE).strip()
-    if source != _DEFAULT_SOURCE:
+    if source.lower() != _DEFAULT_SOURCE.lower():
         logger.warning("skills_manifest_source_rejected", source=source, fallback=_DEFAULT_SOURCE)
-        return _DEFAULT_SOURCE
-    return source
+    return _DEFAULT_SOURCE
 
 
 def _parse_manifest(data: dict[str, Any]) -> tuple[str, str, list[SkillEntry]]:
