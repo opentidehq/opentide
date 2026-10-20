@@ -410,7 +410,7 @@ run `pip install --force-reinstall opentide`.
 
 ### Live query validation in CI takes most of an hour
 
-Through 0.16.1 the generated pipelines ran `opentide validate query --platform <platform> --live` with no scope, so every run sent every rule in the catalogue to the tenant. The step now passes `--changed` and checks only the rule files the pull request, merge request or push changed, still on every tenant they can reach ([which rules are checked](../cli/validate.md#which-rules-are-checked)). Regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. Do not add `--plan STAGING` instead: it also drops rules in a `RELEASE` status and every tenant but the staging ones. To check particular rules by hand, pass `--file` or `--uuid`.
+Through 0.16.1 the generated pipelines ran `opentide validate query --platform <platform> --live` with no scope, so every run sent every rule in the catalogue to the tenant. The step now passes `--changed --plan FULL` and checks only the rule files the pull request, merge request or push changed, still on every tenant they can reach ([which rules are checked](../cli/validate.md#which-rules-are-checked)). Regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. Do not add `--plan STAGING` instead: it also drops rules in a `RELEASE` status and every tenant but the staging ones. To check particular rules by hand, pass `--file` or `--uuid`.
 
 ## Platforms and deployment
 

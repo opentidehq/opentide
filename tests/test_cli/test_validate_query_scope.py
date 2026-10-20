@@ -361,3 +361,21 @@ def test_changed_on_a_fork_pull_request_diffs_from_the_merge_ref(
     assert code == 0, payload
     assert payload["scope"] == "changed"
     assert payload["queries_per_tenant"] == {"Staging": 1, "Production": 1}
+
+
+def test_the_generated_gate_is_not_narrowed_by_an_inherited_plan(
+    repo: Path, azure_client: MagicMock
+) -> None:
+    """A project-wide ``DEPLOYMENT_PLAN`` must not narrow the generated live gate."""
+    from opentide.ci.stages import query_validation_command
+
+    base, head = _change_a_production_rule(repo)
+    env = {**_ci_env("gitlab-merge-request", repo, base, head), "DEPLOYMENT_PLAN": "STAGING"}
+    argv = query_validation_command("sentinel").split()[1:]
+
+    result = runner.invoke(app, ["--json", *argv], env=env)
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 0, payload
+    assert payload["plan"] == "FULL"
+    assert payload["queries_per_tenant"] == {"Staging": 1, "Production": 1}

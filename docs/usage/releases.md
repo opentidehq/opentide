@@ -22,7 +22,7 @@ opentide validate --strict
 
 **What changes**
 
-- **Faster live query gate.** Generated pipelines run `opentide validate query --live --changed`: only the rules the pull request, merge request or push changed, still on every tenant they can reach. Before, every run sent the whole catalogue. Check rules by hand with `--file` or `--uuid`. See [Which rules are checked](../cli/validate.md#which-rules-are-checked).
+- **Faster live query gate.** Generated pipelines run `opentide validate query --live --changed --plan FULL`: only the rules the pull request, merge request or push changed, still on every tenant they can reach. Before, every run sent the whole catalogue. Check rules by hand with `--file` or `--uuid`. See [Which rules are checked](../cli/validate.md#which-rules-are-checked).
 - **GitLab merge request pipelines start.** The generated `.gitlab-ci.yml` sets `workflow:rules`; without them GitLab refused every merge request pipeline, so the staging deploy never ran. A branch without a merge request no longer runs a pipeline.
 - **Plans are pipelines, not statuses.** `--plan STAGING` deploys `PREVIEW` rules on a pull request, `--plan PRODUCTION` `RELEASE` rules on the default branch, whatever your statuses are called. See [Deployment plan](./configuration.md#deployment-plan).
 - **Behind a proxy.** `OPENTIDE_PROXY` sets `--proxy`, and `NO_PROXY` keeps internal tenants such as Splunk off the proxy. See [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).

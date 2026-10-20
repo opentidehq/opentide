@@ -40,9 +40,9 @@ def test_render_github_query_validation_checks_only_changed_rules() -> None:
     """Every rule on every run took 45 minutes on a 467-rule Splunk catalogue."""
     workflow = render_github(CiRenderOptions(ci="github", platforms=["splunk"]))
     validate = workflow.split("  validate:", 1)[1].split("  generate:", 1)[0]
-    assert "opentide validate query --platform splunk --live --changed" in validate
-    # No plan: a changed rule is still checked on every tenant it can reach.
-    assert "--plan" not in validate
+    assert "opentide validate query --platform splunk --live --changed --plan FULL" in validate
+    # FULL, never STAGING: a changed rule is checked on every tenant it can reach.
+    assert "--plan STAGING" not in validate
     # The pull request's merge base and the pushed commit's parent are not in
     # a one-commit checkout.
     assert "fetch-depth: 0" in validate

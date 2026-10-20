@@ -144,15 +144,17 @@ def query_validation_command(platform: str, *, repo: Path | None = None) -> str:
 
     ``--changed`` reads the pull or merge request's diff, or the push's, as the
     deploy job of the same run does; without it every rule in the catalogue was
-    sent on every run. No ``--plan``, so each changed rule is still checked on
-    every tenant it can reach, and in any status a deploy acts on.
+    sent on every run. ``--plan FULL``, not ``--plan STAGING``: each changed
+    ``PREVIEW`` or ``RELEASE`` rule is checked on every tenant it can reach.
+    Explicit, because an omitted ``--plan`` reads ``DEPLOYMENT_PLAN``, and a
+    project-wide value would narrow the gate.
 
     The guard lists ``$VAR`` references in the workspace platform file. A
     literal value is not a credential, and a comment is not a reference. No
     references means the live check runs with no guard. A skip exits 2 so it
     cannot be read as a check that ran.
     """
-    live = f"opentide validate query --platform {platform} --live --changed"
+    live = f"opentide validate query --platform {platform} --live --changed --plan FULL"
     names = workspace_credential_names(repo, platform) if repo is not None else []
     if not names:
         return live

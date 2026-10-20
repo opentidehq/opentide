@@ -308,7 +308,7 @@ def test_a_reviewed_tenant_is_validated_live(remote: Path) -> None:
     assert done.returncode == 0, done.stderr
     assert NO_REVIEWED_TENANT_NOTE.format(platform="splunk") not in done.stdout
     assert (work / "credentialed").read_text(encoding="utf-8") == (
-        "validate query --platform splunk --live --changed\n"
+        "validate query --platform splunk --live --changed --plan FULL\n"
     )
 
 
@@ -332,7 +332,7 @@ def test_only_an_uncommented_tenant_runs_live_validation(platform: str, tmp_path
     ran = _bash(tmp_path, command)
     assert ran.returncode == 0, ran.stderr
     assert (tmp_path / "credentialed").read_text(encoding="utf-8") == (
-        f"validate query --platform {platform} --live --changed\n"
+        f"validate query --platform {platform} --live --changed --plan FULL\n"
     )
 
 
