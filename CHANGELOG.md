@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- `opentide setup skills` accepts the catalogue manifest's `source` in any letter case. GitHub names are case-insensitive, and a manifest that spelled itself `OpenTideHQ/skills` logged `Skills manifest source rejected` on every run, although the fallback installed the same catalogue.
+
 ## [0.16.0] — 2026-10-19
 
 Minor release: `pip install opentide` is the only install, and two things need action after upgrading.
