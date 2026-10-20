@@ -40,7 +40,7 @@ uv venv
 
 ## PyPI install
 
-The latest release is **0.16.1** (20 October 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest release is **0.17.0** (20 October 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 <Tabs items={['venv + pip', 'uv']}>
 
@@ -49,7 +49,7 @@ The latest release is **0.16.1** (20 October 2026). The first public release was
 ```bash
 pip install opentide              # latest on PyPI
 # python -m pip install opentide  # in constrained environments
-pip install 'opentide==0.16.1'     # pin the current release
+pip install 'opentide==0.17.0'     # pin the current release
 ```
 
 </Tab>
@@ -58,7 +58,7 @@ pip install 'opentide==0.16.1'     # pin the current release
 
 ```bash
 uv pip install opentide              # latest on PyPI
-uv pip install 'opentide==0.16.1'    # pin the current release
+uv pip install 'opentide==0.17.0'    # pin the current release
 ```
 
 </Tab>

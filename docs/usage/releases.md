@@ -7,6 +7,33 @@ description: Public package versions of the opentide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.17.0 — 20 October 2026
+
+Minor release. Regenerate your CI pipeline after upgrading: live query validation then checks only the rules each run changed, and GitLab merge request pipelines start again.
+
+**Install**
+
+```bash
+pip install opentide==0.17.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide setup ci <github|gitlab|azure> --yes
+opentide validate --strict
+```
+
+**What changes**
+
+- **Faster live query gate.** Generated pipelines run `opentide validate query --live --changed`: only the rules the pull request, merge request or push changed, still on every tenant they can reach. Before, every run sent the whole catalogue. Check rules by hand with `--file` or `--uuid`. See [Which rules are checked](../cli/validate.md#which-rules-are-checked).
+- **GitLab merge request pipelines start.** The generated `.gitlab-ci.yml` sets `workflow:rules`; without them GitLab refused every merge request pipeline, so the staging deploy never ran. A branch without a merge request no longer runs a pipeline.
+- **Plans are pipelines, not statuses.** `--plan STAGING` deploys `PREVIEW` rules on a pull request, `--plan PRODUCTION` `RELEASE` rules on the default branch, whatever your statuses are called. See [Deployment plan](./configuration.md#deployment-plan).
+- **Behind a proxy.** `OPENTIDE_PROXY` sets `--proxy`, and `NO_PROXY` keeps internal tenants such as Splunk off the proxy. See [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
+- **Quieter `generate`.** No more `Vocab identifier not found` / `Vocab parameter not found` warnings for objective priorities.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.17.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.17.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.16.1 — 20 October 2026
 
 Patch release. Nothing to regenerate and nothing to do after upgrading. The SDK class is spelled `Opentide`; `OpenTide` still imports with a deprecation warning.

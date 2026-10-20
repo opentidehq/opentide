@@ -6,7 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
-Regenerate generated pipelines with `opentide setup ci <github|gitlab|azure> --yes` after upgrading.
+## [0.17.0] — 2026-10-20
+
+Minor release: `validate query` gains flags and a `scope` JSON field, and generated pipelines change. Two things need action after upgrading.
+- **Regenerate generated pipelines** with `opentide setup ci <github|gitlab|azure> --yes`. Live query validation then checks only the rules each run changed, and GitLab merge request pipelines start at all.
+- **Run `opentide generate`** to refresh the editor schemas' objective and signal labels; the vocabulary warnings stop either way.
 
 ### Added
 
@@ -26,6 +30,15 @@ Regenerate generated pipelines with `opentide setup ci <github|gitlab|azure> --y
 - **Generated GitLab pipelines could not start a merge request pipeline.** A GitLab job with no `rules` defaults to `except: merge_requests`, so the merge request pipeline held only `deploy_staging` and `inflight_shards`, whose `needs: generate` named a job that was not added: GitLab refused the pipeline, the staging deploy and the inflight shards never ran, and every push to the branch also ran a branch pipeline. The file now sets `workflow:rules` for merge request and default-branch pipelines, so every job runs in a merge request pipeline and one push starts one pipeline. A push to a branch that has no merge request yet starts no pipeline; open a (draft) merge request to validate it, as GitHub validates pull requests.
 - **`opentide generate` logged a vocabulary warning per objective.** The editor schemas describe each objective with its priority, and looked that value up in the `criticality` vocabulary for an icon: `High` logged `Vocab parameter not found` (no vocabulary defines `icon`) and `Critical` logged `Vocab identifier not found` (an objective's `priority` is free text, commonly an `alert_severity` value, not a `criticality` one). The description prints the value as authored, labelled **Priority** for an objective, **Severity** for a signal and **Criticality** for a threat, with no lookup. Regenerate schemas with `opentide generate` to update the labels.
 - A GitLab `PRODUCTION` plan with no previous tip (`CI_COMMIT_BEFORE_SHA` all zeros, as on a branch's first push, a manual run or a schedule) diffs from HEAD's first parent, as on GitHub and Azure, instead of failing with `No Source Commit Found`.
+
+### Install
+
+```bash
+pip install opentide==0.17.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide setup ci <github|gitlab|azure> --yes
+opentide validate --strict
+```
 
 ## [0.16.1] — 2026-10-20
 
@@ -1039,7 +1052,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/opentidehq/opentide/releases/tag/v0.17.0
 [0.16.1]: https://github.com/opentidehq/opentide/releases/tag/v0.16.1
 [0.16.0]: https://github.com/opentidehq/opentide/releases/tag/v0.16.0
 [0.15.0]: https://github.com/opentidehq/opentide/releases/tag/v0.15.0
