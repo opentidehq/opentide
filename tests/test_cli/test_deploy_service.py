@@ -255,8 +255,10 @@ def test_run_deploy_requires_a_strategy() -> None:
             [
                 "--strategy 'STAGING' is not a deployable strategy. Use PREVIEW or RELEASE",
                 "STAGING was a deployment plan, removed in 0.17.0: pass PREVIEW",
-                "STAGING is also a configured status name; it maps to PREVIEW, which a PREVIEW "
-                "run deploys",
+                (
+                    "STAGING is also a configured status name; it maps to PREVIEW, which a PREVIEW "
+                    "run deploys"
+                ),
             ],
         ),
         (

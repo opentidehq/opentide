@@ -338,6 +338,13 @@ _CHANGE_REQUEST = {
 }
 
 
+def _only_ci(monkeypatch: pytest.MonkeyPatch, ci: str) -> None:
+    """Run as *ci* alone: a CI runner's own ``GITHUB_ACTIONS`` would win detection."""
+    for name in ("CI", "GITHUB_ACTIONS", "TF_BUILD"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(ci, "true")
+
+
 @pytest.mark.parametrize(
     ("strategies", "change_request", "where"),
     [
@@ -359,7 +366,7 @@ def test_a_ci_create_outside_a_release_push_is_refused_before_any_http(
     ci: str,
 ) -> None:
     """#554: only the production job (RELEASE on a push) commits shards; the new id is lost."""
-    monkeypatch.setenv(ci, "true")
+    _only_ci(monkeypatch, ci)
     if change_request:
         monkeypatch.setenv(*_CHANGE_REQUEST[ci])
     spy = _spy_logger(monkeypatch)
@@ -392,7 +399,7 @@ def test_a_ci_release_push_may_create(
     strategies: RunStrategies,
     ci: str,
 ) -> None:
-    monkeypatch.setenv(ci, "true")
+    _only_ci(monkeypatch, ci)
 
     defender(strategies).return_value.create_detection_rule.assert_called_once()
 
