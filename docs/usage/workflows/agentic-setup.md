@@ -104,7 +104,7 @@ flowchart LR
 > `get_chaining(uuid="…8002…0001")` → confirms it covers the *Simulated Actor* threat and has no rule yet.
 > Proposes `objects/rules/sentinel-t1059.yaml` with `detection_model` pointing at the objective.
 > `validation_report()` → passes schema, uuid, chaining.
-> Runs `opentide validate query --platform sentinel --live` (CLI) against the tenant.
+> Runs `opentide validate query --platform sentinel --live --file objects/rules/sentinel-t1059.yaml` (CLI), which checks that one rule's query against the tenant.
 > `deploy_rule(uuid=…, platform="sentinel", dry_run=true)` → shows the planned change.
 >
 > **You:** review the diff, then deploy for real.

@@ -22,9 +22,11 @@ Use this skill when authoring or reviewing detection content in an opentide repo
 ```bash
 opentide validate
 opentide generate
-opentide validate query --platform sentinel --live
+opentide validate query --platform sentinel --live --file objects/rules/<rule>.yaml
 opentide deploy --dry-run
 ```
+
+`validate query --live` sends queries to the tenant. Pass `--file` or `--uuid` to check the rules you changed; without them it checks every rule in the catalogue. CI passes `--changed`, which checks the rules the pull request changed.
 
 ## Platform capabilities
 

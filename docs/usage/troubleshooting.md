@@ -145,6 +145,16 @@ Confirm `.opentide/templates/rule.1.0.template.yaml` has no `null`, `metadata.tl
 opentide setup ci github --yes
 ```
 
+### GitLab merge request pipeline fails: `'deploy_staging' job needs 'generate' job, but it was not added to the pipeline`
+
+A GitLab job with no `rules` defaults to `except: merge_requests`. Through 0.16.1 the generated `.gitlab-ci.yml` had no `workflow:rules`, so the merge request pipeline held only `deploy_staging` and `inflight_shards`, which need `generate`, and GitLab refused to start it. Each push to the branch also ran a branch pipeline. The generated file now sets `workflow:rules` for merge request and default-branch pipelines; regenerate it:
+
+```bash
+opentide setup ci gitlab --yes
+```
+
+A hand-edited `workflow:` block that did the same can go.
+
 ### GitLab inflight job pushes to a host called `${{CI_SERVER_HOST}}`
 
 Through `0.3.0` the GitLab inflight jobs wrote the push URL with GitHub Actions expression syntax (`${{CI_JOB_TOKEN}}`). GitLab only expands `$VAR` / `${VAR}`, so the job tried to reach a literal host. Fixed in **0.4.0** — re-run:
@@ -195,6 +205,16 @@ opentide --json setup --yes --platform sentinel --ci github
 `0.1.2` imported Azure and pandas when loading Sentinel (and other) deployers, so a base install reported no deploy capability. **0.1.3** lazy-loads those SDKs. Re-run `opentide info` after upgrading. CrowdStrike and HarfangLab still report `can_validate: false` by design.
 
 ## Generation
+
+### `opentide generate` warns `Vocab identifier not found` or `Vocab parameter not found` for `criticality`
+
+```text illustrative
+WARNING   Vocab identifier not found
+          identifier: Critical
+          vocab: criticality
+```
+
+The editor schemas describe each objective with its `priority`, and through 0.16.1 looked that value up in the `criticality` vocabulary for an icon. No vocabulary defines `icon` (`Vocab parameter not found` for `High`), and an objective's `priority` is free text, commonly an `alert_severity` value such as `Critical`, which `criticality` does not have (`Vocab identifier not found`). Nothing failed; the warnings repeated for every objective on every run. The sample above is illustrative: a current release no longer prints it. The description now prints the value as authored, labelled **Priority** (objectives), **Severity** (signals) or **Criticality** (threats), with no lookup. Upgrade and run `opentide generate`.
 
 ### `opentide generate` crashes with `Object of type date is not JSON serializable`
 
@@ -388,6 +408,10 @@ Through 0.15.0 the SDKs were extras, so a pipeline that installed only
 release still reports that an SDK will not import, the environment is damaged:
 run `pip install --force-reinstall opentide`.
 
+### Live query validation in CI takes most of an hour
+
+Through 0.16.1 the generated pipelines ran `opentide validate query --platform <platform> --live` with no scope, so every run sent every rule in the catalogue to the tenant. The step now passes `--changed` and checks only the rule files the pull request, merge request or push changed, still on every tenant they can reach ([which rules are checked](../cli/validate.md#which-rules-are-checked)). Regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. Do not add `--plan STAGING` instead: it also drops rules in a `RELEASE` status and every tenant but the staging ones. To check particular rules by hand, pass `--file` or `--uuid`.
+
 ## Platforms and deployment
 
 ### A platform I configured is not loaded
@@ -401,6 +425,14 @@ enabled = true
 ```
 
 Verify with `opentide info --platform sentinel`. See [Configuration → enabling a platform](./configuration.md#enabling-a-platform).
+
+### Splunk answers with HTML instead of XML behind a proxy
+
+The request went through the proxy, and the proxy answered with its own error page. An internal tenant must not be reached through the corporate proxy: add its host to `NO_PROXY` and `no_proxy` (`NO_PROXY=splunk.internal.example`). opentide's platform clients honour it, so the same run still reaches a cloud tenant such as Sentinel through the proxy, and the deploy does not have to be split per platform. See [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
+
+### `--plan PREVIEW` or `--plan RELEASE` is rejected
+
+`PREVIEW` and `RELEASE` are status strategies, not plans. A plan names the pipeline: `--plan STAGING` (pull or merge request) deploys the rules whose status strategy is `PREVIEW`, and `--plan PRODUCTION` (the default branch) the `RELEASE`, `DISABLEMENT` and `DELETION` ones, whatever your statuses are called. The error names the plan to use. See [Configuration → deployment plan](./configuration.md#deployment-plan).
 
 ### Deploy fails with an authentication error
 
