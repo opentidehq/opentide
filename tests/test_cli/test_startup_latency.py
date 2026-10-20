@@ -8,22 +8,22 @@ import sys
 from pathlib import Path
 
 _IMPORT_SCRIPT = """
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.cli import app
 
-assert OpenTide.is_initialised is False, "CLI import must not initialise the registry"
+assert Opentide.is_initialised is False, "CLI import must not initialise the registry"
 assert app is not None
 print("IMPORT_OK")
 """
 
 _HELP_SCRIPT = """
 import sys
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.cli import app
 
-assert OpenTide.is_initialised is False
+assert Opentide.is_initialised is False
 result = app(sys.argv[1:], standalone_mode=False)
-assert OpenTide.is_initialised is False, "CLI help must not initialise the registry"
+assert Opentide.is_initialised is False, "CLI help must not initialise the registry"
 raise SystemExit(result or 0)
 """
 

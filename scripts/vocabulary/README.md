@@ -33,7 +33,7 @@ uv run python scripts/vocabulary/sync_upstream.py --apply
 
 1. `specifications/vocabularies/{att&ck,att&ck.groups,mitigations,datasources,actors}.vocab.toml`
 2. Schema pin files in `specifications/schemas/pins/` and `src/opentide/data/pins/`
-3. The OpenTide bundle + `data/specifications.lock.json`
+3. The opentide bundle + `data/specifications.lock.json`
 
 Pin bumps are **additive minors only** (for example `att&ck::1.0` → `att&ck::1.1`)
 and only for vocab fields already referenced in schema pin files (`att&ck`,
@@ -45,7 +45,7 @@ next major, so existing schema revisions still accept them. The ingest PRs are
 the review gate — nothing auto-merges.
 
 Merge order: specifications PR first (canonical vocabs + `schemas/pins/`), then
-the OpenTide companion PR (bundle, pins, lockfile).
+the opentide companion PR (bundle, pins, lockfile).
 
 ### Per-key bump rules (RFC 0003)
 

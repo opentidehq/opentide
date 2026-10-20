@@ -5,7 +5,7 @@ description: Configure MCP servers and agent skills so AI assistants work safely
 
 # Agentic setup
 
-OpenTide exposes the engine to AI agents through an [MCP server](../../mcp/index.md) and portable agent skills, so an assistant in your editor can search the catalogue, validate objects, and preview deploys. This page sets it up, shows a realistic session, and is honest about what agents can and cannot do today.
+opentide exposes the engine to AI agents through an [MCP server](../../mcp/index.md) and portable agent skills, so an assistant in your editor can search the catalogue, validate objects, and preview deploys. This page sets it up, shows a realistic session, and is honest about what agents can and cannot do today.
 
 ## What agents can and cannot do today
 
@@ -57,7 +57,7 @@ The server uses **stdio transport**. It must know where your content lives, so s
 
 Skills give the agent durable, project-specific instructions (object layout, commands, the validate-before-deploy rule):
 
-Browse the catalogue with `discover` and `show`. Those commands read the live `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills). If that catalogue cannot be fetched, the command fails with an actionable error. `AGENTS.md` is rendered from the package template. The four authoring skills are copied from the package. Every other skill is the full tree under `skills/<slug>/`, including its reference files; an unreadable or truncated tree fails the install instead of writing a partial skill.
+Browse the catalogue with `discover` and `show`. Those commands read the live `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills). If that catalogue cannot be fetched, the command fails with an actionable error. `AGENTS.md` is rendered from the package template. The four authoring skills are copied from the package. Every other skill is the full tree under `skills/<slug>/`, including its reference files; an unreadable or truncated tree fails the install instead of writing a partial skill.
 
 ```bash
 opentide setup skills discover
@@ -81,7 +81,7 @@ opentide setup skills --yes --install opentide-detection-rule --install detectio
 
 After setup, point your agent at the generated `AGENTS.md` at the repo root — it is rendered from the package template for this repository, not copied from the skills catalogue.
 
-`opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package so they match `rule::1.0`, `objective::1.0`, and `threat::1.0` under `objects/`. Other skills are downloaded as the full tree under `skills/<slug>/` from OpenTideHQ/skills.
+`opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package so they match `rule::1.0`, `objective::1.0`, and `threat::1.0` under `objects/`. Other skills are downloaded as the full tree under `skills/<slug>/` from opentidehq/skills.
 
 ## A safe agent workflow
 

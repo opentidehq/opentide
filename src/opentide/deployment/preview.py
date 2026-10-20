@@ -88,15 +88,15 @@ def preview_platform_deployment(
     platform: str, uuids: list[str], *, rules_by_uuid: dict[str, DetectionRule] | None = None
 ) -> list[dict[str, Any]]:
     """Preview deployment payloads for a list of rule UUIDs on one platform."""
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
 
-    OpenTide.initialise()
+    Opentide.initialise()
     previews: list[dict[str, Any]] = []
     for uuid in uuids:
         if rules_by_uuid is not None:
             rule = rules_by_uuid.get(uuid)
         else:
-            rule = OpenTide.Rules[uuid]
+            rule = Opentide.Rules[uuid]
         if rule is None:
             continue
         if isinstance(rule, DetectionRule):

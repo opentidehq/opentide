@@ -1,4 +1,4 @@
-"""Skills catalogue discovery from the live OpenTideHQ/skills manifest."""
+"""Skills catalogue discovery from the live opentidehq/skills manifest."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import structlog
 
 logger = structlog.get_logger("opentide.cli.services.setup.skills_registry")
 
-_DEFAULT_SOURCE = "OpenTideHQ/skills"
+_DEFAULT_SOURCE = "opentidehq/skills"
 _DEFAULT_REF = "main"
 _CACHE_TTL_SECONDS = 30.0
 _REF_SEGMENT = re.compile(r"[A-Za-z0-9._-]+")
@@ -27,7 +27,7 @@ _API_HOST = "api.github.com"
 
 
 class SkillsManifestError(RuntimeError):
-    """Raised when the live OpenTideHQ/skills catalogue cannot be fetched."""
+    """Raised when the live opentidehq/skills catalogue cannot be fetched."""
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,7 @@ class SkillEntry:
 #: what the remote catalogue happens to list.
 #:
 #: They were previously known only through the remote manifest. When
-#: ``OpenTideHQ/skills`` dropped three of them from ``manifest.json``, the CLI
+#: ``opentidehq/skills`` dropped three of them from ``manifest.json``, the CLI
 #: began refusing ``--install opentide-detection-rule`` as an "unknown skill
 #: slug" while still installing that very slug as part of its default starter
 #: set -- and ``discover`` stopped listing skills the wheel contains.
@@ -60,7 +60,7 @@ BUNDLED_AUTHORING_ENTRIES: tuple[SkillEntry, ...] = (
     SkillEntry(
         name="Detection engineering",
         slug="detection-engineering",
-        description="OpenTide's three object families: threats, objectives and rules.",
+        description="opentide's three object families: threats, objectives and rules.",
     ),
     SkillEntry(
         name="Detection objectives",
@@ -167,7 +167,7 @@ def fetch_github_bytes(
     source: str = _DEFAULT_SOURCE,
     ref: str = _DEFAULT_REF,
 ) -> bytes | None:
-    """Fetch raw file bytes from the pinned OpenTideHQ/skills repository."""
+    """Fetch raw file bytes from the pinned opentidehq/skills repository."""
     file_path = _repo_file_path(path)
     if source != _DEFAULT_SOURCE or not ref_is_contained(ref) or file_path is None:
         logger.warning("skills_download_url_rejected", source=source, ref=ref, path=path)
@@ -247,7 +247,7 @@ def clear_manifest_cache() -> None:
 
 
 def _normalise_source(raw: object) -> str:
-    """Accept only the public OpenTideHQ/skills repo; ignore redirect attempts."""
+    """Accept only the public opentidehq/skills repo; ignore redirect attempts."""
     source = str(raw or _DEFAULT_SOURCE).strip()
     if source != _DEFAULT_SOURCE:
         logger.warning("skills_manifest_source_rejected", source=source, fallback=_DEFAULT_SOURCE)
@@ -325,7 +325,7 @@ def load_manifest(*, refresh: bool = False) -> ManifestLoadResult:
 
 
 def known_skill_slugs() -> set[str]:
-    """Slugs from the live OpenTideHQ/skills catalogue."""
+    """Slugs from the live opentidehq/skills catalogue."""
     return {entry.slug for entry in load_manifest().entries}
 
 

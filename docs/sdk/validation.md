@@ -62,16 +62,16 @@ MCP `validation_report` tool returns this shape.
 ## Single rule via registry
 
 ```python
-from opentide import OpenTide
+from opentide import Opentide
 
-OpenTide.initialise()
-rule = OpenTide.Rules[uuid]
-result = OpenTide.validate_rule(rule)
+Opentide.initialise()
+rule = Opentide.Rules[uuid]
+result = Opentide.validate_rule(rule)
 ```
 
 `validate_rule` checks the rule against the revision its `metadata.schema` names, so a `rule::1.1` rule may carry `metadata.reviewed` and a `rule::1.0` rule may not. Through 0.15.0 `validate_rule` checked every rule against `rule::1.0`, so a valid `rule::1.1` rule that carried `metadata.reviewed` failed.
 
-A loaded rule always declares a registered identifier: `OpenTide.Rules` and `load_rule_from_dict` raise `SchemaMissingError` or `SchemaIdentifierError` instead (see [Loading without the registry](./models.md#loading-without-the-registry)). To check a raw YAML body, use `validate_raw_payload`:
+A loaded rule always declares a registered identifier: `Opentide.Rules` and `load_rule_from_dict` raise `SchemaMissingError` or `SchemaIdentifierError` instead (see [Loading without the registry](./models.md#loading-without-the-registry)). To check a raw YAML body, use `validate_raw_payload`:
 
 ```python
 from opentide.validation import validate_raw_payload
@@ -86,10 +86,10 @@ It checks the body against the revision its `metadata.schema` names. A body with
 Query validation is a **platform plugin** concern, separate from object validation above. Two Python paths exist:
 
 ```python
-from opentide import OpenTide
-OpenTide.initialise()
+from opentide import Opentide
+Opentide.initialise()
 
-rule = OpenTide.Rules[uuid]
+rule = Opentide.Rules[uuid]
 result = rule.validate_query("sentinel")   # ValidationResult
 print(result.ok, result.errors)
 ```
@@ -97,7 +97,7 @@ print(result.ok, result.errors)
 `rule.validate_query(platform)` delegates to the platform's registered **live** validator, which needs the vendor SDK and tenant credentials. It works for the six platforms that ship validators — `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud`, `elastic` — and reports **unsupported** (not a fake pass) for `crowdstrike` and `harfanglab`. Check capability first:
 
 ```python
-if OpenTide.Platforms["sentinel"].can_validate:
+if Opentide.Platforms["sentinel"].can_validate:
     result = rule.validate_query("sentinel")
 ```
 

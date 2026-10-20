@@ -8,18 +8,18 @@ description: Render and publish markdown documentation for rules, objectives, an
 Programmatic access to the same renderer used by `opentide generate docs`.
 
 <Callout type="info">
-This renders **human wiki pages** from loaded objects. It is distinct from schema/template **generation** (`opentide generate`), which builds framework scaffolding under `.opentide/`. See [How OpenTide works](../usage/how-it-works.md#where-generation-and-deployment-differ).
+This renders **human wiki pages** from loaded objects. It is distinct from schema/template **generation** (`opentide generate`), which builds framework scaffolding under `.opentide/`. See [How opentide works](../usage/how-it-works.md#where-generation-and-deployment-differ).
 </Callout>
 
 ## Render single objects
 
 ```python
-from opentide import OpenTide
+from opentide import Opentide
 from opentide.documentation import render_rule, render_objective, render_threat
 from opentide.documentation.types import DocumentFlavor
 
-OpenTide.initialise()
-rule = OpenTide.Rules[uuid]
+Opentide.initialise()
+rule = Opentide.Rules[uuid]
 
 md = render_rule(rule)
 md_github = render_rule(rule, flavor=DocumentFlavor.github)

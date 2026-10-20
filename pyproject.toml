@@ -10,7 +10,7 @@ readme = "README.md"
 license = "EUPL-1.2"
 license-files = ["LICENSE"]
 authors = [
-    { name = "OpenTide", email = "digit-ec-opentide@ec.europa.eu" },
+    { name = "opentide", email = "digit-ec-opentide@ec.europa.eu" },
 ]
 requires-python = ">=3.10"
 classifiers = [
@@ -80,10 +80,10 @@ dev = [
 [project.urls]
 Homepage = "https://opentide.org"
 Documentation = "https://opentide.org/docs/usage/"
-Changelog = "https://github.com/OpenTideHQ/opentide/blob/development/CHANGELOG.md"
+Changelog = "https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md"
 Releases = "https://opentide.org/docs/usage/releases/"
-Repository = "https://github.com/OpenTideHQ/opentide"
-Issues = "https://github.com/OpenTideHQ/opentide/issues"
+Repository = "https://github.com/opentidehq/opentide"
+Issues = "https://github.com/opentidehq/opentide/issues"
 
 [project.scripts]
 opentide = "opentide.cli:main"

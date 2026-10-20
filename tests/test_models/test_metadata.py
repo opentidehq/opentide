@@ -70,10 +70,10 @@ def test_loaded_objects_expose_their_schema_identifier(
     tide_corpus_repo: Path, collection: str, uuid: str, identifier: str
 ) -> None:
     """The attribute docs/sdk/models.md prints, read off an object the registry loaded."""
-    from opentide import OpenTide
+    from opentide import Opentide
 
-    OpenTide.initialise()
-    loaded = getattr(OpenTide, collection)[uuid]
+    Opentide.initialise()
+    loaded = getattr(Opentide, collection)[uuid]
     assert isinstance(loaded.metadata.schema, str)
     assert loaded.metadata.schema == identifier
     assert loaded.metadata.schema_id == identifier

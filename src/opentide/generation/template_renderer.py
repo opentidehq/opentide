@@ -7,7 +7,7 @@ from typing import Any
 
 from opentide.core.logging import get_logger
 from opentide.core.logging.console import emit_section
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.generation.pydantic_skeleton import write_model_template
 from opentide.generation.pydantic_templates import (
     core_template_model_keys,
@@ -45,10 +45,10 @@ def _refresh_renderer_context() -> None:
     """Rebind renderer paths after env or index changes (tests, reload)."""
     global CONFIG_INDEX, PATHS, PLATFORM_TEMPLATES_FOLDER, RECOMPOSITION
 
-    CONFIG_INDEX = OpenTide.Configurations.Index
-    PATHS = OpenTide.Configurations.Global.Paths.Index
+    CONFIG_INDEX = Opentide.Configurations.Index
+    PATHS = Opentide.Configurations.Global.Paths.Index
     PLATFORM_TEMPLATES_FOLDER = Path(PATHS.get("platform_templates", PATHS.get("subschemas", ".")))
-    RECOMPOSITION = OpenTide.Configurations.Global.recomposition
+    RECOMPOSITION = Opentide.Configurations.Global.recomposition
 
 
 def run() -> None:
@@ -59,9 +59,9 @@ def run() -> None:
         detail="Core and platform templates are generated from Pydantic FieldInfo.",
     )
 
-    templates = OpenTide.Configurations.Global.templates
+    templates = Opentide.Configurations.Global.templates
     templates_dir = Path(PATHS["templates"])
-    for meta in OpenTide.Configurations.Global.metaschemas:
+    for meta in Opentide.Configurations.Global.metaschemas:
         if meta not in templates or meta not in core_template_model_keys():
             continue
         written: set[Path] = set()

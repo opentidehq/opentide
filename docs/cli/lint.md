@@ -21,7 +21,7 @@ opentide lint --strict
 | `filenames` | Object YAML stem must equal `slugify(name)` | Renames files. On a collision in the same folder, appends `{uuid[:8]}` |
 | `metadata` | Reports a missing `metadata.author` or `metadata.organisation` | Not auto-fixed |
 
-Default (no `--check`) runs both. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside OpenTide, so lint does not check them: OpenTide's own CI checks the bundled pins against the specifications whenever they change.
+Default (no `--check`) runs both. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside opentide, so lint does not check them: opentide's own CI checks the bundled pins against the specifications whenever they change.
 
 Lint walks `objects/{threats,objectives,rules}/**/*.yaml` and does not rebuild the object registry.
 

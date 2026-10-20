@@ -8,7 +8,7 @@ from opentide.cli.enums import DetectionPlatform, platform_label
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.object_fields import as_body, matches_technique, object_platforms
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.platforms.enabled import enabled_systems
 
 if TYPE_CHECKING:
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
     from opentide.cli.context import CliContext
 
-#: Human titles for the object sections, keyed by section and ``OpenTide.Models`` family.
+#: Human titles for the object sections, keyed by section and ``Opentide.Models`` family.
 _SECTION_TITLES = {"rules": "Rules", "threats": "Threats", "objectives": "Objectives"}
 
 
@@ -29,11 +29,11 @@ def collect_info(
 ) -> dict[str, Any]:
     """Collect system information about the detection repository."""
     ctx.apply_environment()
-    OpenTide.reload()
+    Opentide.reload()
     parse_errors = list(IndexManager.load().get("parse_errors") or [])
     enabled_platforms = set(enabled_systems())
     platforms_info = []
-    for name, plat in OpenTide.Platforms.items():
+    for name, plat in Opentide.Platforms.items():
         if platform is not None and name != platform.value:
             continue
         platforms_info.append(
@@ -48,19 +48,19 @@ def collect_info(
         "version": _package_version(),
         "repo": str(ctx.repo),
         "counts": {
-            "rules": len(OpenTide.Models.rules),
-            "threats": len(OpenTide.Models.threats),
-            "objectives": len(OpenTide.Models.objectives),
+            "rules": len(Opentide.Models.rules),
+            "threats": len(Opentide.Models.threats),
+            "objectives": len(Opentide.Models.objectives),
         },
         "parse_error_count": len(parse_errors),
         "platforms": platforms_info,
     }
     if section == "rules":
-        payload["rules"] = list(OpenTide.Models.rules.keys())
+        payload["rules"] = list(Opentide.Models.rules.keys())
     elif section == "threats":
-        payload["threats"] = list(OpenTide.Models.threats.keys())
+        payload["threats"] = list(Opentide.Models.threats.keys())
     elif section == "objectives":
-        payload["objectives"] = list(OpenTide.Models.objectives.keys())
+        payload["objectives"] = list(Opentide.Models.objectives.keys())
     elif section == "coverage" and technique:
         payload["coverage"] = _technique_coverage(technique)
     return payload
@@ -92,7 +92,7 @@ def _summary_table(payload: dict[str, Any]) -> Table:
     from rich.table import Table
     from rich.text import Text
 
-    table = Table(title="OpenTide Info")
+    table = Table(title="opentide Info")
     table.add_column("Key")
     table.add_column("Value")
     table.add_row("Version", Text(str(payload["version"])))
@@ -121,7 +121,7 @@ def _objects_table(family: str, uuids: list[str]) -> Table:
     from rich.table import Table
     from rich.text import Text
 
-    objects = getattr(OpenTide.Models, family)
+    objects = getattr(Opentide.Models, family)
     table = Table(title=f"{_SECTION_TITLES[family]} ({len(uuids)})")
     table.add_column("UUID", no_wrap=True, min_width=36)
     table.add_column("Name", overflow="fold")
@@ -146,6 +146,6 @@ def _technique_coverage(technique: str) -> dict[str, Any]:
     """Return rules referencing an ATT&CK technique."""
     needle = technique.strip()
     matching = [
-        uuid for uuid, rule in OpenTide.Models.rules.items() if matches_technique(rule, needle)
+        uuid for uuid, rule in Opentide.Models.rules.items() if matches_technique(rule, needle)
     ]
     return {"technique": needle, "rules": matching, "count": len(matching)}

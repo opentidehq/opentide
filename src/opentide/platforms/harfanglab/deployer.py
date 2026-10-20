@@ -1,6 +1,6 @@
 from typing import Sequence
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide, DetectionPlatforms
+from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy
@@ -24,7 +24,7 @@ class HarfangLabDeploy(RuleDeployer):
     def compile_sigma_deployment(self, data: DetectionRule, tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant) -> SigmaRule:
         """
         Builds the Sigma Rule for deployment to HarfangLab API.
-        Converts OpenTide's selection-based format to HarfangLab's Sigma format.
+        Converts opentide's selection-based format to HarfangLab's Sigma format.
         """
         mdr_config = data.configurations.harfanglab
         if not mdr_config:
@@ -57,7 +57,7 @@ class HarfangLabDeploy(RuleDeployer):
     def compile_yara_deployment(self, data: DetectionRule, tenant_config: ConfigurationModels.Systems.HarfangLab.Tenant) -> YaraRule:
         """
         Builds the YARA Rule for deployment to HarfangLab API.
-        Converts OpenTide's YARA format to HarfangLab's YARA format.
+        Converts opentide's YARA format to HarfangLab's YARA format.
         
         Features:
         - Automatic id field for rule identification
@@ -199,7 +199,7 @@ class HarfangLabDeploy(RuleDeployer):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if isinstance(mdr, str):
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = without_legacy_external_ids(loaded_mdr, platform='harfanglab')

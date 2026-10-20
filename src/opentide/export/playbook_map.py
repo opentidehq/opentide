@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 
 logger = get_logger(__name__)
 
@@ -14,10 +14,10 @@ def run(output: Path | None = None) -> Path:
     """Generate an Excel playbook mapping for production MDRs."""
     import pandas as pd  # type: ignore[import-untyped]
 
-    OpenTide.initialise()
+    Opentide.initialise()
     playbook_mapping: list[dict[str, str]] = []
 
-    for mdr_uuid, content in OpenTide.Models.rules.items():
+    for mdr_uuid, content in Opentide.Models.rules.items():
         if content.get("status") != "PRODUCTION":
             continue
 

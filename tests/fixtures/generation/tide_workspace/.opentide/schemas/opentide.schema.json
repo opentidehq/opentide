@@ -1,7 +1,7 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "OpenTide Object Router",
-    "description": "Validates any OpenTide object against the schema revision named in metadata.schema. Map objects/**/*.yaml to this file in the editor.",
+    "title": "opentide Object Router",
+    "description": "Validates any opentide object against the schema revision named in metadata.schema. Map objects/**/*.yaml to this file in the editor.",
     "type": "object",
     "required": [
         "metadata"

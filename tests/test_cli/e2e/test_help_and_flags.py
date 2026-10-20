@@ -32,7 +32,7 @@ def test_json_suppresses_banner(cli_runner, tide_corpus_repo) -> None:
     )
     payload = assert_json_ok(result)
     assert "counts" in payload
-    assert "OpenTide" not in result.stdout
+    assert "opentide" not in result.stdout
 
 
 def test_no_color_info_renders_plain_text(cli_runner, tide_corpus_repo, monkeypatch) -> None:

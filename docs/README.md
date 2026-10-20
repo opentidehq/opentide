@@ -1,6 +1,6 @@
 # Documentation authoring guide
 
-OpenTide documentation lives in this directory and is published on **[opentide.org](https://opentide.org/docs)** by [OpenTideHQ/website](https://github.com/OpenTideHQ/website). Four top-level sections become sidebar tabs:
+opentide documentation lives in this directory and is published on **[opentide.org](https://opentide.org/docs)** by [opentidehq/website](https://github.com/opentidehq/website). Four top-level sections become sidebar tabs:
 
 | Tab | Directory | Audience |
 |-----|-----------|----------|
@@ -115,7 +115,7 @@ Agents working on documentation should read [`.agents/skills/docs-maintenance/SK
 
 ## Fumadocs site repository
 
-**Build and deploy are owned by [OpenTideHQ/website](https://github.com/OpenTideHQ/website)** — not this repo. This repository only ships markdown content and structural validation.
+**Build and deploy are owned by [opentidehq/website](https://github.com/opentidehq/website)** — not this repo. This repository only ships markdown content and structural validation.
 
 Scaffolding notes: [`fumadocs/`](./fumadocs/). The website repo syncs `docs/` at build time.
 

@@ -1,6 +1,6 @@
 name: Docs
 
-# Content-only checks in opentide. Build and deploy live in OpenTideHQ/website (Fumadocs).
+# Content-only checks in opentide. Build and deploy live in opentidehq/website (Fumadocs).
 
 on:
   push:

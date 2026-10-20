@@ -1,4 +1,4 @@
-"""MCP tools against tide_corpus instead of a patched ``OpenTide`` (#264)."""
+"""MCP tools against tide_corpus instead of a patched ``Opentide`` (#264)."""
 
 from __future__ import annotations
 

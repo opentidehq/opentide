@@ -1,12 +1,12 @@
 ---
 title: MCP server
-description: OpenTide MCP server — search, validate, deploy, and query detection content from AI agents and editors.
+description: opentide MCP server — search, validate, deploy, and query detection content from AI agents and editors.
 icon: Bot
 ---
 
 # MCP server
 
-The OpenTide MCP server exposes catalogue search, validation, deployment, and read-only resources to AI agents and editor integrations.
+The opentide MCP server exposes catalogue search, validation, deployment, and read-only resources to AI agents and editor integrations.
 
 ## Quick start
 

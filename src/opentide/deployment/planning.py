@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 def __getattr__(name: str) -> Any:
     """Resolve registry-backed globals on access rather than at import (#536)."""
     if name == "SYSTEMS_CONFIGS_INDEX":
-        return registry.OpenTide.Configurations.Systems.Index
+        return registry.Opentide.Configurations.Systems.Index
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -118,21 +118,21 @@ class TideDeployment:
     def system_configuration_resolver(self, system: DetectionPlatforms):  # type:ignore
         match system:
             case DetectionPlatforms.SPLUNK:
-                return registry.OpenTide.Configurations.Systems.Splunk
+                return registry.Opentide.Configurations.Systems.Splunk
             case DetectionPlatforms.CARBON_BLACK_CLOUD:
-                return registry.OpenTide.Configurations.Systems.CarbonBlackCloud
+                return registry.Opentide.Configurations.Systems.CarbonBlackCloud
             case DetectionPlatforms.SENTINEL:
-                return registry.OpenTide.Configurations.Systems.Sentinel
+                return registry.Opentide.Configurations.Systems.Sentinel
             case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
-                return registry.OpenTide.Configurations.Systems.DefenderForEndpoint
+                return registry.Opentide.Configurations.Systems.DefenderForEndpoint
             case DetectionPlatforms.SENTINEL_ONE:
-                return registry.OpenTide.Configurations.Systems.SentinelOne
+                return registry.Opentide.Configurations.Systems.SentinelOne
             case DetectionPlatforms.CROWDSTRIKE:
-                return registry.OpenTide.Configurations.Systems.Crowdstrike
+                return registry.Opentide.Configurations.Systems.Crowdstrike
             case DetectionPlatforms.HARFANGLAB:
-                return registry.OpenTide.Configurations.Systems.HarfangLab
+                return registry.Opentide.Configurations.Systems.HarfangLab
             case DetectionPlatforms.ELASTIC:
-                return registry.OpenTide.Configurations.Systems.Elastic
+                return registry.Opentide.Configurations.Systems.Elastic
             # case _:
             # raise NotImplementedError
         return None
@@ -402,7 +402,7 @@ class TideDeployment:
 
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                mdr = registry.OpenTide.Rules[mdr]
+                mdr = registry.Opentide.Rules[mdr]
 
             tenants = self.tenants_resolver(mdr, system, deployment_strategy)
 

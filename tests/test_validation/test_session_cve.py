@@ -18,7 +18,7 @@ def test_run_validation_includes_cve_check() -> None:
     }
     cve_issue = ValidationIssue(code="invalid_cve", message="bad cve", object_uuid="u1")
     with (
-        patch("opentide.validation.session.OpenTide.initialise"),
+        patch("opentide.validation.session.Opentide.initialise"),
         patch("opentide.validation.session.PreflightGraph.build", return_value=MagicMock()),
         patch(
             "opentide.validation.cve_check.check_cve_issues",

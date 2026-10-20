@@ -1,6 +1,6 @@
 # Ruff recursive fix
 
-> **Moved:** OpenTide Ruff scope, commands, and fix workflow are in [`.agents/skills/ruff/SKILL.md`](../ruff/SKILL.md).
+> **Moved:** opentide Ruff scope, commands, and fix workflow are in [`.agents/skills/ruff/SKILL.md`](../ruff/SKILL.md).
 
 Use `uv run ruff check tests src/opentide` and `scripts/ci-local.sh --quick`.
 

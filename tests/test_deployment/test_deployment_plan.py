@@ -26,12 +26,12 @@ LoggedEvent = tuple[str, str, dict[str, object]]
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """An empty workspace the registry resolves ``objects/rules`` against."""
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
 
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(tmp_path))
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path))
     clear_runtime_caches()
-    OpenTide.reload()
+    Opentide.reload()
     yield tmp_path
     clear_runtime_caches()
 
@@ -45,7 +45,7 @@ def catalogue(
     Parametrise indirectly with ``"symlinked"`` to keep the corpus's
     ``objects/rules`` symlink instead of a real folder.
     """
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
 
     repo = materialise_corpus(tmp_path / "corpus")
     if getattr(request, "param", "plain") == "plain":
@@ -56,7 +56,7 @@ def catalogue(
     for name in CI_VARIABLES:
         monkeypatch.delenv(name, raising=False)
     clear_runtime_caches()
-    OpenTide.reload()
+    Opentide.reload()
     yield repo
     clear_runtime_caches()
 
@@ -221,7 +221,7 @@ def test_make_deploy_plan_names_the_rule_files_in_subfolders(
     ]
     assert warnings == [
         "2 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only "
-        "files directly in objects/rules; see https://github.com/OpenTideHQ/opentide/issues/312): "
+        "files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): "
         + ", ".join(nested)
     ]
     assert _skipped_subfolder_logs(plan_log) == [
@@ -230,7 +230,7 @@ def test_make_deploy_plan_names_the_rule_files_in_subfolders(
             {
                 "count": 2,
                 "files": nested,
-                "issue": "https://github.com/OpenTideHQ/opentide/issues/312",
+                "issue": "https://github.com/opentidehq/opentide/issues/312",
             },
         )
     ]
@@ -260,7 +260,7 @@ def test_subfolder_warning_caps_the_file_list(workspace: Path, plan_log: list[Lo
     assert make_deploy_plan(DeploymentStrategy.FULL, warnings=warnings) == {}
     assert warnings == [
         "7 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only "
-        "files directly in objects/rules; see https://github.com/OpenTideHQ/opentide/issues/312): "
+        "files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): "
         "objects/rules/team-a/r1.yaml, objects/rules/team-a/r2.yaml, "
         "objects/rules/team-a/r3.yaml, objects/rules/team-a/r4.yaml, "
         "objects/rules/team-a/r5.yaml, +2 more"
@@ -300,7 +300,7 @@ def test_ci_diff_plan_names_only_the_changed_subfolder_files(
     assert make_deploy_plan(plan, warnings=warnings) == {}
     assert warnings == [
         "1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only "
-        "files directly in objects/rules; see https://github.com/OpenTideHQ/opentide/issues/312): "
+        "files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): "
         "objects/rules/team-a/changed.yaml"
     ]
     assert len(_skipped_subfolder_logs(plan_log)) == 1
@@ -372,14 +372,14 @@ def test_ci_rule_selection_keeps_top_level_files_out_of_the_subfolder_list(
 @pytest.mark.parametrize("catalogue", ["plain", "symlinked"], indirect=True)
 def test_full_plan_accounts_for_every_indexed_rule(catalogue: Path) -> None:
     """#312 guard: an indexed rule is planned, excluded by status, or named in a warning."""
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.deployment import make_deploy_plan
 
     warnings: list[str] = []
     deploy_plan = make_deploy_plan(DeploymentStrategy.FULL, warnings=warnings)
     scope = classify_deploy_scope(
         catalogue,
-        OpenTide.Models.rules,
+        Opentide.Models.rules,
         deploy_plan,
         warnings,
         excluded=frozenset({StatusStrategy.INERT}),

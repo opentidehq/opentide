@@ -119,7 +119,7 @@ def test_write_inflight_from_yaml(tmp_path: Path, sample_threat_body: dict) -> N
     change_meta = {
         "platform": "github",
         "number": 4,
-        "url": "https://github.com/OpenTideHQ/library/pull/4",
+        "url": "https://github.com/opentidehq/library/pull/4",
         "title": "example/inflight-preview",
         "head_ref": "example/inflight-preview",
         "base_ref": "main",

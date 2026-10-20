@@ -1,4 +1,4 @@
-"""Pydantic base types for code-first OpenTide models."""
+"""Pydantic base types for code-first opentide models."""
 
 from __future__ import annotations
 

@@ -1,11 +1,11 @@
 ---
-title: Why OpenTide
-description: The problem detection-as-code teams hit at scale, and the design goals that shape OpenTide.
+title: Why opentide
+description: The problem detection-as-code teams hit at scale, and the design goals that shape opentide.
 ---
 
-# Why OpenTide
+# Why opentide
 
-Detection engineering breaks down in predictable ways as a team grows. OpenTide exists to remove those failure modes. This page explains the problem it solves and the principles behind its design — read it before deciding whether OpenTide fits your team.
+Detection engineering breaks down in predictable ways as a team grows. opentide exists to remove those failure modes. This page explains the problem it solves and the principles behind its design — read it before deciding whether opentide fits your team.
 
 ## The problem
 
@@ -17,20 +17,20 @@ A modern SOC writes detections for several platforms at once — Sentinel, Splun
 - **Submodule and copy-paste reuse.** Sharing content across repos via git submodules (the CoreTide era) couples repositories, makes upgrades painful, and spreads breaking changes silently.
 - **Unsafe automation.** Agents and scripts edit detection YAML with no schema to validate against and no honest signal about which platforms can actually be tested.
 
-## What OpenTide does about it
+## What opentide does about it
 
-OpenTide treats detection content as **typed, versioned objects in a git repository** and gives you an engine to work with them.
+opentide treats detection content as **typed, versioned objects in a git repository** and gives you an engine to work with them.
 
 - **A normative object model.** Every threat, objective, and rule conforms to a published [specification](/docs/specifications/). Validation is schema-driven, not opinion-driven.
 - **Explicit chaining.** Rules reference the objectives they satisfy; objectives reference the threats they cover. Coverage and gaps become queryable facts, not tribal knowledge. See the [object model](./concepts/object-model.md).
-- **One source, many platforms.** A rule carries per-platform configuration blocks. OpenTide deploys to each platform and, where the platform allows it, validates query syntax — [honestly reporting](./concepts/platforms.md) where it cannot.
+- **One source, many platforms.** A rule carries per-platform configuration blocks. opentide deploys to each platform and, where the platform allows it, validates query syntax — [honestly reporting](./concepts/platforms.md) where it cannot.
 - **Generated, not hand-maintained, scaffolding.** JSON Schemas, templates, IDE routing, and documentation are generated from the specs and your objects with `opentide generate` and `opentide generate docs`.
-- **Package, not submodule.** OpenTide ships as a PyPI package. You depend on a version, not on someone else's repository layout.
+- **Package, not submodule.** opentide ships as a PyPI package. You depend on a version, not on someone else's repository layout.
 - **Automation as a first-class citizen.** The same engine is exposed as a [CLI](../cli/index.md), a Python [SDK](../sdk/index.md), and an [MCP server](../mcp/index.md) for agents — with capability reporting that never fakes a result.
 
 ## Design principles
 
-These principles explain *why* OpenTide behaves the way it does, and where its boundaries are.
+These principles explain *why* opentide behaves the way it does, and where its boundaries are.
 
 | Principle | What it means in practice |
 |-----------|---------------------------|
@@ -40,16 +40,16 @@ These principles explain *why* OpenTide behaves the way it does, and where its b
 | **Git is the history** | Instance content versions (`metadata.version`) track meaning; git tracks the actual change history. See [Schema revision](./concepts/schema-revision.md). |
 | **Fail loud in CI, safe by default locally** | Validation errors exit `1` everywhere, and `validate --strict` turns warnings into failures for pipelines. Deploys default to staging and dry-run friendly flows. |
 
-## When OpenTide is *not* the right fit
+## When opentide is *not* the right fit
 
 Being honest about scope:
 
 - You manage a handful of rules on a single platform and are happy in that platform's native UI — the object model overhead may not pay off yet.
-- You need a turnkey SaaS detection catalog — OpenTide is an engine and a content model you run yourself, not a hosted product.
+- You need a turnkey SaaS detection catalog — opentide is an engine and a content model you run yourself, not a hosted product.
 - You want live query execution against every platform today — some platforms are deploy-only, and a couple of MCP query tools are still [stubs](./workflows/agentic-setup.md). Check the [platform matrix](./concepts/platforms.md) before committing.
 
 ## Next
 
-- [How OpenTide works](./how-it-works.md) — the end-to-end lifecycle.
+- [How opentide works](./how-it-works.md) — the end-to-end lifecycle.
 - [Object model](./concepts/object-model.md) — the three object families and chaining.
 - [Installation](./installation.md) — get the CLI on your machine. Latest release: [0.6.4](./releases.md).

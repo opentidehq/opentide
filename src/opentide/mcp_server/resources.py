@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from opentide.core.io import dump_json_text
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.mcp_server.catalog import ensure_initialised, get_object
 
 _FAMILY_ALIASES = {
@@ -71,12 +71,12 @@ def _resolve_family_key(index: Mapping[str, Any], requested: str) -> str | None:
 
 def resource_index() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Index)
+    return _json_resource(Opentide.Index)
 
 
 def resource_rules() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Models.rules)
+    return _json_resource(Opentide.Models.rules)
 
 
 def resource_rule(uuid: str) -> str:
@@ -88,7 +88,7 @@ def resource_rule(uuid: str) -> str:
 
 def resource_threats() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Models.threats)
+    return _json_resource(Opentide.Models.threats)
 
 
 def resource_threat(uuid: str) -> str:
@@ -100,7 +100,7 @@ def resource_threat(uuid: str) -> str:
 
 def resource_objectives() -> str:
     ensure_initialised()
-    return _json_resource(OpenTide.Models.objectives)
+    return _json_resource(Opentide.Models.objectives)
 
 
 def resource_objective(uuid: str) -> str:
@@ -112,7 +112,7 @@ def resource_objective(uuid: str) -> str:
 
 def resource_schema(object_type: str) -> str:
     ensure_initialised()
-    schemas = OpenTide.JsonSchemas.Index
+    schemas = Opentide.JsonSchemas.Index
     key = _resolve_family_key(schemas, object_type)
     if key is None:
         return _json_resource(
@@ -137,7 +137,7 @@ def _resolve_template_key(templates: Mapping[str, Any], requested: str) -> str |
     family, version = _split_schema_id(requested)
     if version is None or family not in templates:
         return None
-    current = _resolve_family_key(OpenTide.MetaSchemas.Index, family)
+    current = _resolve_family_key(Opentide.MetaSchemas.Index, family)
     if current is None or _split_schema_id(current)[1] != version:
         return None
     return family
@@ -145,7 +145,7 @@ def _resolve_template_key(templates: Mapping[str, Any], requested: str) -> str |
 
 def resource_template(object_type: str) -> str:
     ensure_initialised()
-    templates = OpenTide.Templates.Index
+    templates = Opentide.Templates.Index
     key = _resolve_template_key(templates, object_type)
     if key is None:
         return _json_resource(
@@ -166,7 +166,7 @@ def resource_vocabularies() -> str:
     """
     ensure_initialised()
     index: dict[str, Any] = {}
-    for name, vocabulary in OpenTide.Vocabularies.Index.items():
+    for name, vocabulary in Opentide.Vocabularies.Index.items():
         if isinstance(vocabulary, Mapping):
             metadata, entries = vocabulary.get("metadata"), vocabulary.get("entries")
         else:
@@ -182,7 +182,7 @@ def resource_vocabularies() -> str:
 
 def resource_vocabulary(name: str) -> str:
     ensure_initialised()
-    vocabularies = OpenTide.Vocabularies.Index
+    vocabularies = Opentide.Vocabularies.Index
     if name in vocabularies:
         return _json_resource(vocabularies[name])
     return _json_resource(
@@ -202,6 +202,6 @@ def resource_platforms() -> str:
             "can_deploy": plat.can_deploy,
             "can_validate": plat.can_validate,
         }
-        for name, plat in OpenTide.Platforms.items()
+        for name, plat in Opentide.Platforms.items()
     ]
     return _json_resource(platforms)

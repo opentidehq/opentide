@@ -8,7 +8,7 @@ from typing import Any
 
 from opentide.core.io import json_timestamp_default
 from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.core.time import utc_now
 from opentide.generation.errors import rendering
 from opentide.generation.framework import techniques_resolver
@@ -171,15 +171,15 @@ class ExplorerExport:
     """Build explorer.bundle.json and explorer.search.json for the static UI."""
 
     def __init__(self, export_dir: Path | None = None) -> None:
-        self.export_dir = export_dir or Path(OpenTide.Configurations.Global.Paths.Tide.exports)
+        self.export_dir = export_dir or Path(Opentide.Configurations.Global.Paths.Tide.exports)
 
     def build_bundle(self) -> dict[str, Any]:
-        OpenTide.initialise()
+        Opentide.initialise()
         models = {
-            "threat": dict(OpenTide.Models.threats),
-            "objective": dict(OpenTide.Models.objectives),
-            "signal": dict(getattr(OpenTide.Models, "signals", {}) or {}),
-            "rule": dict(OpenTide.Models.rules),
+            "threat": dict(Opentide.Models.threats),
+            "objective": dict(Opentide.Models.objectives),
+            "signal": dict(getattr(Opentide.Models, "signals", {}) or {}),
+            "rule": dict(Opentide.Models.rules),
         }
         flat_index: dict[str, dict[str, Any]] = {}
         for bucket in models.values():

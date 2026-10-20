@@ -10,12 +10,12 @@ from opentide.export.table_export import TableEntry, TableExporter
 
 
 def _setup_opentide_for_table(monkeypatch) -> None:
-    from opentide import OpenTide
+    from opentide import Opentide
 
-    monkeypatch.setattr(OpenTide, "initialise", lambda: None)
+    monkeypatch.setattr(Opentide, "initialise", lambda: None)
     threat_uuid = "00000000-0000-4000-8000-000000000010"
     rule_uuid = "00000000-0000-4000-8000-000000000011"
-    OpenTide._index = {
+    Opentide._index = {
         "objects": {
             "threat": {
                 threat_uuid: {
@@ -61,7 +61,7 @@ def _setup_opentide_for_table(monkeypatch) -> None:
         },
         "paths": {"tide": {"exports": "/tmp/exports"}},
     }
-    OpenTide._initialised = True
+    Opentide._initialised = True
 
 
 def test_flatten_actors_enriches_names(monkeypatch) -> None:
@@ -117,10 +117,10 @@ def test_create_entry_threat(monkeypatch) -> None:
 
 def test_create_entry_threat_object_actors(monkeypatch) -> None:
     _setup_opentide_for_table(monkeypatch)
-    from opentide import OpenTide
+    from opentide import Opentide
 
     threat_uuid = "00000000-0000-4000-8000-000000000010"
-    OpenTide._index["objects"]["threat"][threat_uuid]["threat"]["actors"] = [
+    Opentide._index["objects"]["threat"][threat_uuid]["threat"]["actors"] = [
         {"name": "att&ck::G0006"}
     ]
     exporter = TableExporter()
@@ -215,11 +215,11 @@ def test_run_exports_json(tmp_path, monkeypatch) -> None:
 def test_run_serializes_native_metadata_dates(tmp_path, monkeypatch) -> None:
     """Unquoted YAML dates become datetime.date in the index (issue #178)."""
     _setup_opentide_for_table(monkeypatch)
-    from opentide import OpenTide
+    from opentide import Opentide
 
     threat_uuid = "00000000-0000-4000-8000-000000000010"
-    OpenTide._index["objects"]["threat"][threat_uuid]["metadata"]["created"] = date(2026, 9, 11)
-    OpenTide._index["objects"]["threat"][threat_uuid]["metadata"]["modified"] = date(2026, 9, 11)
+    Opentide._index["objects"]["threat"][threat_uuid]["metadata"]["created"] = date(2026, 9, 11)
+    Opentide._index["objects"]["threat"][threat_uuid]["metadata"]["modified"] = date(2026, 9, 11)
     export_dir = tmp_path / "exports"
     exporter = TableExporter()
     exporter.exports_path = export_dir

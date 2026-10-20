@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.loading.rule_loader import load_rule_from_dict
 from opentide.validation.pipeline import (
     validate_all_objects,
@@ -17,7 +17,7 @@ from opentide.validation.pipeline import (
     validate_raw_payload,
 )
 
-# Verbatim copies of the versioning examples in OpenTideHQ/specifications
+# Verbatim copies of the versioning examples in opentidehq/specifications
 # fixtures/{valid,invalid} at d270475c1729af4a3ef513ff5ba26087c21547ea.
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "specifications" / "versioning"
 
@@ -56,7 +56,7 @@ def test_validate_all_objects_delegates_to_session() -> None:
 @pytest.mark.parametrize("name", ["valid/rule-1.0.yaml", "valid/rule-1.1.yaml"])
 def test_validate_rule_follows_metadata_schema(name: str) -> None:
     body = _fixture(name)
-    result = OpenTide.validate_rule(load_rule_from_dict(body))
+    result = Opentide.validate_rule(load_rule_from_dict(body))
     assert result.ok, result.errors
     assert validate_raw_payload(body, "rule").ok
 

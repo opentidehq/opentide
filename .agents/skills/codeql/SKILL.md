@@ -1,4 +1,4 @@
-# CodeQL — OpenTide
+# CodeQL — opentide
 
 Static analysis for Python and GitHub Actions workflows. One workflow, no duplicate scans.
 

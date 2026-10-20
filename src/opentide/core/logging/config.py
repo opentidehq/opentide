@@ -12,7 +12,7 @@ import structlog
 from rich.console import Console
 from rich.logging import RichHandler
 
-from opentide.core.logging.render import OpenTideConsoleRenderer
+from opentide.core.logging.render import OpentideConsoleRenderer
 
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
@@ -168,7 +168,7 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
             foreign_pre_chain=_shared_pre_chain(),
             processors=[
                 structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-                OpenTideConsoleRenderer(use_color=False),
+                OpentideConsoleRenderer(use_color=False),
             ],
         )
 

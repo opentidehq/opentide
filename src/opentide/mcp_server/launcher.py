@@ -46,7 +46,7 @@ def probe() -> str | None:
         if _package_installed(MCP_PACKAGE):
             return (
                 f"opentide mcp start cannot use the installed mcp package: {exc}.\n"
-                f"OpenTide needs {MCP_SPECIFIER}; mcp 2.x replaced "
+                f"opentide needs {MCP_SPECIFIER}; mcp 2.x replaced "
                 f"`{MCP_IMPORT}` with `MCPServer`.\n"
                 f"Pin it with:  {MCP_INSTALL_HINT}"
             )

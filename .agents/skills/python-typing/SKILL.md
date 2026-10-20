@@ -1,4 +1,4 @@
-# Python typing (ty) — OpenTide
+# Python typing (ty) — opentide
 
 Static type checking with [ty](https://docs.astral.sh/ty/) on the in-scope `src/opentide` tree.
 

@@ -357,7 +357,7 @@ def documented_outputs(paths: list[Path] | None = None) -> list[DocOutput]:
 #: Pairing is opt-in, so the guard below reads every fence a sample could sit
 #: in: the two languages ``output-of`` accepts, and none at all.
 GUARDED_LANGUAGES = OUTPUT_LANGUAGES | {""}
-#: Lines only OpenTide's renderer starts: ``emit_result``'s status words and
+#: Lines only opentide's renderer starts: ``emit_result``'s status words and
 #: ``emit_deprecation``'s, the ``--no-color`` FATAL line, and a phase header.
 _CLI_LINE = re.compile(r"^\s*(?:(?:OK|SKIPPED|WARNING|DEPRECATED)\s|FATAL\b|==\s.*\s==\s*$)")
 #: A key of the result envelope every ``--json`` command writes.

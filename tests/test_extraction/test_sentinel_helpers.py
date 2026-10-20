@@ -72,7 +72,7 @@ def test_import_writes_scheduled_and_nrt_rules(
     service = SimpleNamespace(alert_rules=SimpleNamespace(list=lambda **_: iter(listed)))
     monkeypatch.setattr(
         sentinel_importer,
-        "OpenTide",
+        "Opentide",
         SimpleNamespace(
             Configurations=SimpleNamespace(
                 Systems=SimpleNamespace(Sentinel=SimpleNamespace(tenants=[tenant]))

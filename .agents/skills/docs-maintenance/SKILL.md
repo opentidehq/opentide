@@ -1,11 +1,11 @@
 ---
 name: opentide-docs-maintenance
 description: >-
-  Maintain OpenTide documentation in docs/ — Fumadocs structure, frontmatter,
+  Maintain opentide documentation in docs/ — Fumadocs structure, frontmatter,
   meta.json navigation, and keeping CLI/MCP/SDK pages in sync with code.
 ---
 
-# OpenTide documentation maintenance
+# opentide documentation maintenance
 
 Use this skill when adding features, changing CLI/MCP/SDK surface area, or authoring pages under `docs/`.
 
@@ -62,7 +62,7 @@ When modifying source, update docs in the **same PR**:
 | `src/opentide/core/registry.py` | `docs/sdk/registry.md` |
 | `src/opentide/__init__.py` | `docs/sdk/index.md` |
 | `src/opentide/cli/enums.py` (platforms) | `docs/usage/concepts/platforms.md` (capability matrix only) |
-| `src/opentide/models/platform.py`, `platform_configs.py` | Do not restate keys under `docs/`. Change `specs/platforms/` in [OpenTideHQ/specifications](https://github.com/OpenTideHQ/specifications) first. Usage and SDK pages only link there. |
+| `src/opentide/models/platform.py`, `platform_configs.py` | Do not restate keys under `docs/`. Change `specs/platforms/` in [opentidehq/specifications](https://github.com/opentidehq/specifications) first. Usage and SDK pages only link there. |
 | `src/opentide/data/setup/skills/` | `docs/usage/workflows/agentic-setup.md` |
 
 ## Verify CLI accuracy
@@ -131,7 +131,7 @@ Eight platforms deploy; six validate queries. CrowdStrike and HarfangLab: **`sup
 
 ## Fumadocs site repo
 
-**Build and deploy:** [OpenTideHQ/website](https://github.com/OpenTideHQ/website). This repo ships content under `docs/` only.
+**Build and deploy:** [opentidehq/website](https://github.com/opentidehq/website). This repo ships content under `docs/` only.
 
 After CLI/Usage changes, the website still needs `pnpm sync:content` so `content/docs/` picks up new pages (`lint`, `migrate`) and nav. Landing hero copy in `components/landing/hero-terminal.tsx` is independent of this tree — keep it aligned with the first-user sequence (`setup` → `generate` → `validate` → `deploy --dry-run`).
 

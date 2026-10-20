@@ -35,7 +35,7 @@ The output is plain text even with `--json`. For the version inside a JSON docum
 
 ## Repository root resolution
 
-When `--repo` is omitted, OpenTide walks up from the current directory and stops at the first directory holding `.opentide/` or `objects/`. That is the detection workspace, so every command sees the same catalogue whether you start at its root, in `objects/rules`, or in `.opentide/configurations/platforms`.
+When `--repo` is omitted, opentide walks up from the current directory and stops at the first directory holding `.opentide/` or `objects/`. That is the detection workspace, so every command sees the same catalogue whether you start at its root, in `objects/rules`, or in `.opentide/configurations/platforms`.
 
 The walk never leaves the enclosing git checkout. A workspace kept in a subdirectory of a larger repository (`monorepo/detections/`) is found from anywhere inside `detections/`, while markers above the checkout are ignored. When nothing on the way up is marked, the root is the git top level, or the current directory outside git. Git's own `.git/objects` and a Python package named `objects/` (one with an `__init__.py`) are not markers.
 

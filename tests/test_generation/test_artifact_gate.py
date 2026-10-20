@@ -29,12 +29,12 @@ TIDE_WORKSPACE = ROOT / TIDE_WORKSPACE_DIR
 def _reset_opentide_index() -> None:
     """Ensure generation tests see a full index after earlier suite pollution."""
     from opentide.core import index_manager as index_mod
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
 
     index_mod.IndexManager._cache = None
-    OpenTide._initialised = False
-    OpenTide._index = None
-    OpenTide.reload()
+    Opentide._initialised = False
+    Opentide._index = None
+    Opentide.reload()
 
 
 def test_tide_instance_root_uses_workspace_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -47,13 +47,13 @@ def _run_generation_pipeline() -> None:
     os.environ.setdefault("TERM_PROGRAM", "vscode")
 
     from opentide.core.index_manager import IndexManager
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.generation.schema import run as generate_schemas
     from opentide.generation.template import run as generate_templates
 
     generate_templates()
     IndexManager.reload()
-    OpenTide.reload()
+    Opentide.reload()
     generate_schemas()
 
 

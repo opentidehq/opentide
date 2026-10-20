@@ -6,7 +6,7 @@ from typing import Literal, Sequence, Any, Optional
 from opentide.core.typing import Never
 from enum import Enum
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
 import structlog
@@ -88,7 +88,7 @@ class DefenderForEndpointService:
 
     def __init__(self, tenant_config: ConfigurationModels.Systems.DefenderForEndpoint.Tenant) -> None:
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = OpenTide.Configurations.Systems.DefenderForEndpoint.platform.identifier
+        self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.DefenderForEndpoint.platform.identifier
         self.OAUTH_TOKEN_ENDPOINT = 'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
         self.GRAPH_API_ENDPOINT = 'https://graph.microsoft.com/beta/security'
         self.DETECTION_RULES_ENDPOINT = self.GRAPH_API_ENDPOINT + '/rules/detectionRules'

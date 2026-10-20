@@ -8,7 +8,7 @@ from typing import Any
 
 from opentide.cli.context import CliContext
 from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.sharing.config import MispBlock, SharingConfig, load_sharing
 from opentide.sharing.constants import (
     INTEGRATION_MISP,
@@ -168,8 +168,8 @@ def render_share(payload: dict[str, Any]) -> None:
 
 
 def _catalogue() -> list[TideDocument]:
-    OpenTide.initialise()
-    index = OpenTide.Index
+    Opentide.initialise()
+    index = Opentide.Index
     objects = index.get("objects") or {}
     paths = index.get("file_paths") or {}
     documents: list[TideDocument] = []

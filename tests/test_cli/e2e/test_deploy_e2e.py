@@ -29,7 +29,7 @@ pytestmark = pytest.mark.cli_e2e
 
 SUBFOLDER_RULES_LEAD = (
     "rule file(s) in subfolders of objects/rules are not deployed (deploy reads only "
-    "files directly in objects/rules; see https://github.com/OpenTideHQ/opentide/issues/312): "
+    "files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): "
 )
 
 

@@ -64,9 +64,9 @@ def default_remote_skill_entries() -> list[SkillEntry]:
     """Minimal live-catalogue stand-in used by setup tests."""
     return [
         SkillEntry(
-            name="OpenTide Detection Rule",
+            name="opentide Detection Rule",
             slug="opentide-detection-rule",
-            description="Authors OpenTide Detection Rule YAML",
+            description="Authors opentide Detection Rule YAML",
         ),
         SkillEntry(
             name="Detection Engineering",
@@ -92,7 +92,7 @@ def stub_remote_skills_manifest(
     monkeypatch.setattr(
         skills_registry_mod,
         "_fetch_remote_manifest",
-        lambda **_: ("OpenTideHQ/skills", ref, resolved),
+        lambda **_: ("opentidehq/skills", ref, resolved),
     )
     skills_registry_mod.clear_manifest_cache()
     return resolved
@@ -100,7 +100,7 @@ def stub_remote_skills_manifest(
 
 @pytest.fixture
 def mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Avoid network calls when tests install skills from OpenTideHQ/skills."""
+    """Avoid network calls when tests install skills from opentidehq/skills."""
 
     def _fake(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
         dest.mkdir(parents=True, exist_ok=True)

@@ -4,9 +4,9 @@
 
 **Organisation:** {org}
 
-## OpenTide detection repository
+## opentide detection repository
 
-This repository uses [OpenTide](https://pypi.org/project/opentide/) for detection-as-code.
+This repository uses [opentide](https://pypi.org/project/opentide/) for detection-as-code.
 
 ### Commands
 

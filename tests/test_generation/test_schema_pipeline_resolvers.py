@@ -91,7 +91,7 @@ def test_statuses_resolver_reads_deployment_statuses() -> None:
     status.name = "STAGING"
     status.strategy.name = "PREVIEW"
     status.description = "Pre-production"
-    with patch("opentide.generation.schema_pipeline.OpenTide") as mock_ot:
+    with patch("opentide.generation.schema_pipeline.Opentide") as mock_ot:
         mock_ot.Configurations.Deployment.statuses = [status]
         enums, descriptions = sp.VocabularyResolver.Statuses().resolve()
     assert enums == ["STAGING"]
@@ -99,7 +99,7 @@ def test_statuses_resolver_reads_deployment_statuses() -> None:
 
 
 def test_parameters_resolver_simple_list() -> None:
-    with patch("opentide.generation.schema_pipeline.OpenTide") as mock_ot:
+    with patch("opentide.generation.schema_pipeline.Opentide") as mock_ot:
         mock_ot.Configurations.Index = {"systems": {"splunk": {"indexes": ["main", "security"]}}}
         values = sp.VocabularyResolver.Parameters("systems.splunk.indexes").resolve()
     assert values == ["main", "security"]
@@ -111,14 +111,14 @@ def test_parameters_resolver_tenant_parameters() -> None:
             {"name": " Alpha ", "parameters": {"indexes": [" idx1 ", "idx2"]}},
         ]
     }
-    with patch("opentide.generation.schema_pipeline.OpenTide") as mock_ot:
+    with patch("opentide.generation.schema_pipeline.Opentide") as mock_ot:
         mock_ot.Configurations.Index = config
         values = sp.VocabularyResolver.Parameters("tenants.indexes").resolve()
     assert values == ["Alpha::idx1", "Alpha::idx2"]
 
 
 def test_parameters_resolver_missing_key_raises() -> None:
-    with patch("opentide.generation.schema_pipeline.OpenTide") as mock_ot:
+    with patch("opentide.generation.schema_pipeline.Opentide") as mock_ot:
         mock_ot.Configurations.Index = {}
         with pytest.raises(ValueError, match="could not be found"):
             sp.VocabularyResolver.Parameters("global.missing").resolve()
@@ -134,7 +134,7 @@ def test_system_tenants_resolver() -> None:
             }
         }
     }
-    with patch("opentide.generation.schema_pipeline.OpenTide") as mock_ot:
+    with patch("opentide.generation.schema_pipeline.Opentide") as mock_ot:
         mock_ot.Configurations.Index = config
         enums, descriptions = sp.VocabularyResolver.SystemTenants("sentinel").resolve()
     assert enums == ["Prod"]
@@ -142,7 +142,7 @@ def test_system_tenants_resolver() -> None:
 
 
 def test_system_tenants_missing_system_raises() -> None:
-    with patch("opentide.generation.schema_pipeline.OpenTide") as mock_ot:
+    with patch("opentide.generation.schema_pipeline.Opentide") as mock_ot:
         mock_ot.Configurations.Index = {"systems": {}}
         with pytest.raises(ValueError, match="Missing configuration"):
             sp.VocabularyResolver.SystemTenants("unknown").resolve()

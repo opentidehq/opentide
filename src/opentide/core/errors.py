@@ -1,6 +1,6 @@
 class Errors(Exception):
     """
-    Container for all custom OpenTIDE errors
+    Container for all custom opentide errors
     """
 
     class TideDataModelErrors(Exception):
@@ -45,17 +45,17 @@ class Errors(Exception):
 
     class TideConfigurationErrors(Exception):
         """
-        Represents all errors related to OpenTIDE Configuration Files
+        Represents all errors related to opentide Configuration Files
         """
 
     class TideSystemConfigurationErrors(TideConfigurationErrors):
         """
-        Represents all errors related to OpenTIDE Configuration Files
+        Represents all errors related to opentide Configuration Files
         """
 
     class TideTenantConfigurationErrors(TideSystemConfigurationErrors):
         """
-        Represents all errors related to OpenTIDE System Configuration Files
+        Represents all errors related to opentide System Configuration Files
         """
 
     class TideTenantConfigurationMissingPermissions(TideSystemConfigurationErrors):

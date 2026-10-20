@@ -39,7 +39,7 @@ DetectionRule.__schema_identifier__  # "rule::1.0"
 The YAML you author maps one-to-one onto these attributes:
 
 ```python
-rule = OpenTide.Rules["00000000-0000-4000-8003-000000000001"]
+rule = Opentide.Rules["00000000-0000-4000-8003-000000000001"]
 rule.name                       # "Sentinel KQL Rule"
 rule.metadata.schema_id         # "rule::1.0"  (YAML `metadata.schema`)
 rule.metadata.schema            # "rule::1.0"  (read-only alias of schema_id)
@@ -81,7 +81,7 @@ These classes implement the [platform specs](/docs/specifications/specs/platform
 | `objective` | `ObjectiveBody` | Body: `priority`, `type`, `signals`, `threats`, … |
 
 ```python
-obj = OpenTide.Objectives["00000000-0000-4000-8002-000000000001"]
+obj = Opentide.Objectives["00000000-0000-4000-8002-000000000001"]
 obj.objective.threats           # ["…8001…"]  (threat UUIDs)
 [s.name for s in obj.objective.signals]
 ```
@@ -96,7 +96,7 @@ obj.objective.threats           # ["…8001…"]  (threat UUIDs)
 | `threat` | `ThreatBody` | Body: `severity`, `impact` and `leverage` (non-empty `list[str]` of vocabulary names), `terrain`, `surface`, `att&ck`, `actors` (`list[ThreatActor]`), optional `cve` (`list[str]`, Vulnerability-Lookup IDs), … |
 
 ```python
-threat = OpenTide.Threats["00000000-0000-4000-8001-000000000001"]
+threat = Opentide.Threats["00000000-0000-4000-8001-000000000001"]
 threat.threat.mitre_attack      # ["T1059"]  (YAML `mitre_attack`)
 threat.threat.terrain           # free-form prose
 threat.threat.surface           # vocabulary list, e.g. ["OS::Windows::Desktop"]
@@ -110,18 +110,18 @@ threat.threat.actors            # list[ThreatActor] | None; name is scoped (att&
 Rules loaded through the [registry](./registry.md) are bound to it and expose operations directly:
 
 ```python
-rule = OpenTide.Rules[uuid]
+rule = Opentide.Rules[uuid]
 
 rule.validate() -> ValidationResult                      # schema + cross-object checks
 rule.validate_query(platform) -> ValidationResult        # query syntax (supported platforms)
 rule.deploy(platform, dry_run=False) -> DeploymentResult
-rule.document() -> str                                   # or OpenTide.render_rule(rule)
+rule.document() -> str                                   # or Opentide.render_rule(rule)
 ```
 
 `validate_query` runs the platform's query validator when one exists (Sentinel, Defender, Splunk, SentinelOne, Carbon Black); for CrowdStrike/HarfangLab it reports unsupported rather than faking a pass. See [Validation → query validation](./validation.md#query-validation).
 
 <Callout type="warn">
-`OpenTide.promote_rule()` raises `NotImplementedError` — change rule `status` in YAML and use `opentide deploy` (promotion runs inside deploy when configured).
+`Opentide.promote_rule()` raises `NotImplementedError` — change rule `status` in YAML and use `opentide deploy` (promotion runs inside deploy when configured).
 </Callout>
 
 ## Results
@@ -160,7 +160,7 @@ Exceptions live under `opentide.core.errors.Errors` (aliased `TideErrors`). Catc
 | `Errors.TideDeploymentErrors` | Any failure during deployment |
 | `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host` |
 | `Errors.DetectionRuleCreationFailed` / `…UpdateFailed` / `…DeletionFailed` | Platform API operation failed |
-| `Errors.TideConfigurationErrors` | Invalid OpenTide configuration files |
+| `Errors.TideConfigurationErrors` | Invalid opentide configuration files |
 | `Errors.TenantNonExistingDeploymentPlan` | A tenant references a missing deployment plan |
 
 ```python

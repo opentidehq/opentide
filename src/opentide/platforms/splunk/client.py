@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from splunklib.client import Service
 
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import DebugHelpers, OpenTide
+from opentide.core.registry import DebugHelpers, Opentide
 from opentide.models.rule import DetectionRule
 
 logger = structlog.get_logger("opentide.platforms.splunk.client")
@@ -31,7 +31,7 @@ class SplunkConnection(ABC):
     def __init__(self):
         self.DEBUG = DebugEnvironment.ENABLED
         self.DEBUG_STEP = bool(self.DEBUG)
-        SPLUNK_CONFIG = OpenTide.Configurations.Systems.Splunk
+        SPLUNK_CONFIG = Opentide.Configurations.Systems.Splunk
         self.DEPLOYER_IDENTIFIER = "splunk"
 
         tenants = getattr(SPLUNK_CONFIG, "tenants", None)
@@ -43,7 +43,7 @@ class SplunkConnection(ABC):
         if self.DEBUG:
             self.SSL_ENABLED = DebugEnvironment.SSL_ENABLED
 
-        self.SPLUNK_SUBSCHEMA = OpenTide.TideSchemas.subschemas["systems"][
+        self.SPLUNK_SUBSCHEMA = Opentide.TideSchemas.subschemas["systems"][
             self.DEPLOYER_IDENTIFIER
         ]["properties"]
         self.ALERT_SEVERITY_MAPPING = {

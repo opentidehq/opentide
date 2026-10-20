@@ -52,7 +52,7 @@ def _flattened(text: str) -> str:
 
 
 def _clean_env(**overrides: str) -> dict[str, str]:
-    """The environment a developer commits in: no OpenTide exports."""
+    """The environment a developer commits in: no opentide exports."""
     env = os.environ.copy()
     for name in (
         "OPENTIDE_REPO_ROOT",
@@ -88,7 +88,7 @@ def _scaffold(script_runner: ScriptRunner, repo: Path) -> None:
     init = _git(repo, "init", "-b", "main")
     assert init.returncode == 0, init.stderr
     _git(repo, "config", "user.email", "e2e@opentide.local")
-    _git(repo, "config", "user.name", "OpenTide E2E")
+    _git(repo, "config", "user.name", "opentide E2E")
 
     setup: RunResult = script_runner.run(
         ["opentide", "--json", "setup", "--yes", "--platform", "sentinel", "--path", str(repo)],
@@ -181,7 +181,7 @@ def _scaffold_nested(script_runner: ScriptRunner, mono: Path, workspace: Path) -
     mono.mkdir(parents=True, exist_ok=True)
     assert _git(mono, "init", "-b", "main").returncode == 0
     _git(mono, "config", "user.email", "e2e@opentide.local")
-    _git(mono, "config", "user.name", "OpenTide E2E")
+    _git(mono, "config", "user.name", "opentide E2E")
     (mono / "README.md").write_text("monorepo\n", encoding="utf-8")
     return _add_workspace(script_runner, workspace)
 
@@ -290,7 +290,7 @@ def test_hook_fails_when_the_pinned_workspace_was_moved(
     output = result.stdout + result.stderr
 
     assert result.returncode != 0, f"a hook pinned to a moved workspace passed\n{output}"
-    assert "No OpenTide workspace at" in output, output
+    assert "No opentide workspace at" in output, output
     assert "opentide setup hooks" in output, output
 
 

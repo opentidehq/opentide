@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import DetectionPlatforms, OpenTide
+from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.generation.framework import techniques_resolver
@@ -161,7 +161,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
         loaded_mdr: list[DetectionRule] = []
         for mdr in mdr_deployment:
             if isinstance(mdr, str):
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         loaded_mdr = without_legacy_external_ids(loaded_mdr, platform="carbon_black_cloud")

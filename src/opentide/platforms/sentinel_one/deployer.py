@@ -1,7 +1,7 @@
 from typing import Sequence
 import sys
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide, DetectionPlatforms
+from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy
@@ -132,7 +132,7 @@ class SentinelOneDeploy(RuleDeployer):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if isinstance(mdr, str):
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr

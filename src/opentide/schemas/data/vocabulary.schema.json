@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://opentide.dev/schemas/vocabulary.schema.json",
-  "title": "OpenTide Vocabulary TOML",
+  "title": "opentide Vocabulary TOML",
   "type": "object",
   "required": ["name", "field"],
   "properties": {

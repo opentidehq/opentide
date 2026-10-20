@@ -1,4 +1,4 @@
-"""Pydantic code-first models for OpenTide objects."""
+"""Pydantic code-first models for opentide objects."""
 
 from opentide.models.base import TideField, TideModel, field_json_schema_extra
 from opentide.models.enums import EnumEntry, EnumRegistry

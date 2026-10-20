@@ -1,4 +1,4 @@
-"""Canonical OpenTide core object type keys (folder routing)."""
+"""Canonical opentide core object type keys (folder routing)."""
 
 from __future__ import annotations
 

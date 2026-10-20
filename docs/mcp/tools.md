@@ -1,6 +1,6 @@
 ---
 title: MCP tools
-description: Tool reference for the OpenTide MCP server — parameters, behaviour, and response shapes.
+description: Tool reference for the opentide MCP server — parameters, behaviour, and response shapes.
 ---
 
 # MCP tools
@@ -94,7 +94,7 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
 
 When this threat has `threat.chaining` entries, `graph` stays `{relation: [vector_uuid, …]}` (for example `{"preceeds": ["…"]}`). `lineage` is still present and lists the threats, objectives, and rules reached through `objective.threats`, `rule.detection_model`, and those threat-to-threat links. `chaining_index` maps every participating UUID to that UUID's `graph`. An empty `graph` means the object has no lineage. A missing UUID returns `{ "uuid": "…", "found": false, "graph": {} }`.
 
-The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository. `OpenTide.Models.chaining` remains the threat-to-threat map only. This tool does not write objective or rule lineage into that registry index.
+The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository. `Opentide.Models.chaining` remains the threat-to-threat map only. This tool does not write objective or rule lineage into that registry index.
 
 ## coverage
 

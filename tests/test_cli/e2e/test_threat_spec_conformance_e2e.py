@@ -1,7 +1,7 @@
 """CLI E2E: the published threat-1.0 conformance fixtures, through ``validate``.
 
 ``tests/fixtures/specifications/threat-1.0`` is a verbatim copy of
-``fixtures/{valid,invalid}/threat-*.yaml`` from OpenTideHQ/specifications at
+``fixtures/{valid,invalid}/threat-*.yaml`` from opentidehq/specifications at
 ``SPEC_COMMIT``. The spec is the contract for the object model (opentide#189):
 the valid fixture must pass and every invalid fixture must fail on the field it
 was written to break. Refresh the copy when the upstream fixtures change.

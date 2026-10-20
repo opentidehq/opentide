@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from opentide.core.index_manager import IndexManager
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.registry.builder import build_registry
 from opentide.validation.checks.kinds import ValidateCheck
 from opentide.validation.session import run_validation
@@ -19,12 +19,12 @@ from opentide.validation.session import run_validation
 @pytest.fixture(autouse=True)
 def _reset_index_cache() -> None:
     IndexManager._cache = None
-    OpenTide._initialised = False
-    OpenTide._index = None
+    Opentide._initialised = False
+    Opentide._index = None
     yield
     IndexManager._cache = None
-    OpenTide._initialised = False
-    OpenTide._index = None
+    Opentide._initialised = False
+    Opentide._index = None
 
 
 def _minimal_rule(uuid: str, *, name: str = "broken-rule") -> dict[str, Any]:

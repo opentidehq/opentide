@@ -1,4 +1,4 @@
-"""OpenTide MCP server — FastMCP entry point."""
+"""opentide MCP server — FastMCP entry point."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from opentide.mcp_server.tools import (
 )
 
 mcp = FastMCP(
-    "OpenTide",
+    "opentide",
     instructions=(
         "Detection engineering assistant. Search and analyse detection content, "
         "validate rules against their schema, check platform queries against the "

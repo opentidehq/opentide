@@ -110,11 +110,11 @@ def _changed_object_paths_and_uuids(
 ) -> tuple[set[Path], set[str], list[tuple[str, str, str]]]:
     """Return changed paths, live UUIDs, and deleted (kind, uuid, name) tuples."""
     from opentide.core.git_baseline import changed_paths, resolve_baseline
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
 
     baseline = resolve_baseline(repo_root)
     merge_base = baseline.commit
-    paths_cfg = OpenTide.Index["paths"]
+    paths_cfg = Opentide.Index["paths"]
     object_roots = {
         kind: Path(paths_cfg[kind]).resolve()
         for kind in _OBJECT_KIND_TO_SCOPE

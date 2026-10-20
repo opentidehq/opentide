@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import DetectionPlatforms, OpenTide
+from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment
 from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.models.rule import DetectionRule
@@ -63,7 +63,7 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
         loaded_mdr: list[DetectionRule] = []
         for mdr in mdr_deployment:
             if isinstance(mdr, str):
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
 

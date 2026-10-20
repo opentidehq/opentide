@@ -33,7 +33,7 @@ def test_info_no_color_renders_platform_table(cli_runner, tide_corpus_repo, monk
     assert result.exit_code == 0
     plain = result.stdout
     assert "\x1b[" not in plain
-    assert "OpenTide Info" in plain
+    assert "opentide Info" in plain
     assert "Rules" in plain and "9" in plain
     assert "Splunk Enterprise Security" in plain
     assert "enabled=True" in plain

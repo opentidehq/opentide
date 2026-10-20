@@ -115,7 +115,7 @@ def test_run_disambiguates_duplicate_filenames_and_filters_prebuilt(tmp_path: Pa
     fake_tenant.setup.ssl = True
 
     with (
-        patch("opentide.core.registry.OpenTide") as mock_ot,
+        patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.platforms.elastic.client.ElasticClient") as mock_client_cls,
     ):
         mock_ot.Configuration.Systems.Elastic.tenants = [fake_tenant]
@@ -266,7 +266,7 @@ def test_run_skips_rules_it_cannot_write_valid(tmp_path: Path) -> None:
     fake_tenant.setup.ssl = True
 
     with (
-        patch("opentide.core.registry.OpenTide") as mock_ot,
+        patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.platforms.elastic.client.ElasticClient") as mock_client_cls,
     ):
         mock_ot.Configuration.Systems.Elastic.tenants = [fake_tenant]

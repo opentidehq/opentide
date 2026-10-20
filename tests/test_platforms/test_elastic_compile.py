@@ -1,4 +1,4 @@
-"""Tests for compiling OpenTide DetectionRule to Elastic Security rule body (RFC 0007 §3)."""
+"""Tests for compiling opentide DetectionRule to Elastic Security rule body (RFC 0007 §3)."""
 
 from __future__ import annotations
 
@@ -124,7 +124,7 @@ def test_tenant_without_suppression_omits_alert_suppression() -> None:
     rule_dict = _load_yaml_fixture("rule-query")
     compiled = compile_rule(rule_dict, PROD_SETUP)
     assert "alert_suppression" not in compiled
-    # Also verify tags ordering: OpenTide first, then tenant tags, then block tags
+    # Also verify tags ordering: opentide first, then tenant tags, then block tags
     assert compiled["tags"] == ["OpenTide", "soc-prod", "Windows", "LOLBAS"]
 
 

@@ -12,7 +12,7 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from opentide.core.files import resolve_configurations, resolve_paths
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.validation.checks.cross_object import (
     check_chaining_for_object,
@@ -90,9 +90,9 @@ def run_validation(
     scope = scope or ValidationScope.full()
     checks = checks or _DEFAULT_CHECKS
 
-    OpenTide.initialise()
+    Opentide.initialise()
     if index is None:
-        index = OpenTide.Index
+        index = Opentide.Index
 
     graph = PreflightGraph.build(index)
     objects = index.get("objects", {})

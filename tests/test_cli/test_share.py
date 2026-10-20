@@ -360,7 +360,7 @@ def test_catalogue_ignores_a_malformed_index(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from opentide.cli.services.share import _catalogue, _validator
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.sharing.document import TideDocument
 
     assert _validator([TideDocument("", {}, None, "missing")]) is None
@@ -383,14 +383,14 @@ def test_catalogue_ignores_a_malformed_index(
             {"path": str(present)},
         ],
     }
-    monkeypatch.setattr(OpenTide, "initialise", lambda: None)
-    monkeypatch.setattr(OpenTide, "_index", index)
+    monkeypatch.setattr(Opentide, "initialise", lambda: None)
+    monkeypatch.setattr(Opentide, "_index", index)
     documents = _catalogue()
     assert any(document.parse_error == "missing" for document in documents)
     assert any(document.path == present for document in documents)
 
     monkeypatch.setattr(
-        OpenTide,
+        Opentide,
         "_index",
         {"objects": {"threat": {"x": {}}}, "file_paths": ["nope"]},
     )

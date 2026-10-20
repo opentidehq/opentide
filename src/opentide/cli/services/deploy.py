@@ -124,7 +124,7 @@ def _deploy(
         os.environ.pop(flag, None)
     if plan is not None:
         ctx.set_deployment_plan(plan)
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.deployment import (
         CIEnvironment,
         DeploymentStrategy,
@@ -135,7 +135,7 @@ def _deploy(
     from opentide.mutation.promotion import PromoteMDR
     from opentide.platforms.plugins import DeployTide
 
-    OpenTide.reload()
+    Opentide.reload()
     try:
         deployment_plan = DeploymentStrategy.load_from_environment()
     except ValueError as exc:

@@ -13,7 +13,7 @@ import structlog
 
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.console import emit_section
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.core.root import get_repo_root
 from opentide.generation.errors import GenerationPhaseError, failing_phase
 
@@ -47,7 +47,7 @@ def run_generate_phase(phase: str) -> None:
         emit_section("Template generation")
         generate_templates()
         IndexManager.reload()
-        OpenTide.reload()
+        Opentide.reload()
         return
     if phase == "schemas":
         from opentide.generation.schema import run as generate_schemas
@@ -55,7 +55,7 @@ def run_generate_phase(phase: str) -> None:
         emit_section("JSON schema generation")
         generate_schemas()
         IndexManager.reload()
-        OpenTide.reload()
+        Opentide.reload()
         return
     if phase == "snippets":
         from opentide.generation.vscode_snippets import run as generate_snippets

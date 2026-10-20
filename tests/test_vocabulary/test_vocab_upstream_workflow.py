@@ -1,7 +1,7 @@
 """Guards for the weekly ATT&CK + MISP ingest workflow.
 
 The two string-presence guards below were green on every commit while the
-workflow itself failed every scheduled run from its introduction: the OpenTide
+workflow itself failed every scheduled run from its introduction: the opentide
 PR step was not gated on the App credential the specifications step already
 required, so it fell back to ``GITHUB_TOKEN``, force-pushed
 ``chore/vocab-upstream``, and only then died on ``gh pr create`` with ``GitHub
@@ -36,7 +36,7 @@ def test_ingest_creates_pr_when_previous_cycle_is_merged() -> None:
     assert "gh pr view" not in text
     assert text.count("gh pr list") >= 4
     assert text.count("--state open") >= 4
-    assert "gh pr create --repo OpenTideHQ/specifications" in text
+    assert "gh pr create --repo opentidehq/specifications" in text
     assert "gh pr create --base development" in text
 
 

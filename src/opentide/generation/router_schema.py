@@ -11,7 +11,7 @@ from opentide.models.schema_registry import identifiers_for_families
 from opentide.models.version import SchemaVersion
 from opentide.registry.artifacts import schema_artifact_name
 
-ROUTER_TITLE = "OpenTide Object Router"
+ROUTER_TITLE = "opentide Object Router"
 _FAMILY_LABELS = {
     "threat": "Threat Vector",
     "objective": "Detection Objective",
@@ -62,7 +62,7 @@ def build_opentide_router(identifiers: list[str] | None = None) -> dict[str, Any
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": ROUTER_TITLE,
         "description": (
-            "Validates any OpenTide object against the schema revision named in "
+            "Validates any opentide object against the schema revision named in "
             "metadata.schema. Map objects/**/*.yaml to this file in the editor."
         ),
         "type": "object",

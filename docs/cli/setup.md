@@ -135,7 +135,7 @@ opentide setup env --yes
 opentide setup env --path ./detection-repo --yes
 ```
 
-Copy `.env.example` to `.env` and adjust the path if the working directory is not the detection repository. OpenTide does not load `.env` automatically — export the variables or pass `--repo`.
+Copy `.env.example` to `.env` and adjust the path if the working directory is not the detection repository. opentide does not load `.env` automatically — export the variables or pass `--repo`.
 
 ### setup hooks
 
@@ -154,7 +154,7 @@ A workspace in a subdirectory of a larger repository (for example `security/dete
 
 A repository has a single Git `pre-commit` hook, so running `setup hooks` for a second workspace in the same repository adds it to the installed hook rather than replacing the first. The hook lists its workspaces on `# opentide-workspace:` lines, validates every one of them even after a failure, and blocks the commit if any fails. Re-running setup drops, with a warning, a listed workspace that no longer has `.opentide/`. The versioned copy under each workspace's `.opentide/hooks/` validates that workspace only.
 
-Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the OpenTide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
+Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the opentide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
 
 ### setup mcp
 
@@ -175,7 +175,7 @@ VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PR
 
 ### setup skills
 
-Install detection engineering agent skills from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills).
+Install detection engineering agent skills from [opentidehq/skills](https://github.com/opentidehq/skills).
 
 <Steps>
 
@@ -223,7 +223,7 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | `--name`, `--org`, `--description` | Entrypoint metadata |
 | `--refresh` | Re-fetch `manifest.json` from GitHub (`discover` / `show`) |
 
-Catalogue discovery fetches `manifest.json` from [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
+Catalogue discovery fetches `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
 
 The full wizard checks skill availability before writing repository files. If the catalogue or a requested slug cannot be fetched, the standalone skills command fails without installing a partial tree. The full `opentide setup` wizard omits the skills step with a warning so the rest of the scaffold can still apply.
 
@@ -260,7 +260,7 @@ Pass `--ci none` on the default callback to skip CI file generation while still 
 
 ## Non-interactive use
 
-Interactive setup requires a TTY. In CI or an agent subprocess, provide explicit targets and `--yes`; OpenTide fails immediately rather than waiting for hidden input.
+Interactive setup requires a TTY. In CI or an agent subprocess, provide explicit targets and `--yes`; opentide fails immediately rather than waiting for hidden input.
 
 ## Source
 

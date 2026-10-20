@@ -9,7 +9,7 @@ import structlog
 
 from opentide.core.logging.config import get_stdout_console, is_json_output
 from opentide.core.logging.console import emit_section
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.validation.errors import format_issues_for_console
 from opentide.validation.session import run_validation
 
@@ -31,12 +31,12 @@ def _format_stats_table(rows: list[list[Any]]) -> str:
 def run() -> None:
     emit_section("Pydantic Schema Validation")
     logger.info("validates_all_opentide_objects_via_model_validate")
-    OpenTide.initialise()
+    Opentide.initialise()
     report = run_validation()
     stats: dict[str, int] = {}
     overall = 0
-    for schema in OpenTide.Index["objects"]:
-        count = len(OpenTide.Index["objects"].get(schema, {}))
+    for schema in Opentide.Index["objects"]:
+        count = len(Opentide.Index["objects"].get(schema, {}))
         stats[schema.upper()] = count
         overall += count
     if report.issues:
@@ -50,7 +50,7 @@ def run() -> None:
             )
         logger.critical(
             "failed_schema_validation",
-            detail="OpenTide objects currently do not match Pydantic models",
+            detail="opentide objects currently do not match Pydantic models",
             advice="Review the files before running the validation again",
         )
         os.environ["VALIDATION_ERROR_RAISED"] = "True"
@@ -59,7 +59,7 @@ def run() -> None:
         for key in stats:
             statstable.append([key, stats[key]])
         statstable = _format_stats_table(statstable)
-        logger.info("step_completed", detail=f"Successfully verified {overall} OpenTide objects")
+        logger.info("step_completed", detail=f"Successfully verified {overall} opentide objects")
         if not is_json_output():
             get_stdout_console().print(statstable, markup=False)
 

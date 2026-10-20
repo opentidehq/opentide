@@ -14,7 +14,7 @@ def test_template_renderer_run_writes_core_and_enabled_platform(
 ) -> None:
     from tests.corpus_support import clear_runtime_caches
 
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.generation.template_renderer import run as template_renderer_run
 
     target = tmp_path / "detections"
@@ -30,7 +30,7 @@ def test_template_renderer_run_writes_core_and_enabled_platform(
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(target))
     monkeypatch.delenv("OPENTIDE_DATA_ROOT", raising=False)
     clear_runtime_caches()
-    OpenTide.initialise()
+    Opentide.initialise()
     template_renderer_run()
     rule = (target / ".opentide" / "templates" / "rule.1.0.template.yaml").read_text(
         encoding="utf-8"

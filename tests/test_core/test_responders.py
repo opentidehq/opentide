@@ -78,5 +78,5 @@ class TestResolveResponders:
             def Configurations(self) -> object:
                 raise KeyError("deployment")
 
-        monkeypatch.setattr("opentide.core.registry.OpenTide", _Raises())
+        monkeypatch.setattr("opentide.core.registry.Opentide", _Raises())
         assert module.default_responders() == ""

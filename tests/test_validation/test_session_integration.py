@@ -34,7 +34,7 @@ def _run_schema_check(body: dict[str, Any]) -> ValidationReport:
     graph.enum_values.return_value = frozenset()
     graph.enum_resolver.suggest.return_value = None
     with (
-        patch("opentide.validation.session.OpenTide.initialise"),
+        patch("opentide.validation.session.Opentide.initialise"),
         patch("opentide.validation.session.PreflightGraph.build", return_value=graph),
         patch(
             "opentide.validation.session.validate_object_vocab_from_metaschema",

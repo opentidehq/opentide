@@ -47,7 +47,7 @@ def requires_pty() -> None:
 
 
 def clean_env(repo: Path | None = None) -> dict[str, str]:
-    """A terminal session without the OpenTide exports fixtures normally set."""
+    """A terminal session without the opentide exports fixtures normally set."""
     env = os.environ.copy()
     for name in ("OPENTIDE_REPO_ROOT", "OPENTIDE_TIDE_WORKSPACE", "DEPLOYMENT_PLAN"):
         env.pop(name, None)

@@ -81,7 +81,7 @@ Every rule has a `status`, and each status maps to a **strategy** that drives wh
 | Live | `PRODUCTION` | Production (`RELEASE`) |
 | Retire | `DISABLED`, `REMOVED` | Disable / delete |
 
-OpenTide validates only that a rule's `status` exists in your merged `deployment.toml` — it does not enforce any ordering between statuses, so you can set any configured status directly. If you override `deployment.toml`, these names may not exist at all in your repo. See [Configuration → deployment statuses](../configuration.md#deployment-statuses-and-strategies).
+opentide validates only that a rule's `status` exists in your merged `deployment.toml` — it does not enforce any ordering between statuses, so you can set any configured status directly. If you override `deployment.toml`, these names may not exist at all in your repo. See [Configuration → deployment statuses](../configuration.md#deployment-statuses-and-strategies).
 
 ## Promotion
 
@@ -110,7 +110,7 @@ Each rule carries per-platform query blocks under `configurations`. Six platform
 | CrowdStrike | — | no (deploy only) |
 | HarfangLab | — | no (deploy only) |
 
-Always run `opentide validate query --platform <name> --live` for supporting platforms before deploy. A bare command refuses. OpenTide reports `supported: false` for CrowdStrike/HarfangLab rather than faking a pass — see [Platforms](../concepts/platforms.md).
+Always run `opentide validate query --platform <name> --live` for supporting platforms before deploy. A bare command refuses. opentide reports `supported: false` for CrowdStrike/HarfangLab rather than faking a pass — see [Platforms](../concepts/platforms.md).
 
 ## Review checklist
 

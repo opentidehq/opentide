@@ -12,7 +12,7 @@ def test_id_uniqueness_run_delegates_to_session() -> None:
     issue = ValidationIssue(code="duplicate_id", message="dup")
     report = ValidationReport(ok=False, issues=[issue])
     with (
-        patch.object(id_uniqueness, "OpenTide") as mock_tide,
+        patch.object(id_uniqueness, "Opentide") as mock_tide,
         patch("opentide.validation.id_uniqueness.run_validation", return_value=report) as mock_run,
         patch.object(id_uniqueness, "emit_section"),
     ):
@@ -24,7 +24,7 @@ def test_id_uniqueness_run_delegates_to_session() -> None:
 def test_uuid_v4_run_delegates_to_session() -> None:
     report = ValidationReport(ok=True)
     with (
-        patch.object(uuid_v4, "OpenTide") as mock_tide,
+        patch.object(uuid_v4, "Opentide") as mock_tide,
         patch("opentide.validation.uuid_v4.run_validation", return_value=report) as mock_run,
         patch.object(uuid_v4, "emit_section"),
     ):
@@ -36,7 +36,7 @@ def test_uuid_v4_run_delegates_to_session() -> None:
 def test_cve_run_delegates_to_session() -> None:
     report = ValidationReport(ok=True)
     with (
-        patch.object(cve, "OpenTide") as mock_tide,
+        patch.object(cve, "Opentide") as mock_tide,
         patch("opentide.validation.cve.run_validation", return_value=report) as mock_run,
         patch.object(cve, "emit_section"),
     ):

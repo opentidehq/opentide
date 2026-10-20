@@ -40,7 +40,7 @@ REPLACEMENTS: list[tuple[str, str]] = [
     ("TideModels.MDR", "TideModels.DetectionRule"),
     ("load_mdr", "load_rule"),
     ("load_dom", "load_objective"),
-    ("DataTide", "OpenTide"),
+    ("DataTide", "Opentide"),
 ]
 
 SHIM_FILES = {

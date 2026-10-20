@@ -2,15 +2,15 @@
 # First upload: configure a pending publisher at
 # https://pypi.org/manage/account/publishing/ (see docs/internal/pypi-trusted-publishing.md).
 #
-# After a successful upload, dispatch OpenTideHQ/website so docs/changelog/specs
+# After a successful upload, dispatch opentidehq/website so docs/changelog/specs
 # rebuild immediately. The landing version number is fetched live from PyPI and
 # does not wait on that rebuild. Uses GH_APP_ID / GH_APP_KEY, the secret names
-# vocab-upstream also reads; the App must be installed on OpenTideHQ/website with
+# vocab-upstream also reads; the App must be installed on opentidehq/website with
 # contents: write, which repository_dispatch requires (contents: read mints a
 # token and then 403s). If notify is skipped or fails, publish still succeeds,
 # the last step warns "Website not notified", and the website's hourly cron is
 # the backup:
-#   gh api repos/OpenTideHQ/website/dispatches -f event_type=opentide-released
+#   gh api repos/opentidehq/website/dispatches -f event_type=opentide-released
 #
 # Build with `uv build` (same as CI). Do not use `hatch build`: hatch 1.18.1 +
 # hatchling 1.32.1 isolated envs import `hatch` from BinaryBuilder and fail with
@@ -19,7 +19,7 @@
 # `release: published` runs the workflow file from the tag commit. A tag cut
 # before this uv-build change cannot be rescued by converting the Release to
 # draft and back. Re-run an existing tag from the default branch:
-#   gh api repos/OpenTideHQ/opentide/dispatches \
+#   gh api repos/opentidehq/opentide/dispatches \
 #     -f event_type=publish-pypi \
 #     -f client_payload[checkout_ref]=v0.x.y
 # (workflow_dispatch is equivalent in the Actions UI; GitHub App tokens often
@@ -146,7 +146,7 @@ jobs:
                   print(f"::error::PyPI is missing {missing} for {project} {version} ({status}).")
                   print(
                       "Retry without retagging; skip-existing uploads only the missing files:\n"
-                      "  gh api repos/OpenTideHQ/opentide/dispatches \\\n"
+                      "  gh api repos/opentidehq/opentide/dispatches \\\n"
                       "    -f event_type=publish-pypi \\\n"
                       f"    -f client_payload[checkout_ref]=v{version}"
                   )
@@ -163,7 +163,7 @@ jobs:
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_KEY }}
-          owner: OpenTideHQ
+          owner: opentidehq
           repositories: website
 
       - name: Notify website to sync docs
@@ -174,7 +174,7 @@ jobs:
           GH_TOKEN: ${{ steps.website.outputs.token }}
         run: |
           set -euo pipefail
-          gh api repos/OpenTideHQ/website/dispatches \
+          gh api repos/opentidehq/website/dispatches \
             -f event_type=opentide-released \
             -f client_payload[source]=publish-pypi \
             -f client_payload[tag]="${RELEASE_TAG}"
@@ -201,11 +201,11 @@ jobs:
               reason="GH_APP_ID and GH_APP_KEY are not set for this workflow"
             fi
           elif [[ "${WEBSITE_TOKEN_OUTCOME}" == "failure" ]]; then
-            reason="it could not mint a GitHub App token for OpenTideHQ/website (is the App installed there?)"
+            reason="it could not mint a GitHub App token for opentidehq/website (is the App installed there?)"
           elif [[ "${NOTIFY_OUTCOME}" == "failure" ]]; then
-            reason="the dispatch to OpenTideHQ/website failed (the App needs contents: write there)"
+            reason="the dispatch to opentidehq/website failed (the App needs contents: write there)"
           else
             reason="the GitHub App token was empty"
           fi
           echo "::warning title=Website not notified::${RELEASE_TAG} is on PyPI, but ${reason}. The website's hourly sync will pick it up; to rebuild sooner, run the command in this step's log."
-          echo "gh api repos/OpenTideHQ/website/dispatches -f event_type=opentide-released"
+          echo "gh api repos/opentidehq/website/dispatches -f event_type=opentide-released"

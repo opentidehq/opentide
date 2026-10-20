@@ -165,7 +165,7 @@ def test_vocab_drift_check_compares_against_a_specifications_checkout(
     checkouts = [
         step
         for step in steps[: steps.index(checks[0])]
-        if step.get("with", {}).get("repository") == "OpenTideHQ/specifications"
+        if step.get("with", {}).get("repository") == "opentidehq/specifications"
     ]
     assert len(checkouts) == 1, "the drift check needs a specifications checkout before it"
     assert checkouts[0]["with"]["path"] == "specifications"

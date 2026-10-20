@@ -114,20 +114,20 @@ def test_render_metadata_includes_optional_authoring_fields() -> None:
             "created": "2026-01-01",
             "modified": "2026-01-03",
             "tlp": "amber",
-            "author": "OpenTide Team",
+            "author": "opentide Team",
             "contributors": ["Alice", "Bob"],
             "organisation": {
                 "uuid": "00000000-0000-4000-8000-000000000123",
-                "name": "OpenTideHQ",
+                "name": "opentidehq",
             },
         }
     )
     rendered = render_metadata(metadata, formatter)
 
-    assert "**Author**: OpenTide Team" not in rendered
-    assert "OpenTide Team" in rendered
+    assert "**Author**: opentide Team" not in rendered
+    assert "opentide Team" in rendered
     assert "Alice, Bob" in rendered
-    assert "OpenTideHQ (`00000000-0000-4000-8000-000000000123`)" in rendered
+    assert "opentidehq (`00000000-0000-4000-8000-000000000123`)" in rendered
 
 
 def test_render_references_renders_all_reference_groups() -> None:

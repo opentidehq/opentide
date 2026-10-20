@@ -1,4 +1,4 @@
-# uv — OpenTide
+# uv — opentide
 
 [uv](https://docs.astral.sh/uv/) is the Python package and project manager for this repo. Use it for all dependency install, test, lint, and script execution.
 
@@ -8,7 +8,7 @@
 - Running pytest, ruff, ty, pre-commit, or CLI tools
 - Local CI parity before push
 
-## OpenTide commands
+## opentide commands
 
 ```bash
 uv sync --group dev              # install dev deps (pytest, ruff, ty, pre-commit, …)
@@ -29,7 +29,7 @@ CI (`.github/workflows/ci.yml`) runs `uv sync --group dev` on every job.
 |-------|---------|
 | `dev` | Tests, ruff, ty, pre-commit, pandas fixtures |
 
-Docs build/deploy: [OpenTideHQ/website](https://github.com/OpenTideHQ/website). This repo validates with `scripts/validate-docs.sh`.
+Docs build/deploy: [opentidehq/website](https://github.com/opentidehq/website). This repo validates with `scripts/validate-docs.sh`.
 
 Add runtime deps with `uv add <package>`. Add dev tools with `uv add --group dev <package>`.
 

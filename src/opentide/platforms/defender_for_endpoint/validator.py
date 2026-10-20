@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.logging import get_logger
-from opentide.core.registry import DetectionPlatforms, OpenTide
+from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment
 from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.models.rule import DetectionRule
@@ -177,7 +177,7 @@ class DefenderForEndpointQueryValidator(QueryValidator):
         deployment_plan: DeploymentStrategy,
     ):
         if type(mdr_deployment[0]) is str:
-            mdr_deployment = [OpenTide.Rules[uuid] for uuid in mdr_deployment]
+            mdr_deployment = [Opentide.Rules[uuid] for uuid in mdr_deployment]
         deployment = TideDeployment(
             deployment=mdr_deployment,
             system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,

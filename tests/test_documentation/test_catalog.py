@@ -16,7 +16,7 @@ from opentide.documentation.types import DocumentRecord, DocumentScope
 
 def test_catalog_resolve_name_fallback_to_uuid() -> None:
     catalog = DocumentationCatalog(rules=[], objectives=[], threats=[])
-    with patch("opentide.documentation.catalog.OpenTide.lookup", return_value=None):
+    with patch("opentide.documentation.catalog.Opentide.lookup", return_value=None):
         assert catalog.resolve_name("missing") == "missing"
 
 
@@ -54,7 +54,7 @@ def test_catalog_chaining_entries_enrich_description_from_vocab() -> None:
     threat = MagicMock()
     threat.threat.chaining = [{"vector": "u2", "relation": "preceeds"}]
     with (
-        patch("opentide.documentation.catalog.OpenTide") as mock_ot,
+        patch("opentide.documentation.catalog.Opentide") as mock_ot,
         patch(
             "opentide.documentation.catalog.fw.get_vocab_entry",
             return_value="The following TVM occurs after this TVM.",
@@ -159,7 +159,7 @@ def test_chaining_network_walks_inbound_index() -> None:
         signals=[],
     )
     with (
-        patch("opentide.documentation.catalog.OpenTide") as mock_ot,
+        patch("opentide.documentation.catalog.Opentide") as mock_ot,
         patch(
             "opentide.documentation.catalog.fw.chain_resolver",
             side_effect=lambda _vector, chain: chain,
@@ -198,7 +198,7 @@ def test_chaining_network_keeps_unresolved_chain_targets() -> None:
         {"vector": "ghost-threat", "relation": "succeeds"},
     ]
     with (
-        patch("opentide.documentation.catalog.OpenTide") as mock_ot,
+        patch("opentide.documentation.catalog.Opentide") as mock_ot,
         patch(
             "opentide.documentation.catalog.fw.chain_resolver",
             side_effect=lambda _vector, chain: chain,
@@ -248,7 +248,7 @@ def test_resolve_name_uses_signal_and_lookup() -> None:
     assert catalog.resolve_name("s1") == "Signal One"
     named = MagicMock()
     named.name = "Looked Up"
-    with patch("opentide.documentation.catalog.OpenTide.lookup", return_value=named):
+    with patch("opentide.documentation.catalog.Opentide.lookup", return_value=named):
         assert catalog.resolve_name("other") == "Looked Up"
 
 
@@ -275,14 +275,14 @@ def test_chaining_entries_skip_blank_targets() -> None:
     catalog = DocumentationCatalog(rules=[], objectives=[], threats=[])
     threat = MagicMock()
     threat.threat.chaining = [{"relation": "preceeds"}]
-    with patch("opentide.documentation.catalog.OpenTide") as mock_ot:
+    with patch("opentide.documentation.catalog.Opentide") as mock_ot:
         mock_ot.Threats.get.return_value = threat
         assert catalog.chaining_entries("u1") == []
 
 
 def test_build_catalog_indexes_nested_signals() -> None:
     bundle = load_documentation_bundle()
-    with patch("opentide.documentation.catalog.OpenTide") as mock_ot:
+    with patch("opentide.documentation.catalog.Opentide") as mock_ot:
         mock_ot.Rules.values.return_value = [bundle.rule]
         mock_ot.Objectives.values.return_value = [bundle.objective]
         mock_ot.Threats.values.return_value = [bundle.threat]
@@ -293,7 +293,7 @@ def test_build_catalog_indexes_nested_signals() -> None:
 
 def test_build_catalog_collects_records() -> None:
     rule = MagicMock(metadata=MagicMock(uuid="r1"), name="Rule")
-    with patch("opentide.documentation.catalog.OpenTide") as mock_ot:
+    with patch("opentide.documentation.catalog.Opentide") as mock_ot:
         mock_ot.Rules.values.return_value = [rule]
         mock_ot.Objectives.values.return_value = []
         mock_ot.Threats.values.return_value = []

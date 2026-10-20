@@ -74,7 +74,7 @@ def isolated_session(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
     graph = MagicMock()
     graph.resolve.return_value = MagicMock(file_path=None)
     with (
-        patch("opentide.validation.session.OpenTide.initialise"),
+        patch("opentide.validation.session.Opentide.initialise"),
         patch("opentide.validation.session.PreflightGraph.build", return_value=graph),
         patch("opentide.loading.object_loader.load_object_for_validation"),
         patch("opentide.validation.session.validate_object_vocab_from_metaschema", return_value=[]),

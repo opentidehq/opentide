@@ -4,7 +4,7 @@ from dataclasses import dataclass, asdict
 from typing import Literal, Optional
 from enum import Enum
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
 import structlog
@@ -64,7 +64,7 @@ class CrowdstrikeService:
 
     def __init__(self, tenant_config: ConfigurationModels.Systems.Crowdstrike.Tenant) -> None:
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = OpenTide.Configurations.Systems.SentinelOne.platform.identifier
+        self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.SentinelOne.platform.identifier
         self.tenant_config = tenant_config
         BASE_URL = self._get_base_api(self.tenant_config.setup.api)
         self.OAUTH_TOKEN_ENDPOINT = BASE_URL + '/oauth2/token'

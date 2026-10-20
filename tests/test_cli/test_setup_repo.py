@@ -84,7 +84,7 @@ def test_setup_repo_platform_generate_emits_configuration_stubs(
     """First-user path: setup repo --platform then generate templates (#211)."""
     from tests.corpus_support import clear_runtime_caches
 
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.generation.pydantic_templates import generate_core_template
 
     target = tmp_path / "sentinel-repo"
@@ -100,7 +100,7 @@ def test_setup_repo_platform_generate_emits_configuration_stubs(
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(target))
     monkeypatch.delenv("OPENTIDE_DATA_ROOT", raising=False)
     clear_runtime_caches()
-    OpenTide.initialise()
+    Opentide.initialise()
     path = target / ".opentide" / "templates" / "rule.1.0.template.yaml"
     generate_core_template("rule", path)
     text = path.read_text(encoding="utf-8")

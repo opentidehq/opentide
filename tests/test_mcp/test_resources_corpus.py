@@ -19,7 +19,7 @@ from tests.corpus_support import (
 )
 
 from opentide.cli.services.generation import run_generate_phase
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.mcp_server import resources
 from opentide.models.schema_registry import latest_identifier
 
@@ -33,9 +33,9 @@ def corpus_with_schemas(tide_corpus_repo: Path) -> Path:
 
 
 def test_schema_index_is_keyed_by_schema_id(corpus_with_schemas: Path) -> None:
-    OpenTide.initialise()
-    assert "rule::1.0" in OpenTide.JsonSchemas.Index
-    assert "rule" not in OpenTide.JsonSchemas.Index
+    Opentide.initialise()
+    assert "rule::1.0" in Opentide.JsonSchemas.Index
+    assert "rule" not in Opentide.JsonSchemas.Index
 
 
 @pytest.mark.parametrize("requested", ["rule", "rule::1.0", "rule.1.0", "rules"])
@@ -78,7 +78,7 @@ def test_resource_template_accepts_the_schema_id_the_schema_resource_accepts(
     corpus_with_templates: Path, family: str
 ) -> None:
     """``schemas/rule::1.0`` resolved while ``templates/rule::1.0`` did not."""
-    OpenTide.initialise()
+    Opentide.initialise()
     schema_id = latest_identifier(family)
     bare = json.loads(resources.resource_template(family))
     for requested in (schema_id, schema_id.replace("::", "."), f"{family}s"):
@@ -99,11 +99,11 @@ def test_resource_template_rejects_a_registered_version_that_is_superseded(
     corpus_with_templates: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Templates render the newest model, so an older registered id must not match."""
-    OpenTide.initialise()
-    current = next(key for key in OpenTide.MetaSchemas.Index if key.startswith("rule::"))
+    Opentide.initialise()
+    current = next(key for key in Opentide.MetaSchemas.Index if key.startswith("rule::"))
     family, _, version = current.partition("::")
     newer = f"{family}::{int(version.split('.')[0]) + 1}.0"
-    accessor = type(OpenTide.MetaSchemas)
+    accessor = type(Opentide.MetaSchemas)
     registered = accessor.Index.fget
     assert registered is not None
 

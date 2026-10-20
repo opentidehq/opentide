@@ -17,10 +17,10 @@ splunk = "opentide.platforms.splunk:declare"
 ## PlatformsRegistry
 
 ```python
-from opentide import OpenTide
+from opentide import Opentide
 
-OpenTide.initialise()
-for name, platform in OpenTide.Platforms.items():
+Opentide.initialise()
+for name, platform in Opentide.Platforms.items():
     print(name, platform.enabled, platform.can_deploy, platform.can_validate)
 ```
 
@@ -54,7 +54,7 @@ CrowdStrike and HarfangLab have deployers only.
 ## Rule deployment
 
 ```python
-rule = OpenTide.Rules[uuid]
+rule = Opentide.Rules[uuid]
 result = rule.deploy("sentinel", dry_run=True)
 print(result.dry_run, result.message)
 ```
@@ -65,7 +65,7 @@ Each platform module exposes `declare()` returning deployer/validator factories.
 
 ## Authoring a custom platform plugin
 
-You can add support for a platform OpenTide does not ship by publishing a small package that registers an `opentide.platforms` entry point. At a high level:
+You can add support for a platform opentide does not ship by publishing a small package that registers an `opentide.platforms` entry point. At a high level:
 
 <Steps>
 
@@ -100,7 +100,7 @@ In your package's `pyproject.toml`:
 acme = "my_opentide_acme:declare"
 ```
 
-Install the package into the same environment as `opentide`; the registry discovers it at `OpenTide.initialise()`.
+Install the package into the same environment as `opentide`; the registry discovers it at `Opentide.initialise()`.
 
 </Step>
 
@@ -117,8 +117,8 @@ Define the typed block that appears under `configurations.acme` in rule YAML, fo
 ### Verify
 
 ```python
-OpenTide.initialise()
-plat = OpenTide.Platforms["acme"]
+Opentide.initialise()
+plat = Opentide.Platforms["acme"]
 assert plat.can_deploy and not plat.can_validate
 ```
 

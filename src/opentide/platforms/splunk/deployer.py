@@ -7,7 +7,7 @@ from typing import Any
 import structlog
 
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import DetectionPlatforms, OpenTide
+from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.core.responders import resolve_responders
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
@@ -437,7 +437,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         loaded_mdr: list[DetectionRule] = []
         for mdr in mdr_deployment:
             if isinstance(mdr, str):
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         # Refused on every platform while unmigrated (RFC 0010), including

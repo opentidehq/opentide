@@ -272,8 +272,8 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
     console = get_stdout_console()
     console.print(
         Panel(
-            "[bold]OpenTide — Detection Repository Setup[/]",
-            title=" OpenTide",
+            "[bold]opentide — Detection Repository Setup[/]",
+            title=" opentide",
             border_style="blue",
         )
     )
@@ -310,7 +310,7 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
         options.promotion = None if chosen is promoting else chosen
         options.explorer_pages = "explorer" in features
 
-    if ask_confirm("Configure OpenTide MCP?", default=False):
+    if ask_confirm("Configure opentide MCP?", default=False):
         keys = ask_checkbox(
             "MCP hosts",
             [(label, key) for key, label in MCP_LABELS.items()],

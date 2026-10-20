@@ -1,13 +1,13 @@
 ---
 name: opentide-detection-ops
 description: >-
-  Detection-as-code workflows with OpenTide — validate objects, generate schemas,
+  Detection-as-code workflows with opentide — validate objects, generate schemas,
   deploy rules, and understand the threat/objective/rule model.
 ---
 
-# OpenTide Detection Operations
+# opentide Detection Operations
 
-Use this skill when authoring or reviewing detection content in an OpenTide repository.
+Use this skill when authoring or reviewing detection content in an opentide repository.
 
 ## Object model
 

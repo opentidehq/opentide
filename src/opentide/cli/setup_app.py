@@ -604,7 +604,7 @@ def setup_mcp_cmd(
     generic: bool = typer.Option(False, "--generic"),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
-    """Write OpenTide MCP configuration for editors and agents."""
+    """Write opentide MCP configuration for editors and agents."""
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
     yes = _consented(ctx, yes)
@@ -656,7 +656,7 @@ def setup_skills_install_cmd(
     description: str | None = typer.Option(None, "--description"),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
-    """Install detection engineering agent skills from OpenTideHQ/skills.
+    """Install detection engineering agent skills from opentidehq/skills.
 
     The group callback must not take a positional PATH: Click would consume
     ``discover`` / ``show`` as that argument and skip those subcommands.
@@ -722,7 +722,7 @@ def setup_skills_discover_cmd(
     installed: bool = typer.Option(False, "--installed"),
     refresh: bool = typer.Option(False, "--refresh"),
 ) -> None:
-    """List skills from the OpenTideHQ/skills catalogue."""
+    """List skills from the opentidehq/skills catalogue."""
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag, deprecate_positional=True)
     try:
@@ -735,7 +735,7 @@ def setup_skills_discover_cmd(
     from rich.table import Table
     from rich.text import Text
 
-    table = Table(title="OpenTide Skills")
+    table = Table(title="opentide Skills")
     table.add_column("Name")
     table.add_column("Installed")
     table.add_column("Description")

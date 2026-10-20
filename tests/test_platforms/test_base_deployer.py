@@ -22,7 +22,7 @@ def test_base_rule_deployer_resolves_uuid_strings() -> None:
     mock_rule.name = "Test Rule"
     mock_rule.metadata.uuid = "uuid-1"
 
-    with patch("opentide.core.registry.OpenTide") as mock_tide:
+    with patch("opentide.core.registry.Opentide") as mock_tide:
         mock_tide.Rules.__getitem__.return_value = mock_rule
         deployer.deploy(["uuid-1"], DeploymentStrategy.STAGING)
 

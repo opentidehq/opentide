@@ -55,7 +55,7 @@ def _walk_wizard(repo: Path, *, apply: bool) -> PtyRun:
     session.expect("CI/CD platform")
     session.send(ENTER)  # Configure later
 
-    session.expect("Configure OpenTide MCP")
+    session.expect("Configure opentide MCP")
     session.send(ENTER)  # default No
     session.expect("Install agent skills")
     session.send(ENTER)  # default No

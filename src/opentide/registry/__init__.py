@@ -1,4 +1,4 @@
-"""OpenTide workspace registry — discovery, paths, and in-memory index build."""
+"""opentide workspace registry — discovery, paths, and in-memory index build."""
 
 from opentide.registry.artifacts import schema_artifact_name, template_artifact_name
 from opentide.registry.builder import RegistryBuilder

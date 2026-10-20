@@ -5,7 +5,7 @@ description: Threat vectors, detection objectives, and MDR rules — what each i
 
 # Object model
 
-OpenTide organises detection content into three object families under `objects/`. Together they answer three questions: **what do we defend against?** (threat), **what are we trying to detect?** (objective), and **how do we detect it?** (rule).
+opentide organises detection content into three object families under `objects/`. Together they answer three questions: **what do we defend against?** (threat), **what are we trying to detect?** (objective), and **how do we detect it?** (rule).
 
 | Object | Answers | Directory | Schema | Acronym |
 |--------|---------|-----------|--------|---------|
@@ -31,7 +31,7 @@ metadata:
 
 ## A worked example: one chain
 
-The clearest way to understand the model is to read one full chain — a threat, an objective that covers it, and a rule that implements that objective. These mirror the conformance [fixtures](https://github.com/OpenTideHQ/specifications/blob/main/fixtures/valid).
+The clearest way to understand the model is to read one full chain — a threat, an objective that covers it, and a rule that implements that objective. These mirror the conformance [fixtures](https://github.com/opentidehq/specifications/blob/main/fixtures/valid).
 
 ### 1. Threat — what we defend against
 
@@ -192,14 +192,14 @@ The validator catches these, but designing against them keeps your graph healthy
 The same objects are available programmatically through the [registry](../../sdk/registry.md):
 
 ```python
-from opentide import OpenTide
+from opentide import Opentide
 
-OpenTide.initialise()
-rule = OpenTide.Rules["00000000-0000-4000-8003-000000000001"]
-objective = OpenTide.Objectives["00000000-0000-4000-8002-000000000001"]
-threat = OpenTide.Threats["00000000-0000-4000-8001-000000000001"]
+Opentide.initialise()
+rule = Opentide.Rules["00000000-0000-4000-8003-000000000001"]
+objective = Opentide.Objectives["00000000-0000-4000-8002-000000000001"]
+threat = Opentide.Threats["00000000-0000-4000-8001-000000000001"]
 
-obj = OpenTide.lookup("00000000-0000-4000-8002-000000000001")  # cross-type lookup
+obj = Opentide.lookup("00000000-0000-4000-8002-000000000001")  # cross-type lookup
 ```
 
 Rules loaded through the registry expose delegation methods: `validate()`, `validate_query(platform)`, `deploy()`, and `document()`. See [SDK models](../../sdk/models.md).

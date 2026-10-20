@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from opentide.core.time import format_utc_z, utc_now
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
 import structlog
@@ -74,7 +74,7 @@ class SentinelOneService:
 
     def __init__(self, tenant_config: ConfigurationModels.Systems.SentinelOne.Tenant) -> None:
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = OpenTide.Configurations.Systems.SentinelOne.platform.identifier
+        self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.SentinelOne.platform.identifier
         self.tenant_config = tenant_config
         self.CUSTOM_DETECTION_RULES_ENDPOINT = self.tenant_config.setup.url + '/web/api/v2.1/cloud-detection/rules'
         self.CREATE_QUERY_ENDPOINT = self.tenant_config.setup.url + '/web/api/v2.1/dv/events/pq'

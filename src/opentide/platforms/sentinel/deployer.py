@@ -3,7 +3,7 @@ import json
 from typing import TYPE_CHECKING, Any, Sequence
 from opentide.generation.framework import get_vocab_entry, techniques_resolver
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import OpenTide, DetectionPlatforms
+from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
@@ -228,7 +228,7 @@ class SentinelDeploy(RuleDeployer):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
-                loaded_mdr.append(OpenTide.Rules[mdr])
+                loaded_mdr.append(Opentide.Rules[mdr])
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         from opentide.deployment.external_ids import without_legacy_external_ids

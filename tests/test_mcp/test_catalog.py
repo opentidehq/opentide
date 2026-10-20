@@ -1,6 +1,6 @@
 """MCP catalog search and analysis against the real tide_corpus registry.
 
-These tests deliberately avoid patching ``OpenTide``: the mocked variants used
+These tests deliberately avoid patching ``Opentide``: the mocked variants used
 to assert the broken contracts from #252–#253 (dict-shaped UUID search,
 ``tags``-only technique lookup, substring platform matching).
 """
@@ -19,7 +19,7 @@ from tests.corpus_support import (
     CORPUS_THREAT_UUID,
 )
 
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.mcp_server import resources
 from opentide.mcp_server.catalog import (
     coverage_analysis,
@@ -57,10 +57,10 @@ def test_uuid_lookups_ignore_case_and_padding(
     tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The UUID pattern matched ``ABCDEF…`` but the lookup was exact-case."""
-    OpenTide.initialise()
+    Opentide.initialise()
     uuid = "abcdef00-0000-4000-8000-0000000000ab"
-    body = OpenTide.Models.rules[CORPUS_RULE_UUIDS["sentinel"]]
-    monkeypatch.setitem(OpenTide.Models.rules, uuid, body)
+    body = Opentide.Models.rules[CORPUS_RULE_UUIDS["sentinel"]]
+    monkeypatch.setitem(Opentide.Models.rules, uuid, body)
     for spelling in (uuid.upper(), f"  {uuid.upper()} "):
         found = get_object(spelling)
         assert found is not None and found["uuid"] == uuid, spelling
@@ -145,7 +145,7 @@ def test_get_chaining_graph_links_threat_objective_and_rule(tide_corpus_repo: Pa
         assert payload["graph"]
         assert payload["uuid"] in payload["chaining_index"]
     assert threat["lineage"] == objective["lineage"] == rule["lineage"]
-    assert CORPUS_THREAT_UUID not in OpenTide.Models.chaining
+    assert CORPUS_THREAT_UUID not in Opentide.Models.chaining
 
 
 CHAINED_THREAT_UUID = "0000abcd-0000-4000-8001-00000000000f"
@@ -204,13 +204,13 @@ def test_coverage_for_a_parent_includes_sub_technique_rules(
     tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Rules tagged ``T1059.001`` answer "what do we detect for T1059?"."""
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.mcp_server.catalog import ensure_initialised
 
     ensure_initialised()
     sub_uuid = "00000000-0000-4000-8003-0000000000aa"
     monkeypatch.setitem(
-        OpenTide.Models.rules, sub_uuid, {"name": "PowerShell", "techniques": ["T1059.001"]}
+        Opentide.Models.rules, sub_uuid, {"name": "PowerShell", "techniques": ["T1059.001"]}
     )
 
     parent = coverage_analysis(technique="T1059")

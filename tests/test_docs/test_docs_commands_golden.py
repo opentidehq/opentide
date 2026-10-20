@@ -411,7 +411,7 @@ def test_every_cli_output_sample_is_checked_or_marked_illustrative() -> None:
         for fence in unchecked_output_fences(text)
     ]
     assert not unchecked, (
-        "These fences read like OpenTide CLI output but name no command. Add "
+        "These fences read like opentide CLI output but name no command. Add "
         'output-of="opentide …" (and exit=N when it fails) so the output check runs it, '
         "or mark the fence illustrative and say why in the prose:\n  " + "\n  ".join(unchecked)
     )

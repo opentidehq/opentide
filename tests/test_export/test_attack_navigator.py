@@ -15,11 +15,11 @@ from opentide.export.attack_navigator_layer import (
 
 
 def _setup_opentide_index(monkeypatch) -> None:
-    from opentide import OpenTide
+    from opentide import Opentide
 
     threat_uuid = "00000000-0000-4000-8000-000000000001"
     rule_uuid = "00000000-0000-4000-8000-000000000002"
-    OpenTide._index = {
+    Opentide._index = {
         "objects": {
             "threat": {
                 threat_uuid: {
@@ -44,7 +44,7 @@ def _setup_opentide_index(monkeypatch) -> None:
         },
         "paths": {"tide": {"exports": "/tmp/exports"}},
     }
-    OpenTide._initialised = True
+    Opentide._initialised = True
 
 
 def test_map_objects_and_techniques_threat(monkeypatch) -> None:
@@ -127,9 +127,9 @@ def test_create_layer_orchestrates_pipeline(monkeypatch) -> None:
 
 
 def _export_layer_text(tmp_path: Path, objects: dict[str, dict], name: str) -> str:
-    from opentide import OpenTide
+    from opentide import Opentide
 
-    OpenTide._index = {
+    Opentide._index = {
         "objects": {
             model_type: {
                 uuid: {"name": body["name"], "metadata": {"uuid": uuid}}
@@ -140,7 +140,7 @@ def _export_layer_text(tmp_path: Path, objects: dict[str, dict], name: str) -> s
         },
         "configurations": {"global": {"exports": {"attack_layer": name}}},
     }
-    OpenTide._initialised = True
+    Opentide._initialised = True
     layer = AttackNavigatorLayer()
     layer.EXPORT_FILE_PATH = tmp_path / name
     with patch(

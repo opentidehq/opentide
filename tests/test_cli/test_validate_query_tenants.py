@@ -231,7 +231,7 @@ def test_a_plan_whose_rules_reach_no_tenant_at_all_exits_2(
 
 def test_deploy_resolution_is_unchanged_outside_validation(repo: Path) -> None:
     """Only the read-only check reaches every tenant; FULL deploy targets stay as they were."""
-    from opentide.core.registry import OpenTide
+    from opentide.core.registry import Opentide
     from opentide.deployment import DeploymentStrategy, TideDeployment
     from opentide.deployment.planning import read_only_tenant_resolution
     from opentide.models.deployment_enums import DetectionPlatforms
@@ -241,7 +241,7 @@ def test_deploy_resolution_is_unchanged_outside_validation(repo: Path) -> None:
         _tenant("Staging", "STAGING", STAGING_WORKSPACE),
         _tenant("Production", "PRODUCTION", PRODUCTION_WORKSPACE),
     )
-    OpenTide.reload()
+    Opentide.reload()
 
     def _tenants() -> set[str]:
         deployment = TideDeployment(

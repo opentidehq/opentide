@@ -15,7 +15,7 @@ One install gets the CLI, the MCP server (`opentide mcp start`), all eight platf
 
 ## Recommended: an isolated environment
 
-Install OpenTide into a virtual environment so its dependencies never collide with other tools:
+Install opentide into a virtual environment so its dependencies never collide with other tools:
 
 <Tabs items={['venv + pip', 'uv']}>
 
@@ -90,7 +90,7 @@ Get-Command opentide -All
 where.exe opentide
 ```
 
-OpenTide does not ship or generate `opentide.bat`. Inspect any bat wrapper reported by these commands before using it; it may have been created by local tooling or an agent.
+opentide does not ship or generate `opentide.bat`. Inspect any bat wrapper reported by these commands before using it; it may have been created by local tooling or an agent.
 
 2. check the path is on:
 
@@ -165,12 +165,12 @@ These `--platform` values are built into the package:
 
 See [Platforms](./concepts/platforms.md) for deploy vs query-validation capabilities.
 
-## Contributing to OpenTide
+## Contributing to opentide
 
-To work on the [opentide](https://github.com/OpenTideHQ/opentide) package itself:
+To work on the [opentide](https://github.com/opentidehq/opentide) package itself:
 
 ```bash
-git clone https://github.com/OpenTideHQ/opentide.git
+git clone https://github.com/opentidehq/opentide.git
 cd opentide
 uv sync --group dev
 uv run pre-commit install --install-hooks

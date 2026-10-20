@@ -22,24 +22,24 @@ The project does not exist on PyPI yet. Do not register it by uploading a wheel 
 3. Add a **pending GitHub publisher** with these exact fields:
 
    - PyPI project name: `opentide`
-   - Owner: `opentidehq` (GitHub **login**, lowercase — not the display name `OpenTideHQ`)
+   - Owner: `opentidehq` (GitHub **login**, lowercase — not the display name `opentidehq`)
    - Repository name: `opentide`
    - Workflow name: `publish-pypi.yml` (filename only, no `.github/workflows/`)
    - Environment name: `pypi`
 
-4. The GitHub Environment `pypi` must exist on `OpenTideHQ/opentide` (Settings → Environments). Optional: required reviewers; optional URL `https://pypi.org/p/opentide`.
-5. Make `OpenTideHQ/opentide` **public** before the Release so PyPI source links resolve.
+4. The GitHub Environment `pypi` must exist on `opentidehq/opentide` (Settings → Environments). Optional: required reviewers; optional URL `https://pypi.org/p/opentide`.
+5. Make `opentidehq/opentide` **public** before the Release so PyPI source links resolve.
 6. Cut the Release (creates tag `v0.1.0` at `--target`). The tag **must** sit on the commit that contains `CHANGELOG.md` and `docs/usage/releases.md`, or the wheel’s long description and docs will lag the GitHub notes:
 
 ```bash
 gh release create v0.1.0 \
-  --repo OpenTideHQ/opentide \
+  --repo opentidehq/opentide \
   --target development \
   --title "0.1.0" \
   --notes-file .github/release-notes/v0.1.0.md
 ```
 
-7. Watch [Publish to PyPI](https://github.com/OpenTideHQ/opentide/actions/workflows/publish-pypi.yml). Approve the environment if reviewers are required.
+7. Watch [Publish to PyPI](https://github.com/opentidehq/opentide/actions/workflows/publish-pypi.yml). Approve the environment if reviewers are required.
 8. Confirm:
 
 ```bash
@@ -60,7 +60,7 @@ Cut a patch on `development` after the changelog and release notes land (example
 
 ```bash
 gh release create v0.1.8 \
-  --repo OpenTideHQ/opentide \
+  --repo opentidehq/opentide \
   --target development \
   --title "0.1.8" \
   --notes-file .github/release-notes/v0.1.8.md
@@ -68,17 +68,17 @@ gh release create v0.1.8 \
 
 The tag must sit on the merge commit that contains `CHANGELOG.md`, `docs/usage/releases.md`, and `.github/release-notes/v0.1.8.md`. Do not tag a feature branch.
 
-Do not pass `--latest=false` for the newest version; the default marks it Latest (check with `gh release list --repo OpenTideHQ/opentide --limit 3`).
+Do not pass `--latest=false` for the newest version; the default marks it Latest (check with `gh release list --repo opentidehq/opentide --limit 3`).
 
 **CDN delay:** for about 10–15 minutes after a successful upload, PyPI's CDN can serve stale data. `/pypi/opentide/json` is cached for 900 s and `/simple/opentide/` for 600 s. During that window `pip install opentide==0.1.8` can report "No matching distribution", or `https://pypi.org/pypi/opentide/0.1.8/json` can list only one of the two files. Wait, and install with `uv pip install --no-cache --index-url https://pypi.org/simple`. Do not retag or re-publish.
 
-After a successful upload, `publish-pypi.yml` dispatches `opentide-released` to [`OpenTideHQ/website`](https://github.com/OpenTideHQ/website) so docs, changelog pages, and specs rebuild immediately:
+After a successful upload, `publish-pypi.yml` dispatches `opentide-released` to [`opentidehq/website`](https://github.com/opentidehq/website) so docs, changelog pages, and specs rebuild immediately:
 
 ```bash
-gh api repos/OpenTideHQ/website/dispatches -f event_type=opentide-released
+gh api repos/opentidehq/website/dispatches -f event_type=opentide-released
 ```
 
-That call mints a token from `GH_APP_ID` / `GH_APP_KEY`, the secret names vocab-upstream also reads (set them on the `pypi` environment to use a separate App for publishing). The App must be installed on `OpenTideHQ/website` with **contents: write**, which `repository_dispatch` requires: an App with only `contents: read` mints a token and the dispatch then returns 403. If the secrets are missing, token minting fails, or the dispatch fails, publish still succeeds and the run ends with a **Website not notified** warning that names the cause. The website's hourly cron picks the docs change up; run the command above to rebuild sooner. The landing-page version number is fetched live from PyPI and does not wait on a rebuild.
+That call mints a token from `GH_APP_ID` / `GH_APP_KEY`, the secret names vocab-upstream also reads (set them on the `pypi` environment to use a separate App for publishing). The App must be installed on `opentidehq/website` with **contents: write**, which `repository_dispatch` requires: an App with only `contents: read` mints a token and the dispatch then returns 403. If the secrets are missing, token minting fails, or the dispatch fails, publish still succeeds and the run ends with a **Website not notified** warning that names the cause. The website's hourly cron picks the docs change up; run the command above to rebuild sooner. The landing-page version number is fetched live from PyPI and does not wait on a rebuild.
 
 Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https://test.pypi.org/manage/account/publishing/) with the same GitHub fields (and a `testpypi` environment if you add one). Production `publish-pypi.yml` targets pypi.org only.
 
@@ -91,7 +91,7 @@ Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https
 - `'2.5' is not a valid metadata version`: hatchling defaulted to Core Metadata 2.5. This repo pins `core-metadata-version = "2.4"` on sdist/wheel. Confirm `uvx twine check dist/*` is clean before tagging.
 - `ModuleNotFoundError: No module named 'hatch'` during **Build package**: `hatch build` isolated envs (hatch 1.18.1 / hatchling 1.32.1) import `hatch` from `BinaryBuilder`. Publish uses `uv build` like CI. A `v*` tag cut before that change still runs the old workflow on `release: published` (converting the Release to draft and back does not pick up `development`). From `development`, re-run without moving the tag:
   ```bash
-  gh api repos/OpenTideHQ/opentide/dispatches \
+  gh api repos/opentidehq/opentide/dispatches \
     -f event_type=publish-pypi \
     -f client_payload[checkout_ref]=v0.x.y
   ```

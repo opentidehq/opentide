@@ -1,11 +1,11 @@
 ---
 title: Glossary
-description: Definitions for the OpenTide terms and acronyms used throughout the docs.
+description: Definitions for the opentide terms and acronyms used throughout the docs.
 ---
 
 # Glossary
 
-The terms and acronyms you will meet across the OpenTide docs, defined once. Where a concept has a deeper page, it is linked.
+The terms and acronyms you will meet across the opentide docs, defined once. Where a concept has a deeper page, it is linked.
 
 ## Objects and content
 
@@ -42,12 +42,12 @@ The terms and acronyms you will meet across the OpenTide docs, defined once. Whe
 : The stable identifier for an object. Cross-object references use UUIDs, so renaming or moving files never breaks the graph.
 
 **Vocabulary**
-: A canonical, controlled list of allowed values for a field (e.g. severities, ATT&CK techniques, TLP levels), published in the [specifications](/docs/specifications/specs/vocabularies/catalog/) and bundled with OpenTide.
+: A canonical, controlled list of allowed values for a field (e.g. severities, ATT&CK techniques, TLP levels), published in the [specifications](/docs/specifications/specs/vocabularies/catalog/) and bundled with opentide.
 
 ## Deployment and operations
 
 **Platform**
-: A SIEM or EDR target OpenTide deploys to (e.g. Sentinel, Splunk, CrowdStrike). Some platforms also support query validation. See [Platforms](./platforms.md).
+: A SIEM or EDR target opentide deploys to (e.g. Sentinel, Splunk, CrowdStrike). Some platforms also support query validation. See [Platforms](./platforms.md).
 
 **Status**
 : A rule's deployment state, e.g. `STAGING` or `PRODUCTION`. Deployment respects status and your promotion configuration.
@@ -79,13 +79,13 @@ The terms and acronyms you will meet across the OpenTide docs, defined once. Whe
 : `opentide generate docs` — render human wiki pages from loaded objects. See [`generate docs`](../../cli/generate.md).
 
 **Registry**
-: The in-memory index of loaded objects and generated artifacts that the SDK exposes (`OpenTide.Rules`, `OpenTide.Objectives`, …). See [SDK registry](../../sdk/registry.md).
+: The in-memory index of loaded objects and generated artifacts that the SDK exposes (`Opentide.Rules`, `Opentide.Objectives`, …). See [SDK registry](../../sdk/registry.md).
 
 **MCP (Model Context Protocol)**
-: The protocol OpenTide's agent server speaks, exposing tools and resources to AI editors. See [MCP](../../mcp/index.md).
+: The protocol opentide's agent server speaks, exposing tools and resources to AI editors. See [MCP](../../mcp/index.md).
 
 **SDK**
-: The Python API (`from opentide import OpenTide`) for embedding the engine in your own code. See [SDK](../../sdk/index.md).
+: The Python API (`from opentide import Opentide`) for embedding the engine in your own code. See [SDK](../../sdk/index.md).
 
 **CoreTide**
-: The predecessor to OpenTide, distributed via git submodules. Migrating from it? See the [migration guide](../migration/index.md).
+: The predecessor to opentide, distributed via git submodules. Migrating from it? See the [migration guide](../migration/index.md).

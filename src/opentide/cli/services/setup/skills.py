@@ -1,4 +1,4 @@
-"""Agent skills install from the live OpenTideHQ/skills catalogue."""
+"""Agent skills install from the live opentidehq/skills catalogue."""
 
 from __future__ import annotations
 

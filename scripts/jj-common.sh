@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared jj helpers for OpenTide scripts.
+# Shared jj helpers for opentide scripts.
 set -euo pipefail
 
 # Resolve jj repo root: prefer .jj in the current checkout (incl. git worktrees).

@@ -38,7 +38,7 @@ def test_skills_discover_human_table(invoke_cli, tide_corpus_repo) -> None:
     assert result.exit_code == 0, result.stdout + result.stderr
     combined = result.stdout + result.stderr
     assert "DEPRECATED" not in combined
-    assert "opentide-detection-rule" in combined or "OpenTide Skills" in combined
+    assert "opentide-detection-rule" in combined or "opentide Skills" in combined
 
 
 def test_skills_show_json(invoke_cli, tide_corpus_repo) -> None:

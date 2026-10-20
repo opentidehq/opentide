@@ -24,7 +24,7 @@ def test_build_revisions_export_collects_versions() -> None:
             }
         }
     }
-    with patch.object(revisions_export, "OpenTide") as mock_ot:
+    with patch.object(revisions_export, "Opentide") as mock_ot:
         mock_ot.initialise.return_value = None
         mock_ot.Configurations.Documentation.object_names = {"rule": "Detection Rules"}
         mock_ot.Configurations.Global.objects = ["rule"]
@@ -51,7 +51,7 @@ def test_build_revisions_export_stringifies_native_dates() -> None:
             }
         }
     }
-    with patch.object(revisions_export, "OpenTide") as mock_ot:
+    with patch.object(revisions_export, "Opentide") as mock_ot:
         mock_ot.initialise.return_value = None
         mock_ot.Configurations.Documentation.object_names = {"rule": "Detection Rules"}
         mock_ot.Configurations.Global.objects = ["rule"]
@@ -71,7 +71,7 @@ def test_description_helpers_for_object_types() -> None:
 def test_run_writes_export_file(tmp_path) -> None:
     export_dir = tmp_path / "exports"
     export_dir.mkdir()
-    with patch.object(revisions_export, "OpenTide") as mock_ot:
+    with patch.object(revisions_export, "Opentide") as mock_ot:
         mock_ot.initialise.return_value = None
         mock_ot.Configurations.Global.exports.revisions = "revisions.export.json"
         mock_ot.Configurations.Global.Paths.Tide.exports = str(export_dir)

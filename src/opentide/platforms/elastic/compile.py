@@ -1,4 +1,4 @@
-"""Compile OpenTide DetectionRule objects into Elastic Security Detection Engine format."""
+"""Compile opentide DetectionRule objects into Elastic Security Detection Engine format."""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ def compile_rule(
     rule: DetectionRule | dict[str, Any],
     tenant_config: ConfigurationModels.Systems.Elastic.Tenant | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Compile an OpenTide rule into an Elastic Security detection engine rule body."""
+    """Compile an opentide rule into an Elastic Security detection engine rule body."""
     # Convert DetectionRule to dictionary representation if needed
     if isinstance(rule, DetectionRule):
         # Unset optional keys must stay absent, as in the YAML, so that every

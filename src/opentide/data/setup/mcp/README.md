@@ -1,6 +1,6 @@
-# OpenTide MCP — generic install notes
+# opentide MCP — generic install notes
 
-Install OpenTide (includes the MCP server):
+Install opentide (includes the MCP server):
 
 ```bash
 pip install opentide

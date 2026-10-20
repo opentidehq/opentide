@@ -180,7 +180,7 @@ def mcp_stdio(tmp_path: Path) -> Iterator[StdioClient]:
 def test_initialize_handshake(mcp_stdio: StdioClient) -> None:
     result = mcp_stdio.handshake()["result"]
     assert result["protocolVersion"] == PROTOCOL_VERSION
-    assert result["serverInfo"]["name"] == "OpenTide"
+    assert result["serverInfo"]["name"] == "opentide"
     assert "tools" in result["capabilities"]
 
 
@@ -292,4 +292,4 @@ def test_content_length_headers_are_reported_as_protocol_errors(tmp_path: Path) 
     ]
     assert errors, "header frames should be reported as protocol errors"
     responses = [frame for frame in frames if frame.get("id") == 1]
-    assert responses and responses[0]["result"]["serverInfo"]["name"] == "OpenTide"
+    assert responses and responses[0]["result"]["serverInfo"]["name"] == "opentide"

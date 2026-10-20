@@ -1,5 +1,5 @@
 
-"""Import Defender for Endpoint custom detection rules into OpenTide YAML.
+"""Import Defender for Endpoint custom detection rules into opentide YAML.
 
 Run through ``opentide generate extract defender``. Importing this module has no
 side effects: it used to build a Tenant with an empty ``deployment`` at module
@@ -9,7 +9,7 @@ scope, which raised ``KeyError: ''`` before the CLI could report anything.
 from pathlib import Path
 
 from opentide.core.logging import get_logger
-from opentide.core.registry import OpenTide
+from opentide.core.registry import Opentide
 from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService
 from opentide.platforms.enabled import enable_platform_command
 from opentide.states.deployment import record_external_id
@@ -223,7 +223,7 @@ def _render_rule(rule) -> tuple[str, str]:
 
 
 def _import_defender_rules() -> None:
-    tenants = OpenTide.Configurations.Systems.DefenderForEndpoint.tenants
+    tenants = Opentide.Configurations.Systems.DefenderForEndpoint.tenants
     if not tenants:
         logger.critical(
             "defender_tenants_not_configured",

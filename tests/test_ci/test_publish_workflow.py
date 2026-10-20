@@ -180,7 +180,7 @@ def test_website_warning_names_the_reason_and_the_manual_dispatch(
     warning = result.stdout.splitlines()[0]
     assert warning.startswith("::warning title=Website not notified::v9.9.9 is on PyPI")
     assert reason in warning
-    assert "gh api repos/OpenTideHQ/website/dispatches" in result.stdout
+    assert "gh api repos/opentidehq/website/dispatches" in result.stdout
     assert "event_type=opentide-released" in result.stdout
 
 

@@ -1,17 +1,17 @@
 ---
 title: Troubleshooting
-description: Common OpenTide failures — validation errors, generation drift, platform loading, and deployment — with fixes.
+description: Common opentide failures — validation errors, generation drift, platform loading, and deployment — with fixes.
 ---
 
 # Troubleshooting
 
-The failures you are most likely to hit, why they happen, and how to fix them. If your problem is a genuine bug, open an issue on [opentide](https://github.com/OpenTideHQ/opentide/issues).
+The failures you are most likely to hit, why they happen, and how to fix them. If your problem is a genuine bug, open an issue on [opentide](https://github.com/opentidehq/opentide/issues).
 
 ## Setup and paths
 
 ### `Could not resolve repository root` / objects not found
 
-OpenTide does not know where your content lives. Set the repo root explicitly:
+opentide does not know where your content lives. Set the repo root explicitly:
 
 ```bash
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
@@ -23,7 +23,7 @@ See [Installation → environment variables](./installation.md#environment-varia
 
 ### `validate --strict` passes with 0 objects from `objects/rules` or a monorepo subdirectory
 
-Through `0.5.0` root discovery walked up for `.git` only. Outside git, from `objects/rules`, the current directory itself became the root; in a workspace kept below a larger checkout (`monorepo/detections/`), the checkout root did. Neither holds `objects/`, so `info` counted nothing, every platform showed as disabled, and `validate --strict` passed having checked no objects. Releases after `0.5.0` walk up to the nearest `.opentide/` or `objects/` without leaving the git checkout ([#294](https://github.com/OpenTideHQ/opentide/issues/294)); see [Repository root resolution](../cli/global-options.md#repository-root-resolution). A `validate` run that still finds nothing names the directory it looked in. On `0.5.0`, run from the workspace root or pass it explicitly:
+Through `0.5.0` root discovery walked up for `.git` only. Outside git, from `objects/rules`, the current directory itself became the root; in a workspace kept below a larger checkout (`monorepo/detections/`), the checkout root did. Neither holds `objects/`, so `info` counted nothing, every platform showed as disabled, and `validate --strict` passed having checked no objects. Releases after `0.5.0` walk up to the nearest `.opentide/` or `objects/` without leaving the git checkout ([#294](https://github.com/opentidehq/opentide/issues/294)); see [Repository root resolution](../cli/global-options.md#repository-root-resolution). A `validate` run that still finds nothing names the directory it looked in. On `0.5.0`, run from the workspace root or pass it explicitly:
 
 ```bash
 opentide --repo /path/to/detections validate --strict
@@ -61,11 +61,11 @@ opentide setup skills discover
 opentide setup skills --generic --yes
 ```
 
-Use `--path` / `-C` for the repository root. Catalogue discovery reads the live [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) `manifest.json`. The four authoring skills are then copied from the package; other skills need the GitHub tree.
+Use `--path` / `-C` for the repository root. Catalogue discovery reads the live [opentidehq/skills](https://github.com/opentidehq/skills) `manifest.json`. The four authoring skills are then copied from the package; other skills need the GitHub tree.
 
 ### `setup skills` warns that the remote catalogue is unavailable
 
-`opentide setup skills` fetches `manifest.json` from GitHub. The four authoring skills are copied from the package. Other skills are the full tree under `skills/<slug>/`. `AGENTS.md` is rendered from the package template. If you see `Could not fetch skills catalogue from OpenTideHQ/skills@main`, check network access and that [OpenTideHQ/skills](https://github.com/OpenTideHQ/skills) is publicly reachable, then retry:
+`opentide setup skills` fetches `manifest.json` from GitHub. The four authoring skills are copied from the package. Other skills are the full tree under `skills/<slug>/`. `AGENTS.md` is rendered from the package template. If you see `Could not fetch skills catalogue from opentidehq/skills@main`, check network access and that [opentidehq/skills](https://github.com/opentidehq/skills) is publicly reachable, then retry:
 
 ```bash
 opentide setup skills discover --refresh
@@ -244,7 +244,7 @@ opentide generate
 opentide validate --strict
 ```
 
-Run [`generate`](../cli/generate.md) after cloning a repo, after upgrading the OpenTide package, and whenever schema revisions change.
+Run [`generate`](../cli/generate.md) after cloning a repo, after upgrading the opentide package, and whenever schema revisions change.
 
 ### Editor stopped validating YAML / "Matches multiple schemas"
 
@@ -316,7 +316,7 @@ opentide --json validate
 
 ### `unknown schema identifier` / object won't load
 
-`metadata.schema` must be a registered identifier such as `rule::1.0` or `rule::1.1`. A typo (`rule:1.0`, `rule::1`, `rules::1.0`) means no model matches. Fix the value; the valid identifiers are `threat::1.0`, `objective::1.0`, `rule::1.0`, and `rule::1.1`. `metadata.reviewed` is valid only on `rule::1.1`. A `schema_missing` issue means the file has no `metadata.schema` at all: add the identifier the object follows, because OpenTide does not assume the newest revision. See [Schema revision](./concepts/schema-revision.md).
+`metadata.schema` must be a registered identifier such as `rule::1.0` or `rule::1.1`. A typo (`rule:1.0`, `rule::1`, `rules::1.0`) means no model matches. Fix the value; the valid identifiers are `threat::1.0`, `objective::1.0`, `rule::1.0`, and `rule::1.1`. `metadata.reviewed` is valid only on `rule::1.1`. A `schema_missing` issue means the file has no `metadata.schema` at all: add the identifier the object follows, because opentide does not assume the newest revision. See [Schema revision](./concepts/schema-revision.md).
 
 ### Threat `impact` / `leverage`: `Input should be a valid string`, `must be a YAML list`, or `packs several vocabulary names`
 
@@ -369,7 +369,7 @@ See [Exit codes](../cli/exit-codes.md).
 
 ### `supported: false` for a platform
 
-CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and OpenTide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
+CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and opentide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
 
 ### MCP `validate_query` refuses
 
@@ -404,31 +404,31 @@ Verify with `opentide info --platform sentinel`. See [Configuration → enabling
 
 ### Deploy fails with an authentication error
 
-Credentials are missing or wrong. OpenTide reads them from your platform TOML, typically via environment variables. Confirm the variables are set in your shell (or CI secrets) and match the keys the platform expects (`opentide info --platform <name>`). Never commit secrets — see [Configuration → credentials](./configuration.md#credentials).
+Credentials are missing or wrong. opentide reads them from your platform TOML, typically via environment variables. Confirm the variables are set in your shell (or CI secrets) and match the keys the platform expects (`opentide info --platform <name>`). Never commit secrets — see [Configuration → credentials](./configuration.md#credentials).
 
 ### `deploy` exits with `[Errno 2] No such file or directory`
 
-Through **0.5.0**, `deploy` required `objects/rules/` to exist. A fresh clone has no such folder until the first rule is committed, so the command exited `1` with `Errno 2`. **0.6.0** reports `skipped` with exit `0` and contacts no platform ([#300](https://github.com/OpenTideHQ/opentide/issues/300)).
+Through **0.5.0**, `deploy` required `objects/rules/` to exist. A fresh clone has no such folder until the first rule is committed, so the command exited `1` with `Errno 2`. **0.6.0** reports `skipped` with exit `0` and contacts no platform ([#300](https://github.com/opentidehq/opentide/issues/300)).
 
 ### `deploy` or `validate query --live` says a platform has no tenants
 
-`setup repo` enables a platform and leaves the `[[tenants]]` example commented out. **0.6.0** stops a real `deploy` and a `--live` query check before any engine loads, and names the file to edit. `--dry-run` still previews payloads and warns that a real deploy would stop ([#314](https://github.com/OpenTideHQ/opentide/issues/314)). Uncomment a `[[tenants]]` entry in `.opentide/configurations/platforms/<platform>.toml`.
+`setup repo` enables a platform and leaves the `[[tenants]]` example commented out. **0.6.0** stops a real `deploy` and a `--live` query check before any engine loads, and names the file to edit. `--dry-run` still previews payloads and warns that a real deploy would stop ([#314](https://github.com/opentidehq/opentide/issues/314)). Uncomment a `[[tenants]]` entry in `.opentide/configurations/platforms/<platform>.toml`.
 
 ### `WARNING` names rule files in subfolders of `objects/rules`
 
-A rule file has to sit directly in `objects/rules/`. A file in a subdirectory is outside the rule catalogue and is not deployed. **0.6.0** warns and names the files it skipped ([#300](https://github.com/OpenTideHQ/opentide/issues/300)). Move a rule up into `objects/rules/` to deploy it.
+A rule file has to sit directly in `objects/rules/`. A file in a subdirectory is outside the rule catalogue and is not deployed. **0.6.0** warns and names the files it skipped ([#300](https://github.com/opentidehq/opentide/issues/300)). Move a rule up into `objects/rules/` to deploy it.
 
 ### `--promotion` or `--promotion-target` does not change what `deploy` promotes
 
-Through **0.5.0** those flags were accepted and ignored, so `deploy` kept promoting to `PRODUCTION`. **0.6.0** writes them when the same command also generates CI ([#307](https://github.com/OpenTideHQ/opentide/issues/307)). A plain `opentide setup --no-promotion` or `--promotion-target`, without `--ci`, still ignored them. **0.6.1** writes the `[promotion]` table on that command too ([#325](https://github.com/OpenTideHQ/opentide/issues/325)). Omitting the flags keeps the file as it is. An explicit flag that disagrees with an existing table exits `2` and writes nothing.
+Through **0.5.0** those flags were accepted and ignored, so `deploy` kept promoting to `PRODUCTION`. **0.6.0** writes them when the same command also generates CI ([#307](https://github.com/opentidehq/opentide/issues/307)). A plain `opentide setup --no-promotion` or `--promotion-target`, without `--ci`, still ignored them. **0.6.1** writes the `[promotion]` table on that command too ([#325](https://github.com/opentidehq/opentide/issues/325)). Omitting the flags keeps the file as it is. An explicit flag that disagrees with an existing table exits `2` and writes nothing.
 
 ### CI `STAGING` or `PRODUCTION` deploys none of the changed rules
 
-Through **0.6.0** a CI diff plan matched changed paths against an absolute rules directory, so a repo-relative change such as `objects/rules/rule.yaml` was left out and the plan deployed nothing for it. **0.6.1** includes a changed file that sits directly in `objects/rules/` ([#318](https://github.com/OpenTideHQ/opentide/issues/318)). A file in a subdirectory stays out of the plan; the warning names it.
+Through **0.6.0** a CI diff plan matched changed paths against an absolute rules directory, so a repo-relative change such as `objects/rules/rule.yaml` was left out and the plan deployed nothing for it. **0.6.1** includes a changed file that sits directly in `objects/rules/` ([#318](https://github.com/opentidehq/opentide/issues/318)). A file in a subdirectory stays out of the plan; the warning names it.
 
 ### CI diff plan crashes with `encode`, `KeyError`, `Invalid object name`, or `list index out of range`
 
-Through **0.6.2** several CI diff arms still leaked an exception after the GitLab base and GitHub pull-request-ref fixes. **0.6.3** still exits `1`. The message is a sentence ([#339](https://github.com/OpenTideHQ/opentide/issues/339)):
+Through **0.6.2** several CI diff arms still leaked an exception after the GitLab base and GitHub pull-request-ref fixes. **0.6.3** still exits `1`. The message is a sentence ([#339](https://github.com/opentidehq/opentide/issues/339)):
 
 - An unset tip SHA names `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION`.
 - Azure `STAGING` without `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME` names those variables, before it fetches `origin`.
@@ -438,23 +438,23 @@ Through **0.6.2** several CI diff arms still leaked an exception after the GitLa
 
 ### GitLab `STAGING` or `PRODUCTION` crashes with `lookup_ref`
 
-Through **0.6.1** a GitLab diff plan whose base SHA was unset (`CI_MERGE_REQUEST_DIFF_BASE_SHA` or `CI_COMMIT_BEFORE_SHA`) or not in the checkout walked `origin/main` through Dulwich `Repo.lookup_ref` and exited `1` with `FATAL: 'Repo' object has no attribute 'lookup_ref'`. **0.6.2** still exits `1`, with `No Source Commit Found`. The same command succeeds when both SHAs are in the checkout ([#333](https://github.com/OpenTideHQ/opentide/issues/333)). Set the base variable GitLab provides for that pipeline, and check the job out with enough history for that commit to be present.
+Through **0.6.1** a GitLab diff plan whose base SHA was unset (`CI_MERGE_REQUEST_DIFF_BASE_SHA` or `CI_COMMIT_BEFORE_SHA`) or not in the checkout walked `origin/main` through Dulwich `Repo.lookup_ref` and exited `1` with `FATAL: 'Repo' object has no attribute 'lookup_ref'`. **0.6.2** still exits `1`, with `No Source Commit Found`. The same command succeeds when both SHAs are in the checkout ([#333](https://github.com/opentidehq/opentide/issues/333)). Set the base variable GitLab provides for that pipeline, and check the job out with enough history for that commit to be present.
 
 ### GitHub `STAGING` asks for Azure pull-request variables
 
-Through **0.6.1** a GitHub Actions `STAGING` plan without `GITHUB_HEAD_REF` and `GITHUB_BASE_REF` exited `1` after asking for `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME`, then `FATAL: KeyError while compiling the deployment plan`. **0.6.2** still exits `1`. The message names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF` ([#334](https://github.com/OpenTideHQ/opentide/issues/334)). Run the plan from a pull-request workflow, which sets those variables. An Azure pipeline still names the Azure variables it reads.
+Through **0.6.1** a GitHub Actions `STAGING` plan without `GITHUB_HEAD_REF` and `GITHUB_BASE_REF` exited `1` after asking for `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME`, then `FATAL: KeyError while compiling the deployment plan`. **0.6.2** still exits `1`. The message names `GITHUB_HEAD_REF` and `GITHUB_BASE_REF` ([#334](https://github.com/opentidehq/opentide/issues/334)). Run the plan from a pull-request workflow, which sets those variables. An Azure pipeline still names the Azure variables it reads.
 
 ### `deploy --plan STAGING` says no git repository was found at `None`
 
-Through **0.6.0** a `STAGING` or `PRODUCTION` plan with `GITHUB_ACTIONS`, `CI`, or `TF_BUILD` set and no checkout exited `1` with `FATAL: No git repository was found at None`. **0.6.1** still exits `1`. The message names the plan and the directory it searched, and points at `--plan FULL`. `FULL` does not need a checkout ([#310](https://github.com/OpenTideHQ/opentide/issues/310)). Run the command inside the repository, or use `FULL` when every top-level rule should be planned.
+Through **0.6.0** a `STAGING` or `PRODUCTION` plan with `GITHUB_ACTIONS`, `CI`, or `TF_BUILD` set and no checkout exited `1` with `FATAL: No git repository was found at None`. **0.6.1** still exits `1`. The message names the plan and the directory it searched, and points at `--plan FULL`. `FULL` does not need a checkout ([#310](https://github.com/opentidehq/opentide/issues/310)). Run the command inside the repository, or use `FULL` when every top-level rule should be planned.
 
 ### `setup --path .` writes the scaffold at the git root
 
-Through **0.6.0**, `opentide setup --path .` run from a subdirectory of a git checkout scaffolded the git root, because the discovered root was treated as `--repo`. **0.6.1** scaffolds the working directory ([#324](https://github.com/OpenTideHQ/opentide/issues/324)). Pass `--repo` explicitly when the scaffold should land somewhere else.
+Through **0.6.0**, `opentide setup --path .` run from a subdirectory of a git checkout scaffolded the git root, because the discovered root was treated as `--repo`. **0.6.1** scaffolds the working directory ([#324](https://github.com/opentidehq/opentide/issues/324)). Pass `--repo` explicitly when the scaffold should land somewhere else.
 
 ### `setup --ci` ignores `--default-branch` or hides CI warnings
 
-Through **0.5.0** only `setup ci` accepted `--default-branch`, and a repository whose only branch was not `main` could get a pipeline that fetched and deployed `main`. The one-shot `setup --ci` also dropped the warnings `setup ci` printed. **0.6.0** accepts the flag on both forms and prints the same warnings ([#288](https://github.com/OpenTideHQ/opentide/issues/288), [#308](https://github.com/OpenTideHQ/opentide/issues/308)). Regenerate with `opentide setup ci <github|gitlab|azure> --yes`.
+Through **0.5.0** only `setup ci` accepted `--default-branch`, and a repository whose only branch was not `main` could get a pipeline that fetched and deployed `main`. The one-shot `setup --ci` also dropped the warnings `setup ci` printed. **0.6.0** accepts the flag on both forms and prints the same warnings ([#288](https://github.com/opentidehq/opentide/issues/288), [#308](https://github.com/opentidehq/opentide/issues/308)). Regenerate with `opentide setup ci <github|gitlab|azure> --yes`.
 
 ### `deploy metadata` fails with "not implemented"
 
@@ -468,23 +468,23 @@ opentide deploy metadata --platform splunk
 FATAL: Metadata deployment is not implemented for splunk
 ```
 
-With `--json` it prints one document with `"ok": false` and the same message. Remove the step from your pipeline; lookup tables are not deployed by OpenTide yet. See [`deploy metadata`](../cli/deploy.md#deploy-metadata).
+With `--json` it prints one document with `"ok": false` and the same message. Remove the step from your pipeline; lookup tables are not deployed by opentide yet. See [`deploy metadata`](../cli/deploy.md#deploy-metadata).
 
 ### `generate` exits 1 with an empty JSON body
 
-Through **0.6.3** a rule whose `detection_model` UUID is not in the catalogue made `generate` exit `1` with empty stdout and a traceback ending in a bare `Exception`. **0.6.4** still exits `1`. `--json` returns one document whose `message` names the missing UUID and `detection_model` ([#352](https://github.com/OpenTideHQ/opentide/issues/352)). Add the objective (and its threat) to the catalogue, or point `detection_model` at one that exists. `generate inflight` on that tree still exits `0`.
+Through **0.6.3** a rule whose `detection_model` UUID is not in the catalogue made `generate` exit `1` with empty stdout and a traceback ending in a bare `Exception`. **0.6.4** still exits `1`. `--json` returns one document whose `message` names the missing UUID and `detection_model` ([#352](https://github.com/opentidehq/opentide/issues/352)). Add the objective (and its threat) to the catalogue, or point `detection_model` at one that exists. `generate inflight` on that tree still exits `0`.
 
 ### MCP `deploy_rule` crashes or marks an undeployed rule deployed
 
-Through **0.6.3** an unknown platform crashed with `KeyError`, and a config with no `external_id` and no tenants was reported as deployed. **0.6.4** returns a structured failure for an unknown platform and for a platform with no tenants. `deployment_status` sets `deployed` to false in that case ([#345](https://github.com/OpenTideHQ/opentide/issues/345)).
+Through **0.6.3** an unknown platform crashed with `KeyError`, and a config with no `external_id` and no tenants was reported as deployed. **0.6.4** returns a structured failure for an unknown platform and for a platform with no tenants. `deployment_status` sets `deployed` to false in that case ([#345](https://github.com/opentidehq/opentide/issues/345)).
 
 ### `--json setup` says it would write to `..`
 
-Through **0.6.3** a target of `.` was printed without quotes, so the trailing period made the path look like `..`. **0.6.4** quotes the path ([#346](https://github.com/OpenTideHQ/opentide/issues/346)).
+Through **0.6.3** a target of `.` was printed without quotes, so the trailing period made the path look like `..`. **0.6.4** quotes the path ([#346](https://github.com/opentidehq/opentide/issues/346)).
 
 ### GitHub production deploy is skipped
 
-Through **0.6.3** the generated production job needed `deploy_staging`, and staging runs only on a pull request, so a push to the default branch skipped production. **0.6.4** needs `generate` and still runs only on a push to the default branch ([#348](https://github.com/OpenTideHQ/opentide/issues/348)). Deploy jobs also fetch full history, so a depth-1 checkout no longer exits `1` with a bare parent SHA. Regenerate:
+Through **0.6.3** the generated production job needed `deploy_staging`, and staging runs only on a pull request, so a push to the default branch skipped production. **0.6.4** needs `generate` and still runs only on a push to the default branch ([#348](https://github.com/opentidehq/opentide/issues/348)). Deploy jobs also fetch full history, so a depth-1 checkout no longer exits `1` with a bare parent SHA. Regenerate:
 
 ```bash
 pip install 'opentide==0.16.0'
@@ -495,31 +495,31 @@ GitLab and Azure use the same full-history checkout on their deploy jobs. The Gi
 
 ### Explorer pages on GitLab or Azure write no job
 
-Through **0.6.3** setup accepted Explorer pages for GitLab and Azure, wrote no job, and printed no warning. **0.6.4** offers that choice only for GitHub. On GitLab or Azure the command exits `0` and warns that Explorer pages were not written ([#347](https://github.com/OpenTideHQ/opentide/issues/347)).
+Through **0.6.3** setup accepted Explorer pages for GitLab and Azure, wrote no job, and printed no warning. **0.6.4** offers that choice only for GitHub. On GitLab or Azure the command exits `0` and warns that Explorer pages were not written ([#347](https://github.com/opentidehq/opentide/issues/347)).
 
 ### `setup --ci none` reports success and writes nothing
 
-Through **0.6.3** `setup --yes --ci none` exited `0` with `Setup complete` and an empty `steps` list. **0.6.4** scaffolds the repository and writes no pipeline ([#349](https://github.com/OpenTideHQ/opentide/issues/349)). `setup ci` accepts `github`, `gitlab`, or `azure`. CI-only flags without one of those platforms are named in warnings.
+Through **0.6.3** `setup --yes --ci none` exited `0` with `Setup complete` and an empty `steps` list. **0.6.4** scaffolds the repository and writes no pipeline ([#349](https://github.com/opentidehq/opentide/issues/349)). `setup ci` accepts `github`, `gitlab`, or `azure`. CI-only flags without one of those platforms are named in warnings.
 
 ### Re-running setup replaces README, gitignore, or platform comments
 
-Through **0.6.3** `setup --platform` replaced `README.md` and `.gitignore`, and `setup platforms` rewrote an existing platform toml and dropped comments. **0.6.4** keeps those files when they already exist ([#350](https://github.com/OpenTideHQ/opentide/issues/350)). The first scaffold still creates them. `setup ci` still replaces the workflow.
+Through **0.6.3** `setup --platform` replaced `README.md` and `.gitignore`, and `setup platforms` rewrote an existing platform toml and dropped comments. **0.6.4** keeps those files when they already exist ([#350](https://github.com/opentidehq/opentide/issues/350)). The first scaffold still creates them. `setup ci` still replaces the workflow.
 
 ### `lint --fix` reports metadata on the old filename
 
-Through **0.6.3** `lint --fix` renamed a threat file and the metadata finding in the same run still named the old path. **0.6.4** rewrites that finding onto the new path. A second `--fix` does not rename the file again ([#353](https://github.com/OpenTideHQ/opentide/issues/353)).
+Through **0.6.3** `lint --fix` renamed a threat file and the metadata finding in the same run still named the old path. **0.6.4** rewrites that finding onto the new path. A second `--fix` does not rename the file again ([#353](https://github.com/opentidehq/opentide/issues/353)).
 
 ### `validate` exits 0 when an object YAML has no `uuid`
 
-Through **0.7.0** a rule, objective, or threat file with no `uuid` did not fail the schema check, so `opentide validate` exited 0. **0.8.0** fails that file. The schema check reports `missing_uuid`. An empty catalogue still exits 0 ([#397](https://github.com/OpenTideHQ/opentide/issues/397)). Add a uuid and re-run `opentide validate --strict`.
+Through **0.7.0** a rule, objective, or threat file with no `uuid` did not fail the schema check, so `opentide validate` exited 0. **0.8.0** fails that file. The schema check reports `missing_uuid`. An empty catalogue still exits 0 ([#397](https://github.com/opentidehq/opentide/issues/397)). Add a uuid and re-run `opentide validate --strict`.
 
 ### `deploy --plan STAGING` crashes with `list index out of range`
 
-Through **0.7.0** a GitHub or Azure pull-request checkout (detached `HEAD`) died inside the git fetch with `list index out of range` ([#402](https://github.com/OpenTideHQ/opentide/issues/402), [#415](https://github.com/OpenTideHQ/opentide/issues/415)). **0.8.0** fetches `origin` by name. A missing ref still exits 1 with `Could not find git ref`.
+Through **0.7.0** a GitHub or Azure pull-request checkout (detached `HEAD`) died inside the git fetch with `list index out of range` ([#402](https://github.com/opentidehq/opentide/issues/402), [#415](https://github.com/opentidehq/opentide/issues/415)). **0.8.0** fetches `origin` by name. A missing ref still exits 1 with `Could not find git ref`.
 
 ### The inflight prune job fails because `.opentide/inflight` was never committed
 
-Through **0.7.0** the generated prune job ran `git add .opentide/inflight/` and exited 128 when that directory was absent. **0.8.0** creates the directory first ([#403](https://github.com/OpenTideHQ/opentide/issues/403)). Regenerate:
+Through **0.7.0** the generated prune job ran `git add .opentide/inflight/` and exited 128 when that directory was absent. **0.8.0** creates the directory first ([#403](https://github.com/opentidehq/opentide/issues/403)). Regenerate:
 
 ```bash
 pip install 'opentide==0.16.0'
@@ -530,27 +530,27 @@ GitLab and Azure use the same step.
 
 ### Generated CI stays green when lint fails, or fails with no tenants
 
-Through **0.7.0** generated validate did not pass `--strict`, and lint was not a gate, so a misnamed file stayed green. Deploy also failed while every `[[tenants]]` block was still commented out ([#408](https://github.com/OpenTideHQ/opentide/issues/408), [#409](https://github.com/OpenTideHQ/opentide/issues/409)). **0.8.0** runs `opentide validate --strict` and `opentide lint --strict`. Deploy previews with `--dry-run`, then runs `opentide deploy --plan <PLAN> --skip-unconfigured`. That flag exits 0 only when every platform in the plan has no tenants. A mix still fails with `Cannot deploy:`. Regenerate the pipeline. GitHub deploy jobs map each bundled credential name from `secrets`.
+Through **0.7.0** generated validate did not pass `--strict`, and lint was not a gate, so a misnamed file stayed green. Deploy also failed while every `[[tenants]]` block was still commented out ([#408](https://github.com/opentidehq/opentide/issues/408), [#409](https://github.com/opentidehq/opentide/issues/409)). **0.8.0** runs `opentide validate --strict` and `opentide lint --strict`. Deploy previews with `--dry-run`, then runs `opentide deploy --plan <PLAN> --skip-unconfigured`. That flag exits 0 only when every platform in the plan has no tenants. A mix still fails with `Cannot deploy:`. Regenerate the pipeline. GitHub deploy jobs map each bundled credential name from `secrets`.
 
 ### Azure Pipelines reports `No pool was specified`
 
-Through **0.7.0** `opentide setup ci azure` wrote no `pool`, so Azure Repos refused the file. `pr:` is ignored on Azure Repos Git, so a pull request never set `Build.Reason` ([#398](https://github.com/OpenTideHQ/opentide/issues/398)). **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy. Regenerate with `opentide setup ci azure --yes`.
+Through **0.7.0** `opentide setup ci azure` wrote no `pool`, so Azure Repos refused the file. `pr:` is ignored on Azure Repos Git, so a pull request never set `Build.Reason` ([#398](https://github.com/opentidehq/opentide/issues/398)). **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy. Regenerate with `opentide setup ci azure --yes`.
 
 ### `setup skills` installs a short tree or CoreTide authoring instructions
 
-Through **0.7.0** a skill install copied the skills-repository `AGENTS.md`, dropped files under `references/`, and the four authoring skills still described CoreTide schemas ([#399](https://github.com/OpenTideHQ/opentide/issues/399), [#405](https://github.com/OpenTideHQ/opentide/issues/405)). **0.8.0** downloads every file under `skills/<slug>/`, renders `AGENTS.md` from the package, and installs `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` from the package. Those skills describe `rule::1.0`, `objective::1.0`, and `threat::1.0`. Re-run `opentide setup skills`.
+Through **0.7.0** a skill install copied the skills-repository `AGENTS.md`, dropped files under `references/`, and the four authoring skills still described CoreTide schemas ([#399](https://github.com/opentidehq/opentide/issues/399), [#405](https://github.com/opentidehq/opentide/issues/405)). **0.8.0** downloads every file under `skills/<slug>/`, renders `AGENTS.md` from the package, and installs `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` from the package. Those skills describe `rule::1.0`, `objective::1.0`, and `threat::1.0`. Re-run `opentide setup skills`.
 
 ### `setup repo` hardcodes Sentinel or ignores `--name`
 
-Through **0.7.0** the scaffold README always showed a Sentinel dry-run, empty directories were not kept by git, and `--name`, `--org`, and `--description` left an existing README unchanged with no warning ([#400](https://github.com/OpenTideHQ/opentide/issues/400), [#404](https://github.com/OpenTideHQ/opentide/issues/404)). **0.8.0** writes `.gitkeep` in empty scaffold directories, lists one dry-run per enabled platform, and warns when those flags are ignored because `README.md` already exists.
+Through **0.7.0** the scaffold README always showed a Sentinel dry-run, empty directories were not kept by git, and `--name`, `--org`, and `--description` left an existing README unchanged with no warning ([#400](https://github.com/opentidehq/opentide/issues/400), [#404](https://github.com/opentidehq/opentide/issues/404)). **0.8.0** writes `.gitkeep` in empty scaffold directories, lists one dry-run per enabled platform, and warns when those flags are ignored because `README.md` already exists.
 
 ### `generate docs` links to section READMEs that were not written
 
-Through **0.7.0** an empty `rules/`, `objectives/`, or `threats/` folder produced no `README.md`, so the root index linked to a missing page ([#401](https://github.com/OpenTideHQ/opentide/issues/401)). **0.8.0** writes those indexes, including a zero count.
+Through **0.7.0** an empty `rules/`, `objectives/`, or `threats/` folder produced no `README.md`, so the root index linked to a missing page ([#401](https://github.com/opentidehq/opentide/issues/401)). **0.8.0** writes those indexes, including a zero count.
 
 ### MCP `get_chaining` returns an empty graph for a linked threat
 
-Through **0.7.0** `get_chaining` returned an empty graph unless the threat itself had `threat.chaining`, so a threat listed on an objective and used by a rule looked unconnected ([#407](https://github.com/OpenTideHQ/opentide/issues/407)). **0.8.0** returns that lineage under `lineage` and, when the node has no relation map, under `graph`. When `threat.chaining` is set, `graph` stays the relation map. `OpenTide.Models.chaining` is unchanged.
+Through **0.7.0** `get_chaining` returned an empty graph unless the threat itself had `threat.chaining`, so a threat listed on an objective and used by a rule looked unconnected ([#407](https://github.com/opentidehq/opentide/issues/407)). **0.8.0** returns that lineage under `lineage` and, when the node has no relation map, under `graph`. When `threat.chaining` is set, `graph` stays the relation map. `Opentide.Models.chaining` is unchanged.
 
 ### `lint` prints `OK` while findings are listed
 
@@ -558,11 +558,11 @@ Through **0.7.0** human `lint` printed `OK` when findings existed, and the exit 
 
 ### Installation pages name 0.6.1 as the latest release
 
-Through **0.7.0** the docs home and installation page said the latest release was 0.6.1 while the install block pinned 0.7.0 ([#406](https://github.com/OpenTideHQ/opentide/issues/406)). **0.8.0** names 0.8.0 in both places. **0.8.1** names 0.8.1. **0.8.2** names 0.8.2. **0.9.0** names 0.9.0. **0.10.0** names 0.10.0. **0.11.0** names 0.11.0. **0.12.0** names 0.12.0. **0.12.1** names 0.12.1. **0.13.0** shipped the regression instead: four pages still named 0.12.1, which is what the 0.14.0 preparation found beside those pages' own 0.14.0 install block. **0.14.0** restored the claim and added a test checking every claim, pin and PyPI link against the newest `CHANGELOG.md` entry, so the sentence can no longer drift unnoticed. **0.14.1** names 0.14.1. **0.14.2** names 0.14.2. Pin `opentide==0.16.0`.
+Through **0.7.0** the docs home and installation page said the latest release was 0.6.1 while the install block pinned 0.7.0 ([#406](https://github.com/opentidehq/opentide/issues/406)). **0.8.0** names 0.8.0 in both places. **0.8.1** names 0.8.1. **0.8.2** names 0.8.2. **0.9.0** names 0.9.0. **0.10.0** names 0.10.0. **0.11.0** names 0.11.0. **0.12.0** names 0.12.0. **0.12.1** names 0.12.1. **0.13.0** shipped the regression instead: four pages still named 0.12.1, which is what the 0.14.0 preparation found beside those pages' own 0.14.0 install block. **0.14.0** restored the claim and added a test checking every claim, pin and PyPI link against the newest `CHANGELOG.md` entry, so the sentence can no longer drift unnoticed. **0.14.1** names 0.14.1. **0.14.2** names 0.14.2. Pin `opentide==0.16.0`.
 
 ### GitLab deploy runs after `validate query` fails
 
-Through **0.8.0** a generated GitLab pipeline started `generate` as soon as the object `validate` job finished. Query checks are separate jobs in the same stage, and GitLab starts a job when its `needs` finish, so a failed `opentide validate query` did not stop deploy ([#429](https://github.com/OpenTideHQ/opentide/issues/429)). **0.8.1** lists every query-validation job in `generate`'s `needs`. GitHub and Azure already gated generate this way. Regenerate:
+Through **0.8.0** a generated GitLab pipeline started `generate` as soon as the object `validate` job finished. Query checks are separate jobs in the same stage, and GitLab starts a job when its `needs` finish, so a failed `opentide validate query` did not stop deploy ([#429](https://github.com/opentidehq/opentide/issues/429)). **0.8.1** lists every query-validation job in `generate`'s `needs`. GitHub and Azure already gated generate this way. Regenerate:
 
 ```bash
 pip install 'opentide==0.16.0'
@@ -571,31 +571,31 @@ opentide setup ci gitlab --yes
 
 ### GitLab CI rejects an empty document job, or ShellCheck fails the inflight script
 
-Through **0.8.0** a document job with no commands was written with an empty `script`, which GitLab rejects, and the inflight job fetched `origin $CI_DEFAULT_BRANCH` unquoted ([#430](https://github.com/OpenTideHQ/opentide/issues/430)). **0.8.1** omits that job and the `document` stage when there is nothing to run, quotes the branch, and exits if `cd` into the worktree fails. Regenerate with `opentide setup ci gitlab --yes`.
+Through **0.8.0** a document job with no commands was written with an empty `script`, which GitLab rejects, and the inflight job fetched `origin $CI_DEFAULT_BRANCH` unquoted ([#430](https://github.com/opentidehq/opentide/issues/430)). **0.8.1** omits that job and the `document` stage when there is nothing to run, quotes the branch, and exits if `cd` into the worktree fails. Regenerate with `opentide setup ci gitlab --yes`.
 
 ### CI logs contain a CrowdStrike or Defender OAuth token
 
-Through **0.8.2** CrowdStrike auth logged the full token response at info, which `--json` and the MCP server copy to stderr. Defender logged the token at debug and a client-secret prefix when authentication failed ([#441](https://github.com/OpenTideHQ/opentide/pull/441)). **0.9.0** keeps the bearer token and the client secret out of the log. A failed authentication still names the tenant.
+Through **0.8.2** CrowdStrike auth logged the full token response at info, which `--json` and the MCP server copy to stderr. Defender logged the token at debug and a client-secret prefix when authentication failed ([#441](https://github.com/opentidehq/opentide/pull/441)). **0.9.0** keeps the bearer token and the client secret out of the log. A failed authentication still names the tenant.
 
 ### `share push` leaves a retracted object unpublished
 
-Through **0.8.2** a content hash that still matched the ledger skipped the next push even when that line was `retracted`. Preview reported an update and the MISP event stayed unpublished ([#385](https://github.com/OpenTideHQ/opentide/pull/385)). **0.9.0** treats only a `synced` line as unchanged, so the next push publishes the object again.
+Through **0.8.2** a content hash that still matched the ledger skipped the next push even when that line was `retracted`. Preview reported an update and the MISP event stayed unpublished ([#385](https://github.com/opentidehq/opentide/pull/385)). **0.9.0** treats only a `synced` line as unchanged, so the next push publishes the object again.
 
 ### `deploy` dies with `RecursionError` on a long history
 
-Through **0.8.2** loading a commit walked every ancestor. A repository deeper than the Python recursion limit raised `RecursionError` from `repo.head` while computing the diff, and deploy aborted ([#369](https://github.com/OpenTideHQ/opentide/pull/369)). **0.9.0** records only the immediate parent.
+Through **0.8.2** loading a commit walked every ancestor. A repository deeper than the Python recursion limit raised `RecursionError` from `repo.head` while computing the diff, and deploy aborted ([#369](https://github.com/opentidehq/opentide/pull/369)). **0.9.0** records only the immediate parent.
 
 ### `metadata.reviewed` is rejected, or every rule looks unreviewed
 
-Through **0.8.2** no schema accepted `metadata.reviewed`. **0.9.0** accepts an ISO 8601 date or datetime on `rule::1.1` only. `rule::1.0`, threats, and objectives still reject the field ([#437](https://github.com/OpenTideHQ/opentide/issues/437), [#438](https://github.com/OpenTideHQ/opentide/pull/438)). `opentide rules unreviewed` lists `rule::1.0` as `schema`, a `rule::1.1` with no review as `absent`, and a review older than the window as `stale`. It does not write the date. Set `schema: rule::1.1` before adding `reviewed`, then run `opentide generate` so the editor schema includes the field.
+Through **0.8.2** no schema accepted `metadata.reviewed`. **0.9.0** accepts an ISO 8601 date or datetime on `rule::1.1` only. `rule::1.0`, threats, and objectives still reject the field ([#437](https://github.com/opentidehq/opentide/issues/437), [#438](https://github.com/opentidehq/opentide/pull/438)). `opentide rules unreviewed` lists `rule::1.0` as `schema`, a `rule::1.1` with no review as `absent`, and a review older than the window as `stale`. It does not write the date. Set `schema: rule::1.1` before adding `reviewed`, then run `opentide generate` so the editor schema includes the field.
 
 ### A technique or log source that validated on 0.8.2 now fails
 
-**0.9.0** pins techniques to `att&ck::1.1` and objective logsources to `datasources::1.1` ([#392](https://github.com/OpenTideHQ/opentide/issues/392), [#445](https://github.com/OpenTideHQ/opentide/pull/445)). The catalogues were ATT&CK 19.2. An identifier that is not in the pinned catalogue fails validation. Regenerate schemas if the editor still offers the previous list: `opentide generate schemas`.
+**0.9.0** pins techniques to `att&ck::1.1` and objective logsources to `datasources::1.1` ([#392](https://github.com/opentidehq/opentide/issues/392), [#445](https://github.com/opentidehq/opentide/pull/445)). The catalogues were ATT&CK 19.2. An identifier that is not in the pinned catalogue fails validation. Regenerate schemas if the editor still offers the previous list: `opentide generate schemas`.
 
 ### A recent ATT&CK technique such as T1685 or T1059.013 fails validation
 
-**0.13.0** through **0.15.0** bundled an ATT&CK v17 catalogue under the `att&ck::1.1` pin. [#504](https://github.com/OpenTideHQ/opentide/pull/504) re-synced the bundle from a specifications copy that never had the 19.2 refresh, so T1685–T1690, T1059.013 and the other ATT&CK v18 and v19 techniques failed validation ([#568](https://github.com/OpenTideHQ/opentide/issues/568)). **0.16.0** restores ATT&CK 19.2 as `att&ck::1.1`, adds ATT&CK 20.0 as `att&ck::1.2` (T1696–T1701 and others), and pins threats, objectives and rules to `att&ck::1.2`. Run `opentide generate schemas` so the editor offers the new list.
+**0.13.0** through **0.15.0** bundled an ATT&CK v17 catalogue under the `att&ck::1.1` pin. [#504](https://github.com/opentidehq/opentide/pull/504) re-synced the bundle from a specifications copy that never had the 19.2 refresh, so T1685–T1690, T1059.013 and the other ATT&CK v18 and v19 techniques failed validation ([#568](https://github.com/opentidehq/opentide/issues/568)). **0.16.0** restores ATT&CK 19.2 as `att&ck::1.1`, adds ATT&CK 20.0 as `att&ck::1.2` (T1696–T1701 and others), and pins threats, objectives and rules to `att&ck::1.2`. Run `opentide generate schemas` so the editor offers the new list.
 
 Techniques that MITRE has revoked since then, such as T1562.001 (now T1685) and T1070.001, stay valid under every `att&ck::1.x` pin. They are marked `removed = "2.0"`. T1574.002 is not in any bundled catalogue: MITRE merged it into T1574.001, so use that ID.
 
@@ -604,5 +604,5 @@ ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense Impairm
 ## Still stuck?
 
 - Re-run with debug logging: `DEBUG=1 opentide validate --strict`.
-- Compare your object against a known-good [fixture](https://github.com/OpenTideHQ/specifications/blob/main/fixtures/valid).
+- Compare your object against a known-good [fixture](https://github.com/opentidehq/specifications/blob/main/fixtures/valid).
 - Check the [CLI reference](../cli/index.md) for the exact flags and [exit codes](../cli/exit-codes.md).

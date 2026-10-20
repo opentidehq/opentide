@@ -1,25 +1,25 @@
 ---
 title: Python SDK
-description: Embed OpenTide in Python applications — registry lifecycle, validation, documentation, and platform plugins.
+description: Embed opentide in Python applications — registry lifecycle, validation, documentation, and platform plugins.
 icon: Code
 ---
 
 # Python SDK
 
-The `opentide` PyPI package exposes a typed programmatic API centred on the **`OpenTide`** registry singleton.
+The `opentide` PyPI package exposes a typed programmatic API centred on the **`Opentide`** registry singleton.
 
 ```python
-from opentide import OpenTide, __version__
+from opentide import Opentide, __version__
 
-OpenTide.initialise()
-print(__version__, len(OpenTide.Rules))
+Opentide.initialise()
+print(__version__, len(Opentide.Rules))
 ```
 
 ## Public entry points
 
 | Symbol | Module | Purpose |
 |--------|--------|---------|
-| `OpenTide` | `opentide.core.registry` | Registry singleton |
+| `Opentide` | `opentide.core.registry` | Registry singleton |
 | `__version__` | `opentide._version` | Package version string |
 
 Additional APIs are importable from subpackages (`opentide.validation`, `opentide.documentation`, `opentide.models`) but the registry is the primary integration surface.
@@ -40,12 +40,12 @@ Additional APIs are importable from subpackages (`opentide.validation`, `opentid
 A complete pipeline — initialise, validate the whole repo, and dry-run deploy the rules that pass:
 
 ```python
-from opentide import OpenTide
+from opentide import Opentide
 from opentide.validation.session import run_validation
 from opentide.validation.scope import ValidationScope
 from opentide.core.errors import Errors
 
-OpenTide.initialise()
+Opentide.initialise()
 
 # 1. Validate the entire workspace
 report = run_validation(scope=ValidationScope.full())
@@ -56,10 +56,10 @@ if not report.ok:
 
 # 2. Deploy production rules to Sentinel (dry-run first)
 platform = "sentinel"
-if not OpenTide.Platforms[platform].can_deploy:
+if not Opentide.Platforms[platform].can_deploy:
     raise SystemExit(f"{platform} has no deployer configured")
 
-for uuid, rule in OpenTide.Rules.items():
+for uuid, rule in Opentide.Rules.items():
     if rule.status != "PRODUCTION":
         continue
     try:
@@ -92,8 +92,8 @@ The package ships `py.typed` (PEP 561). Use ty or mypy in consuming projects.
 
 ```
 src/opentide/
-├── __init__.py          # OpenTide, __version__
-├── core/registry.py     # OpenTideRegistry
+├── __init__.py          # opentide, __version__
+├── core/registry.py     # OpentideRegistry
 ├── models/              # Pydantic models
 ├── validation/          # Pipeline and reports
 ├── documentation/       # Markdown rendering
