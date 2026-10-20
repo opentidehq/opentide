@@ -7,6 +7,30 @@ description: Public package versions of the opentide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.16.1 — 20 October 2026
+
+Patch release. Nothing to regenerate and nothing to do after upgrading. The SDK class is spelled `Opentide`; `OpenTide` still imports with a deprecation warning.
+
+**Install**
+
+```bash
+pip install opentide==0.16.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes**
+
+- **`Opentide`, not `OpenTide`.** The registry singleton is `Opentide` and its class `OpentideRegistry`. `from opentide import OpenTide` and the other old import paths keep working and emit a `DeprecationWarning`; switch before a later release removes them.
+- **Lowercase everywhere else.** CLI help, docs, generated pipelines and the MCP server name say `opentide`. The `OPENTIDE_*` environment variables are unchanged.
+- **`opentide setup skills`** no longer logs `Skills manifest source rejected` when the catalogue spells its repository in a different letter case.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.16.1/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.16.1)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.16.0 — 19 October 2026
 
 Minor release. `pip install opentide` is the only install: every optional extra is gone, and every vendor SDK is part of the base install. After upgrading, regenerate your CI pipeline (security fix), then regenerate schemas for ATT&CK 20.0.

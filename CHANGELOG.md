@@ -6,9 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.16.1] — 2026-10-20
+
+Patch release. Nothing to regenerate and nothing to do after upgrading: the SDK class is renamed `Opentide` with the old spelling kept as a deprecated alias.
+
+### Changed
+
+- **The SDK class names lose their second capital.** `Opentide` (the registry singleton) and `OpentideRegistry` replace `OpenTide` and `OpenTideRegistry`. `from opentide import OpenTide`, `opentide.core.OpenTide` and `opentide.core.registry.OpenTide` / `OpenTideRegistry` still import and return the same objects, and raise a `DeprecationWarning`; the old spelling goes in a later release. Docs and snippets use `Opentide`.
+- The project is spelled `opentide`, lowercase, across the CLI help, docs, generated pipelines (`name: opentide`, `opentidehq` as the GitHub owner) and the MCP server name (`opentide`, was `OpenTide`). The `OPENTIDE_*` environment variables and the Elastic rule tag `OpenTide` are unchanged.
+
 ### Fixed
 
 - `opentide setup skills` accepts the catalogue manifest's `source` in any letter case. GitHub names are case-insensitive, and a manifest that spelled itself `OpenTideHQ/skills` logged `Skills manifest source rejected` on every run, although the fallback installed the same catalogue.
+
+### Install
+
+```bash
+pip install opentide==0.16.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.16.0] — 2026-10-19
 
@@ -1001,7 +1018,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/opentidehq/opentide/releases/tag/v0.16.1
 [0.16.0]: https://github.com/opentidehq/opentide/releases/tag/v0.16.0
 [0.15.0]: https://github.com/opentidehq/opentide/releases/tag/v0.15.0
 [0.14.2]: https://github.com/opentidehq/opentide/releases/tag/v0.14.2

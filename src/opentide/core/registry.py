@@ -646,7 +646,21 @@ _LEGACY_EXPORT_MODULES = {
 }
 
 
+# Spellings that shipped through 0.16.0, before the class names lost their second capital.
+_RENAMED = {"OpenTide": "Opentide", "OpenTideRegistry": "OpentideRegistry"}
+
+
 def __getattr__(name: str) -> Any:
+    renamed = _RENAMED.get(name)
+    if renamed is not None:
+        import warnings
+
+        warnings.warn(
+            f"{name} is now {renamed}; the old spelling will be removed in a later release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return globals()[renamed]
     module_path = _LEGACY_EXPORT_MODULES.get(name)
     if module_path is not None:
         import importlib

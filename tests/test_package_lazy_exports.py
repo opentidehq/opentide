@@ -160,3 +160,25 @@ else:
         env={**os.environ},
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    "module",
+    ["opentide", "opentide.core", "opentide.core.registry"],
+)
+def test_the_pre_0_16_1_spelling_still_imports_with_a_warning(module: str) -> None:
+    """``OpenTide`` was the class name through 0.16.0; it keeps working, deprecated."""
+    import importlib
+
+    mod = importlib.import_module(module)
+    with pytest.warns(DeprecationWarning, match="OpenTide is now Opentide"):
+        old = mod.OpenTide
+    assert old is mod.Opentide
+
+
+def test_the_old_registry_class_spelling_still_imports_with_a_warning() -> None:
+    from opentide.core import registry
+
+    with pytest.warns(DeprecationWarning, match="OpenTideRegistry is now OpentideRegistry"):
+        old = registry.OpenTideRegistry
+    assert old is registry.OpentideRegistry
