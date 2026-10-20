@@ -11,7 +11,7 @@ flags = []
 # [[tenants]]
 # name = "org_name"
 # description = "Organisation description"
-# deployment = "ALWAYS"
+# strategies = ["PREVIEW", "RELEASE"]  # status strategies this tenant accepts; omit for both
 # [tenants.setup]
 # ssl = true
 # url = "$CBC_URL"

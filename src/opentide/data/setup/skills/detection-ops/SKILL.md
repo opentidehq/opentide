@@ -22,9 +22,13 @@ Use this skill when authoring or reviewing detection content in an opentide repo
 ```bash
 opentide validate
 opentide generate
-opentide validate query --platform sentinel --live
-opentide deploy --dry-run
+opentide validate query --platform sentinel --live --file objects/rules/<rule>.yaml
+opentide deploy --dry-run --strategy PREVIEW --all
 ```
+
+`validate query --live` sends queries to the tenant. Pass `--file` or `--uuid` to check the rules you changed; without them it checks every rule in the catalogue. CI passes `--changed`, which checks the rules the pull request changed.
+
+`deploy --strategy PREVIEW` deploys rules whose status maps to `PREVIEW` (default `DEVELOPMENT`, `IMPROVING`, `STAGING`, `ACCEPTANCE`); `--strategy RELEASE` deploys those mapping to `RELEASE` (default `PRODUCTION`) and disables or deletes those mapping to `DISABLEMENT` or `DELETION`. `STAGING` and `PRODUCTION` are status names, not strategies. Each rule goes to the tenants whose `strategies` accept the run's strategy. Without `--all`, deploy reads the rules the last commit changed (in CI: the pull request or push).
 
 ## Platform capabilities
 

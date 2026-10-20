@@ -4,7 +4,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.platforms.plugins import QueryValidator
 from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.models.rule import DetectionRule
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.deployment import TideDeployment
 from opentide.platforms.sentinel_one.client import SentinelOneService
 from opentide.platforms.transport import reaching_tenant
@@ -35,7 +35,7 @@ class SentinelOneQueryValidator(QueryValidator):
                 if not validation:
                     os.environ['VALIDATION_ERROR_RAISED'] = 'True'
 
-    def validate(self, mdr_deployment: Union[Sequence[DetectionRule], Sequence[str]], deployment_plan: DeploymentStrategy):
+    def validate(self, mdr_deployment: Union[Sequence[DetectionRule], Sequence[str]], strategies: RunStrategies):
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
@@ -43,7 +43,7 @@ class SentinelOneQueryValidator(QueryValidator):
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
-        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL_ONE, strategy=deployment_plan)
+        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL_ONE, strategies=strategies)
         for tenant_deployment in deployment.rule_deployment:
             tenant = tenant_deployment.tenant
             with reaching_tenant('sentinel_one', tenant.name, tenant.setup.url):
@@ -55,4 +55,4 @@ class SentinelOneQueryValidator(QueryValidator):
 def declare():
     return SentinelOneQueryValidator()
 if __name__ == '__main__' and DebugEnvironment.ENABLED:
-    SentinelOneQueryValidator().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG)
+    SentinelOneQueryValidator().validate(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, (StatusStrategy.PREVIEW,))

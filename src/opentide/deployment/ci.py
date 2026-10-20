@@ -64,5 +64,25 @@ class CIEnvironment:
             return self.CIPlatforms.LocalDebug
 
 
+#: The variable each provider sets, and its values, on a pull or merge request run.
+_CHANGE_REQUEST_EVENTS = {
+    CIEnvironment.CIPlatforms.AzurePipeline: ("BUILD_REASON", frozenset({"PullRequest"})),
+    CIEnvironment.CIPlatforms.GitHubActions: (
+        "GITHUB_EVENT_NAME",
+        frozenset({"pull_request", "pull_request_target"}),
+    ),
+    CIEnvironment.CIPlatforms.GitlabCI: ("CI_PIPELINE_SOURCE", frozenset({"merge_request_event"})),
+}
+
+
+def is_change_request(environment: CIEnvironment.CIPlatforms) -> bool:
+    """Whether this CI run is for a pull or merge request rather than a push."""
+    event = _CHANGE_REQUEST_EVENTS.get(environment)
+    if event is None:
+        return False
+    name, values = event
+    return os.getenv(name) in values
+
+
 def __dir__() -> list[str]:
     return sorted(set(globals()) | {"SYSTEMS_CONFIGS_INDEX"})

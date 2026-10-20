@@ -19,7 +19,10 @@ from opentide.validation.session import run_validation
 
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from opentide.cli.context import CliContext
+    from opentide.deployment.git_repo import RuleScope
     from opentide.platforms.transport import TenantUnreachableError
 
 
@@ -330,22 +333,113 @@ def _live_required_result(platform: str) -> dict[str, object]:
     }
 
 
+def _query_scope_refused(platform: str, message: str, *, exit_code: int) -> dict[str, object]:
+    return {
+        "platform": platform,
+        "mode": "live",
+        "status": "failed",
+        "supported": True,
+        "message": message,
+        "_exit_code": exit_code,
+    }
+
+
+def _selected_rule_scope(files: Sequence[str], uuids: Sequence[str]) -> tuple[RuleScope, list[str]]:
+    """The rule files ``--file`` and ``--uuid`` select, and each target that selects none.
+
+    Candidates are the files deploy reads: those directly in the rules folder.
+    ``--file`` matches as in ``opentide validate``.
+    """
+    from opentide.core.io import load_yaml
+    from opentide.core.object_refs import object_uuid
+    from opentide.deployment.git_repo import RuleScope, local_rule_scope
+
+    by_file = ValidationScope.narrow(files=frozenset(files))
+    wanted = {uuid.strip().lower(): uuid for uuid in uuids}
+    found: set[str] = set()
+    selected: list[Path] = []
+    candidates = local_rule_scope().files
+    for path in candidates:
+        chosen = bool(files) and by_file.matches_file(path.name, path)
+        if wanted:
+            try:
+                uuid = object_uuid(load_yaml(path)).strip().lower()
+            except Exception:
+                uuid = ""
+            if uuid in wanted:
+                found.add(uuid)
+                chosen = True
+        if chosen:
+            selected.append(path)
+    unmatched = by_file.unmatched_file_targets([(path.name, path) for path in candidates])
+    unmatched.extend(raw for key, raw in wanted.items() if key not in found)
+    return RuleScope(tuple(selected)), unmatched
+
+
+def _query_rule_scope(
+    platform: str, *, changed: bool, files: Sequence[str], uuids: Sequence[str]
+) -> tuple[RuleScope | None, str | None, dict[str, object] | None]:
+    """``(scope, label, refusal)`` for ``--changed``, ``--file`` and ``--uuid``.
+
+    No flag reads every rule file (``None``). ``label`` names the
+    narrowing in the result. A refusal is returned instead of a scope.
+    """
+    if not (changed or files or uuids):
+        return None, None, None
+    if changed and (files or uuids):
+        message = "--changed cannot be combined with --file or --uuid"
+        return None, None, _query_scope_refused(platform, message, exit_code=2)
+    if changed:
+        from opentide.deployment.git_repo import MissingGitCheckout, changed_rule_scope
+
+        try:
+            scope, diff = changed_rule_scope()
+        except MissingGitCheckout as exc:
+            message = f"--changed needs a git checkout; no .git was found from {exc.searched}"
+            return None, None, _query_scope_refused(platform, message, exit_code=1)
+        except Exception as exc:
+            message = str(exc).strip() or f"{type(exc).__name__} while computing the changed rules"
+            return None, None, _query_scope_refused(platform, message, exit_code=1)
+        logger.info("query_scope_changed", diff=diff.name, rules=len(scope.files))
+        return scope, "changed", None
+    scope, unmatched = _selected_rule_scope(files, uuids)
+    if unmatched:
+        from opentide.deployment.git_repo import rules_folder_in_repo
+
+        message = (
+            f"No rule file directly in {rules_folder_in_repo()} matched: {', '.join(unmatched)}"
+        )
+        result = _query_scope_refused(platform, message, exit_code=1)
+        result["unmatched"] = unmatched
+        return None, None, result
+    return scope, "selected", None
+
+
 def validate_query_platform(
     ctx: CliContext,
     platform: str,
     *,
-    plan: str | None = None,
+    strategies: Sequence[str] = (),
     wide: bool = False,
     live: bool = False,
+    changed: bool = False,
+    files: Sequence[str] = (),
+    uuids: Sequence[str] = (),
 ) -> dict[str, object]:
     """Validate queries for a single platform.
 
     Without ``live`` the command refuses and names ``--live``. ``live=True``
     runs the platform engine against the tenant.
+
+    A rule is checked on the tenants a deploy would send it to: those
+    accepting a run strategy that deploys its status's strategy. *strategies*
+    (``--strategy``) narrows the run strategies; the default is ``PREVIEW``
+    and ``RELEASE``, so every rule is checked wherever it is deployed.
+    ``DISABLEMENT`` and ``DELETION`` rules send no query. ``changed`` checks
+    only the rule files this run changed, and *files* and *uuids* only the
+    rules they select; without them every rule file is read.
     """
     ctx.apply_environment()
-    if plan is not None:
-        ctx.set_deployment_plan(plan)
     if platform not in QUERY_VALIDATION_PLATFORMS:
         # Returned rather than emitted directly: a raw `emit` skips the
         # ok/status envelope every other command promises, so a caller parsing
@@ -360,32 +454,35 @@ def validate_query_platform(
         }
     if not live:
         return _live_required_result(platform)
-    from opentide.deployment import DeploymentStrategy, make_deploy_plan
+    from opentide.cli.services.deploy import removed_plan_error, resolve_run_strategies
+    from opentide.deployment import make_deploy_plan
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 
     _reset_validation_env()
+    failed = {"platform": platform, "mode": "live", "status": "failed", "supported": True}
+    removed = removed_plan_error()
+    if removed is not None:
+        return {**failed, "message": removed, "_exit_code": 2}
     try:
-        deployment_plan = DeploymentStrategy.load_from_environment()
+        run = resolve_run_strategies(strategies) if strategies else DEPLOYABLE_STRATEGIES
     except ValueError as exc:
-        return {
-            "platform": platform,
-            "mode": "live",
-            "status": "failed",
-            "supported": True,
-            "message": str(exc),
-            "_exit_code": 1,
-        }
+        return {**failed, "message": str(exc), "_exit_code": 2}
+    rule_scope, scope_label, refusal = _query_rule_scope(
+        platform, changed=changed, files=files, uuids=uuids
+    )
+    if refusal is not None:
+        return refusal
     try:
-        deployment_list = make_deploy_plan(deployment_plan, wide_scope=wide, keep_deprecated=False)
+        deployment_list = make_deploy_plan(
+            run,
+            wide_scope=wide,
+            keep_deprecated=False,
+            scope=rule_scope,
+            all_files=rule_scope is None,
+        )
     except Exception as exc:
-        message = str(exc).strip() or (f"{type(exc).__name__} while compiling the deployment plan")
-        return {
-            "platform": platform,
-            "mode": "live",
-            "status": "failed",
-            "supported": True,
-            "message": message,
-            "_exit_code": 1,
-        }
+        message = str(exc).strip() or (f"{type(exc).__name__} while selecting the rules to deploy")
+        return {**failed, "message": message, "_exit_code": 1}
     if platform not in deployment_list:
         from opentide.platforms.enabled import enable_platform_command, enabled_systems
 
@@ -396,62 +493,75 @@ def validate_query_platform(
                 "status": "skipped",
                 "platform_enabled": False,
                 "message": (
-                    f"Platform {platform} is disabled in configurations, so the "
-                    "deployment plan contains no rules for it"
+                    f"Platform {platform} is disabled in configurations, so no rule is "
+                    "checked for it"
                 ),
                 "advice": f"enable it with '{enable_platform_command(platform)}'",
             }
-        return {
+        skipped: dict[str, object] = {
             "platform": platform,
             "mode": "live",
             "status": "skipped",
-            "message": "No rules to validate for this platform in the current plan",
+            "strategies": [strategy.name for strategy in run],
+            "message": _NO_RULES_MESSAGES[scope_label],
         }
+        if scope_label is not None:
+            skipped["scope"] = scope_label
+        return skipped
     from opentide.platforms.enabled import MissingTenantsError, systems_without_tenants
 
     if systems_without_tenants([platform]):
         missing = MissingTenantsError(platform)
         return {
-            "platform": platform,
-            "mode": "live",
-            "status": "failed",
-            "supported": True,
+            **failed,
             "message": f"Cannot run live query validation: {missing}",
             "advice": missing.advice,
             "missing_tenants": {platform: missing.config_path},
             "_exit_code": 1,
         }
-    from opentide.deployment.planning import read_only_tenant_resolution
+    from contextlib import nullcontext
 
-    # Only reads: every tenant a rule reaches is checked under FULL (#547).
-    with read_only_tenant_resolution():
+    from opentide.deployment.planning import wide_scope
+
+    with wide_scope() if wide else nullcontext():
         try:
-            reach = queries_per_tenant(platform, deployment_list[platform], deployment_plan)
+            reach = queries_per_tenant(platform, deployment_list[platform], run)
         except Exception as exc:
             message = str(exc).strip() or f"{type(exc).__name__} while resolving tenants"
-            return {
-                "platform": platform,
-                "mode": "live",
-                "status": "failed",
-                "supported": True,
-                "message": message,
-                "_exit_code": 1,
-            }
+            return {**failed, "message": message, "_exit_code": 1}
         if not reach:
             rules = deployment_list[platform]
-            from opentide.deployment import DeploymentStrategy
+            # An explicit --strategy narrowing a rule's tenants away (a rule only
+            # PREVIEW tenants take, checked with --strategy RELEASE) is an
+            # ordinary skip. Only a rule that reaches no tenant at all means
+            # the check could never run.
+            if run != DEPLOYABLE_STRATEGIES and queries_per_tenant(
+                platform, rules, DEPLOYABLE_STRATEGIES
+            ):
+                return _scoped(_strategy_reaches_none(platform, run, len(rules)), scope_label)
+            return _scoped(_no_tenant_reached(platform, run, len(rules)), scope_label)
+        return _scoped(
+            _run_live_validator(ctx, platform, deployment_list[platform], run, reach),
+            scope_label,
+        )
 
-            if deployment_plan in (DeploymentStrategy.STAGING, DeploymentStrategy.PRODUCTION):
-                # An explicit plan narrowing a rule out (a staging-only rule under
-                # PRODUCTION) is an ordinary skip. Only a rule that reaches no
-                # configured tenant at all means the check could never run.
-                if queries_per_tenant(platform, rules, DeploymentStrategy.FULL):
-                    return _plan_reaches_none(platform, deployment_plan.name, len(rules))
-            return _no_tenant_reached(platform, deployment_plan.name, len(rules))
-        return _run_live_validator(ctx, platform, deployment_list[platform], deployment_plan, reach)
+
+#: The skip message when no rule is checked for the platform, by scope label.
+_NO_RULES_MESSAGES: dict[str | None, str] = {
+    None: "No rule for this platform has a status that maps to the run's strategies",
+    "changed": "No changed rule for this platform has a status that maps to the run's strategies",
+    "selected": "None of the selected rules has a status for this platform that maps to the run's strategies",
+}
 
 
-def queries_per_tenant(platform: str, rules: Sequence[Any], plan: Any) -> dict[str, int]:
+def _scoped(result: dict[str, object], label: str | None) -> dict[str, object]:
+    """Name the narrowed rule scope (``changed`` or ``selected``) in *result*."""
+    if label is not None:
+        result["scope"] = label
+    return result
+
+
+def queries_per_tenant(platform: str, rules: Sequence[Any], strategies: Any) -> dict[str, int]:
     """How many rule queries a live check sends to each tenant.
 
     The same resolution the platform validator runs, so a tenant listed here
@@ -461,7 +571,7 @@ def queries_per_tenant(platform: str, rules: Sequence[Any], plan: Any) -> dict[s
     from opentide.models.deployment_enums import DetectionPlatforms
 
     deployment = TideDeployment(
-        deployment=list(rules), system=DetectionPlatforms[platform.upper()], strategy=plan
+        deployment=list(rules), system=DetectionPlatforms[platform.upper()], strategies=strategies
     )
     reach: dict[str, int] = {}
     for batch in deployment.rule_deployment:
@@ -470,24 +580,31 @@ def queries_per_tenant(platform: str, rules: Sequence[Any], plan: Any) -> dict[s
     return reach
 
 
-def _plan_reaches_none(platform: str, plan: str, rules: int) -> dict[str, object]:
-    """Every rule targets a tenant, but none that *plan* deploys to: nothing to check here."""
+def _names(strategies: Sequence[Any]) -> list[str]:
+    return [strategy.name for strategy in strategies]
+
+
+def _strategy_reaches_none(
+    platform: str, strategies: Sequence[Any], rules: int
+) -> dict[str, object]:
+    """Every rule reaches a tenant, but none accepting *strategies*: nothing to check here."""
+    names = " and ".join(_names(strategies))
     return {
         "platform": platform,
         "mode": "live",
         "status": "skipped",
         "supported": True,
-        "plan": plan,
+        "strategies": _names(strategies),
         "queries_validated": 0,
         "queries_per_tenant": {},
         "message": (
-            f"No {plan} tenant is targeted by the {rules} {platform} rule(s) in the plan; "
-            "they are checked by the plan that deploys them, or by validate without --plan"
+            f"None of the {rules} {platform} rule(s) goes to a tenant accepting {names}; "
+            "they are checked by a run with the strategy that deploys them, or without --strategy"
         ),
     }
 
 
-def _no_tenant_reached(platform: str, plan: str, rules: int) -> dict[str, object]:
+def _no_tenant_reached(platform: str, strategies: Sequence[Any], rules: int) -> dict[str, object]:
     """No query was sent, so the check did not run. Exit 2, like the CI credential guard."""
     from opentide.platforms.enabled import platform_config_path
 
@@ -497,16 +614,17 @@ def _no_tenant_reached(platform: str, plan: str, rules: int) -> dict[str, object
         "mode": "live",
         "status": "skipped",
         "supported": True,
-        "plan": plan,
+        "strategies": _names(strategies),
         "queries_validated": 0,
         "queries_per_tenant": {},
         "message": (
-            f"No query was sent: none of the {rules} {platform} rule(s) in the "
-            f"{plan} plan resolves to a tenant in {config}"
+            f"No query was sent: none of the {rules} {platform} rule(s) goes to a tenant in "
+            f"{config}"
         ),
         "advice": (
-            "a MANUAL tenant is reached only when a rule lists it under tenants, and a "
-            "rule's tenants list must name a tenant configured for this platform"
+            "a tenant takes a rule only when its 'strategies' accept the run strategy that "
+            "deploys the rule's status; a 'manual' tenant only when the rule lists it under "
+            "tenants; and a rule's tenants list must name a tenant configured for this platform"
         ),
         "_exit_code": 2,
     }
@@ -516,7 +634,7 @@ def _run_live_validator(
     ctx: CliContext,
     platform: str,
     rules: Sequence[Any],
-    deployment_plan: Any,
+    strategies: Any,
     reach: dict[str, int],
 ) -> dict[str, object]:
     from opentide.core.registry import Opentide as LegacyOpentide
@@ -524,7 +642,7 @@ def _run_live_validator(
     from opentide.platforms.transport import TenantUnreachableError
 
     counts: dict[str, object] = {
-        "plan": deployment_plan.name,
+        "strategies": _names(strategies),
         "queries_validated": sum(reach.values()),
         "queries_per_tenant": dict(reach),
     }
@@ -556,7 +674,7 @@ def _run_live_validator(
     validator = cast(Any, query_validators[platform])
     try:
         try:
-            validator.validate(mdr_deployment=rules, deployment_plan=deployment_plan)
+            validator.validate(mdr_deployment=rules, strategies=strategies)
         except TypeError:
             logger.warning("trying_mdrv3_style_method")
             validator.validate(deployment=rules)

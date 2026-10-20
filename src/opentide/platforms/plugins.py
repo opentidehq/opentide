@@ -14,7 +14,7 @@ from collections.abc import Iterable, Sequence
 from typing import Iterator, cast
 import structlog
 
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
 # CrowdStrike and HarfangLab ship no validator module: `can_validate is False`.
 from opentide.validation.query_platforms import QUERY_VALIDATION_PLATFORMS
@@ -36,7 +36,7 @@ class RuleDeployer(PlatformEngine):
     def deploy(
         self,
         mdr_deployment: Sequence[DetectionRule] | list[str],
-        deployment_plan: DeploymentStrategy | None = None,
+        strategies: RunStrategies | None = None,
     ) -> None:
         """Deploy detection rules onto the target platform."""
 
@@ -46,7 +46,7 @@ class QueryValidator(ValidationEngine):
     def validate(
         self,
         mdr_deployment: Sequence[DetectionRule] | list[str],
-        deployment_plan: DeploymentStrategy | None = None,
+        strategies: RunStrategies | None = None,
     ):
         """Validate that queries can be executed on the target platform."""
 

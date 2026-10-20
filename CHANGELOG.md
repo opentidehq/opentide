@@ -6,6 +6,57 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-10-20
+
+Minor release with **breaking changes**: deployment plans are removed. A deploy now names the status strategy it carries out, and a tenant lists the strategies it accepts. Three things need action after upgrading; each old setting fails with a message naming its replacement.
+- **Replace `--plan` and unset `DEPLOYMENT_PLAN`.** `--plan STAGING` becomes `--strategy PREVIEW`, `--plan PRODUCTION` becomes `--strategy RELEASE`, and `--plan FULL` (or no plan) becomes `--strategy PREVIEW --strategy RELEASE --all`.
+- **Replace each tenant's `deployment` key** in `.opentide/configurations/platforms/*.toml`: `"STAGING"` becomes `strategies = ["PREVIEW"]`, `"PRODUCTION"` becomes `strategies = ["RELEASE"]`, `"ALWAYS"` is removed, and `"MANUAL"` becomes `manual = true`.
+- **Regenerate generated pipelines** with `opentide setup ci <github|gitlab|azure> --yes`. Deploy jobs then pass `--strategy`, live query validation checks only the rules each run changed, and GitLab merge request pipelines start at all.
+
+Run `opentide generate` to refresh the editor schemas' objective and signal labels; the vocabulary warnings stop either way.
+
+### Breaking
+
+- **`opentide deploy --strategy` replaces `--plan`.** A run deploys the rule files it changed whose status maps to its strategy, to the tenants that accept that strategy. `--strategy PREVIEW` deploys rules whose status maps to `PREVIEW` or `UNIVERSAL`. `--strategy RELEASE` deploys rules mapping to `RELEASE` or `UNIVERSAL`, and disables or deletes those mapping to `DISABLEMENT` or `DELETION`. The option is required and repeatable, and takes only `PREVIEW` and `RELEASE`. A status name such as `STAGING` is refused with the strategy it maps to in your configuration. Plans named a pipeline with the same words as two default statuses, which read as if `STAGING` and `PRODUCTION` were canonical statuses. They are not: they are two of the default statuses, and only the strategy a status maps to decides anything.
+- **Which rule files a deploy reads follows the CI context.** In a pull or merge request pipeline, deploy reads the files changed since the merge base. In any other CI run, it reads those the push changed. Outside CI, it reads those the last commit changed; it used to read every rule file. `--all` reads every rule file. Without `--all`, rules that map to `DISABLEMENT` or `DELETION` are included (`--drop-deprecated` leaves them out); with `--all` they are left out (`--keep-deprecated` includes them).
+- **Tenants declare `strategies`** (`PREVIEW`, `RELEASE`, or both when omitted) and optionally `manual = true` (only rules that list the tenant). The `deployment` key fails to load and names the replacement line.
+- **`--plan` and `DEPLOYMENT_PLAN` are removed.** `--plan`, or `deploy` and `validate query --live` with `DEPLOYMENT_PLAN` set, exits `2` and names the `--strategy` to pass. Generated inflight jobs no longer export `DEPLOYMENT_PLAN`.
+- **`validate query --live` checks each rule on the tenants a deploy sends it to.** Before, a run without `--plan` reached every tenant. Now a `PREVIEW` rule is not checked on a tenant that only accepts `RELEASE`; the pull request that moves it to a `RELEASE` status checks it there. `--strategy` narrows the check. `--json` reports `strategies` instead of `plan`.
+- **SDK and deployer API.** `DeploymentStrategy` is removed. Deployers and validators take `strategies` (a tuple of `StatusStrategy`) instead of `deployment_plan`. `rule.deploy(platform, dry_run=False, *, strategies=None)` deploys a rule by the runs its own status needs when `strategies` is omitted.
+- The `mdr_skipped_for_plan` log event is now `mdr_skipped_for_strategy`, with the rule's `strategy`, the run's `run_strategies`, and `deployed_by`. `adding_tenant` and `skipping_tenant` name the rule strategy, the tenant's strategies and the run's.
+
+### Added
+
+- **[Statuses, strategies and tenants](https://opentide.org/docs/usage/concepts/statuses-and-strategies/)**: a page on how a status maps to a strategy, which runs deploy which strategies, which tenants accept them, and how promotion interacts. It includes worked examples and a migration table from plans.
+- **`deploy --dry-run --json` lists the tenants** each platform's rules would reach (`tenants`), and every deploy result names its `strategies`.
+- **`opentide validate query --changed`** checks only the rule files a deploy of the same run reads: the pull or merge request's diff, the push's, or outside CI the last commit's. `--json` reports `"scope": "changed"`.
+- **`opentide validate query --file` and `--uuid`** (repeatable) check only the selected rules. A target that selects no rule file directly in the rules folder fails with exit `1` and is listed under `unmatched`, before any query is sent. `--json` reports `"scope": "selected"`.
+- **`OPENTIDE_PROXY`** sets the global `--proxy` when the flag is omitted, so a CI/CD variable can send opentide's platform calls through a proxy without editing the generated pipeline. Hosts in `NO_PROXY` are still reached directly, with or without `--proxy`: one deploy reaches a cloud tenant through the proxy and an internal Splunk directly, with no per-platform job.
+
+### Changed
+
+- Generated pipelines run `opentide deploy --strategy PREVIEW` in the pull or merge request job and `opentide deploy --strategy RELEASE` in the default-branch job. The job ids (`deploy_staging`, `deploy_production`) are unchanged. The CI/CD guide's hand-written pipelines match; they used to run `DEPLOYMENT_PLAN: staging` on pushes to `main`, which has no pull request to diff.
+- The CI/CD guide covers pipelines behind a proxy or a private CA: which proxy variables `pip`, `apt-get`, `git` and opentide read (set both spellings), `NO_PROXY` for internal tenants, and the CA bundle variables to use instead of `GIT_SSL_NO_VERIFY`. The global options page lists `--proxy`.
+- `--wide` is documented as what it does: ignore the strategy filter, not widen the output.
+
+### Fixed
+
+- **Generated pipelines checked every rule's query on every run.** The live query step ran `opentide validate query --platform <p> --live` with no scope, so a pull request that edited one rule sent the whole catalogue to the tenant; a catalogue of a few hundred Splunk rules took most of an hour. It now passes `--changed`, and the jobs that run it fetch full history (GitHub `fetch-depth: 0`, GitLab `GIT_DEPTH: "0"`, Azure `fetchDepth: 0`).
+- **Generated GitLab pipelines could not start a merge request pipeline.** A GitLab job with no `rules` defaults to `except: merge_requests`, so the merge request pipeline held only `deploy_staging` and `inflight_shards`, whose `needs: generate` named a job that was not added: GitLab refused the pipeline, the staging deploy and the inflight shards never ran, and every push to the branch also ran a branch pipeline. The file now sets `workflow:rules` for merge request and default-branch pipelines, so every job runs in a merge request pipeline and one push starts one pipeline. A push to a branch that has no merge request yet starts no pipeline; open a (draft) merge request to validate it, as GitHub validates pull requests.
+- **`opentide generate` logged a vocabulary warning per objective.** The editor schemas describe each objective with its priority, and looked that value up in the `criticality` vocabulary for an icon: `High` logged `Vocab parameter not found` (no vocabulary defines `icon`) and `Critical` logged `Vocab identifier not found` (an objective's `priority` is free text, commonly an `alert_severity` value, not a `criticality` one). The description prints the value as authored, labelled **Priority** for an objective, **Severity** for a signal and **Criticality** for a threat, with no lookup. Regenerate schemas with `opentide generate` to update the labels.
+- `--proxy` (and now `OPENTIDE_PROXY`) also sets the lowercase `http_proxy` and `https_proxy`. Python's HTTP clients prefer the lowercase spelling, so an inherited `http_proxy` used to win over the flag.
+- A GitHub pull request diff from a fork, whose head branch is not on origin, takes the request's base from the merge ref's two parents instead of failing with `Could not find git ref origin/<branch>`. This applies to `deploy` and `validate query --changed`.
+- A GitLab push diff with no previous tip (`CI_COMMIT_BEFORE_SHA` all zeros, as on a branch's first push, a manual run or a schedule) diffs from HEAD's first parent, as on GitHub and Azure, instead of failing with `No Source Commit Found`.
+
+### Install
+
+```bash
+pip install opentide==0.17.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide setup ci <github|gitlab|azure> --yes
+opentide validate --strict
+```
+
 ## [0.16.1] — 2026-10-20
 
 Patch release. Nothing to regenerate and nothing to do after upgrading: the SDK class is renamed `Opentide` with the old spelling kept as a deprecated alias.
@@ -1018,7 +1069,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/opentidehq/opentide/releases/tag/v0.17.0
 [0.16.1]: https://github.com/opentidehq/opentide/releases/tag/v0.16.1
 [0.16.0]: https://github.com/opentidehq/opentide/releases/tag/v0.16.0
 [0.15.0]: https://github.com/opentidehq/opentide/releases/tag/v0.15.0

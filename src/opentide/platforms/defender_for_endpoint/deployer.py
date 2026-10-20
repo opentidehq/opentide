@@ -15,7 +15,7 @@ from opentide.deployment.external_ids import (
     screen_tenant,
 )
 from opentide.states.deployment import DeploymentStateError
-from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.platforms.defender_for_endpoint.client import (
     DefenderForEndpointService,
@@ -248,12 +248,12 @@ class DefenderForEndpointDeploy(RuleDeployer):
             except DeploymentStateError as error:
                 report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
 
-    def deploy(self, mdr_deployment: Sequence[DetectionRule], deployment_plan: DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[DetectionRule], strategies: RunStrategies):
         mdr_deployment = [Opentide.Rules[uuid] for uuid in mdr_deployment]
         deployment = TideDeployment(
             deployment=mdr_deployment,
             system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,
-            strategy=deployment_plan,
+            strategies=strategies,
         )
         for tenant_deployment in deployment.rule_deployment:
             tenant = tenant_deployment.tenant.name
@@ -268,7 +268,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
                 platform=PLATFORM,
                 tenant_name=tenant,
                 status_of=lambda mdr: mdr.configurations.defender_for_endpoint.status,
-                plan=deployment_plan,
+                strategies=strategies,
             )
             if not planned:
                 continue
@@ -283,5 +283,5 @@ def declare():
 
 if __name__ == "__main__" and DebugEnvironment.ENABLED:
     DefenderForEndpointDeploy().deploy(
-        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG
+        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, (StatusStrategy.PREVIEW,)
     )

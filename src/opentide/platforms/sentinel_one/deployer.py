@@ -4,7 +4,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide, DetectionPlatforms
 from opentide.platforms.plugins import RuleDeployer
 from opentide.models.rule import DetectionRule
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import ExternalIdAction, plan_external_id, record_created, record_deleted, report_failure, screen_tenant
 from opentide.states.deployment import DeploymentStateError
@@ -124,7 +124,7 @@ class SentinelOneDeploy(RuleDeployer):
             except DeploymentStateError as error:
                 report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
 
-    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], deployment_plan: DeploymentStrategy):
+    def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies):
         """
         Triggers the deployment sequence for a series of MDR uuids or DetectionRule objects
         """
@@ -136,11 +136,11 @@ class SentinelOneDeploy(RuleDeployer):
             elif isinstance(mdr, DetectionRule):
                 loaded_mdr.append(mdr)
         mdr_deployment = loaded_mdr
-        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL_ONE, strategy=deployment_plan)
+        deployment = TideDeployment(deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL_ONE, strategies=strategies)
         for tenant_deployment in deployment.rule_deployment:
             # Plan against the deployment state before the client exists, so a
             # refused rule makes no HTTP call.
-            planned = screen_tenant(list(tenant_deployment.rules), platform=PLATFORM, tenant_name=tenant_deployment.tenant.name, status_of=lambda mdr: mdr.configurations.sentinel_one.status, plan=deployment_plan)
+            planned = screen_tenant(list(tenant_deployment.rules), platform=PLATFORM, tenant_name=tenant_deployment.tenant.name, status_of=lambda mdr: mdr.configurations.sentinel_one.status, strategies=strategies)
             if not planned:
                 continue
             service = SentinelOneService(tenant_deployment.tenant)
@@ -150,4 +150,4 @@ class SentinelOneDeploy(RuleDeployer):
 def declare():
     return SentinelOneDeploy()
 if __name__ == '__main__' and DebugEnvironment.ENABLED:
-    SentinelOneDeploy().deploy(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, DeploymentStrategy.DEBUG)
+    SentinelOneDeploy().deploy(DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, (StatusStrategy.PREVIEW,))

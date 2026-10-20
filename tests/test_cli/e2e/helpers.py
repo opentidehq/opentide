@@ -11,6 +11,10 @@ from importlib.machinery import ModuleSpec
 from pathlib import Path
 from types import ModuleType
 
+#: What the removed default plan (FULL) did: read every rule file and run both
+#: deployable strategies, so every deployable rule is selected.
+EVERY_RULE = ("--strategy", "PREVIEW", "--strategy", "RELEASE", "--all")
+
 
 def sdk_installed(module: str) -> bool:
     """Whether *module* can actually be imported.

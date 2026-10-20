@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, ClassVar, Protocol, cast
 
@@ -64,7 +65,19 @@ class DetectionRule(TideModel):
         bound._registry = registry
         return cast(DetectionRule, bound)
 
-    def deploy(self, platform: str, dry_run: bool = False) -> DeploymentResult:
+    def deploy(
+        self,
+        platform: str,
+        dry_run: bool = False,
+        *,
+        strategies: Iterable[str] | None = None,
+    ) -> DeploymentResult:
+        """Deploy this rule to *platform*'s tenants that accept the run's strategies.
+
+        *strategies* are run strategies (``PREVIEW``, ``RELEASE``). ``None``
+        deploys the rule as its platform status says: the runs that deploy the
+        strategy its status maps to.
+        """
         if self._registry is None:
             raise RuntimeError("DetectionRule.deploy() requires a bound registry")
         platforms = self._registry.Platforms
@@ -79,9 +92,19 @@ class DetectionRule(TideModel):
             return DeploymentResult(
                 platform=platform, uuids=[uuid], dry_run=True, message="dry-run"
             )
-        from opentide.models.deployment_enums import DeploymentStrategy
+        from opentide.models.deployment_enums import deployed_by, parse_strategies
 
-        deployer.deploy([uuid], DeploymentStrategy.load_from_environment())
+        if strategies is None:
+            from opentide.deployment.utils import check_status
+
+            block = getattr(self.configurations, platform, None)
+            status = getattr(block, "status", None)
+            if not status:
+                raise ValueError(f"Rule {self.name!r} has no {platform} status to deploy")
+            run = deployed_by(check_status(str(status)))
+        else:
+            run = parse_strategies(strategies)
+        deployer.deploy([uuid], run)
         return DeploymentResult(platform=platform, uuids=[uuid], dry_run=False)
 
     def validate(self) -> ValidationResult:  # ty: ignore[invalid-method-override]

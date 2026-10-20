@@ -35,7 +35,7 @@ def test_core_cli_steps_include_validate_and_generate() -> None:
     assert steps[0] == "opentide validate --strict"
     assert steps[1] == "opentide lint --strict"
     query = next(step for step in steps if "validate query" in step)
-    assert query == "opentide validate query --platform sentinel --live"
+    assert query == "opentide validate query --platform sentinel --live --changed"
     assert steps[-1] == "opentide generate"
 
 
@@ -54,7 +54,7 @@ def test_query_validation_command_guards_workspace_references(tmp_path: Path) ->
     ]
     assert "SPLUNK_TOKEN" not in names
     assert query_validation_command("sentinel") == (
-        "opentide validate query --platform sentinel --live"
+        "opentide validate query --platform sentinel --live --changed"
     )
 
     platform_dir = tmp_path / ".opentide" / "configurations" / "platforms"
@@ -87,9 +87,9 @@ def test_query_validation_command_guards_workspace_references(tmp_path: Path) ->
         "echo skip splunk live query validation SPLUNK_PORT SPLUNK_TOKEN SPLUNK_URL; exit 2"
         in command
     )
-    assert command.endswith("else opentide validate query --platform splunk --live; fi")
+    assert command.endswith("else opentide validate query --platform splunk --live --changed; fi")
     assert query_validation_command("literal", repo=tmp_path) == (
-        "opentide validate query --platform literal --live"
+        "opentide validate query --platform literal --live --changed"
     )
 
     options = CiRenderOptions(ci="gitlab", platforms=["splunk", "harfanglab"], repo=tmp_path)
@@ -117,14 +117,14 @@ def test_staging_and_production_steps() -> None:
     enabled = CiRenderOptions(ci="github", staging=True)
     disabled = CiRenderOptions(ci="github", staging=False)
     assert staging_deploy_steps(enabled) == [
-        "opentide deploy --dry-run --plan STAGING",
-        "opentide deploy --plan STAGING --skip-unconfigured",
+        "opentide deploy --dry-run --strategy PREVIEW",
+        "opentide deploy --strategy PREVIEW --skip-unconfigured",
     ]
     assert staging_deploy_steps(disabled) == []
     # Production keeps DISABLED and REMOVED rules so they are disabled or deleted (#548).
     assert production_deploy_steps(enabled) == [
-        "opentide deploy --dry-run --plan PRODUCTION --keep-deprecated",
-        "opentide deploy --plan PRODUCTION --keep-deprecated --skip-unconfigured",
+        "opentide deploy --dry-run --strategy RELEASE",
+        "opentide deploy --strategy RELEASE --skip-unconfigured",
     ]
     assert document_steps(enabled) == ["opentide generate docs --output docs"]
     assert document_steps(CiRenderOptions(ci="github", docs_enabled=False)) == []

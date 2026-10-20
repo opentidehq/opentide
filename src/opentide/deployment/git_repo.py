@@ -1,12 +1,13 @@
 import os
 import re
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from opentide.core import registry
 from opentide.deployment.git_backend import DulwichRepo, open_repo
-from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.models.deployment_enums import StatusStrategy
 from opentide.registry.discovery import discover_workspace
 
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
@@ -26,20 +27,44 @@ logger = get_logger(__name__)
 
 
 class MissingGitCheckout(Exception):
-    """A CI diff plan needs a git checkout and none was found."""
+    """A diff of changed rule files needs a git checkout and none was found."""
 
     def __init__(self, searched: Path) -> None:
         self.searched = searched
         super().__init__(f"no .git was found from {searched}")
 
 
-def missing_checkout_message(plan: str, searched: Path) -> str:
-    """The deploy failure for a STAGING or PRODUCTION plan with no checkout."""
+def missing_checkout_message(searched: Path) -> str:
+    """The failure for a run that reads changed rule files with no checkout."""
     return (
-        f"deploy --plan {plan} needs a git checkout to compute changed rules; "
-        f"no .git was found from {searched}. "
-        "Run inside the repository, or use --plan FULL."
+        "deploy reads the rule files the last commit, push or pull request changed, "
+        f"which needs a git checkout; no .git was found from {searched}. "
+        "Run inside the repository, or pass --all to read every rule file."
     )
+
+
+class DiffSource(Enum):
+    """Which commits a run's changed rule files come from. Set by the CI context."""
+
+    CHANGE_REQUEST = "the pull or merge request, from its merge base"
+    PUSH = "the pushed commit, against its first parent"
+    LAST_COMMIT = "the last commit, against its first parent"
+
+
+def run_diff_source() -> DiffSource:
+    """A pull or merge request pipeline reads its request; any other CI run its push.
+
+    Outside CI the run reads the checkout's last commit. Uncommitted edits are
+    not in it.
+    """
+    from opentide.deployment.ci import is_change_request
+
+    environment = CIEnvironment().environment
+    if environment is CIEnvironment.CIPlatforms.LocalDebug:
+        return DiffSource.LAST_COMMIT
+    if is_change_request(environment):
+        return DiffSource.CHANGE_REQUEST
+    return DiffSource.PUSH
 
 
 def _git_worktree(start: Path) -> Path | None:
@@ -107,7 +132,7 @@ RULE_SUFFIXES = (".yaml", ".yml")
 
 @dataclass(frozen=True)
 class RuleScope:
-    """Rule files a plan reads, and the ones in subfolders it skips (#312)."""
+    """Rule files a run reads, and the ones in subfolders it skips (#312)."""
 
     files: tuple[Path, ...] = ()
     nested: tuple[str, ...] = ()
@@ -166,15 +191,10 @@ def split_changed_rule_paths(changed: list[str]) -> tuple[list[str], list[str]]:
     return top_paths, nested_paths
 
 
-def modified_rule_scope(plan: DeploymentStrategy) -> RuleScope:
-    """The local rule files, or in CI the rule files the git diff changed."""
+def modified_rule_scope(source: DiffSource | None = None) -> RuleScope:
+    """The rule files the run's diff changed (*source*, else :func:`run_diff_source`)."""
     MDR_PATH = Path(registry.Opentide.Configurations.Global.Paths.Tide.rule)
-    if CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug:
-        scope = local_rule_scope()
-        logger.info("computed_modified_mdr_files", detail=str(list(scope.files)))
-        return scope
-
-    changed = diff_calculation(plan)
+    changed = diff_calculation(source or run_diff_source())
     top_level, nested_paths = split_changed_rule_paths(changed)
     # The diff path is repo-relative. The file itself lives under the absolute
     # rules folder, and a top-level rule's name is its last path segment.
@@ -183,14 +203,23 @@ def modified_rule_scope(plan: DeploymentStrategy) -> RuleScope:
     return RuleScope(tuple(mdr_files), tuple(nested_paths))
 
 
-def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
-    return list(modified_rule_scope(plan).files)
+def modified_mdr_files(source: DiffSource | None = None) -> list[Path]:
+    return list(modified_rule_scope(source).files)
 
 
-def _not_a_ci_diff_plan(plan: DeploymentStrategy) -> Exception:
-    return Exception(
-        f"Deployment plan {plan.name} is not a CI diff plan. Use STAGING, PRODUCTION, or FULL."
-    )
+def changed_rule_scope() -> tuple[RuleScope, DiffSource]:
+    """The rule files this run changed, and where the diff came from."""
+    source = run_diff_source()
+    return modified_rule_scope(source), source
+
+
+def _local_repository() -> DulwichRepo:
+    """The checkout holding the workspace, for a run outside CI."""
+    searched = discover_workspace().resolve()
+    worktree = _git_worktree(searched)
+    if worktree is None:
+        raise MissingGitCheckout(searched)
+    return open_repo(worktree)
 
 
 def _production_base(repo: DulwichRepo) -> str | None:
@@ -217,6 +246,29 @@ def _production_base(repo: DulwichRepo) -> str | None:
     return parent
 
 
+def _merge_ref_base(repo: DulwichRepo, merge_sha: str | None) -> list | None:
+    """The merge base of a pull request merge commit's two parents.
+
+    ``refs/pull/<n>/merge`` has the base branch tip as first parent and the
+    pull request head as second, so it yields the request's base without the
+    head branch existing on origin, as for a pull request from a fork.
+    ``None`` when *merge_sha* is not a two-parent commit in the checkout.
+    """
+    if not merge_sha:
+        return None
+    try:
+        parents = repo.commit(merge_sha).parents
+    except Exception:
+        return None
+    if len(parents) != 2:
+        return None
+    return repo.merge_base(parents[0].hexsha, parents[1].hexsha)
+
+
+def _not_a_ci_diff_source(source: DiffSource) -> Exception:
+    return Exception(f"{source.name} is not a CI diff source. Use CHANGE_REQUEST or PUSH.")
+
+
 def _require_origin_ref(repo: DulwichRepo, ref: str) -> None:
     try:
         repo._resolve_sha(ref)
@@ -224,30 +276,24 @@ def _require_origin_ref(repo: DulwichRepo, ref: str) -> None:
         raise Exception(f"Could not find git ref {ref}") from None
 
 
-def diff_calculation(plan: DeploymentStrategy) -> list:
-    """
-    Calculates the files in scope of deployment based on the execution context.
+def diff_calculation(source: DiffSource) -> list:
+    """Repo-relative paths added, renamed or modified by the run's commits.
 
-    Limitation: Tied to certain Gitlab CI variables, need more separation
-    to work in other environments
-
-    In a Merge Request, the calculation will take in consideration
-    the root of the MR and tip of the branch. In a direct commit to main, it will
-    instead take the difference between the two last commits.
-
-    stage: used to filter the paths computed
-
+    *source* is :class:`DiffSource`: a pull or merge request diffs from its
+    merge base to its tip, a push from HEAD's first parent (GitLab: the
+    previous tip), and a local run from the last commit's first parent.
+    Deleted files are left out: there is nothing left to deploy.
     """
     TARGET_CI = CIEnvironment().environment
 
-    if TARGET_CI is CIEnvironment.CIPlatforms.LocalDebug:
-        logger.info(
-            "local_debug_using_full_rule_tree",
-            detail="Git diff is unavailable outside CI; compiling from the local rules folder",
-        )
-        raw = registry.Opentide.Configurations.Global.Paths.Tide._raw["rule"]
-        # Repo-relative paths so modified_mdr_files' regex still matches.
-        return [str(Path(raw) / path.name) for path in local_rule_files()]
+    if source is DiffSource.LAST_COMMIT or TARGET_CI is CIEnvironment.CIPlatforms.LocalDebug:
+        if source is DiffSource.CHANGE_REQUEST:
+            raise Exception("A pull or merge request diff needs a CI run")
+        repo = _local_repository()
+        base = _production_base(repo)
+        if base is None:
+            return []
+        return _changed_paths(repo, repo.commit(base), repo.head)
 
     repo = TideRepo().repository
 
@@ -256,13 +302,13 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
             logger.info("identified_github_actions_as_the_ci_runtime_platform")
             LATEST_COMMIT = os.getenv("GITHUB_SHA")
 
-            if plan is DeploymentStrategy.PRODUCTION:
+            if source is DiffSource.PUSH:
                 base = _production_base(repo)
                 if base is None:
                     return []
                 BASE_COMMIT = base
 
-            elif plan is DeploymentStrategy.STAGING:
+            elif source is DiffSource.CHANGE_REQUEST:
                 source_branch = os.getenv("GITHUB_HEAD_REF")
                 target_branch = os.getenv("GITHUB_BASE_REF")
 
@@ -287,8 +333,16 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                     detail=f"source: {source_branch} -> target: {target_branch}",
                 )
                 _require_origin_ref(repo, target_branch)
-                _require_origin_ref(repo, source_branch)
-                base_commit = repo.merge_base(target_branch, source_branch)
+                try:
+                    _require_origin_ref(repo, source_branch)
+                except Exception:
+                    # A fork's branch is not on origin. The pull request's merge
+                    # ref, which actions/checkout checks out, has both sides.
+                    base_commit = _merge_ref_base(repo, os.getenv("GITHUB_SHA"))
+                    if base_commit is None:
+                        raise
+                else:
+                    base_commit = repo.merge_base(target_branch, source_branch)
 
                 if base_commit:
                     BASE_COMMIT = base_commit[0].hexsha
@@ -301,15 +355,23 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                     logger.critical("could_not_identify_the_base_of_the_pull_request", detail=message)
                     raise Exception(message)
             else:
-                raise _not_a_ci_diff_plan(plan)
+                raise _not_a_ci_diff_source(source)
 
         case CIEnvironment.CIPlatforms.GitlabCI:
             logger.info("identified_gitlab_ci_as_the_ci_runtime_platform")
             LATEST_COMMIT = os.getenv("CI_COMMIT_SHA")
 
-            if plan is DeploymentStrategy.PRODUCTION:
+            if source is DiffSource.PUSH:
                 BASE_COMMIT = os.getenv("CI_COMMIT_BEFORE_SHA")
-            elif plan is DeploymentStrategy.STAGING:
+                if not BASE_COMMIT or not BASE_COMMIT.strip("0"):
+                    # All zeros on a branch's first push, a manual run and a
+                    # schedule: there is no previous tip. Diff against HEAD's
+                    # first parent, as GitHub and Azure always do.
+                    base = _production_base(repo)
+                    if base is None:
+                        return []
+                    BASE_COMMIT = base
+            elif source is DiffSource.CHANGE_REQUEST:
                 BASE_COMMIT = os.getenv("CI_MERGE_REQUEST_DIFF_BASE_SHA")
                 # Allows the proper base commit calculation for Merged Result pipelines
                 if os.getenv("CI_MERGE_REQUEST_EVENT_TYPE") == "merged_result":
@@ -327,20 +389,20 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                                 LATEST_COMMIT = mr_correct_parent.hexsha
                             break
             else:
-                logger.critical("illegal_deployment_plan")
-                raise _not_a_ci_diff_plan(plan)
+                logger.critical("illegal_diff_source")
+                raise _not_a_ci_diff_source(source)
 
         case CIEnvironment.CIPlatforms.AzurePipeline:
             logger.info("identified_azure_pipeline_as_the_ci_runtime_platform")
             LATEST_COMMIT = os.getenv("BUILD_SOURCEVERSION")
 
-            if plan is DeploymentStrategy.PRODUCTION:
+            if source is DiffSource.PUSH:
                 base = _production_base(repo)
                 if base is None:
                     return []
                 BASE_COMMIT = base
 
-            elif plan is DeploymentStrategy.STAGING:
+            elif source is DiffSource.CHANGE_REQUEST:
                 source_branch = os.getenv("SYSTEM_PULLREQUEST_SOURCEBRANCH")
                 target_branch = os.getenv("SYSTEM_PULLREQUEST_TARGETBRANCHNAME")
 
@@ -380,8 +442,8 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
                     raise Exception(message)
 
             else:
-                logger.critical("illegal_deployment_plan")
-                raise _not_a_ci_diff_plan(plan)
+                logger.critical("illegal_diff_source")
+                raise _not_a_ci_diff_source(source)
 
         case _:
             logger.critical("illegal_ci_environment_detected", detail=str(TARGET_CI))
@@ -424,7 +486,10 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
     if not LATEST_COMMIT:
         raise Exception(f"{tip_names[TARGET_CI]} is required to compute the changed rules")
 
-    latest_commit = repo.commit(LATEST_COMMIT)
+    return _changed_paths(repo, source_commit, repo.commit(LATEST_COMMIT))
+
+
+def _changed_paths(repo: DulwichRepo, source_commit: Any, latest_commit: Any) -> list:
     diff = source_commit.diff(latest_commit)
 
     logger.info(

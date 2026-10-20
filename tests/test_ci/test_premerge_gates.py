@@ -218,8 +218,10 @@ def test_no_writing_job_carries_an_event_only_gate(renderer, ci: str, event_only
 
     gates: list[str] = []
     if ci == "gitlab":
-        for body in parsed.values():
-            if isinstance(body, dict):
+        for name, body in parsed.items():
+            # ``workflow:rules`` decides which pipelines exist, not what a job
+            # does in one: every writing job still carries its own branch gate.
+            if name != "workflow" and isinstance(body, dict):
                 for rule in body.get("rules") or []:
                     if isinstance(rule, dict) and rule.get("if"):
                         gates.append(str(rule["if"]))

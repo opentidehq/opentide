@@ -44,8 +44,10 @@ class CliContext:
         elif "OPENTIDE_DATA_ROOT" not in os.environ:
             os.environ["OPENTIDE_DATA_ROOT"] = str(get_data_root())
         if self.proxy:
-            os.environ["HTTP_PROXY"] = self.proxy
-            os.environ["HTTPS_PROXY"] = self.proxy
+            # Both spellings: urllib and requests prefer an inherited lowercase
+            # ``http_proxy`` over ``HTTP_PROXY``, which would win over --proxy.
+            for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                os.environ[name] = self.proxy
         if self.debug:
             os.environ["DEBUG"] = "True"
             os.environ["DEBUG_ENABLED"] = "1"
@@ -59,10 +61,6 @@ class CliContext:
     def activate(self) -> None:
         """Register this context for nested Typer subcommand resolution."""
         _cli_context.set(self)
-
-    def set_deployment_plan(self, plan: str | None) -> None:
-        if plan is not None:
-            os.environ["DEPLOYMENT_PLAN"] = plan.upper()
 
 
 def sync_typer_rendering(*, no_color: bool) -> None:

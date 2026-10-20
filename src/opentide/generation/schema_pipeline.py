@@ -8,13 +8,14 @@ from opentide.core.files import resolve_paths
 from opentide.core.logging import get_logger, is_debug_enabled
 from opentide.core.logging.console import emit_section
 from opentide.core.registry import Opentide
-from opentide.generation.framework import get_type, get_vocab_entry
+from opentide.generation.framework import get_type
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
     VocabularyRevisionResolver,
     is_id_keyed,
     split_vocab_reference,
 )
+from opentide.indexing.object_vocab import entry_level
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.platforms.enabled import enabled_systems
 
@@ -307,13 +308,16 @@ _Vocabulary_ : `{source_vocab}`
 
             criticality = ""
             if (get_type(identifier, mute=True) or "") in OBJECT_TYPES:
-                crit = key.get("criticality")
                 crit_icon = get_icon("criticality")
-                if not crit:
+                # Printed as authored. An objective's priority (``Critical``) is
+                # not a criticality value, and no vocabulary defines an icon, so
+                # looking either up only logged a warning per entry.
+                level = entry_level(key)
+                if level is None:
                     criticality = f"{crit_icon} **Criticality**: No Criticality Assigned"
                 else:
-                    crit_value_icon = get_vocab_entry("criticality", crit, "icon")
-                    criticality = f"{crit_icon} **Criticality**: {crit_value_icon} {crit}"
+                    label, value = level
+                    criticality = f"{crit_icon} **{label}**: {value}"
 
             if tlp:
                 tlp = f" | **{get_icon(tlp, vocab='tlp')}TLP:{tlp.upper()}**"

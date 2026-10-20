@@ -34,7 +34,7 @@ opentide --repo /path/to/detections validate --strict
 The CLI ships with the package. Install it:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at that environment's `opentide` binary with args `mcp` and `start` — see [MCP configuration](../mcp/configuration.md).
@@ -46,7 +46,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 Upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 ```
 
 `0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
@@ -56,7 +56,7 @@ pip install 'opentide==0.16.1'
 `0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide setup skills discover
 opentide setup skills --generic --yes
 ```
@@ -83,7 +83,7 @@ ValueError: validate must be callable
 `0.1.5` passed `validate=None` into Questionary for optional checkboxes. **0.1.6** omits the argument when a selection is optional. Non-interactive `opentide setup --ci github` was already fine. Upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide setup
 ```
 
@@ -92,7 +92,7 @@ opentide setup
 Generate-first `opentide setup vscode` `chdir`s into the target before writing files. **0.1.6** raised `FileNotFoundError` when that path did not exist yet. **0.1.7** creates the directory first (same as other setup commands). Upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide setup vscode
 ```
 
@@ -101,7 +101,7 @@ opentide setup vscode
 `0.1.6` wrote `.vscode/settings.json` even when templates (and therefore snippets) were missing. **0.1.7** generates templates and schemas first, then fails (`status: failed`) if snippets were requested but could not be written. Re-run:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide setup vscode
 ```
 
@@ -112,7 +112,7 @@ Pass `--no-generate` only when `.opentide/templates` already exist. A missing ta
 `0.1.7` logged missing `objects/{threats,objectives,rules}` at **error** during generate-first `setup vscode` or `generate` on a brand-new scaffold. Those folders are empty until you author YAML. **0.1.8** logs absence at **debug** (once per path). A path that exists but is not a directory still logs at error. Upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide generate
 ```
 
@@ -121,7 +121,7 @@ opentide generate
 `0.1.7` accepted `--platform sentinel` on `opentide setup repo` but did not write `.opentide/configurations/platforms/sentinel.toml`. The parent `opentide setup --platform` path already did. **0.1.8** runs platform setup from `setup repo --platform` as well, so `generate` emits `#sentinel:` configuration stubs. Upgrade and re-run:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide setup repo --yes --name SOC --platform sentinel
 opentide generate
 ```
@@ -131,7 +131,7 @@ opentide generate
 `0.1.7` dumped `default: None` as YAML `null`, and commented `#organisation:` without commenting nested `uuid` / `name`, so those keys parsed as children of `metadata.tlp`. **0.1.8** patched the legacy JSON Schema walker. **0.2.0** replaces that walker: templates come from Pydantic `FieldInfo`, optional sections are commented as whole blocks with `#` hugging each key (nested optionals are not commented again), and there are no `null` tokens. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide generate templates
 ```
 
@@ -144,6 +144,16 @@ Confirm `.opentide/templates/rule.1.0.template.yaml` has no `null`, `metadata.tl
 ```bash
 opentide setup ci github --yes
 ```
+
+### GitLab merge request pipeline fails: `'deploy_staging' job needs 'generate' job, but it was not added to the pipeline`
+
+A GitLab job with no `rules` defaults to `except: merge_requests`. Through 0.16.1 the generated `.gitlab-ci.yml` had no `workflow:rules`, so the merge request pipeline held only `deploy_staging` and `inflight_shards`, which need `generate`, and GitLab refused to start it. Each push to the branch also ran a branch pipeline. The generated file now sets `workflow:rules` for merge request and default-branch pipelines; regenerate it:
+
+```bash
+opentide setup ci gitlab --yes
+```
+
+A hand-edited `workflow:` block that did the same can go.
 
 ### GitLab inflight job pushes to a host called `${{CI_SERVER_HOST}}`
 
@@ -184,7 +194,7 @@ opentide --json setup --yes --platform sentinel --ci github
 
 ### `deploy` or `validate query --live` crashes locally with `illegal_deployment_plan`
 
-`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. Unset or blank now defaults to `FULL`. This is fixed in **0.1.3**. You can still set `--plan` or `DEPLOYMENT_PLAN` explicitly. A bare `validate query` refuses before it reads the plan, so only `--live` can reach this.
+`0.1.2` treated an unset `DEPLOYMENT_PLAN` as the string `"None"`. This was fixed in **0.1.3**. Since 0.17.0 there are no deployment plans: `deploy` takes `--strategy`, and `DEPLOYMENT_PLAN` fails with a message naming the replacement ([below](#--plan-or-deployment_plan-was-removed)).
 
 ### Tutorial objects fail `validate --strict` or `lint --strict`
 
@@ -196,12 +206,22 @@ opentide --json setup --yes --platform sentinel --ci github
 
 ## Generation
 
+### `opentide generate` warns `Vocab identifier not found` or `Vocab parameter not found` for `criticality`
+
+```text illustrative
+WARNING   Vocab identifier not found
+          identifier: Critical
+          vocab: criticality
+```
+
+The editor schemas describe each objective with its `priority`, and through 0.16.1 looked that value up in the `criticality` vocabulary for an icon. No vocabulary defines `icon` (`Vocab parameter not found` for `High`), and an objective's `priority` is free text, commonly an `alert_severity` value such as `Critical`, which `criticality` does not have (`Vocab identifier not found`). Nothing failed; the warnings repeated for every objective on every run. The sample above is illustrative: a current release no longer prints it. The description now prints the value as authored, labelled **Priority** (objectives), **Severity** (signals) or **Criticality** (threats), with no lookup. Upgrade and run `opentide generate`.
+
 ### `opentide generate` crashes with `Object of type date is not JSON serializable`
 
 Unquoted `metadata.created` / `modified` values (`created: 2026-09-11`) are valid Tide YAML. PyYAML loads them as `datetime.date`, and `0.1.5` crashed when writing `.opentide/exports/objects.export.json`. **0.1.6** stringifies those timestamps at YAML load. Upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide generate
 ```
 
@@ -212,7 +232,7 @@ Quoted dates (`created: "2026-09-11"`) already worked; you do not need to quote 
 `0.1.6` expanded `$ref` / `$defs` in templates but nested objects still inherited a shallow parent `required` list, so required fields under array items were commented out. **0.1.7** uses each nested object's own required list. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide generate
 ```
 
@@ -221,7 +241,7 @@ opentide generate
 `0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the CoreTide object form (`name`, optional `sighting` / `references`). Upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 ```
 
 Write actors as objects, not bare IDs:
@@ -269,7 +289,7 @@ opentide generate schemas
 `0.2.0` and earlier scraped NVD through `mitrecve`. **0.2.1** looks up `threat.cve` on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu). Generated threat pages link to `https://vulnerability.circl.lu/vuln/{id}` and can enrich published date, severity, and aliases. Upgrade, regenerate docs, and (optionally) run the opt-in check:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide generate docs
 opentide validate --check cve
 ```
@@ -281,7 +301,7 @@ Default `opentide validate` does not call the network. Empty JSON from CIRCL mea
 `0.1.7` applied GitLab `uuid_permalinks` to every flavour and built index links from the UUID while page files used slugify. GitHub pages were therefore `simulated-actor.md` while indexes linked to `{uuid}.md`, and folders used Title Case (`docs/Threats`). **0.1.8** scopes UUID permalinks to GitLab and writes lowercase `docs/{rules,objectives,threats}/<slug>.md`. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide generate docs
 ```
 
@@ -290,7 +310,7 @@ opentide generate docs
 Objective `priority` is an unconstrained alert-style string (High / Critical), not an incident `criticality::1.0` token. **0.1.7** looked it up in that vocab. **0.1.8** renders the author value as-is. Threat `criticality` and impact vocab spelling (including `Impairement`) are unchanged. Upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide generate docs
 ```
 
@@ -301,7 +321,7 @@ opentide generate docs
 `0.1.6` attributed `invalid_ref` to the nested object that contained the UUID. **0.1.7** reports the leaf field (`detection_model`, `objective.threats`, …). Vocabulary names also skip YAML list indices (`[0]`). Upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide validate --strict
 ```
 
@@ -310,7 +330,7 @@ opentide validate --strict
 `--json` used a single repo-wide `valid`/`invalid` for every check name. A vocab failure then looked like a failing `uuid` or `metadata` check. **0.1.7** emits per-check `status`. Upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide --json validate
 ```
 
@@ -335,7 +355,7 @@ threat:
 If your CI patches the installed `opentide` model to accept lists, drop that step once you upgrade:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide validate --strict
 ```
 
@@ -388,6 +408,10 @@ Through 0.15.0 the SDKs were extras, so a pipeline that installed only
 release still reports that an SDK will not import, the environment is damaged:
 run `pip install --force-reinstall opentide`.
 
+### Live query validation in CI takes most of an hour
+
+Through 0.16.1 the generated pipelines ran `opentide validate query --platform <platform> --live` with no scope, so every run sent every rule in the catalogue to the tenant. The step now passes `--changed` and checks only the rule files the pull request, merge request or push changed, on the tenants a deploy sends them to ([which rules are checked](../cli/validate.md#which-rules-are-checked)). Regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. Do not add `--strategy PREVIEW` to it: that drops the changed rules in a `RELEASE` status from the pull request's check. To check particular rules by hand, pass `--file` or `--uuid`.
+
 ## Platforms and deployment
 
 ### A platform I configured is not loaded
@@ -401,6 +425,32 @@ enabled = true
 ```
 
 Verify with `opentide info --platform sentinel`. See [Configuration → enabling a platform](./configuration.md#enabling-a-platform).
+
+### Splunk answers with HTML instead of XML behind a proxy
+
+The request went through the proxy, and the proxy answered with its own error page. An internal tenant must not be reached through the corporate proxy: add its host to `NO_PROXY` and `no_proxy` (`NO_PROXY=splunk.internal.example`). opentide's platform clients honour it, so the same run still reaches a cloud tenant such as Sentinel through the proxy, and the deploy does not have to be split per platform. See [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
+
+### `--plan` or `DEPLOYMENT_PLAN` was removed
+
+opentide 0.17.0 removed deployment plans. A run now names the status strategy it deploys: `--strategy PREVIEW` in the pull or merge request job, `--strategy RELEASE` in the default-branch job. `--plan STAGING` becomes `--strategy PREVIEW`, `--plan PRODUCTION` becomes `--strategy RELEASE`, and `--plan FULL` (or no plan) becomes `--strategy PREVIEW --strategy RELEASE --all`. Unset `DEPLOYMENT_PLAN` in your CI variables, and regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. See [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier).
+
+### `--strategy 'STAGING' is not a deployable strategy`
+
+`STAGING` and `PRODUCTION` are default status names, not strategies. A status maps to a strategy in `deployment.toml`; with the defaults, `STAGING` maps to `PREVIEW` and `PRODUCTION` to `RELEASE`. Pass the strategy: `--strategy PREVIEW` or `--strategy RELEASE`. The error names the strategy any status in your configuration maps to.
+
+### `the tenant key 'deployment' was removed in 0.17.0`
+
+A tenant now lists the strategies it accepts. Replace the `deployment` line the error names: `deployment = "STAGING"` becomes `strategies = ["PREVIEW"]`, `"PRODUCTION"` becomes `strategies = ["RELEASE"]`, `"ALWAYS"` is removed (a tenant accepts both by default), and `"MANUAL"` becomes `manual = true`.
+
+### A changed rule was not deployed
+
+Check three things, all named in the `mdr_skipped_for_strategy` and `skipping_tenant` log lines:
+
+1. The strategy its status maps to. A `PREVIEW` run skips a rule in `PRODUCTION` (it maps to `RELEASE`); a `RELEASE` run skips one in `DEVELOPMENT` (`PREVIEW`) unless promotion rewrites it first; `INERT` rules never deploy.
+2. The tenant's `strategies`. A tenant with `strategies = ["RELEASE"]` never receives a `PREVIEW` run, and a `manual` tenant only receives rules that list it.
+3. The rule files the run read. Outside CI, `deploy` reads only the last commit: commit the rule, or pass `--all`.
+
+`opentide --json deploy --dry-run --strategy <S>` lists, per platform, the tenants each rule would reach. See [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md).
 
 ### Deploy fails with an authentication error
 
@@ -433,7 +483,7 @@ Through **0.6.2** several CI diff arms still leaked an exception after the GitLa
 - An unset tip SHA names `CI_COMMIT_SHA`, `GITHUB_SHA`, or `BUILD_SOURCEVERSION`.
 - Azure `STAGING` without `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME` names those variables, before it fetches `origin`.
 - A pull-request ref that is not on `origin` names `origin/<name>`.
-- `DEBUG`, `MANUAL`, and `ALWAYS` say the plan is not a CI diff plan. Use `STAGING`, `PRODUCTION`, or `FULL`. `ALWAYS` is no longer treated as `FULL`.
+- `DEBUG`, `MANUAL`, and `ALWAYS` said the plan was not a CI diff plan. Plans were removed in 0.17.0; the CI context now decides which diff a run reads.
 - A GitLab merged-result commit with only one parent keeps `CI_COMMIT_SHA` and exits `0` when both SHAs are in the checkout.
 
 ### GitLab `STAGING` or `PRODUCTION` crashes with `lookup_ref`
@@ -446,7 +496,7 @@ Through **0.6.1** a GitHub Actions `STAGING` plan without `GITHUB_HEAD_REF` and 
 
 ### `deploy --plan STAGING` says no git repository was found at `None`
 
-Through **0.6.0** a `STAGING` or `PRODUCTION` plan with `GITHUB_ACTIONS`, `CI`, or `TF_BUILD` set and no checkout exited `1` with `FATAL: No git repository was found at None`. **0.6.1** still exits `1`. The message names the plan and the directory it searched, and points at `--plan FULL`. `FULL` does not need a checkout ([#310](https://github.com/opentidehq/opentide/issues/310)). Run the command inside the repository, or use `FULL` when every top-level rule should be planned.
+Through **0.6.0** a `STAGING` or `PRODUCTION` plan with `GITHUB_ACTIONS`, `CI`, or `TF_BUILD` set and no checkout exited `1` with `FATAL: No git repository was found at None`. **0.6.1** still exits `1`. The message names the directory it searched ([#310](https://github.com/opentidehq/opentide/issues/310)). Since 0.17.0 every deploy without `--all` reads a diff, outside CI too (the last commit). Run the command inside the repository, or pass `--all`, which does not need a checkout.
 
 ### `setup --path .` writes the scaffold at the git root
 
@@ -487,7 +537,7 @@ Through **0.6.3** a target of `.` was printed without quotes, so the trailing pe
 Through **0.6.3** the generated production job needed `deploy_staging`, and staging runs only on a pull request, so a push to the default branch skipped production. **0.6.4** needs `generate` and still runs only on a push to the default branch ([#348](https://github.com/opentidehq/opentide/issues/348)). Deploy jobs also fetch full history, so a depth-1 checkout no longer exits `1` with a bare parent SHA. Regenerate:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide setup ci github --yes
 ```
 
@@ -522,7 +572,7 @@ Through **0.7.0** a GitHub or Azure pull-request checkout (detached `HEAD`) died
 Through **0.7.0** the generated prune job ran `git add .opentide/inflight/` and exited 128 when that directory was absent. **0.8.0** creates the directory first ([#403](https://github.com/opentidehq/opentide/issues/403)). Regenerate:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide setup ci github --yes
 ```
 
@@ -558,14 +608,14 @@ Through **0.7.0** human `lint` printed `OK` when findings existed, and the exit 
 
 ### Installation pages name 0.6.1 as the latest release
 
-Through **0.7.0** the docs home and installation page said the latest release was 0.6.1 while the install block pinned 0.7.0 ([#406](https://github.com/opentidehq/opentide/issues/406)). **0.8.0** names 0.8.0 in both places. **0.8.1** names 0.8.1. **0.8.2** names 0.8.2. **0.9.0** names 0.9.0. **0.10.0** names 0.10.0. **0.11.0** names 0.11.0. **0.12.0** names 0.12.0. **0.12.1** names 0.12.1. **0.13.0** shipped the regression instead: four pages still named 0.12.1, which is what the 0.14.0 preparation found beside those pages' own 0.14.0 install block. **0.14.0** restored the claim and added a test checking every claim, pin and PyPI link against the newest `CHANGELOG.md` entry, so the sentence can no longer drift unnoticed. **0.14.1** names 0.14.1. **0.14.2** names 0.14.2. Pin `opentide==0.16.1`.
+Through **0.7.0** the docs home and installation page said the latest release was 0.6.1 while the install block pinned 0.7.0 ([#406](https://github.com/opentidehq/opentide/issues/406)). **0.8.0** names 0.8.0 in both places. **0.8.1** names 0.8.1. **0.8.2** names 0.8.2. **0.9.0** names 0.9.0. **0.10.0** names 0.10.0. **0.11.0** names 0.11.0. **0.12.0** names 0.12.0. **0.12.1** names 0.12.1. **0.13.0** shipped the regression instead: four pages still named 0.12.1, which is what the 0.14.0 preparation found beside those pages' own 0.14.0 install block. **0.14.0** restored the claim and added a test checking every claim, pin and PyPI link against the newest `CHANGELOG.md` entry, so the sentence can no longer drift unnoticed. **0.14.1** names 0.14.1. **0.14.2** names 0.14.2. Pin `opentide==0.17.0`.
 
 ### GitLab deploy runs after `validate query` fails
 
 Through **0.8.0** a generated GitLab pipeline started `generate` as soon as the object `validate` job finished. Query checks are separate jobs in the same stage, and GitLab starts a job when its `needs` finish, so a failed `opentide validate query` did not stop deploy ([#429](https://github.com/opentidehq/opentide/issues/429)). **0.8.1** lists every query-validation job in `generate`'s `needs`. GitHub and Azure already gated generate this way. Regenerate:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide setup ci gitlab --yes
 ```
 

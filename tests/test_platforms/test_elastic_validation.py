@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from opentide.models.deployment_enums import DeploymentStrategy
 from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.es_checks import (
@@ -152,7 +151,6 @@ def test_validator_preview_reports_log_errors(mock_checks, monkeypatch: pytest.M
     tenant = ConfigurationModels.Systems.Elastic.Tenant(
         name="test-tenant",
         description="test",
-        deployment=DeploymentStrategy.ALWAYS,
         setup=setup,
     )
     raw = {
@@ -279,7 +277,6 @@ def _tenant() -> ConfigurationModels.Systems.Elastic.Tenant:
     return ConfigurationModels.Systems.Elastic.Tenant(
         name="test-tenant",
         description="test",
-        deployment=DeploymentStrategy.ALWAYS,
         setup=setup,
     )
 

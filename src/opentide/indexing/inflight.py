@@ -105,15 +105,18 @@ def _local_git_changed_paths() -> list[Path]:
 
 
 def changed_object_yaml_paths(
-    plan: Any = None,
+    source: Any = None,
 ) -> list[Path]:
-    """Return object YAML paths changed in the current CI or git context."""
-    from opentide.deployment.ci import CIEnvironment
-    from opentide.deployment.git_repo import diff_calculation
-    from opentide.models.deployment_enums import DeploymentStrategy as Plan
+    """Return object YAML paths changed in the current CI or git context.
 
-    if plan is None:
-        plan = Plan.STAGING
+    *source* is a :class:`~opentide.deployment.git_repo.DiffSource`; the
+    default is the pull or merge request's diff.
+    """
+    from opentide.deployment.ci import CIEnvironment
+    from opentide.deployment.git_repo import DiffSource, diff_calculation
+
+    if source is None:
+        source = DiffSource.CHANGE_REQUEST
     explicit = _paths_from_env()
     if explicit:
         return explicit
@@ -127,7 +130,7 @@ def changed_object_yaml_paths(
         return []
 
     try:
-        scope = diff_calculation(plan)
+        scope = diff_calculation(source)
     except Exception as exc:
         # A CI runner without a usable git checkout must not traceback out of
         # `opentide generate inflight`; fall back to the local git baseline.
@@ -164,14 +167,14 @@ def write_inflight_shards(
     paths: list[Path] | None = None,
     *,
     inflight_dir: Path | None = None,
-    plan: Any = None,
+    source: Any = None,
 ) -> dict[str, Any]:
     """Write ``<uuid>.json`` preview shards for changed object YAML files."""
     resolved_paths = resolve_workspace_paths()
     target_dir = inflight_dir or resolved_paths["inflight"]
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    yaml_paths = paths if paths is not None else changed_object_yaml_paths(plan)
+    yaml_paths = paths if paths is not None else changed_object_yaml_paths(source)
     written: list[str] = []
 
     for yaml_path in yaml_paths:
@@ -308,15 +311,9 @@ def prune_inflight_shards(inflight_dir: Path | None = None) -> dict[str, Any]:
 def run(inflight_dir: Path | None = None) -> dict[str, Any]:
     """CLI entry: write inflight shards for the current change set."""
     from opentide.core.registry import Opentide
-    from opentide.models.deployment_enums import DeploymentStrategy
 
     Opentide.initialise()
-    plan_name = os.getenv("DEPLOYMENT_PLAN", DeploymentStrategy.STAGING.name)
-    try:
-        plan = DeploymentStrategy[plan_name]
-    except KeyError:
-        plan = DeploymentStrategy.STAGING
-    return write_inflight_shards(inflight_dir=inflight_dir, plan=plan)
+    return write_inflight_shards(inflight_dir=inflight_dir)
 
 
 def run_prune(inflight_dir: Path | None = None) -> dict[str, Any]:

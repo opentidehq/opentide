@@ -6,7 +6,7 @@ subschema = "Elastic Security"
 
 [[tenants]]
 name = "staging"
-deployment = "STAGING"
+strategies = ["PREVIEW"]
 [tenants.setup]
 ssl = true
 url = "https://kibana.staging.example"

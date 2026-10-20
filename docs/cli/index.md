@@ -9,7 +9,7 @@ icon: Terminal
 The `opentide` command is a [Typer](https://typer.tiangolo.com/) application included in the core package:
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 ```
 
 Run `opentide --help` for the live command tree.
@@ -55,7 +55,7 @@ opentide generate
 opentide --json validate --strict
 opentide validate query --platform sentinel --live
 opentide lint --strict
-opentide deploy --platform sentinel --dry-run
+opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
 Generated pipelines use `opentide generate docs --output docs` for documentation jobs. Status promotion runs inside `opentide deploy` — there is no separate `mutate promote` step.

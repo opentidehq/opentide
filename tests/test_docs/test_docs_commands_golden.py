@@ -806,7 +806,10 @@ def test_documented_output_samples_match_the_live_command(
 
 _PRE_0_5_0_DEPLOY_SAMPLE = "\n".join(
     [
-        '```text output-of="opentide deploy --platform sentinel --dry-run"',
+        (
+            '```text output-of="opentide deploy --platform sentinel --dry-run'
+            ' --strategy PREVIEW --all"'
+        ),
         "deploy (dry-run): sentinel",
         "  Sentinel KQL Rule  STAGING  → would create/update",
         "deploy: 1 rule planned, 0 applied (dry-run)",

@@ -21,7 +21,8 @@ flags = [""]
 #[[tenants]]
 #name = "Name"
 #description = "Tenant Description"
-#deployment = "ALWAYS" #STAGING, PRODUCTION, MANUAL (only when defined in MDR) or ALWAYS
+#strategies = ["PREVIEW", "RELEASE"] # status strategies this tenant accepts; omit for both
+#manual = false # true: only rules whose block lists this tenant
 #[tenants.setup]
 #ssl = true
 #api = ""

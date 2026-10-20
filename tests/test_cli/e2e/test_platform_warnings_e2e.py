@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from tests.corpus_support import clear_runtime_caches
 from tests.test_cli.conftest import assert_json_ok
-from tests.test_cli.e2e.helpers import write_tutorial_objects
+from tests.test_cli.e2e.helpers import EVERY_RULE, write_tutorial_objects
 from typer.testing import Result
 
 from opentide.core.logging import LoggingConfig, init_logging
@@ -44,7 +44,6 @@ flags = []
 [[tenants]]
 name = "Default"
 description = "Default Splunk deployment target"
-deployment = "ALWAYS"
 [tenants.setup]
 url = "$SPLUNK_URL"
 port = "$SPLUNK_PORT"
@@ -215,8 +214,7 @@ def test_an_enabled_splunk_tenant_with_an_invalid_frequency_warns_once_on_deploy
         "--dry-run",
         "--platform",
         "splunk",
-        "--plan",
-        "FULL",
+        *EVERY_RULE,
         "--wide",
         "--skip-promotion",
     )

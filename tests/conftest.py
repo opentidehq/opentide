@@ -96,6 +96,20 @@ def _isolate_git_location_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
+#: The variables that make a CI run a pull or merge request run. A GitHub
+#: Actions job for a pull request exports ``GITHUB_EVENT_NAME=pull_request``,
+#: so a test that sets ``GITHUB_ACTIONS`` or ``CI`` to simulate a push would
+#: otherwise run as a pull request there and nowhere else.
+_CHANGE_REQUEST_ENV = ("GITHUB_EVENT_NAME", "CI_PIPELINE_SOURCE", "BUILD_REASON")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ci_event_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start every test as a push run; a test that needs a pull request sets the event."""
+    for name in _CHANGE_REQUEST_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def metadata() -> dict[str, Any]:
     return {
@@ -125,7 +139,7 @@ def rule_payload(metadata: dict[str, Any]) -> dict[str, Any]:
 def _restore_process_environment() -> Iterator[None]:
     """Undo ``os.environ`` writes a test makes outside ``monkeypatch``.
 
-    In-process CLI calls push ``--repo`` / ``--no-color`` / ``--plan`` into the
+    In-process CLI calls push ``--repo`` / ``--no-color`` into the
     environment for engine modules and never take them back; without this every
     later test in the worker inherits them and output checks depend on order.
     """

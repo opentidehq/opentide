@@ -13,6 +13,7 @@ from opentide.generation.vocabulary import (
     is_id_keyed,
     split_vocab_reference,
 )
+from opentide.indexing.object_vocab import entry_level
 from opentide.models.object_types import CORE_OBJECT_TYPES
 
 logger = get_logger(__name__)
@@ -185,10 +186,11 @@ class _VocabEnumBuilder:
 
         criticality = ""
         if self.vocab in self.object_types:
-            crit = key.get("criticality")
             crit_icon = self.icons.get("criticality", "")
-            if crit:
-                criticality = f"{crit_icon} **Criticality**: {crit}"
+            level = entry_level(key)
+            if level is not None:
+                label, value = level
+                criticality = f"{crit_icon} **{label}**: {value}"
 
         id_icon = self.icons.get("id", "")
         stage_doc = ""

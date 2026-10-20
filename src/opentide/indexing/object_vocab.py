@@ -6,6 +6,25 @@ from typing import Any
 
 from opentide.core.index_manager import IndexManager
 
+#: The level an entry carries, under the key of the field it was read from. A
+#: threat's ``criticality`` is a ``criticality`` vocabulary value. An objective's
+#: ``priority`` is free text and a signal's ``severity`` an ``alert_severity``
+#: value (``Critical``), so neither is filed or looked up as a criticality.
+LEVEL_LABELS: tuple[tuple[str, str], ...] = (
+    ("criticality", "Criticality"),
+    ("priority", "Priority"),
+    ("severity", "Severity"),
+)
+
+
+def entry_level(entry: Any) -> tuple[str, str] | None:
+    """``(label, value)`` for the level a model vocabulary entry carries, if any."""
+    for key, label in LEVEL_LABELS:
+        value = entry.get(key)
+        if value:
+            return label, str(value)
+    return None
+
 
 def _empty_model_vocabulary(
     object_type: str, icons: dict[str, str], names: dict[str, str]
@@ -95,7 +114,7 @@ def build_object_vocabularies(
                         objective.get("description") if isinstance(objective, dict) else ""
                     )
                     if isinstance(objective, dict) and objective.get("priority") is not None:
-                        entry["criticality"] = objective.get("priority")
+                        entry["priority"] = objective.get("priority")
                 case "rule":
                     description = object_data.get("description") or ""
                 case _:
@@ -123,7 +142,7 @@ def build_object_vocabularies(
                         "model": True,
                         "tide.object.parent": _uuid,
                         "tlp": obj_meta.get("tlp", ""),
-                        "criticality": signal.get("severity"),
+                        "severity": signal.get("severity"),
                         "description": signal.get("description"),
                     }
                     signal_entry = {k: v for k, v in signal_entry.items() if v is not None}

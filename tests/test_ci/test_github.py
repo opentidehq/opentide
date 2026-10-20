@@ -36,12 +36,25 @@ def test_render_github_validate_includes_query_platforms() -> None:
     assert "AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}" in validate
 
 
+def test_render_github_query_validation_checks_only_changed_rules() -> None:
+    """Every rule on every run took 45 minutes on a 467-rule Splunk catalogue."""
+    workflow = render_github(CiRenderOptions(ci="github", platforms=["splunk"]))
+    validate = workflow.split("  validate:", 1)[1].split("  generate:", 1)[0]
+    assert "opentide validate query --platform splunk --live --changed" in validate
+    # No --strategy: a changed rule is checked on every tenant a deploy sends it to.
+    assert "--strategy" not in validate
+    assert "--plan" not in validate
+    # The pull request's merge base and the pushed commit's parent are not in
+    # a one-commit checkout.
+    assert "fetch-depth: 0" in validate
+
+
 def test_render_github_staging_job_when_enabled() -> None:
     options = CiRenderOptions(ci="github", staging=True)
     workflow = render_github(options)
     assert "deploy_staging:" in workflow
-    assert "opentide deploy --dry-run --plan STAGING" in workflow
-    assert "opentide deploy --plan STAGING --skip-unconfigured" in workflow
+    assert "opentide deploy --dry-run --strategy PREVIEW" in workflow
+    assert "opentide deploy --strategy PREVIEW --skip-unconfigured" in workflow
     assert "opentide validate --strict" in workflow
     assert "opentide lint --strict" in workflow
     assert "AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}" in workflow
@@ -71,6 +84,8 @@ def test_render_github_inflight_job_when_enabled() -> None:
     assert "opentide generate inflight" in workflow
     assert "opentide generate inflight prune" in workflow
     assert 'git push origin "HEAD:main"' in workflow
+    # Removed in 0.17.0: the inflight diff is the pull request's, whatever the env.
+    assert "DEPLOYMENT_PLAN" not in workflow
 
 
 def test_render_github_no_inflight_skips_inflight_job() -> None:

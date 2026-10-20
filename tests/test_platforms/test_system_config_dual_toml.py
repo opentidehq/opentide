@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 from opentide.platforms.config import _build_cbc_config, _build_splunk_config
 
 
@@ -35,7 +36,6 @@ def test_build_splunk_config_v4_format() -> None:
                 {
                     "name": "Primary",
                     "description": "Primary tenant",
-                    "deployment": "ALWAYS",
                     "setup": {
                         "ssl": True,
                         "url": "https://splunk.example",
@@ -55,6 +55,9 @@ def test_build_splunk_config_v4_format() -> None:
     assert config.tenants is not None
     assert config.tenants[0].name == "Primary"
     assert config.tenants[0].setup.enterprise_security is True
+    # A tenant without ``strategies`` or ``manual`` takes every run strategy.
+    assert config.tenants[0].strategies == DEPLOYABLE_STRATEGIES
+    assert config.tenants[0].manual is False
 
 
 def test_build_splunk_config_array_of_modifier_tables() -> None:
@@ -73,7 +76,6 @@ def test_build_splunk_config_array_of_modifier_tables() -> None:
                 {
                     "name": "Primary",
                     "description": "Primary tenant",
-                    "deployment": "ALWAYS",
                     "setup": {
                         "ssl": True,
                         "url": "https://splunk.example",
@@ -122,7 +124,6 @@ def test_build_cbc_config_v4_format() -> None:
                 {
                     "name": "org-a",
                     "description": "Org A",
-                    "deployment": "ALWAYS",
                     "setup": {
                         "ssl": True,
                         "url": "https://cbc.example",
@@ -139,6 +140,8 @@ def test_build_cbc_config_v4_format() -> None:
     )
     assert config.tenants is not None
     assert config.tenants[0].setup.org_key == "key"
+    assert config.tenants[0].strategies == DEPLOYABLE_STRATEGIES
+    assert config.tenants[0].manual is False
 
 
 def test_build_system_config_uses_tenant_identity_not_rule_schema() -> None:

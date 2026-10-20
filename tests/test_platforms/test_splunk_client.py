@@ -27,7 +27,6 @@ flags = []
 [[tenants]]
 name = "Default"
 description = "Default Splunk deployment target"
-deployment = "ALWAYS"
 [tenants.setup]
 ssl = false
 url = "https://splunk.example"

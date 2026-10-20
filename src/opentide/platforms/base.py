@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from typing import cast
 
 from opentide.core.logging import get_logger
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
 
 logger = get_logger(__name__)
@@ -20,14 +20,14 @@ class BaseRuleDeployer(ABC):
     def deploy_mdr(
         self,
         mdr: DetectionRule,
-        deployment_plan: DeploymentStrategy | None,
+        strategies: RunStrategies | None,
     ) -> None:
         """Deploy a single rule onto the target platform."""
 
     def deploy(
         self,
         mdr_deployment: Sequence[DetectionRule] | list[str],
-        deployment_plan: DeploymentStrategy | None = None,
+        strategies: RunStrategies | None = None,
     ) -> None:
         """Deploy rules, resolving UUID strings to loaded models when needed."""
         rules = self._resolve_rules(mdr_deployment)
@@ -36,9 +36,9 @@ class BaseRuleDeployer(ABC):
                 "deploying_rule",
                 rule=mdr.name,
                 uuid=mdr.metadata.uuid,
-                plan=str(deployment_plan),
+                strategies=[s.name for s in strategies or ()],
             )
-            self.deploy_mdr(mdr, deployment_plan)
+            self.deploy_mdr(mdr, strategies)
 
     def _resolve_rules(
         self,

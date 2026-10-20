@@ -118,8 +118,8 @@ def _publish_on_default_branch(*, push: str, fetch: str) -> str:
     branch and committed there.
 
     The worktree starts from the commit the shards were copied from, not the
-    default branch's current tip: ``generate inflight`` fetches ``origin`` on a
-    staging plan, and a newer base would make the commit delete every shard
+    default branch's current tip: ``generate inflight`` fetches ``origin`` to
+    diff the pull request, and a newer base would make the commit delete every shard
     published in between. The push then rebases onto the latest tip.
 
     The ``EXIT`` trap removes that worktree on every path out of the script:
@@ -199,7 +199,6 @@ def github_inflight_job(
               run: {generate_cmd}
               env:
                 OPENTIDE_REPO_ROOT: ${{{{ github.workspace }}}}
-                DEPLOYMENT_PLAN: STAGING
             - name: Push inflight shards to default branch
               run: |
                 git config user.name "github-actions[bot]"
@@ -290,7 +289,6 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
         '    - git fetch origin "$CI_DEFAULT_BRANCH"\n'
         f"{checkout_inflight}"
         '    - export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"\n'
-        "    - export DEPLOYMENT_PLAN=STAGING\n"
         f"    - {generate_cmd}\n"
         '    - git config user.email "gitlab-ci@opentide.local"\n'
         '    - git config user.name "gitlab-ci"\n'
@@ -355,7 +353,6 @@ def azure_inflight_job(*, python_version: str, opentide_version: str, default_br
             f"git fetch origin {default_branch}",
             *_default_branch_shards(default_ref),
             'export OPENTIDE_REPO_ROOT="$BUILD_SOURCESDIRECTORY"',
-            "export DEPLOYMENT_PLAN=STAGING",
             generate_cmd,
             'git config user.email "azure-pipelines@opentide.local"',
             'git config user.name "azure-pipelines"',

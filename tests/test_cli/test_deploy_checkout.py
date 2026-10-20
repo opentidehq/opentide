@@ -1,4 +1,4 @@
-"""CI STAGING/PRODUCTION plans outside a git checkout (#310)."""
+"""A deploy that reads the changed rule files, outside a git checkout (#310)."""
 
 from __future__ import annotations
 
@@ -22,9 +22,17 @@ _WORKSPACE_VARS = {
     "CI": "CI_PROJECT_DIR",
     "TF_BUILD": "BUILD_SOURCESDIRECTORY",
 }
+#: The variable and value each provider sets on a pull or merge request run.
+_CHANGE_REQUEST = {
+    "GITHUB_ACTIONS": ("GITHUB_EVENT_NAME", "pull_request"),
+    "CI": ("CI_PIPELINE_SOURCE", "merge_request_event"),
+    "TF_BUILD": ("BUILD_REASON", "PullRequest"),
+}
 
 
-def _ci_env(tmp_path: Path, marker: str) -> dict[str, str | None]:
+def _ci_env(
+    tmp_path: Path, marker: str | None, *, change_request: bool = False
+) -> dict[str, str | None]:
     """Enable one CI marker and clear the others.
 
     ``CliRunner`` overlays ``env`` on ``os.environ``. A key that is only
@@ -34,32 +42,46 @@ def _ci_env(tmp_path: Path, marker: str) -> dict[str, str | None]:
     hidden = {
         *_MARKERS,
         *_WORKSPACE_VARS.values(),
+        *(name for name, _ in _CHANGE_REQUEST.values()),
         "OPENTIDE_REPO_ROOT",
         "OPENTIDE_TIDE_WORKSPACE",
+        "DEPLOYMENT_PLAN",
     }
     env: dict[str, str | None] = {key: None for key in hidden}
-    env[marker] = "true"
+    if marker is not None:
+        env[marker] = "true"
+        if change_request:
+            name, value = _CHANGE_REQUEST[marker]
+            env[name] = value
     env["OPENTIDE_REPO_ROOT"] = str(tmp_path)
     env["OPENTIDE_TIDE_WORKSPACE"] = str(tmp_path)
     return env
 
 
-@pytest.mark.parametrize("plan", ["STAGING", "PRODUCTION"])
-@pytest.mark.parametrize("marker", list(_WORKSPACE_VARS))
+@pytest.mark.parametrize(
+    ("strategy", "change_request"),
+    [("PREVIEW", True), ("RELEASE", False), ("PREVIEW", False)],
+    ids=["PREVIEW-request", "RELEASE-push", "PREVIEW-push"],
+)
+@pytest.mark.parametrize("marker", [*_WORKSPACE_VARS, None], ids=[*_WORKSPACE_VARS, "local"])
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
-def test_ci_plan_without_a_checkout_names_the_directory(
+def test_a_diff_without_a_checkout_names_the_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    plan: str,
-    marker: str,
+    strategy: str,
+    change_request: bool,
+    marker: str | None,
     json_output: bool,
 ) -> None:
-    """#310: ``open_repo(None)`` reported ``No git repository was found at None``."""
-    monkeypatch.chdir(tmp_path)
-    message = missing_checkout_message(plan, tmp_path.resolve())
-    argv = [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", plan]
+    """#310: ``open_repo(None)`` reported ``No git repository was found at None``.
 
-    result = runner.invoke(app, argv, env=_ci_env(tmp_path, marker))
+    Outside CI the run reads the last commit, which needs a checkout too.
+    """
+    monkeypatch.chdir(tmp_path)
+    message = missing_checkout_message(tmp_path.resolve())
+    argv = [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", strategy]
+
+    result = runner.invoke(app, argv, env=_ci_env(tmp_path, marker, change_request=change_request))
 
     assert result.exit_code == 1, result.stdout + result.stderr
     if json_output:
@@ -76,19 +98,31 @@ def test_ci_plan_without_a_checkout_names_the_directory(
         assert re.sub(r"\s+", "", message) in re.sub(r"\s+", "", visible)
 
 
-def test_full_plan_in_ci_does_not_need_a_checkout(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("marker", ["GITHUB_ACTIONS", None], ids=["github", "local"])
+def test_every_rule_file_does_not_need_a_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, marker: str | None
 ) -> None:
+    """``--all`` (the old ``--plan FULL``) lists the rules folder, not a diff."""
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(
         app,
-        ["--json", "deploy", "--dry-run", "--plan", "FULL"],
-        env=_ci_env(tmp_path, "GITHUB_ACTIONS"),
+        [
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+        ],
+        env=_ci_env(tmp_path, marker),
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["status"] == "skipped"
     assert "no .git was found" not in payload["message"]
+    assert payload["message"] == "No rule this run read has a status that maps to its strategies"
 
 
 def test_a_real_checkout_is_opened(

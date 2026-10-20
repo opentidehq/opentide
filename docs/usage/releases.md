@@ -7,6 +7,35 @@ description: Public package versions of the opentide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.17.0 — 20 October 2026
+
+Minor release with **breaking changes**: deployment plans are removed. Replace `--plan` with `--strategy`, unset `DEPLOYMENT_PLAN`, replace each tenant's `deployment` key, and regenerate your CI pipeline. Each old setting fails with a message naming its replacement.
+
+**Install**
+
+```bash
+pip install opentide==0.17.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide setup ci <github|gitlab|azure> --yes
+opentide validate --strict
+```
+
+**What changes**
+
+- **`--strategy` replaces `--plan`.** A deploy names the status strategy it carries out: `--strategy PREVIEW` in the pull or merge request job, `--strategy RELEASE` on the default branch. It deploys the changed rules whose status maps to that strategy. `STAGING` and `PRODUCTION` are two default status names, nothing more. See [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md).
+- **Tenants list `strategies`.** `strategies = ["PREVIEW"]`, `["RELEASE"]`, or both (the default when omitted), and `manual = true` for a tenant that only takes rules naming it. The `deployment` key is gone; the [migration table](./concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier) maps each old value.
+- **Deploy reads the changed rules.** That is the pull or merge request, the push, or outside CI the last commit. `--all` reads every rule file.
+- **Faster live query gate.** Generated pipelines run `opentide validate query --live --changed`: only the rules the run changed, on the tenants a deploy sends them to. Before, every run sent the whole catalogue. Check rules by hand with `--file` or `--uuid`. See [Which rules are checked](../cli/validate.md#which-rules-are-checked).
+- **GitLab merge request pipelines start.** The generated `.gitlab-ci.yml` sets `workflow:rules`; without them GitLab refused every merge request pipeline, so the staging deploy never ran. A branch without a merge request no longer runs a pipeline.
+- **Behind a proxy.** `OPENTIDE_PROXY` sets `--proxy`, and `NO_PROXY` keeps internal tenants such as Splunk off the proxy. See [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
+- **Quieter `generate`.** No more `Vocab identifier not found` / `Vocab parameter not found` warnings for objective priorities.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.17.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.17.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.16.1 — 20 October 2026
 
 Patch release. Nothing to regenerate and nothing to do after upgrading. The SDK class is spelled `Opentide`; `OpenTide` still imports with a deprecation warning.

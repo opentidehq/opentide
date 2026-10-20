@@ -114,7 +114,7 @@ rule = Opentide.Rules[uuid]
 
 rule.validate() -> ValidationResult                      # schema + cross-object checks
 rule.validate_query(platform) -> ValidationResult        # query syntax (supported platforms)
-rule.deploy(platform, dry_run=False) -> DeploymentResult
+rule.deploy(platform, dry_run=False, *, strategies=None) -> DeploymentResult
 rule.document() -> str                                   # or Opentide.render_rule(rule)
 ```
 

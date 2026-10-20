@@ -50,7 +50,10 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 : A SIEM or EDR target opentide deploys to (e.g. Sentinel, Splunk, CrowdStrike). Some platforms also support query validation. See [Platforms](./platforms.md).
 
 **Status**
-: A rule's deployment state, e.g. `STAGING` or `PRODUCTION`. Deployment respects status and your promotion configuration.
+: A rule block's lifecycle label, e.g. `DEVELOPMENT`. The set is configuration (`deployment.toml`); each status maps to a strategy. The default statuses, `STAGING` and `PRODUCTION` included, are names like any other: only the strategy they map to matters.
+
+**Strategy**
+: What deploy does with a rule in a given status: `INERT`, `PREVIEW`, `RELEASE`, `UNIVERSAL`, `DISABLEMENT` or `DELETION`. Fixed by the deployment spec. A run deploys `--strategy PREVIEW` or `--strategy RELEASE`, and a tenant's `strategies` say which runs reach it. See [Statuses, strategies and tenants](./statuses-and-strategies.md).
 
 **Staging**
 : Deploying rules in a non-production state for verification before they go live.
@@ -58,8 +61,11 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 **Promotion**
 : Advancing rules from a lower status to a higher one (typically `STAGING → PRODUCTION`), individually or in bulk via `opentide deploy`.
 
-**Deployment plan (`DEPLOYMENT_PLAN`)**
-: The configuration that decides which rules deploy where and in what status. Referenced by CLI global options and [Configuration](../configuration.md).
+**Run strategy (`--strategy`)**
+: The strategy a deploy carries out: `PREVIEW` (the pull or merge request job) or `RELEASE` (the default-branch job, which also disables and deletes retired rules). It replaced deployment plans (`--plan`, `DEPLOYMENT_PLAN`), removed in 0.17.0. See [Statuses, strategies and tenants](./statuses-and-strategies.md).
+
+**Tenant strategies (`strategies`, `manual`)**
+: The run strategies a tenant accepts, in its platform file; both when omitted. `manual = true` keeps a tenant to the rules that list it. They replaced the tenant `deployment` key.
 
 **Visibility**
 : Configuration controlling which objects are exposed/deployed in a given context. Validated by a generated `visibility` schema.

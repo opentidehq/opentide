@@ -6,8 +6,13 @@ from opentide.core import registry
 from opentide.core.io import load_yaml
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
-from opentide.deployment.git_repo import local_rule_scope, modified_rule_scope, rules_folder_in_repo
-from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
+from opentide.deployment.git_repo import (
+    RuleScope,
+    local_rule_scope,
+    modified_rule_scope,
+    rules_folder_in_repo,
+)
+from opentide.models.deployment_enums import RunStrategies, StatusStrategy, deployed_by, deploys
 from opentide.platforms.enabled import enable_platform_command, enabled_systems
 
 logger = get_logger(__name__)
@@ -149,17 +154,29 @@ def _report_nested_rules(nested: tuple[str, ...], warnings: list[str] | None) ->
 
 
 def make_deploy_plan(
-    plan: DeploymentStrategy,
+    strategies: RunStrategies,
     wide_scope: bool = False,
     keep_deprecated: bool = True,
     *,
     warnings: list[str] | None = None,
+    scope: RuleScope | None = None,
+    all_files: bool = False,
 ) -> dict[str, list[str]]:
     """Assemble MDR UUIDs to deploy, organized per system.
 
-    Only the files directly in the rules folder are deployed (#312). The
-    message naming the skipped subfolder files is appended to *warnings*;
-    without a list to report through, it is logged as a warning instead.
+    The rule files are *scope* when given (``validate query --file``), every
+    file in the rules folder with *all_files*, and otherwise the files the
+    run's diff changed (:func:`modified_rule_scope`). Only the files directly
+    in the rules folder are deployed (#312). The message naming the skipped
+    subfolder files is appended to *warnings*; without a list to report
+    through, it is logged as a warning instead.
+
+    A platform block is selected when a run strategy deploys its status's
+    strategy (:func:`deploys`): ``PREVIEW`` takes ``PREVIEW`` and
+    ``UNIVERSAL``; ``RELEASE`` takes ``RELEASE`` and ``UNIVERSAL`` and retires
+    ``DISABLEMENT`` and ``DELETION``. The status name never matters, only the
+    strategy it maps to. Tenants are chosen later, per rule
+    (``TideDeployment.tenants_resolver``).
 
     A selected rule that still carries ``rule_id``, ``rule_id_bundle`` or
     ``rule_id::<tenant>`` on any platform block is left out of every
@@ -169,8 +186,9 @@ def make_deploy_plan(
     empty success.
     """
     systems_deployment = enabled_systems()
+    run_names = ", ".join(strategy.name for strategy in strategies) or "none"
 
-    logger.info("compiling_deploy_plan", plan=plan.name, wide_scope=wide_scope)
+    logger.info("compiling_deploy_plan", strategies=run_names, wide_scope=wide_scope)
     if wide_scope:
         logger.warning(
             "wide_scope_enabled",
@@ -179,11 +197,13 @@ def make_deploy_plan(
 
     deploy_mdr: dict[str, list[str]] = {}
 
-    if plan is DeploymentStrategy.FULL:
+    if scope is not None:
+        logger.info("explicit_rule_scope", mdr_count=len(scope.files))
+    elif all_files:
         scope = local_rule_scope()
         logger.info("full_redeploy_scope", mdr_count=len(scope.files))
     else:
-        scope = modified_rule_scope(plan)
+        scope = modified_rule_scope()
     if scope.nested:
         _report_nested_rules(scope.nested, warnings)
 
@@ -209,7 +229,8 @@ def make_deploy_plan(
                 )
                 continue
 
-            if keep_deprecated is False and check_status(platform_status) in DEPRECATED_STATUSES:
+            strategy = check_status(platform_status)
+            if keep_deprecated is False and strategy in DEPRECATED_STATUSES:
                 logger.info(
                     "skip_deprecated_status",
                     system=system,
@@ -221,41 +242,27 @@ def make_deploy_plan(
                 selected.append(system)
                 continue
 
-            if plan is DeploymentStrategy.PRODUCTION:
-                allowed = (
-                    StatusStrategy.RELEASE,
-                    StatusStrategy.UNIVERSAL,
-                    StatusStrategy.DISABLEMENT,
-                    StatusStrategy.DELETION,
-                )
-            elif plan is DeploymentStrategy.STAGING:
-                allowed = (StatusStrategy.PREVIEW, StatusStrategy.UNIVERSAL)
-            elif plan in (DeploymentStrategy.FULL, DeploymentStrategy.ALWAYS):
-                allowed = (
-                    StatusStrategy.RELEASE,
-                    StatusStrategy.UNIVERSAL,
-                    StatusStrategy.PREVIEW,
-                    StatusStrategy.DISABLEMENT,
-                    StatusStrategy.DELETION,
-                )
-            else:
-                allowed = ()
-
-            if check_status(platform_status) in allowed:
+            # Selected by the strategy the status maps to, never by the status
+            # name: a PREVIEW run deploys a DEVELOPMENT rule, and a status named
+            # STAGING that a client maps to RELEASE waits for a RELEASE run.
+            if any(deploys(strategy, run) for run in strategies):
                 selected.append(system)
                 logger.info(
                     "mdr_selected_for_deploy",
                     system=system.upper(),
                     status=platform_status,
-                    plan=plan.name,
+                    strategy=strategy.name,
+                    run_strategies=run_names,
                     rule=name,
                 )
             else:
                 logger.warning(
-                    "mdr_skipped_for_plan",
+                    "mdr_skipped_for_strategy",
                     system=system.upper(),
                     status=platform_status,
-                    plan=plan.name,
+                    strategy=strategy.name,
+                    run_strategies=run_names,
+                    deployed_by=", ".join(r.name for r in deployed_by(strategy)) or "no run",
                     rule=name,
                 )
 

@@ -1,4 +1,9 @@
-"""CI diff plans must return a sentence, not a leaked exception (#339)."""
+"""A CI run's diff must fail with a sentence, not a leaked exception (#339).
+
+The CI context picks the diff: a pull or merge request run (``GITHUB_EVENT_NAME``,
+``BUILD_REASON``, ``CI_PIPELINE_SOURCE``) reads its request from the merge base,
+any other run its push. ``--strategy`` only decides which statuses deploy.
+"""
 
 from __future__ import annotations
 
@@ -18,7 +23,7 @@ _LEAKS = (
     "lookup_ref",
     "encode",
     "list index out of range",
-    "KeyError while compiling the deployment plan",
+    "KeyError while selecting the rules to deploy",
     "Invalid object name",
 )
 
@@ -42,7 +47,17 @@ _HIDDEN = (
     "OPENTIDE_REPO_ROOT",
     "OPENTIDE_TIDE_WORKSPACE",
     "DEPLOYMENT_PLAN",
+    "GITHUB_EVENT_NAME",
+    "BUILD_REASON",
+    "CI_PIPELINE_SOURCE",
 )
+
+#: What each provider sets on a pull or merge request run, by its CI marker.
+_CHANGE_REQUEST = {
+    "CI": {"CI_PIPELINE_SOURCE": "merge_request_event"},
+    "GITHUB_ACTIONS": {"GITHUB_EVENT_NAME": "pull_request"},
+    "TF_BUILD": {"BUILD_REASON": "PullRequest"},
+}
 
 _AZURE_REFS = (
     "Expected to find SYSTEM_PULLREQUEST_SOURCEBRANCH and "
@@ -102,8 +117,14 @@ def test_gitlab_missing_tip_names_ci_commit_sha(
     monkeypatch.chdir(repo)
     result = runner.invoke(
         app,
-        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", "STAGING"],
-        env=_env(repo, CI="true", CI_PROJECT_DIR=str(repo), CI_MERGE_REQUEST_DIFF_BASE_SHA=head),
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", "PREVIEW"],
+        env=_env(
+            repo,
+            CI="true",
+            CI_PROJECT_DIR=str(repo),
+            CI_MERGE_REQUEST_DIFF_BASE_SHA=head,
+            **_CHANGE_REQUEST["CI"],
+        ),
     )
     _assert_failure(
         result, "CI_COMMIT_SHA is required to compute the changed rules", json_output=json_output
@@ -121,7 +142,7 @@ def test_github_missing_tip_names_github_sha(
     monkeypatch.chdir(repo)
     result = runner.invoke(
         app,
-        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", "PRODUCTION"],
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", "RELEASE"],
         env=_env(repo, GITHUB_ACTIONS="true", GITHUB_WORKSPACE=str(repo)),
     )
     _assert_failure(
@@ -140,7 +161,7 @@ def test_azure_missing_tip_names_build_sourceversion(
     monkeypatch.chdir(repo)
     result = runner.invoke(
         app,
-        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", "PRODUCTION"],
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", "RELEASE"],
         env=_env(repo, TF_BUILD="true", BUILD_SOURCESDIRECTORY=str(repo)),
     )
     _assert_failure(
@@ -152,7 +173,7 @@ def test_azure_missing_tip_names_build_sourceversion(
 
 @pytest.mark.parametrize("with_origin", [False, True], ids=["no-origin", "origin"])
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
-def test_azure_staging_without_pr_refs_names_azure_variables(
+def test_azure_pull_request_without_pr_refs_names_azure_variables(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     git_home: Path,
@@ -170,12 +191,13 @@ def test_azure_staging_without_pr_refs_names_azure_variables(
     monkeypatch.chdir(repo)
     result = runner.invoke(
         app,
-        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", "STAGING"],
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", "PREVIEW"],
         env=_env(
             repo,
             TF_BUILD="true",
             BUILD_SOURCESDIRECTORY=str(repo),
             BUILD_SOURCEVERSION=head,
+            **_CHANGE_REQUEST["TF_BUILD"],
         ),
     )
     _assert_failure(result, _AZURE_REFS, json_output=json_output)
@@ -192,7 +214,7 @@ def test_azure_staging_without_pr_refs_names_azure_variables(
     ids=["github", "azure"],
 )
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
-def test_staging_missing_origin_ref_names_the_ref(
+def test_pull_request_missing_origin_ref_names_the_ref(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     git_home: Path,
@@ -215,6 +237,7 @@ def test_staging_missing_origin_ref_names_the_ref(
         marker: "true",
         workspace: str(repo),
         tip_name: head,
+        **_CHANGE_REQUEST[marker],
     }
     if marker == "GITHUB_ACTIONS":
         extra["GITHUB_HEAD_REF"] = "no-such"
@@ -224,7 +247,7 @@ def test_staging_missing_origin_ref_names_the_ref(
         extra["SYSTEM_PULLREQUEST_TARGETBRANCHNAME"] = "also-missing"
     result = runner.invoke(
         app,
-        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", "STAGING"],
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", "PREVIEW"],
         env=_env(repo, **extra),
     )
     _assert_failure(result, "Could not find git ref origin/also-missing", json_output=json_output)
@@ -239,7 +262,7 @@ def test_staging_missing_origin_ref_names_the_ref(
     ids=["github", "azure"],
 )
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
-def test_staging_detached_head_fetches_origin(
+def test_pull_request_detached_head_fetches_origin(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     git_home: Path,
@@ -273,7 +296,12 @@ def test_staging_detached_head_fetches_origin(
     )
     assert detached.returncode != 0
     monkeypatch.chdir(repo)
-    extra: dict[str, str | None] = {marker: "true", workspace: str(repo), tip_name: tip}
+    extra: dict[str, str | None] = {
+        marker: "true",
+        workspace: str(repo),
+        tip_name: tip,
+        **_CHANGE_REQUEST[marker],
+    }
     if marker == "GITHUB_ACTIONS":
         extra["GITHUB_HEAD_REF"] = "feature"
         extra["GITHUB_BASE_REF"] = "main"
@@ -282,7 +310,7 @@ def test_staging_detached_head_fetches_origin(
         extra["SYSTEM_PULLREQUEST_TARGETBRANCHNAME"] = "main"
     result = runner.invoke(
         app,
-        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", "STAGING"],
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", "PREVIEW"],
         env=_env(repo, **extra),
     )
     rendered = result.stdout + result.stderr
@@ -292,8 +320,7 @@ def test_staging_detached_head_fetches_origin(
     assert result.exit_code == 0, rendered
 
 
-@pytest.mark.parametrize("plan", ["DEBUG", "MANUAL", "ALWAYS"])
-@pytest.mark.parametrize(
+_CI_PLATFORMS = pytest.mark.parametrize(
     "platform",
     [
         {"CI": "true", "CI_PROJECT_DIR": "repo", "CI_COMMIT_SHA": "head"},
@@ -302,20 +329,9 @@ def test_staging_detached_head_fetches_origin(
     ],
     ids=["gitlab", "github", "azure"],
 )
-@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
-def test_non_diff_ci_plan_names_the_plan(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    git_home: Path,
-    plan: str,
-    platform: dict[str, str],
-    json_output: bool,
-) -> None:
-    del git_home
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    head = _init_repo(repo)
-    monkeypatch.chdir(repo)
+
+
+def _ci_values(platform: dict[str, str], repo: Path, head: str) -> dict[str, str | None]:
     values: dict[str, str | None] = {}
     for key, value in platform.items():
         if value == "repo":
@@ -324,16 +340,156 @@ def test_non_diff_ci_plan_names_the_plan(
             values[key] = head
         else:
             values[key] = value
+    return values
+
+
+def _assert_refused(result: object, message: str, *, json_output: bool) -> None:
+    """A usage error (exit 2) before any git work, with the sentence and nothing leaked."""
+    assert result.exit_code == 2, result.stdout + result.stderr  # type: ignore[attr-defined]
+    rendered = result.stdout + result.stderr  # type: ignore[attr-defined]
+    for leak in (*_LEAKS, "Traceback"):
+        assert leak not in rendered
+    if json_output:
+        payload = json.loads(result.stdout)  # type: ignore[attr-defined]
+        assert payload["ok"] is False
+        assert payload["message"] == message
+    else:
+        assert message in re.sub(r"\s+", " ", _visible(result))
+
+
+@pytest.mark.parametrize(
+    ("name", "hint"),
+    [
+        ("DEBUG", "deployment plans were removed in 0.17.0; pass PREVIEW or RELEASE"),
+        (
+            "MANUAL",
+            "deployment plans were removed in 0.17.0; a tenant that only takes the rules "
+            "naming it sets 'manual = true'",
+        ),
+        (
+            "ALWAYS",
+            "deployment plans were removed in 0.17.0; a tenant lists the strategies it "
+            "accepts in 'strategies'",
+        ),
+    ],
+)
+@_CI_PLATFORMS
+@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
+def test_an_old_plan_name_as_a_strategy_is_refused_in_ci(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    git_home: Path,
+    name: str,
+    hint: str,
+    platform: dict[str, str],
+    json_output: bool,
+) -> None:
+    """DEBUG, MANUAL and ALWAYS were not CI diff plans; they are not strategies either."""
+    del git_home
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    head = _init_repo(repo)
+    monkeypatch.chdir(repo)
+    result = runner.invoke(
+        app,
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", name],
+        env=_env(repo, **_ci_values(platform, repo, head)),
+    )
+    _assert_refused(
+        result,
+        f"--strategy {name!r} is not a deployable strategy. Use PREVIEW or RELEASE. {hint}",
+        json_output=json_output,
+    )
+
+
+@pytest.mark.parametrize(
+    ("plan", "replacement"),
+    [
+        ("STAGING", "--strategy PREVIEW"),
+        ("PRODUCTION", "--strategy RELEASE"),
+        ("FULL", "--strategy PREVIEW --strategy RELEASE --all"),
+        ("ALWAYS", "--strategy PREVIEW or --strategy RELEASE"),
+    ],
+)
+@_CI_PLATFORMS
+@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
+def test_the_removed_plan_option_names_its_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    git_home: Path,
+    plan: str,
+    replacement: str,
+    platform: dict[str, str],
+    json_output: bool,
+) -> None:
+    del git_home
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    head = _init_repo(repo)
+    monkeypatch.chdir(repo)
     result = runner.invoke(
         app,
         [*(["--json"] if json_output else []), "deploy", "--dry-run", "--plan", plan],
-        env=_env(repo, **values),
+        env=_env(repo, **_ci_values(platform, repo, head)),
     )
-    _assert_failure(
+    _assert_refused(
         result,
-        f"Deployment plan {plan} is not a CI diff plan. Use STAGING, PRODUCTION, or FULL.",
+        "--plan was removed in 0.17.0: a run now says which status strategy it deploys. "
+        f"Use {replacement}. See 'opentide deploy --help'.",
         json_output=json_output,
     )
+
+
+@_CI_PLATFORMS
+@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
+def test_a_pipeline_still_setting_deployment_plan_is_refused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    git_home: Path,
+    platform: dict[str, str],
+    json_output: bool,
+) -> None:
+    """The generated jobs used to export ``DEPLOYMENT_PLAN``; it must not be silently ignored."""
+    del git_home
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    head = _init_repo(repo)
+    monkeypatch.chdir(repo)
+    result = runner.invoke(
+        app,
+        [*(["--json"] if json_output else []), "deploy", "--dry-run", "--strategy", "RELEASE"],
+        env=_env(repo, DEPLOYMENT_PLAN="PRODUCTION", **_ci_values(platform, repo, head)),
+    )
+    _assert_refused(
+        result,
+        "DEPLOYMENT_PLAN was removed in 0.17.0: a run now says which status strategy it "
+        "deploys. Use --strategy RELEASE. Unset DEPLOYMENT_PLAN. See 'opentide deploy --help'.",
+        json_output=json_output,
+    )
+
+
+@_CI_PLATFORMS
+@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
+def test_a_ci_deploy_without_a_strategy_is_refused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    git_home: Path,
+    platform: dict[str, str],
+    json_output: bool,
+) -> None:
+    from opentide.cli.services.deploy import STRATEGY_REQUIRED
+
+    del git_home
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    head = _init_repo(repo)
+    monkeypatch.chdir(repo)
+    result = runner.invoke(
+        app,
+        [*(["--json"] if json_output else []), "deploy", "--dry-run"],
+        env=_env(repo, **_ci_values(platform, repo, head)),
+    )
+    _assert_refused(result, STRATEGY_REQUIRED, json_output=json_output)
 
 
 def _shallow_clone(tmp_path: Path) -> tuple[Path, str, str]:
@@ -351,9 +507,17 @@ def _shallow_clone(tmp_path: Path) -> tuple[Path, str, str]:
     return clone, head, parent
 
 
-@pytest.mark.parametrize("plan", ["STAGING", "PRODUCTION"])
+@pytest.mark.parametrize(
+    ("strategy", "change_request"),
+    [("PREVIEW", True), ("RELEASE", False)],
+    ids=["pull-request", "push"],
+)
 def test_shallow_checkout_names_the_missing_parent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path, plan: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    git_home: Path,
+    strategy: str,
+    change_request: bool,
 ) -> None:
     """#348: a depth-1 clone of two commits crashed with ``b'<parent sha>'``."""
     del git_home
@@ -361,12 +525,13 @@ def test_shallow_checkout_names_the_missing_parent(
     monkeypatch.chdir(repo)
     result = runner.invoke(
         app,
-        ["--json", "deploy", "--dry-run", "--plan", plan],
+        ["--json", "deploy", "--dry-run", "--strategy", strategy],
         env=_env(
             repo,
             GITHUB_ACTIONS="true",
             GITHUB_WORKSPACE=str(repo),
             GITHUB_SHA=head,
+            **(_CHANGE_REQUEST["GITHUB_ACTIONS"] if change_request else {}),
         ),
     )
     rendered = result.stdout + result.stderr
@@ -374,7 +539,7 @@ def test_shallow_checkout_names_the_missing_parent(
     assert f"b'{parent}'" not in rendered
     assert "Traceback" not in rendered
     payload = json.loads(result.stdout)
-    if plan == "PRODUCTION":
+    if not change_request:
         assert payload["message"] == f"Could not find git commit {parent}"
     else:
         assert "GITHUB_HEAD_REF" in payload["message"]
@@ -400,9 +565,10 @@ def test_gitlab_merged_result_with_one_parent_keeps_the_tip(
     monkeypatch.chdir(repo)
     result = runner.invoke(
         app,
-        ["--json", "deploy", "--dry-run", "--plan", "STAGING"],
+        ["--json", "deploy", "--dry-run", "--strategy", "PREVIEW"],
         env=_env(
             repo,
+            **_CHANGE_REQUEST["CI"],
             CI="true",
             CI_PROJECT_DIR=str(repo),
             CI_COMMIT_SHA=head,

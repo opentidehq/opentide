@@ -10,7 +10,7 @@ flags = []
 # [[tenants]]
 # name = "Default"
 # description = "Default Splunk deployment target"
-# deployment = "ALWAYS"
+# strategies = ["PREVIEW", "RELEASE"]  # status strategies this tenant accepts; omit for both
 # [tenants.setup]
 # ssl = false
 # url = "$SPLUNK_URL"

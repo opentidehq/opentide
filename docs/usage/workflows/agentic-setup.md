@@ -10,7 +10,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## What agents can and cannot do today
 
 <Callout type="warn">
-`validate_query` refuses unless you pass `live: true`. That call checks the catalogue rules against the tenant. It does not scan the `query` argument. A missing SDK or a missing plan is a failed live check. `run_query` is **not implemented** — it returns `stub: true` with `rows: null` and never contacts a platform. Use `validation_report` for structured object validation an agent can act on.
+`validate_query` refuses unless you pass `live: true`. That call checks the catalogue rules against the tenant. It does not scan the `query` argument. A missing SDK is a failed live check. `run_query` is **not implemented** — it returns `stub: true` with `rows: null` and never contacts a platform. Use `validation_report` for structured object validation an agent can act on.
 </Callout>
 
 | Capability | Status |
@@ -24,7 +24,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## Install and configure the server
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 opentide setup mcp --cursor --yes
 ```
 
@@ -104,7 +104,7 @@ flowchart LR
 > `get_chaining(uuid="…8002…0001")` → confirms it covers the *Simulated Actor* threat and has no rule yet.
 > Proposes `objects/rules/sentinel-t1059.yaml` with `detection_model` pointing at the objective.
 > `validation_report()` → passes schema, uuid, chaining.
-> Runs `opentide validate query --platform sentinel --live` (CLI) against the tenant.
+> Runs `opentide validate query --platform sentinel --live --file objects/rules/sentinel-t1059.yaml` (CLI), which checks that one rule's query against the tenant.
 > `deploy_rule(uuid=…, platform="sentinel", dry_run=true)` → shows the planned change.
 >
 > **You:** review the diff, then deploy for real.
@@ -123,7 +123,7 @@ flowchart LR
 
 - Real (non-dry-run) deploys to production.
 - Bulk promotion of rules to `PRODUCTION` without an explicit human status change and review.
-- Editing `.opentide/configurations/` credentials or deployment plans.
+- Editing `.opentide/configurations/` credentials or tenant strategies.
 - Trusting an MCP `validate_query` "pass" as proof a query runs — it only proves the query parses.
 - Regenerating or hand-editing UUIDs to resolve a conflict.
 

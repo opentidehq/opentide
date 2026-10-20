@@ -9,7 +9,7 @@ flags = []
 [[tenants]]
 name = "elastic-staging"
 description = "Serverless Security project, staging space"
-deployment = "STAGING"
+strategies = ["PREVIEW"]
 [tenants.setup]
 proxy = false
 ssl = true
@@ -21,7 +21,7 @@ api_key = "$ELASTIC_STAGING_API_KEY"
 [[tenants]]
 name = "elastic-prod"
 description = "Self-managed cluster on a Basic licence, default space"
-deployment = "PRODUCTION"
+strategies = ["RELEASE"]
 [tenants.setup]
 proxy = true
 ssl = true

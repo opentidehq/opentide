@@ -17,6 +17,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from tests.test_cli.e2e.helpers import EVERY_RULE
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -105,7 +106,6 @@ def test_pip_installed_wheel_validate_generate_and_skills(
         **os.environ,
         "OPENTIDE_REPO_ROOT": str(tide_corpus_repo),
         "OPENTIDE_TIDE_WORKSPACE": str(tide_corpus_repo),
-        "DEPLOYMENT_PLAN": "FULL",
         "CI": "true",
     }
 
@@ -195,8 +195,7 @@ def test_pip_installed_wheel_validate_generate_and_skills(
             "--platform",
             "sentinel",
             "--dry-run",
-            "--plan",
-            "FULL",
+            *EVERY_RULE,
             "--wide",
             "--skip-promotion",
         ],

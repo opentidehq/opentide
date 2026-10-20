@@ -21,6 +21,7 @@ opentide --debug --no-color generate
 | `--debug` | `DEBUG` | off | Enable structlog debug logging |
 | `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable Rich colour output |
 | `--json` | — | off | Emit JSON instead of Rich tables / logs |
+| `--proxy` | `OPENTIDE_PROXY` | none | HTTP(S) proxy for platform and lookup calls; see [Proxy](#proxy) |
 | `--version`, `-V` | — | — | Print `opentide <version>` and exit |
 
 ## Version
@@ -55,6 +56,19 @@ A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_W
 
 Setup commands honour `--repo` when `--path` is `.` (default).
 
+## Proxy
+
+`--proxy http://[user:pass@]host:port`, or `OPENTIDE_PROXY` when the flag is omitted, sets `HTTP_PROXY`, `HTTPS_PROXY` and their lowercase spellings for the `opentide` process only, overriding any value it inherited. Platform clients and the CVE lookup then use the proxy. Without either, opentide uses whatever `HTTP_PROXY` and `HTTPS_PROXY` (or their lowercase spellings) the environment already holds.
+
+Hosts listed in `NO_PROXY` (or `no_proxy`) are reached directly, with or without `--proxy`. That is how one command reaches a cloud tenant through the proxy and an internal tenant without it:
+
+```bash
+export NO_PROXY=splunk.internal.example
+opentide --proxy http://proxy.internal.example:8080 deploy --strategy RELEASE
+```
+
+A `proxy` key under a tenant's `[tenants.setup]`, in `deployment.toml` `[proxy]` or in `[cve]` is retired: the command fails and names `opentide --proxy`. For pipelines behind a proxy, see [CI/CD → Behind a proxy or a private CA](../usage/workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
+
 ## Environment propagation
 
 The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.
@@ -71,14 +85,14 @@ Without `--json`, a result prints its `message` first, then any `detail` and `ad
 
 `--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits non-zero with a JSON error naming the flags to pass instead — `--yes` plus the explicit selections. Without `--json` the same commands open the wizard as before.
 
-## Deployment plan
+## Strategy
 
-Some subcommands read `DEPLOYMENT_PLAN` from the environment or `--plan`:
+`opentide deploy` takes `--strategy PREVIEW` or `--strategy RELEASE` (repeatable): the status strategy the run deploys. `validate query --live` takes the same option to narrow its check. There is no environment variable for it. See [Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md).
 
-- `opentide deploy --plan STAGING`
-- `opentide validate query --platform sentinel --live --plan STAGING`
+- `opentide deploy --strategy PREVIEW`
+- `opentide validate query --platform sentinel --live --strategy RELEASE`
 
-`--plan` is unused by a bare `validate query`, which refuses and names `--live`. The plan applies to `validate query --live` and to `deploy`.
+`--plan` and `DEPLOYMENT_PLAN` were removed in 0.17.0. Passing `--plan`, or running `deploy` or `validate query --live` with `DEPLOYMENT_PLAN` set, fails with exit `2` and names the `--strategy` to use.
 
 ## Related
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opentide.ci.gates import gitlab_premerge_rule
+from opentide.ci.gates import gitlab_premerge_rule, gitlab_workflow_rules
 from opentide.ci.inflight import (
     GITLAB_FETCH,
     GITLAB_INSTALL_GIT,
@@ -123,6 +123,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
     # Query jobs share the validate stage. ``needs: validate`` alone lets
     # generate, then deploy, start while a query job is still running or after
     # it has failed (#429).
+    full_history = ["  variables:", '    GIT_DEPTH: "0"']
     query_job_names: list[str] = []
     query_jobs: list[str] = []
     for platform in options.platforms:
@@ -139,12 +140,13 @@ def render_gitlab(options: CiRenderOptions) -> str:
                     *trusted_platform_config_commands(_DEFAULT_BRANCH),
                     reviewed_query_validation_command(platform, repo=options.repo),
                 ],
+                # ``--changed`` diffs from the merge request's base or the
+                # previous tip, which a shallow clone may not contain.
+                extra_lines=full_history,
                 # python slim has no git; without it the endpoint checkout cannot run.
                 before=[GITLAB_INSTALL_GIT],
             )
         )
-
-    full_history = ["  variables:", '    GIT_DEPTH: "0"']
     deploy_jobs: list[str] = []
     if options.staging:
         deploy_jobs.append(
@@ -206,7 +208,15 @@ def render_gitlab(options: CiRenderOptions) -> str:
         )
 
     stage_lines = "\n".join(f"  - {stage}" for stage in stages)
+    workflow_lines = "".join(f"    - if: {rule}\n" for rule in gitlab_workflow_rules())
     core = (
+        "# Merge request and default-branch pipelines only. Every job then runs in\n"
+        "# merge request pipelines, and a push to a branch with an open merge request\n"
+        "# starts one pipeline, not two.\n"
+        "workflow:\n"
+        "  rules:\n"
+        f"{workflow_lines}"
+        "\n"
         "variables:\n"
         "  OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR\n"
         "\n"

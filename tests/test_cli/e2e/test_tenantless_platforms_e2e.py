@@ -18,7 +18,7 @@ import pytest
 import yaml
 from tests.corpus_support import TIDE_CORPUS_ROOT
 from tests.test_cli.conftest import parse_cli_json
-from tests.test_cli.e2e.helpers import uncomment_tenants
+from tests.test_cli.e2e.helpers import EVERY_RULE, uncomment_tenants
 from typer.testing import Result
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, DetectionPlatform
@@ -145,7 +145,9 @@ def test_deploy_without_tenants_fails_before_loading_an_engine(
     config = _config_path(platform.value)
     message = f"Cannot deploy: {platform.value} has no tenants configured in {config}"
 
-    result, output = _run(invoke_cli, repo, json_output, "deploy", "--platform", platform.value)
+    result, output = _run(
+        invoke_cli, repo, json_output, "deploy", *EVERY_RULE, "--platform", platform.value
+    )
 
     assert result.exit_code == 1, output
     if json_output:
@@ -177,6 +179,7 @@ def test_skip_unconfigured_exits_zero_when_every_platform_lacks_tenants(
         repo,
         json_output,
         "deploy",
+        *EVERY_RULE,
         "--platform",
         "sentinel",
         "--skip-unconfigured",
@@ -202,7 +205,7 @@ def test_skip_unconfigured_still_fails_when_another_platform_has_tenants(
     repo = tenantless_repo(["sentinel", "splunk"])
     uncomment_tenants(repo / _config_path("sentinel"))
 
-    result, output = _run(invoke_cli, repo, True, "deploy", "--skip-unconfigured")
+    result, output = _run(invoke_cli, repo, True, "deploy", *EVERY_RULE, "--skip-unconfigured")
 
     assert result.exit_code == 1, output
     payload = parse_cli_json(result)
@@ -226,7 +229,14 @@ def test_deploy_dry_run_without_tenants_previews_but_does_not_claim_the_platform
     warning = f"{platform.value} has no tenants configured in {config}, so a real deploy would stop"
 
     result, output = _run(
-        invoke_cli, repo, json_output, "deploy", "--platform", platform.value, "--dry-run"
+        invoke_cli,
+        repo,
+        json_output,
+        "deploy",
+        *EVERY_RULE,
+        "--platform",
+        platform.value,
+        "--dry-run",
     )
 
     assert result.exit_code == 0, output
@@ -241,6 +251,8 @@ def test_deploy_dry_run_without_tenants_previews_but_does_not_claim_the_platform
         assert payload["warnings"] == [warning]
         (uuid,) = payload["plan"][platform.value]
         assert [item["uuid"] for item in payload["payloads"][platform.value]] == [uuid]
+        assert payload["strategies"] == ["PREVIEW", "RELEASE"]
+        assert payload["tenants"] == {}
     else:
         assert "OK Deployment completed" in output
         assert f"WARNING {warning}" in output
@@ -253,13 +265,16 @@ def test_deploy_dry_run_only_flags_the_platform_without_tenants(
     repo = tenantless_repo(["sentinel", "splunk"])
     uncomment_tenants(repo / _config_path("sentinel"))
 
-    result, output = _run(invoke_cli, repo, True, "deploy", "--dry-run")
+    result, output = _run(invoke_cli, repo, True, "deploy", *EVERY_RULE, "--dry-run")
 
     assert result.exit_code == 0, output
     payload = parse_cli_json(result)
     assert set(payload["plan"]) == {"sentinel", "splunk"}
     assert payload["deployed"] == ["sentinel"]
     assert payload["missing_tenants"] == {"splunk": _config_path("splunk")}
+    # The uncommented example tenant omits ``strategies`` and ``manual``: it
+    # accepts both run strategies and every rule.
+    assert payload["tenants"] == {"sentinel": {"Tenant": payload["plan"]["sentinel"]}}
     mock_deployers.deploy.assert_not_called()
 
 

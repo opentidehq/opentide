@@ -25,7 +25,7 @@ opentide generate                          # only when schemas/templates changed
 opentide validate --strict                 # schema, UUID, uniqueness, chaining
 opentide lint --strict                     # filename slugs and recommended metadata
 opentide validate query --platform sentinel --live
-opentide deploy --platform sentinel --dry-run
+opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 opentide generate docs                          # refresh wiki pages
 ```
 
@@ -77,20 +77,22 @@ Every rule has a `status`, and each status maps to a **strategy** that drives wh
 | Intent | Bundled statuses | Deploys? |
 |--------|------------------|----------|
 | Design | `DESIGN` | No (`INERT`) |
-| Build & refine | `DEVELOPMENT`, `IMPROVING`, `STAGING`, `ACCEPTANCE` | Staging (`PREVIEW`) |
-| Live | `PRODUCTION` | Production (`RELEASE`) |
+| Build & refine | `DEVELOPMENT`, `IMPROVING`, `STAGING`, `ACCEPTANCE` | From pull requests (`PREVIEW`) |
+| Live | `PRODUCTION` | From the default branch (`RELEASE`) |
 | Retire | `DISABLED`, `REMOVED` | Disable / delete |
+
+The pull request job runs `opentide deploy --strategy PREVIEW` and deploys the changed `PREVIEW` rules; the default-branch job runs `--strategy RELEASE` and deploys the changed `RELEASE` rules, disabling or deleting retired ones. Each goes to the tenants whose `strategies` accept it. Runs select by strategy, so they work whatever your statuses are called. See [Statuses, strategies and tenants](../concepts/statuses-and-strategies.md).
 
 opentide validates only that a rule's `status` exists in your merged `deployment.toml` — it does not enforce any ordering between statuses, so you can set any configured status directly. If you override `deployment.toml`, these names may not exist at all in your repo. See [Configuration → deployment statuses](../configuration.md#deployment-statuses-and-strategies).
 
 ## Promotion
 
-Edit the rule's `status` in YAML (and commit it) for deliberate changes, then deploy. When `[promotion]` is enabled in `deployment.toml`, `opentide deploy` rewrites promotable statuses **directly** to the configured `promotion_target` — it does not walk them one step at a time. Statuses whose strategy is `RELEASE`, `DISABLEMENT`, or `DELETION` are left untouched. There is no separate `mutate promote` command.
+Edit the rule's `status` in YAML (and commit it) for deliberate changes, then deploy. When `[promotion]` is enabled in `deployment.toml`, the default-branch `opentide deploy --strategy RELEASE` rewrites the promotable statuses of the changed rules **directly** to the configured `promotion_target` — it does not walk them one step at a time. Statuses whose strategy is `RELEASE`, `DISABLEMENT`, or `DELETION` are left untouched. There is no separate `mutate promote` command.
 
 ```bash
-# after reviewing and bumping status in YAML
-opentide deploy --platform sentinel --dry-run
-opentide deploy --platform sentinel
+# after committing the status change: deploy what the last commit changed
+opentide deploy --platform sentinel --dry-run --strategy RELEASE
+opentide deploy --platform sentinel --strategy RELEASE
 ```
 
 See [`deploy`](../../cli/deploy.md) and [Configuration → promotion](../configuration.md#promotion).

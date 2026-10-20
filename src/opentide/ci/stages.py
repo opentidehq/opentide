@@ -140,14 +140,21 @@ def workspace_credential_names(repo: Path, platform: str) -> list[str]:
 
 
 def query_validation_command(platform: str, *, repo: Path | None = None) -> str:
-    """Tenant query check.
+    """Tenant query check of the rule files this run changed.
+
+    ``--changed`` reads the pull or merge request's diff, or the push's, as the
+    deploy job of the same run does; without it every rule in the catalogue was
+    sent on every run. No ``--strategy``: each changed rule is checked on the
+    tenants that accept the strategy its status maps to, the tenants a deploy
+    sends it to. A changed ``INERT``, ``DISABLEMENT`` or ``DELETION`` rule
+    sends no query.
 
     The guard lists ``$VAR`` references in the workspace platform file. A
     literal value is not a credential, and a comment is not a reference. No
     references means the live check runs with no guard. A skip exits 2 so it
     cannot be read as a check that ran.
     """
-    live = f"opentide validate query --platform {platform} --live"
+    live = f"opentide validate query --platform {platform} --live --changed"
     names = workspace_credential_names(repo, platform) if repo is not None else []
     if not names:
         return live
@@ -195,28 +202,23 @@ def core_cli_steps(options: CiRenderOptions) -> list[str]:
     return [*validate_commands(options), "opentide generate"]
 
 
-def _deploy_steps(plan: str, *flags: str) -> list[str]:
-    extra = "".join(f" {flag}" for flag in flags)
+def _deploy_steps(strategy: str) -> list[str]:
     return [
-        f"opentide deploy --dry-run --plan {plan}{extra}",
-        f"opentide deploy --plan {plan}{extra} --skip-unconfigured",
+        f"opentide deploy --dry-run --strategy {strategy}",
+        f"opentide deploy --strategy {strategy} --skip-unconfigured",
     ]
 
 
 def staging_deploy_steps(options: CiRenderOptions) -> list[str]:
+    """The pull or merge request job deploys the rules whose status maps to PREVIEW."""
     if not options.staging:
         return []
-    return _deploy_steps("STAGING")
+    return _deploy_steps("PREVIEW")
 
 
 def production_deploy_steps(options: CiRenderOptions) -> list[str]:
-    """Production deploys DISABLED and REMOVED rules so they are disabled or deleted.
-
-    ``--keep-deprecated`` is the CLI default for the PRODUCTION plan (#548);
-    the pipeline spells it out so the job reads the same as the deployment
-    spec whatever version it pins.
-    """
-    return _deploy_steps("PRODUCTION", "--keep-deprecated")
+    """The default-branch job deploys RELEASE rules and retires DISABLEMENT and DELETION ones."""
+    return _deploy_steps("RELEASE")
 
 
 def github_deploy_env() -> str:

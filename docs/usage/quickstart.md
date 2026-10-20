@@ -16,7 +16,7 @@ Want to author objects from scratch and understand each step? Do the [Tutorial](
 ### Install and point at your repo
 
 ```bash
-pip install 'opentide==0.16.1'
+pip install 'opentide==0.17.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 ```
 
@@ -86,7 +86,7 @@ opentide --json info --technique T1059 coverage
 ### Dry-run deployment
 
 ```bash
-opentide deploy --platform sentinel --dry-run
+opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
 </Step>

@@ -55,10 +55,7 @@ def _config(repo: Path, platform: str) -> Path:
 
 def _add_tenant(repo: Path, platform: str, setup: str) -> None:
     config = _config(repo, platform)
-    tenant = (
-        '\n[[tenants]]\nname = "unreachable"\ndeployment = "ALWAYS"\n'
-        f"[tenants.setup]\nssl = false\n{setup}"
-    )
+    tenant = f'\n[[tenants]]\nname = "unreachable"\n[tenants.setup]\nssl = false\n{setup}'
     config.write_text(config.read_text(encoding="utf-8") + tenant, encoding="utf-8")
 
 

@@ -15,6 +15,13 @@ from opentide.deployment.ci import CIEnvironment
 
 CLEAN_OUTCOME = CiOutcome(exit_code=0, failed=False, warned=False)
 SPLUNK_TOML = ".opentide/configurations/platforms/splunk.toml"
+PREVIEW = ("PREVIEW",)
+EMPTY_SELECTION = "No rule this run read has a status that maps to its strategies"
+
+
+@pytest.fixture(autouse=True)
+def _no_removed_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DEPLOYMENT_PLAN", raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -28,18 +35,16 @@ def test_run_deploy_skips_when_platform_has_no_rules() -> None:
     ctx = CliContext(json_output=True)
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
     ):
-        result = deploy_service.run_deploy(ctx, platform=DetectionPlatform.splunk)
+        result = deploy_service.run_deploy(
+            ctx, strategies=PREVIEW, platform=DetectionPlatform.splunk
+        )
     assert result["status"] == "skipped"
 
 
 @pytest.mark.parametrize("json_output", [False, True])
-def test_run_deploy_empty_plan_github_actions_warning(
+def test_run_deploy_empty_selection_github_actions_warning(
     monkeypatch: pytest.MonkeyPatch, json_output: bool
 ) -> None:
     ctx = CliContext(json_output=json_output)
@@ -50,23 +55,20 @@ def test_run_deploy_empty_plan_github_actions_warning(
     )
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", return_value={}),
         patch.object(deploy_service.get_stdout_console(), "print") as mock_print,
     ):
-        result = deploy_service.run_deploy(ctx)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
     assert result["status"] == "skipped"
+    assert result["message"] == EMPTY_SELECTION
     if json_output:
         # The annotation would corrupt the single-document JSON contract.
         mock_print.assert_not_called()
     else:
-        assert "::warning::" in mock_print.call_args.args[0]
+        assert mock_print.call_args.args[0] == f"::warning::{EMPTY_SELECTION}"
 
 
-def test_run_deploy_empty_plan_gitlab_exits_cleanly(
+def test_run_deploy_empty_selection_gitlab_exits_cleanly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ctx = CliContext(json_output=True)
@@ -77,27 +79,24 @@ def test_run_deploy_empty_plan_gitlab_exits_cleanly(
     )
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", return_value={}),
     ):
-        result = deploy_service.run_deploy(ctx)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
     assert result["status"] == "skipped"
     assert result.get("_exit_code", 0) == 0
 
 
 def test_run_deploy_dry_run_collects_payloads() -> None:
+    from opentide.models.deployment_enums import StatusStrategy
+
     ctx = CliContext(json_output=True)
     deployer = MagicMock()
     preview = [{"uuid": "u1"}]
     with (
-        patch("opentide.core.registry.Opentide.reload"),
         patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
+            "opentide.cli.services.deploy._tenant_targets", return_value={"Primary": ["u1"]}
+        ) as targets,
+        patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
@@ -105,9 +104,13 @@ def test_run_deploy_dry_run_collects_payloads() -> None:
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
         mock_tide.return_value.mdr_for.return_value = {"sentinel": deployer}
-        result = deploy_service.run_deploy(ctx, dry_run=True)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW, dry_run=True)
     assert result["status"] == "completed"
     assert result["dry_run"] is True
+    assert result["strategies"] == ["PREVIEW"]
+    assert result["tenants"] == {"sentinel": {"Primary": ["u1"]}}
+    targets.assert_called_once()
+    assert targets.call_args.args[:3] == ("sentinel", ["u1"], (StatusStrategy.PREVIEW,))
     assert result["payloads"] == {"sentinel": preview}
     assert result["deployed"] == ["sentinel"]
     assert "missing_tenants" not in result
@@ -120,17 +123,13 @@ def test_run_deploy_invokes_deployer() -> None:
     deployer = MagicMock()
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
         mock_tide.return_value.mdr_for.return_value = {"sentinel": deployer}
-        result = deploy_service.run_deploy(ctx)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
     (requested,) = mock_tide.return_value.mdr_for.call_args.args
     assert list(requested) == ["sentinel"]
     deployer.deploy.assert_called_once()
@@ -144,10 +143,6 @@ def test_run_deploy_reports_an_engine_that_fails_to_load() -> None:
     ctx = CliContext(json_output=True)
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
@@ -155,7 +150,7 @@ def test_run_deploy_reports_an_engine_that_fails_to_load() -> None:
         mock_tide.return_value.mdr_for.side_effect = Exception(
             "PLATFORM ENGINE IMPORT ERROR: sentinel"
         )
-        result = deploy_service.run_deploy(ctx)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
     assert result["status"] == "failed"
     assert result["_exit_code"] == 1
     assert "sentinel" in str(result["message"])
@@ -167,17 +162,13 @@ def test_run_deploy_warning_marks_result_with_warnings() -> None:
     warned = CiOutcome(exit_code=0, failed=False, warned=True)
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
     ):
         mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
-        result = deploy_service.run_deploy(ctx)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
     assert result["status"] == "completed"
     assert result["_exit_code"] == 0
     assert result["warnings"]
@@ -188,41 +179,185 @@ def test_run_deploy_error_marks_result_failed() -> None:
     errored = CiOutcome(exit_code=1, failed=True, warned=False)
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=errored),
     ):
         mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
-        result = deploy_service.run_deploy(ctx)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
     assert result["status"] == "failed"
     assert result["_exit_code"] == 1
 
 
-def test_run_deploy_invalid_plan_returns_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("value", "replacement"),
+    [
+        ("STAGING", "--strategy PREVIEW"),
+        ("PRODUCTION", "--strategy RELEASE"),
+        ("full", "--strategy PREVIEW --strategy RELEASE --all"),
+        ("None", "--strategy PREVIEW or --strategy RELEASE"),
+    ],
+)
+def test_run_deploy_refuses_a_set_deployment_plan(
+    monkeypatch: pytest.MonkeyPatch, value: str, replacement: str
+) -> None:
+    """``DEPLOYMENT_PLAN`` was removed: a pipeline still setting it fails, naming the flag."""
     ctx = CliContext(json_output=True)
-    monkeypatch.setenv("DEPLOYMENT_PLAN", "None")
-    with patch("opentide.core.registry.Opentide.reload"):
-        result = deploy_service.run_deploy(ctx, dry_run=True)
+    monkeypatch.setenv("DEPLOYMENT_PLAN", value)
+    with (
+        patch("opentide.core.registry.Opentide.reload") as mock_reload,
+        patch("opentide.deployment.make_deploy_plan") as mock_plan,
+    ):
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW, dry_run=True)
+    mock_reload.assert_not_called()
+    mock_plan.assert_not_called()
     assert result["status"] == "failed"
-    assert "Unsupported deployment plan" in str(result["message"])
-    assert result["_exit_code"] == 1
+    assert result["_exit_code"] == 2
+    assert result["message"] == (
+        "DEPLOYMENT_PLAN was removed in 0.17.0: a run now says which status strategy it "
+        f"deploys. Use {replacement}. Unset DEPLOYMENT_PLAN. See 'opentide deploy --help'."
+    )
 
 
-def test_run_deploy_dry_run_skips_production_promotion() -> None:
-    from opentide.models.deployment_enums import DeploymentStrategy
+def test_run_deploy_ignores_a_blank_deployment_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = CliContext(json_output=True)
+    monkeypatch.setenv("DEPLOYMENT_PLAN", "  ")
+    with (
+        patch("opentide.core.registry.Opentide.reload"),
+        patch("opentide.deployment.make_deploy_plan", return_value={}),
+    ):
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
+    assert result["status"] == "skipped"
+
+
+def test_run_deploy_requires_a_strategy() -> None:
+    ctx = CliContext(json_output=True)
+    with (
+        patch("opentide.core.registry.Opentide.reload"),
+        patch("opentide.deployment.make_deploy_plan") as mock_plan,
+    ):
+        result = deploy_service.run_deploy(ctx, dry_run=True)
+    mock_plan.assert_not_called()
+    assert result == {
+        "status": "failed",
+        "message": deploy_service.STRATEGY_REQUIRED,
+        "_exit_code": 2,
+    }
+    assert deploy_service.STRATEGY_REQUIRED.startswith("Pass --strategy: PREVIEW deploys")
+
+
+@pytest.mark.parametrize(
+    ("value", "hints"),
+    [
+        (
+            "STAGING",
+            [
+                "--strategy 'STAGING' is not a deployable strategy. Use PREVIEW or RELEASE",
+                "STAGING was a deployment plan, removed in 0.17.0: pass PREVIEW",
+                (
+                    "STAGING is also a configured status name; it maps to PREVIEW, which a PREVIEW "
+                    "run deploys"
+                ),
+            ],
+        ),
+        (
+            "DEVELOPMENT",
+            [
+                "--strategy 'DEVELOPMENT' is not a deployable strategy",
+                "DEVELOPMENT is also a configured status name; it maps to PREVIEW",
+            ],
+        ),
+        ("UNIVERSAL", ["UNIVERSAL is a status strategy that both PREVIEW and RELEASE runs deploy"]),
+    ],
+)
+def test_run_deploy_refuses_a_name_that_is_not_a_run_strategy(value: str, hints: list[str]) -> None:
+    """The configured statuses answer a status name with the strategy it maps to."""
+    ctx = CliContext(json_output=True)
+    with patch("opentide.deployment.make_deploy_plan") as mock_plan:
+        result = deploy_service.run_deploy(ctx, strategies=[value], dry_run=True)
+    mock_plan.assert_not_called()
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 2
+    for hint in hints:
+        assert hint in str(result["message"])
+
+
+@pytest.mark.parametrize(
+    ("strategies", "all_files", "requested", "keep"),
+    [
+        pytest.param(["release"], False, None, True, id="RELEASE-diff-keeps"),
+        pytest.param(["preview,release"], True, None, False, id="all-drops"),
+        pytest.param(["RELEASE"], True, True, True, id="all-keep-deprecated"),
+        pytest.param(["PREVIEW"], False, False, False, id="drop-deprecated"),
+    ],
+)
+def test_run_deploy_selects_rules_with_the_run_strategies(
+    strategies: list[str], all_files: bool, requested: bool | None, keep: bool
+) -> None:
+    from opentide.models.deployment_enums import StatusStrategy, parse_strategies
+
+    ctx = CliContext(json_output=True)
+    deployer = MagicMock()
+    run = parse_strategies(strategies)
+    with (
+        patch("opentide.core.registry.Opentide.reload"),
+        patch("opentide.mutation.promotion.PromoteMDR"),
+        patch("opentide.deployment.modified_mdr_files"),
+        patch(
+            "opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}
+        ) as mock_plan,
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+        patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
+    ):
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": deployer}
+        result = deploy_service.run_deploy(
+            ctx, strategies=strategies, all_files=all_files, keep_deprecated=requested
+        )
+    assert mock_plan.call_args.args == (run,)
+    assert mock_plan.call_args.kwargs["all_files"] is all_files
+    assert mock_plan.call_args.kwargs["keep_deprecated"] is keep
+    assert mock_plan.call_args.kwargs["wide_scope"] is False
+    deployer.deploy.assert_called_once_with(mdr_deployment=["u1"], strategies=run)
+    assert result["strategies"] == [s.name for s in run]
+    assert all(isinstance(s, StatusStrategy) for s in run)
+
+
+@pytest.mark.parametrize(
+    ("all_files", "requested", "keep"),
+    [(False, None, True), (True, None, False), (True, True, True), (False, False, False)],
+)
+def test_keeps_deprecated(all_files: bool, requested: bool | None, keep: bool) -> None:
+    """A RELEASE run retires the changed DISABLEMENT and DELETION rules; ``--all`` does not."""
+    assert deploy_service.keeps_deprecated(all_files, requested) is keep
+
+
+def test_run_deploy_without_a_checkout_names_the_folder_and_all(tmp_path) -> None:
+    from opentide.deployment.git_repo import MissingGitCheckout
 
     ctx = CliContext(json_output=True)
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=DeploymentStrategy.PRODUCTION,
-        ),
+        patch("opentide.deployment.make_deploy_plan", side_effect=MissingGitCheckout(tmp_path)),
+    ):
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+    assert f"no .git was found from {tmp_path}" in str(result["message"])
+    assert "pass --all to read every rule file" in str(result["message"])
+
+
+def test_run_deploy_dry_run_skips_release_promotion(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = CliContext(json_output=True)
+    monkeypatch.setattr(
+        CIEnvironment,
+        "_check_ci_environment",
+        lambda self: CIEnvironment.CIPlatforms.GitlabCI,
+    )
+    monkeypatch.delenv("CI_PIPELINE_SOURCE", raising=False)
+    with (
+        patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.modified_mdr_files") as mock_modified,
         patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
@@ -232,17 +367,15 @@ def test_run_deploy_dry_run_skips_production_promotion() -> None:
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
         mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
-        result = deploy_service.run_deploy(ctx, dry_run=True)
+        result = deploy_service.run_deploy(ctx, strategies=["RELEASE"], dry_run=True)
     mock_modified.assert_not_called()
     mock_promote.assert_not_called()
     assert result["dry_run"] is True
 
 
-def test_run_deploy_local_debug_skips_production_promotion(
+def test_run_deploy_local_debug_skips_release_promotion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from opentide.models.deployment_enums import DeploymentStrategy
-
     ctx = CliContext(json_output=True)
     monkeypatch.setattr(
         CIEnvironment,
@@ -251,10 +384,6 @@ def test_run_deploy_local_debug_skips_production_promotion(
     )
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=DeploymentStrategy.PRODUCTION,
-        ),
         patch("opentide.deployment.modified_mdr_files") as mock_modified,
         patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
@@ -263,10 +392,62 @@ def test_run_deploy_local_debug_skips_production_promotion(
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
         mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
-        result = deploy_service.run_deploy(ctx, dry_run=False)
+        result = deploy_service.run_deploy(ctx, strategies=["RELEASE"], dry_run=False)
     mock_modified.assert_not_called()
     mock_promote.assert_not_called()
     assert result["status"] == "completed"
+
+
+@pytest.mark.parametrize(
+    ("strategies", "all_files", "change_request", "skip", "promoted"),
+    [
+        pytest.param(["RELEASE"], False, False, False, True, id="RELEASE-push"),
+        pytest.param(["PREVIEW", "RELEASE"], False, False, False, True, id="both-push"),
+        pytest.param(["PREVIEW"], False, False, False, False, id="PREVIEW-push"),
+        pytest.param(["RELEASE"], True, False, False, False, id="RELEASE-all"),
+        pytest.param(["RELEASE"], False, True, False, False, id="RELEASE-merge-request"),
+        pytest.param(["RELEASE"], False, False, True, False, id="skip-promotion"),
+    ],
+)
+def test_run_deploy_promotes_only_on_a_release_push(
+    monkeypatch: pytest.MonkeyPatch,
+    strategies: list[str],
+    all_files: bool,
+    change_request: bool,
+    skip: bool,
+    promoted: bool,
+) -> None:
+    """Promotion edits the changed rules before a RELEASE deploy of the default branch."""
+    ctx = CliContext(json_output=True)
+    monkeypatch.setattr(
+        CIEnvironment,
+        "_check_ci_environment",
+        lambda self: CIEnvironment.CIPlatforms.GitlabCI,
+    )
+    if change_request:
+        monkeypatch.setenv("CI_PIPELINE_SOURCE", "merge_request_event")
+    else:
+        monkeypatch.delenv("CI_PIPELINE_SOURCE", raising=False)
+    with (
+        patch("opentide.core.registry.Opentide.reload"),
+        patch("opentide.deployment.modified_mdr_files", return_value=["r.yaml"]) as mock_modified,
+        patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
+        patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+        patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
+    ):
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
+        result = deploy_service.run_deploy(
+            ctx, strategies=strategies, all_files=all_files, skip_promotion=skip
+        )
+    assert result["status"] == "completed"
+    if promoted:
+        mock_modified.assert_called_once_with()
+        mock_promote.return_value.promote.assert_called_once_with(["r.yaml"])
+    else:
+        mock_modified.assert_not_called()
+        mock_promote.assert_not_called()
 
 
 def test_run_deploy_without_tenants_fails_before_loading_engines(tenantless: MagicMock) -> None:
@@ -276,10 +457,6 @@ def test_run_deploy_without_tenants_fails_before_loading_engines(tenantless: Mag
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
-        patch(
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"], "splunk": ["u2"]},
         ),
@@ -287,7 +464,7 @@ def test_run_deploy_without_tenants_fails_before_loading_engines(tenantless: Mag
         patch("opentide.core.index_manager.IndexManager.reload") as mock_reload,
         patch("opentide.platforms.enabled.platform_config_path", return_value=SPLUNK_TOML),
     ):
-        result = deploy_service.run_deploy(ctx)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
     tenantless.assert_called_once_with({"sentinel": ["u1"], "splunk": ["u2"]})
     mock_tide.assert_not_called()
     mock_reload.assert_not_called()
@@ -309,10 +486,6 @@ def test_run_deploy_dry_run_does_not_claim_a_platform_without_tenants(
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
-        patch(
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"], "splunk": ["u2"]},
         ),
@@ -323,7 +496,7 @@ def test_run_deploy_dry_run_does_not_claim_a_platform_without_tenants(
         patch("opentide.platforms.enabled.platform_config_path", return_value=SPLUNK_TOML),
     ):
         mock_tide.return_value.mdr_for.return_value = deployers
-        result = deploy_service.run_deploy(ctx, dry_run=True)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW, dry_run=True)
     assert result["status"] == "completed"
     assert result["_exit_code"] == 0
     assert result["deployed"] == ["sentinel"]
@@ -345,10 +518,6 @@ def test_run_deploy_dry_run_keeps_rule_warnings_next_to_tenant_warnings(
     warned = CiOutcome(exit_code=0, failed=False, warned=True)
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u2"]}),
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
@@ -357,7 +526,7 @@ def test_run_deploy_dry_run_keeps_rule_warnings_next_to_tenant_warnings(
         patch("opentide.platforms.enabled.platform_config_path", return_value=SPLUNK_TOML),
     ):
         mock_tide.return_value.mdr_for.return_value = {"splunk": MagicMock()}
-        result = deploy_service.run_deploy(ctx, dry_run=True)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW, dry_run=True)
     assert result["deployed"] == []
     assert result["warnings"] == [
         f"splunk has no tenants configured in {SPLUNK_TOML}, so a real deploy would stop",
@@ -365,20 +534,15 @@ def test_run_deploy_dry_run_keeps_rule_warnings_next_to_tenant_warnings(
     ]
 
 
-def test_run_deploy_empty_exception_does_not_advise_full_plan() -> None:
+def test_run_deploy_empty_exception_names_the_exception() -> None:
     ctx = CliContext(json_output=True)
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", side_effect=KeyError()),
     ):
-        result = deploy_service.run_deploy(ctx, dry_run=True)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW, dry_run=True)
     assert result["status"] == "failed"
-    assert "FULL" not in str(result["message"])
-    assert "KeyError" in str(result["message"])
+    assert result["message"] == "KeyError while selecting the rules to deploy"
 
 
 SUBFOLDER_WARNING = "1 rule file(s) in subfolders of objects/rules are not deployed"
@@ -416,14 +580,14 @@ DEPLOY_WARNING = "Some rules reported deployment warnings"
         ),
     ],
 )
-def test_run_deploy_reports_plan_warnings_in_every_result(
+def test_run_deploy_reports_selection_warnings_in_every_result(
     plan: dict[str, list[str]] | Exception,
     platform: DetectionPlatform | None,
     engine_error: Exception | None,
     status: str,
     warnings: list[str],
 ) -> None:
-    """#312: a warning raised while planning must reach whichever result follows."""
+    """#312: a warning raised while selecting rules must reach whichever result follows."""
     ctx = CliContext(json_output=True)
     warned = CiOutcome(exit_code=0, failed=False, warned=True)
 
@@ -435,10 +599,6 @@ def test_run_deploy_reports_plan_warnings_in_every_result(
 
     with (
         patch("opentide.core.registry.Opentide.reload"),
-        patch(
-            "opentide.deployment.DeploymentStrategy.load_from_environment",
-            return_value=MagicMock(),
-        ),
         patch("opentide.deployment.make_deploy_plan", side_effect=_plan) as mock_plan,
         patch("opentide.platforms.plugins.DeployTide") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
@@ -447,7 +607,7 @@ def test_run_deploy_reports_plan_warnings_in_every_result(
         mock_tide.return_value.mdr_for.return_value = {"sentinel": MagicMock()}
         if engine_error is not None:
             mock_tide.return_value.mdr_for.side_effect = engine_error
-        result = deploy_service.run_deploy(ctx, platform=platform)
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW, platform=platform)
     mock_plan.assert_called_once()
     assert result["status"] == status
     assert result["warnings"] == warnings

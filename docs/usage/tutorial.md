@@ -272,18 +272,18 @@ opentide validate query --platform sentinel
 FATAL: Query validation checks the tenant. Re-run with --live.
 ```
 
-`--live` sends the catalogue queries to Azure Monitor. That needs tenant credentials; the Azure SDK ships with opentide. Then dry-run the deploy:
+`--live` sends the catalogue queries to Azure Monitor. That needs tenant credentials; the Azure SDK ships with opentide. Then dry-run the deploy. The rule's status is `STAGING`, one of the default statuses, which maps to the `PREVIEW` strategy, so a `PREVIEW` run deploys it. `--all` reads every rule file instead of only the ones the last commit changed:
 
 ```bash
-opentide deploy --platform sentinel --dry-run
+opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
-```text output-of="opentide deploy --platform sentinel --dry-run"
+```text output-of="opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all"
 == MDR Deployment ==
 OK Deployment completed
 ```
 
-`--dry-run` plans the deploy without touching the platform. This scaffold still has `[[tenants]]` commented out, so the dry-run warns that a real deploy would stop and leaves Sentinel out of `deployed` until you uncomment a tenant. The human output does not list rules: `DEBUG=1` logs each selected rule to stderr, and `opentide --json deploy --platform sentinel --dry-run` returns the plan and a payload preview for each rule (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
+`--dry-run` selects the rules without touching the platform. In CI, the pull request job runs `--strategy PREVIEW` and the default-branch job `--strategy RELEASE`; see [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md). This scaffold still has `[[tenants]]` commented out, so the dry-run warns that a real deploy would stop and leaves Sentinel out of `deployed` until you uncomment a tenant. The human output does not list rules: `DEBUG=1` logs each selected rule to stderr, and `opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all` returns the selected rules, the tenants each would reach, and a payload preview for each rule (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
 
 ## 10. Generate documentation
 

@@ -17,6 +17,26 @@ if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
 
+_NO_RULES_MATCHED = "No rule this run read has a status that maps to its strategies"
+
+
+def _tenant_targets(system: str, uuids: list[str], run: Any, wide: bool) -> dict[str, list[str]]:
+    """Which tenants a deploy would reach on *system*, and with which rules."""
+    from opentide.deployment.planning import TideDeployment, wide_scope
+    from opentide.models.deployment_enums import DetectionPlatforms
+
+    platform = DetectionPlatforms[system.upper()]
+    if wide:
+        with wide_scope():
+            deployment = TideDeployment(uuids, platform, run)
+    else:
+        deployment = TideDeployment(uuids, platform, run)
+    return {
+        batch.tenant.name: [str(rule.metadata.uuid) for rule in batch.rules]
+        for batch in deployment.rule_deployment
+    }
+
+
 def _nothing_to_deploy(message: str, *, dry_run: bool, **fields: object) -> dict[str, object]:
     """A skipped deploy, in the same envelope as one that planned rules.
 
@@ -43,29 +63,54 @@ def _nothing_to_deploy(message: str, *, dry_run: bool, **fields: object) -> dict
     return result
 
 
-def keeps_deprecated(plan: Any, requested: bool | None) -> bool:
+def keeps_deprecated(all_files: bool, requested: bool | None) -> bool:
     """Whether a deploy keeps rules whose status strategy is DISABLEMENT or DELETION.
 
-    The deployment spec defines both as deploy actions: DISABLEMENT disables
-    any active deployment of the rule, DELETION removes it. The PRODUCTION
-    allow-list includes both, so dropping them first meant that setting a
-    rule to DISABLED or REMOVED never reached the platform (#548). PRODUCTION
-    therefore keeps them unless ``--drop-deprecated`` says otherwise. Other
-    plans keep the historical default: a FULL deploy does not delete or
-    disable the whole retired catalogue unless asked.
+    A ``RELEASE`` run disables a changed ``DISABLEMENT`` rule and deletes a
+    changed ``DELETION`` rule: that is how setting a rule to a status such as
+    the default ``DISABLED`` or ``REMOVED`` reaches the platform (#548). A
+    run over every rule file (``--all``) leaves them out unless
+    ``--keep-deprecated`` says otherwise, so a full redeploy does not disable
+    or delete the whole retired catalogue by accident.
     """
-    from opentide.deployment import DeploymentStrategy
-
     if requested is not None:
         return requested
-    return plan is DeploymentStrategy.PRODUCTION
+    return not all_files
+
+
+def resolve_run_strategies(values: Any) -> Any:
+    """Parse ``--strategy`` values, answering a status name with its strategy.
+
+    Raises ``ValueError`` with the message the CLI prints.
+    """
+    from opentide.core.registry import Opentide
+    from opentide.models.deployment_enums import parse_strategies
+
+    statuses: dict[str, Any] = {}
+    try:
+        for status in Opentide.Configurations.Deployment.statuses:
+            statuses[str(status.name).upper()] = status.strategy
+    except Exception:  # noqa: BLE001 -- the hint is optional; the refusal is not
+        statuses = {}
+    return parse_strategies(values, statuses=statuses)
+
+
+def removed_plan_error() -> str | None:
+    """The refusal for a run that still sets ``DEPLOYMENT_PLAN``, or ``None``."""
+    from opentide.models.deployment_enums import REMOVED_PLAN_ENV, removed_plan_message
+
+    value = os.environ.get(REMOVED_PLAN_ENV)
+    if value is None or not value.strip():
+        return None
+    return removed_plan_message(value)
 
 
 def run_deploy(
     ctx: CliContext,
     *,
+    strategies: list[str] | tuple[str, ...] = (),
+    all_files: bool = False,
     platform: DetectionPlatform | None = None,
-    plan: str | None = None,
     dry_run: bool = False,
     skip_promotion: bool = False,
     keep_deprecated: bool | None = None,
@@ -73,16 +118,21 @@ def run_deploy(
     skip_unconfigured: bool = False,
     persist_state_externally: bool = False,
 ) -> dict[str, object]:
-    """Deploy detection rules (Orchestration/deploy.py parity).
+    """Deploy the rules the run changed whose status maps to a run strategy.
 
-    *keep_deprecated* ``None`` keeps ``DISABLEMENT`` and ``DELETION`` rules
-    for the ``PRODUCTION`` plan only; see :func:`keeps_deprecated`.
-    *persist_state_externally* lets a CI run other than ``PRODUCTION`` create
-    rules whose ids land in deployment state; the caller commits the shards.
+    *strategies* are ``--strategy`` values (``PREVIEW``, ``RELEASE``). The
+    rule files are those the run's diff changed (the pull or merge request,
+    the push, or outside CI the last commit), or every rule file with
+    *all_files*. Each rule reaches the tenants that accept a run strategy that
+    deploys it. *keep_deprecated* ``None`` keeps ``DISABLEMENT`` and
+    ``DELETION`` rules unless *all_files*; see :func:`keeps_deprecated`.
+    *persist_state_externally* lets a CI run other than a ``RELEASE`` push
+    create rules whose ids land in deployment state; the caller commits the
+    shards.
     """
     from opentide.deployment.external_ids import PERSIST_EXTERNALLY_ENV
 
-    # Per run, like the plan: a long-lived process must not inherit it.
+    # Per run: a long-lived process must not inherit it.
     if persist_state_externally:
         os.environ[PERSIST_EXTERNALLY_ENV] = "1"
     else:
@@ -91,8 +141,9 @@ def run_deploy(
     result = _deploy(
         ctx,
         plan_warnings,
+        strategies=strategies,
+        all_files=all_files,
         platform=platform,
-        plan=plan,
         dry_run=dry_run,
         skip_promotion=skip_promotion,
         keep_deprecated=keep_deprecated,
@@ -104,12 +155,22 @@ def run_deploy(
     return result
 
 
+#: The CLI's answer when ``--strategy`` is missing.
+STRATEGY_REQUIRED = (
+    "Pass --strategy: PREVIEW deploys the rules whose status maps to PREVIEW (the pull or "
+    "merge request job), RELEASE deploys and retires the rules whose status maps to RELEASE, "
+    "DISABLEMENT or DELETION (the default-branch job). Rules whose status maps to UNIVERSAL "
+    "are deployed by both. See 'opentide deploy --help'."
+)
+
+
 def _deploy(
     ctx: CliContext,
     plan_warnings: list[str],
     *,
+    strategies: list[str] | tuple[str, ...],
+    all_files: bool,
     platform: DetectionPlatform | None,
-    plan: str | None,
     dry_run: bool,
     skip_promotion: bool,
     keep_deprecated: bool | None,
@@ -122,49 +183,53 @@ def _deploy(
     # not inherit a previous run's failure or warning.
     for flag in ("DEPLOYMENT_ERROR_RAISED", "DEPLOYMENT_WARNING_RAISED"):
         os.environ.pop(flag, None)
-    if plan is not None:
-        ctx.set_deployment_plan(plan)
+    removed = removed_plan_error()
+    if removed is not None:
+        return {"status": "failed", "message": removed, "_exit_code": 2}
+    if not strategies:
+        return {"status": "failed", "message": STRATEGY_REQUIRED, "_exit_code": 2}
     from opentide.core.registry import Opentide
-    from opentide.deployment import (
-        CIEnvironment,
-        DeploymentStrategy,
-        make_deploy_plan,
-        modified_mdr_files,
-    )
+    from opentide.deployment import CIEnvironment, make_deploy_plan, modified_mdr_files
+    from opentide.deployment.ci import is_change_request
     from opentide.deployment.git_repo import MissingGitCheckout, missing_checkout_message
+    from opentide.models.deployment_enums import StatusStrategy
     from opentide.mutation.promotion import PromoteMDR
     from opentide.platforms.plugins import DeployTide
 
     Opentide.reload()
     try:
-        deployment_plan = DeploymentStrategy.load_from_environment()
+        run = resolve_run_strategies(strategies)
     except ValueError as exc:
-        return {"status": "failed", "message": str(exc), "_exit_code": 1}
+        return {"status": "failed", "message": str(exc), "_exit_code": 2}
     try:
-        local_debug = CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug
+        environment = CIEnvironment().environment
+        local_debug = environment is CIEnvironment.CIPlatforms.LocalDebug
         if (
-            deployment_plan is DeploymentStrategy.PRODUCTION
+            StatusStrategy.RELEASE in run
+            and not all_files
             and not skip_promotion
             and not dry_run
             and not local_debug
+            and not is_change_request(environment)
         ):
-            pre_deployment = modified_mdr_files(deployment_plan)
+            pre_deployment = modified_mdr_files()
             emit_section("Pre-deployment Routine")
             PromoteMDR().promote(pre_deployment)
         deployment_list = make_deploy_plan(
-            deployment_plan,
+            run,
             wide_scope=wide,
-            keep_deprecated=keeps_deprecated(deployment_plan, keep_deprecated),
+            keep_deprecated=keeps_deprecated(all_files, keep_deprecated),
             warnings=plan_warnings,
+            all_files=all_files,
         )
     except MissingGitCheckout as exc:
         return {
             "status": "failed",
-            "message": missing_checkout_message(deployment_plan.name, exc.searched),
+            "message": missing_checkout_message(exc.searched),
             "_exit_code": 1,
         }
     except Exception as exc:
-        message = str(exc).strip() or (f"{type(exc).__name__} while compiling the deployment plan")
+        message = str(exc).strip() or (f"{type(exc).__name__} while selecting the rules to deploy")
         return {"status": "failed", "message": message, "_exit_code": 1}
     if platform is not None:
         platform_key = platform.value
@@ -178,12 +243,12 @@ def _deploy(
         if environment is CIEnvironment.CIPlatforms.GitHubActions and not ctx.json_output:
             # GitHub only parses workflow commands from stdout, and never wrapped.
             get_stdout_console().print(
-                "::warning::No rules matched this deployment plan",
+                f"::warning::{_NO_RULES_MATCHED}",
                 markup=False,
                 highlight=False,
                 soft_wrap=True,
             )
-        return _nothing_to_deploy("No rules matched this deployment plan", dry_run=dry_run)
+        return _nothing_to_deploy(_NO_RULES_MATCHED, dry_run=dry_run)
     deployed: list[str] = []
     plan_payload: dict[str, list[str]] = {
         system: list(uuids) for system, uuids in deployment_list.items()
@@ -231,6 +296,27 @@ def _deploy(
         message = str(exc).strip() or f"{type(exc).__name__} while loading deployment engines"
         return {"status": "failed", "message": message, "deployed": deployed, "_exit_code": 1}
     payloads: dict[str, list[dict[str, object]]] = {}
+    # Resolve every platform's tenants before anything is sent. A platform
+    # file that still sets the removed tenant `deployment` key raises
+    # ValueError here, so the run fails with the replacement line instead of
+    # crashing inside the first deployer after others already ran.
+    targets: dict[str, dict[str, list[str]]] = {}
+    for system, uuids in deployment_list.items():
+        if system in missing_tenants:
+            continue
+        try:
+            targets[system] = _tenant_targets(system, uuids, run, wide)
+        except ValueError as exc:
+            return {
+                "status": "failed",
+                "message": str(exc),
+                "deployed": deployed,
+                "dry_run": dry_run,
+                "plan": plan_payload,
+                "_exit_code": 1,
+            }
+        except Exception as exc:  # noqa: BLE001 -- the deployer reports its own failure
+            logger.warning("tenant_targets_failed", system=system, detail=str(exc))
     for system, uuids in deployment_list.items():
         if system not in mdr_deployers:
             return {
@@ -250,7 +336,13 @@ def _deploy(
                 deployed.append(system)
             continue
         try:
-            deployer.deploy(mdr_deployment=uuids, deployment_plan=deployment_plan)
+            if wide:
+                from opentide.deployment.planning import wide_scope
+
+                with wide_scope():
+                    deployer.deploy(mdr_deployment=uuids, strategies=run)
+            else:
+                deployer.deploy(mdr_deployment=uuids, strategies=run)
         except TypeError:
             logger.warning("switching_to_mdrv3_legacy_methods")
             deployer.deploy(deployment=uuids)
@@ -271,8 +363,10 @@ def _deploy(
         warnings.append("Some rules reported deployment warnings")
     if warnings:
         result["warnings"] = warnings
+    result["strategies"] = [strategy.name for strategy in run]
     if dry_run:
         result["payloads"] = payloads
+        result["tenants"] = targets
         if missing_tenants:
             result["missing_tenants"] = missing_tenants
             result["advice"] = tenants_advice

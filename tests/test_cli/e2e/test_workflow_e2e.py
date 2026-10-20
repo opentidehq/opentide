@@ -11,8 +11,8 @@ validate query → deploy dry-run → docs → setup env/hooks.
 This module uses in-process ``CliRunner``. The matching console-script chain
 lives in ``test_workflow_subprocess_e2e.py``.
 
-Does not inject DEPLOYMENT_PLAN=FULL or CI=true on deploy/query steps
-(issue #164). Populated generate must survive object ``threat.actors``
+Does not inject CI=true on deploy/query steps (issue #164): the deploy runs
+``--strategy PREVIEW --all`` as the tutorial does. Populated generate must survive object ``threat.actors``
 (name / optional sighting / references).
 """
 
@@ -142,7 +142,6 @@ def test_first_user_cli_workflow(
         "--platform",
         "sentinel",
         repo=fresh,
-        extra_env={"DEPLOYMENT_PLAN": ""},
     )
     assert query.exit_code == 1, query.stdout + query.stderr
     query_payload = parse_cli_json(query)
@@ -161,12 +160,15 @@ def test_first_user_cli_workflow(
         "--dry-run",
         "--platform",
         "sentinel",
+        "--strategy",
+        "PREVIEW",
+        "--all",
         "--skip-promotion",
         repo=fresh,
-        extra_env={"DEPLOYMENT_PLAN": ""},
     )
     deploy_payload = assert_json_ok(deploy)
     assert deploy_payload["dry_run"] is True
+    assert deploy_payload["strategies"] == ["PREVIEW"]
     assert "00000000-0000-4000-8003-000000000001" in deploy_payload["plan"]["sentinel"]
     deployer.deploy.assert_not_called()
 

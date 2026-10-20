@@ -11,7 +11,7 @@ from typing import Any, Generic, Protocol, TypeVar, cast
 
 from opentide.core.logging import get_logger
 from opentide.core.root import get_repo_root
-from opentide.models.deployment_enums import DeploymentStrategy
+from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
 from opentide.platforms.config import build_system_config
 from opentide.platforms.enabled import enabled_systems
@@ -35,7 +35,7 @@ class RuleDeployer(Protocol):
     def deploy(
         self,
         mdr_deployment: Sequence[DetectionRule] | list[str],
-        deployment_plan: DeploymentStrategy | None = None,
+        strategies: RunStrategies | None = None,
     ) -> None:
         pass
 
@@ -44,7 +44,7 @@ class QueryValidator(Protocol):
     def validate(
         self,
         mdr_deployment: Sequence[DetectionRule] | list[str],
-        deployment_plan: DeploymentStrategy | None = None,
+        strategies: RunStrategies | None = None,
     ) -> None:
         pass
 
