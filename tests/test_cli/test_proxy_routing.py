@@ -11,8 +11,10 @@ client run here; the proxy is a socket that counts connections.
 from __future__ import annotations
 
 import json
+import os
 import socket
 import threading
+import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -88,9 +90,15 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, closed_port: int) -> I
         'app = "search"\ntoken = "token"\n'
     )
     config.write_text(config.read_text(encoding="utf-8") + tenant, encoding="utf-8")
+    # ``urlopen`` caches one opener, with the proxies of its first call.
+    monkeypatch.setattr(urllib.request, "_opener", None)
     clear_runtime_caches()
     yield repo
     clear_runtime_caches()
+    # ``--proxy`` writes these into the process environment, which CliRunner
+    # does not restore; the monkeypatch teardown then puts back the originals.
+    for name in ("HTTP_PROXY", "HTTPS_PROXY"):
+        os.environ.pop(name, None)
 
 
 def _validate_splunk(env: dict[str, str]) -> tuple[int, dict[str, object]]:
