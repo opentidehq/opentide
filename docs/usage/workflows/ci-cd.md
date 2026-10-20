@@ -53,6 +53,8 @@ GitHub runs that job when `github.event_name == 'push'` and the ref is the defau
 
 `opentide setup ci` writes the gate from the diagram: `opentide validate --strict`, `opentide lint --strict`, and query validation for each supported platform. A generated live job guards only the `$VAR` names in that platform's enabled file under `.opentide/configurations/platforms/` (comments and literal values do not count). If one of those variables is unset the step prints the names and exits 2. The step runs `opentide validate query --platform <platform> --live --changed`: it checks only the rule files the pull request, merge request or push changed, the files the deploy job of the same run reads ([which rules are checked](../../cli/validate.md#which-rules-are-checked)), so the jobs check out full history. It passes no `--plan`, so each changed rule is checked on every tenant it can reach, `STAGING` and `PRODUCTION` alike, whatever its status ([which tenants are checked](../../cli/validate.md#which-tenants-are-checked)). Through 0.16.1 the step checked every rule in the catalogue on every run; regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. The CLI also exits 2 when the platform has rules but none reaches a configured tenant, so no query was sent. Exit 0 means queries were sent and passed, no changed rule has a block for the platform, or the default branch has no `.opentide/configurations` or no tenant for the platform yet, so nothing was sent ([tenant configuration on pull requests](#tenant-configuration-on-pull-requests)). Exit 1 is the check's own failure. On GitLab, `generate` needs the object validate job and every query-validation job, so deploy cannot start after a failed `opentide validate query`. Deploy jobs preview with `--dry-run`, then run `opentide deploy --plan STAGING` or `PRODUCTION` with `--skip-unconfigured`, so a repository whose `[[tenants]]` block is still commented out exits 0 instead of failing the pipeline. The header lists every credential variable the bundled platform files reference. GitHub deploy jobs map those names from `secrets`. GitLab and Azure read the same names from the project variable store. There is no `OPENTIDE_SECRETS` variable.
 
+On GitLab the file sets `workflow:rules` so that pipelines run for merge requests and for the default branch only. Every job then runs in merge request pipelines, and a push to a branch with an open merge request starts one pipeline, not a branch pipeline beside it. A branch is validated once it has a merge request, as GitHub validates pull requests. Through 0.16.1 the file had no `workflow:rules`, and a GitLab job with no `rules` defaults to `except: merge_requests`: the merge request pipeline held only `deploy_staging` and `inflight_shards`, whose `needs: generate` named a job that was not added, so GitLab refused to start it (`'deploy_staging' job needs 'generate' job, but it was not added to the pipeline`) and the staging deploy never ran.
+
 The staging job commits nothing. In CI, a deploy whose plan is not `PRODUCTION` therefore refuses to create a Defender for Endpoint, SentinelOne or CrowdStrike rule that has no recorded id (`deployment_state_unpersisted`, before any vendor call), because the id would be lost with the runner and the next run would create the rule again. Updates and deletes of rules that already have an id still run. See [Creates outside the production job](../concepts/deployment-state.md#creates-outside-the-production-job).
 
 ### Tenant configuration on pull requests
@@ -103,6 +105,33 @@ Every new vendor id is also logged as `external_id_recorded` at warning level, s
 Through 0.14.2 the production job dropped `DISABLED` and `REMOVED` rules before the `PRODUCTION` allow-list was consulted, and discarded the write-backs, so promoted statuses never landed and every later deploy of a Defender, SentinelOne or CrowdStrike rule created a duplicate remote rule. Regenerate existing pipelines with `opentide setup ci <github|gitlab|azure> --yes`.
 
 An Azure pipeline from **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch, so a topic-branch push still validates. Azure Repos Git ignores `pr:`. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy.
+
+### Behind a proxy or a private CA
+
+The generated file sets no proxy and no certificate: both belong to the runner's network. Set them as GitLab CI/CD variables (project or group) or Azure pipeline variables, which every job receives as environment variables, or in the runner's own environment (a self-hosted GitHub runner reads its `.env` file). Nothing in the generated file needs editing.
+
+| Variable | Read by |
+|----------|---------|
+| `HTTP_PROXY`, `HTTPS_PROXY` | `pip` and opentide (either spelling) |
+| `http_proxy`, `https_proxy` | `apt-get`, which installs `git` in the GitLab jobs, and `git` itself (lowercase only for plain HTTP) |
+| `NO_PROXY`, `no_proxy` | Every tool above: hosts reached directly |
+| `OPENTIDE_PROXY` | opentide only, the same as `opentide --proxy`: platform and lookup calls, not `pip` or `git` |
+
+Set both spellings to the same values. A proxy defined only in capitals leaves `apt-get` without one, and the GitLab jobs that install `git` fail before opentide runs.
+
+**A cloud tenant through the proxy and an internal one without it.** List the internal tenant's host in `NO_PROXY` and `no_proxy`, for example `NO_PROXY=splunk.internal.example,.internal.example`. opentide's platform clients honour it, so one deploy job reaches Sentinel through the proxy and Splunk directly. Sent through the proxy, a request for an internal tenant gets the proxy's HTML error page back where the Splunk client expects XML. There is no need to split the deploy per platform, and the generated file does not: the production job is the only one that commits deployment state, once per run ([production write-back](#production-write-back)).
+
+To send only opentide's platform calls through the proxy while `pip` and `git` go direct, set `OPENTIDE_PROXY` instead of the four proxy variables. `NO_PROXY` still applies to it.
+
+**A private certificate authority.** Point each tool at the CA bundle rather than turning verification off. In GitLab, a variable of type *File* holds the bundle and is exported as the path to it:
+
+| Variable | Read by |
+|----------|---------|
+| `GIT_SSL_CAINFO` | `git` fetch and push in the generated jobs |
+| `PIP_CERT` | `pip install` |
+| `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE` | opentide's platform clients and lookups |
+
+On GitLab, `CI_SERVER_TLS_CA_FILE` holds the CA the runner trusts for the GitLab server when the runner sets `tls-ca-file`, so `GIT_SSL_CAINFO: $CI_SERVER_TLS_CA_FILE` reuses it. `GIT_SSL_NO_VERIFY` also gets `git` past a private CA, but it turns certificate checks off for the fetch and for the push that carries the job token, so anyone between the runner and GitLab can read that token. The generated file never sets it.
 
 ## Stage 1 — validate every PR
 

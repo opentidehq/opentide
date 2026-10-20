@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opentide.ci.gates import gitlab_premerge_rule
+from opentide.ci.gates import gitlab_premerge_rule, gitlab_workflow_rules
 from opentide.ci.inflight import (
     GITLAB_FETCH,
     GITLAB_INSTALL_GIT,
@@ -208,7 +208,15 @@ def render_gitlab(options: CiRenderOptions) -> str:
         )
 
     stage_lines = "\n".join(f"  - {stage}" for stage in stages)
+    workflow_lines = "".join(f"    - if: {rule}\n" for rule in gitlab_workflow_rules())
     core = (
+        "# Merge request and default-branch pipelines only. Every job then runs in\n"
+        "# merge request pipelines, and a push to a branch with an open merge request\n"
+        "# starts one pipeline, not two.\n"
+        "workflow:\n"
+        "  rules:\n"
+        f"{workflow_lines}"
+        "\n"
         "variables:\n"
         "  OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR\n"
         "\n"

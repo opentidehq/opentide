@@ -103,7 +103,12 @@ def main_callback(
     proxy: str | None = typer.Option(
         None,
         "--proxy",
-        help="HTTP(S) proxy URL (http://\\[user:pass@\\]host:port). Overrides HTTP_PROXY and HTTPS_PROXY.",
+        envvar="OPENTIDE_PROXY",
+        help=(
+            "HTTP(S) proxy URL (http://\\[user:pass@\\]host:port) for platform and lookup "
+            "calls. Overrides HTTP_PROXY and HTTPS_PROXY; hosts in NO_PROXY are still "
+            "reached directly."
+        ),
     ),
     version: bool = typer.Option(
         False,

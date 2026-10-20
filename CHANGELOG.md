@@ -12,10 +12,16 @@ Regenerate generated pipelines with `opentide setup ci <github|gitlab|azure> --y
 
 - **`opentide validate query --changed`** checks only the rule files the current CI run changed: on a pull or merge request the files `deploy --plan STAGING` reads (the diff from the request's merge base), on any other GitHub Actions, GitLab CI or Azure Pipelines run the files `deploy --plan PRODUCTION` reads (the pushed commit's diff). It narrows the rule files only: without `--plan` each changed rule is still checked in any status a deploy acts on, on every tenant it can reach. Outside CI it refuses with exit `2`. `--json` reports `"scope": "changed"`.
 - **`opentide validate query --file` and `--uuid`** (repeatable) check only the selected rules, for a manual check outside CI. A target that selects no rule file directly in the rules folder fails with exit `1` and is listed under `unmatched`, before any query is sent. `--json` reports `"scope": "selected"`.
+- **`OPENTIDE_PROXY`** sets the global `--proxy` when the flag is omitted, so a CI/CD variable can send opentide's platform calls through a proxy without editing the generated pipeline. Hosts in `NO_PROXY` are still reached directly, with or without `--proxy`: one deploy reaches a cloud tenant through the proxy and an internal Splunk directly, with no per-platform job.
+
+### Changed
+
+- The CI/CD guide covers pipelines behind a proxy or a private CA: which proxy variables `pip`, `apt-get`, `git` and opentide read (set both spellings), `NO_PROXY` for internal tenants, and the CA bundle variables to use instead of `GIT_SSL_NO_VERIFY`. The global options page lists `--proxy`.
 
 ### Fixed
 
 - **Generated pipelines checked every rule's query on every run.** The live query step ran `opentide validate query --platform <p> --live` with no scope, so a pull request that edited one rule sent the whole catalogue to the tenant; a catalogue of a few hundred Splunk rules took most of an hour. It now passes `--changed`, and the jobs that run it fetch full history (GitHub `fetch-depth: 0`, GitLab `GIT_DEPTH: "0"`, Azure `fetchDepth: 0`). `--plan STAGING` was not the fix: it also drops `PRODUCTION` rules and every tenant but the staging ones, so a pull request that edited a production rule's query would have merged it unchecked.
+- **Generated GitLab pipelines could not start a merge request pipeline.** A GitLab job with no `rules` defaults to `except: merge_requests`, so the merge request pipeline held only `deploy_staging` and `inflight_shards`, whose `needs: generate` named a job that was not added: GitLab refused the pipeline, the staging deploy and the inflight shards never ran, and every push to the branch also ran a branch pipeline. The file now sets `workflow:rules` for merge request and default-branch pipelines, so every job runs in a merge request pipeline and one push starts one pipeline.
 - A GitLab `PRODUCTION` plan with no previous tip (`CI_COMMIT_BEFORE_SHA` all zeros, as on a branch's first push, a manual run or a schedule) diffs from HEAD's first parent, as on GitHub and Azure, instead of failing with `No Source Commit Found`.
 
 ## [0.16.1] — 2026-10-20

@@ -28,6 +28,21 @@ def gitlab_premerge_rule() -> str:
     return f"{GITLAB_MERGE_REQUEST} && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH"
 
 
+def gitlab_workflow_rules() -> tuple[str, ...]:
+    """GitLab ``workflow:rules``: merge request pipelines and default-branch pipelines.
+
+    Without ``workflow:rules`` a job with no ``rules`` defaults to
+    ``except: merge_requests``. A merge request pipeline then held only
+    ``deploy_staging`` and ``inflight_shards``, whose ``needs: generate``
+    named a job that was not added, so GitLab refused to start it, and every
+    push to a branch with an open merge request also ran a branch pipeline.
+    With these rules every job runs in merge request pipelines, and a branch
+    is validated once it has a merge request, as GitHub validates pull
+    requests and pushes to the default branch.
+    """
+    return (GITLAB_MERGE_REQUEST, "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH")
+
+
 def github_premerge_if(default_branch: str) -> str:
     """GitHub Actions ``if:`` expression for a pre-merge job that writes externally.
 

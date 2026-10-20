@@ -21,6 +21,7 @@ opentide --debug --no-color generate
 | `--debug` | `DEBUG` | off | Enable structlog debug logging |
 | `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable Rich colour output |
 | `--json` | — | off | Emit JSON instead of Rich tables / logs |
+| `--proxy` | `OPENTIDE_PROXY` | none | HTTP(S) proxy for platform and lookup calls; see [Proxy](#proxy) |
 | `--version`, `-V` | — | — | Print `opentide <version>` and exit |
 
 ## Version
@@ -54,6 +55,19 @@ Git commands such as `generate docs --changed` and `generate inflight` still run
 A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_WORKSPACE`. That variable is read before the repository root when locating detection objects, so without this precedence `--repo` resolved the root while the workspace — and therefore the objects actually validated — stayed on the exported path.
 
 Setup commands honour `--repo` when `--path` is `.` (default).
+
+## Proxy
+
+`--proxy http://[user:pass@]host:port`, or `OPENTIDE_PROXY` when the flag is omitted, sets `HTTP_PROXY` and `HTTPS_PROXY` for the `opentide` process only, overriding any value it inherited. Platform clients and the CVE lookup then use the proxy. Without either, opentide uses whatever `HTTP_PROXY` and `HTTPS_PROXY` (or their lowercase spellings) the environment already holds.
+
+Hosts listed in `NO_PROXY` (or `no_proxy`) are reached directly, with or without `--proxy`. That is how one command reaches a cloud tenant through the proxy and an internal tenant without it:
+
+```bash
+export NO_PROXY=splunk.internal.example
+opentide --proxy http://proxy.internal.example:8080 deploy --plan PRODUCTION
+```
+
+A `proxy` key under a tenant's `[tenants.setup]`, in `deployment.toml` `[proxy]` or in `[cve]` is retired: the command fails and names `opentide --proxy`. For pipelines behind a proxy, see [CI/CD → Behind a proxy or a private CA](../usage/workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
 
 ## Environment propagation
 
