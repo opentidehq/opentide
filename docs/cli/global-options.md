@@ -87,7 +87,7 @@ Without `--json`, a result prints its `message` first, then any `detail` and `ad
 
 ## Deployment plan
 
-Some subcommands read `DEPLOYMENT_PLAN` from the environment or `--plan`:
+Some subcommands read `DEPLOYMENT_PLAN` from the environment or `--plan`. The plans are `STAGING`, `PRODUCTION` and `FULL`; they name a pipeline, not a status. What each one deploys is in [Configuration → deployment plan](../usage/configuration.md#deployment-plan).
 
 - `opentide deploy --plan STAGING`
 - `opentide validate query --platform sentinel --live --plan STAGING`

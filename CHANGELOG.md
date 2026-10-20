@@ -16,6 +16,8 @@ Regenerate generated pipelines with `opentide setup ci <github|gitlab|azure> --y
 
 ### Changed
 
+- **Deployment plans are documented as pipelines, not statuses.** `STAGING` (a pull or merge request) deploys the rules whose status strategy is `PREVIEW`, `PRODUCTION` (the default branch) the `RELEASE`, `DISABLEMENT` and `DELETION` ones, and `FULL` every rule file's `PREVIEW` and `RELEASE` rules; a plan never matches a status by name, so `--plan STAGING` deploys a `DEVELOPMENT` rule. [Configuration → deployment plan](https://opentide.org/docs/usage/configuration/#deployment-plan) has the table, `deploy --help` and `validate query --help` summarise it, and the CI/CD guide's hand-written pipelines run `STAGING` on the pull request and `PRODUCTION` on merge (they ran `DEPLOYMENT_PLAN: staging` on pushes to `main`, which has no pull request to diff). `--wide` is documented as what it does: ignore the strategy filter, not widen the output.
+- `--plan PREVIEW` (or another status strategy) still fails, and now names the plan that deploys that strategy: `PREVIEW is a status strategy, not a plan: the STAGING plan (pull and merge requests) deploys PREVIEW rules`. The `mdr_selected_for_deploy` and `mdr_skipped_for_plan` log lines add the rule's `strategy`, and the skip names the strategies the plan deploys (`plan_deploys`).
 - The CI/CD guide covers pipelines behind a proxy or a private CA: which proxy variables `pip`, `apt-get`, `git` and opentide read (set both spellings), `NO_PROXY` for internal tenants, and the CA bundle variables to use instead of `GIT_SSL_NO_VERIFY`. The global options page lists `--proxy`.
 
 ### Fixed

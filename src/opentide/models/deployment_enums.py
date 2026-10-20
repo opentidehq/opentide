@@ -48,6 +48,19 @@ class DeploymentStrategy(Enum):
             return DeploymentStrategy[name]
         except KeyError as exc:
             logger.critical('the_following_deployment_plan_is_not_supported', arg0=raw, advice=f'Supported plan : {supported}')
-            raise ValueError(
-                f"Unsupported deployment plan {raw!r}. Use one of: {', '.join(supported)}"
-            ) from exc
+            message = f"Unsupported deployment plan {raw!r}. Use one of: {', '.join(supported)}"
+            if name in StatusStrategy.__members__:
+                message += f". {_STRATEGY_IS_NOT_A_PLAN[name]}"
+            raise ValueError(message) from exc
+
+
+#: Why a status strategy is not a plan, and the plan that deploys it. Plans name
+#: a pipeline; a strategy is what a rule's status asks deploy to do.
+_STRATEGY_IS_NOT_A_PLAN = {
+    "PREVIEW": "PREVIEW is a status strategy, not a plan: the STAGING plan (pull and merge requests) deploys PREVIEW rules",
+    "RELEASE": "RELEASE is a status strategy, not a plan: the PRODUCTION plan (the default branch) deploys RELEASE rules",
+    "DISABLEMENT": "DISABLEMENT is a status strategy, not a plan: the PRODUCTION plan (the default branch) disables DISABLEMENT rules",
+    "DELETION": "DELETION is a status strategy, not a plan: the PRODUCTION plan (the default branch) deletes DELETION rules",
+    "UNIVERSAL": "UNIVERSAL is a status strategy, not a plan: both the STAGING and the PRODUCTION plan deploy UNIVERSAL rules",
+    "INERT": "INERT is a status strategy, not a plan: no plan deploys INERT rules",
+}

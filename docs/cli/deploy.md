@@ -33,8 +33,8 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | Flag | Env | Purpose |
 |------|-----|---------|
 | `--platform` | — | Target platform (see [platforms](../usage/concepts/platforms.md)) |
-| `--plan` | `DEPLOYMENT_PLAN` | Deployment plan / strategy |
-| `--wide` | — | Wide output |
+| `--plan` | `DEPLOYMENT_PLAN` | Deployment plan: `STAGING`, `PRODUCTION` or `FULL` (default). A plan names a pipeline and selects rules by their status's strategy, not by status name; see [Deployment plan](../usage/configuration.md#deployment-plan) |
+| `--wide` | — | Deploy the plan's rule files whatever their status strategy, `INERT` included. `DISABLEMENT` and `DELETION` still follow `--keep-deprecated` |
 | `--dry-run` | — | Simulate deployment without writes |
 | `--keep-deprecated` / `--drop-deprecated` | — | Include rules whose status strategy is `DISABLEMENT` or `DELETION`, so the deploy disables or deletes them. Default: on for `--plan PRODUCTION`, off for other plans |
 | `--skip-promotion` | — | Skip promotion step |

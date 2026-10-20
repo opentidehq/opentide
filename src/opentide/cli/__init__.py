@@ -434,6 +434,20 @@ def generate_extract_elastic(
 validate_app = typer.Typer(help="Object and query validation")
 app.add_typer(validate_app, name="validate")
 
+#: Plans name a pipeline, not a status, and select rules by their status's
+#: strategy: the bundled DEVELOPMENT status (PREVIEW) deploys under STAGING.
+DEPLOY_PLAN_HELP = (
+    "STAGING (pull or merge request): rules whose status strategy is PREVIEW, to STAGING "
+    "tenants. PRODUCTION (default branch): RELEASE, DISABLEMENT and DELETION rules, to "
+    "PRODUCTION tenants. FULL (default): every rule file, PREVIEW and RELEASE rules. Plans "
+    "select rules by their status's strategy, not by status name"
+)
+QUERY_PLAN_HELP = (
+    "Narrow the check to a deployment plan: STAGING (PREVIEW rules, STAGING tenants) or "
+    "PRODUCTION (RELEASE rules, PRODUCTION tenants). Default FULL: PREVIEW and RELEASE "
+    "rules, on every tenant a rule can reach"
+)
+
 
 @validate_app.callback(invoke_without_command=True)
 def validate_group(
@@ -494,8 +508,10 @@ def lint_cmd(
 def validate_query_cmd(
     ctx: typer.Context,
     platform: DetectionPlatform = typer.Option(..., "--platform"),
-    plan: str | None = typer.Option(None, "--plan", envvar="DEPLOYMENT_PLAN"),
-    wide: bool = typer.Option(False, "--wide"),
+    plan: str | None = typer.Option(None, "--plan", envvar="DEPLOYMENT_PLAN", help=QUERY_PLAN_HELP),
+    wide: bool = typer.Option(
+        False, "--wide", help="Check every status strategy but DISABLEMENT and DELETION"
+    ),
     live: bool = typer.Option(
         False,
         "--live",
@@ -539,8 +555,14 @@ app.add_typer(deploy_app, name="deploy")
 def deploy_cmd(
     ctx: typer.Context,
     platform: DetectionPlatform | None = typer.Option(None, "--platform"),
-    plan: str | None = typer.Option(None, "--plan", envvar="DEPLOYMENT_PLAN"),
-    wide: bool = typer.Option(False, "--wide"),
+    plan: str | None = typer.Option(
+        None, "--plan", envvar="DEPLOYMENT_PLAN", help=DEPLOY_PLAN_HELP
+    ),
+    wide: bool = typer.Option(
+        False,
+        "--wide",
+        help="Deploy the plan's rule files whatever their status strategy, INERT included",
+    ),
     dry_run: bool = typer.Option(False, "--dry-run"),
     keep_deprecated: bool | None = typer.Option(
         None,

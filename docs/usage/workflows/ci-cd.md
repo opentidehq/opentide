@@ -5,15 +5,17 @@ description: Gate detection content on every PR and deploy on merge — GitHub, 
 
 # CI/CD integration
 
-The point of detection-as-code is that a machine enforces quality. A good opentide pipeline **validates every pull request** and **deploys on merge**, promoting to production as a controlled step.
+The point of detection-as-code is that a machine enforces quality. A good opentide pipeline **validates every pull request**, **previews** its rules on staging tenants, and **releases** them on merge.
 
 ```mermaid
 flowchart LR
-  pr["Pull request"] --> validate["generate + validate --strict + lint --strict + validate query"]
-  validate -->|pass| merge["Merge to main"]
-  merge --> stage["deploy (staging)"]
-  stage --> promote["promote → PRODUCTION"]
+  pr["Pull request"] --> validate["validate --strict + lint --strict + validate query --changed"]
+  validate -->|pass| preview["deploy --plan STAGING: PREVIEW rules to STAGING tenants"]
+  preview -->|review, merge| merge["Push to the default branch"]
+  merge --> release["deploy --plan PRODUCTION: promotion, then RELEASE rules to PRODUCTION tenants"]
 ```
+
+The plan names the pipeline, not a status. `STAGING` runs on the pull request and deploys the rules whose status strategy is `PREVIEW`; `PRODUCTION` runs on the default branch and deploys `RELEASE`, `DISABLEMENT` and `DELETION` rules. A rule in the bundled `DEVELOPMENT` status is therefore deployed by `--plan STAGING`. See [Configuration → deployment plan](../configuration.md#deployment-plan).
 
 ## Scaffold with setup
 
@@ -133,9 +135,9 @@ To send only opentide's platform calls through the proxy while `pip` and `git` g
 
 On GitLab, `CI_SERVER_TLS_CA_FILE` holds the CA the runner trusts for the GitLab server when the runner sets `tls-ca-file`, so `GIT_SSL_CAINFO: $CI_SERVER_TLS_CA_FILE` reuses it. `GIT_SSL_NO_VERIFY` also gets `git` past a private CA, but it turns certificate checks off for the fetch and for the push that carries the job token, so anyone between the runner and GitLab can read that token. The generated file never sets it.
 
-## Stage 1 — validate every PR
+## Stage 1 — validate every pull request
 
-This is the non-negotiable gate. It needs no secrets (query validation checks syntax, not connectivity).
+This is the non-negotiable gate. Object validation needs no secrets. The live query check sends each changed rule's queries to its tenants, so it needs the platform credentials, and `--changed` diffs from the pull request's merge base, so the checkout needs full history. The sketches below are minimal: `opentide setup ci` is the source of truth. Among other things, it replaces `.opentide/configurations` with the default branch's copy before any step that uses a credential ([tenant configuration on pull requests](#tenant-configuration-on-pull-requests)), which these sketches do not.
 
 ```yaml
 # .github/workflows/validate.yml
@@ -146,19 +148,53 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install 'opentide==0.16.1'
-      - run: opentide generate
       - run: opentide validate --strict
-      - run: opentide validate query --platform sentinel --live
+      - run: opentide validate query --platform sentinel --live --changed
 ```
 
-## Stage 2 — deploy on merge (staging)
+## Stage 2 — preview on the pull request (`--plan STAGING`)
 
-Runs on push to `main`, deploying rules in their current status. This is where platform **secrets** are needed.
+The `STAGING` plan deploys the pull request's changed rules whose status strategy is `PREVIEW` (the bundled `DEVELOPMENT`, `IMPROVING`, `STAGING` and `ACCEPTANCE`) to the tenants whose `deployment` is `STAGING`. It reads the pull request's diff, so it runs on pull requests only and checks out full history. Add the job to the same workflow:
+
+```yaml
+  deploy-staging:
+    needs: validate
+    if: github.base_ref == 'main'      # only pull requests into the default branch
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      OPENTIDE_REPO_ROOT: ${{ github.workspace }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install 'opentide==0.16.1'
+      - run: opentide deploy --plan STAGING --dry-run   # preview in logs
+      - run: opentide deploy --plan STAGING
+```
+
+A rule whose status maps to `RELEASE` is not deployed here: it is released on merge.
+
+## Stage 3 — release on merge (`--plan PRODUCTION`)
+
+The `PRODUCTION` plan runs on a push to the default branch and reads the pushed commit's diff. When promotion is enabled (the default), it first rewrites the status of each merged rule whose strategy is not `RELEASE`, `DISABLEMENT` or `DELETION` to `promotion_target` (`PRODUCTION`), so merging a rule releases it. It then deploys the `RELEASE` rules to the tenants whose `deployment` is `PRODUCTION`, and disables or deletes the `DISABLEMENT` and `DELETION` ones. Gate it behind a protected environment.
 
 ```yaml
 # .github/workflows/deploy.yml
@@ -167,49 +203,27 @@ on:
   push:
     branches: [main]
 jobs:
-  deploy-staging:
-    runs-on: ubuntu-latest
-    environment: staging
-    env:
-      OPENTIDE_REPO_ROOT: ${{ github.workspace }}
-      DEPLOYMENT_PLAN: staging
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-      AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.16.1'
-      - run: opentide generate
-      - run: opentide deploy --platform sentinel --dry-run   # preview in logs
-      - run: opentide deploy --platform sentinel
-```
-
-## Stage 3 — promote to production
-
-Promotion is a deliberate step — gate it behind a protected environment or manual approval.
-
-```yaml
-  promote-production:
-    needs: deploy-staging
+  deploy-production:
     runs-on: ubuntu-latest
     environment: production          # require reviewers on this environment
     env:
       OPENTIDE_REPO_ROOT: ${{ github.workspace }}
-      DEPLOYMENT_PLAN: production
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_WORKSPACE_ID: ${{ secrets.AZURE_WORKSPACE_ID }}
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install 'opentide==0.16.1'
-      - run: opentide deploy --platform sentinel
+      - run: opentide deploy --plan PRODUCTION --dry-run
+      - run: opentide deploy --plan PRODUCTION
 ```
+
+Promotion rewrites rule files, and Defender for Endpoint, SentinelOne and CrowdStrike record each new rule's id under `.opentide/states/deployment/`. This sketch leaves both on the runner; the generated production job commits them back to the default branch ([production write-back](#production-write-back)).
 
 ## Secrets
 
@@ -227,32 +241,44 @@ Scope production secrets to a protected environment so PR builds from forks cann
 
 ```yaml
 # .gitlab-ci.yml
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
 stages: [validate, deploy]
+
+variables:
+  OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
+  GIT_DEPTH: "0"
+
+default:
+  image: python:3.12
+  before_script:
+    - pip install 'opentide==0.16.1'
 
 validate:
   stage: validate
-  image: python:3.12
-  variables:
-    OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
   script:
-    - pip install 'opentide==0.16.1'
-    - opentide generate
     - opentide validate --strict
-    - opentide validate query --platform sentinel --live
+    - opentide validate query --platform sentinel --live --changed
 
 deploy-staging:
   stage: deploy
-  image: python:3.12
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  variables:
-    OPENTIDE_REPO_ROOT: $CI_PROJECT_DIR
-    DEPLOYMENT_PLAN: staging
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
   script:
-    - pip install 'opentide==0.16.1'
-    - opentide generate
-    - opentide deploy --platform sentinel
+    - opentide deploy --plan STAGING
+
+deploy-production:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - opentide deploy --plan PRODUCTION
 ```
+
+Without `workflow:rules`, a GitLab job with no `rules` (here `validate`) is left out of merge request pipelines.
 
 ## Azure Pipelines
 
@@ -263,11 +289,15 @@ pool: { vmImage: ubuntu-latest }
 variables:
   OPENTIDE_REPO_ROOT: $(Build.SourcesDirectory)
 steps:
+  - checkout: self
+    fetchDepth: 0
   - task: UsePythonVersion@0
     inputs: { versionSpec: '3.12' }
   - script: pip install 'opentide==0.16.1'
-  - script: opentide generate && opentide validate --strict
-  - script: opentide validate query --platform sentinel --live
+  - script: opentide validate --strict
+  - script: opentide validate query --platform sentinel --live --changed
+  - script: opentide deploy --plan PRODUCTION
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
 ```
 
 ## JSON output for gates

@@ -81,6 +81,8 @@ Every rule has a `status`, and each status maps to a **strategy** that drives wh
 | Live | `PRODUCTION` | Production (`RELEASE`) |
 | Retire | `DISABLED`, `REMOVED` | Disable / delete |
 
+Which pipeline deploys which strategy is the [deployment plan](../configuration.md#deployment-plan): `--plan STAGING` on a pull request deploys the `PREVIEW` rules, `--plan PRODUCTION` on the default branch the `RELEASE` ones. Plans select by strategy, so they work whatever your statuses are called.
+
 opentide validates only that a rule's `status` exists in your merged `deployment.toml` — it does not enforce any ordering between statuses, so you can set any configured status directly. If you override `deployment.toml`, these names may not exist at all in your repo. See [Configuration → deployment statuses](../configuration.md#deployment-statuses-and-strategies).
 
 ## Promotion

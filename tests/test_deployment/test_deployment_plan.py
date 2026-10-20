@@ -114,8 +114,30 @@ def test_load_from_environment_rejects_python_none_string(
 
 def test_load_from_environment_rejects_unknown_plan(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DEPLOYMENT_PLAN", "CANARY")
-    with pytest.raises(ValueError, match="CANARY"):
+    with pytest.raises(ValueError, match="CANARY") as raised:
         DeploymentStrategy.load_from_environment()
+    assert "status strategy" not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    ("strategy", "plan"),
+    [
+        ("preview", "the STAGING plan (pull and merge requests) deploys PREVIEW rules"),
+        ("RELEASE", "the PRODUCTION plan (the default branch) deploys RELEASE rules"),
+        ("DELETION", "the PRODUCTION plan (the default branch) deletes DELETION rules"),
+        ("INERT", "no plan deploys INERT rules"),
+    ],
+)
+def test_a_status_strategy_given_as_a_plan_names_the_plan_that_deploys_it(
+    monkeypatch: pytest.MonkeyPatch, strategy: str, plan: str
+) -> None:
+    """``--plan PREVIEW`` reads naturally and is wrong: plans name a pipeline, not a strategy."""
+    monkeypatch.setenv("DEPLOYMENT_PLAN", strategy)
+    with pytest.raises(ValueError) as raised:
+        DeploymentStrategy.load_from_environment()
+    message = str(raised.value)
+    assert message.startswith(f"Unsupported deployment plan {strategy!r}. Use one of: STAGING")
+    assert f"{strategy.upper()} is a status strategy, not a plan: {plan}" in message
 
 
 def test_local_rule_files_without_rules_folder_is_empty(workspace: Path) -> None:

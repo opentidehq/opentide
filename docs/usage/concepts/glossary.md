@@ -50,7 +50,10 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 : A SIEM or EDR target opentide deploys to (e.g. Sentinel, Splunk, CrowdStrike). Some platforms also support query validation. See [Platforms](./platforms.md).
 
 **Status**
-: A rule's deployment state, e.g. `STAGING` or `PRODUCTION`. Deployment respects status and your promotion configuration.
+: A rule block's lifecycle label, e.g. `DEVELOPMENT` or `PRODUCTION`. The set is configuration (`deployment.toml`); each status maps to a strategy.
+
+**Strategy**
+: What deploy does with a rule in a given status: `INERT`, `PREVIEW`, `RELEASE`, `DISABLEMENT` or `DELETION`. Fixed by the deployment spec. See [Configuration → deployment plan](../configuration.md#deployment-plan).
 
 **Staging**
 : Deploying rules in a non-production state for verification before they go live.
@@ -58,8 +61,8 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 **Promotion**
 : Advancing rules from a lower status to a higher one (typically `STAGING → PRODUCTION`), individually or in bulk via `opentide deploy`.
 
-**Deployment plan (`DEPLOYMENT_PLAN`)**
-: The configuration that decides which rules deploy where and in what status. Referenced by CLI global options and [Configuration](../configuration.md).
+**Deployment plan (`--plan`, `DEPLOYMENT_PLAN`)**
+: Which pipeline a run is: `STAGING` (a pull or merge request), `PRODUCTION` (the default branch) or `FULL` (every rule, the default). A plan selects rules by the strategy of their status, not by the status name: `STAGING` deploys `PREVIEW` rules, `PRODUCTION` deploys `RELEASE`, `DISABLEMENT` and `DELETION` rules. See [Configuration → deployment plan](../configuration.md#deployment-plan).
 
 **Visibility**
 : Configuration controlling which objects are exposed/deployed in a given context. Validated by a generated `visibility` schema.

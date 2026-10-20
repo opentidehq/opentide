@@ -137,7 +137,31 @@ There is no separate promote command. Edit a rule's `status` in YAML for deliber
 
 ## Deployment plan
 
-The `DEPLOYMENT_PLAN` environment variable selects which plan `deploy` and `validate query --live` operate under, letting you keep separate plans (e.g. per environment) without editing config. A bare `validate query` refuses and does not read the plan:
+Three words sound alike and mean different things:
+
+| Term | What it is | Who defines it | Examples |
+|------|------------|----------------|----------|
+| **Status** | A rule block's lifecycle label (`status:` in the YAML) | You, in `deployment.toml` `[[statuses]]` | `DEVELOPMENT`, `STAGING`, `PRODUCTION` |
+| **Strategy** | What deploy does with a rule in that status | The [deployment spec](/docs/specifications/specs/deployment/): fixed | `INERT`, `PREVIEW`, `RELEASE`, `DISABLEMENT`, `DELETION` |
+| **Plan** | Which pipeline a run is, chosen with `--plan` or `DEPLOYMENT_PLAN` | The deployment spec: fixed | `STAGING`, `PRODUCTION`, `FULL` |
+
+A plan is not a status. It names a pipeline, and selects rules by the **strategy** of their status, never by the status name:
+
+| Plan | Pipeline | Rule files read | Deploys rules whose strategy is | To tenants whose `deployment` is |
+|------|----------|-----------------|---------------------------------|----------------------------------|
+| `STAGING` | Pull or merge request | Those the request changed | `PREVIEW` (and `UNIVERSAL`) | `STAGING`, `ALWAYS`, or `MANUAL` when the rule lists it |
+| `PRODUCTION` | Push to the default branch | Those the push changed | `RELEASE`, `DISABLEMENT`, `DELETION` (and `UNIVERSAL`) | `PRODUCTION`, `ALWAYS`, or `MANUAL` when the rule lists it |
+| `FULL` | Any; the default outside CI | Every rule file | `PREVIEW`, `RELEASE` (and `UNIVERSAL`); `DISABLEMENT` and `DELETION` only with `--keep-deprecated` | `ALWAYS`, or `MANUAL` when the rule lists it |
+
+`PRODUCTION` disables and deletes the `DISABLEMENT` and `DELETION` rules unless you pass `--drop-deprecated`; `FULL` leaves them out unless you pass `--keep-deprecated`, so a full redeploy does not retire your archived rules by accident.
+
+So with the bundled statuses, `--plan STAGING` deploys a rule in `DEVELOPMENT`, `IMPROVING`, `STAGING` or `ACCEPTANCE` (all `PREVIEW`) and skips one in `PRODUCTION` (`RELEASE`). If you add a status named `CANARY` with strategy `PREVIEW`, `--plan STAGING` deploys it too; the plan names never have to match your status names. The tenant `deployment` key uses the plan names: a `STAGING` tenant receives the `STAGING` plan's deploys.
+
+`PREVIEW` and `RELEASE` are not plan names. `opentide deploy --plan PREVIEW` fails and names the plan that deploys `PREVIEW` rules. A skipped rule's `mdr_skipped_for_plan` log line names its status, its strategy and the strategies the plan deploys.
+
+`validate query --live` reads the same plans, with one difference: it only reads, so under `FULL` it checks every tenant a rule can reach, `STAGING` and `PRODUCTION` included ([which tenants are checked](../cli/validate.md#which-tenants-are-checked)). A bare `validate query` refuses and does not read the plan.
+
+`DEPLOYMENT_PLAN` sets the plan when `--plan` is omitted:
 
 ```bash
 export DEPLOYMENT_PLAN=production

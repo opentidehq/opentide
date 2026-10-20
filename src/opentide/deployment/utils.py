@@ -254,12 +254,17 @@ def make_deploy_plan(
             else:
                 allowed = ()
 
-            if check_status(platform_status) in allowed:
+            # Plans select by the status's strategy, never by its name: the
+            # STAGING plan deploys a DEVELOPMENT rule (PREVIEW), and skips a
+            # status named STAGING that a client mapped to RELEASE.
+            strategy = check_status(platform_status)
+            if strategy in allowed:
                 selected.append(system)
                 logger.info(
                     "mdr_selected_for_deploy",
                     system=system.upper(),
                     status=platform_status,
+                    strategy=strategy.name,
                     plan=plan.name,
                     rule=name,
                 )
@@ -268,7 +273,9 @@ def make_deploy_plan(
                     "mdr_skipped_for_plan",
                     system=system.upper(),
                     status=platform_status,
+                    strategy=strategy.name,
                     plan=plan.name,
+                    plan_deploys=", ".join(member.name for member in allowed) or "nothing",
                     rule=name,
                 )
 
