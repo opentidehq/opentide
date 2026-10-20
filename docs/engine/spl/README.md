@@ -1,6 +1,6 @@
-# SPL inventory (detections / OpenTide)
+# SPL inventory (detections / opentide)
 
-This directory inventories **Splunk Processing Language (SPL)** as used in Splunk Enterprise Security (ES) detections and OpenTide `configurations.splunk.query` (and legacy `configurations.splunk.search`) blocks.
+This directory inventories **Splunk Processing Language (SPL)** as used in Splunk Enterprise Security (ES) detections and opentide `configurations.splunk.query` (and legacy `configurations.splunk.search`) blocks.
 
 It is a **docs inventory**, not a grammar. The engine still owns parsing. Catalogs:
 
@@ -14,7 +14,7 @@ Runtime model: [`DESIGN.md`](DESIGN.md).
 
 ## Authored text vs implicit `| search`
 
-**Authored SPL is tokenized as written.** OpenTide does **not** rewrite a leading generating command into the source.
+**Authored SPL is tokenized as written.** opentide does **not** rewrite a leading generating command into the source.
 
 Splunk’s runtime default is:
 
@@ -44,11 +44,11 @@ Splunk documents six overlapping types ([Command types](https://docs.splunk.com/
 
 Types overlap. `search` is generating when first and streaming later. `lookup` is streaming unless `local=true` (orchestrating). `fillnull` is streaming with a field list and dataset processing without one.
 
-OpenTide’s catalog uses the five-kind model in the middle column. Dual classification is noted per command in [commands.md](commands.md).
+opentide’s catalog uses the five-kind model in the middle column. Dual classification is noted per command in [commands.md](commands.md).
 
 ## Detection-shaped pipelines
 
-ES / ESCU / OpenTide `splunk.query` blocks typically look like one of:
+ES / ESCU / opentide `splunk.query` blocks typically look like one of:
 
 ```spl
 index=* sourcetype=WinEventLog EventCode=4688
@@ -101,7 +101,7 @@ Use `docs.splunk.com` Search Reference (versionless `latest` URLs):
 - [search](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search)
 - [CIM fields](https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields)
 
-Newer portal mirrors live under `help.splunk.com`; citations in this inventory keep the `docs.splunk.com/Documentation/Splunk/latest/SearchReference/` form requested for OpenTide.
+Newer portal mirrors live under `help.splunk.com`; citations in this inventory keep the `docs.splunk.com/Documentation/Splunk/latest/SearchReference/` form requested for opentide.
 
 ## Counts (this revision)
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Generate Tide LSP catalogs from the installed OpenTide package.
+"""Generate Tide LSP catalogs from the installed opentide package.
 
-The language server is bundled into OpenTide, so object intelligence comes from
-OpenTide's own JSON Schema export (``generate_schema_for_identifier``) plus
+The language server is bundled into opentide, so object intelligence comes from
+opentide's own JSON Schema export (``generate_schema_for_identifier``) plus
 Pydantic ``json_schema_extra`` flags that the schema emitter drops
 (``tide.template.multiline``, ``hide``, ``required``).
 
@@ -148,7 +148,7 @@ def router(schemas: dict[str, dict[str, Any]]) -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://opentide.dev/schemas/opentide.schema.json",
-        "title": "OpenTide Object Router",
+        "title": "opentide Object Router",
         "description": f"Generated from opentide {EXPECTED_VERSION}.",
         "oneOf": branches,
     }

@@ -1,5 +1,5 @@
 {
-  "name": "OpenTide",
+  "name": "opentide",
   "languages": {
     "opentide-yaml": {
       "language_servers": ["opentide-lsp"],

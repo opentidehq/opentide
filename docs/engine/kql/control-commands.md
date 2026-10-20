@@ -7,7 +7,7 @@ Citations:
 - [Management commands overview](https://learn.microsoft.com/kusto/management/)
 - [KQL overview](https://learn.microsoft.com/kusto/query/) — queries vs management commands
 
-In OpenTide they are parsed only so the engine can emit **`kql_control_command_unsupported`**. They must never be treated as valid Sentinel analytics or Defender custom-detection bodies.
+In opentide they are parsed only so the engine can emit **`kql_control_command_unsupported`**. They must never be treated as valid Sentinel analytics or Defender custom-detection bodies.
 
 Also summarized under [`operators.md`](operators.md) (“Unsupported: control / management commands”).
 

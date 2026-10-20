@@ -1,9 +1,9 @@
 ---
 name: rust-engine
-description: Change the OpenTide Rust workspace (edition 2024, rust-version 1.85). Covers I/O-free engine crates, thiserror 2 versus anyhow, serde, toml 0.8, uuid, regex, OnceLock catalogs, clippy -D warnings, and the Cargo.lock that must not be pruned. Use when editing crates/, Cargo.toml, Cargo.lock, or any Rust test.
+description: Change the opentide Rust workspace (edition 2024, rust-version 1.85). Covers I/O-free engine crates, thiserror 2 versus anyhow, serde, toml 0.8, uuid, regex, OnceLock catalogs, clippy -D warnings, and the Cargo.lock that must not be pruned. Use when editing crates/, Cargo.toml, Cargo.lock, or any Rust test.
 license: EUPL-1.2
 metadata:
-  author: OpenTideHQ
+  author: opentidehq
 ---
 
 # Rust engine

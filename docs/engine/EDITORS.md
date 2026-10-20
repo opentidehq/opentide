@@ -1,6 +1,6 @@
 # Editor hosts
 
-The OpenTide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `objects/**`.
+The opentide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `objects/**`.
 
 Languages: `opentide-yaml`, `kql`, `spl` (never `sql`).
 
@@ -20,7 +20,7 @@ See `editors/zed/opentide.json`.
 
 ## VS Code
 
-Lives in **OpenTideHQ/vscode-extension** (other repository). MIT client, EUPL engine notices.
+Lives in **opentidehq/vscode-extension** (other repository). MIT client, EUPL engine notices.
 
 ## Web
 

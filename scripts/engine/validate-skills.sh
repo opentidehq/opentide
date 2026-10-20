@@ -53,8 +53,8 @@ for folder in skills:
         errors.append(f"{name}: description must say when to use the skill ('Use when')")
     if fields.get("license") != "EUPL-1.2":
         errors.append(f"{name}: license must be EUPL-1.2")
-    if "author: OpenTideHQ" not in front:
-        errors.append(f"{name}: metadata.author must be OpenTideHQ")
+    if "author: opentidehq" not in front:
+        errors.append(f"{name}: metadata.author must be opentidehq")
     needle = f"skills/{name}/SKILL.md"
     if needle not in agents:
         errors.append(f"{name}: AGENTS.md does not link {needle}")

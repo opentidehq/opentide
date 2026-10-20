@@ -23,9 +23,9 @@ index=web
 Rules of thumb:
 
 1. The subsearch runs **first**.
-2. If the first token inside `[` is not a generating command, Splunk implies `search` **inside the subsearch only** — that is still a runtime default, not an OpenTide source rewrite of the outer query.
+2. If the first token inside `[` is not a generating command, Splunk implies `search` **inside the subsearch only** — that is still a runtime default, not an opentide source rewrite of the outer query.
 3. Leading `|` inside the brackets is common when the subsearch starts with an explicit generating command (`| inputlookup`, `| makeresults`, `| tstats`).
-4. Outer authored text that begins `index=...` remains a `bare_search` in OpenTide.
+4. Outer authored text that begins `index=...` remains a `bare_search` in opentide.
 
 ## Result shaping
 
@@ -76,7 +76,7 @@ index=firewall dest=
 
 Multisearch-style parallelism uses the `multisearch` **command** with multiple bracketed streaming legs (see [commands.md](commands.md)), which is related but not the same as a filter subsearch.
 
-## OpenTide engine notes
+## opentide engine notes
 
 - Grammar parses a nested `pipeline` inside `join … [ … ]` only.
 - Other `[` `]` pairs are punctuation tokens today — inner commands are **not** fully analyzed as a nested pipeline (implementation gap).

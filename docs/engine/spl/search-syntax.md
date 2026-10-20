@@ -1,6 +1,6 @@
 # SPL search syntax
 
-Syntax used in Splunk ES detections and OpenTide `splunk.query` blocks. Citations are Search Reference / Search Manual pages under `docs.splunk.com`.
+Syntax used in Splunk ES detections and opentide `splunk.query` blocks. Citations are Search Reference / Search Manual pages under `docs.splunk.com`.
 
 Primary citations:
 

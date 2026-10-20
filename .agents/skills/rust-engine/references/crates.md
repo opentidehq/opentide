@@ -49,7 +49,7 @@ Shared package metadata (`version`, `edition`, `rust-version`, `license`, `repos
 
 ```rust
 #[derive(Parser, Debug)]
-#[command(name = "opentide-lsp", version, about = "OpenTide language server")]
+#[command(name = "opentide-lsp", version, about = "opentide language server")]
 struct Cli {
     #[arg(long)]
     stdio: bool,

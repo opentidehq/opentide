@@ -1,4 +1,4 @@
--- Neovim sample: OpenTide LSP.
+-- Neovim sample: opentide LSP.
 -- Disable yamlls on objects/**. Languages: opentide-yaml, kql, spl (not sql).
 
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {

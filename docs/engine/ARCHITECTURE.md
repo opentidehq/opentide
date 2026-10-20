@@ -1,6 +1,6 @@
 # Architecture
 
-OpenTide LSP is an I/O-free Rust engine plus thin hosts.
+opentide LSP is an I/O-free Rust engine plus thin hosts.
 
 ```
 editors / @opentide/lsp-client / WASM worker
@@ -34,7 +34,7 @@ editors / @opentide/lsp-client / WASM worker
 | `configurations.crowdstrike.*` | unsupported (`None`) |
 | `description` / `procedure.analysis` / `recommendation` / other `markdown = true` fields | Markdown (HighlightSpec `markdown.*`) |
 
-Tide object intelligence is generated from the installed OpenTide package (`opentide==0.5.0`) by [`scripts/sync_opentide_schemas.py`](../scripts/sync_opentide_schemas.py). The LSP loads [`catalogs/tide/generated/fields.json`](../catalogs/tide/generated/fields.json), keyed by schema family and YAML path. JSON Schema supplies titles, types, required, enums, and consts. Pydantic `tide.template.multiline` / `hide` supply markdown and hidden flags the schema emitter drops. Capture rename in HighlightSpec is a **major**; adding `markdown.*` / `macro` is a minor (`0.2.0`).
+Tide object intelligence is generated from the installed opentide package (`opentide==0.5.0`) by [`scripts/sync_opentide_schemas.py`](../scripts/sync_opentide_schemas.py). The LSP loads [`catalogs/tide/generated/fields.json`](../catalogs/tide/generated/fields.json), keyed by schema family and YAML path. JSON Schema supplies titles, types, required, enums, and consts. Pydantic `tide.template.multiline` / `hide` supply markdown and hidden flags the schema emitter drops. Capture rename in HighlightSpec is a **major**; adding `markdown.*` / `macro` is a minor (`0.2.0`).
 
 ## Diagnostics
 

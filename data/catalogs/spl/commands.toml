@@ -651,7 +651,7 @@ citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/
 [[commands]]
 name = "script"
 kind = "streaming"
-docs = "Run an external script (alias: run). Not portable in OpenTide rules."
+docs = "Run an external script (alias: run). Not portable in opentide rules."
 citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Script"
 
 [[commands]]

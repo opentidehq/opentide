@@ -1,4 +1,4 @@
-# Helix — OpenTide
+# Helix — opentide
 
 [[language]]
 name = "opentide-yaml"
@@ -6,7 +6,7 @@ scope = "source.opentide-yaml"
 file-types = ["yaml", "yml"]
 roots = [".opentide", "objects"]
 language-servers = ["opentide-lsp"]
-# Disable yamlls on objects/** — OpenTide LSP owns Tide diagnostics.
+# Disable yamlls on objects/** — opentide LSP owns Tide diagnostics.
 
 [[language]]
 name = "kql"

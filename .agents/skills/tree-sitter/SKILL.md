@@ -1,9 +1,9 @@
 ---
 name: tree-sitter
-description: Author and bind tree-sitter 0.25.10 grammars for OpenTide KQL and SPL. Covers grammar.js, vendored parser.c, the tree-sitter CLI pin, Language::from_raw, QueryCursor StreamingIterator, and highlights.scm first-wins. Use when editing grammars/, crates/opentide-syntax, or highlights/queries.
+description: Author and bind tree-sitter 0.25.10 grammars for opentide KQL and SPL. Covers grammar.js, vendored parser.c, the tree-sitter CLI pin, Language::from_raw, QueryCursor StreamingIterator, and highlights.scm first-wins. Use when editing grammars/, crates/opentide-syntax, or highlights/queries.
 license: EUPL-1.2
 metadata:
-  author: OpenTideHQ
+  author: opentidehq
 ---
 
 # tree-sitter 0.25

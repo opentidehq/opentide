@@ -18,7 +18,7 @@ edition = "2024"
 rust-version = "1.85"
 license = "EUPL-1.2"
 repository = "https://github.com/opentidehq/language-server"
-authors = ["OpenTide"]
+authors = ["opentide"]
 
 [workspace.dependencies]
 opentide-core = { path = "crates/opentide-core" }

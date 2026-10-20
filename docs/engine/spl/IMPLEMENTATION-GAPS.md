@@ -1,6 +1,6 @@
 # SPL implementation gaps (catalog / grammar / scm / hover / completions)
 
-Machine-oriented punch list. Inventory prose lives in the other `docs/spl/*.md` files; this file names **exact tokens** still missing or miswired in the OpenTide SPL stack.
+Machine-oriented punch list. Inventory prose lives in the other `docs/spl/*.md` files; this file names **exact tokens** still missing or miswired in the opentide SPL stack.
 
 Measured against:
 

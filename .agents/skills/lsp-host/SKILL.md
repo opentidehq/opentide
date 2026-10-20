@@ -1,9 +1,9 @@
 ---
 name: lsp-host
-description: Implement the OpenTide stdio language server. Covers Content-Length JSON-RPC, UTF-16 positions, semantic tokens, and the opentide/* custom RPCs. The CLI never speaks JSON-RPC. Use when editing crates/opentide-lsp, editors/, or LSP tests. Do not introduce tower-lsp.
+description: Implement the opentide stdio language server. Covers Content-Length JSON-RPC, UTF-16 positions, semantic tokens, and the opentide/* custom RPCs. The CLI never speaks JSON-RPC. Use when editing crates/opentide-lsp, editors/, or LSP tests. Do not introduce tower-lsp.
 license: EUPL-1.2
 metadata:
-  author: OpenTideHQ
+  author: opentidehq
 ---
 
 # LSP host
@@ -52,7 +52,7 @@ Inbound conversion is not the same function. `apply_content_changes` walks `cont
 
 Semantic tokens are the LSP integer array `[deltaLine, deltaStartChar, length, tokenType, tokenModifiers]` from `encode_lsp_semantic_tokens`. A token cannot cross a newline; `length` is the UTF-16 length on the start line. Split multiline comments and strings before encoding. `tokenModifiers` is 0.
 
-The legend advertised at `initialize` is `opentide_highlight::LSP_TOKEN_TYPES` (the standard VS Code token types: `keyword`, `function`, `operator`, …). It is **not** `HighlightSpec.legend`. Captures such as `operator.pipe` and `tide.keyword` are mapped onto those standard types in `lsp_token_type_index`, because default themes do not style OpenTide capture names. Do not replace `tokenTypes` with the HighlightSpec legend. TextMate / Monaco / Helix scopes still come from `highlights/spec.toml`.
+The legend advertised at `initialize` is `opentide_highlight::LSP_TOKEN_TYPES` (the standard VS Code token types: `keyword`, `function`, `operator`, …). It is **not** `HighlightSpec.legend`. Captures such as `operator.pipe` and `tide.keyword` are mapped onto those standard types in `lsp_token_type_index`, because default themes do not style opentide capture names. Do not replace `tokenTypes` with the HighlightSpec legend. TextMate / Monaco / Helix scopes still come from `highlights/spec.toml`.
 
 ## Diagnostics
 
@@ -62,7 +62,7 @@ CrowdStrike paths produce `crowdstrike_unsupported` or no fake success. Do not p
 
 ## Editors in this repo
 
-`editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is `OpenTideHQ/vscode-extension`, a different repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
+`editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is `opentidehq/vscode-extension`, a different repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
 
 Language ids in editors: `opentide-yaml`, `kql`, `spl`. Not `sql`. Not `otide`.
 

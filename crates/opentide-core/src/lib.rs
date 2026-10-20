@@ -1,4 +1,4 @@
-//! Shared I/O-free types for the OpenTide language server.
+//! Shared I/O-free types for the opentide language server.
 //!
 //! Names use `opentide`, never `otide`.
 

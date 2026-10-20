@@ -1,14 +1,14 @@
 ---
 name: add-language
-description: Add a query language to the OpenTide language server (S1QL, Lucene, Sigma, YARA). Follow the harness from LanguageId through a vendored tree-sitter grammar, corpus gate, OnceLock catalogs, HighlightSpec, YAML injection, and external fault twins. CrowdStrike and SQL stay unsupported. Use when creating a new engine crate or grammar.
+description: Add a query language to the opentide language server (S1QL, Lucene, Sigma, YARA). Follow the harness from LanguageId through a vendored tree-sitter grammar, corpus gate, OnceLock catalogs, HighlightSpec, YAML injection, and external fault twins. CrowdStrike and SQL stay unsupported. Use when creating a new engine crate or grammar.
 license: EUPL-1.2
 metadata:
-  author: OpenTideHQ
+  author: opentidehq
 ---
 
 # Add a language
 
-KQL, SPL, and Tide YAML are the 1.0 engines. A later language follows this list. Authoring guidance for detections lives in `OpenTideHQ/skills` (`kusto-query-language`, `splunk-spl-processing`, and the platform skills). Those skills are not an engine. Implementation skills in this repo are `rust-engine`, `tree-sitter`, `catalogs`, `lsp-host`, and `wasm-hosts`. Read them before the matching step.
+KQL, SPL, and Tide YAML are the 1.0 engines. A later language follows this list. Authoring guidance for detections lives in `opentidehq/skills` (`kusto-query-language`, `splunk-spl-processing`, and the platform skills). Those skills are not an engine. Implementation skills in this repo are `rust-engine`, `tree-sitter`, `catalogs`, `lsp-host`, and `wasm-hosts`. Read them before the matching step.
 
 CrowdStrike stays unsupported until its language is specified. SQL stays unsupported until a real dialect and grammar are chosen. A stub parser or a fake highlighter is not a language.
 

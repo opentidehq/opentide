@@ -1,6 +1,6 @@
 # Skills
 
-Agent procedures for working in this repository. Detection-engineering skills are not here; they live in [OpenTideHQ/skills](https://github.com/opentidehq/skills).
+Agent procedures for working in this repository. Detection-engineering skills are not here; they live in [opentidehq/skills](https://github.com/opentidehq/skills).
 
 | Skill | Use when |
 | --- | --- |

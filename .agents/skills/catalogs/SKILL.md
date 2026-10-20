@@ -1,9 +1,9 @@
 ---
 name: catalogs
-description: Load OpenTide catalogs and conformance corpora. Covers include_str, OnceLock, toml 0.8, HighlightSpec capture freezes, Pydantic schema sync for opentide 0.5.0, and external KQL/SPL fault twins. Use when editing catalogs/, highlights/spec.toml, testdata/conformance, or scripts/sync_opentide_schemas.py.
+description: Load opentide catalogs and conformance corpora. Covers include_str, OnceLock, toml 0.8, HighlightSpec capture freezes, Pydantic schema sync for opentide 0.5.0, and external KQL/SPL fault twins. Use when editing catalogs/, highlights/spec.toml, testdata/conformance, or scripts/sync_opentide_schemas.py.
 license: EUPL-1.2
 metadata:
-  author: OpenTideHQ
+  author: opentidehq
 ---
 
 # Catalogs and conformance

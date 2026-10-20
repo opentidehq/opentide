@@ -1,6 +1,6 @@
 # CIM field coverage (detections)
 
-Checklist of Splunk Common Information Model (CIM) data models and the field names OpenTide cares about for ES / ESCU-style `splunk.query` blocks.
+Checklist of Splunk Common Information Model (CIM) data models and the field names opentide cares about for ES / ESCU-style `splunk.query` blocks.
 
 Citations:
 

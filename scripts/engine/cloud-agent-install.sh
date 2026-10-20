@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cloud Agent environment bootstrap for the OpenTide language server.
+# Cloud Agent environment bootstrap for the opentide language server.
 # Idempotent: safe to run repeatedly and against a warm/cached checkout.
 set -euo pipefail
 cd "$(dirname "$0")/.."

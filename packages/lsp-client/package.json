@@ -1,7 +1,7 @@
 {
   "name": "@opentide/lsp-client",
   "version": "0.1.0",
-  "description": "OpenTide language client. createOpentideClient — never createOtideClient.",
+  "description": "opentide language client. createOpentideClient — never createOtideClient.",
   "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",

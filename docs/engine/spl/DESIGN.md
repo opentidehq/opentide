@@ -1,6 +1,6 @@
 # SPL language design (ES / CIM / ESCU)
 
-Context base for the OpenTide SPL engine. Authored text is never rewritten
+Context base for the opentide SPL engine. Authored text is never rewritten
 with an implicit `| search`. `index=main | head 1` stays `bare_search`.
 
 Citations:

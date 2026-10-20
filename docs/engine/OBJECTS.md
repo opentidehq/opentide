@@ -1,6 +1,6 @@
 # Tide objects
 
-OpenTide LSP owns Tide diagnostics. Disable Red Hat YAML / yamlls on `objects/**`.
+opentide LSP owns Tide diagnostics. Disable Red Hat YAML / yamlls on `objects/**`.
 
 There is **no YAML formatter**. The LSP does not rename object `name`.
 

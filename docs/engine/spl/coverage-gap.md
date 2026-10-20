@@ -6,7 +6,7 @@ Comparison of this docs inventory against the **current** catalog compiled into 
 
 [`catalogs/spl/commands.toml`](../../catalogs/spl/commands.toml)
 
-The catalog is `searchbnf`-informed; OpenTide still owns the grammar. Unknown command tokens become `spl.unknown` / `spl_unknown_command` (`docs/LANGUAGE.md`). Catalog functions drive completions and hover.
+The catalog is `searchbnf`-informed; opentide still owns the grammar. Unknown command tokens become `spl.unknown` / `spl_unknown_command` (`docs/LANGUAGE.md`). Catalog functions drive completions and hover.
 
 **Authored SPL is never rewritten with an implicit `| search`.** That prefix is a Splunk runtime default only (see [README.md](README.md)).
 

@@ -1,6 +1,6 @@
 # KQL implementation gaps (punch-list)
 
-Exact names still missing from each OpenTide surface after the 2026-09-15 catalog expansion.
+Exact names still missing from each opentide surface after the 2026-09-15 catalog expansion.
 
 Related: [`coverage-gap.md`](coverage-gap.md), [`evaluate-plugins.md`](evaluate-plugins.md), [`control-commands.md`](control-commands.md), [`scalar-functions-geo-series.md`](scalar-functions-geo-series.md).
 

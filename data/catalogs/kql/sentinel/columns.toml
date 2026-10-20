@@ -1,5 +1,5 @@
 # Sentinel / Azure Monitor table columns. Detection-critical subset with Learn citations.
-# Generated for OpenTide LSP hover, completions, and highlight overlay.
+# Generated for opentide LSP hover, completions, and highlight overlay.
 [[columns]]
 table = "SecurityEvent"
 profile = "sentinel"

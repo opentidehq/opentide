@@ -1,6 +1,6 @@
-# AGENTS.md — OpenTide language server
+# AGENTS.md — opentide language server
 
-Instructions for coding agents in **this** repository (`OpenTideHQ/language-server`). Detection-authoring skills live in `OpenTideHQ/skills` and are not an engine.
+Instructions for coding agents in **this** repository (`opentidehq/language-server`). Detection-authoring skills live in `opentidehq/skills` and are not an engine.
 
 Before editing, read the one skill that matches the change. Skills follow the [Agent Skills specification](https://agentskills.io/specification).
 
@@ -26,7 +26,7 @@ Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript pack
 - Do not validate CrowdStrike. `configurations.crowdstrike.*` stays unsupported.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.
 - Highlight tokenizes **authored** SPL. An implicit leading `| search` is not a source rewrite.
-- OpenTide LSP owns Tide diagnostics. Editor samples keep yamlls off `objects/**`.
+- opentide LSP owns Tide diagnostics. Editor samples keep yamlls off `objects/**`.
 - There is no `opentide-sql` crate, no `.sql` language id, and no stub SQL highlighter.
 - Do not hand-edit `grammars/**/src/parser.c`, `grammar.json`, or `node-types.json`. Regenerate with `tree-sitter-cli` **0.25.10**.
 - Do not commit a rewritten `Cargo.lock`. Resolution prunes entries the lock keeps on purpose. Restore the committed lock if Cargo rewrites it.

@@ -1,4 +1,4 @@
-# OpenTide language server
+# opentide language server
 
 Native language server for **KQL**, **SPL**, and **Tide YAML** objects.
 
@@ -29,7 +29,7 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 - Never fake CrowdStrike validation.
 - Control commands (`.show` / `.create`) → `kql_control_command_unsupported`.
 - Highlight tokenizes **authored** SPL (implicit `| search` is semantic, not a rewrite).
-- OpenTide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
+- opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 - Client factory is `createOpentideClient`, not `createOtideClient`.
 
 ## Crates
@@ -52,7 +52,7 @@ Samples in `editors/{helix,nvim,zed}`. VS Code lives in a **different repository
 
 ## Agent skills
 
-Coding agents start at [`AGENTS.md`](AGENTS.md). Procedures for the Rust workspace, tree-sitter 0.25, the stdio host, WASM, and catalogs live in [`skills/`](skills/README.md). Detection-authoring skills stay in `OpenTideHQ/skills`.
+Coding agents start at [`AGENTS.md`](AGENTS.md). Procedures for the Rust workspace, tree-sitter 0.25, the stdio host, WASM, and catalogs live in [`skills/`](skills/README.md). Detection-authoring skills stay in `opentidehq/skills`.
 
 ## License
 

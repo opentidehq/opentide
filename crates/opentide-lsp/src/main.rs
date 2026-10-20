@@ -1,4 +1,4 @@
-//! OpenTide language server — stdio JSON-RPC and CLI (`analyze` / `highlight`).
+//! opentide language server — stdio JSON-RPC and CLI (`analyze` / `highlight`).
 //!
 //! The CLI never speaks JSON-RPC. `--stdio` is the editor protocol.
 
@@ -15,7 +15,7 @@ use opentide_highlight::{
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
-#[command(name = "opentide-lsp", version, about = "OpenTide language server")]
+#[command(name = "opentide-lsp", version, about = "opentide language server")]
 struct Cli {
     /// Speak LSP over stdin/stdout.
     #[arg(long)]

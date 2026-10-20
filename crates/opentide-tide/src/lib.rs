@@ -1,7 +1,7 @@
 //! Tide YAML objects: schema/vocab diagnostics, UUID graph, query injection.
 //!
 //! Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}`
-//! with real source ranges. OpenTide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
+//! with real source ranges. opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 
 mod intel;
 mod vocabs;

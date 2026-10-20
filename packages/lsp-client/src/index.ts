@@ -1,5 +1,5 @@
 /**
- * OpenTide language client.
+ * opentide language client.
  *
  * The factory is `createOpentideClient`. There is no `createOtideClient`.
  */

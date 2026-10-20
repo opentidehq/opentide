@@ -1,4 +1,4 @@
-# OpenTide highlight debug (KQL / SPL / Tide)
+# opentide highlight debug (KQL / SPL / Tide)
 
 Investigation of “mostly white” highlighting (only table names looking cyan).
 

@@ -1,6 +1,6 @@
 //! Path-aware Tide hover, completions, inlay hints, and completion resolve.
 //!
-//! Field identity is `(schema family, YAML path)` from the generated OpenTide
+//! Field identity is `(schema family, YAML path)` from the generated opentide
 //! catalog. Enum completions come from that node's schema enum. Empty-enum
 //! sentinels are already dropped. Cross-object UUID fields use `ref`.
 

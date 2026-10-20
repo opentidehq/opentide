@@ -119,5 +119,5 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --title "${GITHUB_REF_NAME}" \
-            --notes "OpenTide language server ${GITHUB_REF_NAME}. Tags are independent of the opentide package. npm @opentide/lsp-client is tracked separately." \
+            --notes "opentide language server ${GITHUB_REF_NAME}. Tags are independent of the opentide package. npm @opentide/lsp-client is tracked separately." \
             || gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber

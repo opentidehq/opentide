@@ -1,6 +1,6 @@
 # KQL language design (Sentinel / Defender)
 
-Context base for the OpenTide KQL engine. Inventory stays in the sibling
+Context base for the opentide KQL engine. Inventory stays in the sibling
 markdown files; this document is the **runtime model** the catalogs and LSP
 must implement.
 
