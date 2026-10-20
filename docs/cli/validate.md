@@ -158,6 +158,8 @@ CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI 
 ```bash
 opentide validate query --platform sentinel
 opentide validate query --platform sentinel --live
+opentide validate query --platform splunk --live --changed
+opentide validate query --platform splunk --live --file objects/rules/example.yaml
 opentide validate query --platform splunk --live --plan STAGING --wide
 ```
 
@@ -165,8 +167,11 @@ opentide validate query --platform splunk --live --plan STAGING --wide
 |------|---------|
 | `--platform` | **Required.** Platform enum value |
 | `--live` | Check the catalogue queries against the tenant (needs SDKs + credentials) |
-| `--plan` | Deployment plan (`DEPLOYMENT_PLAN` env) — `--live` only |
-| `--wide` | Wide output format — `--live` only |
+| `--changed` | In CI, check only the rule files this pull request, merge request or push changed (see [Which rules are checked](#which-rules-are-checked)) — `--live` only |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). Repeatable — `--live` only |
+| `--uuid` | Check only the rule with this UUID. Repeatable — `--live` only |
+| `--plan` | [Deployment plan](../usage/configuration.md#deployment-plan) (`DEPLOYMENT_PLAN` env) — `--live` only |
+| `--wide` | Ignore each rule's status: check every status except `DISABLEMENT` and `DELETION`, `INERT` included — `--live` only |
 
 ### The tenant check is `--live`
 
@@ -222,6 +227,19 @@ configured tenant:
   "message": "Cannot reach splunk tenant 'Production' at splunk.example.com:8089: <urlopen error [Errno 111] Connection refused>"
 }
 ```
+
+### Which rules are checked
+
+By default the live check reads the rule files a deploy under the same plan reads: every rule file directly in the rules folder for the `FULL` plan (no `--plan`), or the CI diff for `--plan STAGING` and `--plan PRODUCTION`. Of those, it checks the rules whose status strategy the plan [deploys](../usage/configuration.md#deployment-plan), except `DISABLEMENT` and `DELETION`. `--wide` drops the strategy filter, so `INERT` rules are checked too.
+
+Three flags narrow the rule files and leave the plan alone, so the strategies and the tenants stay the plan's:
+
+- `--changed` reads the rule files the current CI run changed. On a pull or merge request those are the files `deploy --plan STAGING` reads: the diff from the request's merge base. On any other GitHub Actions, GitLab CI or Azure Pipelines run they are the files `deploy --plan PRODUCTION` reads: the pushed commit's diff. Outside CI the flag refuses with exit `2`; select rules with `--file` or `--uuid` instead. The [generated pipelines](../usage/workflows/ci-cd.md) pass `--changed`, so a pull request that edits one rule sends that rule's queries, not the whole catalogue's. A changed rule in `PRODUCTION` status is still checked on the pull request, on every tenant it can reach. `--plan STAGING` would check neither: it keeps only `PREVIEW` rules and `STAGING` tenants. When no changed rule has a block for the platform, the result is `skipped` with exit `0`.
+- `--file` and `--uuid` select rules by file or UUID, for a check outside CI. Each target must select a rule file directly in the rules folder. A target that selects none fails the run with exit `1` before any query is sent, and `--json` lists it under `unmatched`. `--changed` cannot be combined with either (exit `2`).
+
+`--json` names the narrowing in `scope`: `changed` or `selected`.
+
+Through 0.16.1 the generated pipelines passed none of these flags, so every run sent every rule's queries: on a catalogue of a few hundred Splunk rules, the check took most of an hour.
 
 ### Which tenants are checked
 

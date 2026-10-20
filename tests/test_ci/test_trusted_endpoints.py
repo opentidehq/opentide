@@ -104,6 +104,8 @@ def test_gitlab_query_and_staging_jobs_pin_endpoints() -> None:
     query = parsed["validate_query_elastic"]
     assert "apt-get install -y -qq --no-install-recommends git" in "\n".join(query["before_script"])
     assert query["script"] == [*restore, reviewed_query_validation_command("elastic")]
+    # --changed diffs from the merge request base or the previous tip.
+    assert query["variables"] == {"GIT_DEPTH": "0"}
     staging = parsed["deploy_staging"]
     assert staging["script"][: len(restore)] == restore
     assert staging["variables"] == {"GIT_DEPTH": "0"}
@@ -131,8 +133,8 @@ def test_azure_query_and_staging_jobs_pin_endpoints() -> None:
         *restore,
         reviewed_query_validation_command("elastic"),
     ]
-    # The restore fetches, so the token is kept; one path needs no full history.
-    assert query["steps"][0] == {"checkout": "self", "persistCredentials": True}
+    # The restore fetches, so the token is kept; --changed diffs, so history is full.
+    assert query["steps"][0] == {"checkout": "self", "persistCredentials": True, "fetchDepth": 0}
     staging = jobs["deploy_staging"]
     assert _azure_scripts(staging)[-1].splitlines() == [
         "set -e",
@@ -306,7 +308,7 @@ def test_a_reviewed_tenant_is_validated_live(remote: Path) -> None:
     assert done.returncode == 0, done.stderr
     assert NO_REVIEWED_TENANT_NOTE.format(platform="splunk") not in done.stdout
     assert (work / "credentialed").read_text(encoding="utf-8") == (
-        "validate query --platform splunk --live\n"
+        "validate query --platform splunk --live --changed\n"
     )
 
 
@@ -330,7 +332,7 @@ def test_only_an_uncommented_tenant_runs_live_validation(platform: str, tmp_path
     ran = _bash(tmp_path, command)
     assert ran.returncode == 0, ran.stderr
     assert (tmp_path / "credentialed").read_text(encoding="utf-8") == (
-        f"validate query --platform {platform} --live\n"
+        f"validate query --platform {platform} --live --changed\n"
     )
 
 

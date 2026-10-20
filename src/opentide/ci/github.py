@@ -249,7 +249,9 @@ def render_github(options: CiRenderOptions) -> str:
         reviewed_query_validation_command(p, repo=options.repo) for p in query_platforms(options)
     ]
     validate_steps = join_blocks(
-        setup,
+        # ``--changed`` diffs from the pull request's merge base, or from the
+        # pushed commit's parent: neither is in a one-commit checkout.
+        _setup_steps(options, full_history=bool(queries)),
         _run_steps(object_validate_commands()),
         _reviewed_tenants_step("Validate queries on reviewed tenants", branch, queries),
     )

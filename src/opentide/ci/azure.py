@@ -169,6 +169,9 @@ def render_azure(options: CiRenderOptions) -> str:
                     # The checkout token is removed before later steps unless it
                     # is persisted, and the endpoint restore has to fetch.
                     persist_credentials=True,
+                    # ``--changed`` diffs from the pull request's merge base, or
+                    # from the pushed commit's parent.
+                    full_history=True,
                 ),
             )
         )

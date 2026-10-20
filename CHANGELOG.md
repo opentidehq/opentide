@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+Regenerate generated pipelines with `opentide setup ci <github|gitlab|azure> --yes` after upgrading.
+
+### Added
+
+- **`opentide validate query --changed`** checks only the rule files the current CI run changed: on a pull or merge request the files `deploy --plan STAGING` reads (the diff from the request's merge base), on any other GitHub Actions, GitLab CI or Azure Pipelines run the files `deploy --plan PRODUCTION` reads (the pushed commit's diff). It narrows the rule files only: without `--plan` each changed rule is still checked in any status a deploy acts on, on every tenant it can reach. Outside CI it refuses with exit `2`. `--json` reports `"scope": "changed"`.
+- **`opentide validate query --file` and `--uuid`** (repeatable) check only the selected rules, for a manual check outside CI. A target that selects no rule file directly in the rules folder fails with exit `1` and is listed under `unmatched`, before any query is sent. `--json` reports `"scope": "selected"`.
+
+### Fixed
+
+- **Generated pipelines checked every rule's query on every run.** The live query step ran `opentide validate query --platform <p> --live` with no scope, so a pull request that edited one rule sent the whole catalogue to the tenant; a catalogue of a few hundred Splunk rules took most of an hour. It now passes `--changed`, and the jobs that run it fetch full history (GitHub `fetch-depth: 0`, GitLab `GIT_DEPTH: "0"`, Azure `fetchDepth: 0`). `--plan STAGING` was not the fix: it also drops `PRODUCTION` rules and every tenant but the staging ones, so a pull request that edited a production rule's query would have merged it unchecked.
+- A GitLab `PRODUCTION` plan with no previous tip (`CI_COMMIT_BEFORE_SHA` all zeros, as on a branch's first push, a manual run or a schedule) diffs from HEAD's first parent, as on GitHub and Azure, instead of failing with `No Source Commit Found`.
+
 ## [0.16.1] — 2026-10-20
 
 Patch release. Nothing to regenerate and nothing to do after upgrading: the SDK class is renamed `Opentide` with the old spelling kept as a deprecated alias.

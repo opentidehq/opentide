@@ -6,7 +6,12 @@ from opentide.core import registry
 from opentide.core.io import load_yaml
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
-from opentide.deployment.git_repo import local_rule_scope, modified_rule_scope, rules_folder_in_repo
+from opentide.deployment.git_repo import (
+    RuleScope,
+    local_rule_scope,
+    modified_rule_scope,
+    rules_folder_in_repo,
+)
 from opentide.models.deployment_enums import DeploymentStrategy, StatusStrategy
 from opentide.platforms.enabled import enable_platform_command, enabled_systems
 
@@ -154,12 +159,18 @@ def make_deploy_plan(
     keep_deprecated: bool = True,
     *,
     warnings: list[str] | None = None,
+    scope: RuleScope | None = None,
 ) -> dict[str, list[str]]:
     """Assemble MDR UUIDs to deploy, organized per system.
 
     Only the files directly in the rules folder are deployed (#312). The
     message naming the skipped subfolder files is appended to *warnings*;
     without a list to report through, it is logged as a warning instead.
+
+    *scope* replaces the rule files *plan* would read (every file for
+    ``FULL``, the CI diff otherwise) and leaves the rest of the plan alone:
+    the strategies it selects and, downstream, the tenants it reaches.
+    ``validate query --changed`` and ``--file`` pass one.
 
     A selected rule that still carries ``rule_id``, ``rule_id_bundle`` or
     ``rule_id::<tenant>`` on any platform block is left out of every
@@ -179,7 +190,9 @@ def make_deploy_plan(
 
     deploy_mdr: dict[str, list[str]] = {}
 
-    if plan is DeploymentStrategy.FULL:
+    if scope is not None:
+        logger.info("explicit_rule_scope", mdr_count=len(scope.files))
+    elif plan is DeploymentStrategy.FULL:
         scope = local_rule_scope()
         logger.info("full_redeploy_scope", mdr_count=len(scope.files))
     else:

@@ -123,6 +123,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
     # Query jobs share the validate stage. ``needs: validate`` alone lets
     # generate, then deploy, start while a query job is still running or after
     # it has failed (#429).
+    full_history = ["  variables:", '    GIT_DEPTH: "0"']
     query_job_names: list[str] = []
     query_jobs: list[str] = []
     for platform in options.platforms:
@@ -139,12 +140,13 @@ def render_gitlab(options: CiRenderOptions) -> str:
                     *trusted_platform_config_commands(_DEFAULT_BRANCH),
                     reviewed_query_validation_command(platform, repo=options.repo),
                 ],
+                # ``--changed`` diffs from the merge request's base or the
+                # previous tip, which a shallow clone may not contain.
+                extra_lines=full_history,
                 # python slim has no git; without it the endpoint checkout cannot run.
                 before=[GITLAB_INSTALL_GIT],
             )
         )
-
-    full_history = ["  variables:", '    GIT_DEPTH: "0"']
     deploy_jobs: list[str] = []
     if options.staging:
         deploy_jobs.append(

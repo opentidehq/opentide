@@ -187,6 +187,32 @@ def modified_mdr_files(plan: DeploymentStrategy) -> list[Path]:
     return list(modified_rule_scope(plan).files)
 
 
+class NotInCI(Exception):
+    """A change set was asked for outside GitHub Actions, GitLab CI and Azure Pipelines."""
+
+
+def ci_diff_plan() -> DeploymentStrategy:
+    """The plan whose CI diff holds this run's changes.
+
+    ``STAGING`` on a pull or merge request, ``PRODUCTION`` on any other CI run:
+    the rule files the generated deploy job of the same run reads.
+    """
+    from opentide.deployment.ci import is_change_request
+
+    environment = CIEnvironment().environment
+    if environment is CIEnvironment.CIPlatforms.LocalDebug:
+        raise NotInCI("there is no CI run to take the changed rule files from")
+    if is_change_request(environment):
+        return DeploymentStrategy.STAGING
+    return DeploymentStrategy.PRODUCTION
+
+
+def changed_rule_scope() -> tuple[RuleScope, DeploymentStrategy]:
+    """The rule files this CI run changed, and the plan whose diff found them."""
+    plan = ci_diff_plan()
+    return modified_rule_scope(plan), plan
+
+
 def _not_a_ci_diff_plan(plan: DeploymentStrategy) -> Exception:
     return Exception(
         f"Deployment plan {plan.name} is not a CI diff plan. Use STAGING, PRODUCTION, or FULL."
@@ -309,6 +335,14 @@ def diff_calculation(plan: DeploymentStrategy) -> list:
 
             if plan is DeploymentStrategy.PRODUCTION:
                 BASE_COMMIT = os.getenv("CI_COMMIT_BEFORE_SHA")
+                if not BASE_COMMIT or not BASE_COMMIT.strip("0"):
+                    # All zeros on a branch's first push, a manual run and a
+                    # schedule: there is no previous tip. Diff against HEAD's
+                    # first parent, as GitHub and Azure always do.
+                    base = _production_base(repo)
+                    if base is None:
+                        return []
+                    BASE_COMMIT = base
             elif plan is DeploymentStrategy.STAGING:
                 BASE_COMMIT = os.getenv("CI_MERGE_REQUEST_DIFF_BASE_SHA")
                 # Allows the proper base commit calculation for Merged Result pipelines

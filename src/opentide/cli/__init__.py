@@ -496,10 +496,33 @@ def validate_query_cmd(
         "--live",
         help="Check the tenant (needs platform SDKs and credentials)",
     ),
+    changed: bool = typer.Option(
+        False,
+        "--changed",
+        help=(
+            "In CI, check only the rule files this pull request, merge request or push "
+            "changed. The plan still decides strategies and tenants"
+        ),
+    ),
+    file: list[str] | None = typer.Option(
+        None, "--file", help="Check only this rule file (repeatable)"
+    ),
+    uuid: list[str] | None = typer.Option(
+        None, "--uuid", help="Check only the rule with this UUID (repeatable)"
+    ),
 ) -> None:
     """Query validation checks the tenant. Pass --live."""
     cli = get_context(ctx)
-    result = validate_query_platform(cli, platform.value, plan=plan, wide=wide, live=live)
+    result = validate_query_platform(
+        cli,
+        platform.value,
+        plan=plan,
+        wide=wide,
+        live=live,
+        changed=changed,
+        files=file or (),
+        uuids=uuid or (),
+    )
     emit_success(cli, result)
 
 

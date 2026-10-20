@@ -19,7 +19,10 @@ from opentide.validation.session import run_validation
 
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from opentide.cli.context import CliContext
+    from opentide.deployment.git_repo import RuleScope
     from opentide.platforms.transport import TenantUnreachableError
 
 
@@ -330,6 +333,94 @@ def _live_required_result(platform: str) -> dict[str, object]:
     }
 
 
+def _query_scope_refused(platform: str, message: str, *, exit_code: int) -> dict[str, object]:
+    return {
+        "platform": platform,
+        "mode": "live",
+        "status": "failed",
+        "supported": True,
+        "message": message,
+        "_exit_code": exit_code,
+    }
+
+
+def _selected_rule_scope(files: Sequence[str], uuids: Sequence[str]) -> tuple[RuleScope, list[str]]:
+    """The rule files ``--file`` and ``--uuid`` select, and each target that selects none.
+
+    Candidates are the files a plan reads: those directly in the rules folder.
+    ``--file`` matches as in ``opentide validate``.
+    """
+    from opentide.core.io import load_yaml
+    from opentide.core.object_refs import object_uuid
+    from opentide.deployment.git_repo import RuleScope, local_rule_scope
+
+    by_file = ValidationScope.narrow(files=frozenset(files))
+    wanted = {uuid.strip().lower(): uuid for uuid in uuids}
+    found: set[str] = set()
+    selected: list[Path] = []
+    candidates = local_rule_scope().files
+    for path in candidates:
+        chosen = bool(files) and by_file.matches_file(path.name, path)
+        if wanted:
+            try:
+                uuid = object_uuid(load_yaml(path)).strip().lower()
+            except Exception:
+                uuid = ""
+            if uuid in wanted:
+                found.add(uuid)
+                chosen = True
+        if chosen:
+            selected.append(path)
+    unmatched = by_file.unmatched_file_targets([(path.name, path) for path in candidates])
+    unmatched.extend(raw for key, raw in wanted.items() if key not in found)
+    return RuleScope(tuple(selected)), unmatched
+
+
+def _query_rule_scope(
+    platform: str, *, changed: bool, files: Sequence[str], uuids: Sequence[str]
+) -> tuple[RuleScope | None, str | None, dict[str, object] | None]:
+    """``(scope, label, refusal)`` for ``--changed``, ``--file`` and ``--uuid``.
+
+    No flag keeps the plan's own rule files (``None``). ``label`` names the
+    narrowing in the result. A refusal is returned instead of a scope.
+    """
+    if not (changed or files or uuids):
+        return None, None, None
+    if changed and (files or uuids):
+        message = "--changed cannot be combined with --file or --uuid"
+        return None, None, _query_scope_refused(platform, message, exit_code=2)
+    if changed:
+        from opentide.deployment.git_repo import MissingGitCheckout, NotInCI, changed_rule_scope
+
+        try:
+            scope, diff = changed_rule_scope()
+        except NotInCI:
+            message = (
+                "--changed takes the changed rule files from a GitHub Actions, GitLab CI or "
+                "Azure Pipelines run; select rules with --file or --uuid instead"
+            )
+            return None, None, _query_scope_refused(platform, message, exit_code=2)
+        except MissingGitCheckout as exc:
+            message = f"--changed needs a git checkout; no .git was found from {exc.searched}"
+            return None, None, _query_scope_refused(platform, message, exit_code=1)
+        except Exception as exc:
+            message = str(exc).strip() or f"{type(exc).__name__} while computing the changed rules"
+            return None, None, _query_scope_refused(platform, message, exit_code=1)
+        logger.info("query_scope_changed", diff=diff.name, rules=len(scope.files))
+        return scope, "changed", None
+    scope, unmatched = _selected_rule_scope(files, uuids)
+    if unmatched:
+        from opentide.deployment.git_repo import rules_folder_in_repo
+
+        message = (
+            f"No rule file directly in {rules_folder_in_repo()} matched: {', '.join(unmatched)}"
+        )
+        result = _query_scope_refused(platform, message, exit_code=1)
+        result["unmatched"] = unmatched
+        return None, None, result
+    return scope, "selected", None
+
+
 def validate_query_platform(
     ctx: CliContext,
     platform: str,
@@ -337,11 +428,19 @@ def validate_query_platform(
     plan: str | None = None,
     wide: bool = False,
     live: bool = False,
+    changed: bool = False,
+    files: Sequence[str] = (),
+    uuids: Sequence[str] = (),
 ) -> dict[str, object]:
     """Validate queries for a single platform.
 
     Without ``live`` the command refuses and names ``--live``. ``live=True``
     runs the platform engine against the tenant.
+
+    ``changed`` checks only the rule files this CI run changed, and *files*
+    and *uuids* only the rules they select. Either way the plan still decides
+    the strategies and the tenants: without ``--plan``, every tenant a rule
+    can reach.
     """
     ctx.apply_environment()
     if plan is not None:
@@ -374,8 +473,15 @@ def validate_query_platform(
             "message": str(exc),
             "_exit_code": 1,
         }
+    rule_scope, scope_label, refusal = _query_rule_scope(
+        platform, changed=changed, files=files, uuids=uuids
+    )
+    if refusal is not None:
+        return refusal
     try:
-        deployment_list = make_deploy_plan(deployment_plan, wide_scope=wide, keep_deprecated=False)
+        deployment_list = make_deploy_plan(
+            deployment_plan, wide_scope=wide, keep_deprecated=False, scope=rule_scope
+        )
     except Exception as exc:
         message = str(exc).strip() or (f"{type(exc).__name__} while compiling the deployment plan")
         return {
@@ -401,12 +507,15 @@ def validate_query_platform(
                 ),
                 "advice": f"enable it with '{enable_platform_command(platform)}'",
             }
-        return {
+        skipped: dict[str, object] = {
             "platform": platform,
             "mode": "live",
             "status": "skipped",
-            "message": "No rules to validate for this platform in the current plan",
+            "message": _NO_RULES_MESSAGES[scope_label],
         }
+        if scope_label is not None:
+            skipped["scope"] = scope_label
+        return skipped
     from opentide.platforms.enabled import MissingTenantsError, systems_without_tenants
 
     if systems_without_tenants([platform]):
@@ -446,9 +555,32 @@ def validate_query_platform(
                 # PRODUCTION) is an ordinary skip. Only a rule that reaches no
                 # configured tenant at all means the check could never run.
                 if queries_per_tenant(platform, rules, DeploymentStrategy.FULL):
-                    return _plan_reaches_none(platform, deployment_plan.name, len(rules))
-            return _no_tenant_reached(platform, deployment_plan.name, len(rules))
-        return _run_live_validator(ctx, platform, deployment_list[platform], deployment_plan, reach)
+                    return _scoped(
+                        _plan_reaches_none(platform, deployment_plan.name, len(rules)),
+                        scope_label,
+                    )
+            return _scoped(
+                _no_tenant_reached(platform, deployment_plan.name, len(rules)), scope_label
+            )
+        return _scoped(
+            _run_live_validator(ctx, platform, deployment_list[platform], deployment_plan, reach),
+            scope_label,
+        )
+
+
+#: The skip message when the plan has no rule for the platform, by scope label.
+_NO_RULES_MESSAGES: dict[str | None, str] = {
+    None: "No rules to validate for this platform in the current plan",
+    "changed": "No changed rules to validate for this platform in the current plan",
+    "selected": "None of the selected rules is validated for this platform in the current plan",
+}
+
+
+def _scoped(result: dict[str, object], label: str | None) -> dict[str, object]:
+    """Name the narrowed rule scope (``changed`` or ``selected``) in *result*."""
+    if label is not None:
+        result["scope"] = label
+    return result
 
 
 def queries_per_tenant(platform: str, rules: Sequence[Any], plan: Any) -> dict[str, int]:

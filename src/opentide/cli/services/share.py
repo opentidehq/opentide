@@ -225,28 +225,15 @@ def _select_blocks(
 
 
 def _changed_context() -> str | None:
-    """Preflight for ``--changed`` before any git diff or HTTP call.
-
-    Platform order matches :class:`opentide.deployment.ci.CIEnvironment`:
-    Azure, then GitHub, then GitLab.
-    """
-    from opentide.deployment.ci import CIEnvironment
+    """Preflight for ``--changed`` before any git diff or HTTP call."""
+    from opentide.deployment.ci import CIEnvironment, is_change_request
 
     environment = CIEnvironment().environment
-    platforms = CIEnvironment.CIPlatforms
-    if environment is platforms.AzurePipeline:
-        if os.getenv("BUILD_REASON") == "PullRequest":
-            return "changed_on_pull_request"
-        return None
-    if environment is platforms.GitHubActions:
-        if os.getenv("GITHUB_EVENT_NAME") in {"pull_request", "pull_request_target"}:
-            return "changed_on_pull_request"
-        return None
-    if environment is platforms.GitlabCI:
-        if os.getenv("CI_PIPELINE_SOURCE") == "merge_request_event":
-            return "changed_on_pull_request"
-        return None
-    return "changed_outside_ci"
+    if environment is CIEnvironment.CIPlatforms.LocalDebug:
+        return "changed_outside_ci"
+    if is_change_request(environment):
+        return "changed_on_pull_request"
+    return None
 
 
 def _changed_files(

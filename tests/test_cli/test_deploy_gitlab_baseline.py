@@ -79,11 +79,15 @@ def _visible(result: object) -> str:
     return re.sub(r"\s+", " ", visible)
 
 
-@pytest.mark.parametrize("plan", ["STAGING", "PRODUCTION"])
 @pytest.mark.parametrize(
-    "base",
-    [None, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
-    ids=["unset", "unknown"],
+    ("plan", "base"),
+    [
+        ("STAGING", None),
+        ("STAGING", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        # An unset or all-zeros CI_COMMIT_BEFORE_SHA diffs from HEAD's parent instead.
+        ("PRODUCTION", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+    ],
+    ids=["unset-STAGING", "unknown-STAGING", "unknown-PRODUCTION"],
 )
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
 def test_gitlab_missing_base_names_no_source_commit(
@@ -143,6 +147,40 @@ def test_gitlab_plan_succeeds_when_both_shas_are_in_the_checkout(
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
     assert "lookup_ref" not in result.stdout
+
+
+@pytest.mark.parametrize("base", [None, "0" * 40], ids=["unset", "zeros"])
+def test_gitlab_production_without_a_previous_tip_diffs_from_the_parent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    git_home: Path,
+    base: str | None,
+) -> None:
+    """GitLab sends all zeros on a branch's first push, a manual run and a schedule.
+
+    There is no previous tip to diff from, so the plan diffs from HEAD's first
+    parent, as on GitHub and Azure, instead of failing with No Source Commit Found.
+    """
+    del git_home
+    from opentide.deployment.git_repo import diff_calculation
+    from opentide.models.deployment_enums import DeploymentStrategy
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    rules = repo / "objects" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "changed.yaml").write_text("name: changed\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "second")
+    head = _git(repo, "rev-parse", "HEAD")
+    for name, value in _gitlab_env(repo, head, CI_COMMIT_BEFORE_SHA=base).items():
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+
+    assert diff_calculation(DeploymentStrategy.PRODUCTION) == ["objects/rules/changed.yaml"]
 
 
 def test_gitlab_unknown_base_still_names_no_source_when_origin_main_exists(
