@@ -36,7 +36,6 @@ const VOCAB_MITIGATIONS: &str =
 const VOCAB_OBJECTIVES: &str = include_str!("../../../catalogs/tide/vocabs/objectives.vocab.toml");
 const VOCAB_PAP: &str = include_str!("../../../catalogs/tide/vocabs/pap.vocab.toml");
 const VOCAB_RESOURCES: &str = include_str!("../../../catalogs/tide/vocabs/resources.vocab.toml");
-const VOCAB_RESPONDERS: &str = include_str!("../../../catalogs/tide/vocabs/responders.vocab.toml");
 const VOCAB_RSIT: &str = include_str!("../../../catalogs/tide/vocabs/rsit.vocab.toml");
 const VOCAB_SCHEDULING: &str = include_str!("../../../catalogs/tide/vocabs/scheduling.vocab.toml");
 const VOCAB_SECTORS: &str = include_str!("../../../catalogs/tide/vocabs/sectors.vocab.toml");
@@ -77,7 +76,6 @@ const ALL_VOCABS: &[&str] = &[
     VOCAB_OBJECTIVES,
     VOCAB_PAP,
     VOCAB_RESOURCES,
-    VOCAB_RESPONDERS,
     VOCAB_RSIT,
     VOCAB_SCHEDULING,
     VOCAB_SECTORS,
@@ -158,6 +156,18 @@ fn levenshtein(a: &str, b: &str) -> usize {
     prev[b.len()]
 }
 
+/// Stage ids a key belongs to: `"tide.vocab.stages"` is a string or an array of them.
+fn key_stages(key: &toml::Value) -> Vec<String> {
+    match key.get("tide.vocab.stages") {
+        Some(toml::Value::String(stage)) => vec![stage.clone()],
+        Some(toml::Value::Array(stages)) => stages
+            .iter()
+            .filter_map(|stage| stage.as_str().map(str::to_string))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 fn parse_vocab(toml_src: &str) -> Vocab {
     let v: toml::Value = toml::from_str(toml_src).expect("vocab toml");
     let field = v
@@ -167,26 +177,48 @@ fn parse_vocab(toml_src: &str) -> Vocab {
         .to_string();
     let title = v.get("name").and_then(|v| v.as_str()).map(str::to_string);
     let token_field = v.get("key").and_then(|v| v.as_str()).unwrap_or("name");
+    // A vocabulary with `[[stages]]` tables scopes its keys: the value written in YAML is
+    // `<stage>::<key>` (`support::enabled`), because two stages may define the same key.
+    let scoped = v
+        .get("stages")
+        .and_then(|v| v.as_array())
+        .is_some_and(|stages| stages.iter().any(|stage| stage.is_table()));
     let keys = v
         .get("keys")
         .and_then(|v| v.as_array())
         .into_iter()
         .flatten()
-        .filter_map(|k| {
+        .flat_map(|k| {
             let token = k
                 .get(token_field)
                 .and_then(|x| x.as_str())
                 .or_else(|| k.get("name").and_then(|x| x.as_str()))
-                .or_else(|| k.get("id").and_then(|x| x.as_str()))?;
+                .or_else(|| k.get("id").and_then(|x| x.as_str()));
+            let Some(token) = token else {
+                return Vec::new();
+            };
             let pretty = k.get("name").and_then(|x| x.as_str()).map(str::to_string);
-            Some(VocabKey {
-                name: token.to_string(),
-                title: pretty.filter(|p| p != token),
-                description: k
-                    .get("description")
-                    .and_then(|d| d.as_str())
-                    .map(str::to_string),
-            })
+            let description = k
+                .get("description")
+                .and_then(|d| d.as_str())
+                .map(str::to_string);
+            let stages = if scoped { key_stages(k) } else { Vec::new() };
+            let tokens: Vec<String> = if stages.is_empty() {
+                vec![token.to_string()]
+            } else {
+                stages
+                    .iter()
+                    .map(|stage| format!("{stage}::{token}"))
+                    .collect()
+            };
+            tokens
+                .into_iter()
+                .map(|name| VocabKey {
+                    title: pretty.clone().filter(|p| *p != name),
+                    name,
+                    description: description.clone(),
+                })
+                .collect()
         })
         .collect();
     Vocab { field, title, keys }
@@ -225,5 +257,13 @@ mod tests {
         assert!(v.contains_key("detection.types"));
         assert!(v.get("tlp").unwrap().contains("clear"));
         assert!(v.get("att&ck").unwrap().contains("T1059"));
+    }
+
+    #[test]
+    fn staged_vocabularies_are_written_with_their_stage() {
+        let chaining = bundled_vocabs().get("chaining_relations").unwrap();
+        assert!(chaining.contains("sequence::preceeds"));
+        assert!(chaining.contains("support::enabled"));
+        assert!(!chaining.contains("preceeds"));
     }
 }

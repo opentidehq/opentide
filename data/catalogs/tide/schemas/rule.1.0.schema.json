@@ -1043,6 +1043,85 @@
           "T0859",
           "T0860",
           "T0887",
+          "T1687",
+          "T1685.003",
+          "T1685.001",
+          "T1682",
+          "T1685.004",
+          "T1213.006",
+          "T1686.003",
+          "T1689",
+          "T1685.002",
+          "T1684",
+          "T1518.002",
+          "T1685.006",
+          "T1681",
+          "T1683.001",
+          "T1204.005",
+          "T1685.005",
+          "T1677",
+          "T1683.002",
+          "T1679",
+          "T1678",
+          "T1686.002",
+          "T1036.012",
+          "T1683",
+          "T1690",
+          "T1685",
+          "T1059.013",
+          "T1546.018",
+          "T1688",
+          "T1684.001",
+          "T1027.018",
+          "T1686.001",
+          "T1686",
+          "T1680",
+          "T1684.002",
+          "T1453",
+          "T1636.005",
+          "T1676",
+          "T1691.001",
+          "T1691",
+          "T0873.001",
+          "T1694",
+          "T1692.001",
+          "T1692.002",
+          "T1695.001",
+          "T1694.001",
+          "T0843.003",
+          "T0846.001",
+          "T1695.002",
+          "T0846.003",
+          "T1693.001",
+          "T1694.002",
+          "T1695.003",
+          "T1693.002",
+          "T0843.001",
+          "T1691.002",
+          "T1693",
+          "T0846.002",
+          "T0843.002",
+          "T1692",
+          "T1695",
+          "T1696",
+          "T1697",
+          "T1698",
+          "T1699",
+          "T1608.007",
+          "T1696.001",
+          "T1696.002",
+          "T1685.007",
+          "T1700",
+          "T1476",
+          "T1701.003",
+          "T1701.006",
+          "T1701.005",
+          "T0869.002",
+          "T1701",
+          "T1701.001",
+          "T1701.002",
+          "T1701.004",
+          "T0869.001",
           "T1548 #Abuse Elevation Control Mechanism",
           "T1548.002 #Abuse Elevation Control Mechanism: Bypass  r Account Control",
           "T1548.004 #Abuse Elevation Control Mechanism: Elevated Execution w/ Prompt",
@@ -1088,7 +1167,7 @@
           "T1557.002 #Adversary-in-the-Middle: ARP Cache Poisoning",
           "T1557.003 #Adversary-in-the-Middle: DHCP Spoofing",
           "T1557.004 #Adversary-in-the-Middle: Evil Twin",
-          "T1557.001 #Adversary-in-the-Middle: LLMNR/NBT-NS Poisoning & SMB Relay",
+          "T1557.001 #Adversary-in-the-Middle: Name Resolution Poisoning & SMB Relay",
           "T1071 #Application Layer Protocol",
           "T1071.004 #Application Layer Protocol: DNS",
           "T1071.002 #Application Layer Protocol: File Transfer Protocols",
@@ -1304,15 +1383,15 @@
           "T1190 #Exploit Public-Facing Application",
           "T1203 #Exploitation for Client Execution",
           "T1212 #Exploitation for Credential Access",
-          "T1211 #Exploitation for Defense Evasion",
+          "T1211 #Exploitation for Stealth",
           "T1068 #Exploitation for Privilege Escalation",
           "T1210 #Exploitation of Remote Services",
           "T1133 #External Remote Services",
           "T1008 #Fallback Channels",
           "T1083 #File and Directory Discovery",
           "T1222 #File and Directory Permissions Modification",
-          "T1222.002 #File & Directory Permissions Modification: Linux & Mac File & Directory Permissions Modification",
-          "T1222.001 #File & Directory Permissions Modification: Windows File & Directory Permissions Modification",
+          "T1222.002 #File & Directory Permissions Modification: Linux & Mac Permissions",
+          "T1222.001 #File & Directory Permissions Modification: Windows Permissions",
           "T1657 #Financial Theft",
           "T1495 #Firmware Corruption",
           "T1187 #Forced Authentication",
@@ -1682,7 +1761,7 @@
           "T1127.001 #Trusted Developer Utilities Proxy Execution: MSBuild",
           "T1199 #Trusted Relationship",
           "T1552 #Unsecured Credentials",
-          "T1552.003 #Unsecured Credentials: Bash History",
+          "T1552.003 #Unsecured Credentials: Shell History",
           "T1552.008 #Unsecured Credentials: Chat Messages",
           "T1552.005 #Unsecured Credentials: Cloud Instance Metadata API",
           "T1552.007 #Unsecured Credentials: Container API",
@@ -1710,7 +1789,7 @@
           "T1673 #Virtual Machine Discovery",
           "T1497 #Virtualization/Sandbox Evasion",
           "T1497.001 #Virtualization/Sandbox Evasion: System Checks",
-          "T1497.003 #Virtualization/Sandbox Evasion: Time Based Evasion",
+          "T1497.003 #Virtualization/Sandbox Evasion: Time Based Checks",
           "T1497.002 #Virtualization/Sandbox Evasion:  r Activity Based Checks",
           "T1600 #Weaken Encryption",
           "T1600.002 #Weaken Encryption: Disable Crypto Hardware",
@@ -1925,7 +2004,86 @@
           "T0863 #Industrial : User Execution",
           "T0859 #Industrial : Valid Accounts",
           "T0860 #Industrial : Wireless Compromise",
-          "T0887 #Industrial : Wireless Sniffing"
+          "T0887 #Industrial : Wireless Sniffing",
+          "T1687 #Exploitation for Defense Impairment",
+          "T1685.003 #Disable or Modify Tools: Modify or Spoof Tool UI",
+          "T1685.001 #Disable or Modify Tools: Disable or Modify Windows Event Log",
+          "T1682 #Query Public AI Services",
+          "T1685.004 #Disable or Modify Tools: Disable or Modify Linux Audit System Log",
+          "T1213.006 #Data from Information Repositories: Databases",
+          "T1686.003 #Disable or Modify System Firewall: Windows Host Firewall",
+          "T1689 #Downgrade Attack",
+          "T1685.002 #Disable or Modify Tools: Disable or Modify Cloud Log",
+          "T1684 #Social Engineering",
+          "T1518.002 #Software Discovery: Backup Software Discovery",
+          "T1685.006 #Disable or Modify Tools: Clear Linux or Mac System Logs",
+          "T1681 #Search Threat Vendor Data",
+          "T1683.001 #Generate Content: Written Content",
+          "T1204.005 #User Execution: Malicious Library",
+          "T1685.005 #Disable or Modify Tools: Clear Windows Event Logs",
+          "T1677 #Poisoned Pipeline Execution",
+          "T1683.002 #Generate Content: Audio-Visual Content",
+          "T1679 #Selective Exclusion",
+          "T1678 #Delay Execution",
+          "T1686.002 #Disable or Modify System Firewall: Network Device Firewall",
+          "T1036.012 #Masquerading: Browser Fingerprint",
+          "T1683 #Generate Content",
+          "T1690 #Prevent Command History Logging",
+          "T1685 #Disable or Modify Tools",
+          "T1059.013 #Command & Scripting Interpreter: Container CLI/API",
+          "T1546.018 #Event Triggered Execution: Python Startup Hooks",
+          "T1688 #Safe Mode Boot",
+          "T1684.001 #Social Engineering: Impersonation",
+          "T1027.018 #Obfuscated Files or Information: Invisible Unicode",
+          "T1686.001 #Disable or Modify System Firewall: Cloud Firewall",
+          "T1686 #Disable or Modify System Firewall",
+          "T1680 #Local Storage Discovery",
+          "T1684.002 #Social Engineering: Email Spoofing",
+          "T1453 #Mobile : Abuse Accessibility Features",
+          "T1636.005 #Mobile : Accounts",
+          "T1676 #Mobile : Linked Devices",
+          "T1691.001 #Industrial : Command Message",
+          "T1691 #Industrial : Block Operational Technology Message",
+          "T0873.001 #Industrial : Siemens Project File Format",
+          "T1694 #Industrial : Insecure Credentials",
+          "T1692.001 #Industrial : Command Message",
+          "T1692.002 #Industrial : Reporting Message",
+          "T1695.001 #Industrial : Serial COM",
+          "T1694.001 #Industrial : Default Credentials",
+          "T0843.003 #Industrial : Program Append",
+          "T0846.001 #Industrial : Port Scan",
+          "T1695.002 #Industrial : Ethernet",
+          "T0846.003 #Industrial : Multicast Discovery",
+          "T1693.001 #Industrial : System Firmware",
+          "T1694.002 #Industrial : Hardcoded Credentials",
+          "T1695.003 #Industrial : Wi-Fi",
+          "T1693.002 #Industrial : Module Firmware",
+          "T0843.001 #Industrial : Download All",
+          "T1691.002 #Industrial : Reporting Message",
+          "T1693 #Industrial : Modify Firmware",
+          "T0846.002 #Industrial : Broadcast Discovery",
+          "T0843.002 #Industrial : Online Edit",
+          "T1692 #Industrial : Unauthorized Message",
+          "T1695 #Industrial : Block Communications",
+          "T1696 #Anti-Automation Evasion",
+          "T1697 #Steal Application Specific Passwords",
+          "T1698 #Indirect Prompt Injection",
+          "T1699 #Direct Prompt Injection",
+          "T1608.007 #Stage Capabilities: AI Result Poisoning",
+          "T1696.001 #Anti-Automation Evasion: Automate CAPTCHA Completion",
+          "T1696.002 #Anti-Automation Evasion: Avoid CAPTCHA",
+          "T1685.007 #Disable or Modify Tools: Impair Autonomous Defenses",
+          "T1700 #AI-Enabled Exfiltration",
+          "T1476 #Mobile : Deliver Malicious Application via Other Means",
+          "T1701.003 #Industrial : Unix Shell",
+          "T1701.006 #Industrial : JavaScript",
+          "T1701.005 #Industrial : Python",
+          "T0869.002 #Industrial : Publish/Subscribe Protocols",
+          "T1701 #Industrial : Command and Scripting Interpreter",
+          "T1701.001 #Industrial : PowerShell",
+          "T1701.002 #Industrial : Windows Command Shell",
+          "T1701.004 #Industrial : Visual Basic",
+          "T0869.001 #Industrial : DNS"
         ]
       },
       "title": "Techniques",
@@ -1994,18 +2152,18 @@
     "detection_model": {
       "anyOf": [
         {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            ""
+          ],
+          "markdownEnumDescriptions": []
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "title": "Detection Model",
-      "enum": [
-        ""
-      ],
-      "markdownEnumDescriptions": []
+      "title": "Detection Model"
     },
     "response": {
       "anyOf": [
@@ -2074,16 +2232,8 @@
           "title": "Schema"
         },
         "status": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Status"
+          "title": "Status",
+          "type": "string"
         },
         "flags": {
           "anyOf": [
@@ -2187,24 +2337,10 @@
           ],
           "default": null,
           "title": "Tags"
-        },
-        "rule_id_bundle": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rule Id Bundle"
         }
       },
       "required": [
+        "status",
         "query"
       ],
       "title": "CarbonBlackConfig",
@@ -2236,16 +2372,8 @@
           "title": "Schema"
         },
         "status": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Status"
+          "title": "Status",
+          "type": "string"
         },
         "flags": {
           "anyOf": [
@@ -2303,24 +2431,10 @@
         "query": {
           "title": "Query",
           "type": "string"
-        },
-        "rule_id_bundle": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rule Id Bundle"
         }
       },
       "required": [
+        "status",
         "details",
         "schedule",
         "query"
@@ -2621,16 +2735,8 @@
           "title": "Schema"
         },
         "status": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Status"
+          "title": "Status",
+          "type": "string"
         },
         "flags": {
           "anyOf": [
@@ -2700,21 +2806,6 @@
           "title": "Scheduling",
           "type": "string"
         },
-        "rule_id": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "type": "integer"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rule Id"
-        },
         "actions": {
           "anyOf": [
             {
@@ -2756,6 +2847,7 @@
         }
       },
       "required": [
+        "status",
         "query",
         "alert",
         "impacted_entities",
@@ -3040,6 +3132,1250 @@
       "title": "DefenderUserActions",
       "type": "object"
     },
+    "ElasticActions": {
+      "additionalProperties": false,
+      "properties": {
+        "notify": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notify"
+        },
+        "respond": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Respond"
+        },
+        "timeline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticTimeline"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeline"
+        }
+      },
+      "title": "ElasticActions",
+      "type": "object"
+    },
+    "ElasticCardinality": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "field",
+        "value"
+      ],
+      "title": "ElasticCardinality",
+      "type": "object"
+    },
+    "ElasticConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contributors"
+        },
+        "type": {
+          "enum": [
+            "query",
+            "eql",
+            "esql",
+            "threshold",
+            "new_terms",
+            "threat_match",
+            "machine_learning"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "enum": [
+                "kuery",
+                "lucene"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "index": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Index"
+        },
+        "data_view_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data View Id"
+        },
+        "filters": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ElasticFilter"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filters"
+        },
+        "scheduling": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticScheduling"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scheduling"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ElasticSeverity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "risk": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/ElasticRisk"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Risk"
+        },
+        "suppression": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticSuppression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suppression"
+        },
+        "highlighted_fields": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Highlighted Fields"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticThreshold"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Threshold"
+        },
+        "new_terms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticNewTerms"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Terms"
+        },
+        "eql": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticEql"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Eql"
+        },
+        "threat": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticThreatMatch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Threat"
+        },
+        "machine_learning": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticMachineLearning"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Machine Learning"
+        },
+        "integration": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/ElasticIntegration"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Integration"
+        },
+        "required_fields": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ElasticRequiredField"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Fields"
+        },
+        "guide": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticGuide"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Guide"
+        },
+        "false_positives": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "False Positives"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tags"
+        },
+        "exceptions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticExceptions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exceptions"
+        },
+        "building_block": {
+          "default": false,
+          "title": "Building Block",
+          "type": "boolean"
+        },
+        "overrides": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticOverrides"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Overrides"
+        },
+        "actions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticActions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actions"
+        }
+      },
+      "required": [
+        "status",
+        "type"
+      ],
+      "title": "ElasticConfig",
+      "type": "object"
+    },
+    "ElasticEql": {
+      "additionalProperties": false,
+      "properties": {
+        "timestamp_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp Field"
+        },
+        "event_category_override": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event Category Override"
+        },
+        "tiebreaker_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tiebreaker Field"
+        }
+      },
+      "title": "ElasticEql",
+      "type": "object"
+    },
+    "ElasticExceptionList": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "list_id": {
+          "title": "List Id",
+          "type": "string"
+        },
+        "namespace_type": {
+          "enum": [
+            "single",
+            "agnostic"
+          ],
+          "title": "Namespace Type",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "detection",
+            "rule_default"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "list_id",
+        "namespace_type",
+        "type"
+      ],
+      "title": "ElasticExceptionList",
+      "type": "object"
+    },
+    "ElasticExceptions": {
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "default": false,
+          "title": "Endpoint",
+          "type": "boolean"
+        },
+        "lists": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ElasticExceptionList"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lists"
+        }
+      },
+      "title": "ElasticExceptions",
+      "type": "object"
+    },
+    "ElasticFilter": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "negate": {
+          "default": false,
+          "title": "Negate",
+          "type": "boolean"
+        },
+        "meta": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Meta"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        }
+      },
+      "title": "ElasticFilter",
+      "type": "object"
+    },
+    "ElasticGuide": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Investigation"
+        },
+        "setup": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Setup"
+        }
+      },
+      "title": "ElasticGuide",
+      "type": "object"
+    },
+    "ElasticIntegration": {
+      "additionalProperties": false,
+      "properties": {
+        "package": {
+          "title": "Package",
+          "type": "string"
+        },
+        "integration": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Integration"
+        },
+        "version": {
+          "default": "*",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "package"
+      ],
+      "title": "ElasticIntegration",
+      "type": "object"
+    },
+    "ElasticMachineLearning": {
+      "additionalProperties": false,
+      "properties": {
+        "job_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "title": "Job Id"
+        },
+        "anomaly_threshold": {
+          "title": "Anomaly Threshold",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job_id",
+        "anomaly_threshold"
+      ],
+      "title": "ElasticMachineLearning",
+      "type": "object"
+    },
+    "ElasticNewTerms": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "history_window_start": {
+          "title": "History Window Start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fields",
+        "history_window_start"
+      ],
+      "title": "ElasticNewTerms",
+      "type": "object"
+    },
+    "ElasticOverrides": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "disable_fallback": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Disable Fallback"
+        }
+      },
+      "title": "ElasticOverrides",
+      "type": "object"
+    },
+    "ElasticRequiredField": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "keyword",
+            "constant_keyword",
+            "wildcard",
+            "text",
+            "match_only_text",
+            "long",
+            "integer",
+            "short",
+            "byte",
+            "unsigned_long",
+            "double",
+            "float",
+            "half_float",
+            "scaled_float",
+            "date",
+            "date_nanos",
+            "boolean",
+            "ip",
+            "version",
+            "binary",
+            "geo_point",
+            "geo_shape",
+            "object",
+            "flattened",
+            "nested"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "ElasticRequiredField",
+      "type": "object"
+    },
+    "ElasticRisk": {
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "mapping": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ElasticRiskScoreMapping"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mapping"
+        }
+      },
+      "title": "ElasticRisk",
+      "type": "object"
+    },
+    "ElasticRiskScoreMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "operator": {
+          "const": "equals",
+          "default": "equals",
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "default": "",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field"
+      ],
+      "title": "ElasticRiskScoreMapping",
+      "type": "object"
+    },
+    "ElasticScheduling": {
+      "additionalProperties": false,
+      "properties": {
+        "interval": {
+          "default": "5m",
+          "title": "Interval",
+          "type": "string"
+        },
+        "lookback": {
+          "default": "1m",
+          "title": "Lookback",
+          "type": "string"
+        },
+        "max_alerts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Alerts"
+        }
+      },
+      "title": "ElasticScheduling",
+      "type": "object"
+    },
+    "ElasticSeverity": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "string",
+          "title": "Default"
+        },
+        "mapping": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ElasticSeverityMapping"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mapping"
+        }
+      },
+      "required": [
+        "default"
+      ],
+      "title": "ElasticSeverity",
+      "type": "object"
+    },
+    "ElasticSeverityMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "operator": {
+          "const": "equals",
+          "default": "equals",
+          "title": "Operator",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "value",
+        "severity"
+      ],
+      "title": "ElasticSeverityMapping",
+      "type": "object"
+    },
+    "ElasticSuppression": {
+      "additionalProperties": false,
+      "properties": {
+        "group_by": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group By"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration"
+        },
+        "missing_fields_strategy": {
+          "default": "suppress",
+          "enum": [
+            "suppress",
+            "doNotSuppress"
+          ],
+          "title": "Missing Fields Strategy",
+          "type": "string"
+        }
+      },
+      "title": "ElasticSuppression",
+      "type": "object"
+    },
+    "ElasticThreatEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "type": {
+          "const": "mapping",
+          "default": "mapping",
+          "title": "Type",
+          "type": "string"
+        },
+        "negate": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Negate"
+        }
+      },
+      "required": [
+        "field",
+        "value"
+      ],
+      "title": "ElasticThreatEntry",
+      "type": "object"
+    },
+    "ElasticThreatGroup": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ElasticThreatEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "title": "ElasticThreatGroup",
+      "type": "object"
+    },
+    "ElasticThreatMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Index",
+          "type": "array"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "enum": [
+                "kuery",
+                "lucene"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "mapping": {
+          "items": {
+            "$ref": "#/$defs/ElasticThreatGroup"
+          },
+          "title": "Mapping",
+          "type": "array"
+        },
+        "filters": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filters"
+        },
+        "indicator_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Indicator Path"
+        }
+      },
+      "required": [
+        "index",
+        "query",
+        "mapping"
+      ],
+      "title": "ElasticThreatMatch",
+      "type": "object"
+    },
+    "ElasticThreshold": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Field",
+          "type": "array"
+        },
+        "value": {
+          "title": "Value",
+          "type": "integer"
+        },
+        "cardinality": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticCardinality"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cardinality"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "ElasticThreshold",
+      "type": "object"
+    },
+    "ElasticTimeline": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "title": "ElasticTimeline",
+      "type": "object"
+    },
     "HarfangLabConfig": {
       "additionalProperties": false,
       "properties": {
@@ -3066,16 +4402,8 @@
           "title": "Schema"
         },
         "status": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Status"
+          "title": "Status",
+          "type": "string"
         },
         "flags": {
           "anyOf": [
@@ -3175,23 +4503,11 @@
           ],
           "default": null,
           "title": "Yara"
-        },
-        "rule_id_bundle": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rule Id Bundle"
         }
       },
+      "required": [
+        "status"
+      ],
       "title": "HarfangLabConfig",
       "type": "object"
     },
@@ -3738,6 +5054,18 @@
           ],
           "default": null,
           "title": "Carbon Black Cloud"
+        },
+        "elastic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElasticConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Elastic"
         }
       },
       "title": "RuleConfigurations",
@@ -3787,11 +5115,7 @@
             }
           ],
           "default": null,
-          "title": "Responders",
-          "enum": [
-            ""
-          ],
-          "markdownEnumDescriptions": []
+          "title": "Responders"
         },
         "procedure": {
           "anyOf": [
@@ -4050,16 +5374,8 @@
           "title": "Schema"
         },
         "status": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Status"
+          "title": "Status",
+          "type": "string"
         },
         "flags": {
           "anyOf": [
@@ -4186,6 +5502,7 @@
         }
       },
       "required": [
+        "status",
         "query",
         "scheduling",
         "alert"
@@ -4422,16 +5739,8 @@
           "title": "Schema"
         },
         "status": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Status"
+          "title": "Status",
+          "type": "string"
         },
         "flags": {
           "anyOf": [
@@ -4505,24 +5814,10 @@
           ],
           "default": null,
           "title": "Details"
-        },
-        "rule_id_bundle": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "type": "integer"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rule Id Bundle"
         }
       },
       "required": [
+        "status",
         "condition"
       ],
       "title": "SentinelOneConfig",
@@ -4821,16 +6116,8 @@
           "title": "Schema"
         },
         "status": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Status"
+          "title": "Status",
+          "type": "string"
         },
         "flags": {
           "anyOf": [
@@ -4968,6 +6255,7 @@
         }
       },
       "required": [
+        "status",
         "query"
       ],
       "title": "SplunkConfig",

@@ -6,7 +6,7 @@ opentide's own JSON Schema export (``generate_schema_for_identifier``) plus
 Pydantic ``json_schema_extra`` flags that the schema emitter drops
 (``tide.template.multiline``, ``hide``, ``required``).
 
-Pin: opentide==0.5.0 (see scripts/requirements-opentide.txt).
+Pin: opentide==0.16.1 (see scripts/requirements-opentide.txt).
 
     python3 scripts/sync_opentide_schemas.py
 """
@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = ROOT / "catalogs" / "tide" / "schemas"
 GENERATED = ROOT / "catalogs" / "tide" / "generated" / "fields.json"
 HIGHLIGHTS = ROOT / "highlights" / "queries" / "tide" / "highlights.scm"
-EXPECTED_VERSION = "0.5.0"
+EXPECTED_VERSION = "0.16.1"
 
 REF_LEAVES = dict(_REF_LEAF_TO_TYPE)
 
@@ -48,8 +48,8 @@ def main() -> None:
     schemas: dict[str, dict[str, Any]] = {}
     for schema_id in identifiers_for_families(CORE_OBJECT_TYPES):
         schemas[schema_id] = generate_schema_for_identifier(schema_id)
-        family = schema_id.split("::", 1)[0]
-        path = SCHEMA_DIR / f"{family}.1.0.schema.json"
+        family, revision = schema_id.split("::", 1)
+        path = SCHEMA_DIR / f"{family}.{revision}.schema.json"
         path.write_text(dump_schema(schemas[schema_id]), encoding="utf-8")
         print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size} bytes)")
 
@@ -59,14 +59,34 @@ def main() -> None:
     visibility = SCHEMA_DIR / "visibility.1.0.schema.json"
     if visibility.exists():
         visibility.unlink()
-        print("removed visibility.1.0.schema.json (not registered in opentide 0.5.0)")
+        print("removed visibility.1.0.schema.json (not registered in opentide 0.16.1)")
+
+    # The field catalog is keyed by family, so a family with several revisions
+    # contributes its newest one: a superset of the older shapes.
+    latest: dict[str, str] = {}
+    for schema_id in schemas:
+        family, revision = schema_id.split("::", 1)
+        if family not in latest or revision_key(revision) > revision_key(latest[family].split("::", 1)[1]):
+            latest[family] = schema_id
 
     nodes: list[dict[str, Any]] = []
-    for schema_id, schema in schemas.items():
+    for schema_id in latest.values():
+        schema = schemas[schema_id]
         family = schema_id.split("::", 1)[0]
         model = resolve_model(schema_id)
         extras, defaults = model_facts(model)
         nodes.extend(flatten(schema, family, extras, defaults))
+
+    # A family's revisions share one field catalog (the newest), so metadata.schema must
+    # offer every revision rather than only the newest.
+    revisions: dict[str, list[str]] = {}
+    for schema_id in schemas:
+        revisions.setdefault(schema_id.split("::", 1)[0], []).append(schema_id)
+    for node in nodes:
+        if node["path"] == "metadata.schema":
+            ids = sorted(revisions[node["schema"]], key=lambda i: revision_key(i.split("::", 1)[1]))
+            node["enum"] = ids
+            node["const"] = ids[0] if len(ids) == 1 else None
 
     nodes.sort(key=lambda n: (n["schema"], n["path"]))
     payload = {
@@ -74,7 +94,7 @@ def main() -> None:
         "generator": "scripts/sync_opentide_schemas.py",
         "ref_leaves": REF_LEAVES,
         "gaps": [
-            "threat.chaining items are untyped maps in opentide 0.5.0, so relation and vector are not schema properties. Chaining-relation diagnostics still use catalogs/tide/vocabs/chaining_relations.toml.",
+            "threat.chaining items are untyped maps in opentide 0.16.1, so relation and vector are not schema properties. Chaining-relation diagnostics still use catalogs/tide/vocabs/chaining_relations.toml.",
             "Root status is a free string with default STAGING. Lifecycle values are deployment configuration, not a schema enum, so they are not offered as completions.",
             "enum:[\"\"] sentinels (empty vocabulary, including detection_model) are dropped and are not completions.",
         ],
@@ -86,6 +106,10 @@ def main() -> None:
     write_highlights(nodes)
     print(f"updated {HIGHLIGHTS.relative_to(ROOT)}")
     write_deprecations(version)
+
+
+def revision_key(revision: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in revision.split("."))
 
 
 def dump_schema(schema: dict[str, Any]) -> str:
@@ -499,7 +523,7 @@ def write_highlights(nodes: list[dict[str, Any]]) -> None:
 def write_deprecations(version: str) -> None:
     """``tide.meta.deprecation`` lives on the metaschema, not on JSON Schema nodes.
 
-    Root ``meta`` and Splunk ``advanced`` / ``security_domain`` are the 0.5.0 markers.
+    Root ``meta`` and Splunk ``advanced`` / ``security_domain`` are the markers that exist in opentide 0.16.1.
     """
     from opentide.generation.pydantic_metaschema import CORE_ROOT_EXTRAS
     from opentide.models.platform_schema import _PLATFORM_EXTRAS

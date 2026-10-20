@@ -1,7 +1,0 @@
-name = "Alert Handling Team"
-field = "responders"
-version = "1.0"
-description = "Team responsible to handle incoming security alerts"
-
-key = "name"
-keys = []
