@@ -32,6 +32,25 @@ _TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
 )
 
 
+def tenant_tls_verify(ssl_setting: object, *, platform: str, tenant: str) -> bool:
+    """A tenant's ``ssl`` as the ``verify`` flag for every call made to it.
+
+    Loading parses ``ssl`` to a boolean, but an ``ssl = "$VAR"`` whose
+    variable is unset stays the literal ``$VAR``; ``requests`` would read that
+    as the path of a CA bundle and fail with an unrelated ``OSError``.
+    """
+    if isinstance(ssl_setting, bool):
+        return ssl_setting
+    if isinstance(ssl_setting, str) and ssl_setting.startswith("$"):
+        raise ValueError(
+            f"{platform} tenant {tenant!r} setup: ssl is unset ({ssl_setting}). "
+            "Set that environment variable to true or false before a live check."
+        )
+    raise ValueError(
+        f"{platform} tenant {tenant!r} setup: ssl must be true or false, got {ssl_setting!r}"
+    )
+
+
 class TenantUnreachableError(Errors.TenantConnectionError):
     """A live check could not reach *host*, the address of *tenant* on *platform*.
 

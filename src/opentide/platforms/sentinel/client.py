@@ -23,6 +23,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
 from opentide.models.system_config import ConfigurationModels
+from opentide.platforms.transport import tenant_tls_verify
 
 logger = structlog.get_logger('opentide.platforms.sentinel.client')
 
@@ -163,7 +164,7 @@ class AlertRules:
 class SentinelClient:
     """What :meth:`SentinelService.connect` returns: the alert-rule operations."""
 
-    def __init__(self, credential: Any, subscription_id: str, verify: bool | str = True):
+    def __init__(self, credential: Any, subscription_id: str, verify: bool = True):
         session = requests.Session()
         session.verify = verify
         session.headers.update({'Accept': 'application/json'})
@@ -183,6 +184,7 @@ class SentinelService:
 
     def __init__(self, tenant_config: ConfigurationModels.Systems.Sentinel.Tenant):
         self.setup = tenant_config.setup
+        self.tenant_name = tenant_config.name
 
     def connect(self) -> SentinelClient:
         from azure.identity import ClientSecretCredential
@@ -195,8 +197,10 @@ class SentinelService:
             self.setup.azure_subscription_id,
             client='Azure',
         )
-        credentials = ClientSecretCredential(self.setup.azure_tenant_id, self.setup.azure_client_id, self.setup.azure_client_secret)
-        return SentinelClient(credentials, self.setup.azure_subscription_id, verify=self.setup.ssl)
+        verify = tenant_tls_verify(self.setup.ssl, platform='sentinel', tenant=self.tenant_name)
+        # The tenant's ssl covers the Entra ID token request as well as ARM.
+        credentials = ClientSecretCredential(self.setup.azure_tenant_id, self.setup.azure_client_id, self.setup.azure_client_secret, connection_verify=verify)
+        return SentinelClient(credentials, self.setup.azure_subscription_id, verify=verify)
 
 
 # Case-sensitive, like the Elastic parser: an upper-case `M` reads as months.

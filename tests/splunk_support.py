@@ -1,4 +1,4 @@
-"""A local HTTPS stand-in for a Splunk management port.
+"""A local HTTPS stand-in for a Splunk management port and other platform APIs.
 
 It serves a self-signed certificate, as an on-premises Splunk often does, and
 answers the endpoints opentide calls the way Splunk does: ``server/info``,
@@ -82,6 +82,10 @@ def _handler(state: SplunkStandIn) -> type[http.server.BaseHTTPRequestHandler]:
             state.requests.append((self.command, url.path, args))
             path = urllib.parse.unquote_plus(url.path)
 
+            if self.command == "POST" and path.endswith(("/oauth2/token", "/oauth2/v2.0/token")):
+                # CrowdStrike answers 201, Entra ID 200.
+                status = 201 if path.endswith("/oauth2/token") else 200
+                return self._reply(status, b'{"access_token": "token"}', "application/json")
             if path == _SERVER_INFO:
                 info = {"version": "9.3.0", "instance_type": "download", "serverName": "stand-in"}
                 return self._reply(200, _feed(_entry("server-info", info)))
@@ -165,6 +169,7 @@ def serve_splunk(directory: Path) -> Iterator[SplunkStandIn]:
     """Serve a stand-in on a free ``127.0.0.1`` port; its certificate names ``localhost``."""
     cert, key = _self_signed(directory)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(cert, key)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), http.server.BaseHTTPRequestHandler)
     state = SplunkStandIn(port=server.server_address[1])

@@ -10,6 +10,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
+from opentide.platforms.transport import tenant_tls_verify
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel_one.client')
 
@@ -76,9 +77,11 @@ class SentinelOneService:
         self.DEBUG = DebugEnvironment.ENABLED
         self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.SentinelOne.platform.identifier
         self.tenant_config = tenant_config
+        self.verify = tenant_tls_verify(tenant_config.setup.ssl, platform='sentinel_one', tenant=tenant_config.name)
         self.CUSTOM_DETECTION_RULES_ENDPOINT = self.tenant_config.setup.url + '/web/api/v2.1/cloud-detection/rules'
         self.CREATE_QUERY_ENDPOINT = self.tenant_config.setup.url + '/web/api/v2.1/dv/events/pq'
         self.session = requests.Session()
+        self.session.verify = self.verify
         self.session.headers.update({'Authorization': f'ApiToken {self.tenant_config.setup.api_token}', 'Content-Type': 'application/json'})
 
     def _http_errors(self, response: requests.Response, error) -> NoReturn:
@@ -111,7 +114,7 @@ class SentinelOneService:
         request['toDate'] = format_utc_z(now)
         request['fromDate'] = format_utc_z(from_date)
         request = json.dumps(request, indent=4)
-        response = self.session.post(url=self.CREATE_QUERY_ENDPOINT, verify=self.tenant_config.setup.ssl, data=request)
+        response = self.session.post(url=self.CREATE_QUERY_ENDPOINT, verify=self.verify, data=request)
         if response.status_code == 200:
             logger.info('the_query_was_able_to_run')
             return True
@@ -141,11 +144,11 @@ class SentinelOneService:
             logger.info('executing_api_call_to_update_star_custom_rule_with_id', detail=str(rule_id))
             endpoint += f'/{rule_id}'
             error = Errors.DetectionRuleCreationFailed
-            request = self.session.put(url=endpoint, verify=self.tenant_config.setup.ssl, data=rule_body)
+            request = self.session.put(url=endpoint, verify=self.verify, data=rule_body)
         else:
             logger.info('executing_api_call_to_create_star_custom_rule')
             error = Errors.DetectionRuleCreationFailed
-            request = self.session.post(url=endpoint, verify=self.tenant_config.setup.ssl, data=rule_body)
+            request = self.session.post(url=endpoint, verify=self.verify, data=rule_body)
         if request.status_code == 200:
             logger.info('created_rule_in_sentinelone', detail=str(request.json()))
             return int(request.json()['data']['id'])
@@ -156,7 +159,7 @@ class SentinelOneService:
         filter = {'filter': {'ids': [rule_id]}}
         filter = json.dumps(filter)
         logger.info('disabling_rule_with_id', detail=str(rule_id))
-        request = self.session.put(url=self.CUSTOM_DETECTION_RULES_ENDPOINT, verify=self.tenant_config.setup.ssl, data=filter)
+        request = self.session.put(url=self.CUSTOM_DETECTION_RULES_ENDPOINT, verify=self.verify, data=filter)
         match request.status_code:
             case 200:
                 logger.info('step_completed', detail=f'Disabled rule with id {rule_id} in SentinelOne', context=str(request.json()))
@@ -167,7 +170,7 @@ class SentinelOneService:
         filter = {'filter': {'ids': [rule_id]}}
         filter = json.dumps(filter)
         logger.info('deleting_rule_with_id', detail=str(rule_id))
-        request = self.session.delete(url=self.CUSTOM_DETECTION_RULES_ENDPOINT, verify=self.tenant_config.setup.ssl, data=filter)
+        request = self.session.delete(url=self.CUSTOM_DETECTION_RULES_ENDPOINT, verify=self.verify, data=filter)
         match request.status_code:
             case 200:
                 logger.info('step_completed', detail=f'Deleted rule with id {rule_id} in SentinelOne', context=str(request.json()))

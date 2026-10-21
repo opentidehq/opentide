@@ -95,7 +95,7 @@ opentide --proxy http://user:pass@proxy.internal:8080 validate --strict
 
 ### TLS verification
 
-Each tenant's `ssl` decides whether opentide verifies that tenant's TLS certificate. It defaults to `true`. Set `ssl = false` for a tenant whose certificate your machine does not trust, such as an on-premises Splunk with a self-signed certificate; prefer trusting its CA (see [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca)) and keeping `ssl = true`. The setting is per tenant, so one run can reach a cloud tenant with verification and an internal one without.
+Each tenant's `ssl` decides whether opentide verifies that tenant's TLS certificate. It defaults to `true`. Set `ssl = false` for a tenant whose certificate your machine does not trust, such as an on-premises Splunk with a self-signed certificate; prefer trusting its CA (see [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca)) and keeping `ssl = true`. The setting is per tenant and covers every request opentide makes to that tenant, sign-in included (the Entra ID token request for Sentinel and Defender, the OAuth token for CrowdStrike), so one run can reach a cloud tenant with verification and an internal one without.
 
 ```toml
 [[tenants]]
@@ -108,7 +108,7 @@ app = "search"
 token = "$SPLUNK_TOKEN"
 ```
 
-`ssl` takes `true` or `false`; from an environment variable, `true`/`false`, `yes`/`no`, `on`/`off` or `1`/`0` in any case. Any other value fails to load and names the tenant.
+`ssl` takes `true` or `false`; from an environment variable, `true`/`false`, `yes`/`no`, `on`/`off` or `1`/`0` in any case. Any other value fails to load and names the tenant. An `ssl = "$VAR"` whose variable is unset fails before the first request, naming the tenant and the variable.
 
 ## Deployment statuses and strategies
 
