@@ -7,6 +7,31 @@ description: Public package versions of the opentide DetectionOps engine on PyPI
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.17.2 — 21 October 2026
+
+Patch release. Nothing to regenerate. Splunk works again against a tenant with `ssl = false`, and rules with a `trigger` block deploy. Delete any pipeline step that patches the installed Splunk client or deployer with `sed`.
+
+**Install**
+
+```bash
+pip install opentide==0.17.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes**
+
+- **`ssl = false` is honoured.** A Splunk tenant with a self-signed certificate is reached without verifying it, as its `ssl` asks. 0.17.0 verified it anyway, so every deploy and live query check against it failed. Each tenant keeps its own setting, and `TIDE_SPLUNK_SSL_ENABLED` is no longer used.
+- **Trigger settings deploy.** `trigger.condition`, `comparator` and `threshold` are sent as `alert_type`, `alert_comparator` and `alert_threshold`; Splunk refused the old names with `Argument "quantity" is not supported by this handler`.
+- **Splunk's reason reaches the error.** A refused request reports Splunk's message instead of `b''`.
+- **`ssl` must be a boolean.** `true`/`false` (or `yes`/`no`, `on`/`off`, `1`/`0`, including from an environment variable) on every platform; any other value fails and names the tenant. See [Configuration → TLS verification](./configuration.md#tls-verification).
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.17.2/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.17.2)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.17.0 — 20 October 2026
 
 Minor release with **breaking changes**: deployment plans are removed. Replace `--plan` with `--strategy`, unset `DEPLOYMENT_PLAN`, replace each tenant's `deployment` key, and regenerate your CI pipeline. Each old setting fails with a message naming its replacement.

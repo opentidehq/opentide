@@ -18,6 +18,7 @@ from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.platforms.plugins import QueryValidator
 from opentide.platforms.splunk.client import (
+    HTTP_ERROR_STATUS,
     SplunkConnection,
     connect_splunk,
     create_query,
@@ -48,7 +49,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
                 query.strip(), enable_lookups=True, output_mode="json", reload_macros=True
             )
             status = response["status"]
-            if status == 19:
+            if status == HTTP_ERROR_STATUS:
                 if (reason := response.get("reason")) and reason == "Temporary Redirect":
                     if "Network Error" in str(response["body"].read()):
                         logger.warning("query_validation_timeout_assumed_valid", mdr_name=mdr_name)

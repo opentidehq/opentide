@@ -106,12 +106,15 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
 
         if splunk_config.trigger:
             trig = splunk_config.trigger
+            # The saved/searches REST endpoint names these alert_*; the
+            # savedsearches.conf names (counttype, relation, quantity) are
+            # refused with HTTP 400 "Argument ... is not supported".
             if trig.condition:
-                config["counttype"] = trig.condition
+                config["alert_type"] = trig.condition
             if trig.comparator:
-                config["relation"] = trig.comparator
+                config["alert_comparator"] = trig.comparator
             if trig.threshold is not None:
-                config["quantity"] = trig.threshold
+                config["alert_threshold"] = trig.threshold
             if trig.severity is not None:
                 config["alert.severity"] = trig.severity
             if trig.custom_condition:

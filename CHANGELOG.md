@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.17.2] — 2026-10-21
+
+Patch release. Nothing to regenerate. Splunk deploys and live query checks work again against a tenant with `ssl = false` (a self-signed certificate), and rules with a `trigger` block deploy. If your pipeline patches the installed `opentide/platforms/splunk/client.py` or `deployer.py` with `sed` to work around either bug, delete those steps: after upgrading their patterns match nothing. A patch, not a minor: each fix restores what the configuration already documented, and the stricter `ssl` check only refuses values that never worked.
+
+### Fixed
+
+- **A Splunk tenant with `ssl = false` still verified the certificate.** The tenant's `ssl` reached the HTTP handler through the `TIDE_SPLUNK_SSL_ENABLED` environment variable, which held the string `"False"`, and the handler tested the string, which is true. Against a Splunk with a self-signed certificate, every `deploy` and `validate query --live` failed on the TLS handshake, often reported as an XML `ParseError`. Each connection now carries its own tenant's `ssl`, so two tenants with different settings in one run each get their own. `TIDE_SPLUNK_SSL_ENABLED` is no longer read or written. `TIDE_SPLUNK_PLUGIN_ALLOW_HTTP_ERRORS` is gone the same way: once a live query check had set it, a later deploy in the same process stopped raising on HTTP errors.
+- **Splunk rules with a `trigger` block failed to deploy** with `HTTP 400 Bad Request -- Argument "quantity" is not supported by this handler.` The deployer sent the `savedsearches.conf` names `counttype`, `relation` and `quantity`, which the `saved/searches` REST endpoint refuses. `trigger.condition`, `comparator` and `threshold` now deploy as `alert_type`, `alert_comparator` and `alert_threshold`, the names the bundled `splunk.toml` defaults already used.
+- **A refused Splunk request lost Splunk's reason.** The handler read the error body into the log, then gave splunklib an empty one, so the raised error read `HTTP 400 Bad Request -- b''`. The error now carries Splunk's message.
+- **A tenant's `ssl` must be a boolean.** `ssl = "$SPLUNK_SSL"` resolves to the variable's text, and the text `false` verified the certificate too. `true`/`false`, `yes`/`no`, `on`/`off` and `1`/`0` (any case) now read as booleans on every platform. Any other value fails to load and names the tenant: `splunk tenant 'Primary' setup: ssl must be true or false, got 'sometimes'`.
+
+### Install
+
+```bash
+pip install opentide==0.17.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.17.0] — 2026-10-20
 
 Minor release with **breaking changes**: deployment plans are removed. A deploy now names the status strategy it carries out, and a tenant lists the strategies it accepts. Three things need action after upgrading; each old setting fails with a message naming its replacement.
@@ -1069,7 +1088,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.17.2...HEAD
+[0.17.2]: https://github.com/opentidehq/opentide/releases/tag/v0.17.2
 [0.17.0]: https://github.com/opentidehq/opentide/releases/tag/v0.17.0
 [0.16.1]: https://github.com/opentidehq/opentide/releases/tag/v0.16.1
 [0.16.0]: https://github.com/opentidehq/opentide/releases/tag/v0.16.0

@@ -81,7 +81,8 @@ def test_config_mdr_maps_scheduling_and_trigger(
     tenant = _tenant()
 
     config = deployer.config_mdr(rule, tenant.setup)
-    assert config["quantity"] == 3
+    assert config["alert_threshold"] == 3
+    assert not {"counttype", "relation", "quantity"} & set(config)
     assert "cron_schedule" in config
     assert "dispatch.earliest_time" in config
     assert config["action.notable.param.security_domain"] == "threat"

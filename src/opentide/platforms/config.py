@@ -78,6 +78,37 @@ def _tenant_targeting(data: dict[str, Any], *, where: str) -> dict[str, Any]:
     return targeting
 
 
+_SSL_WORDS = {
+    "true": True,
+    "yes": True,
+    "on": True,
+    "1": True,
+    "false": False,
+    "no": False,
+    "off": False,
+    "0": False,
+}
+
+
+def _tenant_ssl(value: Any, *, where: str) -> bool | str:
+    """Read a tenant's ``ssl`` as a boolean.
+
+    ``ssl = "$SPLUNK_SSL"`` resolves to the variable's text, and the string
+    ``"false"`` is truthy: left as is it would verify the certificate the
+    tenant asked not to. A placeholder whose variable is unset stays
+    ``$NAME``, as for every other setup key; ``connect_splunk`` refuses it.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        if value.startswith("$"):
+            return value
+        parsed = _SSL_WORDS.get(value.strip().lower())
+        if parsed is not None:
+            return parsed
+    raise ValueError(f"{where} setup: ssl must be true or false, got {value!r}")
+
+
 _PROXY_RETIRED = (
     "The proxy key is retired. Pass the URL with `opentide --proxy http://[user:pass@]host:port`."
 )
@@ -135,6 +166,7 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
                 )
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
+        setup_raw["ssl"] = _tenant_ssl(setup_raw["ssl"], where=where)
         kwargs: dict[str, Any] = {
             "name": data["name"],
             "description": data.get("description", ""),
@@ -196,7 +228,10 @@ def _load_splunk_tenants(
             setup_raw, where=f"splunk tenant {tenant_data.get('name', '<unnamed>')!r}"
         )
         setup = ConfigurationModels.Systems.Splunk.Tenant.Setup(
-            ssl=setup_raw.get("ssl", True),
+            ssl=_tenant_ssl(
+                setup_raw.get("ssl", True),
+                where=f"splunk tenant {tenant_data.get('name', '<unnamed>')!r}",
+            ),
             url=setup_raw["url"],
             port=setup_raw["port"],
             app=setup_raw["app"],
@@ -238,7 +273,10 @@ def _load_cbc_tenants(
             where=f"carbon_black_cloud tenant {tenant_data.get('name', '<unnamed>')!r}",
         )
         setup = ConfigurationModels.Systems.CarbonBlackCloud.Tenant.Setup(
-            ssl=setup_raw.get("ssl", True),
+            ssl=_tenant_ssl(
+                setup_raw.get("ssl", True),
+                where=f"carbon_black_cloud tenant {tenant_data.get('name', '<unnamed>')!r}",
+            ),
             url=setup_raw["url"],
             org_key=setup_raw["org_key"],
             token=setup_raw["token"],

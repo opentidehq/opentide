@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
 import ssl
 import urllib.request
 from abc import ABC
+from collections.abc import Callable
 from io import BytesIO
 from random import randrange
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.error import HTTPError
 
 import structlog
@@ -40,9 +40,6 @@ class SplunkConnection(ABC):
         else:
             self._init_from_legacy(SPLUNK_CONFIG)
 
-        if self.DEBUG:
-            self.SSL_ENABLED = DebugEnvironment.SSL_ENABLED
-
         self.SPLUNK_SUBSCHEMA = Opentide.TideSchemas.subschemas["systems"][
             self.DEPLOYER_IDENTIFIER
         ]["properties"]
@@ -53,16 +50,10 @@ class SplunkConnection(ABC):
             "High": 5,
             "Critical": 6,
         }
-        logger.info(
-            "ssl_has_been_set_to",
-            detail=str(self.SSL_ENABLED),
-            advice="This can be adjusted in splunk.toml with the setup.ssl keyword",
-        )
 
     def _init_from_tenants(self, splunk_config, first_tenant) -> None:
         setup = DebugHelpers.fetch_config_envvar(
             {
-                "ssl": first_tenant.setup.ssl,
                 "url": first_tenant.setup.url,
                 "port": first_tenant.setup.port,
                 "app": first_tenant.setup.app,
@@ -96,7 +87,6 @@ class SplunkConnection(ABC):
         token: str,
         unset_frequency: Literal["random", "current", "custom"] = "random",
     ) -> None:
-        self.SSL_ENABLED: bool = setup.get("ssl", True)
         self.SPLUNK_URL = setup.get("url", "")
         try:
             self.SPLUNK_PORT = int(setup.get("port", 8089))
@@ -194,33 +184,62 @@ def cron_to_timeframe(
     return cron
 
 
-def custom_request_handler(url, message):
-    method = message["method"].lower()
-    data = message.get("body", "") if method == "post" else None
-    headers = dict(message.get("headers", []))
-    req = urllib.request.Request(url, data, headers)
-    response = None
-    try:
-        if os.environ["TIDE_SPLUNK_SSL_ENABLED"]:
-            response = urllib.request.urlopen(req)
-        else:
-            response = urllib.request.urlopen(req, context=ssl._create_unverified_context())
-    except HTTPError as error:
-        response = error
-        if os.getenv("TIDE_SPLUNK_PLUGIN_ALLOW_HTTP_ERRORS") == "True":
-            response.code = 19
-        else:
-            logger.critical(
-                "fatal_error",
-                detail=f"Received HTTP Error Code {repr(error)}",
-                context=str(response.read()),
-            )
-    return {
-        "status": response.code,
-        "reason": response.msg,
-        "headers": dict(response.info()),
-        "body": BytesIO(response.read()),
-    }
+#: Status a handler reports for an HTTP error when the caller asked to see
+#: errors as responses (query validation reads the parse errors from the body).
+HTTP_ERROR_STATUS = 19
+
+RequestHandler = Callable[[str, dict[str, Any]], dict[str, Any]]
+
+
+def request_handler(*, verify: bool, allow_http_errors: bool = False) -> RequestHandler:
+    """A splunklib ``handler`` bound to one tenant's connection settings.
+
+    splunklib's own handler opens ``http.client`` connections, which ignore
+    ``HTTPS_PROXY`` and ``NO_PROXY``; ``urllib`` honours both, which
+    ``--proxy`` relies on. *verify* and *allow_http_errors* are captured
+    here rather than read from the process environment, so two tenants with
+    different ``ssl`` settings never share them.
+    """
+    context = None
+    if not verify:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
+    def handle(url: str, message: dict[str, Any]) -> dict[str, Any]:
+        method = message["method"].lower()
+        data = message.get("body", "") if method == "post" else None
+        headers = dict(message.get("headers", []))
+        req = urllib.request.Request(url, data, headers)
+        failed = False
+        try:
+            response = urllib.request.urlopen(req, context=context)
+            status = response.code
+        except HTTPError as error:
+            # Includes a 307 answering a POST, which urllib does not follow.
+            response = error
+            status = error.code
+            failed = True
+        body = response.read()
+        if failed:
+            if allow_http_errors:
+                status = HTTP_ERROR_STATUS
+            else:
+                # The body carries Splunk's reason; splunklib puts it in the
+                # HTTPError it raises, so it must still be returned.
+                logger.critical(
+                    "fatal_error",
+                    detail=f"Received HTTP Error Code {status} {response.msg}",
+                    context=str(body),
+                )
+        return {
+            "status": status,
+            "reason": response.msg,
+            "headers": dict(response.info()),
+            "body": BytesIO(body),
+        }
+
+    return handle
 
 
 def connect_splunk(
@@ -233,19 +252,28 @@ def connect_splunk(
 ) -> Service:
     from opentide.core.environment import reject_unsubstituted_placeholders
 
-    reject_unsubstituted_placeholders(host, port, token, app, client="Splunk")
+    reject_unsubstituted_placeholders(host, port, token, app, ssl_enabled, client="Splunk")
     from splunklib import client
 
+    if not isinstance(ssl_enabled, bool):
+        raise ValueError(
+            f"Splunk tenant ssl must be true or false, got {ssl_enabled!r}. "
+            "Set ssl in the tenant's [tenants.setup] table in splunk.toml."
+        )
     port = int(port)
     if allow_http_errors:
-        os.environ["TIDE_SPLUNK_PLUGIN_ALLOW_HTTP_ERRORS"] = "True"
         logger.info(
             "http_errors_will_be_returned_with_error_code_19",
             detail="Ensure to handle them appropriately",
         )
-    os.environ["TIDE_SPLUNK_SSL_ENABLED"] = "True" if ssl_enabled else "False"
+    if not ssl_enabled:
+        logger.info(
+            "splunk_tls_verification_disabled",
+            host=host,
+            advice="Set ssl = true in the tenant's setup once its certificate is trusted",
+        )
     service = client.connect(
-        handler=custom_request_handler,
+        handler=request_handler(verify=ssl_enabled, allow_http_errors=allow_http_errors),
         host=host,
         port=port,
         token=token,
