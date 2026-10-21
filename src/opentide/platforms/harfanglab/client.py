@@ -7,6 +7,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
+from opentide.platforms.transport import tenant_tls_verify
 import structlog
 logger = structlog.get_logger('opentide.platforms.harfanglab.client')
 
@@ -179,10 +180,12 @@ class HarfangLabService:
         self.DEBUG = DebugEnvironment.ENABLED
         self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.HarfangLab.platform.identifier
         self.tenant_config = tenant_config
+        self.verify = tenant_tls_verify(tenant_config.setup.ssl, platform='harfanglab', tenant=tenant_config.name)
         base_url = self.tenant_config.setup.url.rstrip('/')
         self.SIGMA_RULES_ENDPOINT = f'{base_url}/api/data/threat_intelligence/SigmaRule/'
         self.YARA_RULES_ENDPOINT = f'{base_url}/api/data/threat_intelligence/YaraFile/'
         self.session = requests.Session()
+        self.session.verify = self.verify
         self.session.headers.update({'Authorization': f'Token {self.tenant_config.setup.api_token}', 'Content-Type': 'application/json'})
 
     def _http_errors(self, response: requests.Response, error):
@@ -217,7 +220,7 @@ class HarfangLabService:
         rule_body = remove_none_values(asdict(rule))
         rule_body = json.dumps(rule_body)
         logger.info('creating_sigma_rule_in_harfanglab', detail=rule.name)
-        response = self.session.post(url=self.SIGMA_RULES_ENDPOINT, data=rule_body, verify=self.tenant_config.setup.ssl)
+        response = self.session.post(url=self.SIGMA_RULES_ENDPOINT, data=rule_body, verify=self.verify)
         if response.status_code in [200, 201]:
             logger.info('step_completed', detail=f'Created Sigma rule: {rule.name}')
             try:
@@ -244,7 +247,7 @@ class HarfangLabService:
         rule_body = json.dumps(rule_body)
         endpoint = f'{self.SIGMA_RULES_ENDPOINT}{rule_id}/'
         logger.info('step_in_progress', detail=f'Updating Sigma rule {rule_id} in HarfangLab', context_1=rule.name)
-        response = self.session.put(url=endpoint, data=rule_body, verify=self.tenant_config.setup.ssl)
+        response = self.session.put(url=endpoint, data=rule_body, verify=self.verify)
         if response.status_code == 200:
             logger.info('step_completed', detail=f'Updated Sigma rule: {rule.name}', context=str(rule_id))
         else:
@@ -259,7 +262,7 @@ class HarfangLabService:
         """
         endpoint = f'{self.SIGMA_RULES_ENDPOINT}{rule_id}/'
         logger.info('deleting_sigma_rule_from_harfanglab', detail=str(rule_id))
-        response = self.session.delete(url=endpoint, verify=self.tenant_config.setup.ssl)
+        response = self.session.delete(url=endpoint, verify=self.verify)
         if response.status_code in [200, 204]:
             logger.info('step_completed', detail=f'Deleted Sigma rule with ID {rule_id}')
         else:
@@ -275,7 +278,7 @@ class HarfangLabService:
         endpoint = f'{self.SIGMA_RULES_ENDPOINT}{rule_id}/'
         update_body = json.dumps({'global_state': 'disabled', 'enabled': False})
         logger.info('disabling_sigma_rule_in_harfanglab', detail=str(rule_id))
-        response = self.session.patch(url=endpoint, data=update_body, verify=self.tenant_config.setup.ssl)
+        response = self.session.patch(url=endpoint, data=update_body, verify=self.verify)
         if response.status_code == 200:
             logger.info('step_completed', detail=f'Disabled Sigma rule with ID {rule_id}')
         else:
@@ -351,12 +354,12 @@ class HarfangLabService:
         rule_body = json.dumps(rule_body)
         logger.info('creating_updating_sigma_rule_in_harfanglab', detail=rule.name, advice=str(rule_id))
         endpoint = f'{self.SIGMA_RULES_ENDPOINT}{rule_id}/'
-        response = self.session.put(url=endpoint, data=rule_body, verify=self.tenant_config.setup.ssl)
+        response = self.session.put(url=endpoint, data=rule_body, verify=self.verify)
         if response.status_code == 200:
             logger.info('step_completed', detail=f'Updated Sigma rule: {rule.name}', context=str(rule_id))
             return
         if response.status_code == 404:
-            response = self.session.post(url=self.SIGMA_RULES_ENDPOINT, data=rule_body, verify=self.tenant_config.setup.ssl)
+            response = self.session.post(url=self.SIGMA_RULES_ENDPOINT, data=rule_body, verify=self.verify)
             if response.status_code in [200, 201]:
                 logger.info('step_completed', detail=f'Created Sigma rule: {rule.name}', context=str(rule_id))
                 return
@@ -377,7 +380,7 @@ class HarfangLabService:
         rule_body_json = json.dumps(rule_body)
         logger.info('creating_updating_yara_rule_in_harfanglab', detail=rule.name, advice=str(rule_id))
         logger.debug('post_to', detail=self.YARA_RULES_ENDPOINT)
-        response = self.session.post(url=self.YARA_RULES_ENDPOINT, data=rule_body_json, verify=self.tenant_config.setup.ssl)
+        response = self.session.post(url=self.YARA_RULES_ENDPOINT, data=rule_body_json, verify=self.verify)
         logger.debug('event', detail=f'POST response [{response.status_code}]:', context_1=response.text[:1000] if response.text else 'empty')
         if response.status_code in [200, 201]:
             logger.info('step_completed', detail=f'Created/Updated YARA rule: {rule.name}', context=str(rule_id))
@@ -393,7 +396,7 @@ class HarfangLabService:
         """
         endpoint = f'{self.YARA_RULES_ENDPOINT}{rule_id}/'
         logger.info('deleting_yara_rule_from_harfanglab', detail=str(rule_id))
-        response = self.session.delete(url=endpoint, verify=self.tenant_config.setup.ssl)
+        response = self.session.delete(url=endpoint, verify=self.verify)
         if response.status_code in [200, 204]:
             logger.info('step_completed', detail=f'Deleted YARA rule with ID {rule_id}')
         else:

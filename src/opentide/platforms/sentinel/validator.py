@@ -10,6 +10,7 @@ from opentide.models.system_config import ConfigurationModels, TenantDeployment
 from opentide.core.errors import Errors
 from opentide.deployment import DetectionPlatforms
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
+from opentide.platforms.transport import tenant_tls_verify
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel.validator')
 
@@ -77,10 +78,11 @@ class SentinelQueryValidator(QueryValidator):
                 tenant_setup.azure_client_secret,
                 client='Azure',
             )
-            credentials = ClientSecretCredential(tenant_setup.azure_tenant_id, tenant_setup.azure_client_id, tenant_setup.azure_client_secret)
+            verify = tenant_tls_verify(tenant_setup.ssl, platform='sentinel', tenant=tenant_deployment.tenant.name)
+            credentials = ClientSecretCredential(tenant_setup.azure_tenant_id, tenant_setup.azure_client_id, tenant_setup.azure_client_secret, connection_verify=verify)
             logger.info('azure_credentials_prepared_for_tenant', detail=tenant_deployment.tenant.name, advice='Note: credentials are validated lazily on first API call')
             logger.info('initialising_logsqueryclient_for_tenant', detail=tenant_deployment.tenant.name)
-            service = LogsQueryClient(credential=credentials, connection_verify=tenant_setup.ssl)
+            service = LogsQueryClient(credential=credentials, connection_verify=verify)
             logger.info('logsqueryclient_ready_for_tenant', detail=tenant_deployment.tenant.name)
             for mdr in tenant_deployment.rules:
                 logger.info('validating_kql_query', detail=f'{mdr.name} ({mdr.metadata.uuid})')

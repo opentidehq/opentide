@@ -79,8 +79,6 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, closed_port: int) -> I
     repo = materialise_corpus(tmp_path / "corpus")
     for name in _ENVIRONMENT + _PROXIES + tuple(name.lower() for name in _PROXIES):
         monkeypatch.delenv(name, raising=False)
-    for name in ("TIDE_SPLUNK_SSL_ENABLED", "TIDE_SPLUNK_PLUGIN_ALLOW_HTTP_ERRORS"):
-        monkeypatch.setenv(name, "")
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(repo))
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(repo))
     config = repo / ".opentide/configurations/systems/splunk.toml"

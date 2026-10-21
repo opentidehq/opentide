@@ -7,6 +7,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
+from opentide.platforms.transport import tenant_tls_verify
 import structlog
 logger = structlog.get_logger('opentide.platforms.crowdstrike.client')
 
@@ -66,11 +67,13 @@ class CrowdstrikeService:
         self.DEBUG = DebugEnvironment.ENABLED
         self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.SentinelOne.platform.identifier
         self.tenant_config = tenant_config
+        self.verify = tenant_tls_verify(tenant_config.setup.ssl, platform='crowdstrike', tenant=tenant_config.name)
         BASE_URL = self._get_base_api(self.tenant_config.setup.api)
         self.OAUTH_TOKEN_ENDPOINT = BASE_URL + '/oauth2/token'
         self.CORRELATION_RULES_ENDPOINT = BASE_URL + '/correlation-rules/entities/rules/v1'
         self.access_token = self._get_access_token(self.tenant_config.setup.client_id, self.tenant_config.setup.client_secret)
         self.session = requests.Session()
+        self.session.verify = self.verify
         self.session.headers.update({'Authorization': f'Bearer {self.access_token}', 'Content-Type': 'application/json', 'accept': 'application/json'})
 
     def _get_base_api(self, domain: str) -> str:
@@ -92,7 +95,7 @@ class CrowdstrikeService:
 
     def _get_access_token(self, client_id: str, client_secret: str):
         data = {'client_id': client_id, 'client_secret': client_secret}
-        response = requests.post(data=data, url=self.OAUTH_TOKEN_ENDPOINT, verify=self.tenant_config.setup.ssl)
+        response = requests.post(data=data, url=self.OAUTH_TOKEN_ENDPOINT, verify=self.verify)
         if response.status_code == 201:
             # The token response is a bearer credential. `--json` raises the log
             # level to INFO, and CI captures stderr, so the body must not be logged.
@@ -119,7 +122,7 @@ class CrowdstrikeService:
     def create_detection_rule(self, rule: DetectionRule) -> str:
         rule_body = remove_none_values(asdict(rule))
         rule_body = json.dumps(rule_body)
-        response = self.session.post(url=self.CORRELATION_RULES_ENDPOINT, data=rule_body, verify=self.tenant_config.setup.ssl)
+        response = self.session.post(url=self.CORRELATION_RULES_ENDPOINT, data=rule_body, verify=self.verify)
         if response.status_code == 200:
             logger.info('event', detail=f'Successfully created rule {rule.name}', context_1=f'On tenant : {self.tenant_config.name}', advice=str(response.json()))
             try:
@@ -136,7 +139,7 @@ class CrowdstrikeService:
         rule_body = remove_none_values(asdict(rule))
         rule_body.update({'id': rule_id})
         rule_body = json.dumps([rule_body])
-        response = self.session.patch(url=self.CORRELATION_RULES_ENDPOINT, data=rule_body, verify=self.tenant_config.setup.ssl)
+        response = self.session.patch(url=self.CORRELATION_RULES_ENDPOINT, data=rule_body, verify=self.verify)
         if response.status_code == 200:
             logger.info('event', detail=f'Successfully update rule {rule.name} with id {rule_id} on {self.tenant_config.name}', context=str(response.json()))
         else:
@@ -146,7 +149,7 @@ class CrowdstrikeService:
 
     def delete_detection_rule(self, rule_id: str):
         params = {'ids': rule_id}
-        response = self.session.delete(params=params, url=self.CORRELATION_RULES_ENDPOINT, verify=self.tenant_config.setup.ssl)
+        response = self.session.delete(params=params, url=self.CORRELATION_RULES_ENDPOINT, verify=self.verify)
         if response.status_code == 200:
             logger.info('step_completed', detail=f'Removed detection rule with ID {rule_id}', context_1=f'Against tenant {self.tenant_config.name}')
             return

@@ -5,6 +5,7 @@ import structlog
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, Opentide
 from opentide.models.system_config import ConfigurationModels
+from opentide.platforms.transport import tenant_tls_verify
 
 logger = structlog.get_logger("opentide.platforms.carbon_black.client")
 
@@ -31,21 +32,11 @@ class CarbonBlackCloudConnection(ABC):
         else:
             self._init_from_legacy(CBC_CONFIG)
 
-        if self.DEBUG:
-            self.SSL_ENABLED = DebugEnvironment.SSL_ENABLED
-
-        logger.info(
-            "ssl_has_been_set_to",
-            detail=str(self.SSL_ENABLED),
-            advice="This can be adjusted in carbon_black_cloud.toml with the setup.ssl keyword",
-        )
-
     def _init_from_tenants(self, cbc_config) -> None:
         """Initialise from MDRv4 typed tenant configuration."""
         first_tenant = cbc_config.tenants[0]
         self.DEFAULT_WATCHLIST = first_tenant.setup.watchlist or ""
         self.CBC_URL = first_tenant.setup.url
-        self.SSL_ENABLED = first_tenant.setup.ssl
 
         secrets: dict[str, dict[str, str]] = {}
         organizations: list[str] = []
@@ -70,7 +61,6 @@ class CarbonBlackCloudConnection(ABC):
         CBC_SETUP = DebugHelpers.fetch_config_envvar(getattr(cbc_config, "setup", {}) or {})
         self.DEFAULT_WATCHLIST = CBC_SETUP.get("watchlist", "")
         self.CBC_URL = CBC_SETUP.get("url", "")
-        self.SSL_ENABLED = CBC_SETUP.get("ssl", True)
 
         secrets: dict[str, dict[str, str]] = {}
         cbc_secrets_error_flag = False
@@ -119,5 +109,7 @@ class CarbonBlackCloudService:
             url=tenant.setup.url,
             token=tenant.setup.token,
             org_key=tenant.setup.org_key,
-            ssl_verify=tenant.setup.ssl,
+            ssl_verify=tenant_tls_verify(
+                tenant.setup.ssl, platform="carbon_black_cloud", tenant=tenant.name
+            ),
         )

@@ -9,6 +9,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
+from opentide.platforms.transport import tenant_tls_verify
 import structlog
 logger = structlog.get_logger('opentide.platforms.defender_for_endpoint.client')
 
@@ -94,13 +95,15 @@ class DefenderForEndpointService:
         self.DETECTION_RULES_ENDPOINT = self.GRAPH_API_ENDPOINT + '/rules/detectionRules'
         self.HUNTING_QUERY_ENDPOINT = self.GRAPH_API_ENDPOINT + '/runHuntingQuery'
         self.tenant_config = tenant_config
+        self.verify = tenant_tls_verify(tenant_config.setup.ssl, platform='defender_for_endpoint', tenant=tenant_config.name)
         self.access_token = self._connect_to_tenant(self.tenant_config.setup.client_id, self.tenant_config.setup.tenant_id, self.tenant_config.setup.client_secret)
         self.session = requests.Session()
+        self.session.verify = self.verify
         self.session.headers.update({'Authorization': f'Bearer {self.access_token}', 'Content-Type': 'application/json'})
 
     def _connect_to_tenant(self, client_id: str, tenant_id: str, client_secret: str):
         data = {'client_id': client_id, 'client_secret': client_secret, 'grant_type': 'client_credentials', 'scope': 'https://graph.microsoft.com/.default'}
-        response = requests.post(data=data, url=self.OAUTH_TOKEN_ENDPOINT.format(tenant_id=tenant_id))
+        response = requests.post(data=data, url=self.OAUTH_TOKEN_ENDPOINT.format(tenant_id=tenant_id), verify=self.verify)
         if response.status_code == 200:
             # `--debug` logs at DEBUG and CI log readers are not the secret store.
             # Keep the bearer token and client secret out of the record.
@@ -151,7 +154,7 @@ class DefenderForEndpointService:
         Returns the full JSON response body on success.
         Raises on permission or query execution errors.
         """
-        request = self.session.post(url=self.HUNTING_QUERY_ENDPOINT, verify=self.tenant_config.setup.ssl, json={'Query': query, 'Timespan': timespan})
+        request = self.session.post(url=self.HUNTING_QUERY_ENDPOINT, verify=self.verify, json={'Query': query, 'Timespan': timespan})
         if request.status_code == 200:
             logger.info('query_was_able_to_run_on_tenant', detail=self.tenant_config.name)
             return request.json()
@@ -166,7 +169,7 @@ class DefenderForEndpointService:
         rule_body = json.dumps(asdict(rule))
         rule_body = rule_body.replace('odata_type', '@odata.type')
         rule_body = json.loads(rule_body)
-        request = self.session.post(url=self.DETECTION_RULES_ENDPOINT, verify=self.tenant_config.setup.ssl, json=rule_body)
+        request = self.session.post(url=self.DETECTION_RULES_ENDPOINT, verify=self.verify, json=rule_body)
         if request.status_code == 201:
             logger.info('created_rule_in_mde', detail=str(request.json()))
             return int(request.json()['id'])
@@ -191,7 +194,7 @@ class DefenderForEndpointService:
         rule_body = rule_body.replace('odata_type', '@odata.type')
         rule_body = json.loads(rule_body)
         url = self.DETECTION_RULES_ENDPOINT + f'/{rule_id}'
-        request = self.session.patch(url=url, verify=self.tenant_config.setup.ssl, json=rule_body)
+        request = self.session.patch(url=url, verify=self.verify, json=rule_body)
         if request.status_code == 200:
             logger.info('updated_rules_in_mde', detail=str(request.json()))
         else:
@@ -199,7 +202,7 @@ class DefenderForEndpointService:
             raise Errors.DetectionRuleUpdateFailed
 
     def delete_detection_rule(self, rule_id: int | str):
-        request = self.session.delete(url=self.DETECTION_RULES_ENDPOINT + f'/{rule_id}', verify=self.tenant_config.setup.ssl)
+        request = self.session.delete(url=self.DETECTION_RULES_ENDPOINT + f'/{rule_id}', verify=self.verify)
         if request.status_code == 204:
             logger.info('removed_detection_rule_from_mde_tenant')
         else:

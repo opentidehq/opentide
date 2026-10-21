@@ -29,6 +29,7 @@ class _Response:
 def _service(cls: type, name: str) -> object:
     service = cls.__new__(cls)
     service.tenant_config = SimpleNamespace(name=name, setup=SimpleNamespace(ssl=True))
+    service.verify = True
     service.OAUTH_TOKEN_ENDPOINT = "https://login.example/oauth2/token"
     return service
 

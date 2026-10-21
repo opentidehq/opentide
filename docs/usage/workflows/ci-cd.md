@@ -28,10 +28,10 @@ opentide setup ci gitlab --yes
 opentide setup ci azure --python-version 3.12 --yes
 ```
 
-`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines install **`opentide==`** the version that generated them (`opentide==0.17.0` from 0.14.1) and set `OPENTIDE_REPO_ROOT` for every job (GitHub workflow `env`, GitLab `variables`, Azure pipeline `variables`). Re-run `opentide setup ci github --yes` (or `gitlab` or `azure`) after you upgrade to pin the new release.
+`setup ci` discovers enabled platforms from `.opentide/configurations/platforms/` — it does not take `--platform` flags (those belong on `setup platforms` or the parent `opentide setup --platform` callback). Generated pipelines install **`opentide==`** the version that generated them (`opentide==0.17.1` from 0.14.1) and set `OPENTIDE_REPO_ROOT` for every job (GitHub workflow `env`, GitLab `variables`, Azure pipeline `variables`). Re-run `opentide setup ci github --yes` (or `gitlab` or `azure`) after you upgrade to pin the new release.
 
 <Callout type="info">
-Hand-written examples below pin `pip install 'opentide==0.17.0'` so a pipeline cannot float onto an accidental `0.x.dev…` local build. `opentide setup ci` is the source of truth.
+Hand-written examples below pin `pip install 'opentide==0.17.1'` so a pipeline cannot float onto an accidental `0.x.dev…` local build. `opentide setup ci` is the source of truth.
 </Callout>
 
 | Flag | Default | Purpose |
@@ -158,7 +158,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.17.0'
+      - run: pip install 'opentide==0.17.1'
       - run: opentide validate --strict
       - run: opentide validate query --platform sentinel --live --changed
 ```
@@ -185,7 +185,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.17.0'
+      - run: pip install 'opentide==0.17.1'
       - run: opentide deploy --strategy PREVIEW --dry-run   # preview in logs
       - run: opentide deploy --strategy PREVIEW
 ```
@@ -218,7 +218,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install 'opentide==0.17.0'
+      - run: pip install 'opentide==0.17.1'
       - run: opentide deploy --strategy RELEASE --dry-run
       - run: opentide deploy --strategy RELEASE
 ```
@@ -255,7 +255,7 @@ variables:
 default:
   image: python:3.12
   before_script:
-    - pip install 'opentide==0.17.0'
+    - pip install 'opentide==0.17.1'
 
 validate:
   stage: validate
@@ -293,7 +293,7 @@ steps:
     fetchDepth: 0
   - task: UsePythonVersion@0
     inputs: { versionSpec: '3.12' }
-  - script: pip install 'opentide==0.17.0'
+  - script: pip install 'opentide==0.17.1'
   - script: opentide validate --strict
   - script: opentide validate query --platform sentinel --live --changed
   - script: opentide deploy --strategy RELEASE

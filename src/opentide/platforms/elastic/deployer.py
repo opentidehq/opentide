@@ -28,6 +28,7 @@ from opentide.platforms.elastic.es_checks import (
     ElasticTenantError,
     run_elasticsearch_checks,
 )
+from opentide.platforms.transport import tenant_tls_verify
 
 logger = structlog.get_logger(__name__)
 
@@ -318,7 +319,9 @@ class ElasticDeploy:
                 elasticsearch_url=tenant.setup.elasticsearch_url,
                 api_key=getattr(tenant.setup, "api_key", ""),
                 space=getattr(tenant.setup, "space", "default"),
-                verify_ssl=getattr(tenant.setup, "ssl", True),
+                verify_ssl=tenant_tls_verify(
+                    getattr(tenant.setup, "ssl", True), platform="elastic", tenant=tenant.name
+                ),
             )
             try:
                 self.deploy_mdr(batch, client, tenant)
