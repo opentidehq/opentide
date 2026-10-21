@@ -55,11 +55,11 @@ State the rationale in the CHANGELOG upgrade cue.
 
 ## Required two-step flow
 
-**Step 1** — notes PR, merge to `development`.  
-**Step 1b** — CI green on that PR.  
-**Step 2** — `gh release create` on the merge commit (this publishes).  
-**Step 3** — prove PyPI.  
-**Step 4** — group the shipped issues under the release tracking issue and close it.
+- **Step 1** — notes PR, merge to `development`.
+- **Step 1b** — CI green on that PR.
+- **Step 2** — `gh release create` on the merge commit (this publishes).
+- **Step 3** — prove PyPI.
+- **Step 4** — group the shipped issues under the release tracking issue and close it.
 
 Do not skip Step 1. The tag must sit on the merge commit that **already contains** the changelog, usage notes, GitHub notes file, and install pins.
 
@@ -69,8 +69,8 @@ Do not skip Step 1. The tag must sit on the merge commit that **already contains
 
 Create a `docs:` (or `chore:`) PR against `development`.
 
-**Cloud agents:** branch `cursor/prepare-0.x.y-…`, Conventional Commit, PR to `development`.  
-**Local agents:** jj bookmark `docs/prepare-0.x.y`, `scripts/jj-submit.sh`.
+- **Cloud agents:** branch `cursor/prepare-0.x.y-…`, Conventional Commit, PR to `development`.
+- **Local agents:** branch `docs/prepare-0.x.y` from `origin/development`, `gh pr create --base development`.
 
 #### 1. `CHANGELOG.md` (Keep a Changelog)
 
@@ -268,4 +268,4 @@ Job needs `id-token: write` and `contents: read` (already set in the workflow).
 - [`CHANGELOG.md`](../../../CHANGELOG.md)
 - [`.github/release-notes/v0.1.3.md`](../../../.github/release-notes/v0.1.3.md) — notes template
 - [`docs-maintenance`](../docs-maintenance/SKILL.md) — Fumadocs pages in Step 1
-- `AGENTS.md` — trunk, Conventional Commits, `scripts/jj-submit.sh`
+- `AGENTS.md` — trunk, Conventional Commits, branch and PR workflow

@@ -10,7 +10,6 @@
 
 | Task | Skill |
 |------|-------|
-| Any VCS work (commit, push, rebase, stacked PRs) | [`.agents/skills/jujutsu/SKILL.md`](.agents/skills/jujutsu/SKILL.md) |
 | Dependencies, `uv run`, pre-commit, local CI | [`.agents/skills/uv/SKILL.md`](.agents/skills/uv/SKILL.md) |
 | Ruff lint / format failures | [`.agents/skills/ruff/SKILL.md`](.agents/skills/ruff/SKILL.md) |
 | ty type-check failures | [`.agents/skills/python-typing/SKILL.md`](.agents/skills/python-typing/SKILL.md) |
@@ -22,49 +21,44 @@
 | Documentation pages, Fumadocs structure, doc/code sync | [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md) |
 | PyPI release, changelog, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
 
-Stub pointers (content merged above): `jujutsu-stacked-prs`, `uv-package-manager`, `ruff-recursive-fix`.
+Stub pointers (content merged above): `uv-package-manager`, `ruff-recursive-fix`.
 
 ## Ground rules
 
 | Rule | Detail |
 |------|--------|
-| VCS | **jj** only — `jj describe`, `jj bookmark`, `jj git push --bookmark` |
-| PRs | Single: `scripts/jj-submit.sh`; stacked: `scripts/jj-stack-submit.sh` |
-| Trunk | `development@origin` |
+| VCS | git, one branch per change, cut from `origin/development` |
+| PRs | `gh pr create --base development`; a stacked PR targets the branch below it |
+| Trunk | `development` |
 | Scope | One concern per change / PR |
 | Commits | Conventional Commits (`feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `ci`) |
 
-Bookmark naming: `<type>/<short-slug>` (e.g. `feat/sentinel-query-cache`).
+Branch naming: `<type>/<short-slug>` (e.g. `feat/sentinel-query-cache`).
 
-**Forbidden for local coding agents:** `git commit`, `git add`, `git checkout -b`, `git merge`, `git rebase`, `git push`, Graphite (`gt`). Use **jj** instead (see above).
-
-**Cloud agents** (Cursor Cloud, GitHub Copilot Workspace, etc.): follow the platform git workflow when jj is unavailable; still use Conventional Commits and open PRs against `development`.
+Never push to `development` directly, force-push a branch someone else is working on, or rewrite history that is already on `origin`.
 
 ## Daily workflow
 
 ```bash
-scripts/jj-setup.sh                         # once per machine
 uv sync --group dev
 uv run pre-commit install --install-hooks   # once per clone
 
-jj git fetch
-jj new development@origin -m "feat(scope): …"   # or continue on @
-# … edit files (jj snapshots @ automatically) …
-jj describe -m "feat(scope): …"
-jj bookmark create feat/slug                  # if new
+git fetch origin
+git switch -c feat/slug origin/development
+# … edit files …
+git add <paths>
+git commit -m "feat(scope): …"
 scripts/ci-local.sh --full
-jj git push --bookmark feat/slug              # triggers pre-push hooks
-scripts/jj-submit.sh feat/slug                # or jj-stack-submit.sh for stacks
+git push -u origin feat/slug                  # triggers pre-push hooks
+gh pr create --base development --fill
 ```
 
 | Step | Command |
 |------|---------|
-| Status | `jj status`, `jj log` |
-| Rebase on trunk | `jj rebase -d development@origin` |
-| View stack | `scripts/jj-stack-status.sh` |
-| After merge | `jj git fetch` → `jj abandon <bookmark>` → `jj rebase -d development@origin` |
-
-Full jj reference: [`.agents/skills/jujutsu/SKILL.md`](.agents/skills/jujutsu/SKILL.md).
+| Status | `git status`, `git log --oneline origin/development..` |
+| Update from trunk | `git fetch origin && git rebase origin/development` (or merge, once the branch is shared) |
+| Stacked PR | branch from the PR below, then `gh pr create --base <that-branch>` |
+| After merge | `git switch development && git pull` → `git branch -d feat/slug` |
 
 ## CI, coverage, CodeQL, stack comments
 
@@ -113,7 +107,7 @@ Paths and excludes: `pyproject.toml` → `[tool.ruff]`, `[tool.ty.src]`. Skills:
 src/opentide/     # PyPI package (models, CLI, MCP, platforms, bundled data)
 tests/
 docs/
-scripts/          # ci-local.sh, codeql-local.sh, jj-*.sh
+scripts/          # ci-local.sh, codeql-local.sh, validate-docs.sh
 .agents/skills/
 ```
 

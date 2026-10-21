@@ -89,7 +89,7 @@ def build_stack_chain(
 def render_comment(chain: list[dict[str, Any]], current_number: int) -> str:
     lines = [
         MARKER,
-        "## Stack navigation (Jujutsu)",
+        "## Stack navigation",
         "",
         "This PR is part of a **stacked** change set. Merge **bottom → top**.",
         "",
@@ -116,11 +116,6 @@ def render_comment(chain: list[dict[str, Any]], current_number: int) -> str:
             "",
             f"**Merge order:** start at {merge_hint}, then work upward.",
             depth,
-            "",
-            (
-                "**Local (jj):** `scripts/jj-stack-status.sh` · "
-                "submit: `scripts/jj-stack-submit.sh <top-bookmark>`"
-            ),
             "",
             (
                 "_Updated automatically by "
@@ -171,7 +166,7 @@ def main() -> int:
         body = "\n".join(
             [
                 MARKER,
-                "## Stack navigation (Jujutsu)",
+                "## Stack navigation",
                 "",
                 "Standalone PR (base is trunk — not stacked on another open PR).",
                 "",
@@ -181,8 +176,6 @@ def main() -> int:
                     f"| `{current['headRefName']}` | [#{current['number']}]({current['url']}) "
                     f"| `{current['baseRefName']}` |"
                 ),
-                "",
-                "**Local (jj):** `scripts/jj-stack-status.sh`",
             ]
         )
     else:
