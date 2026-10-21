@@ -4,7 +4,7 @@
 
 **Entry point:** this file, then a domain skill from [`.agents/skills/`](.agents/skills/) when the task matches.
 
-**Repository:** [opentidehq/opentide](https://github.com/opentidehq/opentide). Trunk: `development` (`development@origin` in jj).
+**Repository:** [opentidehq/opentide](https://github.com/opentidehq/opentide). Trunk: `development`.
 
 ## Skills — when to read which
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Post or update a stack-navigation comment on a GitHub pull request.
 
-Used by .github/workflows/stack-comment.yml so every PR in a jj stack shows
+Used by .github/workflows/stack-comment.yml so every PR in a stack shows
 position, merge order, and links to sibling PRs.
 """
 
