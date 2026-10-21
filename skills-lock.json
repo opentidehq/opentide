@@ -19,18 +19,6 @@
       "skillPath": "plugins/python-development/skills/python-testing-patterns/SKILL.md",
       "computedHash": "1306eea409e7eff2288d7658806cb508f18339a0ee9a686d324a0fd2570eae55"
     },
-    "jujutsu": {
-      "source": "opentidehq/opentide",
-      "sourceType": "project",
-      "skillPath": ".agents/skills/jujutsu/SKILL.md",
-      "computedHash": "project-local"
-    },
-    "jujutsu-stacked-prs": {
-      "source": "opentidehq/opentide",
-      "sourceType": "project",
-      "skillPath": ".agents/skills/jujutsu-stacked-prs/SKILL.md",
-      "computedHash": "project-local-stub"
-    },
     "uv": {
       "source": "opentidehq/opentide",
       "sourceType": "project",
