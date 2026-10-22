@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -45,8 +46,8 @@ def missing_checkout_message(searched: Path) -> str:
 class DiffSource(Enum):
     """Which commits a run's changed rule files come from. Set by the CI context."""
 
-    CHANGE_REQUEST = "the pull or merge request, from its merge base"
-    PUSH = "the pushed commit, against its first parent"
+    CHANGE_REQUEST = "the pull or merge request, against its target branch"
+    PUSH = "the pushed commits, against the branch's previous tip"
     LAST_COMMIT = "the last commit, against its first parent"
 
 
@@ -245,13 +246,30 @@ def _production_base(repo: DulwichRepo) -> str | None:
     return parent
 
 
-def _merge_ref_base(repo: DulwichRepo, merge_sha: str | None) -> list | None:
-    """The merge base of a pull request merge commit's two parents.
+def _has_commit(repo: DulwichRepo, sha: str) -> bool:
+    """Whether the commit object *sha* is in the checkout (a shallow clone may lack it)."""
+    try:
+        repo.commit(sha)
+    except Exception:
+        return False
+    return True
 
-    ``refs/pull/<n>/merge`` has the base branch tip as first parent and the
-    pull request head as second, so it yields the request's base without the
-    head branch existing on origin, as for a pull request from a fork.
-    ``None`` when *merge_sha* is not a two-parent commit in the checkout.
+
+def _merge_first_parent(
+    repo: DulwichRepo, merge_sha: str | None, *, head: str | None = None
+) -> str | None:
+    """The first parent of the merge commit a pull or merge request run builds.
+
+    GitHub (``refs/pull/<n>/merge``), Azure Pipelines and GitLab merged
+    results pipelines build a commit that merges the request into the target
+    branch's tip, which is its first parent. Diffing from that parent yields
+    the request's own changes. Diffing from the merge base to the merge commit
+    also listed every rule the target branch changed since the request
+    branched off, and the run deployed, validated and attributed those to the
+    request.
+
+    ``None`` when *merge_sha* is not a two-parent commit whose first parent is
+    in the checkout, or when *head* is given and is not its second parent.
     """
     if not merge_sha:
         return None
@@ -261,7 +279,41 @@ def _merge_ref_base(repo: DulwichRepo, merge_sha: str | None) -> list | None:
         return None
     if len(parents) != 2:
         return None
-    return repo.merge_base(parents[0].hexsha, parents[1].hexsha)
+    first, second = parents
+    if head and second.hexsha != head:
+        return None
+    if not _has_commit(repo, first.hexsha):
+        return None
+    return first.hexsha
+
+
+def _github_push_before(repo: DulwichRepo) -> str | None:
+    """The branch tip before this push, from the push event's ``before``.
+
+    One push can land several commits (a rebase merge, a direct push of a
+    series), and ``HEAD^1`` covers only the last one. ``None`` when the event
+    has no usable ``before``: not a push, the branch's first push (all
+    zeros), or a commit the checkout does not have.
+    """
+    event_path = os.getenv("GITHUB_EVENT_PATH")
+    if not event_path:
+        return None
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    before = event.get("before") if isinstance(event, dict) else None
+    if not isinstance(before, str) or not before.strip("0"):
+        return None
+    if not _has_commit(repo, before):
+        logger.info("push_before_not_in_checkout", before=before)
+        return None
+    return before
+
+
+def _origin_sha(repo: DulwichRepo, ref: str) -> str:
+    """The commit *ref* (``origin/<branch>``) names."""
+    return repo._resolve_sha(ref).decode("ascii")
 
 
 def _not_a_ci_diff_source(source: DiffSource) -> Exception:
@@ -278,10 +330,14 @@ def _require_origin_ref(repo: DulwichRepo, ref: str) -> None:
 def diff_calculation(source: DiffSource) -> list:
     """Repo-relative paths added, renamed or modified by the run's commits.
 
-    *source* is :class:`DiffSource`: a pull or merge request diffs from its
-    merge base to its tip, a push from HEAD's first parent (GitLab: the
-    previous tip), and a local run from the last commit's first parent.
-    Deleted files are left out: there is nothing left to deploy.
+    *source* is :class:`DiffSource`. A pull or merge request run that builds
+    the request merged into its target branch diffs that merge commit from
+    its first parent, the target's tip; one that builds the request's head
+    diffs it from the merge base. A push diffs from the branch's previous tip
+    (GitHub: the event's ``before``; GitLab: ``CI_COMMIT_BEFORE_SHA``), else
+    from HEAD's first parent, as on Azure. A local run diffs the last commit
+    from its first parent. Deleted files are left out: there is nothing left
+    to deploy.
     """
     TARGET_CI = CIEnvironment().environment
 
@@ -302,10 +358,16 @@ def diff_calculation(source: DiffSource) -> list:
             LATEST_COMMIT = os.getenv("GITHUB_SHA")
 
             if source is DiffSource.PUSH:
-                base = _production_base(repo)
-                if base is None:
-                    return []
-                BASE_COMMIT = base
+                before = _github_push_before(repo)
+                if before is not None:
+                    logger.info("push_diff_base", base=before, source="push event before")
+                    BASE_COMMIT = before
+                else:
+                    base = _production_base(repo)
+                    if base is None:
+                        return []
+                    logger.info("push_diff_base", base=base, source="first parent of HEAD")
+                    BASE_COMMIT = base
 
             elif source is DiffSource.CHANGE_REQUEST:
                 source_branch = os.getenv("GITHUB_HEAD_REF")
@@ -322,39 +384,41 @@ def diff_calculation(source: DiffSource) -> list:
                     )
                     raise Exception(message)
 
-                repo.remotes.origin.fetch()
+                # ``pull_request_target`` runs on the base branch: GITHUB_SHA is
+                # that branch's tip, which may be any merge, not this request's.
+                merge_parent = None
+                if os.getenv("GITHUB_EVENT_NAME") != "pull_request_target":
+                    merge_parent = _merge_first_parent(repo, LATEST_COMMIT)
 
-                source_branch = source_branch.replace("refs/heads/", "")
-                source_branch = "origin/" + source_branch
-                target_branch = "origin/" + target_branch
-                logger.info(
-                    "identified_source_and_target_branch_in_the_pull_request",
-                    detail=f"source: {source_branch} -> target: {target_branch}",
-                )
-                _require_origin_ref(repo, target_branch)
-                try:
-                    _require_origin_ref(repo, source_branch)
-                except Exception:
-                    # A fork's branch is not on origin. The pull request's merge
-                    # ref, which actions/checkout checks out, has both sides.
-                    base_commit = _merge_ref_base(repo, os.getenv("GITHUB_SHA"))
-                    if base_commit is None:
-                        raise
+                if merge_parent is not None:
+                    BASE_COMMIT = merge_parent
                 else:
+                    repo.remotes.origin.fetch()
+
+                    source_branch = source_branch.replace("refs/heads/", "")
+                    source_branch = "origin/" + source_branch
+                    target_branch = "origin/" + target_branch
+                    logger.info(
+                        "identified_source_and_target_branch_in_the_pull_request",
+                        detail=f"source: {source_branch} -> target: {target_branch}",
+                    )
+                    _require_origin_ref(repo, target_branch)
+                    _require_origin_ref(repo, source_branch)
                     base_commit = repo.merge_base(target_branch, source_branch)
 
-                if base_commit:
-                    BASE_COMMIT = base_commit[0].hexsha
-                else:
-                    message = (
-                        "You may not have a sufficient Checkout Depth configuration | "
-                        "If you run very old Pull Requests, this setting may need to be "
-                        "increased, or reopen a PR"
-                    )
-                    logger.critical(
-                        "could_not_identify_the_base_of_the_pull_request", detail=message
-                    )
-                    raise Exception(message)
+                    if base_commit:
+                        BASE_COMMIT = base_commit[0].hexsha
+                        LATEST_COMMIT = _origin_sha(repo, source_branch)
+                    else:
+                        message = (
+                            "You may not have a sufficient Checkout Depth configuration | "
+                            "If you run very old Pull Requests, this setting may need to be "
+                            "increased, or reopen a PR"
+                        )
+                        logger.critical(
+                            "could_not_identify_the_base_of_the_pull_request", detail=message
+                        )
+                        raise Exception(message)
             else:
                 raise _not_a_ci_diff_source(source)
 
@@ -374,21 +438,17 @@ def diff_calculation(source: DiffSource) -> list:
                     BASE_COMMIT = base
             elif source is DiffSource.CHANGE_REQUEST:
                 BASE_COMMIT = os.getenv("CI_MERGE_REQUEST_DIFF_BASE_SHA")
-                # Allows the proper base commit calculation for Merged Result pipelines
-                if os.getenv("CI_MERGE_REQUEST_EVENT_TYPE") == "merged_result":
+                # Merged results and merge train pipelines build a commit that
+                # merges the request into the target branch; diff it from the
+                # target side, as for GitHub and Azure.
+                if os.getenv("CI_MERGE_REQUEST_EVENT_TYPE") in ("merged_result", "merge_train"):
                     logger.info("currently_running_a_diff_calculation_for_merge_results")
-                    for commit in repo.iter_commits():
-                        if commit.hexsha == os.getenv("CI_COMMIT_BEFORE_SHA"):
-                            if len(commit.parents) > 1:
-                                mr_correct_parent = commit.parents[1]
-                                logger.info(
-                                    "current_evaluating_commit_and_found_parent",
-                                    detail=str(f"{commit.hexsha} | {commit.message}")
-                                    + " | "
-                                    + str(str(mr_correct_parent)),
-                                )
-                                LATEST_COMMIT = mr_correct_parent.hexsha
-                            break
+                    source_head = os.getenv("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA") or None
+                    merge_parent = _merge_first_parent(repo, LATEST_COMMIT, head=source_head)
+                    if merge_parent is not None:
+                        BASE_COMMIT = merge_parent
+                    elif source_head:
+                        LATEST_COMMIT = source_head
             else:
                 logger.critical("illegal_diff_source")
                 raise _not_a_ci_diff_source(source)
@@ -419,31 +479,40 @@ def diff_calculation(source: DiffSource) -> list:
                     )
                     raise Exception(message)
 
-                repo.remotes.origin.fetch()
-                source_branch = source_branch.replace("refs/heads/", "")
-                source_branch = "origin/" + source_branch
-                target_branch = "origin/" + target_branch
-                logger.info(
-                    "identified_source_and_target_branch_in_the_pull_request",
-                    detail=f"source: {source_branch} -> target: {target_branch}",
+                merge_parent = _merge_first_parent(
+                    repo,
+                    LATEST_COMMIT,
+                    head=os.getenv("SYSTEM_PULLREQUEST_SOURCECOMMITID") or None,
                 )
-                _require_origin_ref(repo, target_branch)
-                _require_origin_ref(repo, source_branch)
-                base_commit = repo.merge_base(target_branch, source_branch)
-
-                if base_commit:
-                    BASE_COMMIT = base_commit[0].hexsha
+                if merge_parent is not None:
+                    BASE_COMMIT = merge_parent
                 else:
-                    message = (
-                        "You may not have a sufficient Opentide.Repo.Checkout.Depth configuration"
-                        " | "
-                        "If you run very old Pull Requests, this setting may need to be "
-                        "increased, or reopen a PR"
+                    repo.remotes.origin.fetch()
+                    source_branch = source_branch.replace("refs/heads/", "")
+                    source_branch = "origin/" + source_branch
+                    target_branch = "origin/" + target_branch
+                    logger.info(
+                        "identified_source_and_target_branch_in_the_pull_request",
+                        detail=f"source: {source_branch} -> target: {target_branch}",
                     )
-                    logger.critical(
-                        "could_not_identify_the_base_of_the_pull_request", detail=message
-                    )
-                    raise Exception(message)
+                    _require_origin_ref(repo, target_branch)
+                    _require_origin_ref(repo, source_branch)
+                    base_commit = repo.merge_base(target_branch, source_branch)
+
+                    if base_commit:
+                        BASE_COMMIT = base_commit[0].hexsha
+                        LATEST_COMMIT = _origin_sha(repo, source_branch)
+                    else:
+                        message = (
+                            "You may not have a sufficient Opentide.Repo.Checkout.Depth"
+                            " configuration | "
+                            "If you run very old Pull Requests, this setting may need to be "
+                            "increased, or reopen a PR"
+                        )
+                        logger.critical(
+                            "could_not_identify_the_base_of_the_pull_request", detail=message
+                        )
+                        raise Exception(message)
 
             else:
                 logger.critical("illegal_diff_source")
