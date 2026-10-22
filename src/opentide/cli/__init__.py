@@ -19,6 +19,7 @@ from opentide.cli.enums import (
     LintCheck,
     ValidateCheck,
 )
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.mcp_app import mcp_app
 from opentide.cli.output import (
     CommandResult,
@@ -260,6 +261,7 @@ def _emit_docs(
     objectives: bool = False,
     changed: bool = False,
 ) -> None:
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     cli.apply_environment()
     if changed and (scope is not None or rules or threats or objectives):
@@ -290,6 +292,7 @@ def generate_docs_all(
 ) -> None:
     """Generate documentation (all scopes, then index)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     _emit_docs(
         ctx,
@@ -470,6 +473,7 @@ def validate_group(
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     cli = get_context(ctx)
     valid_object_types = {"rule", "threat", "objective"}
@@ -542,6 +546,7 @@ def validate_query_cmd(
     ),
 ) -> None:
     """Query validation checks the tenant. Pass --live."""
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     _refuse_removed_plan(cli, plan)
     result = validate_query_platform(
@@ -613,6 +618,7 @@ def deploy_cmd(
     --strategy PREVIEW; the default-branch job runs --strategy RELEASE.
     """
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     cli = get_context(ctx)
     _refuse_removed_plan(cli, plan)
@@ -643,6 +649,7 @@ def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
     from opentide.core.index_manager import IndexManager
     from opentide.registry.discovery import discover_workspace
 
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     cli.apply_environment()
     workspace = discover_workspace()
@@ -655,6 +662,7 @@ def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
 
 @deploy_app.command("replay-state", hidden=True)
 def deploy_replay_state_cmd(
+    ctx: typer.Context,
     state_commit: str = typer.Argument(..., help="Commit whose deployment-state changes to replay"),
 ) -> None:
     """Replay one commit's deployment-state changes onto the checkout (CI write-back).
@@ -665,6 +673,7 @@ def deploy_replay_state_cmd(
     """
     from opentide.ci.state_replay import main as replay_main
 
+    refuse_dropped(ctx)
     raise typer.Exit(replay_main([state_commit]))
 
 
@@ -673,6 +682,7 @@ def deploy_metadata_cmd(
     ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")
 ) -> None:
     """Reserved for a future metadata deployment implementation."""
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     emit_error(
         cli,
@@ -701,6 +711,7 @@ def document_cmd(
     # Each `document <scope>` subcommand names its own replacement; warning here
     # too would print two DEPRECATED lines for one invocation.
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     _deprecate("opentide document", "opentide generate docs")
     _emit_docs(ctx, output=output, flavor=flavor)

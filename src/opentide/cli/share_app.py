@@ -5,6 +5,7 @@ from __future__ import annotations
 import typer
 
 from opentide.cli.context import get_context
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import CommandResult, emit_result
 from opentide.cli.services.share import render_share, run_share
 
@@ -29,6 +30,7 @@ def _dispatch(
     yes: bool,
     changed: bool = False,
 ) -> None:
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     payload = run_share(
         cli,
@@ -77,6 +79,7 @@ def share_default(
 ) -> None:
     """Publish objects to every enabled sharing target (same as ``share push``)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     _dispatch(
         ctx,
