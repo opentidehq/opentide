@@ -177,9 +177,6 @@ extend-immutable-calls = ["typer.Option", "typer.Argument"]
 include = ["src/opentide"]
 exclude = [
     "src/opentide/mutation",
-    "src/opentide/documentation",
-    "src/opentide/extraction",
-    "src/opentide/export",
     "src/opentide/cli",
     "src/opentide/deployment",
     "src/opentide/platforms/crowdstrike",
