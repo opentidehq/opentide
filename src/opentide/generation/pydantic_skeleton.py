@@ -4,6 +4,10 @@ Templates are line-oriented YAML. Optional fields are the same YAML as the
 required render with ``#`` hugging each key (issue #223). Nested optionals
 are not commented again. JSON Schema ``$ref`` / ``properties`` walking is
 not used here.
+
+Optional ``metadata`` keys that ``opentide lint`` requires (``lint.toml``
+``[metadata].required``) render live, so a scaffolded object shows every key
+lint will ask for (issue #489).
 """
 
 from __future__ import annotations
@@ -11,15 +15,17 @@ from __future__ import annotations
 import json
 import re
 import types
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
+from opentide.core.lint_config import DEFAULT_REQUIRED_METADATA
 from opentide.models.base import TideModel, field_json_schema_extra
+from opentide.models.metadata import ObjectMetadata
 
 _YAML_UNQUOTED = re.compile(r"^[A-Za-z0-9_./:+-]+$")
 _YAML_RESERVED = frozenset({"true", "false", "null", "yes", "no", "on", "off", "y", "n", "~"})
@@ -36,6 +42,8 @@ class RenderOptions:
     schema_id: str | None = None
     required_only: bool = False
     comment_optionals: bool = True
+    #: ``metadata`` keys rendered as required although the model makes them optional.
+    required_metadata: frozenset[str] = frozenset(DEFAULT_REQUIRED_METADATA)
 
 
 def render_model_template(
@@ -44,6 +52,7 @@ def render_model_template(
     schema_id: str | None = None,
     required_only: bool = False,
     indent: int = 0,
+    required_metadata: Iterable[str] | None = None,
 ) -> str:
     """Return a YAML skeleton for *model* in declaration order.
 
@@ -51,8 +60,17 @@ def render_model_template(
     Optional fields emit as commented blocks: the subtree is live YAML with
     ``#`` hugging each key (nested optionals are not commented again). Path
     fields and ``tide.template.hide`` are omitted. No YAML ``null`` tokens.
+
+    *required_metadata* names the ``metadata`` keys to render as required, as
+    ``lint.toml`` ``[metadata].required`` does; ``None`` uses lint's default.
     """
-    options = RenderOptions(schema_id=schema_id, required_only=required_only)
+    options = RenderOptions(
+        schema_id=schema_id,
+        required_only=required_only,
+        required_metadata=frozenset(
+            DEFAULT_REQUIRED_METADATA if required_metadata is None else required_metadata
+        ),
+    )
     lines = _render_model(model, indent=indent, options=options, depth=0)
     text = "\n".join(lines)
     if text:
@@ -66,11 +84,14 @@ def write_model_template(
     *,
     schema_id: str | None = None,
     indent: int = 0,
+    required_metadata: Iterable[str] | None = None,
 ) -> None:
     """Write ``render_model_template`` output to *path*."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        render_model_template(model, schema_id=schema_id, indent=indent),
+        render_model_template(
+            model, schema_id=schema_id, indent=indent, required_metadata=required_metadata
+        ),
         encoding="utf-8",
     )
 
@@ -107,15 +128,19 @@ def _render_model(
         return []
     identifier = getattr(model, "__schema_identifier__", None)
     if isinstance(identifier, str) and identifier:
-        options = RenderOptions(
-            schema_id=identifier,
-            required_only=options.required_only,
-            comment_optionals=options.comment_optionals,
-        )
+        options = replace(options, schema_id=identifier)
+    promoted = options.required_metadata if issubclass(model, ObjectMetadata) else frozenset()
     lines: list[str] = []
     first = True
     for name, field in model.model_fields.items():
-        field_lines = _render_field(name, field, indent=indent, options=options, depth=depth)
+        field_lines = _render_field(
+            name,
+            field,
+            indent=indent,
+            options=options,
+            depth=depth,
+            promoted=_yaml_key(name, field) in promoted,
+        )
         if not field_lines:
             continue
         if _wants_spacer(field) and not first and (not lines or lines[-1] != ""):
@@ -132,6 +157,7 @@ def _render_field(
     indent: int,
     options: RenderOptions,
     depth: int,
+    promoted: bool = False,
 ) -> list[str]:
     extras = field_json_schema_extra(field)
     if extras.get("tide.template.hide"):
@@ -142,7 +168,7 @@ def _render_field(
     core, _nullable = _unwrap_annotation(annotation)
     if _is_path_type(core):
         return []
-    required = _field_is_required(field)
+    required = promoted or _field_is_required(field)
     if options.required_only and not required:
         return []
 
@@ -150,11 +176,7 @@ def _render_field(
     child_options = options
     comment_now = not required and options.comment_optionals
     if comment_now:
-        child_options = RenderOptions(
-            schema_id=options.schema_id,
-            required_only=options.required_only,
-            comment_optionals=False,
-        )
+        child_options = replace(options, comment_optionals=False)
     value_lines = _render_value(
         name,
         field,
