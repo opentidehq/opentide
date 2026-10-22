@@ -9,7 +9,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
-from opentide.platforms.transport import tenant_tls_verify
+from opentide.platforms.transport import TenantSession, tenant_tls_verify
 import structlog
 logger = structlog.get_logger('opentide.platforms.defender_for_endpoint.client')
 
@@ -97,8 +97,7 @@ class DefenderForEndpointService:
         self.tenant_config = tenant_config
         self.verify = tenant_tls_verify(tenant_config.setup.ssl, platform='defender_for_endpoint', tenant=tenant_config.name)
         self.access_token = self._connect_to_tenant(self.tenant_config.setup.client_id, self.tenant_config.setup.tenant_id, self.tenant_config.setup.client_secret)
-        self.session = requests.Session()
-        self.session.verify = self.verify
+        self.session = TenantSession(verify=self.verify)
         self.session.headers.update({'Authorization': f'Bearer {self.access_token}', 'Content-Type': 'application/json'})
 
     def _connect_to_tenant(self, client_id: str, tenant_id: str, client_secret: str):

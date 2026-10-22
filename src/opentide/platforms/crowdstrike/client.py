@@ -7,7 +7,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
-from opentide.platforms.transport import tenant_tls_verify
+from opentide.platforms.transport import TenantSession, tenant_tls_verify
 import structlog
 logger = structlog.get_logger('opentide.platforms.crowdstrike.client')
 
@@ -72,8 +72,7 @@ class CrowdstrikeService:
         self.OAUTH_TOKEN_ENDPOINT = BASE_URL + '/oauth2/token'
         self.CORRELATION_RULES_ENDPOINT = BASE_URL + '/correlation-rules/entities/rules/v1'
         self.access_token = self._get_access_token(self.tenant_config.setup.client_id, self.tenant_config.setup.client_secret)
-        self.session = requests.Session()
-        self.session.verify = self.verify
+        self.session = TenantSession(verify=self.verify)
         self.session.headers.update({'Authorization': f'Bearer {self.access_token}', 'Content-Type': 'application/json', 'accept': 'application/json'})
 
     def _get_base_api(self, domain: str) -> str:

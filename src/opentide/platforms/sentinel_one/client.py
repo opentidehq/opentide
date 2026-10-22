@@ -10,7 +10,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
-from opentide.platforms.transport import tenant_tls_verify
+from opentide.platforms.transport import TenantSession, tenant_tls_verify
 import structlog
 logger = structlog.get_logger('opentide.platforms.sentinel_one.client')
 
@@ -80,8 +80,7 @@ class SentinelOneService:
         self.verify = tenant_tls_verify(tenant_config.setup.ssl, platform='sentinel_one', tenant=tenant_config.name)
         self.CUSTOM_DETECTION_RULES_ENDPOINT = self.tenant_config.setup.url + '/web/api/v2.1/cloud-detection/rules'
         self.CREATE_QUERY_ENDPOINT = self.tenant_config.setup.url + '/web/api/v2.1/dv/events/pq'
-        self.session = requests.Session()
-        self.session.verify = self.verify
+        self.session = TenantSession(verify=self.verify)
         self.session.headers.update({'Authorization': f'ApiToken {self.tenant_config.setup.api_token}', 'Content-Type': 'application/json'})
 
     def _http_errors(self, response: requests.Response, error) -> NoReturn:

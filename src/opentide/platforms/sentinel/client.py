@@ -23,7 +23,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
 from opentide.models.system_config import ConfigurationModels
-from opentide.platforms.transport import tenant_tls_verify
+from opentide.platforms.transport import TenantSession, tenant_tls_verify
 
 logger = structlog.get_logger('opentide.platforms.sentinel.client')
 
@@ -165,8 +165,7 @@ class SentinelClient:
     """What :meth:`SentinelService.connect` returns: the alert-rule operations."""
 
     def __init__(self, credential: Any, subscription_id: str, verify: bool = True):
-        session = requests.Session()
-        session.verify = verify
+        session = TenantSession(verify=verify)
         session.headers.update({'Accept': 'application/json'})
         retries = Retry(
             total=3,

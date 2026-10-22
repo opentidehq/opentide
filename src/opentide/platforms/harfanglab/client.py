@@ -7,7 +7,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.core.errors import Errors
-from opentide.platforms.transport import tenant_tls_verify
+from opentide.platforms.transport import TenantSession, tenant_tls_verify
 import structlog
 logger = structlog.get_logger('opentide.platforms.harfanglab.client')
 
@@ -184,8 +184,7 @@ class HarfangLabService:
         base_url = self.tenant_config.setup.url.rstrip('/')
         self.SIGMA_RULES_ENDPOINT = f'{base_url}/api/data/threat_intelligence/SigmaRule/'
         self.YARA_RULES_ENDPOINT = f'{base_url}/api/data/threat_intelligence/YaraFile/'
-        self.session = requests.Session()
-        self.session.verify = self.verify
+        self.session = TenantSession(verify=self.verify)
         self.session.headers.update({'Authorization': f'Token {self.tenant_config.setup.api_token}', 'Content-Type': 'application/json'})
 
     def _http_errors(self, response: requests.Response, error):

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- **`ssl = false` was ignored on Elastic when a CA bundle is exported.** With `REQUESTS_CA_BUNDLE` or `CURL_CA_BUNDLE` set, as on many corporate hosts and CI runners, `requests` replaces a session's `verify` with the bundle for every request that does not pass its own (psf/requests#3829). Elastic set verification only on its session, so `deploy` and `validate query --live` against a self-signed Kibana failed with `CERTIFICATE_VERIFY_FAILED`; Defender's Graph API fallback and Sentinel's ARM calls had the same gap. Every platform's HTTP session now keeps the tenant's `ssl` for every request; with `ssl = true` an exported bundle is still used.
+
 ## [0.17.2] — 2026-10-22
 
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
