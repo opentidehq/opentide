@@ -79,10 +79,13 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
                 )
 
         ioc = IOC_V2.create_query(service, uuid, query)
+        # remove_iocs_by_id takes a list: given the string it removed nothing,
+        # since a set of its characters matches no IOC id.
+        own_ioc = [str(uuid)]
         if report:
             if selected_report == name:
                 if deployment:
-                    report.remove_iocs_by_id(str(uuid))
+                    report.remove_iocs_by_id(own_ioc)
                     report.append_iocs([ioc])
                     if severity != report.severity:
                         report.update(description=description, tags=tags, severity=severity)
@@ -94,7 +97,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
                     report.delete()
                     logger.warning("report_deleted_with_rule", report=selected_report)
             elif deployment:
-                report.remove_iocs_by_id(uuid)
+                report.remove_iocs_by_id(own_ioc)
                 report.append_iocs([ioc])
                 tags.extend(tag for tag in report.tags if tag not in tags)
                 if severity > report.severity:
@@ -104,8 +107,11 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
                     report.update(description=description, tags=tags)
                 logger.info("deployed_ioc_to_report", report=selected_report)
             elif removal:
-                if len(report.iocs_) > 1:
-                    report.remove_iocs_by_id(uuid)
+                # A shared report holds other rules' IOCs: delete it only once
+                # this rule's IOC was the last one, never for a lone IOC that
+                # belongs to another rule.
+                report.remove_iocs_by_id(own_ioc)
+                if report.iocs_:
                     report.update()
                     logger.info("deleted_ioc_from_report", report=selected_report)
                 else:
