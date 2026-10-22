@@ -216,9 +216,13 @@ def splunk_route(url: str) -> str | None:
 
 
 def _looks_like_html(headers: Any, body: bytes) -> bool:
-    content_type = str(headers.get("Content-Type") or "").lower()
-    start = body.lstrip()[:15].lower()
-    return content_type.startswith("text/html") or start.startswith((b"<!doctype html", b"<html"))
+    """An HTML page; a body Splunk labels XML, JSON or text is trusted whatever it starts with."""
+    content_type = str(headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if content_type == "text/html":
+        return True
+    if content_type:
+        return False
+    return body.lstrip()[:15].lower().startswith((b"<!doctype html", b"<html"))
 
 
 def _html_answer(url: str, body: bytes) -> SplunkAnsweredHtmlError:

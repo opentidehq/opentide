@@ -262,6 +262,27 @@ def test_an_html_answer_without_a_proxy_points_at_the_port(
             service.saved_searches["Rule"]
 
 
+@pytest.mark.parametrize(
+    ("content_type", "body", "html"),
+    [
+        ("text/html; charset=utf-8", b"anything", True),
+        ("TEXT/HTML", b"", True),
+        ("", b"  <!DOCTYPE html><html>", True),
+        ("", b"<html><body>", True),
+        ("text/xml; charset=UTF-8", b"<html>an event that is HTML</html>", False),
+        ("application/json", b"<html>", False),
+        ("text/plain", b"<!doctype html>", False),
+        ("", b'<?xml version="1.0"?><feed/>', False),
+    ],
+)
+def test_only_an_html_page_is_refused(content_type: str, body: bytes, html: bool) -> None:
+    """A body Splunk labels XML, JSON or text is trusted, whatever it starts with."""
+    from opentide.platforms.splunk.client import _looks_like_html
+
+    headers = {"Content-Type": content_type} if content_type else {}
+    assert _looks_like_html(headers, body) is html
+
+
 def test_splunk_route_follows_no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in _PROXY_VARIABLES:
         monkeypatch.delenv(name, raising=False)
