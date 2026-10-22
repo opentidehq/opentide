@@ -42,6 +42,11 @@ def get_pins(schema_id: str) -> dict[str, str]:
     return dict(_load_all_pins().get(schema_id, {}))
 
 
+def all_pins() -> dict[str, dict[str, str]]:
+    """Return every pin section, keyed by schema identifier (``threat::1.0``, …)."""
+    return {schema_id: dict(pins) for schema_id, pins in _load_all_pins().items()}
+
+
 def pins_for_family(family: str) -> dict[str, dict[str, str]]:
     """Return all pin sections declared for an object family."""
     return {

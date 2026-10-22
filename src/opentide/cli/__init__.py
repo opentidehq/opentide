@@ -33,7 +33,7 @@ from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate, run_generate_docs
-from opentide.cli.services.info import collect_info, render_info
+from opentide.cli.services.info import UnknownVocabularyError, collect_info, render_info
 from opentide.cli.services.lint import render_findings, run_lint
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
@@ -917,6 +917,9 @@ def info_cmd(
     ctx: typer.Context,
     platform: DetectionPlatform | None = typer.Option(None, "--platform"),
     section: str | None = typer.Argument(None),
+    name: str | None = typer.Argument(
+        None, help="Vocabulary to inspect, with the vocab section (e.g. surface)"
+    ),
     technique: str | None = typer.Option(None, "--technique"),
     strict: bool = typer.Option(
         False, "--strict", help="Exit non-zero when any object failed to load"
@@ -924,12 +927,19 @@ def info_cmd(
 ) -> None:
     """Show repository and platform information."""
     cli = get_context(ctx)
-    valid_sections = {None, "rules", "threats", "objectives", "coverage"}
+    valid_sections = {None, "rules", "threats", "objectives", "coverage", "vocab"}
     if section not in valid_sections:
         emit_error(cli, f"Unknown info section: {section}")
     if section == "coverage" and not technique:
         emit_error(cli, "The coverage section requires --technique")
-    result = collect_info(cli, platform=platform, section=section, technique=technique)
+    if name is not None and section != "vocab":
+        emit_error(cli, f"Only the vocab section takes a name; got {name!r} after {section!r}")
+    try:
+        result = collect_info(
+            cli, platform=platform, section=section, technique=technique, vocab=name
+        )
+    except UnknownVocabularyError as exc:
+        emit_error(cli, str(exc))
     strict_failure = strict and int(result.get("parse_error_count") or 0) > 0
     if strict_failure:
         result["status"] = "failed"
