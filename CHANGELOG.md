@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+**Regenerate CI** with `opentide setup ci <github|gitlab|azure> --yes` if the pipeline was written with `--sharing`.
+
+### Fixed
+
+- **A rule promoted by the production deploy was not shared until it changed again** ([#590](https://github.com/opentidehq/opentide/issues/590)). The generated share job ran beside the production deploy on the triggering commit, before promotion rewrote block statuses, so the rule was `skipped_status`; the `[skip ci]` write-back that promoted it was in no later `--changed` diff. The share job now runs after the production job (GitHub `needs: [generate, deploy_production]`, GitLab stage `share` after `deploy`, Azure stage `Share` with `dependsOn: [Generate, Deploy]`) and checks out the default branch's tip. It runs after a failed or no-op deploy too, but not after a failed generate or a cancel; GitLab, which cannot express that, runs it `when: always` behind `opentide validate --strict`.
+- `share push --changed` diffs from the triggering push's baseline (the triggering commit's first parent, or GitLab's `CI_COMMIT_BEFORE_SHA`) to the checkout's `HEAD`, so on the tip it covers both the push and the promotion write-back. In a checkout of the triggering commit nothing changes.
+
+### Added
+
+- `share push --changed --since COMMIT` diffs from a commit SHA or ref of your choosing to `HEAD`, also outside CI. Use it once to share rules promoted before this fix.
+
 ## [0.17.2] — 2026-10-22
 
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
