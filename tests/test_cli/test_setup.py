@@ -36,6 +36,22 @@ def test_run_setup_repo_only(tmp_path: Path) -> None:
     assert "enabled = true" in sentinel.read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("promotion", [None, False, True])
+def test_run_setup_reports_the_repo_steps_platforms(tmp_path: Path, promotion: bool | None) -> None:
+    """``platforms`` came from the first step, which with --no-promotion is promotion."""
+    result = run_setup(
+        SetupOptions(
+            path=tmp_path / "repo",
+            platforms=[DetectionPlatform.sentinel],
+            promotion=promotion,
+            yes=True,
+            run_repo=True,
+            run_ci=False,
+        )
+    )
+    assert result["platforms"] == ["sentinel"]
+
+
 def test_run_setup_with_ci_and_mcp(tmp_path: Path) -> None:
     target = tmp_path / "full"
     result = run_setup(
