@@ -434,3 +434,50 @@ def test_redeploy_updates_the_existing_saved_search(
     creates = [r for r in splunk.requests if r[0] == "POST" and r[1] == SAVED_SEARCHES]
     assert len(creates) == 1
     assert splunk.saved_searches["Trigger Rule"]["alert_type"] == "number of events"
+
+
+# --- retiring a rule removes its saved search ----------------------------------
+
+
+def test_delete_reaches_splunk_as_a_delete(splunk: SplunkStandIn) -> None:
+    """The handler named no method, so urllib sent every DELETE as a GET.
+
+    Splunk answered the GET with the saved search, splunklib reported success
+    and the retired rule kept running.
+    """
+    splunk.saved_searches["Retired Rule"] = {"search": "index=main"}
+    service = _connect(splunk, ssl_enabled=False)
+    service.saved_searches.delete("Retired Rule")
+
+    assert [method for method, _path, _args in splunk.requests] == ["DELETE"]
+    assert "Retired Rule" not in splunk.saved_searches
+
+
+@pytest.fixture
+def retiring(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every rule status carries the DELETION strategy."""
+    from opentide.models.deployment_enums import StatusStrategy
+
+    monkeypatch.setattr(
+        "opentide.platforms.splunk.deployer.check_status", lambda _status: StatusStrategy.DELETION
+    )
+
+
+def _retire(service: object, name: str) -> bool | None:
+    return _deployer()._apply_saved_search(
+        service=service,
+        name=name,
+        status="REMOVED",
+        query="index=main",
+        mdr_config={},
+        actions_config={},
+    )
+
+
+@pytest.mark.usefixtures("retiring")
+def test_a_retired_rule_deletes_its_saved_search(splunk: SplunkStandIn) -> None:
+    splunk.saved_searches["Retired Rule"] = {"search": "index=main"}
+    _retire(_connect(splunk, ssl_enabled=False), "Retired Rule")
+
+    assert "Retired Rule" not in splunk.saved_searches
+    assert [method for method, _path, _args in splunk.requests] == ["GET", "DELETE"]

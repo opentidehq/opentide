@@ -262,10 +262,13 @@ def request_handler(*, verify: bool, allow_http_errors: bool = False) -> Request
         context.verify_mode = ssl.CERT_NONE
 
     def handle(url: str, message: dict[str, Any]) -> dict[str, Any]:
-        method = message["method"].lower()
-        data = message.get("body", "") if method == "post" else None
+        # splunklib sends a body with POST, PUT and PATCH only. urllib picks
+        # GET for a request without a body unless told the method, which sent
+        # every DELETE as a GET and left retired saved searches in place.
+        method = message["method"].upper()
+        data = message.get("body")
         headers = dict(message.get("headers", []))
-        req = urllib.request.Request(url, data, headers)
+        req = urllib.request.Request(url, data, headers, method=method)
         failed = False
         try:
             response = urllib.request.urlopen(req, context=context)

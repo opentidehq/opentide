@@ -5,7 +5,8 @@ answers the endpoints opentide calls the way Splunk does: ``server/info``,
 ``search/parser`` (``|badcommand`` is a parse error, ``|unreachable`` a 307
 "Network Error") and ``saved/searches``,
 where an argument the REST handler does not know is refused with HTTP 400
-``Argument "<name>" is not supported by this handler.``
+``Argument "<name>" is not supported by this handler.`` and a ``DELETE``
+removes the saved search.
 """
 
 from __future__ import annotations
@@ -121,6 +122,10 @@ def _handler(state: SplunkStandIn) -> type[http.server.BaseHTTPRequestHandler]:
                     status = 200
                 state.saved_searches[name].update(args)
                 return self._reply(status, _feed(_entry(name, state.saved_searches[name])))
+            if self.command == "DELETE":
+                if state.saved_searches.pop(name, None) is None:
+                    return self._reply(404, b"")
+                return self._reply(200, _feed())
             if name in state.saved_searches:
                 return self._reply(200, _feed(_entry(name, state.saved_searches[name])))
             return self._reply(404, b"")
