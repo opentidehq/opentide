@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`opentide info vocab <name>` reports a vocabulary's contract revisions** ([#523](https://github.com/opentidehq/opentide/issues/523)). A vocabulary file declares no top-level `version`, so nothing read back which revision a field validates against. The command lists each revision the `[[keys]]` lifecycle defines with the keys it introduces, removes and admits; each object schema field pinned to the vocabulary in `data/pins/`, with its revision, the keys it admits and whether the field is `scoped` (authored `<stage>::<key>`); whether the vocabulary is staged and its stage ids; and its entry and removed-key counts. `opentide info vocab` lists every vocabulary. An unknown name exits `1` and lists the available ones. `--json` returns the same data under `vocabulary` / `vocabularies`.
+
 ## [0.17.2] — 2026-10-22
 
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
