@@ -165,7 +165,10 @@ def vocabularies_resource() -> str:
     return res.resource_vocabularies()
 
 
-@mcp.resource("opentide://vocabularies/{name}")
+# `{+name}`, not `{name}`: mcp 2.x matches RFC 6570, where a simple expansion
+# rejects a literal `&`, and the index advertises `opentide://vocabularies/att&ck`.
+# Reserved expansion accepts that and the percent-encoded `att%26ck` alike.
+@mcp.resource("opentide://vocabularies/{+name}")
 def vocabulary_resource(name: str) -> str:
     return res.resource_vocabulary(name)
 

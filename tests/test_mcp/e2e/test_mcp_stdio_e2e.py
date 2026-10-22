@@ -233,6 +233,30 @@ def test_resource_vocabularies_over_stdio_is_json(mcp_stdio: StdioClient) -> Non
     assert len(detail["entries"]) == payload["actors"]["entry_count"]
 
 
+def test_every_advertised_vocabulary_uri_is_readable(mcp_stdio: StdioClient) -> None:
+    """The index's ``uri`` values must resolve, ``att&ck`` included.
+
+    mcp 2.x matches ``{name}`` as an RFC 6570 simple expansion, which does not
+    admit a literal ``&``: ``opentide://vocabularies/att&ck`` was "Unknown
+    resource" even though the index advertises it.
+    """
+    mcp_stdio.handshake()
+    index = mcp_stdio.read_resource("opentide://vocabularies")
+    assert "att&ck" in index
+    unreadable = {}
+    for name, entry in index.items():
+        response = mcp_stdio.request("resources/read", {"uri": entry["uri"]})
+        if "error" in response:
+            unreadable[name] = response["error"]["message"]
+            continue
+        detail = json.loads(response["result"]["contents"][0]["text"])
+        assert "error" not in detail, (name, detail)
+    assert not unreadable, unreadable
+    # A client that percent-encodes the name per RFC 6570 reaches it too.
+    encoded = mcp_stdio.read_resource("opentide://vocabularies/att%26ck")
+    assert "error" not in encoded
+
+
 def test_resource_rule_body_over_stdio(mcp_stdio: StdioClient) -> None:
     mcp_stdio.handshake()
     uuid = CORPUS_RULE_UUIDS["sentinel"]
