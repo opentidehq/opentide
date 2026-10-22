@@ -22,7 +22,7 @@ description: >-
 ```bash
 uv sync --group dev              # install dev deps (pytest, ruff, ty, pre-commit, …)
 uv run pytest tests/ -v
-uv run ruff check tests src/opentide
+uv run ruff check src/opentide tests scripts
 uv run ty check src/opentide
 uv run pre-commit install --install-hooks   # once per clone
 scripts/ci-local.sh --quick      # ruff + ty

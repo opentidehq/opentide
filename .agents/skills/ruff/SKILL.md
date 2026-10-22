@@ -5,14 +5,14 @@ description: Lint and format opentide with ruff — one rule set for the whole p
 
 # Ruff — opentide
 
-`pyproject.toml` → `[tool.ruff]`. Every file under `src/opentide` and `tests` is linted and
+`pyproject.toml` → `[tool.ruff]`. Every file under `src/opentide`, `tests` and `scripts` is linted and
 formatted with the same configuration; there is no exclude list and no per-module relief
 beyond the few documented `per-file-ignores`.
 
 ```bash
-uv run ruff check src/opentide tests
-uv run ruff format --check src/opentide tests      # CI form
-uv run ruff check --fix src/opentide tests && uv run ruff format src/opentide tests
+uv run ruff check src/opentide tests scripts
+uv run ruff format --check src/opentide tests scripts   # CI form
+uv run ruff check --fix src/opentide tests scripts && uv run ruff format src/opentide tests scripts
 scripts/ci-local.sh --quick                         # ruff + ty + build
 ```
 

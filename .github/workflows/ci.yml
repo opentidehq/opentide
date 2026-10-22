@@ -40,10 +40,10 @@ jobs:
         run: uv sync --group dev
 
       - name: Ruff check
-        run: uv run ruff check tests src/opentide
+        run: uv run ruff check src/opentide tests scripts
 
       - name: Ruff format
-        run: uv run ruff format --check tests src/opentide
+        run: uv run ruff format --check src/opentide tests scripts
 
       - name: Ty type check
         run: uv run ty check src/opentide --output-format github
