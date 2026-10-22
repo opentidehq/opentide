@@ -28,7 +28,7 @@ error that fails the run.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -117,7 +117,11 @@ def without_legacy_external_ids(rules: list[Any], *, platform: str) -> list[Any]
 
 
 def unpersisted_error(
-    *, object_uuid: str, platform: str, tenant_name: str, strategies: object = None
+    *,
+    object_uuid: str,
+    platform: str,
+    tenant_name: str,
+    strategies: Iterable[StatusStrategy] | None = None,
 ) -> DeploymentStateError | None:
     """``deployment_state_unpersisted`` when this run could create an id nobody commits.
 
@@ -138,11 +142,11 @@ def unpersisted_error(
     environment = CIEnvironment().environment
     if environment is CIEnvironment.CIPlatforms.LocalDebug:
         return None
-    run = tuple(strategies or ())  # type: ignore[arg-type]
+    run = tuple(strategies or ())
     if _Strategy.RELEASE in run and not is_change_request(environment):
         return None
     where = "pull or merge request" if is_change_request(environment) else "push"
-    names = " ".join(getattr(s, "name", str(s)) for s in run) or "no strategy"
+    names = " ".join(s.name for s in run) or "no strategy"
     return DeploymentStateError(
         "deployment_state_unpersisted",
         f"rule {object_uuid} has no {platform} id for tenant {tenant_name.strip()!r}, and "
@@ -162,7 +166,7 @@ def plan_external_id(
     status: object,
     raw_rule: Mapping[str, Any] | None = None,
     workspace: Path | None = None,
-    strategies: object = None,
+    strategies: Iterable[StatusStrategy] | None = None,
 ) -> ExternalIdAction:
     """Decide create, update or delete from the shard, or raise a coded error.
 
@@ -297,7 +301,7 @@ def screen_tenant(
     tenant_name: str,
     status_of: Any,
     workspace: Path | None = None,
-    strategies: object = None,
+    strategies: Iterable[StatusStrategy] | None = None,
 ) -> list[tuple[Any, ExternalIdAction]]:
     """Plan every rule for one tenant before the client is built; drop and report failures."""
     planned: list[tuple[Any, ExternalIdAction]] = []

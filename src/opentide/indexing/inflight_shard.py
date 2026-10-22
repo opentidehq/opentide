@@ -7,7 +7,8 @@ from typing import Any
 
 
 def _object_version(body: dict[str, Any]) -> int:
-    raw = (body.get("metadata") or {}).get("version")
+    # A missing version reads as 0, as an unparsable one does.
+    raw = (body.get("metadata") or {}).get("version", 0)
     try:
         return int(raw)
     except (TypeError, ValueError):

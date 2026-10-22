@@ -9,7 +9,7 @@ from typing import Any
 from opentide.core import registry
 from opentide.core.logging import get_logger
 from opentide.deployment.ci import CIEnvironment
-from opentide.deployment.git_backend import DulwichRepo, open_repo
+from opentide.deployment.git_backend import CommitInfo, DulwichRepo, open_repo
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.registry.discovery import discover_workspace
 
@@ -76,7 +76,7 @@ def _git_worktree(start: Path) -> Path | None:
 
 
 class GitRepository:
-    def __init__(self):
+    def __init__(self) -> None:
         self.repository = self._initialize_repository()
         self.last_commit_details = self._latest_commit_information()
 
@@ -99,7 +99,7 @@ class GitRepository:
                 logger.info("identified_azure_pipeline_as_the_ci_runtime_platform")
                 raw = os.getenv("BUILD_SOURCESDIRECTORY")
             case CIEnvironment.CIPlatforms.LocalDebug:
-                return None  # type: ignore
+                return None
             case _:
                 raw = None
         searched = Path(raw).expanduser() if raw else Path.cwd()
@@ -112,8 +112,8 @@ class GitRepository:
         return open_repo(searched)
 
     def _latest_commit_information(self) -> LatestCommit:
-
-        if CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug:
+        # Only a local run has no repository (see ``_initialize_repository``).
+        if self.repository is None:
             return self.LatestCommit(
                 message="Sample Commit Message",
                 author="Sample Commit Author",
@@ -327,7 +327,7 @@ def _require_origin_ref(repo: DulwichRepo, ref: str) -> None:
         raise Exception(f"Could not find git ref {ref}") from None
 
 
-def diff_calculation(source: DiffSource) -> list:
+def diff_calculation(source: DiffSource) -> list[str]:
     """Repo-relative paths added, renamed or modified by the run's commits.
 
     *source* is :class:`DiffSource`. A pull or merge request run that builds
@@ -351,6 +351,9 @@ def diff_calculation(source: DiffSource) -> list:
         return _changed_paths(repo, repo.commit(base), repo.head)
 
     repo = TideRepo().repository
+    if repo is None:
+        # Only a local run has no repository, and it returned above.
+        raise MissingGitCheckout(discover_workspace())
 
     match TARGET_CI:
         case CIEnvironment.CIPlatforms.GitHubActions:
@@ -527,9 +530,10 @@ def diff_calculation(source: DiffSource) -> list:
         detail=f"{BASE_COMMIT} | {LATEST_COMMIT}",
     )
 
-    source_commit = None
+    source_commit: CommitInfo | None = None
     try:
-        source_commit = repo.commit(BASE_COMMIT)
+        if BASE_COMMIT:
+            source_commit = repo.commit(BASE_COMMIT)
     except Exception:
         logger.info("could_not_find_source_commit_in_current_branch_trying_iter_commits_method")
         try:
@@ -562,20 +566,23 @@ def diff_calculation(source: DiffSource) -> list:
     return _changed_paths(repo, source_commit, repo.commit(LATEST_COMMIT))
 
 
-def _changed_paths(repo: DulwichRepo, source_commit: Any, latest_commit: Any) -> list:
+def _changed_paths(
+    repo: DulwichRepo, source_commit: CommitInfo, latest_commit: CommitInfo
+) -> list[str]:
     diff = source_commit.diff(latest_commit)
 
     logger.info(
         "preliminary_diff_calculation_completed_returned_with",
-        detail=", ".join([f.b_path for f in diff]),
+        detail=", ".join([f.b_path for f in diff if f.b_path]),
     )
 
     # Computing diff for added/renamed paths and modified files.
     # Deleted files are explicitely excluded to avoid attempting to deploy
-    # something that is not material anymore.
-    added_files = [f.b_path for f in diff.iter_change_type("A")]
-    renamed_files = [f.b_path for f in diff.iter_change_type("R")]
-    modified_files = [f.b_path for f in diff.iter_change_type("M")]
+    # something that is not material anymore. An added, renamed or modified
+    # entry always has a path.
+    added_files = [f.b_path for f in diff.iter_change_type("A") if f.b_path]
+    renamed_files = [f.b_path for f in diff.iter_change_type("R") if f.b_path]
+    modified_files = [f.b_path for f in diff.iter_change_type("M") if f.b_path]
 
     scope = added_files + renamed_files + modified_files
     scope = list(set(scope))  # De-duplicate - may happen if file modified and renamed, for example

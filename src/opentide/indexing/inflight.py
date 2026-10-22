@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -32,7 +32,7 @@ def inflight_preview_enabled() -> bool:
 
 
 @contextmanager
-def inflight_preview() -> Iterator[None]:
+def inflight_preview() -> Generator[None]:
     """Overlay the inflight preview shards on the registry for the block.
 
     Shards are open pull requests' objects, published to the default branch
@@ -60,7 +60,8 @@ _OBJECT_FAMILIES = ("threat", "objective", "rule")
 
 
 def _object_version(body: dict[str, Any]) -> int:
-    raw = (body.get("metadata") or {}).get("version")
+    # A missing version reads as 0, as an unparsable one does.
+    raw = (body.get("metadata") or {}).get("version", 0)
     try:
         return int(raw)
     except (TypeError, ValueError):

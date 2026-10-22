@@ -33,7 +33,7 @@ class CIEnvironment:
     Returns the CI Environment based on the environment variables
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.environment = self._check_ci_environment()
 
     class CIPlatforms(Enum):
