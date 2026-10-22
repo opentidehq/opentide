@@ -84,7 +84,7 @@ def run_misp(
     needs_key = mode in {"push", "retract"}
     if needs_key and any(block.resolved_api_key() is None for block in active):
         return ShareRun((), "api_key_unset")
-    if mode == "retract" and not selected and not _ledger_uuids(ledger, active, filters):
+    if mode == "retract" and not selected and not _ledger_uuids(ledger, active, filters, documents):
         return ShareRun((), "scope_no_match")
 
     factory = client_for or _default_client
@@ -104,7 +104,9 @@ def run_misp(
     for probe in probes:
         if mode == "retract":
             records.extend(
-                _retract_block(probe, selected, ledger, filters, delete, workers, lock, stamp)
+                _retract_block(
+                    probe, selected, documents, ledger, filters, delete, workers, lock, stamp
+                )
             )
         else:
             records.extend(
@@ -321,6 +323,7 @@ def _upsert(
 def _retract_block(
     probe: _Probe,
     documents: Sequence[TideDocument],
+    catalogue: Sequence[TideDocument],
     ledger: ShareLedger,
     filters: ShareFilters | None,
     delete: bool,
@@ -331,7 +334,7 @@ def _retract_block(
     block = probe.block
     by_uuid = {document.uuid: document for document in documents if document.uuid}
     candidates = list(by_uuid)
-    for uuid in _ledger_uuids(ledger, (block,), filters):
+    for uuid in _ledger_uuids(ledger, (block,), filters, catalogue):
         if uuid not in by_uuid:
             candidates.append(uuid)
     if probe.error is not None or probe.client is None:
@@ -762,20 +765,40 @@ def _ledger_uuids(
     ledger: ShareLedger,
     blocks: Sequence[MispBlock],
     filters: ShareFilters | None,
+    catalogue: Sequence[TideDocument],
 ) -> list[str]:
+    """Shared objects that are no longer in *catalogue*, narrowed by *filters*.
+
+    An object still in the catalogue is retracted only when the filters select
+    its document. A deleted object has no file, so ``--file`` never matches it,
+    and ``--type`` matches the schema its ledger line recorded.
+    """
     names = {block.name for block in blocks}
+    present = {document.uuid for document in catalogue if document.uuid}
     found: list[str] = []
     for line in ledger.records():
         if line.get("integration") != INTEGRATION_MISP or line.get("target") not in names:
             continue
         uuid = line.get("object_uuid")
-        if not isinstance(uuid, str):
+        if not isinstance(uuid, str) or uuid in present:
             continue
-        if filters is not None and filters.uuids is not None and uuid not in filters.uuids:
-            continue
+        if filters is not None:
+            if filters.uuids is not None and uuid not in filters.uuids:
+                continue
+            if filters.files is not None:
+                continue
+            if filters.types is not None and _schema_family(line) not in filters.types:
+                continue
         if uuid not in found:
             found.append(uuid)
     return found
+
+
+def _schema_family(line: Mapping[str, object]) -> str | None:
+    schema = line.get("object_schema")
+    if not isinstance(schema, str):
+        return None
+    return schema.split("::", 1)[0]
 
 
 _T = TypeVar("_T")

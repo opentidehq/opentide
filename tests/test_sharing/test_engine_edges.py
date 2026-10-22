@@ -688,7 +688,7 @@ def test_helpers_for_unreachable_ledger_shapes(tmp_path: Path) -> None:
                 {"integration": "misp", "target": "misp-internal", "object_uuid": "abc"},
             )
 
-    assert _ledger_uuids(Stub(), (block,), None) == ["abc"]  # type: ignore[arg-type]
+    assert _ledger_uuids(Stub(), (block,), None, ()) == ["abc"]  # type: ignore[arg-type]
 
     ledger = ShareLedger.load(tmp_path / "sharing.jsonl")
     ledger.put(
