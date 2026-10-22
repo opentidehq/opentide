@@ -611,7 +611,9 @@ def _scan_id_file(path_row: tuple[Path, str]) -> list[_IdScanRow] | _IdScanParse
     model_file, meta_name = path_row
     try:
         model_body = load_yaml(model_file)
-    except (yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
+    # RecursionError: a pathologically nested document is unreadable too, and
+    # must be reported rather than take the whole run down.
+    except (yaml.YAMLError, OSError, UnicodeDecodeError, RecursionError) as exc:
         return _IdScanParseError(
             model_file=model_file,
             meta_name=meta_name,

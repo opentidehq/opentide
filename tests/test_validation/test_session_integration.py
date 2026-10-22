@@ -123,6 +123,24 @@ def test_run_validation_reports_an_empty_body_block(
     assert [(i.code, i.field_path[:1]) for i in report.errors] == [("schema_validation", (block,))]
 
 
+def test_run_validation_reports_a_recursive_alias_as_a_parse_error(
+    tide_corpus_repo: Path,
+) -> None:
+    """``a: &x [1, *x]`` raised RecursionError out of the ID scan.
+
+    ``opentide validate`` crashed with a traceback instead of naming the file.
+    """
+    rule = tide_corpus_repo / "Objects" / "Detection Rules" / "rule-0001-sentinel-kql.yaml"
+    rule.write_text(rule.read_text(encoding="utf-8") + "loop: &x [1, *x]\n", encoding="utf-8")
+
+    report = run_validation(workers=0)
+
+    assert [(i.code, Path(str(i.file_path)).name) for i in report.errors] == [
+        ("yaml_parse", rule.name)
+    ]
+    assert "recursive alias" in report.errors[0].message
+
+
 def _run_uuid_check(raw_uuid: str) -> ValidationReport:
     index = {
         "objects": {"rule": {raw_uuid: {"name": "Rule", "metadata": {"uuid": raw_uuid}}}},
