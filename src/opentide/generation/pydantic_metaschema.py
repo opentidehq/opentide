@@ -168,7 +168,13 @@ def build_model_schema_source(
     if "required" in raw:
         result["required"] = raw["required"]
     for key, value in (root_extras or {}).items():
-        if key != "property_extras":
+        if key == "required":
+            # Extras add to the model's required fields (a rule's `response`,
+            # which the template asks for) and never drop one: replacing the
+            # list let the schema accept a body the model rejects.
+            model_required = cast(list[str], raw.get("required", []))
+            result[key] = list(dict.fromkeys([*value, *model_required]))
+        elif key != "property_extras":
             result[key] = value
     return result
 
