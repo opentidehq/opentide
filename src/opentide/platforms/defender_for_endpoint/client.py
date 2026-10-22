@@ -13,7 +13,7 @@ from opentide.core.errors import Errors
 from opentide.core.registry import Opentide
 from opentide.core.typing import Never
 from opentide.models.system_config import ConfigurationModels
-from opentide.platforms.transport import TenantSession, tenant_tls_verify
+from opentide.platforms.transport import DEFAULT_TIMEOUT, TenantSession, tenant_tls_verify
 
 logger = structlog.get_logger("opentide.platforms.defender_for_endpoint.client")
 
@@ -130,7 +130,10 @@ class DefenderForEndpointService:
             "scope": "https://graph.microsoft.com/.default",
         }
         response = requests.post(
-            data=data, url=self.OAUTH_TOKEN_ENDPOINT.format(tenant_id=tenant_id), verify=self.verify
+            data=data,
+            url=self.OAUTH_TOKEN_ENDPOINT.format(tenant_id=tenant_id),
+            verify=self.verify,
+            timeout=DEFAULT_TIMEOUT,
         )
         if response.status_code == 200:
             # `--debug` logs at DEBUG and CI log readers are not the secret store.

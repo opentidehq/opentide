@@ -21,6 +21,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, Opentide
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels
+from opentide.platforms.transport import DEFAULT_TIMEOUT
 
 logger = structlog.get_logger("opentide.platforms.splunk.client")
 
@@ -287,7 +288,7 @@ def request_handler(*, verify: bool, allow_http_errors: bool = False) -> Request
         req = urllib.request.Request(url, data, headers, method=method)
         failed = False
         try:
-            response = urllib.request.urlopen(req, context=context)
+            response = urllib.request.urlopen(req, context=context, timeout=DEFAULT_TIMEOUT)
             status = response.code
         except HTTPError as error:
             # Includes a 307 answering a POST, which urllib does not follow.

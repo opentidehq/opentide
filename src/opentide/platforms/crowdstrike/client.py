@@ -10,7 +10,7 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.errors import Errors
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
-from opentide.platforms.transport import TenantSession, tenant_tls_verify
+from opentide.platforms.transport import DEFAULT_TIMEOUT, TenantSession, tenant_tls_verify
 
 logger = structlog.get_logger("opentide.platforms.crowdstrike.client")
 
@@ -114,7 +114,9 @@ class CrowdstrikeService:
 
     def _get_access_token(self, client_id: str, client_secret: str):
         data = {"client_id": client_id, "client_secret": client_secret}
-        response = requests.post(data=data, url=self.OAUTH_TOKEN_ENDPOINT, verify=self.verify)
+        response = requests.post(
+            data=data, url=self.OAUTH_TOKEN_ENDPOINT, verify=self.verify, timeout=DEFAULT_TIMEOUT
+        )
         if response.status_code == 201:
             # The token response is a bearer credential. `--json` raises the log
             # level to INFO, and CI captures stderr, so the body must not be logged.

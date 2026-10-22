@@ -33,6 +33,13 @@ _TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
 )
 
 
+#: Seconds a tenant has to accept a connection, and then to send each part of
+#: its answer, when a request names no timeout of its own. Without one, a
+#: tenant that accepts the connection and never answers held a deploy or a CI
+#: job forever. Generous, because a live query check runs the query first.
+DEFAULT_TIMEOUT = 120.0
+
+
 def tenant_tls_verify(ssl_setting: object, *, platform: str, tenant: str) -> bool:
     """A tenant's ``ssl`` as the ``verify`` flag for every call made to it.
 
@@ -62,11 +69,20 @@ class TenantSession(requests.Session):
     that names no ``verify`` takes the session's here before the environment is
     consulted; with ``verify`` true the exported bundle still applies, as it
     should.
+
+    A request sent without a ``timeout`` gets :data:`DEFAULT_TIMEOUT`, where
+    ``requests`` itself would wait forever.
     """
 
     def __init__(self, verify: bool) -> None:
         super().__init__()
         self.verify = verify
+
+    def send(self, request: requests.PreparedRequest, **kwargs: Any) -> requests.Response:
+        # ``Session.request`` passes timeout=None for a call that names none.
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = DEFAULT_TIMEOUT
+        return super().send(request, **kwargs)
 
     def merge_environment_settings(
         self,
