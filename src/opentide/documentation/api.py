@@ -6,6 +6,7 @@ from opentide.documentation.catalog import DocumentationCatalog, build_catalog
 from opentide.documentation.config import load_settings
 from opentide.documentation.context import DocumentationContext
 from opentide.documentation.format.factory import formatter_for
+from opentide.documentation.markdown.links import page_slug
 from opentide.documentation.objects.objective import render_objective_page
 from opentide.documentation.objects.rule import render_rule_page
 from opentide.documentation.objects.threat import render_threat_page
@@ -79,7 +80,13 @@ def write_rules(
     count = 0
     for record in cat.rules:
         content = render_rule_page(record.model, context, cat)
-        path = page_path(context, folder=pub.rules_dir, name=record.name, uuid=record.uuid)
+        path = page_path(
+            context,
+            folder=pub.rules_dir,
+            name=record.name,
+            uuid=record.uuid,
+            slug=page_slug(record),
+        )
         write_page(path, content)
         count += 1
     return count
@@ -95,7 +102,13 @@ def write_objectives(
     count = 0
     for record in cat.objectives:
         content = render_objective_page(record.model, context, cat)
-        path = page_path(context, folder=pub.objectives_dir, name=record.name, uuid=record.uuid)
+        path = page_path(
+            context,
+            folder=pub.objectives_dir,
+            name=record.name,
+            uuid=record.uuid,
+            slug=page_slug(record),
+        )
         write_page(path, content)
         count += 1
     return count
@@ -112,7 +125,13 @@ def write_threats(
     count = 0
     for record in cat.threats:
         content = render_threat_page(record.model, context, cat)
-        path = page_path(context, folder=pub.threats_dir, name=record.name, uuid=record.uuid)
+        path = page_path(
+            context,
+            folder=pub.threats_dir,
+            name=record.name,
+            uuid=record.uuid,
+            slug=page_slug(record),
+        )
         write_page(path, content)
         count += 1
     return count

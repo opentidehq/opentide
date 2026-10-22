@@ -11,6 +11,7 @@ from opentide.documentation.catalog import build_catalog
 from opentide.documentation.config import load_settings
 from opentide.documentation.context import DocumentationContext
 from opentide.documentation.format.factory import formatter_for
+from opentide.documentation.markdown.links import page_slug
 from opentide.documentation.objects.objective import render_objective_page
 from opentide.documentation.objects.rule import render_rule_page
 from opentide.documentation.objects.threat import render_threat_page
@@ -213,7 +214,13 @@ def run_objects(
                 continue
             with rendering(record.uuid):
                 write_page(
-                    page_path(ctx, folder=pub.threats_dir, name=record.name, uuid=record.uuid),
+                    page_path(
+                        ctx,
+                        folder=pub.threats_dir,
+                        name=record.name,
+                        uuid=record.uuid,
+                        slug=page_slug(record),
+                    ),
                     render_threat_page(record.model, ctx, catalog),
                 )
             counts["threats"] += 1
@@ -224,7 +231,13 @@ def run_objects(
                 continue
             with rendering(record.uuid):
                 write_page(
-                    page_path(ctx, folder=pub.objectives_dir, name=record.name, uuid=record.uuid),
+                    page_path(
+                        ctx,
+                        folder=pub.objectives_dir,
+                        name=record.name,
+                        uuid=record.uuid,
+                        slug=page_slug(record),
+                    ),
                     render_objective_page(record.model, ctx, catalog),
                 )
             counts["objectives"] += 1
@@ -235,7 +248,13 @@ def run_objects(
                 continue
             with rendering(record.uuid):
                 write_page(
-                    page_path(ctx, folder=pub.rules_dir, name=record.name, uuid=record.uuid),
+                    page_path(
+                        ctx,
+                        folder=pub.rules_dir,
+                        name=record.name,
+                        uuid=record.uuid,
+                        slug=page_slug(record),
+                    ),
                     render_rule_page(record.model, ctx, catalog),
                 )
             counts["rules"] += 1

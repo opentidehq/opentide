@@ -10,6 +10,8 @@ from opentide.documentation.markdown.links import (
     heading_anchor,
     object_link,
     page_href,
+    page_slug,
+    unique_slugs,
     wiki_target,
 )
 from opentide.documentation.types import DocumentRecord, DocumentScope
@@ -87,3 +89,30 @@ def test_object_link_uses_resolve_name_when_unpaged() -> None:
     )
     rendered = object_link(GitHubFormatter(), catalog, "follow", from_folder="threats")
     assert rendered == "Cloud Discovery Follow-up (`follow`)"
+
+
+def _rule(uuid: str, name: str) -> DocumentRecord:
+    return DocumentRecord(DocumentScope.rules, uuid, name, model=object())
+
+
+def test_unique_slugs_suffix_colliding_names_only() -> None:
+    """Names that slugify alike used to share one page file."""
+    records = unique_slugs(
+        [
+            _rule("bbbbbbbb-2", "Sentinel-KQL rule"),
+            _rule("aaaaaaaa-1", "Sentinel KQL Rule"),
+            _rule("cccccccc-3", "Other rule"),
+            _rule("dddddddd-4", "Sentinel KQL rule bbbbbbbb"),
+        ]
+    )
+    assert [page_slug(record) for record in records] == [
+        "sentinel-kql-rule-bbbbbbbb-1",
+        "sentinel-kql-rule",
+        "other-rule",
+        "sentinel-kql-rule-bbbbbbbb",
+    ]
+    assert records[0].name == "Sentinel-KQL rule"
+
+
+def test_page_slug_defaults_to_the_slugified_name() -> None:
+    assert page_slug(_rule("u1", "My Rule")) == "my-rule"
