@@ -510,7 +510,10 @@ def kibana_to_opentide(
             "version": 1,
             "created": created,
             "modified": modified,
-            "tlp": "clear",
+            # A cluster's rules are the organisation's own detections. CLEAR
+            # would let `share push` publish them to anyone; the Sentinel
+            # importer defaults to amber too.
+            "tlp": "amber",
             "author": author,
             "contributors": contributors or None,
         },
