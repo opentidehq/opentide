@@ -83,7 +83,7 @@ def test_run_setup_skills_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     stub_remote_skills_manifest(monkeypatch)
     monkeypatch.setattr(
         "opentide.cli.services.setup.skills._download_skill",
-        lambda slug, dest, *, source, ref: (
+        lambda slug, dest, *, source, ref, **_: (
             dest.mkdir(parents=True, exist_ok=True),
             (dest / "SKILL.md").write_text(f"# {slug}\n", encoding="utf-8"),
             ["SKILL.md"],

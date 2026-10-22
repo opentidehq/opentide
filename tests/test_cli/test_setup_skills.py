@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -25,7 +26,7 @@ _real_download_skill = skills_mod._download_skill
 def _mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
     stub_remote_skills_manifest(monkeypatch)
 
-    def _fake(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
+    def _fake(slug: str, dest: Path, *, source: str, ref: str, **_: object) -> list[str]:
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "SKILL.md").write_text(f"# {slug} ({source}@{ref})\n", encoding="utf-8")
         return ["SKILL.md"]
@@ -384,6 +385,45 @@ def test_download_skill_keeps_the_previous_tree_when_a_later_file_is_missing(
     assert (dest / "references" / "Old.md").read_text(encoding="utf-8") == "old\n"
     assert not (dest / "references" / "Examples.md").exists()
     assert not (tmp_path / ".downloaded.incoming").exists()
+
+
+def test_install_lists_the_github_tree_once_per_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Each skill fetched the full recursive tree again: 60 API calls an hour ran out.
+
+    ``setup skills --all`` installs the whole catalogue in one run.
+    """
+    slugs = ["kusto-query-language", "sigma-rules", "spl-searches"]
+    stub_remote_skills_manifest(
+        monkeypatch,
+        [registry.SkillEntry(slug=slug, name=slug, description="") for slug in slugs],
+    )
+    calls: list[str] = []
+
+    class _Response:
+        def read(self) -> bytes:
+            tree = [{"path": f"skills/{slug}/SKILL.md", "type": "blob"} for slug in slugs]
+            return json.dumps({"truncated": False, "tree": tree}).encode("utf-8")
+
+    def _urlopen(request: object, **_: object) -> _Response:
+        calls.append(str(getattr(request, "full_url", request)))
+        return _Response()
+
+    monkeypatch.setattr(registry.urllib.request, "urlopen", _urlopen)
+    monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
+    monkeypatch.setattr(skills_mod, "fetch_github_bytes", lambda path, **_: b"# skill\n")
+
+    result = run_skills_setup(
+        SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.generic], install_all=True, yes=True)
+    )
+
+    installed = result["skills"]
+    assert isinstance(installed, list)
+    assert set(slugs) <= set(installed)
+    assert len(calls) == 1
+    for slug in slugs:
+        assert (tmp_path / ".agents" / "skills" / slug / "SKILL.md").is_file()
 
 
 def test_bundled_reinstall_drops_stale_reference_files(tmp_path: Path) -> None:

@@ -20,6 +20,7 @@ from opentide.cli.services.setup.interactive import (
 )
 from opentide.cli.services.setup.skills_registry import (
     BUNDLED_AUTHORING_SKILLS,
+    GithubTree,
     fetch_github_bytes,
     known_skill_slugs,
     list_github_paths,
@@ -146,16 +147,19 @@ def _install_bundled_skill(slug: str, dest: Path) -> list[str]:
     return _replace_tree(dest, files)
 
 
-def _download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
+def _download_skill(
+    slug: str, dest: Path, *, source: str, ref: str, tree: GithubTree | None = None
+) -> list[str]:
     """Install one skill tree.
 
     The four authoring skills come from the package. Every other skill is the
     full git tree under ``skills/<slug>/``, not a fixed pair of reference files.
+    *tree* shares one listing of the repository between the skills of a run.
     """
     _require_slug(slug)
     if slug in BUNDLED_AUTHORING_SKILLS:
         return _install_bundled_skill(slug, dest)
-    paths = list_github_paths(f"skills/{slug}", source=source, ref=ref)
+    paths = list_github_paths(f"skills/{slug}", source=source, ref=ref, tree=tree)
     if not paths:
         raise SkillsDownloadError(_download_error(slug, source=source, ref=ref))
     prefix = f"skills/{slug}/"
@@ -189,6 +193,7 @@ def _resolve_skill_slugs(options: SkillsSetupOptions) -> list[str]:
 
 def _install_skill_trees(target: Path, slugs: list[str]) -> list[str]:
     manifest = load_manifest()
+    tree = GithubTree(source=manifest.source, ref=manifest.ref)
     written: list[str] = []
     for slug in slugs:
         _require_slug(slug)
@@ -197,6 +202,7 @@ def _install_skill_trees(target: Path, slugs: list[str]) -> list[str]:
             target / ".agents" / "skills" / slug,
             source=manifest.source,
             ref=manifest.ref,
+            tree=tree,
         )
         written.extend(f".agents/skills/{slug}/{name}" for name in rel_files)
     return written

@@ -72,7 +72,7 @@ def test_run_interactive_mcp_setup_can_cancel(monkeypatch, tmp_path: Path) -> No
     assert not (tmp_path / ".vscode/mcp.json").exists()
 
 
-def _fake_download_skill(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
+def _fake_download_skill(slug: str, dest: Path, *, source: str, ref: str, **_: object) -> list[str]:
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "SKILL.md").write_text(f"# {slug} ({source}@{ref})\n", encoding="utf-8")
     return ["SKILL.md"]
