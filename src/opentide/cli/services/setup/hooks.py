@@ -328,8 +328,15 @@ def _kept_pin_warning(shown: str, pin: str, relative: str) -> str:
 
 def _write_executable(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    # Text mode writes CRLF on Windows, and sh reads the carriage return as
+    # part of each line: Git Bash failed the hook on `set -e\r`.
+    path.write_text(content, encoding="utf-8", newline="\n")
     path.chmod(path.stat().st_mode | 0o111)
+
+
+def _holds(path: Path, content: str) -> bool:
+    """Whether *path* holds exactly *content*; a text read would hide CRLF."""
+    return path.is_file() and path.read_bytes() == content.encode("utf-8")
 
 
 def _hook_lines(relative: str, indent: int) -> str:
@@ -494,8 +501,7 @@ def _refresh_root_pre_commit_config(
 def _ensure_versioned_hook(target: Path, relative: str = "") -> tuple[str, bool]:
     dest = target / VERSIONED_HOOK_PATH
     script = pre_commit_script(relative)
-    existing = dest.read_text(encoding="utf-8") if dest.is_file() else None
-    if existing == script:
+    if _holds(dest, script):
         if os.access(dest, os.X_OK):
             return VERSIONED_HOOK_PATH, False
         dest.chmod(dest.stat().st_mode | 0o111)
@@ -583,7 +589,7 @@ def _install_git_hook(
         )
         return shown, False
     script = pre_commit_script(*_hook_workspaces_after_setup(existing, layout, shown, warnings))
-    if existing == script and os.access(dest, os.X_OK):
+    if _holds(dest, script) and os.access(dest, os.X_OK):
         return shown, False
     _write_executable(dest, script)
     return shown, True

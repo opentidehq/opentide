@@ -688,3 +688,50 @@ def test_a_hooks_directory_on_another_drive_does_not_crash_setup(
     assert result["installed"] is True, result
     hook = (tmp_path / ".git" / "hooks" / "pre-commit").resolve().as_posix()
     assert hook in result["files"]
+
+
+def _windows_text_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``Path.write_text`` translate newlines the way it does on Windows."""
+    write_text = Path.write_text
+
+    def _crlf(
+        self: Path,
+        data: str,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> int:
+        if newline is None:
+            data, newline = data.replace("\n", "\r\n"), ""
+        return write_text(self, data, encoding=encoding, errors=errors, newline=newline)
+
+    monkeypatch.setattr(Path, "write_text", _crlf)
+
+
+def test_hook_scripts_are_written_with_lf_on_windows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Text mode wrote CRLF on Windows, and Git Bash failed the hook on ``set -e\\r``."""
+    hooks_dir = _git_init(tmp_path)
+    _windows_text_mode(monkeypatch)
+
+    run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=True))
+
+    for hook in (tmp_path / ".opentide" / "hooks" / "pre-commit", hooks_dir / "pre-commit"):
+        assert b"\r" not in hook.read_bytes(), hook
+
+
+def test_setup_rewrites_a_hook_script_with_crlf_line_endings(tmp_path: Path) -> None:
+    """Re-running setup compared text, which reads CRLF as LF, so it kept the broken hook."""
+    hooks_dir = _git_init(tmp_path)
+    run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=True))
+    hooks = (tmp_path / ".opentide" / "hooks" / "pre-commit", hooks_dir / "pre-commit")
+    for hook in hooks:
+        hook.write_bytes(hook.read_bytes().replace(b"\n", b"\r\n"))
+
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=True))
+
+    assert ".opentide/hooks/pre-commit" in result["files"]
+    assert ".git/hooks/pre-commit" in result["files"]
+    for hook in hooks:
+        assert b"\r" not in hook.read_bytes(), hook
