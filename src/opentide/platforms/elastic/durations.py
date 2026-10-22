@@ -5,8 +5,12 @@ from __future__ import annotations
 import re
 
 UNIT_SECONDS = {"d": 86400, "h": 3600, "m": 60, "s": 1}
-_SHORT_DURATION = re.compile(r"(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?")
-_ISO_DURATION = re.compile(r"P(?:(\d+)D)?(?:T(?=\d)(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?")
+# ASCII digits only: `\d` also matches other Unicode digits ("５m", "٣h"),
+# which int() accepts but Kibana does not.
+_SHORT_DURATION = re.compile(r"(?:([0-9]+)d)?(?:([0-9]+)h)?(?:([0-9]+)m)?(?:([0-9]+)s)?")
+_ISO_DURATION = re.compile(
+    r"P(?:([0-9]+)D)?(?:T(?=[0-9])(?:([0-9]+)H)?(?:([0-9]+)M)?(?:([0-9]+)S)?)?"
+)
 
 
 def duration_seconds(value: str, *, allow_zero: bool = False) -> int:

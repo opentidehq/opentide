@@ -404,7 +404,9 @@ class ElasticConfig(PlatformConfigBase):
         if suppression is not None:
             group_by = suppression.get("group_by")
             if rule_type == "threshold":
-                if not suppression.get("duration") or group_by:
+                # A missing duration is a shape fault; an empty one is a
+                # `duration` fault, reported by the duration check below.
+                if suppression.get("duration") is None or group_by:
                     codes.add("suppression_shape")
             elif (
                 not isinstance(group_by, list)
@@ -448,26 +450,25 @@ class ElasticConfig(PlatformConfigBase):
                 codes.add("risk_score")
         elif risk is not None:
             codes.add("risk_score")
+        # A non-object `scheduling` is a shape fault, not a duration one: leave
+        # it to the field type, which names `scheduling` and the expected shape.
         raw_scheduling = raw.get("scheduling")
-        if raw_scheduling is not None and not isinstance(raw_scheduling, dict):
-            codes.add("duration")
-            scheduling: dict[str, Any] = {}
-        else:
-            scheduling = raw_scheduling or {}
+        scheduling: dict[str, Any] = raw_scheduling if isinstance(raw_scheduling, dict) else {}
         if scheduling.get("lookback") is not None:
             try:
                 duration_seconds(scheduling["lookback"], allow_zero=True)
             except ValueError:
                 codes.add("duration")
         history = new_terms.get("history_window_start") if isinstance(new_terms, dict) else None
-        for value in filter(
-            None,
-            (
-                scheduling.get("interval"),
-                (suppression or {}).get("duration"),
-                history,
-            ),
+        # `None` is absent (#557); every other value, "" included, must parse.
+        # An empty string skipped here used to pass validate and crash compile.
+        for value in (
+            scheduling.get("interval"),
+            (suppression or {}).get("duration"),
+            history,
         ):
+            if value is None:
+                continue
             try:
                 duration_seconds(value)
             except ValueError:

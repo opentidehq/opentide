@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- **An empty Elastic duration passed validate and crashed compile.** `""` for `scheduling.interval`, `suppression.duration` or `new_terms.history_window_start` skipped the duration check; it now reports `duration` at validate time, as `scheduling.lookback` already did. A threshold rule's empty `suppression.duration` reports `duration` too (a missing one is still `suppression_shape`). A `scheduling` that is not an object is reported as a `scheduling` shape error instead of `duration` ([#589](https://github.com/opentidehq/opentide/issues/589)).
+- **Elastic durations accepted non-ASCII digits.** `５m` or `PT١H` parsed as five minutes and one hour; Elastic durations now take ASCII digits `0-9` only and report `duration` otherwise ([#589](https://github.com/opentidehq/opentide/issues/589)).
+- **An Elastic tenant `api_key` only had to start with `$`.** `$`, `$1KEY` or `$ELASTIC KEY` loaded and never resolved. The key must be `$VAR` or `${VAR}`; anything else, a literal key included, fails the config load. `${VAR}` now resolves like `$VAR` ([#589](https://github.com/opentidehq/opentide/issues/589)).
+
 ## [0.17.2] — 2026-10-22
 
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
