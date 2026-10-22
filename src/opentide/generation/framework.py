@@ -295,7 +295,9 @@ def parents(id: str) -> list:
     parents = []
     parent_mappings = {
         "objective": {"data": "objective", "parent": "threats"},
-        "signal": {"parent": "parent"},
+        # `owner` is the objective a signal is indexed under; the authored
+        # `parent` names a parent signal and is not an objective hop.
+        "signal": {"parent": "owner"},
         "rule": {"parent": "detection_model"},
     }
     if model_type not in parent_mappings:
@@ -327,7 +329,7 @@ _CHILD_RELATION_MAPPINGS: Mapping[str, Mapping[str, Any]] = {
     },
     "objective": {
         "child_types": ["signal", "rule"],
-        "references": ["detection_model", "parent"],
+        "references": ["detection_model", "owner"],
     },
     "signal": {"child_types": ["rule"], "references": ["detection_model"]},
 }
@@ -412,7 +414,7 @@ def _child_relation_index() -> dict[str, dict[str, list[str]]]:
 def _referenced_uuids(value: Any) -> list[str]:
     """Normalise a reference field to the list of UUIDs it names.
 
-    A reference is usually a list, but ``parent`` / ``detection_model`` may be a
+    A reference is usually a list, but ``owner`` / ``detection_model`` may be a
     bare string. The pre-index code tested ``model_id in value``, which on a
     string was a SUBSTRING test; treating it as a single-element list makes that
     an equality test instead. For the UUIDs these fields hold the two agree --
@@ -546,7 +548,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
             else:
                 return techniques
     if model_type == "signal":
-        parent_id = model_body.get("parent")
+        parent_id = model_body.get("owner")
         if not parent_id:
             return []
         elif recursive:

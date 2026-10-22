@@ -21,8 +21,8 @@ class SignalRecord:
 
     uuid: str
     name: str
-    parent_uuid: str
-    parent_name: str
+    owner_uuid: str
+    owner_name: str
 
 
 @dataclass(frozen=True)
@@ -291,7 +291,7 @@ class DocumentationCatalog:
         def add_objective(obj_uuid: str) -> None:
             signal = self.resolve_signal(obj_uuid)
             if signal is not None:
-                obj_uuid = signal.parent_uuid
+                obj_uuid = signal.owner_uuid
             obj_record = self.resolve_record(obj_uuid)
             if obj_record is None or obj_record.object_type != DocumentScope.objectives:
                 return
@@ -389,8 +389,8 @@ def build_catalog() -> DocumentationCatalog:
                 SignalRecord(
                     uuid=signal.uuid,
                     name=signal.name,
-                    parent_uuid=record.uuid,
-                    parent_name=record.name,
+                    owner_uuid=record.uuid,
+                    owner_name=record.name,
                 )
             )
     return DocumentationCatalog(

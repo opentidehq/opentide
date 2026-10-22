@@ -35,7 +35,7 @@ def _reference_childs(model_id: str, models_index: dict[str, Any]) -> list[str]:
         },
         "objective": {
             "child_types": ["signal", "rule"],
-            "references": ["detection_model", "parent"],
+            "references": ["detection_model", "owner"],
         },
         "signal": {"child_types": ["rule"], "references": ["detection_model"]},
     }
@@ -80,8 +80,8 @@ CORPUS: dict[str, Any] = {
         "o-3": {},
     },
     "signal": {
-        "s-1": {"parent": "o-1"},
-        "s-2": {"parent": ["o-2"]},
+        "s-1": {"owner": "o-1"},
+        "s-2": {"owner": ["o-2"]},
     },
     "rule": {
         "r-1": {"detection_model": "s-1"},
@@ -143,7 +143,7 @@ class TestSubstringMatchingFixed:
     """The index compares references by equality, not substring.
 
     The pre-index code tested ``model_id in value``. When a reference holds a
-    bare STRING (``parent``, ``detection_model``) that is a substring test, so
+    bare STRING (``owner``, ``detection_model``) that is a substring test, so
     any id that happened to be a prefix of another id matched it. Measured on a
     1497-object corpus with short ids: ``childs('o-1')`` returned 113 children,
     including signals that actually referenced ``o-186``.
@@ -156,7 +156,7 @@ class TestSubstringMatchingFixed:
 
     OVERLAPPING: dict[str, Any] = {
         "objective": {"o-1": {}, "o-186": {}},
-        "signal": {"s-0": {"parent": "o-186"}},
+        "signal": {"s-0": {"owner": "o-186"}},
         "rule": {},
     }
 
