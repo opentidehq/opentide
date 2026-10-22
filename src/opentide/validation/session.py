@@ -154,7 +154,8 @@ def run_validation(
     if ValidateCheck.cve in checks:
         from opentide.validation.cve_check import check_cve_issues
 
-        issues.extend(check_cve_issues(index, scope))
+        for issue in check_cve_issues(index, scope):
+            (warnings if issue.severity == "warning" else issues).append(issue)
 
     if ValidateCheck.sharing_config in checks:
         sharing_issues, sharing_warnings = _sharing_config_issues()

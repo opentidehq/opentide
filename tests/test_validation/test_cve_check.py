@@ -110,8 +110,13 @@ def test_check_cve_issues_accepts_known_identifier() -> None:
     assert issues == []
 
 
-def test_check_cve_issues_skips_when_lookup_unavailable() -> None:
-    index = _threat_index(["CVE-2024-3094"])
+def test_check_cve_issues_warns_when_lookup_unavailable() -> None:
+    """An outage fails open, but no longer silently.
+
+    The lookup error was only logged, so the report, and ``--strict``, could
+    not tell a run that checked every CVE from one that checked none.
+    """
+    index = _threat_index(["CVE-2024-3094", "CVE-2024-0001"])
     with (
         patch.object(cve_check_module, "load_cve_settings", return_value=CveSettings()),
         patch.object(cve_check_module, "apply_cve_proxy_settings"),
@@ -120,7 +125,12 @@ def test_check_cve_issues_skips_when_lookup_unavailable() -> None:
             index,
             client=_FakeLookup(error="offline"),
         )
-    assert issues == []
+    assert [issue for issue in issues if issue.severity == "error"] == []
+    assert [(i.code, i.severity, i.field_path) for i in issues] == [
+        ("cve_lookup_unavailable", "warning", ("threat", "cve"))
+    ]
+    assert issues[0].context["unchecked_cve"] == ["CVE-2024-3094", "CVE-2024-0001"]
+    assert "offline" in issues[0].message
 
 
 def test_check_cve_issues_respects_scope() -> None:

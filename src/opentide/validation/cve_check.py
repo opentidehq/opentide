@@ -55,6 +55,8 @@ def check_cve_issues(
             continue
 
         broken: list[str] = []
+        unchecked: list[str] = []
+        lookup_error = ""
         for cve in cve_list:
             try:
                 record = lookup.get(cve)
@@ -65,6 +67,8 @@ def check_cve_issues(
                     threat=threat_uuid,
                     detail=str(exc),
                 )
+                unchecked.append(cve)
+                lookup_error = str(exc)
                 continue
             if record is None:
                 logger.warning(
@@ -93,6 +97,26 @@ def check_cve_issues(
                     message=f"Invalid CVE references: {', '.join(broken)}",
                     suggestion="Confirm each identifier on Vulnerability-Lookup (https://vulnerability.circl.lu).",
                     context={"threat_id": threat_id, "broken_cve": broken},
+                )
+            )
+        if unchecked:
+            # Fail open, since an outage is not the author's mistake, but say
+            # so: a warning reaches the report and fails ``--strict``, where a
+            # log line alone let an unchecked run pass as a checked one.
+            issues.append(
+                ValidationIssue(
+                    code="cve_lookup_unavailable",
+                    severity="warning",
+                    object_uuid=threat_uuid,
+                    object_type="threat",
+                    file_path=file_path,
+                    field_path=(THREAT_MODEL_FIELD, "cve"),
+                    message=(
+                        f"Could not check CVE references on Vulnerability-Lookup: "
+                        f"{', '.join(unchecked)} ({lookup_error})"
+                    ),
+                    suggestion="Run `opentide validate --check cve` again once it is reachable.",
+                    context={"threat_id": threat_id, "unchecked_cve": unchecked},
                 )
             )
 
