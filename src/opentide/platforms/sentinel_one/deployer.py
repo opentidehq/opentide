@@ -42,6 +42,11 @@ class SentinelOneDeploy(RuleDeployer):
                 timespan_in_minute = timespan.removesuffix("m")
             elif timespan.endswith("h"):
                 timespan_in_minute = int(timespan.removesuffix("h")) * 60
+            else:
+                raise ValueError(
+                    f"SentinelOne expects a duration in minutes (30m) or hours (2h), "
+                    f"got {timespan!r}"
+                )
             return int(timespan_in_minute)
 
         mdr_config = data.configurations.sentinel_one
@@ -75,10 +80,10 @@ class SentinelOneDeploy(RuleDeployer):
         else:
             treat_as_threat = None
             network_quarantine = None
-        cool_off = mdr_config.condition.cool_off
-        if cool_off is str:
+        cool_off = None
+        if mdr_config.condition.cool_off:
             cool_off = SentinelOneApiRule.Data.CoolOffSettings(
-                renotifyMinutes=_convert_to_minutes(cool_off)
+                renotifyMinutes=_convert_to_minutes(mdr_config.condition.cool_off)
             )
         if mdr_config.condition.type not in ["Single Event", "Correlation"]:
             raise Exception
