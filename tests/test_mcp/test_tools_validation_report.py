@@ -11,7 +11,7 @@ from opentide.validation.issues import ValidationReport
 def test_tool_validation_report_full_scope() -> None:
     report = ValidationReport(ok=True, stats={"objects_checked": 0})
     with (
-        patch("opentide.mcp_server.tools.ensure_initialised"),
+        patch("opentide.mcp_server.tools.Opentide.reload"),
         patch("opentide.validation.session.run_validation", return_value=report),
     ):
         payload = tool_validation_report()
@@ -21,7 +21,7 @@ def test_tool_validation_report_full_scope() -> None:
 def test_tool_validation_report_narrow_scope() -> None:
     report = ValidationReport(ok=True)
     with (
-        patch("opentide.mcp_server.tools.ensure_initialised"),
+        patch("opentide.mcp_server.tools.Opentide.reload"),
         patch("opentide.validation.session.run_validation", return_value=report) as mock_run,
     ):
         tool_validation_report(file="rule.yaml", uuid="u1", object_type="rule")

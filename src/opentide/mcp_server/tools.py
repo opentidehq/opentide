@@ -37,7 +37,9 @@ def tool_coverage(technique: str = "", tactic: str = "") -> dict[str, Any]:
 
 
 def tool_validate_rule(uuid: str) -> dict[str, Any]:
-    ensure_initialised()
+    # The server outlives any edit an agent makes; validating the index built at
+    # start-up would report the content the author has already changed.
+    Opentide.reload()
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 
@@ -61,7 +63,8 @@ def tool_validation_report(
     object_type: str | None = None,
 ) -> dict[str, Any]:
     """Structured validation report for agents (headless API)."""
-    ensure_initialised()
+    # Re-read the workspace, as ``tool_validate_rule`` does.
+    Opentide.reload()
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 
