@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -101,7 +101,7 @@ def run_generate_phase(phase: str) -> None:
 
 
 @contextmanager
-def workspace_repo_env(target: Path) -> Iterator[Path]:
+def workspace_repo_env(target: Path) -> Generator[Path, None, None]:
     """Bind generation/index lookup to ``target`` and restore process state."""
     resolved = target.resolve()
     resolved.mkdir(parents=True, exist_ok=True)

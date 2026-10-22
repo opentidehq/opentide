@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
     from opentide.cli.context import CliContext
     from opentide.deployment.git_repo import RuleScope
+    from opentide.models.deployment_enums import RunStrategies
     from opentide.platforms.transport import TenantUnreachableError
 
 
@@ -565,7 +566,9 @@ def _scoped(result: dict[str, object], label: str | None) -> dict[str, object]:
     return result
 
 
-def queries_per_tenant(platform: str, rules: Sequence[Any], strategies: Any) -> dict[str, int]:
+def queries_per_tenant(
+    platform: str, rules: Sequence[str], strategies: RunStrategies
+) -> dict[str, int]:
     """How many rule queries a live check sends to each tenant.
 
     The same resolution the platform validator runs, so a tenant listed here
@@ -637,8 +640,8 @@ def _no_tenant_reached(platform: str, strategies: Sequence[Any], rules: int) -> 
 def _run_live_validator(
     ctx: CliContext,
     platform: str,
-    rules: Sequence[Any],
-    strategies: Any,
+    rules: Sequence[str],
+    strategies: RunStrategies,
     reach: dict[str, int],
 ) -> dict[str, object]:
     from opentide.core.registry import Opentide as LegacyOpentide

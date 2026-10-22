@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
@@ -15,12 +16,15 @@ from opentide.core.logging.console import emit_section
 logger = structlog.get_logger("opentide.cli.services.deploy")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
+    from opentide.models.deployment_enums import RunStrategies
 
 
 _NO_RULES_MATCHED = "No rule this run read has a status that maps to its strategies"
 
 
-def _tenant_targets(system: str, uuids: list[str], run: Any, wide: bool) -> dict[str, list[str]]:
+def _tenant_targets(
+    system: str, uuids: list[str], run: RunStrategies, wide: bool
+) -> dict[str, list[str]]:
     """Which tenants a deploy would reach on *system*, and with which rules."""
     from opentide.deployment.planning import TideDeployment, wide_scope
     from opentide.models.deployment_enums import DetectionPlatforms
@@ -78,7 +82,7 @@ def keeps_deprecated(all_files: bool, requested: bool | None) -> bool:
     return not all_files
 
 
-def resolve_run_strategies(values: Any) -> Any:
+def resolve_run_strategies(values: Iterable[str]) -> RunStrategies:
     """Parse ``--strategy`` values, answering a status name with its strategy.
 
     Raises ``ValueError`` with the message the CLI prints.

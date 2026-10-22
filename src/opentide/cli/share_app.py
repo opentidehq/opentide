@@ -7,7 +7,7 @@ import typer
 from opentide.cli.context import get_context
 from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import CommandResult, emit_result
-from opentide.cli.services.share import render_share, run_share
+from opentide.cli.services.share import ShareMode, render_share, run_share
 
 share_app = typer.Typer(
     help="Publish Tide objects to intelligence platforms",
@@ -17,7 +17,7 @@ share_app = typer.Typer(
 
 def _dispatch(
     ctx: typer.Context,
-    mode: str,
+    mode: ShareMode,
     *,
     target: list[str] | None,
     uuid: list[str] | None,
