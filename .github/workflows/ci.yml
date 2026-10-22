@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, development]
   pull_request:
-    # All base branches — required for jj stacks (PRs target parent bookmarks, not only development)
+    # All base branches: a stacked PR targets the branch below it, not development.
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}

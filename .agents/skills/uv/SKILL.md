@@ -46,10 +46,10 @@ Add runtime deps with `uv add <package>`. Add dev tools with `uv add --group dev
 uv run pre-commit install --install-hooks
 ```
 
-- **pre-commit:** whitespace, YAML/TOML, ruff, ruff-format, ty (staged)
+- **pre-commit:** whitespace, YAML/TOML, ruff check, ruff format, ty (staged). ruff and ty are local hooks that run the versions pinned in `uv.lock`, so a hook never disagrees with CI.
 - **pre-push:** `scripts/ci-local.sh --full` when code/CI paths change; `scripts/validate-docs.sh` when `docs/` changes
 
-Hooks run on `jj git push` (colocated git backend).
+The pre-push hook runs on `git push`.
 
 ## General uv reference
 
