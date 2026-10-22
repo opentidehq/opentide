@@ -127,6 +127,63 @@ def test_migrate_objects_skips_existing_destination(tmp_path: Path) -> None:
     assert (dest / "existing.toml").is_file()
 
 
+def test_migrate_objects_cli_warns_about_a_configurations_folder_it_left(tmp_path: Path) -> None:
+    """``setup platforms`` before the migration created ``.opentide/configurations``.
+
+    The migration then skipped ``Configurations/`` and printed only
+    ``OK Migrated 1 legacy path(s)``: the skip was visible in ``--json`` alone.
+    """
+    root = tmp_path / "legacy"
+    (root / "Configurations" / "systems").mkdir(parents=True)
+    (root / "Configurations" / "systems" / "sentinel.toml").write_text("x = 1\n", encoding="utf-8")
+    (root / "Objects" / "Detection Rules").mkdir(parents=True)
+    (root / "Objects" / "Detection Rules" / "r.yaml").write_text("name: r\n", encoding="utf-8")
+    (root / ".opentide" / "configurations" / "platforms").mkdir(parents=True)
+    (root / ".opentide" / "configurations" / "platforms" / "sentinel.toml").write_text(
+        "enabled = true\n", encoding="utf-8"
+    )
+
+    dry = runner.invoke(app, ["--repo", str(root), "migrate", "objects"])
+    applied = runner.invoke(app, ["--repo", str(root), "migrate", "objects", "--apply"])
+
+    assert dry.exit_code == 0, dry.output
+    assert "Left Configurations/ in place" in " ".join(dry.output.split())
+    assert applied.exit_code == 1, applied.output
+    output = " ".join(applied.output.split())
+    assert "ISSUES Migrated 1 legacy path(s); 1 legacy path(s) left in place" in output
+    assert "Left Configurations/ in place: .opentide/configurations/ already exists" in output
+    assert (root / "objects" / "rules" / "r.yaml").is_file()
+    assert (root / "Configurations" / "systems" / "sentinel.toml").is_file()
+
+
+def test_migrate_objects_warns_about_files_a_merge_left_behind(tmp_path: Path) -> None:
+    root = tmp_path / "legacy"
+    (root / "Objects" / "Threat Vectors").mkdir(parents=True)
+    (root / "Objects" / "Threat Vectors" / "threat.yaml").write_text("client\n", encoding="utf-8")
+    library = root / "Models Library" / "Threat Vector Models"
+    library.mkdir(parents=True)
+    (library / "threat.yaml").write_text("library\n", encoding="utf-8")
+    (root / "objects" / "threats").mkdir(parents=True)
+    (root / "objects" / "threats" / "threat.yaml").write_text("current\n", encoding="utf-8")
+    expected = [
+        f"{source}/threat.yaml was not moved: its destination already has a file or "
+        "folder of that name."
+        for source in ("Objects/Threat Vectors", "Models Library/Threat Vector Models")
+    ]
+
+    planned = run_migrate_objects(root)
+    result = run_migrate_objects(root, apply=True)
+
+    assert planned["warnings"] == expected
+    assert "_exit_code" not in planned
+    assert result["warnings"] == expected
+    assert result["status"] == "issues"
+    assert result["_exit_code"] == 1
+    assert (root / "objects" / "threats" / "threat.yaml").read_text(encoding="utf-8") == (
+        "current\n"
+    )
+
+
 def test_migrate_objects_idempotent_after_apply(tmp_path: Path) -> None:
     root = _legacy_repo(tmp_path)
     run_migrate_objects(root, apply=True)
