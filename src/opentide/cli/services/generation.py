@@ -193,6 +193,12 @@ def run_generate_all() -> None:
                 phase=phase,
                 seconds=round(elapsed[phase], 1),
             )
+    # Files in subfolders are not objects (#584): every phase skipped them,
+    # so the pipeline names them once, after the phases built the index (an
+    # index loaded before them would log its own errors outside any phase).
+    from opentide.registry.catalogue import report_nested_object_files
+
+    report_nested_object_files()
     total = time.monotonic() - started
     logger.info(
         "generation_complete",

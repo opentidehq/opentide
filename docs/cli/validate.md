@@ -92,17 +92,27 @@ OK Validation passed, but no detection objects were found under /home/you/monore
 
 If that path is not your workspace, `cd` into it or pass `--repo`.
 
+### Files in subfolders
+
+An object is a `.yaml` or `.yml` file placed directly in its folder (`objects/rules/rule.yaml`). A file in a subfolder (`objects/rules/team-a/rule.yaml`) is not an object: `validate` does not index or check it, and neither do `share`, `lint`, `deploy`, docs or exports. `validate` reports each such file once as a `nested_object_file` warning at its path:
+
+```text illustrative
+objects/rules/team-a/rule.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)
+```
+
+Move the file up into its object folder to make it an object. `--strict` fails on this warning. Through 0.17.2 `validate`, `share`, `lint`, docs and exports read subfolders too, while `deploy` skipped them.
+
 ### Selecting a file
 
-Object folders may contain subfolders, and files in different folders may share a name. `--file` matches like this:
+`--file` matches like this:
 
 | Target | Matches |
 |--------|---------|
-| Repo-relative path (`objects/rules/team-a/rule.yaml`, `./objects/rules/team-a/rule.yaml`) | That file only. It is resolved from the working directory and from the repository root, so it also works from outside the repo or with `--repo`. |
+| Repo-relative path (`objects/rules/rule.yaml`, `./objects/rules/rule.yaml`) | That file only. It is resolved from the working directory and from the repository root, so it also works from outside the repo or with `--repo`. |
 | Absolute path | That file only. |
-| Bare file name (`rule.yaml`) | Every object file with that name, in any object folder or subfolder. |
+| Bare file name (`rule.yaml`) | Every object file with that name, in any object folder. |
 
-A path never falls back to its file name: `objects/rules/rule.yaml` does not select `objects/rules/team-a/rule.yaml`, and a path that names no object file fails with `scope_no_match`. Give a path when a file name is not unique.
+A path never falls back to its file name, and a path that names no object file fails with `scope_no_match`. A path to a file in a subfolder names no object: it fails with `scope_no_match` and the file's `nested_object_file` warning.
 
 Every `--file` target must select at least one object. A target that matches nothing fails the run with a `scope_no_match` issue naming that target (`context.targets`), even when the other targets matched and validated cleanly. Through 0.14.2 the run failed only when no target matched at all, so a mistyped or quoted path beside a valid one passed without being validated.
 

@@ -9,6 +9,7 @@ from typing import Any
 from opentide.cli.context import CliContext
 from opentide.core.logging import get_logger
 from opentide.core.registry import Opentide
+from opentide.registry.catalogue import report_nested_object_files
 from opentide.sharing.config import MispBlock, SharingConfig, load_sharing
 from opentide.sharing.constants import (
     INTEGRATION_MISP,
@@ -100,13 +101,19 @@ def run_share(
             return _redact(_quiet(_NO_ENABLED_TARGET, config), secrets)
         return _redact(_preflight(problem or "scope_no_match", config), secrets)
     documents = _catalogue()
+    # Files in subfolders are not objects (#584): never shared, named once.
+    nested: list[str] = []
+    report_nested_object_files(warnings=nested)
     filters = _filters(cli.repo, uuids, types, files)
     if changed and mode == "push":
         filters, stop = _changed_files(cli.repo, filters)
         if stop == "empty":
-            return _redact(_quiet(_NO_CHANGED_OBJECTS, config), secrets)
+            return _redact(_with_warnings(_quiet(_NO_CHANGED_OBJECTS, config), nested), secrets)
         if stop is not None:
-            return _redact(_preflight("changed_diff", config, message=stop), secrets)
+            return _redact(
+                _with_warnings(_preflight("changed_diff", config, message=stop), nested),
+                secrets,
+            )
     validate = _validator(documents) if effective in {"push", "preview"} else None
     outcome = run_misp(
         documents,
@@ -123,7 +130,7 @@ def run_share(
     log.info(
         "share.completed", mode=effective, exit_code=outcome.exit_code, records=len(outcome.records)
     )
-    return _redact(_from_run(outcome, config), secrets)
+    return _redact(_with_warnings(_from_run(outcome, config), nested), secrets)
 
 
 def render_share(payload: dict[str, Any]) -> None:
@@ -488,6 +495,12 @@ def _result(
     if warnings:
         payload["warnings"] = list(warnings)
     payload.update(data)
+    return payload
+
+
+def _with_warnings(payload: dict[str, Any], extra: list[str]) -> dict[str, Any]:
+    if extra:
+        payload["warnings"] = [*payload.get("warnings", []), *extra]
     return payload
 
 

@@ -14,6 +14,13 @@ from pydantic import ValidationError
 from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.core.registry import Opentide
 from opentide.models.object_types import CORE_OBJECT_TYPES
+from opentide.registry.catalogue import (
+    NESTED_OBJECT_FILE,
+    catalogue_files,
+    display_path,
+    nested_entries,
+    nested_file_message,
+)
 from opentide.validation.checks.cross_object import (
     check_chaining_for_object,
     check_references_for_object,
@@ -156,6 +163,9 @@ def run_validation(
 
         issues.extend(check_cve_issues(index, scope))
 
+    # Files in subfolders are not objects (#584): say so once, as warnings.
+    warnings.extend(_nested_object_warnings(index, scope))
+
     if ValidateCheck.sharing_config in checks:
         sharing_issues, sharing_warnings = _sharing_config_issues()
         issues.extend(sharing_issues)
@@ -225,6 +235,37 @@ def _enabled_platforms(
     from opentide.platforms.enabled import enabled_systems
 
     return frozenset(enabled_systems())
+
+
+def _nested_object_warnings(index: dict[str, Any], scope: ValidationScope) -> list[ValidationIssue]:
+    """One ``nested_object_file`` warning per YAML file in a subfolder of an object folder.
+
+    A narrow run warns only about the files its ``--file`` or ``--type``
+    filters point at, so ``--file objects/rules/team/x.yaml`` explains why
+    nothing matched.
+    """
+    warnings: list[ValidationIssue] = []
+    for row in nested_entries(index):
+        path = Path(row["path"])
+        object_type = str(row.get("object_type") or "")
+        if scope.mode == "narrow":
+            if scope.object_types and object_type not in scope.object_types:
+                continue
+            if scope.file_targets and not scope.matches_file(path.name, path):
+                continue
+            if not scope.file_targets and not scope.object_types:
+                continue
+        folder = display_path(row.get("folder") or path.parent)
+        warnings.append(
+            ValidationIssue(
+                code=NESTED_OBJECT_FILE,
+                severity="warning",
+                object_type=object_type,
+                file_path=path,
+                message=nested_file_message(display_path(path), folder),
+            )
+        )
+    return warnings
 
 
 def _sharing_config_issues() -> tuple[list[ValidationIssue], list[ValidationIssue]]:
@@ -579,8 +620,9 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
         object_path = paths.get(meta_name)
         if not object_path or not object_path.exists():
             continue
-        # Must walk the same tree as ``RegistryBuilder``, which indexes subfolders.
-        for model_file in sorted(object_path.rglob("*.yaml")):
+        # The same catalogue as ``RegistryBuilder`` (direct children only, #584),
+        # plus ``*.debug.yaml`` so an unparseable one is still reported (#250).
+        for model_file in catalogue_files(object_path, include_debug=True):
             scan_paths.append((model_file, meta_name))
     return scan_paths
 

@@ -248,7 +248,24 @@ def run(
     flavor: str | None = None,
     changed: bool = False,
 ) -> dict[str, object]:
-    """Run documentation generation for a scope or full pipeline."""
+    """Run documentation generation for a scope or full pipeline.
+
+    Files in subfolders of an object folder are not objects (#584): they get
+    no page, and the payload names them once in ``warnings``.
+    """
+    from opentide.registry.catalogue import with_nested_object_warning
+
+    result = _run(scope=scope, output=output, flavor=flavor, changed=changed)
+    return with_nested_object_warning(dict(result))
+
+
+def _run(
+    *,
+    scope: str | None,
+    output: str | None,
+    flavor: str | None,
+    changed: bool,
+) -> dict[str, object]:
     ctx = _build_context(output=output, flavor=flavor)
     resolved = DocumentScope(scope) if scope else None
 
