@@ -180,6 +180,37 @@ def test_query_validator_assumes_valid_on_a_network_error_redirect(
     assert "VALIDATION_ERROR_RAISED" not in os.environ
 
 
+def test_query_validator_reads_a_redirected_refusal_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A redirect that is not a network error is still a refusal, reported from its body.
+
+    The body is a stream; reading it once for the network-error check left
+    ``json.loads`` an empty one, and the check crashed instead of reporting.
+    """
+    from opentide.platforms.splunk.validator import SplunkQueryValidator
+
+    class Body:
+        def __init__(self, data: bytes) -> None:
+            self._data = data
+
+        def read(self) -> bytes:
+            data, self._data = self._data, b""
+            return data
+
+    class Service:
+        def parse(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {
+                "status": HTTP_ERROR_STATUS,
+                "reason": "Temporary Redirect",
+                "body": Body(b'{"messages": [{"type": "FATAL", "text": "Unknown command"}]}'),
+            }
+
+    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
+    validator = SplunkQueryValidator.__new__(SplunkQueryValidator)
+
+    validator._validate_spl_query("| makeresults |badcommand", "bad", "uuid-4", Service())  # type: ignore[arg-type]
+    assert os.environ.get("VALIDATION_ERROR_RAISED") == "True"
+
+
 # --- a proxy's HTML page is named, not parsed as XML ---------------------------
 
 _PROXY_VARIABLES = (

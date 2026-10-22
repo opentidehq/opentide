@@ -50,12 +50,15 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
             )
             status = response["status"]
             if status == HTTP_ERROR_STATUS:
-                if (reason := response.get("reason")) and reason == "Temporary Redirect":
-                    if "Network Error" in str(response["body"].read()):
-                        logger.warning("query_validation_timeout_assumed_valid", mdr_name=mdr_name)
-                        os.environ["VALIDATION_WARNING_RAISED"] = "True"
-                        return
-                parsing = json.loads(response["body"].read())
+                # The body is a stream: read it once. A second read returned b""
+                # and failed in json.loads, so a refused query on a redirect
+                # crashed the check instead of being reported.
+                body = response["body"].read()
+                if response.get("reason") == "Temporary Redirect" and "Network Error" in str(body):
+                    logger.warning("query_validation_timeout_assumed_valid", mdr_name=mdr_name)
+                    os.environ["VALIDATION_WARNING_RAISED"] = "True"
+                    return
+                parsing = json.loads(body)
                 for message in parsing["messages"]:
                     logger.critical(
                         "invalid_spl_query",
