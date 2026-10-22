@@ -1,0 +1,13 @@
+# A later configuration layer applied on top of sharing.toml.
+# Entries merge by name: misp-isac keeps every key it does not restate,
+# and misp-lab is appended. The expected result is merged.toml.
+
+[[misp]]
+name = "misp-isac"
+max_tlp = "clear"
+
+[[misp]]
+name = "misp-lab"
+url = "https://misp.lab.example.com"
+api_key = "${MISP_LAB_API_KEY}"
+max_tlp = "amber"

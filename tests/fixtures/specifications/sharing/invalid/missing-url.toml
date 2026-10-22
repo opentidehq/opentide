@@ -1,0 +1,4 @@
+[[misp]]
+name = "misp-internal"
+api_key = "${MISP_INTERNAL_API_KEY}"
+max_tlp = "amber"

@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "VisibilityAsset": {
+      "additionalProperties": false,
+      "description": "One `[[assets]]` entry: a system in the environment that generates logs.",
+      "properties": {
+        "name": {
+          "description": "Asset name that log sources and detectors refer to.",
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "description": "What the asset is.",
+          "title": "Description",
+          "type": "string"
+        },
+        "criticality": {
+          "description": "How critical the asset is to the organisation.",
+          "title": "Criticality",
+          "type": "string"
+        },
+        "custom_details": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Free-form details shown with the asset.",
+          "title": "Custom Details"
+        },
+        "surface": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Technologies the asset exposes.",
+          "title": "Surface"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "criticality"
+      ],
+      "title": "VisibilityAsset",
+      "type": "object"
+    },
+    "VisibilityDetector": {
+      "additionalProperties": false,
+      "description": "One `[[detectors]]` entry: an external detector an objective can name.",
+      "properties": {
+        "name": {
+          "description": "Detector name an objective refers to.",
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "description": "What the detector detects.",
+          "title": "Description",
+          "type": "string"
+        },
+        "references": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference links.",
+          "title": "References"
+        },
+        "assets": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Names of the [[assets]] the detector covers.",
+          "title": "Assets"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "title": "VisibilityDetector",
+      "type": "object"
+    },
+    "VisibilityLogSource": {
+      "additionalProperties": false,
+      "description": "One `[[logsources]]` entry: a log source a rule's signals can name.",
+      "properties": {
+        "name": {
+          "description": "Log source name a signal refers to.",
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "description": "What the log source collects.",
+          "title": "Description",
+          "type": "string"
+        },
+        "system": {
+          "description": "Platform identifier the log source is searched on.",
+          "title": "System",
+          "type": "string"
+        },
+        "assets": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Names of the [[assets]] the log source collects from.",
+          "title": "Assets"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tenants of the platform the log source is available on.",
+          "title": "Tenants"
+        },
+        "references": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reference links.",
+          "title": "References"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "system"
+      ],
+      "title": "VisibilityLogSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Code-first visibility configuration schema.",
+  "properties": {
+    "assets": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/VisibilityAsset"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "List of assets that generate logs in the environment",
+      "title": "Assets"
+    },
+    "logsources": {
+      "description": "Log sources available in the environment",
+      "items": {
+        "$ref": "#/$defs/VisibilityLogSource"
+      },
+      "title": "Log Sources",
+      "type": "array"
+    },
+    "detectors": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/VisibilityDetector"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Detectors outside opentide that cover the environment",
+      "title": "External Detectors"
+    }
+  },
+  "required": [
+    "logsources"
+  ],
+  "title": "visibility.toml",
+  "type": "object"
+}

@@ -4,31 +4,47 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from pydantic import Field
+
 from opentide.models.base import TideField, TideModel
 
 
 class VisibilityAsset(TideModel):
-    name: str
-    description: str
-    criticality: str
-    custom_details: dict[str, str | bool | int | float] | None = None
-    surface: list[str] | None = None
+    """One `[[assets]]` entry: a system in the environment that generates logs."""
+
+    name: str = Field(description="Asset name that log sources and detectors refer to.")
+    description: str = Field(description="What the asset is.")
+    criticality: str = Field(description="How critical the asset is to the organisation.")
+    custom_details: dict[str, str | bool | int | float] | None = Field(
+        default=None, description="Free-form details shown with the asset."
+    )
+    surface: list[str] | None = Field(default=None, description="Technologies the asset exposes.")
 
 
 class VisibilityLogSource(TideModel):
-    name: str
-    description: str
-    system: str
-    assets: list[str] | None = None
-    tenants: list[str] | None = None
-    references: list[str] | None = None
+    """One `[[logsources]]` entry: a log source a rule's signals can name."""
+
+    name: str = Field(description="Log source name a signal refers to.")
+    description: str = Field(description="What the log source collects.")
+    system: str = Field(description="Platform identifier the log source is searched on.")
+    assets: list[str] | None = Field(
+        default=None, description="Names of the [[assets]] the log source collects from."
+    )
+    tenants: list[str] | None = Field(
+        default=None, description="Tenants of the platform the log source is available on."
+    )
+    references: list[str] | None = Field(default=None, description="Reference links.")
 
 
 class VisibilityDetector(TideModel):
-    name: str
-    description: str
-    references: list[str] | None = None
-    assets: list[str] | None = None
+    """One `[[detectors]]` entry: an external detector an objective can name."""
+
+    name: str = Field(description="Detector name an objective refers to.")
+    description: str = Field(description="What the detector detects.")
+    references: list[str] | None = Field(default=None, description="Reference links.")
+    assets: list[str] | None = Field(
+        default=None, description="Names of the [[assets]] the detector covers."
+    )
 
 
 class VisibilityConfig(TideModel):
@@ -49,6 +65,7 @@ class VisibilityConfig(TideModel):
             "title": "Log Sources",
             "tide.config.visibility.logsources": True,
         },
+        description="Log sources available in the environment",
     )
     detectors: list[VisibilityDetector] | None = TideField(
         default=None,
@@ -56,4 +73,5 @@ class VisibilityConfig(TideModel):
             "title": "External Detectors",
             "tide.config.visibility.detectors": True,
         },
+        description="Detectors outside opentide that cover the environment",
     )

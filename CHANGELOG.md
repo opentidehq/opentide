@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+Every file under `.opentide/configurations/` now has a Pydantic model, and the CLI validates the merged file against it when it reads the file (#374). A misspelt or unknown key that was silently ignored now fails the command that reads the file, naming the file and the key: `deployment.toml is invalid: promotion.enabeld: unknown key`. Run a command that reads each file (`opentide generate schemas`, `opentide deploy --dry-run`) after upgrading to find any.
+
+### Added
+
+- **Configuration models and JSON Schema export.** `opentide.models.configuration` holds one model per file: `paths.toml` (and legacy `global.toml`), `deployment.toml`, `schema.toml`, `visibility.toml`, `documentation.toml`, `sharing.toml` (items are `sharing::misp::1.0`) and each `platforms/<id>.toml`. `opentide.generation.configuration_schemas.export_configuration_schemas(dir)`, or `python -m opentide.generation.configuration_schemas <dir>`, writes the JSON Schema of each file (`model_json_schema()`, with a description on every field) and `configurations.router.json`, which maps a file name to its schema. They are for editors and the language server; `.opentide/schemas/` is unchanged.
+- **`opentide.validation.configuration.configuration_file_issues`** returns `{code, field_path, severity}` issues for one configuration file, merged onto the layers before it so that a partial override is not reported for keys it inherits. It returns every `sharing-config` code, and `promotion_target_unknown`, `asset_unknown` and `identifier_mismatch` for the checks a schema cannot state.
+
+### Changed
+
+- **Unknown keys and wrong types in configuration files are errors.** The exceptions are the retired `[vocabulary]` table of `schema.toml`, which is accepted and ignored, and a `sharing.toml` array naming an unknown connector, which is skipped with a warning. A `$NAME` placeholder is still valid for any tenant `setup` key. Error messages never repeat a value. A malformed `[[responders]]` entry is still skipped with a warning rather than failing the file.
+- **`documentation.toml` values are checked.** `[diagrams] relations_direction` outside `upstream`, `downstream` and `both` failed over to `both`; it now fails to load.
+- **sharing.toml:** `api_key` must be `${NAME}` with an uppercase name, as sharing 1.0 specifies; `${misp_key}` is now a literal and reported as `api_key_literal`. `organisation_uuid` accepts uppercase hex. The warning for an unknown top-level array is `unknown_connector` (was `unknown_integration`).
+
 ## [0.17.2] — 2026-10-22
 
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.

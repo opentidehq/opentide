@@ -1,0 +1,509 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "LegacyTideIdentity": {
+      "additionalProperties": true,
+      "description": "`[tide]`: CoreTIDE-era identity table. `identifier` keys the file.",
+      "properties": {
+        "identifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform identifier, read when [platform] has none.",
+          "title": "Identifier"
+        }
+      },
+      "title": "LegacyTideIdentity",
+      "type": "object"
+    },
+    "Modifier": {
+      "additionalProperties": false,
+      "description": "`[[modifiers]]`: rule values rewritten at deploy time when the conditions match.",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Modifier name.",
+          "title": "Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the modifier is for.",
+          "title": "Description"
+        },
+        "conditions": {
+          "$ref": "#/$defs/ModifierConditions",
+          "description": "When the modifier applies."
+        },
+        "modifications": {
+          "additionalProperties": true,
+          "description": "Rule values to set, keyed by dotted platform field path.",
+          "title": "Modifications",
+          "type": "object"
+        }
+      },
+      "required": [
+        "conditions",
+        "modifications"
+      ],
+      "title": "Modifier",
+      "type": "object"
+    },
+    "ModifierConditions": {
+      "additionalProperties": false,
+      "description": "`[modifiers.conditions]`: which rules a modifier applies to.",
+      "properties": {
+        "status": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Apply to rules in one of these deployment statuses.",
+          "title": "Status"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Apply to rules carrying one of these flags.",
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Apply when deploying to one of these tenants.",
+          "title": "Tenants"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Apply to every rule, as platform defaults.",
+          "title": "Default"
+        }
+      },
+      "title": "ModifierConditions",
+      "type": "object"
+    },
+    "PlatformIdentity": {
+      "additionalProperties": false,
+      "description": "`[platform]`: whether the platform is enabled, and how it is named.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Load and deploy to this platform.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "identifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform identifier (for example sentinel). Matches the file name stem.",
+          "title": "Identifier"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Display name of the platform.",
+          "title": "Name"
+        },
+        "subschema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Title of the platform's rule sub-schema.",
+          "title": "Subschema"
+        },
+        "description": {
+          "default": "",
+          "description": "What the platform is.",
+          "title": "Description",
+          "type": "string"
+        },
+        "flags": {
+          "description": "Flags a modifier condition can match.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        }
+      },
+      "title": "PlatformIdentity",
+      "type": "object"
+    },
+    "SplunkSetup": {
+      "additionalProperties": false,
+      "description": "`[tenants.setup]` for Splunk.",
+      "properties": {
+        "ssl": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": true,
+          "description": "Verify the tenant's TLS certificate. A $NAME placeholder is allowed.",
+          "title": "Ssl"
+        },
+        "url": {
+          "description": "Splunk management URL.",
+          "title": "Url",
+          "type": "string"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Splunk management port.",
+          "title": "Port"
+        },
+        "app": {
+          "description": "Splunk app the searches are saved in.",
+          "title": "App",
+          "type": "string"
+        },
+        "token": {
+          "default": "",
+          "description": "Splunk authentication token. Use a $NAME placeholder; do not commit the value.",
+          "title": "Token",
+          "type": "string"
+        },
+        "correlation_searches": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
+              "pattern": "^\\$",
+              "type": "string"
+            }
+          ],
+          "default": true,
+          "description": "Save rules as Enterprise Security correlation searches.",
+          "title": "Correlation Searches"
+        },
+        "allow_skew": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Splunk allow_skew value.",
+          "title": "Allow Skew"
+        },
+        "schedule_offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
+              "pattern": "^\\$",
+              "type": "string"
+            }
+          ],
+          "default": 0,
+          "description": "Minutes added to the computed schedule.",
+          "title": "Schedule Offset"
+        },
+        "frequency_scheduling": {
+          "default": "random",
+          "description": "How a search's cron minute is chosen.",
+          "title": "Frequency Scheduling",
+          "type": "string"
+        },
+        "actions_enabled": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Alert actions a rule may enable.",
+          "title": "Actions Enabled"
+        },
+        "default_actions": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Alert actions enabled when a rule names none.",
+          "title": "Default Actions"
+        },
+        "enterprise_security": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
+              "pattern": "^\\$",
+              "type": "string"
+            }
+          ],
+          "default": false,
+          "description": "The instance runs Splunk Enterprise Security.",
+          "title": "Enterprise Security"
+        }
+      },
+      "required": [
+        "url",
+        "port",
+        "app"
+      ],
+      "title": "SplunkSetup",
+      "type": "object"
+    },
+    "SplunkTenant": {
+      "additionalProperties": false,
+      "description": "`[[tenants]]` for Splunk.",
+      "properties": {
+        "name": {
+          "description": "Tenant name a rule's platform block may list.",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "description": "What the tenant is.",
+          "title": "Description",
+          "type": "string"
+        },
+        "strategies": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "PREVIEW",
+                  "RELEASE"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "enum": [
+                "PREVIEW",
+                "RELEASE"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Status strategies the tenant accepts (PREVIEW, RELEASE). Omit for both.",
+          "title": "Strategies"
+        },
+        "manual": {
+          "default": false,
+          "description": "Only rules whose platform block lists this tenant reach it.",
+          "title": "Manual",
+          "type": "boolean"
+        },
+        "setup": {
+          "$ref": "#/$defs/SplunkSetup",
+          "description": "Connection settings."
+        }
+      },
+      "required": [
+        "name",
+        "setup"
+      ],
+      "title": "SplunkTenant",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Merged `platforms/splunk.toml`.",
+  "properties": {
+    "platform": {
+      "$ref": "#/$defs/PlatformIdentity",
+      "description": "Platform identity."
+    },
+    "tide": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LegacyTideIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "CoreTIDE-era identity table."
+    },
+    "modifiers": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/Modifier"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      ],
+      "description": "Deploy-time rule modifiers. A [modifiers] table is the legacy layout.",
+      "title": "Modifiers"
+    },
+    "tenants": {
+      "description": "Splunk tenants.",
+      "items": {
+        "$ref": "#/$defs/SplunkTenant"
+      },
+      "title": "Tenants",
+      "type": "array"
+    },
+    "defaults": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Saved-search values applied to every rule.",
+      "title": "Defaults"
+    },
+    "setup": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Legacy connection settings, read when no tenant is set.",
+      "title": "Setup"
+    },
+    "secrets": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Legacy secrets, read when no tenant is set.",
+      "title": "Secrets"
+    }
+  },
+  "title": "platforms/splunk.toml",
+  "type": "object"
+}

@@ -19,6 +19,17 @@ def workspace_config(configs: dict[str, Any]) -> dict[str, Any]:
     raise KeyError("Bundled paths.toml or global.toml missing from configurations")
 
 
+def validate_paths_configuration(configs: dict[str, Any]) -> None:
+    """Validate merged `paths.toml` and legacy `global.toml` against `PathsConfiguration`."""
+    from opentide.models.configuration.loading import validate_configuration
+    from opentide.models.configuration.paths import PathsConfiguration
+
+    for key in ("paths", "global"):
+        document = configs.get(key)
+        if isinstance(document, dict):
+            validate_configuration(PathsConfiguration, document, file_key=f"{key}.toml")
+
+
 def _rel(base: Path, value: str) -> Path:
     return (base / value).resolve()
 
@@ -53,6 +64,7 @@ def resolve_workspace_paths(
 
         configs = resolve_configurations()
 
+    validate_paths_configuration(configs)
     cfg = workspace_config(configs)
     base = workspace or discover_workspace()
     data_root = get_data_root()

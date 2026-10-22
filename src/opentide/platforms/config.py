@@ -429,9 +429,34 @@ def _identity_platform(system: str, payload: dict[str, Any]) -> SystemConfig.Pla
     )
 
 
+def validate_platform_config(system: str, raw: dict[str, Any]) -> Any:
+    """Validate a merged `platforms/<system>.toml` against its model.
+
+    Values are checked as written: a `$NAME` placeholder is valid for any
+    setup key, so no secret is resolved or repeated here.
+    """
+    from opentide.models.configuration.loading import validate_configuration
+    from opentide.models.configuration.platforms import platform_configuration_model
+
+    return validate_configuration(
+        platform_configuration_model(system), raw, file_key=f"platforms/{system}.toml"
+    )
+
+
 def build_system_config(system: str, raw: dict[str, Any] | None = None) -> Any:
-    """Build typed platform configuration for a detection system."""
+    """Build typed platform configuration for a detection system.
+
+    The tenant loaders run first and report a retired or missing key in the
+    words they always have; the platform model then rejects whatever they
+    do not read (an unknown key, a wrong type).
+    """
     raw = dict(systems_raw_index()[system]) if raw is None else dict(raw)
+    built = _build_system_config(system, raw)
+    validate_platform_config(system, raw)
+    return built
+
+
+def _build_system_config(system: str, raw: dict[str, Any]) -> Any:
     if system == "splunk":
         return _build_splunk_config(raw)
     if system == "carbon_black_cloud":

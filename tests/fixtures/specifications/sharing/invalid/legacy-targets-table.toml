@@ -1,0 +1,6 @@
+# The [targets.<id>] layout from RFC 0005 drafts. The top level holds only integration arrays.
+
+[targets.misp-internal]
+connector = "misp"
+url = "https://misp.internal.example.org"
+api_key = "${MISP_INTERNAL_API_KEY}"
