@@ -145,6 +145,26 @@ def test_run_validate_all_counts_schema_missing_against_schema() -> None:
     assert [issue["code"] for issue in results["schema"]["issues"]] == ["schema_missing"]
 
 
+def test_run_validate_all_counts_config_enum_unknown_against_schema() -> None:
+    """A value missing from a configured enum failed validation but no check.
+
+    ``checks.schema.status`` read ``passed`` while the top-level status was
+    ``failed``, and the issue was missing from every check's list.
+    """
+    issue = ValidationIssue(
+        code="config_enum_unknown",
+        message="Value 'Tier 9' is not a configured responders value.",
+        field_path=("rule", "response", "responders"),
+    )
+    report = ValidationReport(ok=False, issues=[issue])
+    with patch.object(validation_service, "run_validation", return_value=report):
+        results = validation_service.run_validate_all()
+        payload = validation_service.run_validate_check(ValidateCheck.schema)
+    assert results["schema"]["status"] == "failed"
+    assert [item["code"] for item in results["schema"]["issues"]] == ["config_enum_unknown"]
+    assert payload["checks"]["schema"]["status"] == "failed"
+
+
 def test_run_validate_check_id_uniqueness() -> None:
     report = ValidationReport(ok=True)
     with patch.object(validation_service, "run_validation", return_value=report):

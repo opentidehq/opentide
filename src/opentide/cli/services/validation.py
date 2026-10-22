@@ -96,6 +96,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "missing_uuid",
             "invalid_ref",
             "vocab_unknown",
+            "config_enum_unknown",
             "chaining_relation_unknown",
             "external_id_in_rule",
             "deployment_state_uuid_mismatch",
