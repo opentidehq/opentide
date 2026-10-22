@@ -15,11 +15,11 @@ import importlib.util
 import sys
 
 #: Exact import the server performs at module scope. Checking the package name
-#: alone is not enough: mcp 2.x is importable but dropped ``server.fastmcp``.
-MCP_IMPORT = "mcp.server.fastmcp"
+#: alone is not enough: mcp 1.x is importable but has no ``server.mcpserver``.
+MCP_IMPORT = "mcp.server.mcpserver"
 MCP_PACKAGE = "mcp"
 
-MCP_SPECIFIER = "mcp>=1.28.1,<2"
+MCP_SPECIFIER = "mcp>=2.3,<3"
 #: Remedy for both failure modes. ``mcp`` is a base dependency since 0.14.0 and
 #: opentide has no extras, so naming the package itself is the only advice that
 #: changes anything.
@@ -36,9 +36,10 @@ def _package_installed(name: str) -> bool:
 def probe() -> str | None:
     """Why the MCP server cannot start here, or ``None`` when it can.
 
-    ``mcp`` 2.x is importable but ships ``server.fastmcp`` as a stub that
-    raises, so "not installed" would be a lie and the user would reinstall the
-    extra they already have. Distinguish the two.
+    ``mcp`` 1.x is importable but has no ``server.mcpserver`` (``MCPServer``
+    arrived in 2.x, replacing ``server.fastmcp``), so "not installed" would be
+    a lie and the user would reinstall the package they already have.
+    Distinguish the two.
     """
     try:
         importlib.import_module(MCP_IMPORT)
@@ -46,9 +47,9 @@ def probe() -> str | None:
         if _package_installed(MCP_PACKAGE):
             return (
                 f"opentide mcp start cannot use the installed mcp package: {exc}.\n"
-                f"opentide needs {MCP_SPECIFIER}; mcp 2.x replaced "
-                f"`{MCP_IMPORT}` with `MCPServer`.\n"
-                f"Pin it with:  {MCP_INSTALL_HINT}"
+                f"opentide needs {MCP_SPECIFIER}; mcp 1.x has no "
+                f"`{MCP_IMPORT}` (`MCPServer` replaced `mcp.server.fastmcp` in 2.x).\n"
+                f"Upgrade it with:  {MCP_INSTALL_HINT}"
             )
         return (
             f"opentide mcp start cannot import {MCP_IMPORT}, but mcp ships as a "

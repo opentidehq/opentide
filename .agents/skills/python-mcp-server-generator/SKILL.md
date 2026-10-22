@@ -19,13 +19,14 @@ Create a complete Model Context Protocol (MCP) server in Python with the followi
 
 ### Project Setup
 - Initialize with `uv init project-name`
-- Add MCP SDK: `uv add "mcp[cli]"`
+- Add MCP SDK: `uv add "mcp[cli]>=2.3,<3"`
 - Create main server file (e.g., `server.py`)
 - Add `.gitignore` for Python projects
 - Configure for direct execution with `if __name__ == "__main__"`
 
 ### Server Configuration
-- Use `FastMCP` class from `mcp.server.fastmcp`
+- Use `MCPServer` from `mcp.server.mcpserver` (mcp 2.x; `mcp.server.fastmcp` is a stub that raises since 2.0)
+- Pass `version=` so `serverInfo.version` is not empty
 - Set server name and optional instructions
 - Choose transport: stdio (default) or streamable-http
 - For HTTP: optionally configure host, port, and stateless mode
