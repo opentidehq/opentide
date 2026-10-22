@@ -449,10 +449,11 @@ def _uuid_issue_for_object(
     graph: PreflightGraph,
     file_path: Path | None,
 ) -> list[ValidationIssue]:
-    raw_uuid = item.body.get("uuid") or item.body.get("metadata", {}).get("uuid")
-    try:
-        UUID(str(raw_uuid), version=4)
-    except (ValueError, TypeError):
+    metadata = item.body.get("metadata")
+    raw_uuid = item.body.get("uuid") or (
+        metadata.get("uuid") if isinstance(metadata, dict) else None
+    )
+    if not _is_uuid_v4(raw_uuid):
         return [
             ValidationIssue(
                 code="invalid_uuid",
@@ -466,6 +467,22 @@ def _uuid_issue_for_object(
             )
         ]
     return []
+
+
+def _is_uuid_v4(raw: object) -> bool:
+    """Whether *raw* is a version 4 UUID written as ``8-4-4-4-12`` hex digits.
+
+    ``UUID(raw, version=4)`` overwrites the version and variant bits instead of
+    checking them, so version 1 and 5 UUIDs, the nil UUID and braced, ``urn:``
+    or unhyphenated spellings all passed. Hex digits may be either case, as
+    RFC 9562 reads them.
+    """
+    text = str(raw)
+    try:
+        parsed = UUID(text)
+    except ValueError:
+        return False
+    return parsed.version == 4 and str(parsed) == text.lower()
 
 
 def _scope_has_narrow_filter(scope: ValidationScope) -> bool:
