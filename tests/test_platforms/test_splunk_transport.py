@@ -481,3 +481,23 @@ def test_a_retired_rule_deletes_its_saved_search(splunk: SplunkStandIn) -> None:
 
     assert "Retired Rule" not in splunk.saved_searches
     assert [method for method, _path, _args in splunk.requests] == ["GET", "DELETE"]
+
+
+@pytest.mark.usefixtures("retiring")
+def test_retiring_an_absent_saved_search_succeeds(splunk: SplunkStandIn) -> None:
+    assert _retire(_connect(splunk, ssl_enabled=False), "Never Deployed") is None
+    assert [method for method, _path, _args in splunk.requests] == ["GET"]
+
+
+@pytest.mark.usefixtures("retiring")
+def test_retiring_on_an_unreachable_tenant_fails(splunk: SplunkStandIn) -> None:
+    """Any failure to look the saved search up used to read as "already absent".
+
+    A TLS failure, a refused token or a 5xx left the saved search running
+    while the run reported success.
+    """
+    splunk.saved_searches["Retired Rule"] = {"search": "index=main"}
+    with pytest.raises(URLError):
+        _retire(_connect(splunk, ssl_enabled=True), "Retired Rule")
+
+    assert "Retired Rule" in splunk.saved_searches

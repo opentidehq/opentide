@@ -367,7 +367,9 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         try:
             selected_search = service.saved_searches[name]
             logger.info("found_existing_saved_search", name=name)
-        except Exception:
+        except KeyError:
+            # splunklib raises KeyError for a 404 only; an unreachable tenant,
+            # a refused token or a server error must not read as "absent".
             if check_status(status) is StatusStrategy.DELETION:
                 logger.info("saved_search_already_absent", name=name)
                 return None
