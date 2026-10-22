@@ -281,23 +281,26 @@ def request_handler(*, verify: bool, allow_http_errors: bool = False) -> Request
         body = response.read()
         if _looks_like_html(response.info(), body):
             raise _html_answer(url, body)
-        if failed:
-            if allow_http_errors:
-                status = HTTP_ERROR_STATUS
-            else:
-                # The body carries Splunk's reason; splunklib puts it in the
-                # HTTPError it raises, so it must still be returned.
-                logger.critical(
-                    "fatal_error",
-                    detail=f"Received HTTP Error Code {status} {response.msg}",
-                    context=str(body),
-                )
-        return {
-            "status": status,
+        answer = {
+            "status": HTTP_ERROR_STATUS if failed and allow_http_errors else status,
             "reason": response.msg,
             "headers": dict(response.info()),
             "body": BytesIO(body),
         }
+        if failed and not allow_http_errors:
+            from splunklib.binding import HTTPError as SplunkHTTPError
+            from splunklib.data import record
+
+            logger.critical(
+                "fatal_error",
+                detail=f"Received HTTP Error Code {status} {response.msg}",
+                context=str(body),
+            )
+            # splunklib raises only for a status of 400 or more, so a 307 a
+            # gateway answers for a timed-out search head read as a deployed
+            # rule. Raise splunklib's own error, which carries the body.
+            raise SplunkHTTPError(record(answer))
+        return answer
 
     return handle
 

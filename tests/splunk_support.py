@@ -36,6 +36,8 @@ class SplunkStandIn:
     port: int
     saved_searches: dict[str, dict[str, str]] = field(default_factory=dict)
     requests: list[tuple[str, str, dict[str, str]]] = field(default_factory=list)
+    #: Answer every saved search POST with the gateway's 307 "Network Error".
+    gateway_timeout: bool = False
 
     def posted(self, name: str) -> dict[str, str]:
         """Every argument POSTed to the saved search *name*, merged in order."""
@@ -104,6 +106,8 @@ def _handler(state: SplunkStandIn) -> type[http.server.BaseHTTPRequestHandler]:
                 return self._reply(404, b"")
             name = path.removeprefix(SAVED_SEARCHES)
             if self.command == "POST":
+                if state.gateway_timeout:
+                    return self._reply(307, b"Network Error", "text/plain")
                 refused = sorted(set(args) & CONF_ONLY_ARGUMENTS)
                 if refused:
                     message = f'Argument "{refused[0]}" is not supported by this handler.'

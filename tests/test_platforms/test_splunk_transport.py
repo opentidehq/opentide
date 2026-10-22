@@ -148,6 +148,17 @@ def test_http_errors_are_reported_only_to_the_connection_that_asked(splunk: Splu
         deploying.parse("| makeresults |badcommand", output_mode="json")
 
 
+def test_a_redirect_urllib_does_not_follow_fails_a_deploying_connection(
+    splunk: SplunkStandIn,
+) -> None:
+    """splunklib raises only for 400 or more, so a gateway's 307 read as success."""
+    from splunklib.binding import HTTPError
+
+    deploying = _connect(splunk, ssl_enabled=False)
+    with pytest.raises(HTTPError, match="307 Temporary Redirect -- b'Network Error'"):
+        deploying.parse("| makeresults |unreachable", output_mode="json")
+
+
 def test_query_validator_reports_an_invalid_query(
     splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -434,6 +445,25 @@ def test_redeploy_updates_the_existing_saved_search(
     creates = [r for r in splunk.requests if r[0] == "POST" and r[1] == SAVED_SEARCHES]
     assert len(creates) == 1
     assert splunk.saved_searches["Trigger Rule"]["alert_type"] == "number of events"
+
+
+@patch("opentide.platforms.splunk.deployer.techniques_resolver", return_value=[])
+def test_an_update_the_gateway_times_out_fails_the_deploy(
+    _techniques: object, splunk: SplunkStandIn, trigger_rule
+) -> None:
+    """The handler logged the 307 and returned it; splunklib treated it as success.
+
+    The rule was reported deployed while Splunk kept the old search.
+    """
+    from splunklib.binding import HTTPError
+
+    splunk.saved_searches["Trigger Rule"] = {"search": "index=old"}
+    splunk.gateway_timeout = True
+    service = _connect(splunk, ssl_enabled=False)
+    with pytest.raises(HTTPError, match="307"):
+        _deployer().deploy_mdr(data=trigger_rule, service=service, tenant_config=_tenant())
+
+    assert splunk.saved_searches["Trigger Rule"] == {"search": "index=old"}
 
 
 # --- retiring a rule removes its saved search ----------------------------------
