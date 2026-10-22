@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import importlib
 import types
+from collections.abc import Mapping
 from typing import Any, Union, cast, get_args, get_origin
 
 from opentide.generation.model_json_schema import model_json_schema
@@ -196,16 +197,27 @@ def build_schema_source_for_identifier(schema_id: str) -> dict[str, Any]:
     return result
 
 
+#: Pins below a ``tide.meta.definition`` property, keyed by their path under it.
+#: The schema pipeline rebuilds that property from its model, which drops any
+#: ``tide.vocab`` set on it here, so it applies these to the rebuilt copy.
+DEFINITION_PINS = "tide.vocab.pins"
+
+
 def apply_vocab_pins(schema: dict[str, Any], schema_id: str) -> None:
     """Inject versioned ``tide.vocab`` contracts from the pin manifest onto *schema*."""
     from opentide.models.vocab_pins import get_pins
 
+    apply_pin_map(schema, get_pins(schema_id))
+
+
+def apply_pin_map(schema: dict[str, Any], pins: Mapping[str, str]) -> None:
+    """Inject ``dot.path`` → ``field::M.m`` contracts onto *schema*."""
     properties = schema.get("properties")
     if not isinstance(properties, dict):
         return
     defs = schema.get("$defs", {})
     defs_map = defs if isinstance(defs, dict) else {}
-    for dot_path, contract in get_pins(schema_id).items():
+    for dot_path, contract in pins.items():
         parts = [part for part in dot_path.split(".") if part]
         if parts:
             _set_vocab_at_path(properties, parts, contract, defs=defs_map)
@@ -251,6 +263,8 @@ def _set_vocab_at_path(
     if len(parts) == 1:
         field_schema["tide.vocab"] = contract
         return
+    if "tide.meta.definition" in field_schema:
+        field_schema.setdefault(DEFINITION_PINS, {})[".".join(parts[1:])] = contract
 
     for branch in _schema_branch_nodes(field_schema, defs):
         if branch.get("type") == "array":
