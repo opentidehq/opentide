@@ -43,9 +43,9 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 
-    _ = Opentide.Rules
-    rule = Opentide.Rules.get(uuid)
-    if rule is None:
+    # The raw index, not ``Opentide.Rules``: typed loading raises for the whole
+    # catalogue when one rule does not load, which is what validation reports.
+    if uuid not in Opentide.Models.rules:
         return {"valid": False, "errors": [f"Rule {uuid} not found"], "warnings": [], "issues": []}
     report = run_validation(scope=ValidationScope.narrow(uuids=frozenset({uuid})))
     return {

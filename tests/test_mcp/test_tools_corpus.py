@@ -253,3 +253,21 @@ def test_tool_validate_rule_sees_an_edit_made_after_start_up(tide_corpus_repo: P
 
     assert payload["valid"] is False
     assert "invalid_ref" in [issue["code"] for issue in payload["issues"]]
+
+
+def test_tool_validate_rule_reports_a_rule_that_does_not_load(tide_corpus_repo: Path) -> None:
+    """``validate_rule`` loaded every typed rule just to see whether *uuid* existed.
+
+    One rule with an unknown schema identifier made ``Opentide.Rules`` raise,
+    so the tool failed for every rule instead of reporting the broken one.
+    """
+    rule = tide_corpus_repo / "Objects" / "Detection Rules" / "rule-0001-sentinel-kql.yaml"
+    text = rule.read_text(encoding="utf-8")
+    rule.write_text(text.replace("schema: rule::1.0", "schema: rule::9.9", 1), encoding="utf-8")
+
+    broken = tools.tool_validate_rule(CORPUS_RULE_UUIDS["sentinel"])
+    other = tools.tool_validate_rule(CORPUS_RULE_UUIDS["defender_for_endpoint"])
+
+    assert broken["valid"] is False
+    assert [issue["code"] for issue in broken["issues"]] == ["schema_validation"]
+    assert other["valid"] is True
