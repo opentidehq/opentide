@@ -223,3 +223,101 @@ def test_explorer_export_reads_owner() -> None:
     assert _infer_type(flat["s-1"]) == "signal"
     assert _count_relations("o-1", flat) == 1
     assert _count_relations("s-1", flat) == 1
+
+
+def _bump(body: dict[str, Any]) -> dict[str, Any]:
+    body["metadata"]["version"] = 2
+    return body
+
+
+@pytest.mark.parametrize("b_first", [True, False])
+def test_inflight_overlay_moving_a_signal_reassigns_its_owner(b_first: bool) -> None:
+    """A PR that moves a signal from A to B must index it under B, whatever the shard order."""
+    a_uuid, b_uuid, moved = str(uuid4()), str(uuid4()), str(uuid4())
+    objects_index: dict[str, Any] = {"threat": {}, "objective": {}, "rule": {}, "signal": {}}
+    a_body = _objective(a_uuid, "A", [{"uuid": moved, "name": "Moved"}])
+    b_body = _objective(b_uuid, "B", [])
+    objects_index["objective"] = {a_uuid: a_body, b_uuid: b_body}
+    index_objective_signals(objects_index["signal"], a_uuid, a_body)
+
+    shards = {
+        a_uuid: _bump(_objective(a_uuid, "A", [])),
+        b_uuid: _bump(_objective(b_uuid, "B", [{"uuid": moved, "name": "Moved"}])),
+    }
+    ordered = dict(reversed(shards.items())) if b_first else shards
+
+    apply_inflight_overlay(objects_index, ordered)
+
+    assert objects_index["signal"][moved]["owner"] == b_uuid
+
+
+def test_inflight_overlay_drops_signals_its_objective_no_longer_defines() -> None:
+    objective_uuid, kept, removed = str(uuid4()), str(uuid4()), str(uuid4())
+    body = _objective(
+        objective_uuid, "O", [{"uuid": kept, "name": "Kept"}, {"uuid": removed, "name": "Gone"}]
+    )
+    objects_index: dict[str, Any] = {
+        "threat": {},
+        "objective": {objective_uuid: body},
+        "rule": {},
+        "signal": {},
+    }
+    index_objective_signals(objects_index["signal"], objective_uuid, body)
+
+    shard = _bump(_objective(objective_uuid, "O", [{"uuid": kept, "name": "Kept"}]))
+    apply_inflight_overlay(objects_index, {objective_uuid: shard})
+
+    assert kept in objects_index["signal"]
+    assert removed not in objects_index["signal"]
+
+
+def test_inflight_overlay_keeps_a_true_duplicate_on_its_committed_owner() -> None:
+    """B's shard reusing a UUID A still defines is a duplicate: A keeps it."""
+    a_uuid, b_uuid, shared = str(uuid4()), str(uuid4()), str(uuid4())
+    a_body = _objective(a_uuid, "A", [{"uuid": shared, "name": "From A"}])
+    objects_index: dict[str, Any] = {
+        "threat": {},
+        "objective": {a_uuid: a_body},
+        "rule": {},
+        "signal": {},
+    }
+    index_objective_signals(objects_index["signal"], a_uuid, a_body)
+
+    shard = _objective(b_uuid, "B", [{"uuid": shared, "name": "From B"}])
+    apply_inflight_overlay(objects_index, {b_uuid: shard})
+
+    assert objects_index["signal"][shared]["owner"] == a_uuid
+
+
+def test_same_objective_duplicate_keeps_the_first_definition() -> None:
+    objective_uuid, shared = str(uuid4()), str(uuid4())
+    bucket: dict[str, Any] = {}
+    index_objective_signals(
+        bucket,
+        objective_uuid,
+        _objective(
+            objective_uuid, "O", [{"uuid": shared, "name": "One"}, {"uuid": shared, "name": "Two"}]
+        ),
+    )
+    assert bucket[shared]["name"] == "One"
+
+
+def test_duplicate_signal_uuid_within_one_objective_fails_validate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    objective_uuid, shared = str(uuid4()), str(uuid4())
+    _write_objectives(
+        tmp_path,
+        {
+            "o.yaml": _objective(
+                objective_uuid,
+                "O",
+                [{"uuid": shared, "name": "One"}, {"uuid": shared, "name": "Two"}],
+            )
+        },
+    )
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path.resolve()))
+
+    report = run_validation(checks=frozenset({ValidateCheck.id_uniqueness}), workers=0)
+
+    assert [issue.code for issue in report.issues].count("duplicate_signal_uuid") == 1

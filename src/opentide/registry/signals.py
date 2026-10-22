@@ -39,11 +39,13 @@ def index_objective_signals(
     """Add an objective's signals to ``signal_bucket``.
 
     Each entry is a copy of the authored signal plus ``owner``. A UUID already
-    indexed under a *different* objective keeps its first definition; the clash
-    is reported by ``opentide validate`` as ``duplicate_signal_uuid``. A
-    re-ingest of the same objective (an inflight overlay) replaces its own
-    signals.
+    indexed under a *different* objective, or repeated within this objective,
+    keeps its first definition; the clash is reported by ``opentide validate``
+    as ``duplicate_signal_uuid``. A re-ingest of the same objective replaces
+    its own signals; see :func:`drop_objective_signals` for removing the ones
+    it no longer defines.
     """
+    indexed_here: set[str] = set()
     for signal in objective_signals(body):
         signal_uuid = signal.get("uuid")
         if not signal_uuid:
@@ -51,14 +53,27 @@ def index_objective_signals(
             continue
         key = str(signal_uuid)
         existing = signal_bucket.get(key)
-        if isinstance(existing, dict) and existing.get(SIGNAL_OWNER_FIELD) != objective_uuid:
+        if key in indexed_here or (
+            isinstance(existing, dict) and existing.get(SIGNAL_OWNER_FIELD) != objective_uuid
+        ):
             logger.warning(
                 "duplicate_signal_uuid",
                 signal=key,
-                kept_owner=existing.get(SIGNAL_OWNER_FIELD),
+                kept_owner=existing.get(SIGNAL_OWNER_FIELD) if isinstance(existing, dict) else None,
                 ignored_owner=objective_uuid,
             )
             continue
         signal_copy = signal.copy()
         signal_copy[SIGNAL_OWNER_FIELD] = objective_uuid
         signal_bucket[key] = signal_copy
+        indexed_here.add(key)
+
+
+def drop_objective_signals(signal_bucket: dict[str, Any], objective_uuids: set[str]) -> None:
+    """Remove every indexed signal owned by one of *objective_uuids*."""
+    for key in [
+        key
+        for key, entry in signal_bucket.items()
+        if isinstance(entry, dict) and entry.get(SIGNAL_OWNER_FIELD) in objective_uuids
+    ]:
+        del signal_bucket[key]
