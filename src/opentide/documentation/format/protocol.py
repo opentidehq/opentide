@@ -51,6 +51,9 @@ class MarkdownFormatter(Protocol):
     def page_filename(self, slug: str, uuid: str | None) -> str:
         pass
 
+    def heading_anchor(self, title: str) -> str:
+        pass
+
     def diagram_relations_type(self) -> Literal["mindmap", "flowchart", "graph"]:
         pass
 
@@ -116,6 +119,12 @@ class BaseFormatter:
 
     def page_filename(self, slug: str, uuid: str | None) -> str:
         return f"{uuid or slug}.md"
+
+    def heading_anchor(self, title: str) -> str:
+        # Imported here: the links module imports this one.
+        from opentide.documentation.markdown.links import heading_anchor
+
+        return heading_anchor(title)
 
     def diagram_relations_type(self) -> Literal["mindmap", "flowchart", "graph"]:
         return "flowchart"

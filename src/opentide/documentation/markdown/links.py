@@ -126,7 +126,7 @@ def object_link(
             from_folder=from_folder,
             to_folder=FOLDER_BY_SCOPE[DocumentScope.objectives],
             filename=filename,
-            anchor=heading_anchor(signal.name),
+            anchor=formatter.heading_anchor(signal.name),
         )
         link = render_link(formatter, signal.name, href, wiki=wiki)
         return f"{link} (`{uuid}`)"
