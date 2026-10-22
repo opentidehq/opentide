@@ -50,6 +50,33 @@ def wide_scope() -> Iterator[None]:
         _WIDE_SCOPE.reset(token)
 
 
+def modifier_applies(
+    conditions: SystemConfig.Modifiers.Conditions,
+    *,
+    status: str,
+    tenant: str,
+    flags: Sequence[str] | None,
+) -> bool:
+    """Whether a platform modifier applies to a rule deployed to *tenant*.
+
+    Every condition the modifier sets must hold: ``status`` lists the rule's
+    status, ``tenants`` lists the tenant, and ``flags`` shares a flag with the
+    rule, so a rule without flags never meets a ``flags`` condition.
+    ``default = true`` holds for every rule. A modifier that sets no
+    condition applies to none.
+    """
+    checks: list[bool] = []
+    if conditions.status:
+        checks.append(status in conditions.status)
+    if conditions.tenants:
+        checks.append(tenant in conditions.tenants)
+    if conditions.flags:
+        checks.append(any(flag in conditions.flags for flag in flags or ()))
+    if checks:
+        return all(checks)
+    return conditions.default is True
+
+
 def _json_normalize(data: Any) -> Any:
     """Import pandas on first use: it is slow to import and most commands never need it."""
     import pandas as pd
@@ -280,22 +307,12 @@ class TideDeployment:
             for mod in modifiers:
                 logger.info("evaluating_modifier", detail=str(mod.conditions))
 
-                match = False
-
-                if mod.conditions.default and mod.conditions.default is True:
-                    match = True
-
-                if mod.conditions.status and mdr_config.status in mod.conditions.status:
-                    match = True
-                if mod.conditions.tenants:
-                    match = target_tenant in mod.conditions.tenants
-                if mod.conditions.flags and mdr_config.flags:
-                    if [tag for tag in mdr_config.flags if tag in mod.conditions.flags]:
-                        match = True
-                    else:
-                        match = False
-
-                if match is True:
+                if modifier_applies(
+                    mod.conditions,
+                    status=mdr_config.status,
+                    tenant=target_tenant,
+                    flags=mdr_config.flags,
+                ):
                     logger.info(
                         "condition_matching",
                         detail=str(str(mod.name or "")) + " | " + str(str(mod.description or "")),
