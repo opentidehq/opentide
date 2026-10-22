@@ -221,7 +221,7 @@ _Vocabulary_ : `{source_vocab}`
                 entries = {key: entry.as_dict() for key, entry in vocab_data.entries.items()}
             self._process(entries, is_model=is_model)
 
-        def _process(self, entries: dict, *, is_model: bool):
+        def _process(self, entries: dict[str, dict[str, Any]], *, is_model: bool) -> None:
             """Iterate entries and emit enum values."""
             for key, data in entries.items():
                 # An entry without stages carries an empty tuple, not a list,
@@ -675,7 +675,7 @@ def _apply_vocab_enum(field_schema: dict, temp: dict) -> None:
         field_schema["uniqueItems"] = True
 
 
-def gen_json_schema(dictionary, *, schema_id: str | None = None):
+def gen_json_schema(dictionary: dict[str, Any], *, schema_id: str | None = None) -> dict[str, Any]:
     """Recursively resolve opentide metaschema keywords into JSON Schema.
 
     Walks *dictionary* depth-first and replaces ``tide.*`` annotated
@@ -917,8 +917,10 @@ def _legacy_alias_tracks_latest(filename: str, schema_id: str) -> bool:
     return legacy_id == schema_id
 
 
-def run():
+def run() -> None:
     _refresh_runtime_context()
+    schema_folder = JSON_SCHEMA_FOLDER
+    assert schema_folder is not None, "bound by _refresh_runtime_context"
 
     emit_section("Pydantic JSON Schema Assembler")
     logger.info(
@@ -938,7 +940,7 @@ def run():
     for schema_id in identifiers_for_families(configured_families):
         family = schema_id.split("::", 1)[0]
         artifact_name = schema_artifact_name(schema_id)
-        json_output = JSON_SCHEMA_FOLDER / artifact_name
+        json_output = schema_folder / artifact_name
 
         logger.info(
             "generating_pydantic_json_schema_for_identifier",
@@ -954,7 +956,7 @@ def run():
 
         if family in legacy_schema_map and schema_id == latest_identifier(family):
             legacy_name = legacy_schema_map[family]
-            legacy_output = JSON_SCHEMA_FOLDER / legacy_name
+            legacy_output = schema_folder / legacy_name
             if legacy_output != json_output and _legacy_alias_tracks_latest(legacy_name, schema_id):
                 with open(legacy_output, "w", encoding="utf-8") as legacy_file:
                     legacy_file.write(output)
@@ -973,7 +975,7 @@ def run():
         )
 
         for meta in config_json_schemas:
-            json_output = JSON_SCHEMA_FOLDER / config_json_schemas[meta]
+            json_output = schema_folder / config_json_schemas[meta]
 
             if meta == "visibility":
                 from opentide.generation.pydantic_metaschema import build_model_schema_source

@@ -38,7 +38,8 @@ class _LazyMapping(Mapping[_KT, _VT]):
     def __contains__(self, key: object) -> bool:
         return key in self._data()
 
-    def get(self, key: _KT, default: Any = None) -> Any:
+    # `key: object` as on `Mapping.get`, whose last overload takes any key.
+    def get(self, key: object, default: Any = None) -> Any:
         return self._data().get(key, default)
 
 
@@ -586,22 +587,51 @@ def relations_upstream(id):
     return tree
 
 
+@overload
 def relations_list(
-    id,
+    id: str,
+    mode: Literal["flat"] = "flat",
+    direction: Literal["upstream", "downstream", "both"] = "downstream",
+) -> dict[str, list[str]]: ...
+
+
+@overload
+def relations_list(
+    id: str,
+    mode: Literal["count"],
+    direction: Literal["upstream", "downstream", "both"] = "downstream",
+) -> dict[str, int]: ...
+
+
+def relations_list(
+    id: str,
     mode: Literal["count", "flat"] = "flat",
     direction: Literal["upstream", "downstream", "both"] = "downstream",
-):
-    flat = {}
+) -> dict[str, list[str]] | dict[str, int]:
+    """Related object UUIDs by object type, or how many there are of each type.
+
+    ``both`` lets the upstream relations replace the downstream ones of a type.
+    """
+    if direction == "both":
+        flat = _flat_relations(id, "downstream")
+        flat.update(_flat_relations(id, "upstream"))
+    else:
+        flat = _flat_relations(id, direction)
+    if mode == "count":
+        return {k: len(v) for k, v in flat.items()}
+    return flat
+
+
+def _flat_relations(id: str, direction: Literal["upstream", "downstream"]) -> dict[str, list[str]]:
+    flat: dict[str, list[str]] = {}
     if direction == "upstream":
         relations = relations_upstream(id)
     elif direction == "downstream":
         relations = relations_downstream(id)
-    elif direction == "both":
-        merged = relations_list(id, mode, direction="downstream")
-        merged.update(relations_list(id, mode, "upstream"))
-        return merged
+    else:
+        raise ValueError(f"Unknown relations direction {direction!r}")
 
-    def recursive_items(dictionary):
+    def recursive_items(dictionary: Mapping[Any, Any]) -> Iterator[tuple[Any, Any]]:
         for key, value in dictionary.items():
             if type(value) is dict:
                 yield (key, value)
@@ -636,9 +666,6 @@ def relations_list(
     if rule_list := flat.get("rule"):
         active_rules = keep_active_rules(rule_list)
         flat["rule"] = active_rules
-    if mode == "count":
-        for k, v in flat.items():
-            flat[k] = len(v)
     return flat
 
 
