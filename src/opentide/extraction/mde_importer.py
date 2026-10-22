@@ -7,6 +7,7 @@ scope, which raised ``KeyError: ''`` before the CLI could report anything.
 
 import json
 from pathlib import Path
+from typing import Any
 
 from opentide.core.logging import get_logger
 from opentide.core.registry import Opentide
@@ -18,9 +19,29 @@ logger = get_logger(__name__)
 
 
 class DefenderForEndpointImporter(DefenderForEndpointService):
-    def list_rules(self):
-        response = self.session.get(self.DETECTION_RULES_ENDPOINT)
-        return response.json()
+    #: Seconds to wait for one page of the rule listing.
+    LIST_TIMEOUT = 60
+
+    def list_rules(self) -> list[dict[str, Any]]:
+        """Every custom detection rule of the tenant, across all result pages.
+
+        Graph pages the listing with ``@odata.nextLink``. An error answer is
+        raised, not read as an empty listing.
+        """
+        rules: list[dict[str, Any]] = []
+        url: str | None = self.DETECTION_RULES_ENDPOINT
+        while url:
+            response = self.session.get(url, timeout=self.LIST_TIMEOUT)
+            if not 200 <= response.status_code < 300:
+                raise RuntimeError(
+                    "Listing Defender for Endpoint detection rules on tenant "
+                    f"{self.tenant_config.name} failed with HTTP {response.status_code} "
+                    f"{response.reason}"
+                )
+            page = response.json()
+            rules.extend(page.get("value") or [])
+            url = page.get("@odata.nextLink")
+        return rules
 
 
 template = """
@@ -264,7 +285,7 @@ def _import_defender_rules() -> None:
     written: set[str] = set()
     for tenant in tenants:
         service = DefenderForEndpointImporter(tenant)  # type: ignore[arg-type]
-        for rule in service.list_rules()["value"]:
+        for rule in service.list_rules():
             filename, body = _render_rule(rule, tenant.name)
             if filename.lower() in written:
                 filename = f"{filename} {rule['detectorId'][:8]}"

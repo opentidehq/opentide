@@ -64,8 +64,8 @@ def test_import_never_overwrites_a_rule_from_this_run(
         def __init__(self, tenant: SimpleNamespace) -> None:
             self.tenant = tenant
 
-        def list_rules(self) -> dict[str, list[dict[str, Any]]]:
-            return {"value": listed[self.tenant.name]}
+        def list_rules(self) -> list[dict[str, Any]]:
+            return listed[self.tenant.name]
 
     tenants = [SimpleNamespace(name=name) for name in listed]
     monkeypatch.setattr(
@@ -92,3 +92,65 @@ def test_import_never_overwrites_a_rule_from_this_run(
         "Suspicious logon - Contoso bbbbbbbb.yaml": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         "Suspicious logon - Fabrikam.yaml": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
     }
+
+
+class _Response:
+    def __init__(self, status_code: int, payload: dict[str, Any], reason: str = "OK") -> None:
+        self.status_code = status_code
+        self.reason = reason
+        self._payload = payload
+
+    def json(self) -> dict[str, Any]:
+        return self._payload
+
+
+class _Session:
+    def __init__(self, pages: dict[str, _Response]) -> None:
+        self.pages = pages
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def get(self, url: str, **kwargs: Any) -> _Response:
+        self.calls.append((url, kwargs))
+        return self.pages[url]
+
+
+def _importer(session: _Session) -> mde_importer.DefenderForEndpointImporter:
+    # The real constructor fetches a token; only the listing is under test.
+    importer = object.__new__(mde_importer.DefenderForEndpointImporter)
+    importer.session = session
+    importer.DETECTION_RULES_ENDPOINT = "https://graph.example/rules"
+    importer.tenant_config = SimpleNamespace(name="Contoso")
+    return importer
+
+
+def test_list_rules_follows_next_links_with_a_timeout() -> None:
+    """Only the first page was read, and a silent tenant hung the import forever."""
+    session = _Session(
+        {
+            "https://graph.example/rules": _Response(
+                200,
+                {
+                    "value": [{"detectorId": "a"}],
+                    "@odata.nextLink": "https://graph.example/rules?$skiptoken=2",
+                },
+            ),
+            "https://graph.example/rules?$skiptoken=2": _Response(
+                200, {"value": [{"detectorId": "b"}]}
+            ),
+        }
+    )
+
+    rules = _importer(session).list_rules()
+
+    assert [rule["detectorId"] for rule in rules] == ["a", "b"]
+    assert [kwargs["timeout"] for _url, kwargs in session.calls] == [60, 60]
+
+
+def test_list_rules_raises_on_an_error_answer() -> None:
+    """A 401 or 403 body has no ``value`` and used to fail later with a bare KeyError."""
+    session = _Session(
+        {"https://graph.example/rules": _Response(403, {"error": {}}, reason="Forbidden")}
+    )
+
+    with pytest.raises(RuntimeError, match="tenant Contoso failed with HTTP 403 Forbidden"):
+        _importer(session).list_rules()
