@@ -13,6 +13,7 @@ from opentide.generation.vocabulary import (
     VocabularyDefinition,
     VocabularyRevisionResolver,
     is_id_keyed,
+    normalize_stages,
     split_vocab_reference,
 )
 from opentide.indexing.object_vocab import entry_level
@@ -223,18 +224,17 @@ _Vocabulary_ : `{source_vocab}`
         def _process(self, entries: dict, *, is_model: bool):
             """Iterate entries and emit enum values."""
             for key, data in entries.items():
+                # An entry without stages carries an empty tuple, not a list,
+                # so normalise rather than wrap anything that is not a list.
+                stages = normalize_stages(data.get("tide.vocab.stages"))
                 if is_model:
                     value = key
-                    if self.scoped and data.get("tide.vocab.stages"):
-                        raw_stages = data["tide.vocab.stages"]
-                        stage = raw_stages[0] if isinstance(raw_stages, list) else raw_stages
-                        value = stage + "::" + key
+                    if self.scoped and stages:
+                        value = stages[0] + "::" + key
                     if self._emit(value, key, data) and self._hints_enabled:
                         self._hints.append(self._search_hint(value, data))
                         self._hint_descriptions.append(self.enum_description[-1])
                 else:
-                    raw = data.get("tide.vocab.stages", [])
-                    stages = [raw] if not isinstance(raw, list) else raw
                     matching = (
                         [s for s in stages if s in self.filter_stages]
                         if self.filter_stages
