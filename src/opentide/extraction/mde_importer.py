@@ -163,7 +163,8 @@ def fix_multiline(string: str, indentation: int):
 def _render_rule(rule, tenant_name: str) -> tuple[str, str]:
     """Return the file name and YAML body for one Defender custom detection.
 
-    The rule is imported for *tenant_name*, the tenant it was listed from.
+    The rule is imported for *tenant_name*, the tenant it was listed from, and
+    the file name carries that tenant so two tenants never share a file.
     """
     rule_name = rule["displayName"]
     rule_uuid = rule["detectorId"]
@@ -242,7 +243,7 @@ def _render_rule(rule, tenant_name: str) -> tuple[str, str]:
         query=fix_multiline(rule_query, 6),
         status=rule_status,
     ).strip()
-    return sanitize_filename(rule_name), body
+    return sanitize_filename(f"{rule_name} - {tenant_name}"), body
 
 
 def _import_defender_rules() -> None:
@@ -259,10 +260,15 @@ def _import_defender_rules() -> None:
         raise RuntimeError("No Defender for Endpoint tenants are configured")
     destination = Path("Imported")
     destination.mkdir(exist_ok=True)
+    # Display names are not unique in Defender; never overwrite a file from this run.
+    written: set[str] = set()
     for tenant in tenants:
         service = DefenderForEndpointImporter(tenant)  # type: ignore[arg-type]
         for rule in service.list_rules()["value"]:
             filename, body = _render_rule(rule, tenant.name)
+            if filename.lower() in written:
+                filename = f"{filename} {rule['detectorId'][:8]}"
+            written.add(filename.lower())
             (destination / f"{filename}.yaml").write_text(body, encoding="utf-8")
             # The Graph id is deployment state, not rule content (RFC 0010).
             record_external_id(rule["detectorId"], "defender_for_endpoint", tenant.name, rule["id"])

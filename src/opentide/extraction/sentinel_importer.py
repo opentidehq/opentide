@@ -223,6 +223,8 @@ def _import_sentinel_rules() -> None:
         # A bare ``raise Exception`` escapes the CLI's error handler and prints a
         # Rich traceback instead of the JSON document --json promised (#242).
         raise RuntimeError("No Sentinel tenants are configured")
+    # Display names are not unique in Sentinel; never overwrite a file from this run.
+    written: set[str] = set()
     for tenant in Opentide.Configurations.Systems.Sentinel.tenants:  # type: ignore
         service = SentinelService(tenant).connect()  # type: ignore
         rules = service.alert_rules.list(
@@ -435,6 +437,9 @@ def _import_sentinel_rules() -> None:
                 continue
 
             stem = sanitize_filename(f'"{display_name}"')
+            if stem.lower() in written:
+                stem = f"{stem} {rule['name'][:8]}"
+            written.add(stem.lower())
             Path("Imported").mkdir(exist_ok=True)
             with open(f"Imported/{stem}.yaml", "w+", encoding="utf-8") as f:
                 f.write(mdr)

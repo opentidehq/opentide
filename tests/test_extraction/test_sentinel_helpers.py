@@ -218,3 +218,19 @@ def test_import_keeps_values_that_yaml_would_misread(
     ]
     assert sentinel["query"] == "  SecurityEvent\n| take 1\n"
     assert sentinel["tenants"] == ["tenant-a"]
+
+
+def test_import_never_overwrites_a_rule_with_the_same_display_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sentinel allows duplicate display names; the second rule overwrote the first file."""
+    first = _scheduled("33333333-3333-4333-8333-333333333333", displayName="Dup rule")
+    second = _scheduled("44444444-4444-4444-8444-444444444444", displayName="Dup rule")
+
+    files = _import([first, second], tmp_path, monkeypatch)
+
+    uuids = {name: document["metadata"]["uuid"] for name, document in files.items()}
+    assert uuids == {
+        " Dup rule - tenant-a .yaml": "33333333-3333-4333-8333-333333333333",
+        " Dup rule - tenant-a  44444444.yaml": "44444444-4444-4444-8444-444444444444",
+    }
