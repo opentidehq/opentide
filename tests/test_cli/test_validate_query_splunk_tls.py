@@ -9,12 +9,19 @@ tenant here is a local HTTPS stand-in with a self-signed certificate.
 from __future__ import annotations
 
 import json
+import os
+import urllib.request
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 from tests.corpus_support import clear_runtime_caches, materialise_corpus
-from tests.splunk_support import SplunkStandIn, serve_splunk
+from tests.splunk_support import (
+    InterceptingProxy,
+    SplunkStandIn,
+    serve_intercepting_proxy,
+    serve_splunk,
+)
 from typer.testing import CliRunner
 
 from opentide.cli import app
@@ -109,3 +116,53 @@ def test_an_ssl_that_is_not_a_boolean_names_the_tenant(
 
     assert result.exit_code != 0
     assert "splunk tenant 'self-signed' setup: ssl must be true or false" in result.output
+
+
+@pytest.fixture
+def intercepting_proxy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[InterceptingProxy]:
+    monkeypatch.setattr(urllib.request, "_opener", None)
+    (tmp_path / "proxy").mkdir()
+    with serve_intercepting_proxy(tmp_path / "proxy") as proxy:
+        yield proxy
+    # ``--proxy`` / OPENTIDE_PROXY write these into the process environment.
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        os.environ.pop(name, None)
+
+
+def test_a_proxy_page_names_the_proxy_and_no_proxy(
+    tenant_ssl: Callable[[str], None],
+    splunk: SplunkStandIn,
+    intercepting_proxy: InterceptingProxy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The 0.17.1 report: an ssl = false tenant behind OPENTIDE_PROXY failed with a ParseError."""
+    tenant_ssl("false")
+    monkeypatch.setenv("OPENTIDE_PROXY", f"http://127.0.0.1:{intercepting_proxy.port}")
+    code, payload = _validate_splunk()
+
+    text = json.dumps(payload)
+    assert code == 1, payload
+    assert "ParseError" not in text
+    assert "answered with an HTML page" in text
+    assert f"through the proxy http://127.0.0.1:{intercepting_proxy.port}" in text
+    assert "NO_PROXY=localhost" in text
+    assert _parsed(splunk) == 0
+
+
+def test_no_proxy_takes_the_tenant_off_the_proxy(
+    tenant_ssl: Callable[[str], None],
+    splunk: SplunkStandIn,
+    intercepting_proxy: InterceptingProxy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_ssl("false")
+    monkeypatch.setenv("OPENTIDE_PROXY", f"http://127.0.0.1:{intercepting_proxy.port}")
+    monkeypatch.setenv("NO_PROXY", "localhost")
+    monkeypatch.setenv("no_proxy", "localhost")
+    code, payload = _validate_splunk()
+
+    assert code == 0, payload
+    assert intercepting_proxy.tunnels == 0
+    assert _parsed(splunk) > 0

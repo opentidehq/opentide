@@ -58,6 +58,11 @@ dependencies = [
     # pandas writes the playbook map export (`to_excel`) through openpyxl.
     "openpyxl>=3.1",
     "carbon-black-cloud-sdk>=1.0",
+    # carbon-black-cloud-sdk requires boto3 unpinned. botocore caps
+    # python-dateutil below 3, and once 3.0.0 was out uv's resolver chose it and
+    # walked boto3 back to 0.0.3, whose botocore fails on `six.moves`. The floor
+    # makes the resolver keep a current boto3 and cap python-dateutil instead.
+    "boto3>=1.35",
 ]
 
 [dependency-groups]

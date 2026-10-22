@@ -13,11 +13,12 @@ from __future__ import annotations
 import datetime
 import http.server
 import json
+import socket
 import ssl
 import threading
 import urllib.parse
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -182,3 +183,119 @@ def serve_splunk(directory: Path) -> Iterator[SplunkStandIn]:
     finally:
         server.shutdown()
         server.server_close()
+
+
+#: What a TLS-inspecting corporate proxy answers for a host its policy refuses.
+BLOCK_PAGE = b"""<!DOCTYPE html>
+<html>
+<head>
+<title>Access denied by policy</title>
+<meta charset="utf-8">
+</head>
+<body><p>This site is blocked.<br></body>
+</html>
+"""
+
+
+@dataclass
+class InterceptingProxy:
+    port: int
+    tunnels: int = 0
+
+
+def _serve_block_page(directory: Path) -> http.server.ThreadingHTTPServer:
+    cert, key = _self_signed(directory)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.load_cert_chain(cert, key)
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def _serve(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(BLOCK_PAGE)))
+            self.end_headers()
+            self.wfile.write(BLOCK_PAGE)
+
+        do_GET = do_POST = do_DELETE = _serve
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+@contextmanager
+def serve_block_page(directory: Path) -> Iterator[int]:
+    """An HTTPS server that answers every path with :data:`BLOCK_PAGE`; yields its port."""
+    server = _serve_block_page(directory)
+    try:
+        yield server.server_address[1]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@contextmanager
+def serve_intercepting_proxy(directory: Path) -> Iterator[InterceptingProxy]:
+    """A proxy that accepts every ``CONNECT`` and answers it with :data:`BLOCK_PAGE`.
+
+    The tunnel ends at its own TLS server, as a TLS-inspecting proxy does,
+    so a client that does not verify certificates reads the block page.
+    """
+    page = _serve_block_page(directory)
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    listener.settimeout(0.2)
+    state = InterceptingProxy(port=listener.getsockname()[1])
+    stop = threading.Event()
+
+    def pipe(source: socket.socket, sink: socket.socket) -> None:
+        try:
+            while data := source.recv(65536):
+                sink.sendall(data)
+        except OSError:
+            pass
+        finally:
+            for end in (source, sink):
+                with suppress(OSError):
+                    end.shutdown(socket.SHUT_RDWR)
+
+    def serve() -> None:
+        while not stop.is_set():
+            try:
+                client, _ = listener.accept()
+            except OSError:
+                continue
+            client.settimeout(5)
+            head = b""
+            while b"\r\n\r\n" not in head:
+                chunk = client.recv(4096)
+                if not chunk:
+                    break
+                head += chunk
+            if not head.startswith(b"CONNECT "):
+                client.close()
+                continue
+            state.tunnels += 1
+            client.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            client.settimeout(None)
+            upstream = socket.create_connection(("127.0.0.1", page.server_address[1]))
+            threading.Thread(target=pipe, args=(client, upstream), daemon=True).start()
+            threading.Thread(target=pipe, args=(upstream, client), daemon=True).start()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        yield state
+    finally:
+        stop.set()
+        thread.join()
+        listener.close()
+        page.shutdown()
+        page.server_close()

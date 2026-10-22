@@ -1206,6 +1206,7 @@ source = { editable = "." }
 dependencies = [
     { name = "azure-identity" },
     { name = "azure-monitor-query" },
+    { name = "boto3" },
     { name = "carbon-black-cloud-sdk" },
     { name = "dulwich" },
     { name = "mcp" },
@@ -1248,6 +1249,7 @@ dev = [
 requires-dist = [
     { name = "azure-identity", specifier = ">=1.17" },
     { name = "azure-monitor-query", specifier = ">=1.4" },
+    { name = "boto3", specifier = ">=1.35" },
     { name = "carbon-black-cloud-sdk", specifier = ">=1.0" },
     { name = "dulwich", specifier = ">=1.2.12" },
     { name = "mcp", specifier = ">=1.28.1,<2" },
