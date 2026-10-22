@@ -8,6 +8,7 @@ from opentide.ci.gates import azure_premerge_condition
 from opentide.ci.inflight import azure_inflight_job, azure_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    SHARE_COMMAND,
     document_steps,
     header_comment,
     object_validate_commands,
@@ -150,6 +151,51 @@ def _azure_job(
     return "\n".join(lines)
 
 
+#: Share once Deploy has finished, whether it deployed, failed or had nothing
+#: to do: a share skipped now would never come back, because the next push
+#: diffs only its own commits. Generate must have passed.
+SHARE_STATUS_CONDITION = "not(canceled()), eq(dependencies.Generate.result, 'Succeeded')"
+
+
+def _share_stage(options: CiRenderOptions) -> str:
+    """Share what the push changed, read from the default branch after the write-back (#590).
+
+    The stage depends on Deploy, whose production job pushes promoted
+    statuses to the default branch in a ``[skip ci]`` commit. The job checks
+    out the branch tip after that (persisted credentials let it fetch), and
+    ``--changed`` diffs from the triggering commit's parent to the tip, so a
+    rule this run promoted is shared in this run.
+    """
+    branch = options.default_branch
+    quoted = shlex.quote(branch)
+    return (
+        "- stage: Share\n"
+        "  displayName: Share\n"
+        "  dependsOn: [Generate, Deploy]\n"
+        f"  condition: and({SHARE_STATUS_CONDITION}, "
+        f"eq(variables['Build.SourceBranch'], 'refs/heads/{branch}'), "
+        "ne(variables['Build.Reason'], 'PullRequest'))\n"
+        "  jobs:\n"
+        + indent(
+            _azure_job(
+                "share",
+                display_name="Share changed objects",
+                steps=_job_steps(
+                    options,
+                    [
+                        f"git fetch origin {quoted}",
+                        "git checkout -q FETCH_HEAD",
+                        SHARE_COMMAND,
+                    ],
+                    persist_credentials=True,
+                    full_history=True,
+                ),
+            ),
+            4,
+        )
+    )
+
+
 def render_azure(options: CiRenderOptions) -> str:
     branch = options.default_branch
     restore = trusted_platform_config_commands(shlex.quote(branch))
@@ -238,29 +284,7 @@ def render_azure(options: CiRenderOptions) -> str:
         )
     )
 
-    share_stage = ""
-    if options.sharing:
-        share_stage = (
-            "- stage: Share\n"
-            "  displayName: Share\n"
-            "  dependsOn: Generate\n"
-            "  condition: and("
-            f"eq(variables['Build.SourceBranch'], 'refs/heads/{branch}'), "
-            "ne(variables['Build.Reason'], 'PullRequest'))\n"
-            "  jobs:\n"
-            + indent(
-                _azure_job(
-                    "share",
-                    display_name="Share changed objects",
-                    steps=_job_steps(
-                        options,
-                        ["opentide share push --changed"],
-                        full_history=True,
-                    ),
-                ),
-                4,
-            )
-        )
+    share_stage = _share_stage(options) if options.sharing else ""
 
     document_stage = (
         "- stage: Document\n"
@@ -283,7 +307,7 @@ def render_azure(options: CiRenderOptions) -> str:
     deploy_jobs_yaml = indent("\n".join(deploy_jobs), 6)
     share_stage_yaml = indent(share_stage, 2) if share_stage else ""
     # indent() drops the trailing newline, so a share stage must be followed by
-    # a blank line or its last job line glues onto Deploy.
+    # a blank line or its last job line glues onto Document.
     share_block = f"{share_stage_yaml}\n\n" if share_stage_yaml else ""
     document_stage_yaml = indent(document_stage, 2)
 
@@ -326,13 +350,13 @@ def render_azure(options: CiRenderOptions) -> str:
         "    jobs:\n"
         f"{generate_job_yaml}\n"
         "\n"
-        f"{share_block}"
         "  - stage: Deploy\n"
         "    displayName: Deploy\n"
         "    dependsOn: Generate\n"
         "    jobs:\n"
         f"{deploy_jobs_yaml}\n"
         "\n"
+        f"{share_block}"
         f"{document_stage_yaml}\n"
     )
     return header_comment(options) + body

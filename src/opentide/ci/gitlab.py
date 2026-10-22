@@ -12,6 +12,7 @@ from opentide.ci.inflight import (
 )
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    SHARE_COMMAND,
     document_steps,
     header_comment,
     object_validate_commands,
@@ -51,6 +52,7 @@ def _gitlab_job(
     script: list[str],
     needs: str | list[str] | None = None,
     rules: str | None = None,
+    rule_when: str | None = None,
     extra_lines: list[str] | None = None,
     before: list[str] | None = None,
     after: list[str] | None = None,
@@ -63,6 +65,8 @@ def _gitlab_job(
     if rules:
         lines.append("  rules:")
         lines.append(f"    - if: {rules}")
+        if rule_when:
+            lines.append(f"      when: {rule_when}")
     if extra_lines:
         lines.extend(extra_lines)
     lines.append("  before_script:")
@@ -111,6 +115,41 @@ def _production_after_script(options: CiRenderOptions) -> list[str]:
     return ["|\n" + indent(script, 6)]
 
 
+def _share_job(options: CiRenderOptions) -> str:
+    """Share what the push changed, read from the default branch after the write-back (#590).
+
+    The job needs ``deploy_production`` and checks out the default branch's
+    tip, which holds the ``[skip ci]`` commit recording promoted statuses.
+    ``--changed`` diffs from ``CI_COMMIT_BEFORE_SHA`` (or the pushed commit's
+    parent) to that tip, so a rule this pipeline promoted is shared in it.
+
+    ``when: always`` runs it after a failed deploy too: a share skipped now
+    would never come back, because the next push diffs only its own commits.
+    GitLab cannot ask for "generate passed, deploy finished", so the job
+    validates the checkout first and shares nothing from a broken catalogue.
+    """
+    return _gitlab_job(
+        "share",
+        options=options,
+        stage="share",
+        script=[
+            GITLAB_FETCH,
+            "git checkout -q FETCH_HEAD",
+            "opentide validate --strict",
+            SHARE_COMMAND,
+        ],
+        needs=["generate", "deploy_production"],
+        rules=(
+            "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "
+            '$CI_PIPELINE_SOURCE != "merge_request_event"'
+        ),
+        rule_when="always",
+        extra_lines=["  variables:", '    GIT_DEPTH: "0"'],
+        # ``python:<ver>-slim`` ships without git; the tip checkout needs it.
+        before=[GITLAB_INSTALL_GIT],
+    )
+
+
 def render_gitlab(options: CiRenderOptions) -> str:
     # An empty ``script:`` is null YAML. GitLab rejects the pipeline (GL003, #430).
     doc_commands = document_steps(options)
@@ -118,7 +157,8 @@ def render_gitlab(options: CiRenderOptions) -> str:
     if doc_commands:
         stages.append("document")
     if options.sharing:
-        stages.insert(2, "share")
+        # After deploy: the share job reads the production write-back (#590).
+        stages.insert(stages.index("deploy") + 1, "share")
 
     # Query jobs share the validate stage. ``needs: validate`` alone lets
     # generate, then deploy, start while a query job is still running or after
@@ -244,22 +284,9 @@ def render_gitlab(options: CiRenderOptions) -> str:
 
     parts = [header_comment(options), core]
     parts.extend(query_jobs)
-    if options.sharing:
-        parts.append(
-            _gitlab_job(
-                "share",
-                options=options,
-                stage="share",
-                script=["opentide share push --changed"],
-                needs="generate",
-                rules=(
-                    "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "
-                    '$CI_PIPELINE_SOURCE != "merge_request_event"'
-                ),
-                extra_lines=["  variables:", '    GIT_DEPTH: "0"'],
-            )
-        )
     parts.extend(deploy_jobs)
+    if options.sharing:
+        parts.append(_share_job(options))
     if document_job:
         parts.append(document_job)
     return "\n".join(parts) + "\n"
