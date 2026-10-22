@@ -498,16 +498,24 @@ TRIGGER_SHA_VARIABLES = {
 
 
 def _resolve_commit(repo: DulwichRepo, rev: str) -> Any:
-    """A full commit SHA, or a branch, ``origin/<branch>`` or ``refs/...`` name."""
+    """A full commit SHA, or a branch, ``origin/<branch>`` or ``refs/...`` name.
+
+    An annotated tag's ref names a tag object, so it is peeled to its commit.
+    """
+    from dulwich.objects import Tag
+
     try:
         return repo.commit(rev)
     except Exception:
         pass
     try:
         sha = repo._resolve_sha(rev)
+        target = repo._repo[sha]
+        while isinstance(target, Tag):
+            target = repo._repo[target.object[1]]
     except KeyError:
         raise Exception(f"Could not find git commit {rev}") from None
-    return repo.commit(sha.decode("ascii"))
+    return repo.commit(target.id.decode("ascii"))
 
 
 def _push_baseline(repo: DulwichRepo, environment: Any) -> Any | None:

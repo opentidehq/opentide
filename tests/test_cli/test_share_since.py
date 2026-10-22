@@ -220,3 +220,16 @@ def test_since_runs_outside_ci_and_reaches_the_diff(
     assert json.loads(result.stdout)["message"] == "No changed objects to share"
     assert asked == ["deadbeef"]
     assert _Persistent.events == []
+
+
+def test_since_peels_an_annotated_tag(promoted_repo: dict) -> None:
+    """``refs/tags/<tag>`` names a tag object for an annotated tag, not a commit."""
+    from opentide.deployment.git_repo import changed_through_head
+
+    repo = promoted_repo["repo"]
+    _git(repo, "tag", "-a", "v1", "-m", "release", promoted_repo["before"])
+    _git(repo, "tag", "-a", "v1-again", "-m", "tag of a tag", "v1")
+    _git(repo, "tag", "light", promoted_repo["before"])
+    assert sorted(changed_through_head("refs/tags/v1")) == _THROUGH_TIP
+    assert sorted(changed_through_head("refs/tags/v1-again")) == _THROUGH_TIP
+    assert sorted(changed_through_head("refs/tags/light")) == _THROUGH_TIP

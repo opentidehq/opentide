@@ -39,7 +39,7 @@ opentide share targets
 | `--publish` / `--no-publish` | push | Override the block `publish` flag for this run |
 | `--workers` | push, preview, retract | Parallel workers for one destination. Default `1` |
 | `--changed` | push | Share only objects the default-branch CI diff changed. `opentide share --changed` is the same flag |
-| `--since COMMIT` | push | With `--changed`: diff from this full commit SHA, branch, `origin/<branch>` or `refs/...` name instead of the push's baseline. Also runs outside CI |
+| `--since COMMIT` | push | With `--changed`: diff from this full commit SHA, branch, `origin/<branch>` or `refs/...` name (a tag is `refs/tags/<tag>`) instead of the push's baseline. Also runs outside CI |
 | `--delete` | retract | Delete the remote event |
 | `--yes` | retract | Required with `--delete` |
 
