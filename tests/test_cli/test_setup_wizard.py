@@ -104,6 +104,39 @@ def test_run_interactive_skills_setup(monkeypatch, tmp_path: Path) -> None:
     assert "opentide-detection-rule" in result["skills"]
 
 
+def test_run_interactive_skills_setup_installs_the_skills_it_was_given(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from tests.test_cli.conftest import stub_remote_skills_manifest
+
+    from opentide.cli.services.setup.skills import SkillsSetupOptions
+
+    stub_remote_skills_manifest(monkeypatch)
+    monkeypatch.setattr("opentide.cli.services.setup.skills.require_interactive", lambda: None)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.ask_checkbox",
+        lambda *args, **kwargs: ["generic"],
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.ask_confirm", lambda *args, **kwargs: True
+    )
+    monkeypatch.setattr("opentide.cli.services.setup.skills.unavailable_skills", lambda options: [])
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills._download_skill",
+        _fake_download_skill,
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.skills.fetch_github_bytes",
+        lambda path, **_: None,
+    )
+    given = SkillsSetupOptions(skill_slugs=["detection-engineering"], name="SOC Detections")
+
+    result = run_interactive_skills_setup(tmp_path, given)
+
+    assert result["skills"] == ["detection-engineering"]
+    assert "SOC Detections" in (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+
+
 def test_run_interactive_skills_setup_can_cancel(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("opentide.cli.services.setup.skills.require_interactive", lambda: None)
     monkeypatch.setattr(

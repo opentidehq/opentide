@@ -709,9 +709,19 @@ def setup_skills_install_cmd(
         except (SkillsDownloadError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     else:
-        _require_scripted_for_json(cli, "opentide setup skills", "--skill, --all")
+        _require_scripted_for_json(
+            cli, "opentide setup skills", "--generic or another target, --install, --all"
+        )
+        given = SkillsSetupOptions(
+            path=base,
+            skill_slugs=list(install),
+            install_all=all_skills,
+            name=name,
+            org=org,
+            description=description,
+        )
         try:
-            result = run_interactive_skills_setup(base)
+            result = run_interactive_skills_setup(base, given)
         except (InteractiveRequiredError, RuntimeError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     emit_success(cli, result)

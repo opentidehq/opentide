@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 
 import structlog
@@ -322,15 +322,23 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
     return result
 
 
-def run_interactive_skills_setup(base_path: Path) -> dict[str, object]:
-    """Prompt for skill targets and install packs."""
+def run_interactive_skills_setup(
+    base_path: Path, given: SkillsSetupOptions | None = None
+) -> dict[str, object]:
+    """Prompt for skill targets and install packs.
+
+    *given* carries the flags typed with the command (``--install``, ``--all``,
+    ``--name``...); the wizard only asks for the targets. It used to receive
+    the path alone and install the starter skills whatever was asked for.
+    """
     require_interactive()
     keys = ask_checkbox(
         "Agent environments",
         [(label, key) for key, label in SKILL_LABELS.items()],
         require_selection=True,
     )
-    options = SkillsSetupOptions(
+    options = replace(
+        given or SkillsSetupOptions(),
         path=base_path,
         targets=skill_targets_from_keys(keys),
         yes=True,
