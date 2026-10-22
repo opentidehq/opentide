@@ -164,3 +164,22 @@ def test_unknown_required_field_fails_the_human_command(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
     assert result.exit_code == 2
     assert "unknown metadata field(s) 'owner'" in result.output
+
+
+def test_required_skips_keys_the_object_schema_cannot_hold(tmp_path: Path) -> None:
+    # ``reviewed`` exists only on rule::1.1 metadata; threat::1.0 forbids it,
+    # so demanding it of a threat is a finding no author can fix.
+    _write_object(tmp_path, "simulated-actor.yaml", _BARE + "  author: Jane\n")
+    rule = tmp_path / "objects" / "rules" / "simulated-rule.yaml"
+    rule.parent.mkdir(parents=True)
+    rule.write_text(
+        "name: Simulated Rule\nmetadata:\n"
+        "  uuid: 00000000-0000-4000-8001-000000000002\n"
+        "  schema: rule::1.1\n  author: Jane\n",
+        encoding="utf-8",
+    )
+    _write_lint_toml(tmp_path, '[metadata]\nrequired = ["author", "reviewed"]\n')
+    findings = run_lint(tmp_path)["findings"]
+    assert [(item["path"], item["message"]) for item in findings] == [
+        ("objects/rules/simulated-rule.yaml", "Recommended metadata missing: reviewed")
+    ]

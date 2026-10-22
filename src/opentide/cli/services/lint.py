@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -126,6 +127,31 @@ def _has_metadata(record: _ObjectRecord, key: str) -> bool:
     return True
 
 
+@cache
+def _schema_metadata_keys(schema_id: str) -> frozenset[str] | None:
+    """YAML keys the ``metadata`` block of *schema_id* accepts, or ``None`` if unknown."""
+    from pydantic import BaseModel
+
+    from opentide.models.schema_registry import is_registered, resolve_model
+
+    if not is_registered(schema_id):
+        return None
+    field_info = resolve_model(schema_id).model_fields.get("metadata")
+    model = field_info.annotation if field_info is not None else None
+    if not (isinstance(model, type) and issubclass(model, BaseModel)):
+        return None
+    return frozenset(info.alias or name for name, info in model.model_fields.items())
+
+
+def _required_for(record: _ObjectRecord, required: tuple[str, ...]) -> list[str]:
+    """*required* minus keys the object's schema forbids (``reviewed`` on a threat)."""
+    schema_id = _as_str(record.metadata.get("schema"))
+    accepted = _schema_metadata_keys(schema_id) if schema_id else None
+    if accepted is None:
+        return list(required)
+    return [key for key in required if key in accepted]
+
+
 def _key_line(record: _ObjectRecord, key: str) -> int | None:
     """Zero-based line of a top-level *key*, as ``validate`` records ``yaml_line``."""
     return record.key_lines.get(key)
@@ -244,7 +270,7 @@ def _metadata_findings(
     for record in records:
         if record.parse_error or not record.name:
             continue
-        missing = [key for key in required if not _has_metadata(record, key)]
+        missing = [key for key in _required_for(record, required) if not _has_metadata(record, key)]
         if missing:
             findings.append(
                 _finding(
