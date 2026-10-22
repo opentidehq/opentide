@@ -675,25 +675,35 @@ def _run_live_validator(
         system_name = LegacyOpentide.Configurations.Systems.Index[platform]["platform"]["name"]
     emit_section(f"Query Validation - {system_name}")
     validator = cast(Any, query_validators[platform])
+    # No retry on TypeError: the pre-strategy `validate(deployment=...)` that
+    # was retried exists on no engine, and its own TypeError hid the real one.
     try:
-        try:
-            validator.validate(mdr_deployment=rules, strategies=strategies)
-        except TypeError:
-            logger.warning("trying_mdrv3_style_method")
-            validator.validate(deployment=rules)
+        validator.validate(mdr_deployment=rules, strategies=strategies)
     except ModuleNotFoundError as exc:
         return _missing_sdk_result(platform, exc)
     except TenantUnreachableError as exc:
         return _unreachable_tenant_result(exc)
     except ValueError as exc:
         # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
-        # TypeError stays uncaught here so the legacy validator signature retry works.
         return {
             "platform": platform,
             "mode": "live",
             "status": "failed",
             "supported": True,
             "message": str(exc),
+            "_exit_code": 1,
+        }
+    except Exception as exc:  # noqa: BLE001 -- one result document is the contract
+        detail = str(exc).strip()
+        error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+        logger.error("query_validation_failed", system=platform, detail=error)
+        return {
+            "platform": platform,
+            "mode": "live",
+            "status": "failed",
+            "supported": True,
+            **counts,
+            "message": f"Query validation for {platform} failed: {error}",
             "_exit_code": 1,
         }
     from opentide.cli.exit_codes import validation_outcome

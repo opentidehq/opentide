@@ -343,9 +343,23 @@ def _deploy(
                     deployer.deploy(mdr_deployment=uuids, strategies=run)
             else:
                 deployer.deploy(mdr_deployment=uuids, strategies=run)
-        except TypeError:
-            logger.warning("switching_to_mdrv3_legacy_methods")
-            deployer.deploy(deployment=uuids)
+        except Exception as exc:  # noqa: BLE001 -- one result document is the contract
+            # A TypeError used to be retried as the pre-strategy signature
+            # `deploy(deployment=...)`, which no engine has: its own TypeError
+            # replaced the real one. Any other error escaped as a traceback,
+            # with no result and no record of the platforms already deployed.
+            detail = str(exc).strip()
+            error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+            logger.error("platform_deployment_failed", system=system, detail=error)
+            return {
+                "status": "failed",
+                "message": f"Deployment to {system} failed: {error}",
+                "deployed": deployed,
+                "dry_run": dry_run,
+                "plan": plan_payload,
+                "strategies": [strategy.name for strategy in run],
+                "_exit_code": 1,
+            }
         deployed.append(system)
     from opentide.cli.exit_codes import deployment_outcome
 
