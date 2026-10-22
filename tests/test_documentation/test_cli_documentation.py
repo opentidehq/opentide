@@ -158,3 +158,42 @@ def test_remove_deleted_pages_unlinks_existing_markdown() -> None:
         removed = _remove_deleted_pages(ctx, [("rule", "rule-1", "Example Rule")])
     path.unlink.assert_called_once_with()
     assert removed == 1
+
+
+def test_changed_targets_read_only_catalogue_files(tmp_path: Path) -> None:
+    """``docs --changed`` follows the catalogue (#584): direct ``.yaml``/``.yml`` children only.
+
+    Moving ``objects/rules/team/moved.yaml`` up into ``objects/rules/`` (what the
+    ``nested_object_file`` warning asks for) must not report the old nested path
+    as a deleted object: that would unlink the page just written for the moved file.
+    """
+    from opentide.core.git_baseline import ChangedPath
+    from opentide.documentation.cli import _changed_object_paths_and_uuids
+
+    rules = tmp_path / "objects" / "rules"
+    (rules / "team").mkdir(parents=True)
+    body = "name: Moved Rule\nuuid: rule-moved\n"
+    (rules / "moved.yaml").write_text(body, encoding="utf-8")
+    (rules / "other.yml").write_text("name: Other\nuuid: rule-yml\n", encoding="utf-8")
+    (rules / "team" / "nested.yaml").write_text("name: N\nuuid: rule-nested\n", encoding="utf-8")
+    changes = [
+        ChangedPath(relative=Path(rel), absolute=tmp_path / rel)
+        for rel in (
+            "objects/rules/team/moved.yaml",
+            "objects/rules/moved.yaml",
+            "objects/rules/other.yml",
+            "objects/rules/team/nested.yaml",
+        )
+    ]
+    registry = MagicMock(Index={"paths": {"rule": str(rules)}})
+    with (
+        patch("opentide.core.registry.Opentide", registry),
+        patch("opentide.core.git_baseline.resolve_baseline", return_value=MagicMock(commit="b")),
+        patch("opentide.core.git_baseline.changed_paths", return_value=changes),
+        patch("opentide.documentation.cli._git_stdout", return_value=body),
+    ):
+        paths, uuids, deleted = _changed_object_paths_and_uuids(tmp_path)
+
+    assert deleted == []
+    assert uuids == {"rule-moved", "rule-yml"}
+    assert paths == {Path("objects/rules/moved.yaml"), Path("objects/rules/other.yml")}

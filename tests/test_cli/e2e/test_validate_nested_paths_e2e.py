@@ -1,10 +1,12 @@
-"""CLI E2E: ``validate --file`` with object files in nested folders (issue #297).
+"""CLI E2E: ``validate --file`` with object files in nested folders (#297, #584).
 
-The index kept only each object's basename and validation rebuilt its path as
-``<type folder>/<basename>``. Every object in a subfolder therefore "lived" at
-the top-level file sharing its name: ``--file objects/rules/x.yaml`` also
-validated ``objects/rules/other/x.yaml`` and blamed that object's issues on the
-parent file, while ``--file objects/rules/other/x.yaml`` matched nothing.
+#297: the index kept only each object's basename and validation rebuilt its
+path as ``<type folder>/<basename>``, so ``--file objects/rules/x.yaml`` also
+validated ``objects/rules/other/x.yaml`` and blamed it on the parent file.
+
+#584 (workspace 1.3): a file in a subfolder is not an object instance at all.
+``validate`` does not index or check it, and warns (``nested_object_file``)
+naming its path. A ``--file`` target that names it selects nothing.
 """
 
 from __future__ import annotations
@@ -57,6 +59,14 @@ def _report(payload: dict[str, object]) -> dict:
 
 def _issue_uuids(report: dict) -> set[str]:
     return {issue["object_uuid"] for issue in report["issues"] if issue["object_uuid"]}
+
+
+def _nested_warnings(report: dict) -> set[Path]:
+    return {
+        Path(warning["file_path"]).resolve()
+        for warning in report["warnings"]
+        if warning["code"] == "nested_object_file"
+    }
 
 
 @pytest.fixture
@@ -115,67 +125,68 @@ def test_the_parent_path_selects_only_the_parent_file(
 
 
 @pytest.mark.parametrize("style", ["repo-relative", "dot-relative", "absolute"])
-def test_the_nested_path_selects_the_decoy_and_blames_its_own_file(
+def test_the_nested_path_selects_nothing_and_warns_about_the_decoy(
     invoke_cli, tutorial_with_decoy: Path, style: str
 ) -> None:
     repo = tutorial_with_decoy
     code, report = _validate(invoke_cli, repo, "--file", _target(repo, DECOY_RULE, style))
     assert code == 1
-    assert report["stats"]["objects_checked"] == 1, report["stats"]
-    codes = {issue["code"] for issue in report["issues"]}
-    assert "invalid_ref" in codes
-    assert "scope_no_match" not in codes
-    assert _issue_uuids(report) == {DECOY_UUID}
-    decoy = (tutorial_with_decoy / DECOY_RULE).resolve()
-    for issue in report["issues"]:
-        assert Path(issue["file_path"]).resolve() == decoy, issue
-    assert_issues_point_at_their_objects(report)
+    assert report["stats"]["objects_checked"] == 0, report["stats"]
+    assert {issue["code"] for issue in report["issues"]} == {"scope_no_match"}
+    assert _nested_warnings(report) == {(repo / DECOY_RULE).resolve()}
 
 
-def test_a_bare_file_name_selects_every_file_with_that_name(
+def test_a_bare_file_name_selects_only_the_catalogue_file(
     invoke_cli, tutorial_with_decoy: Path
 ) -> None:
-    """A basename has no directory to disagree with, so it matches in every subfolder."""
+    """A basename matches the catalogue file; the nested twin is only warned about."""
     code, report = _validate(invoke_cli, tutorial_with_decoy, "--file", "sentinel-kql-rule.yaml")
-    assert code == 1
-    assert report["stats"]["objects_checked"] == 2, report["stats"]
-    assert _issue_uuids(report) == {DECOY_UUID}
-    decoy = (tutorial_with_decoy / DECOY_RULE).resolve()
-    assert {Path(issue["file_path"]).resolve() for issue in report["issues"]} == {decoy}
+    assert code == 0, report["issues"]
+    assert report["stats"]["objects_checked"] == 1, report["stats"]
+    assert DECOY_UUID not in _issue_uuids(report)
+    assert _nested_warnings(report) == {(tutorial_with_decoy / DECOY_RULE).resolve()}
+
+
+def test_a_full_run_warns_about_the_decoy_and_does_not_check_it(
+    invoke_cli, tutorial_with_decoy: Path
+) -> None:
+    code, report = _validate(invoke_cli, tutorial_with_decoy)
+    assert code == 0, report["issues"]
+    assert DECOY_UUID not in _issue_uuids(report)
+    assert _nested_warnings(report) == {(tutorial_with_decoy / DECOY_RULE).resolve()}
+    [warning] = [w for w in report["warnings"] if w["code"] == "nested_object_file"]
+    assert DECOY_RULE in warning["message"]
+    assert "not an object instance" in warning["message"]
     assert_issues_point_at_their_objects(report)
 
 
-def test_a_full_run_blames_the_decoy_on_its_own_file(invoke_cli, tutorial_with_decoy: Path) -> None:
-    _, report = _validate(invoke_cli, tutorial_with_decoy)
-    assert _issue_uuids(report) == {DECOY_UUID}
-    assert_issues_point_at_their_objects(report)
+def test_strict_fails_on_a_nested_object_file(invoke_cli, tutorial_with_decoy: Path) -> None:
+    result = invoke_cli("validate", "--strict", repo=tutorial_with_decoy)
+    assert result.exit_code == 1
 
 
 @pytest.mark.parametrize("args", [(), ("--file", "objects/rules/other/copy-of-rule.yaml")])
-def test_a_duplicate_uuid_in_a_subfolder_fails_validation(
+def test_a_copy_in_a_subfolder_is_not_a_duplicate_uuid(
     invoke_cli, tutorial_with_decoy: Path, args: tuple[str, ...]
 ) -> None:
-    """The ID scan only read the top of each folder, so this passed a full run."""
+    """A nested copy is not an object instance (#584), so it duplicates no UUID."""
     repo = tutorial_with_decoy
     (repo / DECOY_RULE).unlink()
     copy = repo / "objects" / "rules" / "other" / "copy-of-rule.yaml"
     copy.write_text((repo / TUTORIAL_RULE).read_text(encoding="utf-8"), encoding="utf-8")
-    code, report = _validate(invoke_cli, repo, *args)
-    assert code == 1
-    duplicates = [issue for issue in report["issues"] if issue["code"] == "duplicate_id"]
-    assert duplicates, report["issues"]
-    assert {issue["object_uuid"] for issue in duplicates} == {TUTORIAL_RULE_UUID}
-    assert_issues_point_at_their_objects(report)
+    _, report = _validate(invoke_cli, repo, *args)
+    assert [issue for issue in report["issues"] if issue["code"] == "duplicate_id"] == []
+    assert _nested_warnings(report) == {copy.resolve()}
 
 
-def test_mcp_validation_report_selects_the_nested_file(tutorial_with_decoy: Path) -> None:
+def test_mcp_validation_report_does_not_select_the_nested_file(tutorial_with_decoy: Path) -> None:
     from opentide.mcp_server.tools import tool_validation_report
 
     clear_runtime_caches()
     nested = tool_validation_report(file=DECOY_RULE)
-    assert nested["stats"]["objects_checked"] == 1, nested["stats"]
-    assert _issue_uuids(nested) == {DECOY_UUID}
-    assert_issues_point_at_their_objects(nested)
+    assert nested["stats"]["objects_checked"] == 0, nested["stats"]
+    assert DECOY_UUID not in _issue_uuids(nested)
+    assert _nested_warnings(nested) == {(tutorial_with_decoy / DECOY_RULE).resolve()}
 
     clear_runtime_caches()
     parent = tool_validation_report(file=TUTORIAL_RULE)
@@ -216,12 +227,9 @@ def test_issue_297_commands_on_console_script(script_runner: ScriptRunner, tmp_p
 
     code, nested = _run(DECOY_RULE)
     assert code == 1
-    assert nested["stats"]["objects_checked"] == 1
-    assert _issue_uuids(nested) == {DECOY_UUID}
-    assert {Path(issue["file_path"]).resolve() for issue in nested["issues"]} == {
-        (repo / DECOY_RULE).resolve()
-    }
-    assert_issues_point_at_their_objects(nested)
+    assert nested["stats"]["objects_checked"] == 0
+    assert DECOY_UUID not in _issue_uuids(nested)
+    assert _nested_warnings(nested) == {(repo / DECOY_RULE).resolve()}
 
 
 # --- Same-basename layouts across object types and depths -------------------
@@ -239,22 +247,28 @@ def _uuid(relative: str) -> str:
     return NESTED_TWIN_LAYOUT[relative][1]
 
 
-_ALL_TWINS = frozenset(uuid for _, uuid in NESTED_TWIN_LAYOUT.values())
+def _is_direct(relative: str) -> bool:
+    """``objects/<family>/<file>``: a catalogue file, not one in a subfolder (#584)."""
+    return relative.count("/") == 2
+
+
+_DIRECT_TWINS = frozenset(
+    uuid for relative, (_, uuid) in NESTED_TWIN_LAYOUT.items() if _is_direct(relative)
+)
+_NESTED_TWINS = frozenset(
+    uuid for relative, (_, uuid) in NESTED_TWIN_LAYOUT.items() if not _is_direct(relative)
+)
 _LAYOUT_CASES: list[tuple[str, frozenset[str]]] = [
-    *((relative, frozenset({_uuid(relative)})) for relative in NESTED_TWIN_LAYOUT),
-    (TWIN, _ALL_TWINS),
-    (
-        f"./objects/threats/actors/apt/{TWIN}",
-        frozenset({_uuid(f"objects/threats/actors/apt/{TWIN}")}),
+    *(
+        (relative, frozenset({_uuid(relative)}) if _is_direct(relative) else frozenset())
+        for relative in NESTED_TWIN_LAYOUT
     ),
-    (
-        f"<abs>objects/objectives/access/emea/{TWIN}",
-        frozenset({_uuid(f"objects/objectives/access/emea/{TWIN}")}),
-    ),
-    (
-        f"Objects/Detection Rules/team-a/{TWIN}",
-        frozenset({_uuid(f"objects/rules/team-a/{TWIN}")}),
-    ),
+    (TWIN, _DIRECT_TWINS),
+    (f"./objects/threats/actors/apt/{TWIN}", frozenset()),
+    (f"<abs>objects/objectives/access/emea/{TWIN}", frozenset()),
+    (f"<abs>objects/objectives/{TWIN}", frozenset({_uuid(f"objects/objectives/{TWIN}")})),
+    (f"Objects/Detection Rules/team-a/{TWIN}", frozenset()),
+    (f"Objects/Detection Rules/{TWIN}", frozenset({_uuid(f"objects/rules/{TWIN}")})),
     (f"objects/rules/emea/{TWIN}", frozenset()),
     (f"objects/rules/team-a/emea/deeper/{TWIN}", frozenset()),
     (f"objects/threats/team-a/{TWIN}", frozenset()),
@@ -292,3 +306,14 @@ def test_a_file_target_selects_exactly_its_objects_and_blames_their_own_files(
     if not expected:
         assert "scope_no_match" in codes
         assert exit_code == 1
+
+
+def test_a_full_run_on_the_twins_warns_once_per_nested_file(
+    invoke_cli, nested_twins: dict[str, Path], tide_corpus_repo: Path
+) -> None:
+    _, report = _validate(invoke_cli, tide_corpus_repo)
+    nested = {nested_twins[uuid] for uuid in _NESTED_TWINS}
+    warned = [w for w in report["warnings"] if w["code"] == "nested_object_file"]
+    assert len(warned) == len(nested)
+    assert _nested_warnings(report) == nested
+    assert _issue_uuids(report).isdisjoint(_NESTED_TWINS)

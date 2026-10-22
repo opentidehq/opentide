@@ -48,6 +48,20 @@ def test_lint_reports_filename_mismatch(tmp_path: Path) -> None:
     assert result["_exit_code"] == 0
 
 
+def test_lint_warns_about_a_nested_object_file_and_does_not_lint_it(tmp_path: Path) -> None:
+    """A file in a subfolder is not an object instance (#584): one warning, no other check."""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _THREAT)
+    _write_object(tmp_path, "threats", "team/Bad Name.yaml", "name: Other\nmetadata: {}\n")
+    result = run_lint(tmp_path)
+    assert result["count"] == 1
+    [finding] = result["findings"]
+    assert finding["code"] == "nested_object_file"
+    assert finding["severity"] == "warning"
+    assert finding["path"] == "objects/threats/team/Bad Name.yaml"
+    assert "not an object instance" in str(finding["message"])
+    assert "objects/threats" in str(finding["message"])
+
+
 def test_lint_strict_fails_on_findings(tmp_path: Path) -> None:
     _write_object(tmp_path, "threats", "Simulated Actor.yaml", _THREAT)
     result = run_lint(tmp_path, checks=[LintCheck.filenames], strict=True)

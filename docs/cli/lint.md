@@ -23,7 +23,7 @@ opentide lint --strict
 
 Default (no `--check`) runs both. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside opentide, so lint does not check them: opentide's own CI checks the bundled pins against the specifications whenever they change.
 
-Lint walks `objects/{threats,objectives,rules}/**/*.yaml` and does not rebuild the object registry.
+Lint reads the `.yaml` and `.yml` files directly in `objects/{threats,objectives,rules}/` and does not rebuild the object registry. A file in a subfolder is not an object: the `filenames` check reports it once as a `warning` with `code: nested_object_file` and checks nothing else in it.
 
 ## Flags
 

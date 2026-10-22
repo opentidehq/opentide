@@ -84,14 +84,15 @@ def test_registry_indexes_malformed_objects_without_raising(
     )
 
 
-def test_registry_records_each_objects_own_file_in_nested_folders(
+def test_registry_indexes_only_direct_children_of_an_object_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``files`` keeps the basename; ``file_paths`` tells same-named twins apart (#297)."""
+    """A file in a subfolder is not an object instance (#584): listed, never indexed."""
     layout = {
         "objects/rules/twin.yaml": str(uuid4()),
+        "objects/rules/other.yml": str(uuid4()),
         "objects/rules/team-a/twin.yaml": str(uuid4()),
-        "objects/rules/team-a/emea/twin.yaml": str(uuid4()),
+        "objects/rules/team-a/emea/twin.yml": str(uuid4()),
     }
     for relative, rule_uuid in layout.items():
         path = tmp_path / relative
@@ -101,10 +102,19 @@ def test_registry_records_each_objects_own_file_in_nested_folders(
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path.resolve()))
     index = build_registry()
 
-    for relative, rule_uuid in layout.items():
+    direct = ("objects/rules/twin.yaml", "objects/rules/other.yml")
+    for relative in direct:
+        rule_uuid = layout[relative]
         assert rule_uuid in index["objects"]["rule"]
-        assert index["files"][rule_uuid] == "twin.yaml"
         assert Path(index["file_paths"][rule_uuid]) == (tmp_path / relative).resolve()
+    nested = [relative for relative in layout if relative not in direct]
+    for relative in nested:
+        assert layout[relative] not in index["objects"]["rule"]
+        assert layout[relative] not in index["file_paths"]
+    assert [Path(row["path"]) for row in index["nested_object_files"]] == [
+        (tmp_path / relative).resolve() for relative in sorted(nested)
+    ]
+    assert {row["object_type"] for row in index["nested_object_files"]} == {"rule"}
 
 
 def test_validation_reports_all_schema_errors_without_aborting(

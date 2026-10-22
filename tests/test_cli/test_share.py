@@ -643,3 +643,101 @@ def test_changed_path_filter_keeps_direct_yaml_children(
     narrowed, stop = _changed_files(tmp_path, None)
     assert narrowed is None
     assert stop == _PREFLIGHT["changed_diff"]
+
+
+_NESTED_OBJECTIVE = "objects/objectives/team/nested-objective.yaml"
+_NESTED_OBJECTIVE_UUID = "00000000-0000-4000-8002-0000000005a4"
+
+
+def _write_nested_objective(repo: Path) -> Path:
+    """A valid objective one folder down: not an object instance (#584)."""
+    nested = repo / _NESTED_OBJECTIVE
+    nested.parent.mkdir(parents=True, exist_ok=True)
+    text = (repo / _OBJECTIVE).read_text(encoding="utf-8")
+    nested.write_text(text.replace(_OBJECTIVE_UUID, _NESTED_OBJECTIVE_UUID), encoding="utf-8")
+    return nested
+
+
+def _shared_uuids() -> set[str]:
+    return {uuid for event in _Persistent.events for uuid in event.opentide_uuids}
+
+
+def test_full_push_never_publishes_a_nested_object_file(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    _write_sharing(tide_corpus_repo)
+    _write_nested_objective(tide_corpus_repo)
+
+    pushed = invoke_cli("share", "push", repo=tide_corpus_repo)
+    assert pushed.exit_code == 0, pushed.stdout
+    body = json.loads(pushed.stdout)
+    uuids = {record["object_uuid"] for record in body["records"]}
+    assert _OBJECTIVE_UUID in uuids
+    assert _NESTED_OBJECTIVE_UUID not in uuids
+    assert _NESTED_OBJECTIVE_UUID not in _shared_uuids()
+    assert len(_Persistent.events) == 1
+    assert any("team/nested-objective.yaml" in warning for warning in body["warnings"])
+
+    named = invoke_cli("share", "push", "--file", _NESTED_OBJECTIVE, repo=tide_corpus_repo)
+    named_body = json.loads(named.stdout)
+    assert _NESTED_OBJECTIVE_UUID not in {r["object_uuid"] for r in named_body["records"]}
+    assert _NESTED_OBJECTIVE_UUID not in _shared_uuids()
+
+
+def test_changed_push_never_publishes_a_nested_object_file(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    _write_sharing(tide_corpus_repo)
+    _write_nested_objective(tide_corpus_repo)
+
+    def _both(_plan: object) -> list[str]:
+        return [_OBJECTIVE, _NESTED_OBJECTIVE]
+
+    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _both)
+    pushed = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
+    assert pushed.exit_code == 0, pushed.stdout
+    body = json.loads(pushed.stdout)
+    assert {record["object_uuid"] for record in body["records"]} == {_OBJECTIVE_UUID}
+    assert _NESTED_OBJECTIVE_UUID not in _shared_uuids()
+    assert any("team/nested-objective.yaml" in warning for warning in body["warnings"])
+
+    _Persistent.events = []
+
+    def _nested_only(_plan: object) -> list[str]:
+        return [_NESTED_OBJECTIVE]
+
+    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _nested_only)
+    only = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
+    assert only.exit_code == 0, only.stdout
+    assert "No changed objects to share" in only.stdout
+    assert _Persistent.events == []
+
+
+@pytest.mark.parametrize("name", ["scratch.debug.yaml", "upper.YAML"])
+def test_changed_push_skips_a_changed_file_outside_the_catalogue(
+    name: str, invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A changed file the catalogue does not read is no changed object (#584).
+
+    ``--changed`` selected ``*.debug.yaml`` and ``*.YAML`` files beside the
+    objects, which the registry never indexes, so a push touching only one of
+    them failed with ``scope_no_match`` instead of having nothing to share.
+    """
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    _write_sharing(tide_corpus_repo)
+    source = tide_corpus_repo / _OBJECTIVE
+    (source.parent / name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+    def _diff(_plan: object) -> list[str]:
+        return [f"objects/objectives/{name}"]
+
+    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _diff)
+    pushed = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
+    assert pushed.exit_code == 0, pushed.stdout
+    assert "No changed objects to share" in pushed.stdout
+    assert _Persistent.events == []

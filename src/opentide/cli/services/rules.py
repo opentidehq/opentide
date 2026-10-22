@@ -8,8 +8,7 @@ from typing import Any
 
 from opentide.core.io import load_yaml
 from opentide.models.review import parse_window, reviewed_text, unreviewed_reason
-
-_YAML_SUFFIXES = {".yaml", ".yml"}
+from opentide.registry.catalogue import catalogue_files
 
 
 def list_unreviewed_rules(
@@ -26,9 +25,8 @@ def list_unreviewed_rules(
     if not root.is_dir():
         return []
     findings: list[dict[str, Any]] = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in _YAML_SUFFIXES:
-            continue
+    # Only catalogue files: one in a subfolder is not a rule (#584).
+    for path in catalogue_files(root, include_debug=True):
         document = load_yaml(path)
         if not isinstance(document, dict):
             continue

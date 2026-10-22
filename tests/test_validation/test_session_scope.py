@@ -127,12 +127,12 @@ def test_run_validation_uuid_scope_still_finds_duplicate_ids(
     [None, frozenset({"team-a/emea/b.yaml"}), frozenset({"b.yaml"})],
     ids=["full", "nested-path", "basename"],
 )
-def test_run_validation_finds_duplicate_ids_in_nested_folders(
+def test_run_validation_ignores_a_uuid_repeated_in_a_subfolder(
     tmp_path: Path,
     validation_session_mocks: MagicMock,
     files: frozenset[str] | None,
 ) -> None:
-    """The ID scan walked only the top of each folder, unlike the indexer."""
+    """A file in a subfolder is not an object instance (#584), so it duplicates nothing."""
     del validation_session_mocks
     rules_dir = tmp_path / "rules"
     nested = rules_dir / "team-a" / "emea"
@@ -164,9 +164,38 @@ def test_run_validation_finds_duplicate_ids_in_nested_folders(
             index=index,
             workers=0,
         )
+    assert [issue for issue in report.issues if issue.code == "duplicate_id"] == []
+
+
+def test_run_validation_finds_a_duplicate_uuid_in_a_yml_file(
+    tmp_path: Path,
+    validation_session_mocks: MagicMock,
+) -> None:
+    """``*.yml`` files directly in the folder are catalogue files too (#584)."""
+    del validation_session_mocks
+    rules_dir = tmp_path / "rules"
+    rules_dir.mkdir()
+    uuid = "00000000-0000-4000-8000-000000000001"
+    (rules_dir / "a.yaml").write_text(f"name: A\nmetadata:\n  uuid: {uuid}\n", encoding="utf-8")
+    (rules_dir / "b.yml").write_text(f"name: B\nmetadata:\n  uuid: {uuid}\n", encoding="utf-8")
+    index = {
+        "objects": {"rule": {}, "objective": {}, "threat": {}},
+        "metaschemas": {"rule": {}},
+        "files": {},
+        "vocabs": {},
+    }
+    with (
+        patch("opentide.validation.session.resolve_paths", return_value={"rule": rules_dir}),
+        patch(
+            "opentide.validation.session.resolve_configurations",
+            return_value={"global": {"metaschemas": {"rule": {}}}},
+        ),
+    ):
+        report = run_validation(
+            checks=frozenset({ValidateCheck.id_uniqueness}), index=index, workers=0
+        )
     duplicates = [issue for issue in report.issues if issue.code == "duplicate_id"]
-    assert [issue.file_path for issue in duplicates] == [nested / "b.yaml"]
-    assert_issues_point_at_their_objects(report)
+    assert [issue.file_path for issue in duplicates] == [rules_dir / "b.yml"]
 
 
 _TWIN_LAYOUT = {
@@ -214,18 +243,33 @@ def twin_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
         IndexManager._cache = None  # noqa: SLF001
 
 
+def _is_direct(relative: str) -> bool:
+    """``objects/<family>/<file>``: a catalogue file, not one in a subfolder (#584)."""
+    return relative.count("/") == 2
+
+
+_DIRECT_TWINS = {uuid for rel, (_, uuid) in _TWIN_LAYOUT.items() if _is_direct(rel)}
+
+
 @pytest.mark.parametrize(
     ("target", "expected"),
     [
-        *((relative, {uuid}) for relative, (_, uuid) in _TWIN_LAYOUT.items()),
-        ("twin.yaml", {uuid for _, uuid in _TWIN_LAYOUT.values()}),
+        *(
+            (relative, {uuid} if _is_direct(relative) else set())
+            for relative, (_, uuid) in _TWIN_LAYOUT.items()
+        ),
+        ("twin.yaml", _DIRECT_TWINS),
         ("objects/rules/team-b/twin.yaml", set()),
     ],
 )
 def test_run_validation_checks_exactly_the_targeted_twin_and_blames_its_own_file(
     twin_workspace: dict[str, Any], tmp_path: Path, target: str, expected: set[str]
 ) -> None:
-    """Class guard for #297: same basename at depth 1-3, across object types."""
+    """Class guard for #297: same basename at depth 1-3, across object types.
+
+    Only the twin directly in its family folder is an object (#584); a target
+    naming a nested twin selects nothing and warns about that file.
+    """
     real_paths = {uuid: (tmp_path / rel).resolve() for rel, (_, uuid) in _TWIN_LAYOUT.items()}
     scope = ValidationScope.narrow(files=frozenset({target}), roots=(tmp_path,))
     with patch("opentide.validation.session.Opentide.initialise"):
@@ -243,3 +287,16 @@ def test_run_validation_checks_exactly_the_targeted_twin_and_blames_its_own_file
             assert issue.file_path is not None
             assert issue.file_path.resolve() == real_paths[issue.object_uuid], issue
     assert_issues_point_at_their_objects(report)
+    warned = {
+        issue.file_path.resolve()
+        for issue in report.warnings
+        if issue.code == "nested_object_file" and issue.file_path is not None
+    }
+    nested_targets = {
+        (tmp_path / rel).resolve()
+        for rel in _TWIN_LAYOUT
+        if not _is_direct(rel) and scope.matches_file(Path(rel).name, tmp_path / rel)
+    }
+    assert warned == nested_targets
+    if not expected:
+        assert any(issue.code == "scope_no_match" for issue in report.issues)

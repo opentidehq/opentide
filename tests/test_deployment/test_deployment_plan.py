@@ -566,7 +566,11 @@ def test_ci_rule_selection_keeps_top_level_files_out_of_the_subfolder_list(
 
 @pytest.mark.parametrize("catalogue", ["plain", "symlinked"], indirect=True)
 def test_every_rule_run_accounts_for_every_indexed_rule(catalogue: Path) -> None:
-    """#312 guard: an indexed rule is planned, excluded by status, or named in a warning."""
+    """#312 guard: an indexed rule is planned, excluded by status, or named in a warning.
+
+    Rules in subfolders are not object instances (#584): the registry does
+    not index them, and deploy still names each one in its warning.
+    """
     from opentide.core.registry import Opentide
     from opentide.deployment import make_deploy_plan
 
@@ -582,7 +586,11 @@ def test_every_rule_run_accounts_for_every_indexed_rule(catalogue: Path) -> None
     assert scope["silent"] == set()
     assert set(CORPUS_RULE_UUIDS.values()) <= scope["planned"]
     assert scope["status"] == {INERT_RULE_UUID}
-    assert scope["warned"] == set(SUBFOLDER_RULE_UUIDS.values())
+    assert scope["warned"] == set()
+    assert set(SUBFOLDER_RULE_UUIDS.values()).isdisjoint(Opentide.Models.rules)
+    named = " ".join(warnings)
+    for relative in SUBFOLDER_RULE_UUIDS:
+        assert f"/{relative}" in named
 
 
 GATED_RULE_UUID = "00000000-0000-4000-8003-000000000414"

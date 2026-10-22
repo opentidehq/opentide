@@ -111,14 +111,13 @@ def _changed_object_paths_and_uuids(
     """Return changed paths, live UUIDs, and deleted (kind, uuid, name) tuples."""
     from opentide.core.git_baseline import changed_paths, resolve_baseline
     from opentide.core.registry import Opentide
+    from opentide.registry.catalogue import is_object_file_name
 
     baseline = resolve_baseline(repo_root)
     merge_base = baseline.commit
     paths_cfg = Opentide.Index["paths"]
     object_roots = {
-        kind: Path(paths_cfg[kind]).resolve()
-        for kind in _OBJECT_KIND_TO_SCOPE
-        if kind in paths_cfg
+        kind: Path(paths_cfg[kind]).resolve() for kind in _OBJECT_KIND_TO_SCOPE if kind in paths_cfg
     }
     changed_object_paths: set[Path] = set()
     changed_uuids: set[str] = set()
@@ -126,10 +125,12 @@ def _changed_object_paths_and_uuids(
     for change in changed_paths(repo_root, baseline):
         relative_path = change.relative
         absolute_path = change.absolute.resolve()
-        if absolute_path.suffix.lower() != ".yaml":
+        # The catalogue's rule (#584): a file directly in an object folder. A
+        # nested file never had a page, so its deletion must not remove one.
+        if not is_object_file_name(absolute_path.name):
             continue
         kind = next(
-            (candidate for candidate, root in object_roots.items() if root in absolute_path.parents),
+            (candidate for candidate, root in object_roots.items() if absolute_path.parent == root),
             None,
         )
         if kind is None:
@@ -248,7 +249,24 @@ def run(
     flavor: str | None = None,
     changed: bool = False,
 ) -> dict[str, object]:
-    """Run documentation generation for a scope or full pipeline."""
+    """Run documentation generation for a scope or full pipeline.
+
+    Files in subfolders of an object folder are not objects (#584): they get
+    no page, and the payload names them once in ``warnings``.
+    """
+    from opentide.registry.catalogue import with_nested_object_warning
+
+    result = _run(scope=scope, output=output, flavor=flavor, changed=changed)
+    return with_nested_object_warning(dict(result))
+
+
+def _run(
+    *,
+    scope: str | None,
+    output: str | None,
+    flavor: str | None,
+    changed: bool,
+) -> dict[str, object]:
     ctx = _build_context(output=output, flavor=flavor)
     resolved = DocumentScope(scope) if scope else None
 

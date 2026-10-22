@@ -8,6 +8,7 @@ from typing import Any
 from opentide.core.files import resolve_configurations
 from opentide.core.io import parse_json
 from opentide.core.logging import get_logger
+from opentide.registry.catalogue import NESTED_INDEX_KEY, scan_object_dir
 from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
 
 logger = get_logger(__name__)
@@ -77,6 +78,9 @@ class RegistryBuilder:
         # UUID -> the YAML file the object was read from. ``files`` keeps only
         # the basename, which is ambiguous once object folders are nested.
         self.file_paths: dict[str, str] = {}
+        # YAML files in subfolders of an object folder: not object instances
+        # (workspace 1.3, #584), so they are listed here instead of indexed.
+        self.nested_object_files: list[dict[str, str]] = []
 
     def build(self) -> dict[str, Any]:
         configs = resolve_configurations()
@@ -108,6 +112,7 @@ class RegistryBuilder:
 
         objects_index, files_index = self._load_objects(paths, metaschemas)
         index["parse_errors"] = self.parse_errors
+        index[NESTED_INDEX_KEY] = self.nested_object_files
         from opentide.indexing.inflight import apply_inflight_overlay
 
         apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
@@ -275,14 +280,23 @@ class RegistryBuilder:
                 _log_missing_object_folder(object_dir, error=True, reason="not_a_directory")
                 continue
             try:
-                model_paths = sorted(object_dir.rglob("*.yaml"))
+                scan = scan_object_dir(object_dir)
             except OSError as exc:
                 _log_missing_object_folder(object_dir, error=True, reason=str(exc))
                 continue
-            for model_path in model_paths:
-                if model_path.name.endswith(".debug.yaml"):
-                    continue
+            for model_path in scan.files:
                 yaml_files.append((meta_name, str(model_path)))
+            self.nested_object_files.extend(
+                {"path": str(path), "folder": str(object_dir), "object_type": meta_name}
+                for path in scan.nested
+            )
+
+        if self.nested_object_files:
+            logger.info(
+                "nested_object_files_skipped",
+                count=len(self.nested_object_files),
+                files=[row["path"] for row in self.nested_object_files],
+            )
 
         if not yaml_files:
             return objects_index, files_index
