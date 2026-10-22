@@ -57,7 +57,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
 
         alert_severity = data.response.alert_severity if data.response else "Low"
         severity = self.SEVERITY_MAPPING[str(alert_severity)]
-        selected_watchlist = config_data.get("watchlist") or self.DEFAULT_WATCHLIST
+        selected_watchlist = str(config_data.get("watchlist") or "")
         selected_report = config_data.get("report") or name
 
         watchlist_list = service.select(Watchlist)
@@ -145,7 +145,9 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
         config_data = {
             "status": config.status,
             "query": config.query,
-            "watchlist": config.watchlist,
+            # The tenant's own watchlist, not DEFAULT_WATCHLIST: that one is
+            # the first tenant's, and every other tenant has its own.
+            "watchlist": config.watchlist or tenant_config.setup.watchlist,
             "report": config.report,
             "tags": config.tags,
         }

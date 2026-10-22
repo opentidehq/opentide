@@ -16,6 +16,7 @@ import pytest
 from opentide.loading.rule_loader import load_rule_from_dict
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.models.rule import DetectionRule
+from opentide.models.system_config import ConfigurationModels
 
 pytest.importorskip("cbc_sdk")
 
@@ -83,7 +84,9 @@ def _strategy(monkeypatch: pytest.MonkeyPatch, strategy: StatusStrategy) -> None
     )
 
 
-def _rule(metadata: dict, *, report: str | None = None) -> DetectionRule:
+def _rule(
+    metadata: dict, *, report: str | None = None, watchlist: str | None = WATCHLIST
+) -> DetectionRule:
     return load_rule_from_dict(
         {
             "name": "CBC Rule",
@@ -94,7 +97,7 @@ def _rule(metadata: dict, *, report: str | None = None) -> DetectionRule:
                     "schema": "carbon_black_cloud::3.0",
                     "status": "STAGING",
                     "query": "process_name:new.exe",
-                    "watchlist": WATCHLIST,
+                    "watchlist": watchlist,
                     "report": report,
                 }
             },
@@ -168,3 +171,40 @@ def test_retiring_the_last_ioc_of_a_shared_report_deletes_it(
 
     assert console.deletes == ["/threathunter/watchlistmgr/v3/orgs/ORG/reports/report-0"]
     assert console.puts == []
+
+
+def _tenant(name: str, watchlist: str) -> ConfigurationModels.Systems.CarbonBlackCloud.Tenant:
+    Tenant = ConfigurationModels.Systems.CarbonBlackCloud.Tenant
+    return Tenant(
+        name=name,
+        description=name,
+        setup=Tenant.Setup(
+            ssl=True, url="https://cbc.example", org_key="ORG", token="ABC/DEF", watchlist=watchlist
+        ),
+    )
+
+
+def test_a_rule_without_a_watchlist_uses_its_own_tenants(
+    console: _Console, metadata: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The fallback watchlist was the first tenant's, for every tenant.
+
+    A second tenant failed with "nonexistent Watchlist", or deployed into
+    a watchlist of the same name that was not the one it configured.
+    """
+    from opentide.platforms.carbon_black import client
+    from opentide.platforms.carbon_black.deployer import CarbonBlackCloudDeploy
+
+    first = _tenant("First", "First tenant's watchlist")
+    second = _tenant("Second", WATCHLIST)
+    systems = SimpleNamespace(CarbonBlackCloud=SimpleNamespace(tenants=[first, second]))
+    registry = SimpleNamespace(Configurations=SimpleNamespace(Systems=systems))
+    monkeypatch.setattr(client, "Opentide", registry)
+    _strategy(monkeypatch, StatusStrategy.RELEASE)
+    console.add_report("CBC Rule", (RULE_IOC, "process_name:old.exe"))
+
+    CarbonBlackCloudDeploy().deploy_mdr(
+        data=_rule(metadata, watchlist=None), service=console.api, tenant_config=second
+    )
+
+    assert console.iocs() == [(RULE_IOC, "process_name:new.exe")]
