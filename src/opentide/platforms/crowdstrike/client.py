@@ -8,7 +8,6 @@ import structlog
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.errors import Errors
-from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.transport import DEFAULT_TIMEOUT, TenantSession, tenant_tls_verify
 
@@ -66,13 +65,13 @@ def remove_none_values(data: dict) -> dict:
 @dataclass
 class CrowdstrikeService:
     """
-    Interface to connect and deploy MDRs to SentinelOne. Initialized on a single
+    Interface to connect and deploy MDRs to CrowdStrike. Initialized on a single
     tenant basis.
     """
 
     def __init__(self, tenant_config: ConfigurationModels.Systems.Crowdstrike.Tenant) -> None:
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.SentinelOne.platform.identifier
+        self.DEPLOYER_IDENTIFIER = "crowdstrike"
         self.tenant_config = tenant_config
         self.verify = tenant_tls_verify(
             tenant_config.setup.ssl, platform="crowdstrike", tenant=tenant_config.name
@@ -100,7 +99,7 @@ class CrowdstrikeService:
                 return "https://api.us-2.crowdstrike.com"
             case "EU-1":
                 return "https://api.eu-1.crowdstrike.com"
-            case "US-GOV-1:":
+            case "US-GOV-1":
                 return "https://api.laggar.gcw.crowdstrike.com"
             case "US-GOV-2":
                 return "https://api.falcon.us-gov-2.crowdstrike.mil"
