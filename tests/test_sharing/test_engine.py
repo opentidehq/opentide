@@ -852,3 +852,63 @@ def test_retract_type_filter_matches_deleted_objects_by_ledger_schema(tmp_path: 
         (rule.uuid, "retracted")
     ]
     assert [event.opentide_uuids for event in fake.events] == [(threat.uuid,)]
+
+
+def test_push_publish_publishes_an_unchanged_unpublished_event(tmp_path: Path) -> None:
+    """``share push --publish`` after a push without publish used to report ``unchanged``.
+
+    The same content hash short-circuited the push before the publish step, so
+    the event stayed unpublished while the run exited ``0``.
+    """
+    fake = FakeMisp()
+    ledger = ShareLedger.load(tmp_path / "sharing.jsonl")
+    document = _load("objective.yaml")
+    assert document.uuid is not None
+    block = _block(max_tlp="red", publish=False)
+    created = run_misp(
+        [document],
+        [block],
+        mode="push",
+        ledger=ledger,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert created.records[0].action == "created"
+    assert fake.events[0].published is False
+    preview = run_misp(
+        [document], [block], mode="preview", ledger=ledger, publish=True, clock=lambda: CLOCK
+    )
+    assert preview.records[0].action == "updated"
+    fake.calls.clear()
+    published = run_misp(
+        [document],
+        [block],
+        mode="push",
+        ledger=ledger,
+        publish=True,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert published.records[0].action == "updated"
+    assert any(call.startswith("publish:") for call in fake.calls)
+    assert "add" not in fake.calls
+    assert fake.events[0].published is True
+    line = ledger.get(document.uuid, "misp", "misp-internal")
+    assert line is not None
+    assert line["published"] is True
+    fake.calls.clear()
+    again = run_misp(
+        [document],
+        [block],
+        mode="push",
+        ledger=ledger,
+        publish=True,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert again.records[0].action == "unchanged"
+    assert not any(call.startswith(("publish:", "edit:")) for call in fake.calls)
+    still = run_misp(
+        [document], [block], mode="preview", ledger=ledger, publish=True, clock=lambda: CLOCK
+    )
+    assert still.records[0].action == "unchanged"
