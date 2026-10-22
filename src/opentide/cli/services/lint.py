@@ -5,14 +5,20 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import structlog
 import yaml
 
 from opentide.cli.enums import LintCheck
 from opentide.core.io import parse_yaml
+from opentide.core.lint_config import (
+    LintConfig,
+    Severity,
+    load_lint_config,
+)
 from opentide.core.logging.config import get_stdout_console
 from opentide.documentation.markdown.links import slugify
 
@@ -21,9 +27,6 @@ logger = structlog.get_logger("opentide.cli.services.lint")
 _OBJECT_FAMILIES = ("threats", "objectives", "rules")
 _YAML_SUFFIXES = {".yaml", ".yml"}
 
-#: How much a finding matters. ``--strict`` still fails on any finding.
-Severity = Literal["error", "warning", "info"]
-
 
 @dataclass
 class _ObjectRecord:
@@ -31,8 +34,7 @@ class _ObjectRecord:
     relative: str
     name: str | None = None
     uuid: str | None = None
-    author: str | None = None
-    organisation: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     parse_error: str | None = None
     expected_stem: str | None = None
     key_lines: dict[str, int] = field(default_factory=dict)
@@ -102,12 +104,52 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
     record.name = _as_str(data.get("name"))
     metadata = data.get("metadata")
     if isinstance(metadata, dict):
+        record.metadata = metadata
         record.uuid = _as_str(metadata.get("uuid"))
-        record.author = _as_str(metadata.get("author"))
-        record.organisation = _organisation_name(
-            metadata.get("organisation")
-        ) or _organisation_name(metadata.get("organization"))
     return record
+
+
+def _has_metadata(record: _ObjectRecord, key: str) -> bool:
+    """True when ``metadata.<key>`` holds a value an author filled in."""
+    if key == "organisation":
+        metadata = record.metadata
+        return bool(
+            _organisation_name(metadata.get("organisation"))
+            or _organisation_name(metadata.get("organization"))
+        )
+    value = record.metadata.get(key)
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
+
+
+@cache
+def _schema_metadata_keys(schema_id: str) -> frozenset[str] | None:
+    """YAML keys the ``metadata`` block of *schema_id* accepts, or ``None`` if unknown."""
+    from pydantic import BaseModel
+
+    from opentide.models.schema_registry import is_registered, resolve_model
+
+    if not is_registered(schema_id):
+        return None
+    field_info = resolve_model(schema_id).model_fields.get("metadata")
+    model = field_info.annotation if field_info is not None else None
+    if not (isinstance(model, type) and issubclass(model, BaseModel)):
+        return None
+    return frozenset(info.alias or name for name, info in model.model_fields.items())
+
+
+def _required_for(record: _ObjectRecord, required: tuple[str, ...]) -> list[str]:
+    """*required* minus keys the object's schema forbids (``reviewed`` on a threat)."""
+    schema_id = _as_str(record.metadata.get("schema"))
+    accepted = _schema_metadata_keys(schema_id) if schema_id else None
+    if accepted is None:
+        return list(required)
+    return [key for key in required if key in accepted]
 
 
 def _key_line(record: _ObjectRecord, key: str) -> int | None:
@@ -219,16 +261,16 @@ def _filename_findings(
     return findings
 
 
-def _metadata_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+def _metadata_findings(
+    records: list[_ObjectRecord], required: tuple[str, ...]
+) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
+    if not required:
+        return findings
     for record in records:
         if record.parse_error or not record.name:
             continue
-        missing: list[str] = []
-        if not record.author:
-            missing.append("author")
-        if not record.organisation:
-            missing.append("organisation")
+        missing = [key for key in _required_for(record, required) if not _has_metadata(record, key)]
         if missing:
             findings.append(
                 _finding(
@@ -257,23 +299,54 @@ def _rewrite_renamed_paths(findings: list[dict[str, object]]) -> None:
             finding["path"] = renamed[path]
 
 
+def _apply_severity(findings: list[dict[str, object]], config: LintConfig) -> None:
+    """Replace each finding's severity with its check's configured one, if any."""
+    for finding in findings:
+        override = config.check(str(finding["check"])).severity
+        if override is not None:
+            finding["severity"] = override
+
+
 def run_lint(
     root: Path,
     *,
     checks: list[LintCheck] | None = None,
     fix: bool = False,
     strict: bool = False,
+    config: LintConfig | None = None,
 ) -> dict[str, object]:
-    """Run catalogue hygiene checks without a full registry rebuild."""
+    """Run catalogue hygiene checks without a full registry rebuild.
+
+    *config* defaults to the workspace's resolved ``lint.toml``. *checks* (the
+    CLI's ``--check``) wins over it: a named check runs even when disabled there.
+    """
     target = root.resolve()
-    selected = list(checks) if checks else [LintCheck.filenames, LintCheck.metadata]
+    if config is None:
+        try:
+            config = load_lint_config(target)
+        except ValueError as exc:  # LintConfigError, unparsable TOML, retired keys
+            return {
+                "message": str(exc),
+                "path": str(target),
+                "checks": [],
+                "findings": [],
+                "count": 0,
+                "fixed": 0,
+                "status": "failed",
+                "_exit_code": 2,
+            }
+    if checks:
+        selected = list(checks)
+    else:
+        selected = [LintCheck(name) for name in config.enabled_checks()]
     records = [_load_record(target, path) for path in _object_files(target)]
     findings: list[dict[str, object]] = []
     if LintCheck.metadata in selected:
-        findings.extend(_metadata_findings(records))
+        findings.extend(_metadata_findings(records, config.required_metadata))
     if LintCheck.filenames in selected:
         findings.extend(_filename_findings(target, records, fix=fix))
         _rewrite_renamed_paths(findings)
+    _apply_severity(findings, config)
     logger.debug(
         "lint_complete",
         path=str(target),

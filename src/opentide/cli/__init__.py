@@ -500,7 +500,12 @@ def lint_cmd(
         False, "--strict", help="Exit non-zero when findings exist (CI gate)"
     ),
     check: list[LintCheck] = typer.Option(
-        [], "--check", help="Limit to one check: filenames or metadata (repeatable)"
+        [],
+        "--check",
+        help=(
+            "Limit to one check: filenames or metadata (repeatable). "
+            "Runs it even when lint.toml disables it"
+        ),
     ),
 ) -> None:
     """Catalogue hygiene: filename slugs and recommended metadata (not schema validation)."""

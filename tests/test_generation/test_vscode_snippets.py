@@ -251,7 +251,8 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
     assert payload["Detection Objectives Template"]["prefix"] == "tide-objective"
     rule_body = "\n".join(payload["Detection Rules Template"]["body"])
     assert "${1:name}" in rule_body or "name: ${" in rule_body
-    assert "#author:" in rule_body
+    assert "  author: " in rule_body
+    assert "#contributors:" in rule_body
     assert "configurations:" in rule_body
     assert "configurations: ${" not in rule_body
     assert "${" not in "".join(

@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`opentide lint` reads `lint.toml`** ([#489](https://github.com/opentidehq/opentide/issues/489)). opentide ships the defaults, and `.opentide/configurations/lint.toml` overrides them like any other configuration file. `[metadata].required` lists the `metadata` keys the metadata check demands (default `["author", "organisation"]`, so an unconfigured repository sees the same findings as before). Each check takes `enabled` and `severity` (`error`, `warning` or `info`, replacing the severity of every finding of that check). `--check` still wins: it runs a check that `lint.toml` disables. Each object is asked only for the `required` keys its schema accepts, so `reviewed` (rule::1.1 only) is not demanded of threats, objectives or rule::1.0 rules. A `required` entry that is not a metadata key, an unknown table or key, or a bad `severity`/`enabled` fails the command with exit `2` and names the key. `run_lint` takes an optional `config`.
+
+### Changed
+
+- **Generated templates uncomment the metadata keys lint requires.** `opentide setup` and `opentide generate templates` wrote `author` and `organisation` commented out, as optional, and `opentide lint` then flagged every object made from them. Templates and VS Code snippets now write each `[metadata].required` key live (`author:` and an `organisation:` block with `uuid:` and `name:` by default), so a new object shows what lint asks for. Fill them in, or delete the block: an empty `organisation` fails `validate`. Run `opentide generate templates snippets` to pick this up; a workspace that sets `required` gets templates that follow it.
+
 ## [0.17.2] — 2026-10-22
 
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.

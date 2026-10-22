@@ -1,0 +1,15 @@
+# `opentide lint` checks. Override any key in .opentide/configurations/lint.toml;
+# tables merge, and a list (such as `required`) replaces the default wholesale.
+# `opentide lint --check <name>` runs that check even when it is disabled here.
+
+[filenames]
+enabled = true
+# Replace every finding's severity: "error", "warning" or "info".
+# severity = "warning"
+
+[metadata]
+enabled = true
+# Metadata keys every object must fill. Generated templates leave these keys
+# uncommented, so a scaffolded object shows each one lint asks for.
+required = ["author", "organisation"]
+# severity = "info"
