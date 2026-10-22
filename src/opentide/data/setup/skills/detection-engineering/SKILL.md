@@ -1,11 +1,11 @@
 ---
-name: opentide-detection-ops
+name: opentide-detection-engineering
 description: >-
   Detection-as-code workflows with opentide — validate objects, generate schemas,
   deploy rules, and understand the threat/objective/rule model.
 ---
 
-# opentide Detection Operations
+# opentide detection engineering
 
 Use this skill when authoring or reviewing detection content in an opentide repository.
 

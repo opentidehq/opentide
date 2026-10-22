@@ -1,4 +1,4 @@
-"""CLI E2E: first-user DetectionOps workflow without Python setup helpers.
+"""CLI E2E: first-user opentide workflow without Python setup helpers.
 
 Replays the published tutorial console path in order, asserting each
 ``opentide`` invocation exits 0 (or 1 on the dangling reference and on a bare

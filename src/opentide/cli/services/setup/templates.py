@@ -9,7 +9,9 @@ from pathlib import Path
 from opentide.core.root import get_data_root
 
 MCP_HOSTS = frozenset({"vscode", "cursor", "claude-code", "generic"})
-SKILL_PACKS = frozenset({"detection-ops"})
+SKILL_PACKS = frozenset({"detection-engineering"})
+#: Former pack names, still accepted so existing scripts keep working.
+SKILL_PACK_ALIASES = {"detection-ops": "detection-engineering"}
 ENTRYPOINT_TEMPLATES = frozenset(
     {"AGENTS.md.template", "CLAUDE.md.template", "copilot-instructions.md"}
 )
@@ -33,6 +35,7 @@ def load_mcp_template(host: str) -> dict[str, object]:
 
 
 def copy_skill_pack(pack: str, dest: Path) -> list[str]:
+    pack = SKILL_PACK_ALIASES.get(pack, pack)
     if pack not in SKILL_PACKS:
         raise SetupTemplateError(f"Unknown skill pack: {pack}")
     src = setup_data_root() / "skills" / pack

@@ -1,11 +1,11 @@
 ---
 title: opentide
-description: DetectionOps engine — validate, generate, deploy, and document detection rules across eight security platforms.
+description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across eight security platforms.
 ---
 
 # opentide
 
-opentide is the **DetectionOps engine** for detection-as-code repositories. Install it from PyPI, point it at your content repository, and use the CLI, MCP server, or Python SDK to validate objects, generate schemas, deploy rules, and publish documentation.
+**Spec-driven development for agentic detection engineering.** opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. Install it from PyPI, point it at your content repository, and use the CLI, MCP server, or Python SDK to validate objects, generate schemas, deploy rules, and publish documentation.
 
 ## Choose your path
 

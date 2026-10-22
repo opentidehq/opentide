@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- opentide describes itself as "spec-driven development for agentic detection engineering" instead of "DetectionOps engine", in the PyPI description, the README and the documentation.
+- The bundled skill pack `detection-ops` is now `detection-engineering`, and its skill is named `opentide-detection-engineering` instead of `opentide-detection-ops`. Asking for the pack as `detection-ops` still returns it. `opentide setup skills` never installed this pack, so repositories set up with it have nothing to change; for copies made by hand, see [Client migration](https://opentide.org/docs/usage/migration/#skill-pack-detection-ops-renamed).
+
 ## [0.17.2] — 2026-10-22
 
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
