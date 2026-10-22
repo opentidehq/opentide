@@ -51,7 +51,7 @@ _VALID_FIELD_TYPES = frozenset(
 class IndentedYamlDumper(yaml.SafeDumper):
     """YAML dumper preserving list indents and formatting."""
 
-    def increase_indent(self, flow: bool = False, indentless: bool = False):
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
         return super().increase_indent(flow, False)
 
 

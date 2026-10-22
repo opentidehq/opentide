@@ -10,7 +10,9 @@ from typing import Literal, Protocol
 class MarkdownFormatter(Protocol):
     """Flavor-specific markdown formatting hooks."""
 
-    flavor: str
+    # Read-only: the formatters are frozen dataclasses.
+    @property
+    def flavor(self) -> str: ...
 
     def heading(self, level: int, text: str) -> str:
         pass

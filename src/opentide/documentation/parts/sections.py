@@ -9,7 +9,7 @@ from opentide.core.responders import resolve_responders
 from opentide.documentation.catalog import DocumentationCatalog
 from opentide.documentation.format.protocol import MarkdownFormatter
 from opentide.documentation.markdown.links import object_link
-from opentide.documentation.vocabulary import enrich, enrich_technique
+from opentide.documentation.vocabulary import EnrichedEntry, enrich, enrich_technique
 from opentide.generation import framework as fw
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
 from opentide.models.objective import (
@@ -599,7 +599,7 @@ def _assessment_row(
     return [title, assessment, description]
 
 
-def _entry_link(entry, fallback: str, formatter: MarkdownFormatter) -> str:
+def _entry_link(entry: EnrichedEntry, fallback: str, formatter: MarkdownFormatter) -> str:
     link = entry.raw.get("link") if isinstance(entry.raw, dict) else None
     label = _table_cell(entry.label or fallback)
     if isinstance(link, str) and link.startswith(("http://", "https://")):

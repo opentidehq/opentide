@@ -150,7 +150,7 @@ techniques_template = """
 """
 
 
-def add_space_before_uppercase(s):
+def add_space_before_uppercase(s: str) -> str:
     result = ""
     for i, char in enumerate(s):
         if (
@@ -161,7 +161,7 @@ def add_space_before_uppercase(s):
     return result
 
 
-def sanitize_filename(name):
+def sanitize_filename(name: str) -> str:
     invalid_chars = '<>:"/\\|?*'
     sanitized_name = ""
     for char in name:
@@ -172,7 +172,7 @@ def sanitize_filename(name):
     return sanitized_name
 
 
-def fix_multiline(string: str, indentation: int):
+def fix_multiline(string: str, indentation: int) -> str:
     lines = string.splitlines()
     fixed_lines = []
     for line in lines:
@@ -181,7 +181,7 @@ def fix_multiline(string: str, indentation: int):
     return "\n".join(fixed_lines)
 
 
-def _render_rule(rule, tenant_name: str) -> tuple[str, str]:
+def _render_rule(rule: dict[str, Any], tenant_name: str) -> tuple[str, str]:
     """Return the file name and YAML body for one Defender custom detection.
 
     The rule is imported for *tenant_name*, the tenant it was listed from, and
@@ -284,7 +284,7 @@ def _import_defender_rules() -> None:
     # Display names are not unique in Defender; never overwrite a file from this run.
     written: set[str] = set()
     for tenant in tenants:
-        service = DefenderForEndpointImporter(tenant)  # type: ignore[arg-type]
+        service = DefenderForEndpointImporter(tenant)
         for rule in service.list_rules():
             filename, body = _render_rule(rule, tenant.name)
             if filename.lower() in written:

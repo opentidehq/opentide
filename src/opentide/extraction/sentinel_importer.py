@@ -202,7 +202,7 @@ def _block_style(text: str) -> str:
     return "|2" if first.startswith(" ") else "|"
 
 
-def sanitize_filename(name):
+def sanitize_filename(name: str) -> str:
     invalid_chars = '<>:"/\\|?*'
     sanitized_name = ""
     for char in name:
@@ -225,11 +225,11 @@ def _import_sentinel_rules() -> None:
         raise RuntimeError("No Sentinel tenants are configured")
     # Display names are not unique in Sentinel; never overwrite a file from this run.
     written: set[str] = set()
-    for tenant in Opentide.Configurations.Systems.Sentinel.tenants:  # type: ignore
-        service = SentinelService(tenant).connect()  # type: ignore
+    for tenant in Opentide.Configurations.Systems.Sentinel.tenants:
+        service = SentinelService(tenant).connect()
         rules = service.alert_rules.list(
-            resource_group_name=tenant.setup.resource_group,  # type: ignore
-            workspace_name=tenant.setup.workspace_name,  # type: ignore
+            resource_group_name=tenant.setup.resource_group,
+            workspace_name=tenant.setup.workspace_name,
         )
         rules_list = [alert_rule_as_flat_dict(rule) for rule in rules]
 
@@ -343,7 +343,7 @@ def _import_sentinel_rules() -> None:
             event_aggregation = _scalar(
                 rule.get("event_grouping_settings", {}).get("aggregation_kind") or "SingleAlert"
             )
-            incident_configuration = rule.get("incident_configuration")
+            incident_configuration = rule.get("incident_configuration") or {}
             grouping_configuration = incident_configuration.get("grouping_configuration") or {}
 
             if grouping_configuration["enabled"] is False:

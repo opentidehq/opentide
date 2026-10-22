@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from collections.abc import Mapping, Set
 from pathlib import Path
+from typing import Literal
 
 import structlog
 
@@ -173,7 +174,9 @@ def _expand_referrer_closure(changed_uuids: Set[str], renamed: Set[str] = frozen
     keep linking the old page.
     """
     closure = set(changed_uuids)
-    walks = [(uuid, "upstream") for uuid in sorted(changed_uuids)]
+    walks: list[tuple[str, Literal["upstream", "downstream"]]] = [
+        (uuid, "upstream") for uuid in sorted(changed_uuids)
+    ]
     walks += [(uuid, "downstream") for uuid in sorted(renamed)]
     for uuid, direction in walks:
         try:
