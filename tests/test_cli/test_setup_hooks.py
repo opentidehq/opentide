@@ -120,6 +120,89 @@ def test_run_hooks_setup_merges_existing_pre_commit_config(tmp_path: Path) -> No
     assert ".pre-commit-config.yaml" in result["files"]
 
 
+_SAMPLE_CONFIG = """\
+# See https://pre-commit.com for more information
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+    -   id: trailing-whitespace
+"""
+
+_KEY_AFTER_REPOS = """\
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+    # trailing comment about ruff
+
+ci:
+  autoupdate_schedule: monthly
+exclude: ^vendor/
+"""
+
+
+@pytest.mark.parametrize(
+    "original",
+    [
+        pytest.param(_SAMPLE_CONFIG, id="sample-config"),
+        pytest.param(_KEY_AFTER_REPOS, id="key-after-repos"),
+        pytest.param("ci:\n  skip: [ruff]\nrepos: []\nexclude: ^vendor/\n", id="empty-repos"),
+        pytest.param("default_language_version:\n  python: python3\nrepos:\n", id="null-repos"),
+        pytest.param("# no hooks yet\nfail_fast: true\n", id="no-repos"),
+        pytest.param("# no hooks yet\n", id="comments-only"),
+        pytest.param("repos:\n  - repo: meta\n    hooks:\n      - id: identity", id="no-final-eol"),
+    ],
+)
+def test_run_hooks_setup_adds_the_hook_and_keeps_the_rest_of_the_config(
+    tmp_path: Path, original: str
+) -> None:
+    """The hook block used to be appended to the end of the file.
+
+    With zero-indented entries (``pre-commit sample-config``) or a top-level
+    key after ``repos``, the result was invalid YAML, reported as success;
+    ``repos: []`` replaced the whole file and dropped its other keys.
+    """
+    config = tmp_path / ".pre-commit-config.yaml"
+    config.write_text(original, encoding="utf-8")
+    before = yaml.safe_load(original) or {}
+
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=False))
+
+    text = config.read_text(encoding="utf-8")
+    after = yaml.safe_load(text)
+    assert {k: v for k, v in after.items() if k != "repos"} == {
+        k: v for k, v in before.items() if k != "repos"
+    }
+    assert after["repos"][:-1] == (before.get("repos") or [])
+    assert after["repos"][-1]["repo"] == "local"
+    assert after["repos"][-1]["hooks"][0]["entry"] == HOOK_ENTRY
+    assert all(line in text for line in original.splitlines() if line.startswith("#"))
+    assert ".pre-commit-config.yaml" in result["files"]
+    assert "warnings" not in result
+    second = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=False))
+    assert config.read_text(encoding="utf-8") == text
+    assert ".pre-commit-config.yaml" in second["skipped"]
+
+
+@pytest.mark.parametrize(
+    "original",
+    [
+        pytest.param("{repos: [{repo: meta, hooks: [{id: identity}]}]}\n", id="flow-mapping"),
+        pytest.param("repos: [{repo: meta, hooks: [{id: identity}]}]\n", id="flow-repos"),
+        pytest.param("repos:\n  repo: meta\n", id="repos-not-a-list"),
+    ],
+)
+def test_run_hooks_setup_leaves_a_config_it_cannot_extend(tmp_path: Path, original: str) -> None:
+    config = tmp_path / ".pre-commit-config.yaml"
+    config.write_text(original, encoding="utf-8")
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=False))
+    assert config.read_text(encoding="utf-8") == original
+    assert ".pre-commit-config.yaml" in result["skipped"]
+    assert "left unchanged" in result["warnings"][0]
+
+
 def test_run_hooks_setup_leaves_unparseable_config(tmp_path: Path) -> None:
     (tmp_path / ".pre-commit-config.yaml").write_text("- just a list\n", encoding="utf-8")
     result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=False))
