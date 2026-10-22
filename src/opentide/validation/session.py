@@ -538,12 +538,12 @@ def _check_id_uniqueness(
 
     if workers > 0:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            results = [row for row in pool.map(_scan_id_file, paths) if row is not None]
+            results = list(pool.map(_scan_id_file, paths))
     else:
-        results = [row for path_row in paths if (row := _scan_id_file(path_row)) is not None]
+        results = [_scan_id_file(path_row) for path_row in paths]
 
-    scans = [row for row in results if isinstance(row, _IdScanRow)]
-    failures = [row for row in results if isinstance(row, _IdScanParseError)]
+    scans = [row for result in results if isinstance(result, list) for row in result]
+    failures = [result for result in results if isinstance(result, _IdScanParseError)]
     issues = _id_scan_parse_issues(failures, scope=scope, already_reported=already_reported)
     issues.extend(_merge_id_duplicates(scans, scope))
     return issues
@@ -602,7 +602,7 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
     return scan_paths
 
 
-def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | _IdScanParseError | None:
+def _scan_id_file(path_row: tuple[Path, str]) -> list[_IdScanRow] | _IdScanParseError:
     import yaml
 
     from opentide.core.io import load_yaml
@@ -617,19 +617,47 @@ def _scan_id_file(path_row: tuple[Path, str]) -> _IdScanRow | _IdScanParseError 
             error=str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__,
         )
     if not isinstance(model_body, dict):
-        return None
+        return []
+    rows: list[_IdScanRow] = []
     metadata = model_body.get("metadata")
     # A scalar `metadata` is a schema error the schema check reports; here it
     # only means there is no uuid to compare.
     uuid = metadata.get("uuid") if isinstance(metadata, dict) else None
-    if not uuid:
-        return None
-    return _IdScanRow(
-        model_file=model_file,
-        meta_name=meta_name,
-        uuid=str(uuid),
-        name=str(model_body.get("name", "")),
-    )
+    if uuid:
+        rows.append(
+            _IdScanRow(
+                model_file=model_file,
+                meta_name=meta_name,
+                uuid=str(uuid),
+                name=str(model_body.get("name", "")),
+            )
+        )
+    if meta_name == "objective":
+        rows.extend(_signal_id_rows(model_file, model_body))
+    return rows
+
+
+def _signal_id_rows(model_file: Path, body: dict[str, Any]) -> list[_IdScanRow]:
+    """One row per ``objective.signals[*].uuid``.
+
+    ``RegistryBuilder`` indexes each signal under its own UUID beside the
+    objects, so a copied objective that kept its signals silently re-parented
+    them to the copy unless the scan compares their UUIDs too.
+    """
+    objective = body.get("objective")
+    signals = objective.get("signals") if isinstance(objective, dict) else None
+    if not isinstance(signals, list):
+        return []
+    return [
+        _IdScanRow(
+            model_file=model_file,
+            meta_name="signal",
+            uuid=str(signal["uuid"]),
+            name=str(signal.get("name", "")),
+        )
+        for signal in signals
+        if isinstance(signal, dict) and signal.get("uuid")
+    ]
 
 
 def _merge_id_duplicates(scans: list[_IdScanRow], scope: ValidationScope) -> list[ValidationIssue]:

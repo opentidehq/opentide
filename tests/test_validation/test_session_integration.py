@@ -96,7 +96,7 @@ def test_id_scan_skips_a_non_mapping_metadata(tmp_path: Path) -> None:
     rule.write_text(
         "name: Scalar\nuuid: 00000000-0000-4000-8003-000000000001\nmetadata: rule::1.0\n"
     )
-    assert _scan_id_file((rule, "rule")) is None
+    assert _scan_id_file((rule, "rule")) == []
 
 
 @pytest.mark.parametrize(
