@@ -463,3 +463,43 @@ def test_rendered_entrypoints_name_mcp_start_not_the_removed_script(tmp_path: Pa
     for entrypoint in ("AGENTS.md", "CLAUDE.md"):
         text = (tmp_path / entrypoint).read_text(encoding="utf-8")
         assert "`opentide mcp start`" in text, entrypoint
+
+
+@pytest.mark.parametrize(
+    ("targets", "entrypoint"),
+    [
+        ([SkillTarget.claude_code], "CLAUDE.md"),
+        ([SkillTarget.generic], "AGENTS.md"),
+        ([SkillTarget.github_copilot], "AGENTS.md"),
+        ([SkillTarget.github_copilot], ".github/copilot-instructions.md"),
+    ],
+)
+def test_setup_skills_keeps_an_existing_entrypoint(
+    tmp_path: Path, targets: list[SkillTarget], entrypoint: str
+) -> None:
+    """The repository's own agent instructions were replaced with the template."""
+    dest = tmp_path / entrypoint
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("# Our team's agent rules\n", encoding="utf-8")
+
+    result = run_skills_setup(SkillsSetupOptions(path=tmp_path, targets=targets, yes=True))
+
+    assert dest.read_text(encoding="utf-8") == "# Our team's agent rules\n"
+    files = result["files"]
+    assert isinstance(files, list)
+    assert entrypoint not in files
+    assert result["skipped"] == [entrypoint]
+    assert result["warnings"] == [
+        f"Left {entrypoint} unchanged because the file already exists; point it at "
+        ".agents/skills/ by hand, or delete it and re-run to write opentide's template."
+    ]
+
+
+def test_setup_skills_rerun_skips_its_own_entrypoints_quietly(tmp_path: Path) -> None:
+    options = SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.claude_code], yes=True)
+    run_skills_setup(options)
+
+    again = run_skills_setup(options)
+
+    assert again["skipped"] == ["CLAUDE.md"]
+    assert "warnings" not in again

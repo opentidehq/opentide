@@ -225,11 +225,39 @@ def _install_cursor(target: Path, slugs: list[str]) -> list[str]:
     return written
 
 
-def _install_claude_code(target: Path, slugs: list[str], context: dict[str, str]) -> list[str]:
-    written: list[str] = []
+@dataclass
+class _Entrypoints:
+    """Entrypoint files a run left alone, and why."""
+
+    skipped: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    def write(self, target: Path, rel: str, content: str) -> list[str]:
+        """Write *content* to *rel* unless the file already exists.
+
+        These are the repository's own agent instructions. Setup replaced
+        them with the template and lost whatever the user had written.
+        """
+        dest = target / rel
+        if dest.exists():
+            self.skipped.append(rel)
+            if dest.read_bytes() != content.encode("utf-8"):
+                self.warnings.append(
+                    f"Left {rel} unchanged because the file already exists; "
+                    "point it at .agents/skills/ by hand, or delete it and re-run "
+                    "to write opentide's template."
+                )
+            return []
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(content, encoding="utf-8")
+        return [rel]
+
+
+def _install_claude_code(
+    target: Path, slugs: list[str], context: dict[str, str], entrypoints: _Entrypoints
+) -> list[str]:
     claude_md = render_agent_entrypoint("CLAUDE.md.template", context)
-    (target / "CLAUDE.md").write_text(claude_md, encoding="utf-8")
-    written.append("CLAUDE.md")
+    written = entrypoints.write(target, "CLAUDE.md", claude_md)
     for slug in slugs:
         src = target / ".agents" / "skills" / slug
         dest = target / ".claude" / "skills" / slug
@@ -241,20 +269,16 @@ def _install_claude_code(target: Path, slugs: list[str], context: dict[str, str]
     return written
 
 
-def _install_generic(target: Path, slugs: list[str], context: dict[str, str]) -> list[str]:
-    del slugs
-    (target / "AGENTS.md").write_text(
-        render_agent_entrypoint("AGENTS.md.template", context), encoding="utf-8"
-    )
-    return ["AGENTS.md"]
+def _install_generic(target: Path, context: dict[str, str], entrypoints: _Entrypoints) -> list[str]:
+    content = render_agent_entrypoint("AGENTS.md.template", context)
+    return entrypoints.write(target, "AGENTS.md", content)
 
 
-def _install_github_copilot(target: Path, context: dict[str, str]) -> list[str]:
+def _install_github_copilot(
+    target: Path, context: dict[str, str], entrypoints: _Entrypoints
+) -> list[str]:
     content = render_agent_entrypoint("copilot-instructions.md", context)
-    dest = target / ".github" / "copilot-instructions.md"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(content, encoding="utf-8")
-    return [".github/copilot-instructions.md"]
+    return entrypoints.write(target, ".github/copilot-instructions.md", content)
 
 
 def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
@@ -268,19 +292,20 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
     slugs = _resolve_skill_slugs(options)
     context = _entrypoint_context(options, target)
     written = _install_skill_trees(target, slugs)
+    entrypoints = _Entrypoints()
     also_applied: list[str] = []
     for skill_target in options.targets:
         if skill_target is SkillTarget.cursor:
             written.extend(_install_cursor(target, slugs))
         elif skill_target is SkillTarget.claude_code:
-            written.extend(_install_claude_code(target, slugs, context))
+            written.extend(_install_claude_code(target, slugs, context, entrypoints))
         elif skill_target is SkillTarget.generic:
-            written.extend(_install_generic(target, slugs, context))
+            written.extend(_install_generic(target, context, entrypoints))
         elif skill_target is SkillTarget.github_copilot:
             if SkillTarget.generic not in options.targets:
-                written.extend(_install_generic(target, slugs, context))
+                written.extend(_install_generic(target, context, entrypoints))
                 also_applied.append("generic")
-            written.extend(_install_github_copilot(target, context))
+            written.extend(_install_github_copilot(target, context, entrypoints))
     logger.debug("agent_skills_created", detail=str(target), files=written, skills=slugs)
     result: dict[str, object] = {
         "message": "Agent skills installed",
@@ -290,6 +315,10 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
     }
     if also_applied:
         result["also_applied"] = also_applied
+    if entrypoints.skipped:
+        result["skipped"] = entrypoints.skipped
+    if entrypoints.warnings:
+        result["warnings"] = entrypoints.warnings
     return result
 
 

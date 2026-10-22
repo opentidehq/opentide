@@ -305,11 +305,19 @@ def run_vscode_setup(
         if snippet_path:
             files.append(snippet_path)
 
+    warnings: list[str] = []
     if mcp:
         from opentide.cli.enums import McpHost
-        from opentide.cli.services.setup.mcp import write_mcp_config
+        from opentide.cli.services.setup.mcp import (
+            McpConfigError,
+            mcp_config_warning,
+            write_mcp_config,
+        )
 
-        files.append(write_mcp_config(target, McpHost.vscode))
+        try:
+            files.append(write_mcp_config(target, McpHost.vscode))
+        except McpConfigError as exc:
+            warnings.append(mcp_config_warning(McpHost.vscode, exc))
 
     payload: dict[str, object] = {
         "message": "VS Code setup complete (deprecated)",
@@ -318,6 +326,8 @@ def run_vscode_setup(
         "deprecated": DEPRECATION_MESSAGE,
         "status": "completed",
     }
+    if warnings:
+        payload["warnings"] = warnings
     if snippets and snippet_path is None:
         payload["status"] = "failed"
         payload["_exit_code"] = 1
