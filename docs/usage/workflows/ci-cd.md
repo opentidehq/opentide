@@ -51,7 +51,7 @@ The one-shot `opentide setup --ci <github|gitlab|azure>` accepts the same flags.
 opentide share push --changed
 ```
 
-The tip holds the production job's `ci: record production deployment [skip ci]` commit, which records the statuses [promotion](#production-write-back) rewrote. `--changed` diffs from where the triggering push's diff starts (the triggering commit's first parent; on GitLab `CI_COMMIT_BEFORE_SHA` when it is set and not all zeros) to that tip, so a rule merged in `STAGING` and promoted to `PRODUCTION` by this run's deploy is shared in this run. With promotion off, or when the deploy has nothing to write back, the tip is the triggering commit (or a later push) and the job shares the push's own changes. A tip that already holds a later push also shares that push's changes; its own run shares them again, as an update.
+The tip holds the production job's `ci: record production deployment [skip ci]` commit, which records the statuses [promotion](#production-write-back) rewrote. `--changed` diffs from where the triggering push's diff starts (the triggering commit's first parent; on GitLab `CI_COMMIT_BEFORE_SHA` when it is set and not all zeros) to that tip, so a rule merged in `STAGING` and promoted to `PRODUCTION` by this run's deploy is shared in this run. With promotion off the write-back holds only deployment state, and when the deploy has nothing to write back the tip is the triggering commit (or a later push); either way the job shares the push's own changes. A tip that already holds a later push also shares that push's changes; its own run shares them again, as an update.
 
 | CI | Share job ordering | Runs when |
 |----|--------------------|-----------|
