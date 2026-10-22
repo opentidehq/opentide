@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -90,6 +91,57 @@ def test_detection_rule_deploy_and_validate_query_success(metadata: dict[str, An
     )
     with pytest.raises(ValueError, match="not_a_platform"):
         bound.deploy("not_a_platform", dry_run=True)
+
+
+def _raise_flag(flag: str) -> MagicMock:
+    """A validator that reports its verdict the way the platform validators do."""
+    validator = MagicMock()
+    validator.validate.side_effect = lambda _uuids: os.environ.__setitem__(flag, "True")
+    return validator
+
+
+def test_validate_query_reports_a_query_the_validator_refused(
+    metadata: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An invalid query used to come back ``ok=True``.
+
+    Platform validators log a refused query and raise ``VALIDATION_ERROR_RAISED``,
+    a flag ``validate_query`` never read.
+    """
+    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
+    bound, _ = _bound(_sentinel_rule(metadata))
+    bound._registry.Platforms["sentinel"].validator = _raise_flag("VALIDATION_ERROR_RAISED")
+
+    result = bound.validate_query("sentinel")
+
+    assert result.ok is False
+    assert result.errors == ["Query validation failed for sentinel"]
+    # The flag is the CLI's run verdict; the SDK call reports and leaves it as it was.
+    assert not os.environ.get("VALIDATION_ERROR_RAISED")
+
+
+def test_validate_query_reports_warnings_without_failing(
+    metadata: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("VALIDATION_WARNING_RAISED", raising=False)
+    bound, _ = _bound(_sentinel_rule(metadata))
+    bound._registry.Platforms["sentinel"].validator = _raise_flag("VALIDATION_WARNING_RAISED")
+
+    result = bound.validate_query("sentinel")
+
+    assert result.ok is True
+    assert result.warnings == ["Query validation reported warnings for sentinel"]
+
+
+def test_validate_query_ignores_an_earlier_failure(
+    metadata: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A flag raised before the call belongs to another check, and survives it."""
+    monkeypatch.setenv("VALIDATION_ERROR_RAISED", "True")
+    bound, _ = _bound(_sentinel_rule(metadata))
+
+    assert bound.validate_query("sentinel").ok is True
+    assert os.environ["VALIDATION_ERROR_RAISED"] == "True"
 
 
 @pytest.mark.parametrize(

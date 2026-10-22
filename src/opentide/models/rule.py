@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, ClassVar, Protocol, cast
@@ -13,6 +14,11 @@ from opentide.models.metadata import ObjectMetadata, ObjectReferences, RuleMetad
 from opentide.models.platform import RuleConfigurations
 from opentide.models.response import RuleResponse
 from opentide.models.results import DeploymentResult, ValidationResult
+
+#: Environment flags a platform query validator raises on a failure or a warning.
+_ERROR_FLAG = "VALIDATION_ERROR_RAISED"
+_WARNING_FLAG = "VALIDATION_WARNING_RAISED"
+_QUERY_VALIDATION_FLAGS = (_ERROR_FLAG, _WARNING_FLAG)
 
 
 class TideRegistry(Protocol):
@@ -124,8 +130,29 @@ class DetectionRule(TideModel):
             return ValidationResult(
                 ok=False, errors=[f"Platform {platform!r} does not support query validation"]
             )
-        validator.validate([self.metadata.uuid])
-        return ValidationResult(ok=True)
+        # Platform validators log each refused query and report the verdict
+        # only through these process-wide flags, which the CLI grades after a
+        # run. Clear them for the call so an earlier failure does not fail
+        # this rule, then put back what was there so the caller's run keeps
+        # its own verdict.
+        saved = {flag: os.environ.get(flag) for flag in _QUERY_VALIDATION_FLAGS}
+        for flag in _QUERY_VALIDATION_FLAGS:
+            os.environ[flag] = ""
+        try:
+            validator.validate([self.metadata.uuid])
+            failed = bool(os.environ.get(_ERROR_FLAG))
+            warned = bool(os.environ.get(_WARNING_FLAG))
+        finally:
+            for flag, value in saved.items():
+                if value is None:
+                    os.environ.pop(flag, None)
+                else:
+                    os.environ[flag] = value
+        return ValidationResult(
+            ok=not failed,
+            errors=[f"Query validation failed for {platform}"] if failed else [],
+            warnings=[f"Query validation reported warnings for {platform}"] if warned else [],
+        )
 
     def document(self) -> str:
         if self._registry is None:
