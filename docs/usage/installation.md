@@ -74,7 +74,7 @@ For agent/MCP hosts, remember the path to this environment's `opentide` binary â
 The base install above already ships the MCP server. There is no extra step:
 
 ```bash
-opentide mcp start        # mcp (>=1.28.1,<2) is a base dependency since 0.14.0
+opentide mcp start        # mcp (>=2.3,<3) is a base dependency since 0.14.0
 ```
 
 An older command such as `pip install 'opentide[mcp]'` still installs opentide: pip and uv warn that the extra does not exist and install the package anyway. Drop the brackets when you next touch it. See [MCP installation](../mcp/installation.md).

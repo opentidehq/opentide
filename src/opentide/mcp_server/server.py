@@ -1,9 +1,10 @@
-"""opentide MCP server — FastMCP entry point."""
+"""opentide MCP server — MCPServer (mcp 2.x) entry point."""
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
+import opentide
 from opentide.mcp_server import resources as res
 from opentide.mcp_server.tools import (
     tool_coverage,
@@ -17,8 +18,10 @@ from opentide.mcp_server.tools import (
     tool_validation_report,
 )
 
-mcp = FastMCP(
+mcp = MCPServer(
     "opentide",
+    # Without it mcp 2.x reports serverInfo.version as "".
+    version=opentide.__version__,
     instructions=(
         "Detection engineering assistant. Search and analyse detection content, "
         "validate rules against their schema, check platform queries against the "
@@ -162,7 +165,10 @@ def vocabularies_resource() -> str:
     return res.resource_vocabularies()
 
 
-@mcp.resource("opentide://vocabularies/{name}")
+# `{+name}`, not `{name}`: mcp 2.x matches RFC 6570, where a simple expansion
+# rejects a literal `&`, and the index advertises `opentide://vocabularies/att&ck`.
+# Reserved expansion accepts that and the percent-encoded `att%26ck` alike.
+@mcp.resource("opentide://vocabularies/{+name}")
 def vocabulary_resource(name: str) -> str:
     return res.resource_vocabulary(name)
 

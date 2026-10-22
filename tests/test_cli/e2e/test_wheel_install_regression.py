@@ -275,7 +275,7 @@ def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
     removed = _venv_bin(env_dir, "opentide-mcp")
     assert not removed.exists(), "the wheel must not install an opentide-mcp alias"
 
-    imported = _run([str(python), "-c", "import mcp.server.fastmcp"], timeout=60)
+    imported = _run([str(python), "-c", "import mcp.server.mcpserver"], timeout=60)
     assert imported.returncode == 0, (
         "a bare wheel install must ship mcp as a base dependency:\n"
         + imported.stdout

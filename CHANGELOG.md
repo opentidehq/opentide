@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **The MCP server runs on `mcp` 2.x.** `mcp` 2.x turned `mcp.server.fastmcp` into a stub that raises `ModuleNotFoundError` and moved the server class to `mcp.server.mcpserver.MCPServer`. `opentide mcp start` now uses `MCPServer`, and the base dependency moves from `mcp>=1.28.1,<2` to `mcp>=2.3,<3`. The server now reports opentide's version in `serverInfo.version`, which `mcp` 2.x would otherwise leave empty. **If your environment pins `mcp` 1.x alongside opentide** (a constraints file, a lock, or a `pip install 'mcp<2'`), upgrade that pin: `pip install 'mcp>=2.3,<3'`. With `mcp` 1.x installed, `opentide mcp start` exits with that instruction on stderr instead of a traceback; the rest of the CLI is unaffected ([#581](https://github.com/opentidehq/opentide/issues/581)).
+- Under `mcp` 2.x the stdio transport drops a line that is not JSON-RPC (such as an LSP-style `Content-Length:` header) without answering it; 1.x sent an error notification. The JSON body after the header is still answered.
+
 ## [0.17.2] — 2026-10-22
 
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
