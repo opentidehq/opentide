@@ -96,6 +96,8 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     return {
         "schemas": schemas,
         "visibility": visibility,
+        # The corpus configures one Elastic tenant, `staging`, and none elsewhere.
+        "elastic_rule": _load(next((objects / "rules").rglob("rule-0009-*.yaml"))),
         "valid": {
             "threat::1.0": _load(next((objects / "threats").rglob("*.yaml"))),
             "objective::1.0": objective,
@@ -198,3 +200,22 @@ def test_visibility_schema_accepts_the_bundled_configuration(corpus: dict[str, A
     assert [error.message for error in validator.iter_errors(body)] == []
     misspelled = {"logsources": [{**body["logsources"][0], "sytem": "splunk"}]}
     assert not validator.is_valid(misspelled)
+
+
+@pytest.mark.parametrize(
+    ("tenants", "valid"),
+    [(["staging"], True), (None, True), (["stagng"], False), (["staging", "prod"], False)],
+)
+def test_rule_schema_offers_only_configured_tenants(
+    tenants: list[str] | None, valid: bool, corpus: dict[str, Any]
+) -> None:
+    """A misspelled tenant used to pass the schema and then deploy nowhere.
+
+    ``tenants`` is optional, so it renders as ``anyOf`` with no top-level
+    ``type``, and the tenant enum was only ever written for a plain string or
+    array field.
+    """
+    body = copy.deepcopy(corpus["elastic_rule"])
+    body["configurations"]["elastic"]["tenants"] = tenants
+    schema = corpus["schemas"]["rule::1.0"]
+    assert Draft202012Validator(schema).is_valid(body) is valid

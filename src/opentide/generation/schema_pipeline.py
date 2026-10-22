@@ -805,19 +805,24 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
                         dictionary[field]["items"]["enum"] = values_list
                         dictionary[field]["items"]["uniqueItems"] = True
 
-                # Special handling to specifically get the available tenants
+                # The tenants configured for a system. A rule's `tenants` is
+                # `list[str] | None`, which renders as `anyOf` with no
+                # top-level `type`, so the enum goes through
+                # `_apply_vocab_enum` like responders. Without it a misspelled
+                # tenant passed the schema and the rule deployed nowhere.
+                # No configured tenant writes no enum, as for responders.
                 if system := dict_foo[field].get("tide.config.system.tenants"):
                     values_list, descriptions_list = VocabularyResolver.SystemTenants(
                         system
                     ).resolve()
-                    if dict_foo[field].get("type") == "string":
-                        dictionary[field]["enum"] = values_list
-                        dictionary[field]["markdownEnumDescriptions"] = descriptions_list
-                    elif dict_foo[field].get("type") == "array":
-                        dictionary[field]["items"] = {}
-                        dictionary[field]["items"]["enum"] = values_list
-                        dictionary[field]["items"]["uniqueItems"] = True
-                        dictionary[field]["items"]["markdownEnumDescriptions"] = descriptions_list
+                    if values_list:
+                        _apply_vocab_enum(
+                            dictionary[field],
+                            {
+                                "enum": values_list,
+                                "markdownEnumDescriptions": descriptions_list,
+                            },
+                        )
 
                 # Special handling to specifically get the available statuses
                 if system := dict_foo[field].get("tide.config.statuses"):
