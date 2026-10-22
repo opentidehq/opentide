@@ -41,7 +41,7 @@ def test_scan_splits_direct_children_from_nested_files(tmp_path: Path) -> None:
 
     scan = scan_object_dir(tmp_path)
 
-    assert [path.name for path in scan.files] == ["a.yaml", "b.yml", "c.YAML"]
+    assert [path.name for path in scan.files] == ["a.yaml", "b.yml"]
     assert [path.relative_to(tmp_path).as_posix() for path in scan.nested] == [
         "team/deep/y.yml",
         "team/x.yaml",
@@ -104,3 +104,18 @@ def test_payload_warning_keeps_existing_warnings(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(catalogue, "nested_entries", lambda index=None: [])
     assert with_nested_object_warning({"message": "ok"}) == {"message": "ok"}
+
+
+@pytest.mark.parametrize("name", ["a.yaml", "a.yml", "a.YAML", "a.Yml", "a.YML", "a.json"])
+def test_object_file_names_match_deploy_and_inflight(name: str) -> None:
+    """``deploy`` and inflight shards match suffixes case-sensitively; so does the catalogue.
+
+    Otherwise ``objects/rules/r.YAML`` is indexed, validated and shared by a full
+    ``share push`` while ``deploy`` skips it without a warning (#584, #312).
+    """
+    from opentide.deployment.git_repo import RULE_SUFFIXES
+    from opentide.indexing.inflight import _is_object_yaml
+
+    deployed = Path(name).suffix in RULE_SUFFIXES
+    assert is_object_file_name(name) is deployed
+    assert _is_object_yaml(f"objects/rules/{name}") is deployed

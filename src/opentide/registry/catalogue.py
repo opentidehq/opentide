@@ -41,11 +41,14 @@ class ObjectDirScan:
 
 
 def is_object_file_name(name: str, *, include_debug: bool = False) -> bool:
-    """True for a ``*.yaml``/``*.yml`` name (``*.debug.yaml`` only when asked)."""
-    lowered = name.lower()
-    if not lowered.endswith(OBJECT_SUFFIXES):
+    """True for a ``*.yaml``/``*.yml`` name (``*.debug.yaml`` only when asked).
+
+    Case-sensitive, like ``deploy``'s rule scan and inflight shards: ``r.YAML``
+    is not an object, so no command reads a file ``deploy`` would skip.
+    """
+    if not name.endswith(OBJECT_SUFFIXES):
         return False
-    return include_debug or not lowered.endswith(DEBUG_SUFFIX)
+    return include_debug or not name.endswith(DEBUG_SUFFIX)
 
 
 def scan_object_dir(object_dir: Path, *, include_debug: bool = False) -> ObjectDirScan:
