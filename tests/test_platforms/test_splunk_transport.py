@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import ssl
+import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
@@ -19,13 +20,21 @@ import pytest
 from tests.splunk_support import (
     CONF_ONLY_ARGUMENTS,
     SAVED_SEARCHES,
+    InterceptingProxy,
     SplunkStandIn,
+    serve_block_page,
+    serve_intercepting_proxy,
     serve_splunk,
 )
 
 from opentide.loading.rule_loader import load_rule_from_dict
 from opentide.models.system_config import ConfigurationModels
-from opentide.platforms.splunk.client import HTTP_ERROR_STATUS, connect_splunk
+from opentide.platforms.splunk.client import (
+    HTTP_ERROR_STATUS,
+    SplunkAnsweredHtmlError,
+    connect_splunk,
+    splunk_route,
+)
 
 pytest.importorskip("cryptography")
 
@@ -169,6 +178,110 @@ def test_query_validator_assumes_valid_on_a_network_error_redirect(
     validator._validate_spl_query("| makeresults |unreachable", "slow", "uuid-3", service)
     assert os.environ.get("VALIDATION_WARNING_RAISED") == "True"
     assert "VALIDATION_ERROR_RAISED" not in os.environ
+
+
+# --- a proxy's HTML page is named, not parsed as XML ---------------------------
+
+_PROXY_VARIABLES = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "NO_PROXY",
+    "no_proxy",
+)
+
+
+@pytest.fixture
+def proxy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[InterceptingProxy]:
+    """A TLS-inspecting proxy in HTTPS_PROXY that answers every tunnel with a block page."""
+    for name in _PROXY_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    # ``urlopen`` caches one opener, with the proxies of its first call.
+    monkeypatch.setattr(urllib.request, "_opener", None)
+    (tmp_path / "proxy").mkdir()
+    with serve_intercepting_proxy(tmp_path / "proxy") as server:
+        for name in ("HTTPS_PROXY", "https_proxy"):
+            monkeypatch.setenv(name, f"http://127.0.0.1:{server.port}")
+        yield server
+
+
+def test_a_proxy_page_is_reported_with_the_proxy_and_no_proxy(
+    splunk: SplunkStandIn, proxy: InterceptingProxy
+) -> None:
+    """0.17.0/0.17.1 failed here with ``ParseError: mismatched tag``, read as a TLS fault."""
+    service = _connect(splunk, ssl_enabled=False)
+    with pytest.raises(SplunkAnsweredHtmlError) as exc:
+        service.saved_searches.create("Rule", search="index=main")
+
+    message = str(exc.value)
+    assert f"through the proxy http://127.0.0.1:{proxy.port}" in message
+    assert "NO_PROXY=localhost" in message
+    assert "'Access denied by policy'" in message
+    assert isinstance(exc.value, ConnectionError)
+    assert proxy.tunnels == 1
+    assert splunk.requests == []
+
+
+def test_no_proxy_reaches_an_internal_tenant_directly(
+    splunk: SplunkStandIn, proxy: InterceptingProxy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.setenv(name, "localhost")
+    service = _connect(splunk, ssl_enabled=False)
+    service.saved_searches.create("Rule", search="index=main")
+
+    assert proxy.tunnels == 0
+    assert "Rule" in splunk.saved_searches
+
+
+def test_the_proxy_page_hides_proxy_credentials(
+    splunk: SplunkStandIn, proxy: InterceptingProxy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("HTTPS_PROXY", "https_proxy"):
+        monkeypatch.setenv(name, f"http://svc-user:s3cret@127.0.0.1:{proxy.port}")
+    with pytest.raises(SplunkAnsweredHtmlError) as exc:
+        _connect(splunk, ssl_enabled=False).saved_searches.create("Rule", search="index=main")
+
+    assert "s3cret" not in str(exc.value)
+    assert "svc-user" not in str(exc.value)
+    assert f"http://127.0.0.1:{proxy.port}" in str(exc.value)
+
+
+def test_an_html_answer_without_a_proxy_points_at_the_port(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Splunk Web on port 8000 answers HTML; the REST API is on the management port."""
+    for name in _PROXY_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    with serve_block_page(tmp_path) as port:
+        service = connect_splunk(
+            host="localhost", port=port, token="token", app="search", ssl_enabled=False
+        )
+        with pytest.raises(SplunkAnsweredHtmlError, match="management port"):
+            service.saved_searches["Rule"]
+
+
+def test_splunk_route_follows_no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in _PROXY_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    assert splunk_route("https://splunk.internal:8089/") is None
+
+    monkeypatch.setenv("https_proxy", "http://user:pass@proxy.corp:3128")
+    assert splunk_route("https://splunk.internal:8089/") == "http://proxy.corp:3128"
+
+    monkeypatch.setenv("no_proxy", ".internal")
+    assert splunk_route("https://splunk.internal:8089/") is None
+    assert splunk_route("https://splunk.cloud.example:8089/") == "http://proxy.corp:3128"
+
+
+def test_connect_logs_the_route(splunk: SplunkStandIn, proxy: InterceptingProxy) -> None:
+    from structlog.testing import capture_logs
+
+    with capture_logs() as logs:
+        _connect(splunk, ssl_enabled=False)
+    (route,) = [entry for entry in logs if entry["event"] == "splunk_tenant_route"]
+    assert route["via"] == f"http://127.0.0.1:{proxy.port}"
 
 
 # --- trigger arguments match the REST endpoint ---------------------------------

@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.17.2] — 2026-10-22
+
+Patch release. Nothing to regenerate. A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
+
+### Fixed
+
+- **A proxy's HTML page read as a Splunk TLS failure.** When `HTTPS_PROXY` or `OPENTIDE_PROXY` sends an internal Splunk tenant through a TLS-inspecting proxy, the proxy answers with its own page. With `ssl = false` the proxy's certificate is accepted, and splunklib failed to parse the page as XML with `ParseError: mismatched tag`, which read as a certificate fault; 0.17.1's notes repeated that reading. Splunk's REST API never answers with HTML, so the client now raises `SplunkAnsweredHtmlError` (a `ConnectionError`; `validate query --live` reports it as the tenant's result). The message names the address, the page title and the proxy (without credentials), and gives the `NO_PROXY` entry to add. Without a proxy it points at the port: 8089 is the REST API, 8000 Splunk Web.
+- Each Splunk connection logs `splunk_tenant_route` with `via` set to the proxy it goes through, or `direct`.
+- The troubleshooting entry for 0.17.0's `ssl = false` bug said that it often failed with an XML `ParseError`. It failed with `CERTIFICATE_VERIFY_FAILED`; a `ParseError` means an HTML answer.
+
+### Install
+
+```bash
+pip install opentide==0.17.2
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
 ## [0.17.1] — 2026-10-21
 
 Patch release. Nothing to regenerate. A tenant's `ssl` now decides certificate verification for every call opentide makes to that tenant, on every platform. Splunk deploys and live query checks work again against a tenant with `ssl = false` (a self-signed certificate), and Splunk rules with a `trigger` block deploy. If your pipeline patches the installed `opentide/platforms/splunk/client.py` or `deployer.py` with `sed` to work around either bug, delete those steps: after upgrading their patterns match nothing. A patch, not a minor: each fix restores what the configuration already documented, and the stricter `ssl` check only refuses values that never worked.
@@ -1091,7 +1109,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.17.2...HEAD
+[0.17.2]: https://github.com/opentidehq/opentide/releases/tag/v0.17.2
 [0.17.1]: https://github.com/opentidehq/opentide/releases/tag/v0.17.1
 [0.17.0]: https://github.com/opentidehq/opentide/releases/tag/v0.17.0
 [0.16.1]: https://github.com/opentidehq/opentide/releases/tag/v0.16.1

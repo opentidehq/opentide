@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import ssl
 import urllib.request
 from abc import ABC
@@ -8,6 +9,7 @@ from io import BytesIO
 from random import randrange
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.error import HTTPError
+from urllib.parse import urlsplit
 
 import structlog
 
@@ -190,6 +192,55 @@ HTTP_ERROR_STATUS = 19
 
 RequestHandler = Callable[[str, dict[str, Any]], dict[str, Any]]
 
+_HTML_TITLE = re.compile(rb"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+
+
+class SplunkAnsweredHtmlError(ConnectionError):
+    """The address answered with an HTML page, which the Splunk REST API never sends.
+
+    Behind a proxy that is the proxy's own page (a block page, a login page):
+    splunklib used to fail on it with ``xml.etree.ElementTree.ParseError:
+    mismatched tag``, which reads like a TLS fault. A ``ConnectionError``, so
+    a live query check reports it as the tenant's result.
+    """
+
+
+def splunk_route(url: str) -> str | None:
+    """The proxy ``urllib`` sends a request for *url* through, without credentials; ``None`` if direct."""
+    parts = urlsplit(url)
+    proxy = urllib.request.getproxies().get(parts.scheme)
+    if not proxy or urllib.request.proxy_bypass(parts.netloc):
+        return None
+    proxy_parts = urlsplit(proxy if "://" in proxy else f"http://{proxy}")
+    return f"{proxy_parts.scheme}://{proxy_parts.netloc.rpartition('@')[2]}"
+
+
+def _looks_like_html(headers: Any, body: bytes) -> bool:
+    content_type = str(headers.get("Content-Type") or "").lower()
+    start = body.lstrip()[:15].lower()
+    return content_type.startswith("text/html") or start.startswith((b"<!doctype html", b"<html"))
+
+
+def _html_answer(url: str, body: bytes) -> SplunkAnsweredHtmlError:
+    parts = urlsplit(url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    title = _HTML_TITLE.search(body)
+    page = f" (page title: {title.group(1).decode(errors='replace').strip()!r})" if title else ""
+    proxy = splunk_route(url)
+    if proxy:
+        return SplunkAnsweredHtmlError(
+            f"Splunk at {origin} answered with an HTML page, not its REST API{page}. "
+            f"The request went through the proxy {proxy}, so the page is most likely the "
+            "proxy's (a block or sign-in page). If this tenant is reached directly, add its "
+            f"host to NO_PROXY and no_proxy (NO_PROXY={parts.hostname}); otherwise check the "
+            "tenant's port: 8089 is the REST API, 8000 Splunk Web."
+        )
+    return SplunkAnsweredHtmlError(
+        f"Splunk at {origin} answered with an HTML page, not its REST API{page}. "
+        "Check the tenant's url and port: the REST API listens on the management port "
+        "(8089 by default), while 8000 serves Splunk Web."
+    )
+
 
 def request_handler(*, verify: bool, allow_http_errors: bool = False) -> RequestHandler:
     """A splunklib ``handler`` bound to one tenant's connection settings.
@@ -221,6 +272,8 @@ def request_handler(*, verify: bool, allow_http_errors: bool = False) -> Request
             status = error.code
             failed = True
         body = response.read()
+        if _looks_like_html(response.info(), body):
+            raise _html_answer(url, body)
         if failed:
             if allow_http_errors:
                 status = HTTP_ERROR_STATUS
@@ -272,6 +325,8 @@ def connect_splunk(
             host=host,
             advice="Set ssl = true in the tenant's setup once its certificate is trusted",
         )
+    proxy = splunk_route(f"https://{host}:{port}/")
+    logger.info("splunk_tenant_route", host=host, port=port, via=proxy or "direct")
     service = client.connect(
         handler=request_handler(verify=ssl_enabled, allow_http_errors=allow_http_errors),
         host=host,
