@@ -20,10 +20,13 @@ import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import ValidationError
 
+from opentide.core.io import load_toml
+from opentide.core.root import get_data_root
 from opentide.generation.pydantic_schemas import generate_schema_for_identifier
 from opentide.loading.object_loader import load_object
 from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.models.schema_registry import identifiers_for_families
+from opentide.models.visibility import VisibilityConfig
 
 REVIEWED = [
     "2026-10-15",
@@ -79,6 +82,7 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
             schema_id: generate_schema_for_identifier(schema_id)
             for schema_id in identifiers_for_families(CORE_OBJECT_TYPES)
         }
+        visibility = generate_schema_for_identifier("visibility::1.0")
     finally:
         patch.undo()
         clear_runtime_caches()
@@ -91,6 +95,7 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     rule = _load(next((objects / "rules").rglob("rule-0001-*.yaml")))
     return {
         "schemas": schemas,
+        "visibility": visibility,
         "valid": {
             "threat::1.0": _load(next((objects / "threats").rglob("*.yaml"))),
             "objective::1.0": objective,
@@ -178,3 +183,18 @@ def test_effort_schema_and_model_agree(value: Any, valid: bool, corpus: dict[str
         assert not valid
     else:
         assert valid
+
+
+def test_visibility_schema_accepts_the_bundled_configuration(corpus: dict[str, Any]) -> None:
+    """``logsources`` items used to be a ``system::name`` string enum.
+
+    The marker that fills a field with log source names sat on the list of log
+    source objects itself, so the generated schema replaced the item ``$ref``
+    with that enum and rejected every configuration, the bundled one included.
+    """
+    body = load_toml(get_data_root() / "configurations" / "visibility.toml")
+    VisibilityConfig.model_validate(body)
+    validator = Draft202012Validator(corpus["visibility"])
+    assert [error.message for error in validator.iter_errors(body)] == []
+    misspelled = {"logsources": [{**body["logsources"][0], "sytem": "splunk"}]}
+    assert not validator.is_valid(misspelled)
