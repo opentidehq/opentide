@@ -89,6 +89,25 @@ class DetectionRule:
     isEnabled: bool = False
 
 
+def _error_body(response: requests.Response) -> Any:
+    """The JSON of an error answer, or its text when it is not JSON.
+
+    A gateway's 5xx page or an empty 404 is not JSON: reading it with
+    ``.json()`` raised ``JSONDecodeError``, and the status was never reported.
+    """
+    try:
+        return response.json()
+    except ValueError:
+        return response.text or f"(empty body, HTTP {response.status_code})"
+
+
+def _error_message(response: requests.Response) -> Any:
+    """Graph's ``error.message``, or the whole body when it carries none."""
+    body = _error_body(response)
+    error = body.get("error") if isinstance(body, dict) else None
+    return (error.get("message") if isinstance(error, dict) else None) or body
+
+
 class DefenderForEndpointService:
     """
     Interface to connect and deploy MDRs to MDE. Initialized on a single
@@ -214,11 +233,11 @@ class DefenderForEndpointService:
                     f"Missing permissions to run query against tenant {self.tenant_config.name} - "
                     f"Error Code {request.status_code}"
                 ),
-                context=str(request.json()),
+                context=str(_error_body(request)),
                 advice="Add the permissions mentioned above to the service principal to fix this",
             )
             raise Exception(f"Permission denied (403) on tenant {self.tenant_config.name}")
-        error_message = request.json().get("error", {}).get("message") or request.json()
+        error_message = _error_message(request)
         logger.critical(
             "fatal_error",
             detail=f"Error Code {request.status_code} - {error_message}",
@@ -243,8 +262,11 @@ class DefenderForEndpointService:
         else:
             logger.critical(
                 "fatal_error",
-                detail=f"Failed to create detection rule in tenant {self.tenant_config.name}",
-                context=str(request.json()),
+                detail=(
+                    f"Failed to create detection rule in tenant {self.tenant_config.name} - "
+                    f"Error Code {request.status_code}"
+                ),
+                context=str(_error_body(request)),
                 advice=(
                     "Will attempt redeployment, with minimal configurations : "
                     "impacted_entitieswill be set to Device with DeviceId mapping, user response "
@@ -258,13 +280,25 @@ class DefenderForEndpointService:
             rule_body = rule_body.replace("odata_type", "@odata.type")
             rule_body = json.loads(rule_body)
             logger.info("attempting_redeployment_with_safer_configuration", detail=str(rule_body))
-            request = self.session.post(url=self.GRAPH_API_ENDPOINT, json=rule_body)
+            # The retry creates in the same collection; it used to be sent to
+            # the Graph security root, where no detection rule can be created.
+            request = self.session.post(
+                url=self.DETECTION_RULES_ENDPOINT, verify=self.verify, json=rule_body
+            )
             if request.status_code == 201:
                 logger.info("created_rule_in_mde", detail=str(request.json()))
                 logger.warning("this_is_a_partial_deployment_check_the_mde_gui_to_see_the_availa")
                 os.environ["DEPLOYMENT_WARNING_RAISED"] = "1"
                 return int(request.json()["id"])
             else:
+                logger.critical(
+                    "fatal_error",
+                    detail=(
+                        f"Failed to create detection rule in tenant {self.tenant_config.name} "
+                        f"with the safer configuration - Error Code {request.status_code}"
+                    ),
+                    context=str(_error_body(request)),
+                )
                 raise Errors.DetectionRuleCreationFailed
 
     def update_detection_rule(self, rule: DetectionRule, rule_id: int | str):
@@ -280,9 +314,9 @@ class DefenderForEndpointService:
                 "fatal_error",
                 detail=(
                     f"Failed to update detection rule with id {rule_id} in tenant "
-                    f"{self.tenant_config.name} ({url})"
+                    f"{self.tenant_config.name} ({url}) - Error Code {request.status_code}"
                 ),
-                context=str(request.json()),
+                context=str(_error_body(request)),
                 advice=str(rule_body),
             )
             raise Errors.DetectionRuleUpdateFailed
