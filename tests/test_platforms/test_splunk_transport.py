@@ -275,13 +275,20 @@ def test_splunk_route_follows_no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     assert splunk_route("https://splunk.cloud.example:8089/") == "http://proxy.corp:3128"
 
 
-def test_connect_logs_the_route(splunk: SplunkStandIn, proxy: InterceptingProxy) -> None:
-    from structlog.testing import capture_logs
+def test_connect_logs_the_route(
+    splunk: SplunkStandIn, proxy: InterceptingProxy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # ``capture_logs`` misses a logger cached on first use by an earlier test.
+    from structlog.testing import CapturingLogger
 
-    with capture_logs() as logs:
-        _connect(splunk, ssl_enabled=False)
-    (route,) = [entry for entry in logs if entry["event"] == "splunk_tenant_route"]
-    assert route["via"] == f"http://127.0.0.1:{proxy.port}"
+    from opentide.platforms.splunk import client as splunk_client
+
+    captured = CapturingLogger()
+    monkeypatch.setattr(splunk_client, "logger", captured)
+    _connect(splunk, ssl_enabled=False)
+
+    (route,) = [call for call in captured.calls if call.args == ("splunk_tenant_route",)]
+    assert route.kwargs["via"] == f"http://127.0.0.1:{proxy.port}"
 
 
 # --- trigger arguments match the REST endpoint ---------------------------------

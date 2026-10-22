@@ -8,12 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [0.17.2] — 2026-10-22
 
-Patch release. Nothing to regenerate. A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
+Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.
 
 ### Fixed
 
 - **A proxy's HTML page read as a Splunk TLS failure.** When `HTTPS_PROXY` or `OPENTIDE_PROXY` sends an internal Splunk tenant through a TLS-inspecting proxy, the proxy answers with its own page. With `ssl = false` the proxy's certificate is accepted, and splunklib failed to parse the page as XML with `ParseError: mismatched tag`, which read as a certificate fault; 0.17.1's notes repeated that reading. Splunk's REST API never answers with HTML, so the client now raises `SplunkAnsweredHtmlError` (a `ConnectionError`; `validate query --live` reports it as the tenant's result). The message names the address, the page title and the proxy (without credentials), and gives the `NO_PROXY` entry to add. Without a proxy it points at the port: 8089 is the REST API, 8000 Splunk Web.
 - Each Splunk connection logs `splunk_tenant_route` with `via` set to the proxy it goes through, or `direct`.
+- **A `uv` install of opentide could not import the Carbon Black SDK.** python-dateutil 3.0.0 came out on 21 October. botocore caps it below 3, and `uv`'s resolver chose dateutil 3 and walked boto3 back to `0.0.3`, whose botocore fails on `from six.moves import configparser`. Carbon Black deploys and live query checks, and anything importing `cbc_sdk`, failed. opentide now requires `boto3>=1.35`, so the resolver keeps a current boto3 and caps python-dateutil. `pip` was not affected. Until you upgrade, `uv pip install opentide==0.17.1 'boto3>=1.35'` works around it.
 - The troubleshooting entry for 0.17.0's `ssl = false` bug said that it often failed with an XML `ParseError`. It failed with `CERTIFICATE_VERIFY_FAILED`; a `ParseError` means an HTML answer.
 
 ### Install

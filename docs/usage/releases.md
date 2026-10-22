@@ -9,7 +9,7 @@ The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin 
 
 ## 0.17.2 — 22 October 2026
 
-Patch release. Nothing to regenerate. A Splunk tenant behind a proxy that answers with an HTML page now fails with a message naming the proxy and the `NO_PROXY` entry to add. Delete any `verify=not ssl_enabled` patch of the Splunk client and set `NO_PROXY` instead.
+Patch release. Nothing to regenerate. `uv` installs resolve a current boto3 again, and a Splunk tenant behind a proxy that answers with an HTML page now fails with a message naming the proxy and the `NO_PROXY` entry to add. Delete any `verify=not ssl_enabled` patch of the Splunk client and set `NO_PROXY` instead.
 
 **Install**
 
@@ -23,6 +23,7 @@ opentide validate --strict
 
 - **A proxy's page is named, not parsed.** Through 0.17.1 it failed as `xml.etree.ElementTree.ParseError: mismatched tag`, which read as a certificate problem. The error now names the Splunk address, the page title, the proxy, and `NO_PROXY=<host>`. See [Splunk answers with HTML instead of XML behind a proxy](./troubleshooting.md#splunk-answers-with-html-instead-of-xml-behind-a-proxy).
 - **The route is logged.** Each Splunk connection logs `splunk_tenant_route`: the proxy it goes through, or `direct`.
+- **`uv` installs work again.** python-dateutil 3.0.0 led `uv` to install boto3 `0.0.3`, and the Carbon Black SDK failed to import (`No module named 'six.moves'`). opentide now requires `boto3>=1.35`. `pip` was not affected.
 
 **Links**
 

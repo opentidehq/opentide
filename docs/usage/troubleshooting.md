@@ -426,6 +426,14 @@ enabled = true
 
 Verify with `opentide info --platform sentinel`. See [Configuration → enabling a platform](./configuration.md#enabling-a-platform).
 
+### `No module named 'six.moves'` from `botocore` or `cbc_sdk`
+
+python-dateutil 3.0.0 (21 October 2026) led `uv`'s resolver to install boto3 `0.0.3` with opentide **0.17.1** and earlier; its botocore cannot import on current Python. **0.17.2** requires `boto3>=1.35`. Upgrade; to stay on an older version, add `'boto3>=1.35'` to the same install command.
+
+```bash
+uv pip install 'opentide==0.17.2'
+```
+
 ### Splunk answers with HTML instead of XML behind a proxy
 
 Through **0.17.1** this failed as `xml.etree.ElementTree.ParseError: mismatched tag`, which reads like a TLS fault but is not one. **0.17.2** names it: `Splunk at https://<host>:8089 answered with an HTML page, not its REST API … The request went through the proxy http://<proxy>:<port> …`, with the `NO_PROXY` value to set. Each connection also logs `splunk_tenant_route` with `via` set to the proxy or `direct`.
