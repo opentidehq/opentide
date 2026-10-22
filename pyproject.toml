@@ -165,63 +165,13 @@ output = "coverage.xml"
 target-version = "py310"
 line-length = 100
 src = ["src", "tests"]
-exclude = [
-    # Ported Engines modules — style cleanup tracked separately
-    "src/opentide/deployment",
-    "src/opentide/mutation",
-    "src/opentide/documentation",
-    "src/opentide/extraction",
-    "src/opentide/export",
-    "src/opentide/platforms/crowdstrike",
-    "src/opentide/platforms/defender_for_endpoint",
-    "src/opentide/platforms/harfanglab",
-    "src/opentide/platforms/sentinel",
-    "src/opentide/platforms/sentinel_one",
-    "src/opentide/platforms/kql.py",
-    "src/opentide/platforms/plugins.py",
-    "src/opentide/core/debug.py",
-    "src/opentide/core/environment.py",
-    "src/opentide/generation/framework.py",
-    "src/opentide/generation/vscode_snippets.py",
-    "src/opentide/loading/config_loader.py",
-    "src/opentide/loading/configurations.py",
-    "src/opentide/loading/objects.py",
-    "src/opentide/models/object_models.py",
-    "src/opentide/models/system_models.py",
-    "src/opentide/models/deployment_enums.py",
-    "src/opentide/validation/cve.py",
-    "src/opentide/validation/legacy.py",
-    "src/opentide/validation/tide_schema.py",
-    "src/opentide/validation/id_uniqueness.py",
-    "src/opentide/validation/uuid_v4.py",
-]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
-[tool.ruff.lint.per-file-ignores]
-# Ported from Engines/framework — behavioural preservation; style cleanup deferred to Phase 9
-"src/opentide/generation/schema_pipeline.py" = ["E501", "SIM", "UP", "B", "E712", "E721", "E722", "F841"]
-"src/opentide/generation/template_renderer.py" = ["E501", "SIM", "UP", "B", "E712", "E722", "F841"]
-"src/opentide/generation/template_engine.py" = ["E501", "SIM", "UP", "B", "E712", "E722", "F841"]
-"src/opentide/cli/__init__.py" = ["B008", "E501"]
-"src/opentide/cli/setup_app.py" = ["B008", "E501"]
-"src/opentide/cli/share_app.py" = ["B008", "E501"]
-"src/opentide/cli/services/*.py" = ["E501", "SIM"]
-"tests/test_cli/*.py" = ["E501"]
-"tests/test_generation/*.py" = ["E501"]
-"src/opentide/platforms/splunk/deployer.py" = ["E501", "B024"]
-"src/opentide/platforms/splunk/client.py" = ["E501", "B024"]
-"src/opentide/platforms/splunk/validator.py" = ["E501", "SIM102"]
-"src/opentide/platforms/carbon_black/deployer.py" = ["E501", "B024"]
-"src/opentide/platforms/carbon_black/client.py" = ["E501", "B024"]
-"src/opentide/platforms/carbon_black/validator.py" = ["E501"]
-"src/opentide/platforms/config.py" = ["E501"]
-"src/opentide/platforms/elastic/*.py" = ["E501", "SIM"]
-"tests/test_platforms/test_elastic_*.py" = ["E501"]
-"src/opentide/deployment/planning.py" = ["E501", "SIM102"]
-"src/opentide/mcp_server/server.py" = ["B008", "E501"]
-"src/opentide/mcp_server/*.py" = ["E501"]
+[tool.ruff.lint.flake8-bugbear]
+# Typer declares CLI parameters as call defaults; they are immutable markers.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
 
 [tool.ty.src]
 include = ["src/opentide"]

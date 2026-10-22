@@ -313,7 +313,9 @@ def setup_cmd(
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
-        help="Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+        help=(
+            "Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting."
+        ),
     ),
     promotion_target: str | None = typer.Option(
         None,
@@ -451,7 +453,7 @@ def setup_platforms_cmd(
     elastic: bool = typer.Option(False, "--elastic"),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
-    """Create and enable platform configuration files under ``.opentide/configurations/platforms/``."""
+    """Create and enable platform configuration files in ``.opentide/configurations/platforms/``."""
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
     yes = _consented(ctx, yes)
@@ -507,7 +509,9 @@ def setup_ci_cmd(
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
-        help="Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+        help=(
+            "Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting."
+        ),
     ),
     promotion_target: str | None = typer.Option(
         None,

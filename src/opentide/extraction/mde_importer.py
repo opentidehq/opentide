@@ -1,4 +1,3 @@
-
 """Import Defender for Endpoint custom detection rules into opentide YAML.
 
 Run through ``opentide generate extract defender``. Importing this module has no
@@ -18,7 +17,6 @@ logger = get_logger(__name__)
 
 
 class DefenderForEndpointImporter(DefenderForEndpointService):
-    
     def list_rules(self):
         response = self.session.get(self.DETECTION_RULES_ENDPOINT)
         return response.json()
@@ -129,13 +127,17 @@ techniques_template = """
         {techniques_list}
 """
 
+
 def add_space_before_uppercase(s):
     result = ""
     for i, char in enumerate(s):
-        if char.isupper() and i > 0:  # Add a space before uppercase letters, except the first character
+        if (
+            char.isupper() and i > 0
+        ):  # Add a space before uppercase letters, except the first character
             result += " "
         result += char
     return result
+
 
 def sanitize_filename(name):
     invalid_chars = '<>:"/\\|?*'
@@ -147,13 +149,15 @@ def sanitize_filename(name):
             sanitized_name += char
     return sanitized_name
 
-def fix_multiline(string:str, indentation:int):
+
+def fix_multiline(string: str, indentation: int):
     lines = string.splitlines()
     fixed_lines = []
     for line in lines:
         if line.strip():
             fixed_lines.append(" " * indentation + line.strip())
     return "\n".join(fixed_lines)
+
 
 def _render_rule(rule) -> tuple[str, str]:
     """Return the file name and YAML body for one Defender custom detection."""
@@ -165,60 +169,72 @@ def _render_rule(rule) -> tuple[str, str]:
     rule_author = rule["createdBy"]
     rule_description = rule["detectionAction"].get("alertTemplate", {}).get("description")
     rule_schedule = rule["schedule"]["period"] if rule["schedule"]["period"] != "0" else "NRT"
-    rule_category = add_space_before_uppercase(rule["detectionAction"].get("alertTemplate", {}).get("category"))
+    rule_category = add_space_before_uppercase(
+        rule["detectionAction"].get("alertTemplate", {}).get("category")
+    )
     rule_query = rule["queryCondition"].get("queryText")
     rule_status = "PRODUCTION" if rule.get("isEnabled") else "DISABLED"
 
-    #Contributors resolution
+    # Contributors resolution
     if rule["lastModifiedBy"] != rule_author:
         contributors = contributors_template.format(contributor=rule["lastModifiedBy"]).strip()
     else:
         contributors = no_contributors_template.strip()
 
-    #Techniques, if added
+    # Techniques, if added
     techniques = ""
-    if t:=rule["detectionAction"].get("alertTemplate", {}).get("mitreTechniques"):
-      techniques_list = "- " + "\n        - ".join(t)
-      techniques = techniques_template.format(techniques_list=techniques_list).rstrip()
+    if t := rule["detectionAction"].get("alertTemplate", {}).get("mitreTechniques"):
+        techniques_list = "- " + "\n        - ".join(t)
+        techniques = techniques_template.format(techniques_list=techniques_list).rstrip()
 
-    #Recommended actions, if added
+    # Recommended actions, if added
     if not rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions"):
         alert_recommendation = no_recommendation_template.strip()
     else:
-        rule_description += "\n\n---\n" + "Recommended Actions : " + rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions")
-        alert_recommendation = recommendation_template.format(recommendation=fix_multiline(rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions"), 8)).strip()
+        rule_description += (
+            "\n\n---\n"
+            + "Recommended Actions : "
+            + rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions")
+        )
+        alert_recommendation = recommendation_template.format(
+            recommendation=fix_multiline(
+                rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions"), 8
+            )
+        ).strip()
 
-    #Impacted Assets
+    # Impacted Assets
     impacted_device = "#device:"
     impacted_user = "#user:"
     impacted_entities_flag = "#"
     for impacted_asset in rule["detectionAction"]["alertTemplate"]["impactedAssets"]:
         if impacted_asset["@odata.type"].endswith("impactedDeviceAsset"):
-            identifier = impacted_asset['identifier']
+            identifier = impacted_asset["identifier"]
             impacted_device = f"device: {identifier[0].upper() + identifier[1:]}"
             impacted_entities_flag = ""
         if impacted_asset["@odata.type"].endswith("impactedUserAsset"):
-            identifier = impacted_asset['identifier']
+            identifier = impacted_asset["identifier"]
             impacted_user = f"user: {identifier[0].upper() + identifier[1:]}"
             impacted_entities_flag = ""
 
-    body = template.format(name=rule_name,
-                                uuid=rule_uuid,
-                                created=rule_created,
-                                modified=rule_modified,
-                                alert_severity=rule_severity.title(),
-                                alert_recommendation=alert_recommendation,
-                                impacted_device=impacted_device,
-                                impacted_user=impacted_user,
-                                impacted_entities_flag=impacted_entities_flag,
-                                author=rule_author,
-                                contributors=contributors,
-                                description=fix_multiline(rule_description, 2),
-                                schedule=rule_schedule,
-                                category=rule_category,
-                                techniques=techniques,
-                                query=fix_multiline(rule_query, 6),
-                                status=rule_status).strip()
+    body = template.format(
+        name=rule_name,
+        uuid=rule_uuid,
+        created=rule_created,
+        modified=rule_modified,
+        alert_severity=rule_severity.title(),
+        alert_recommendation=alert_recommendation,
+        impacted_device=impacted_device,
+        impacted_user=impacted_user,
+        impacted_entities_flag=impacted_entities_flag,
+        author=rule_author,
+        contributors=contributors,
+        description=fix_multiline(rule_description, 2),
+        schedule=rule_schedule,
+        category=rule_category,
+        techniques=techniques,
+        query=fix_multiline(rule_query, 6),
+        status=rule_status,
+    ).strip()
     return sanitize_filename(rule_name), body
 
 
@@ -227,7 +243,10 @@ def _import_defender_rules() -> None:
     if not tenants:
         logger.critical(
             "defender_tenants_not_configured",
-            detail="You must first have Defender for Endpoint tenants configured to initiate the import",
+            detail=(
+                "You must first have Defender for Endpoint tenants configured to initiate the "
+                "import"
+            ),
             advice=f"run '{enable_platform_command('defender_for_endpoint')}'",
         )
         raise RuntimeError("No Defender for Endpoint tenants are configured")

@@ -116,9 +116,8 @@ def required_column_groups(query: str) -> list[set[str]]:
         groups.extend([DEVICE_ID_COLUMNS, REPORT_ID_COLUMNS])
     if "observation" in categories:
         groups.append(OBSERVATION_ID_COLUMNS)
-    if "xdr" in categories or not categories:
-        if REPORT_ID_COLUMNS not in groups:
-            groups.append(REPORT_ID_COLUMNS)
+    if ("xdr" in categories or not categories) and REPORT_ID_COLUMNS not in groups:
+        groups.append(REPORT_ID_COLUMNS)
     if "endpoint" not in categories:
         groups.append(IMPACTED_ASSET_IDENTIFIER_COLUMNS)
     return groups
@@ -164,10 +163,16 @@ class DefenderForEndpointQueryValidator(QueryValidator):
                 detail=str(f"{mdr_name} ({mdr_uuid})")
                 + " | "
                 + str(
-                    f"Detected Defender XDR tables: {', '.join(sorted(defender_xdr_tables_in_query(query))) or 'none'}"
+                    "Detected Defender XDR tables: "
+                    f"{', '.join(sorted(defender_xdr_tables_in_query(query))) or 'none'}"
                 )
                 + " | "
-                + "Per Microsoft documentation, Defender XDR custom detection queries must include Timestamp or TimeGenerated, event identity columns for the queried table family, and a supported impacted asset identifier in the output. See: https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules",
+                + (
+                    "Per Microsoft documentation, Defender XDR custom detection queries must "
+                    "include Timestamp or TimeGenerated, event identity columns for the queried "
+                    "table family, and a supported impacted asset identifier in the output. See: "
+                    "https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules"
+                ),
             )
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
 

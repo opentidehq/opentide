@@ -128,9 +128,7 @@ def _is_prebuilt_rule(remote: dict[str, Any]) -> bool:
     if remote.get("immutable") is True:
         return True
     rule_source = remote.get("rule_source")
-    if isinstance(rule_source, dict) and rule_source.get("type") == "external":
-        return True
-    return False
+    return isinstance(rule_source, dict) and rule_source.get("type") == "external"
 
 
 class ElasticDeploy:
@@ -187,15 +185,18 @@ class ElasticDeploy:
                 continue
 
             # Active deployment: PREVIEW, RELEASE, or DISABLEMENT
-            if setup.suppression is False and cfg.suppression is not None:
-                if rule_id not in suppression_warned:
-                    _deployment_warning(
-                        "suppression_omitted_basic_license",
-                        rule=rule.name,
-                        rule_id=rule_id,
-                        tenant=tenant_config.name,
-                    )
-                    suppression_warned.add(rule_id)
+            if (
+                setup.suppression is False
+                and cfg.suppression is not None
+                and rule_id not in suppression_warned
+            ):
+                _deployment_warning(
+                    "suppression_omitted_basic_license",
+                    rule=rule.name,
+                    rule_id=rule_id,
+                    tenant=tenant_config.name,
+                )
+                suppression_warned.add(rule_id)
 
             block_dict = cfg.model_dump(by_alias=True, exclude_none=False)
             if not _check_rule(

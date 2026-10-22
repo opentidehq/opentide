@@ -179,7 +179,8 @@ def test_nested_workspace_replaces_a_root_pinned_entry(tmp_path: Path) -> None:
     workspace.mkdir()
     config = workspace / ".pre-commit-config.yaml"
     config.write_text(
-        f"repos:\n  - repo: local\n    hooks:\n      - id: opentide-validate\n        entry: {HOOK_ENTRY}\n",
+        "repos:\n  - repo: local\n    hooks:\n"
+        f"      - id: opentide-validate\n        entry: {HOOK_ENTRY}\n",
         encoding="utf-8",
     )
 

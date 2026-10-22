@@ -698,7 +698,7 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
     _ensure_runtime_context()
     dict_foo = dictionary.copy()
     icon = ""
-    for field in dict_foo.keys():
+    for field in dict_foo:
         query = field
         if field == "$defs" and isinstance(dict_foo[field], dict):
             for def_schema in dict_foo[field].values():
@@ -706,8 +706,8 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
                     gen_json_schema(def_schema, schema_id=schema_id)
             continue
         # checks if the key is a dict
-        if type(dict_foo[field]) == dict:
-            if "tide.meta.definition" in dict_foo[field].keys():
+        if type(dict_foo[field]) is dict:
+            if "tide.meta.definition" in dict_foo[field]:
                 from opentide.generation.pydantic_metaschema import (
                     build_model_schema_source,
                     resolve_definition_model,
@@ -727,10 +727,7 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
             else:
                 title = dict_foo[field].get("title")
 
-                if "icon" in dictionary[field].keys():
-                    icon = dictionary[field]["icon"]
-                else:
-                    icon = get_icon(field)
+                icon = dictionary[field]["icon"] if "icon" in dictionary[field] else get_icon(field)
 
                 if title:
                     if icon:
@@ -747,14 +744,15 @@ def gen_json_schema(dictionary, *, schema_id: str | None = None):
                 # typos, or indentation error for example that
                 # wouldn't be flagged by the validation, and not be processed
                 # correctly.
-                if dict_foo[field].get("type") == "object":
-                    if not dict_foo[field].get("additionalProperties"):
-                        dictionary[field]["additionalProperties"] = False
+                if dict_foo[field].get("type") == "object" and not dict_foo[field].get(
+                    "additionalProperties"
+                ):
+                    dictionary[field]["additionalProperties"] = False
 
                 # If within that dict a key is called coretide, the dict will receive
                 # fields generated from the libraries to allow multi or single
                 # field validation with JSON Schema
-                if "recomposition" in dict_foo[field].keys():
+                if "recomposition" in dict_foo[field]:
                     temp = recomposition_handler(dict_foo[field]["recomposition"])
                     dictionary[field]["properties"] = temp
 

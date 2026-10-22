@@ -103,17 +103,20 @@ def _emit_rule_advisories(
         _flag_warning()
 
     # 2. Non-aggregating ES|QL METADATA _id advisory
-    if cfg.type == "esql" and cfg.query and not _STATS.search(cfg.query):
-        if not _METADATA_ID.search(cfg.query):
-            logger.warning(
-                "elastic_esql_metadata_id_warning",
-                rule=rule.name,
-                advice=(
-                    "Non-aggregating ES|QL query lacks METADATA _id; "
-                    "alerts will not be deduplicated"
-                ),
-            )
-            _flag_warning()
+    if (
+        cfg.type == "esql"
+        and cfg.query
+        and not _STATS.search(cfg.query)
+        and not _METADATA_ID.search(cfg.query)
+    ):
+        logger.warning(
+            "elastic_esql_metadata_id_warning",
+            rule=rule.name,
+            advice=(
+                "Non-aggregating ES|QL query lacks METADATA _id; alerts will not be deduplicated"
+            ),
+        )
+        _flag_warning()
 
     # 3. Explicit risk.score outside RFC 0007 §3 severity band
     if cfg.risk is not None:

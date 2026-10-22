@@ -1,15 +1,19 @@
-import requests
 import json
-from dataclasses import dataclass, asdict
-from typing import Literal, Optional
+from dataclasses import asdict, dataclass
 from enum import Enum
+from typing import Literal
+
+import requests
+import structlog
+
 from opentide.core.debug import DebugEnvironment
+from opentide.core.errors import Errors
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
-from opentide.core.errors import Errors
 from opentide.platforms.transport import TenantSession, tenant_tls_verify
-import structlog
-logger = structlog.get_logger('opentide.platforms.crowdstrike.client')
+
+logger = structlog.get_logger("opentide.platforms.crowdstrike.client")
+
 
 class SeverityMapping(Enum):
     Informational = 10
@@ -18,35 +22,37 @@ class SeverityMapping(Enum):
     High = 70
     Critical = 90
 
+
 @dataclass
 class DetectionRule:
-
     @dataclass
     class Search:
-        outcome: Literal['detection', 'incident']
+        outcome: Literal["detection", "incident"]
         filter: str
         lookback: str
-        trigger_mode: Literal['summary', 'verbose']
+        trigger_mode: Literal["summary", "verbose"]
 
     @dataclass
     class Operation:
-
         @dataclass
         class Schedule:
             definition: str
+
         schedule: Schedule
-        start_on: Optional[str] = None
-        stop_on: Optional[str] = None
+        start_on: str | None = None
+        stop_on: str | None = None
+
     name: str
     description: str
     customer_id: str
     severity: int
     search: Search
     operation: Operation
-    status: Literal['active', 'inactive']
-    tactic: Optional[str] = None
-    technique: Optional[str] = None
-    comment: Optional[str] = None
+    status: Literal["active", "inactive"]
+    tactic: str | None = None
+    technique: str | None = None
+    comment: str | None = None
+
 
 def remove_none_values(data: dict) -> dict:
     if isinstance(data, dict):
@@ -55,6 +61,7 @@ def remove_none_values(data: dict) -> dict:
         return [remove_none_values(v) for v in data if v is not None]
     else:
         return data
+
 
 @dataclass
 class CrowdstrikeService:
@@ -67,91 +74,155 @@ class CrowdstrikeService:
         self.DEBUG = DebugEnvironment.ENABLED
         self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.SentinelOne.platform.identifier
         self.tenant_config = tenant_config
-        self.verify = tenant_tls_verify(tenant_config.setup.ssl, platform='crowdstrike', tenant=tenant_config.name)
+        self.verify = tenant_tls_verify(
+            tenant_config.setup.ssl, platform="crowdstrike", tenant=tenant_config.name
+        )
         BASE_URL = self._get_base_api(self.tenant_config.setup.api)
-        self.OAUTH_TOKEN_ENDPOINT = BASE_URL + '/oauth2/token'
-        self.CORRELATION_RULES_ENDPOINT = BASE_URL + '/correlation-rules/entities/rules/v1'
-        self.access_token = self._get_access_token(self.tenant_config.setup.client_id, self.tenant_config.setup.client_secret)
+        self.OAUTH_TOKEN_ENDPOINT = BASE_URL + "/oauth2/token"
+        self.CORRELATION_RULES_ENDPOINT = BASE_URL + "/correlation-rules/entities/rules/v1"
+        self.access_token = self._get_access_token(
+            self.tenant_config.setup.client_id, self.tenant_config.setup.client_secret
+        )
         self.session = TenantSession(verify=self.verify)
-        self.session.headers.update({'Authorization': f'Bearer {self.access_token}', 'Content-Type': 'application/json', 'accept': 'application/json'})
+        self.session.headers.update(
+            {
+                "Authorization": f"Bearer {self.access_token}",
+                "Content-Type": "application/json",
+                "accept": "application/json",
+            }
+        )
 
     def _get_base_api(self, domain: str) -> str:
         match domain:
-            case 'US-1':
-                return 'https://api.crowdstrike.com'
-            case 'US-2':
-                return 'https://api.us-2.crowdstrike.com'
-            case 'EU-1':
-                return 'https://api.eu-1.crowdstrike.com'
-            case 'US-GOV-1:':
-                return 'https://api.laggar.gcw.crowdstrike.com'
-            case 'US-GOV-2':
-                return 'https://api.falcon.us-gov-2.crowdstrike.mil'
+            case "US-1":
+                return "https://api.crowdstrike.com"
+            case "US-2":
+                return "https://api.us-2.crowdstrike.com"
+            case "EU-1":
+                return "https://api.eu-1.crowdstrike.com"
+            case "US-GOV-1:":
+                return "https://api.laggar.gcw.crowdstrike.com"
+            case "US-GOV-2":
+                return "https://api.falcon.us-gov-2.crowdstrike.mil"
             case _:
-                logger.critical('the_configured_crowdstrike_api_domain_isn_t_valid', detail='Expects : US-1 , US-2 , EU-1 , US-GOV-1 , US-GOV-2')
-                raise Errors.TideSystemConfigurationErrors('Invalid API Domain')
-        raise AssertionError('unreachable')
+                logger.critical(
+                    "the_configured_crowdstrike_api_domain_isn_t_valid",
+                    detail="Expects : US-1 , US-2 , EU-1 , US-GOV-1 , US-GOV-2",
+                )
+                raise Errors.TideSystemConfigurationErrors("Invalid API Domain")
+        raise AssertionError("unreachable")
 
     def _get_access_token(self, client_id: str, client_secret: str):
-        data = {'client_id': client_id, 'client_secret': client_secret}
+        data = {"client_id": client_id, "client_secret": client_secret}
         response = requests.post(data=data, url=self.OAUTH_TOKEN_ENDPOINT, verify=self.verify)
         if response.status_code == 201:
             # The token response is a bearer credential. `--json` raises the log
             # level to INFO, and CI captures stderr, so the body must not be logged.
-            token = response.json().get('access_token')
+            token = response.json().get("access_token")
             if not isinstance(token, str) or not token:
                 logger.critical(
-                    'fatal_error',
-                    detail=f'CrowdStrike authentication for {self.tenant_config.name} returned no access token',
+                    "fatal_error",
+                    detail=(
+                        f"CrowdStrike authentication for {self.tenant_config.name} returned no "
+                        "access token"
+                    ),
                     status_code=response.status_code,
                 )
-                raise Errors.TenantConnectionError('Cannot authenticate with the tenant configuration')
+                raise Errors.TenantConnectionError(
+                    "Cannot authenticate with the tenant configuration"
+                )
             logger.info(
-                'event',
-                detail=f'Successfully authenticated against {self.tenant_config.name}',
+                "event",
+                detail=f"Successfully authenticated against {self.tenant_config.name}",
             )
             return token
         logger.critical(
-            'fatal_error',
-            detail=f'Cannot authenticate against {self.tenant_config.name}',
+            "fatal_error",
+            detail=f"Cannot authenticate against {self.tenant_config.name}",
             status_code=response.status_code,
         )
-        raise Errors.TenantConnectionError('Cannot authenticate with the tenant configuration')
+        raise Errors.TenantConnectionError("Cannot authenticate with the tenant configuration")
 
     def create_detection_rule(self, rule: DetectionRule) -> str:
         rule_body = remove_none_values(asdict(rule))
         rule_body = json.dumps(rule_body)
-        response = self.session.post(url=self.CORRELATION_RULES_ENDPOINT, data=rule_body, verify=self.verify)
+        response = self.session.post(
+            url=self.CORRELATION_RULES_ENDPOINT, data=rule_body, verify=self.verify
+        )
         if response.status_code == 200:
-            logger.info('event', detail=f'Successfully created rule {rule.name}', context_1=f'On tenant : {self.tenant_config.name}', advice=str(response.json()))
+            logger.info(
+                "event",
+                detail=f"Successfully created rule {rule.name}",
+                context_1=f"On tenant : {self.tenant_config.name}",
+                advice=str(response.json()),
+            )
             try:
-                rule_id = response.json()['resources'][0]['id']
+                rule_id = response.json()["resources"][0]["id"]
                 return rule_id
-            except Exception:
-                logger.critical('the_rule_id_was_not_present_in_the_response_body', detail=str(response.json()))
-                raise Errors.DetectionRulesOperationErrors('Could not retrieve rule ID')
+            except Exception as exc:
+                logger.critical(
+                    "the_rule_id_was_not_present_in_the_response_body", detail=str(response.json())
+                )
+                raise Errors.DetectionRulesOperationErrors("Could not retrieve rule ID") from exc
         else:
-            logger.critical('fatal_error', detail=f'Was not able to create rule against tenant {self.tenant_config.name} - Error Code {response.status_code}', context=str(response.json()))
-            raise Errors.DetectionRuleCreationFailed('Could not create rule')
+            logger.critical(
+                "fatal_error",
+                detail=(
+                    f"Was not able to create rule against tenant {self.tenant_config.name} - "
+                    f"Error Code {response.status_code}"
+                ),
+                context=str(response.json()),
+            )
+            raise Errors.DetectionRuleCreationFailed("Could not create rule")
 
     def update_detection_rule(self, rule_id: str, rule: DetectionRule):
         rule_body = remove_none_values(asdict(rule))
-        rule_body.update({'id': rule_id})
+        rule_body.update({"id": rule_id})
         rule_body = json.dumps([rule_body])
-        response = self.session.patch(url=self.CORRELATION_RULES_ENDPOINT, data=rule_body, verify=self.verify)
+        response = self.session.patch(
+            url=self.CORRELATION_RULES_ENDPOINT, data=rule_body, verify=self.verify
+        )
         if response.status_code == 200:
-            logger.info('event', detail=f'Successfully update rule {rule.name} with id {rule_id} on {self.tenant_config.name}', context=str(response.json()))
+            logger.info(
+                "event",
+                detail=(
+                    f"Successfully update rule {rule.name} with id {rule_id} on "
+                    f"{self.tenant_config.name}"
+                ),
+                context=str(response.json()),
+            )
         else:
-            logger.critical('fatal_error', detail=f'Was not able to create update rule with id {rule_id} against tenant {self.tenant_config.name} - Error Code {response.status_code}', context=str(response.json()))
-            logger.info('request_body', detail=str(rule_body))
-            raise Errors.DetectionRuleUpdateFailed('Could not update rule')
+            logger.critical(
+                "fatal_error",
+                detail=(
+                    f"Was not able to create update rule with id {rule_id} against tenant "
+                    f"{self.tenant_config.name} - Error Code {response.status_code}"
+                ),
+                context=str(response.json()),
+            )
+            logger.info("request_body", detail=str(rule_body))
+            raise Errors.DetectionRuleUpdateFailed("Could not update rule")
 
     def delete_detection_rule(self, rule_id: str):
-        params = {'ids': rule_id}
-        response = self.session.delete(params=params, url=self.CORRELATION_RULES_ENDPOINT, verify=self.verify)
+        params = {"ids": rule_id}
+        response = self.session.delete(
+            params=params, url=self.CORRELATION_RULES_ENDPOINT, verify=self.verify
+        )
         if response.status_code == 200:
-            logger.info('step_completed', detail=f'Removed detection rule with ID {rule_id}', context_1=f'Against tenant {self.tenant_config.name}')
+            logger.info(
+                "step_completed",
+                detail=f"Removed detection rule with ID {rule_id}",
+                context_1=f"Against tenant {self.tenant_config.name}",
+            )
             return
         else:
-            logger.critical('fatal_error', detail=f'Was not able to delete rule with ID {rule_id}', context_1=f'Against tenant {self.tenant_config.name}', advice='Verify API permission, and check if the rule was not already removed from the console')
-            raise Errors.DetectionRuleDeletionFailed('Could not delete rule')
+            logger.critical(
+                "fatal_error",
+                detail=f"Was not able to delete rule with ID {rule_id}",
+                context_1=f"Against tenant {self.tenant_config.name}",
+                advice=(
+                    "Verify API permission, and check if the rule was not already removed from "
+                    "the console"
+                ),
+            )
+            raise Errors.DetectionRuleDeletionFailed("Could not delete rule")

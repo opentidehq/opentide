@@ -90,13 +90,13 @@ def rename_param_nest(nest, schema, scope=None):
         temp = nest[item]
         nest.pop(item)
         nest[parameter_name] = temp
-        if type(nest_copy[item]) == list:
+        if type(nest_copy[item]) is list:
             if lookup_schema_extra(schema, item, "key_value_store"):
                 nest[parameter_name] = key_value_transform(nest_copy[item])
             else:
                 for elem in nest_copy[item]:
                     rename_param_nest(elem, schema, scope=item)
-        elif type(nest_copy[item]) == dict:
+        elif type(nest_copy[item]) is dict:
             rename_param_nest(nest[parameter_name], schema, scope=item)
     return nest
 
@@ -108,11 +108,11 @@ def deep_update(dictionary, key, new_value):
     will return None.
     """
     dict_copy = dictionary.copy()
-    if key in dict_copy.keys():
+    if key in dict_copy:
         dictionary[key] = new_value
     else:
         for k in dict_copy:
-            if type(dict_copy[k]) == dict:
+            if type(dict_copy[k]) is dict:
                 deep_update(dictionary[k], key, new_value)
     return dictionary
 
@@ -242,7 +242,7 @@ def get_vocab_entry(vocab, identifier, field=None, newlines=False):
         if newlines is False and isinstance(value, str):
             return value.replace("\n", "")
         return value
-    for entry_key, entry in vocabulary.entries.items():
+    for entry in vocabulary.entries.values():
         if entry.get("legacy") == identifier:
             if field is None:
                 return entry.as_dict()
@@ -265,13 +265,14 @@ def get_key_in_model_body(model_body, key):
     Self-recursive function to return the value of a key nested within
     the body of a model data.
     """
-    if key in model_body.keys():
+    if key in model_body:
         return model_body[key]
     else:
-        for model_key in model_body.keys():
+        for model_key in model_body:
             if type(model_body[model_key]) is dict:
-                if get_key_in_model_body(model_body[model_key], key) is not None:
-                    return get_key_in_model_body(model_body[model_key], key)
+                found = get_key_in_model_body(model_body[model_key], key)
+                if found is not None:
+                    return found
     return None
 
 

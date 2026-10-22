@@ -93,7 +93,10 @@ def search_catalog(
             body = as_body(entry)
             if not wanted(bucket_type, body):
                 continue
-            haystack = f"{uuid} {body.get('title', '')} {body.get('name', '')} {body.get('description', '')}".lower()
+            haystack = (
+                f"{uuid} {body.get('title', '')} {body.get('name', '')} "
+                f"{body.get('description', '')}"
+            ).lower()
             if query_lower in haystack:
                 results.append(object_summary(uuid, bucket_type, body))
     return results

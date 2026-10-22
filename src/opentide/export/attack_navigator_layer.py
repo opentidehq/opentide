@@ -71,7 +71,8 @@ class AttackNavigatorLayer:
         # Visit objects by name, not index order: the index follows file paths,
         # so a rename or move would otherwise reorder every comment.
         for object in sorted(
-            index, key=lambda object_id: (str(index[object_id].get("name") or "").casefold(), object_id)
+            index,
+            key=lambda object_id: (str(index[object_id].get("name") or "").casefold(), object_id),
         ):
             with rendering(object):
                 techniques = techniques_resolver(object)

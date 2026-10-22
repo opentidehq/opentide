@@ -42,10 +42,10 @@ def _normalize_ref(ref: str) -> bytes:
     if ref.startswith("refs/"):
         return ref.encode("utf-8")
     if ref.startswith("origin/"):
-        return f"refs/remotes/{ref}".encode("utf-8")
+        return f"refs/remotes/{ref}".encode()
     if ref == "HEAD":
         return b"HEAD"
-    return f"refs/heads/{ref}".encode("utf-8")
+    return f"refs/heads/{ref}".encode()
 
 
 @dataclass(frozen=True)
@@ -161,8 +161,7 @@ class _RemoteCollection:
     @property
     def refs(self) -> list[_RemoteRef]:
         return [
-            _RemoteRef(name.decode("utf-8", errors="replace"))
-            for name in self._repo._repo.refs.keys()
+            _RemoteRef(name.decode("utf-8", errors="replace")) for name in self._repo._repo.refs
         ]
 
 
@@ -223,7 +222,9 @@ class DulwichRepo:
                 continue
         raise KeyError(ref)
 
-    def iter_commits(self, ref: str | None = None, max_count: int | None = None) -> Iterator[CommitInfo]:
+    def iter_commits(
+        self, ref: str | None = None, max_count: int | None = None
+    ) -> Iterator[CommitInfo]:
         start = [self._resolve_sha(ref)] if ref is not None else [self._repo.head()]
         kwargs: dict[str, int] = {}
         if max_count is not None:

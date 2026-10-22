@@ -308,7 +308,8 @@ def test_case_fix_renames_through_a_temporary_name(
 ) -> None:
     if _case_insensitive(tmp_path):
         pytest.skip(
-            "simulates case-insensitivity with a symlink, which a real case-insensitive filesystem cannot host"
+            "simulates case-insensitivity with a symlink, "
+            "which a real case-insensitive filesystem cannot host"
         )
     root = tmp_path / "repo"
     (root / "Objects" / "threats").mkdir(parents=True)
@@ -371,7 +372,8 @@ def test_migrate_objects_warns_once_when_the_case_rename_is_blocked(
     """A leftover temporary name keeps ``Objects``; ``--json`` readers see why."""
     if _case_insensitive(tmp_path):
         pytest.skip(
-            "simulates case-insensitivity with a symlink, which a real case-insensitive filesystem cannot host"
+            "simulates case-insensitivity with a symlink, "
+            "which a real case-insensitive filesystem cannot host"
         )
     root = _legacy_repo(tmp_path)
     _alias_objects(root, monkeypatch)
@@ -416,7 +418,8 @@ def test_migrate_objects_repairs_a_layout_an_earlier_release_migrated(
     """No legacy source is left, but the migrated folders still sit in ``Objects``."""
     if _case_insensitive(tmp_path):
         pytest.skip(
-            "simulates case-insensitivity with a symlink, which a real case-insensitive filesystem cannot host"
+            "simulates case-insensitivity with a symlink, "
+            "which a real case-insensitive filesystem cannot host"
         )
     root = tmp_path / "repo"
     (root / "Objects" / "threats").mkdir(parents=True)

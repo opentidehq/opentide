@@ -180,10 +180,7 @@ def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
     vscode_dir.mkdir(parents=True, exist_ok=True)
     settings_path = vscode_dir / "settings.json"
     mappings = build_yaml_schema_mappings(workspace=target.resolve())
-    if merge and settings_path.is_file():
-        existing = _load_jsonc(settings_path)
-    else:
-        existing = {}
+    existing = _load_jsonc(settings_path) if merge and settings_path.is_file() else {}
     yaml_schemas = existing.get("yaml.schemas", {})
     if not isinstance(yaml_schemas, dict):
         yaml_schemas = {}
@@ -206,10 +203,7 @@ def write_vscode_extensions(target: Path, *, merge: bool = True) -> str:
     vscode_dir = target / ".vscode"
     vscode_dir.mkdir(parents=True, exist_ok=True)
     extensions_path = vscode_dir / "extensions.json"
-    if merge and extensions_path.is_file():
-        existing = _load_jsonc(extensions_path)
-    else:
-        existing = {}
+    existing = _load_jsonc(extensions_path) if merge and extensions_path.is_file() else {}
     recommendations = existing.get("recommendations", [])
     if not isinstance(recommendations, list):
         recommendations = []

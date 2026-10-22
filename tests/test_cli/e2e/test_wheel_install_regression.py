@@ -89,7 +89,8 @@ def test_pip_installed_wheel_validate_generate_and_skills(
             "-c",
             (
                 "import compileall, pathlib, opentide; "
-                "root = pathlib.Path(opentide.__file__).resolve().parent / 'data' / 'configurations'; "
+                "root = pathlib.Path(opentide.__file__).resolve().parent "
+                "/ 'data' / 'configurations'; "
                 "compileall.compile_dir(str(root), quiet=1, force=True); "
                 "print(root)"
             ),

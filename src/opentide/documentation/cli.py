@@ -116,9 +116,7 @@ def _changed_object_paths_and_uuids(
     merge_base = baseline.commit
     paths_cfg = Opentide.Index["paths"]
     object_roots = {
-        kind: Path(paths_cfg[kind]).resolve()
-        for kind in _OBJECT_KIND_TO_SCOPE
-        if kind in paths_cfg
+        kind: Path(paths_cfg[kind]).resolve() for kind in _OBJECT_KIND_TO_SCOPE if kind in paths_cfg
     }
     changed_object_paths: set[Path] = set()
     changed_uuids: set[str] = set()
@@ -129,7 +127,11 @@ def _changed_object_paths_and_uuids(
         if absolute_path.suffix.lower() != ".yaml":
             continue
         kind = next(
-            (candidate for candidate, root in object_roots.items() if root in absolute_path.parents),
+            (
+                candidate
+                for candidate, root in object_roots.items()
+                if root in absolute_path.parents
+            ),
             None,
         )
         if kind is None:

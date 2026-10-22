@@ -86,10 +86,9 @@ def run():
             continue
         logger.info("now_processing_all_files_under_model_type", detail=model_type)
         for file in sorted(os.listdir(folder)):
-            if not file.endswith(".yaml"):
-                if not file.endswith(".yml"):
-                    logger.info("the_file_doesn_t_end_with_yaml_or_yml_skipping", detail=file)
-                    continue
+            if not file.endswith(".yaml") and not file.endswith(".yml"):
+                logger.info("the_file_doesn_t_end_with_yaml_or_yml_skipping", detail=file)
+                continue
 
             with open(folder / file, encoding="utf-8") as handle:
                 raw_body = handle.read()

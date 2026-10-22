@@ -1,39 +1,40 @@
-import requests
 import json
-from dataclasses import dataclass, asdict
-from typing import Literal, NoReturn, Optional
-from enum import Enum
+from dataclasses import asdict, dataclass
 from datetime import timedelta
+from enum import Enum
+from typing import Literal, NoReturn
 
-from opentide.core.time import format_utc_z, utc_now
-from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import Opentide
-from opentide.models.system_config import ConfigurationModels
-from opentide.core.errors import Errors
-from opentide.platforms.transport import TenantSession, tenant_tls_verify
+import requests
 import structlog
-logger = structlog.get_logger('opentide.platforms.sentinel_one.client')
+
+from opentide.core.debug import DebugEnvironment
+from opentide.core.errors import Errors
+from opentide.core.registry import Opentide
+from opentide.core.time import format_utc_z, utc_now
+from opentide.models.system_config import ConfigurationModels
+from opentide.platforms.transport import TenantSession, tenant_tls_verify
+
+logger = structlog.get_logger("opentide.platforms.sentinel_one.client")
+
 
 class SeverityMapping(Enum):
-    Informational = 'Low'
-    Low = 'Low'
-    Medium = 'Medium'
-    High = 'High'
-    Critical = 'Critical'
+    Informational = "Low"
+    Low = "Low"
+    Medium = "Medium"
+    High = "High"
+    Critical = "Critical"
+
 
 @dataclass
 class DetectionRule:
-
     @dataclass
     class Data:
-
         @dataclass
         class CoolOffSettings:
             renotifyMinutes: int
 
         @dataclass
         class CorrelationParams:
-
             @dataclass
             class SubQueries:
                 matchesRequired: int
@@ -42,30 +43,34 @@ class DetectionRule:
             @dataclass
             class TimeWindow:
                 windowMinutes: int
+
             entity: str
             matchInOrder: bool
             subQueries: SubQueries
-            timeWindow: Optional[TimeWindow] = None
-        expirationMode: Literal['Permanent', 'Temporary']
+            timeWindow: TimeWindow | None = None
+
+        expirationMode: Literal["Permanent", "Temporary"]
         name: str
         description: str
-        queryType: Literal['correlation', 'events']
+        queryType: Literal["correlation", "events"]
         severity: str
-        status: Literal['Active', 'Disabled']
-        networkQuarantine: Optional[bool] = None
-        treatAsThreat: Optional[Literal['UNDEFINED', 'Suspicious', 'Malicious']] = None
-        queryLang: Literal['1.0', '2.0'] = '2.0'
-        s1ql: Optional[str] = None
-        expiration: Optional[str] = None
-        coolOffSetting: Optional[CoolOffSettings] = None
-        correlationParams: Optional[CorrelationParams] = None
+        status: Literal["Active", "Disabled"]
+        networkQuarantine: bool | None = None
+        treatAsThreat: Literal["UNDEFINED", "Suspicious", "Malicious"] | None = None
+        queryLang: Literal["1.0", "2.0"] = "2.0"
+        s1ql: str | None = None
+        expiration: str | None = None
+        coolOffSetting: CoolOffSettings | None = None
+        correlationParams: CorrelationParams | None = None
 
     @dataclass
     class Filter:
-        accountIds: Optional[list[str]] = None
-        siteIds: Optional[list[str]] = None
+        accountIds: list[str] | None = None
+        siteIds: list[str] | None = None
+
     data: Data
     filter: Filter
+
 
 class SentinelOneService:
     """
@@ -77,57 +82,94 @@ class SentinelOneService:
         self.DEBUG = DebugEnvironment.ENABLED
         self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.SentinelOne.platform.identifier
         self.tenant_config = tenant_config
-        self.verify = tenant_tls_verify(tenant_config.setup.ssl, platform='sentinel_one', tenant=tenant_config.name)
-        self.CUSTOM_DETECTION_RULES_ENDPOINT = self.tenant_config.setup.url + '/web/api/v2.1/cloud-detection/rules'
-        self.CREATE_QUERY_ENDPOINT = self.tenant_config.setup.url + '/web/api/v2.1/dv/events/pq'
+        self.verify = tenant_tls_verify(
+            tenant_config.setup.ssl, platform="sentinel_one", tenant=tenant_config.name
+        )
+        self.CUSTOM_DETECTION_RULES_ENDPOINT = (
+            self.tenant_config.setup.url + "/web/api/v2.1/cloud-detection/rules"
+        )
+        self.CREATE_QUERY_ENDPOINT = self.tenant_config.setup.url + "/web/api/v2.1/dv/events/pq"
         self.session = TenantSession(verify=self.verify)
-        self.session.headers.update({'Authorization': f'ApiToken {self.tenant_config.setup.api_token}', 'Content-Type': 'application/json'})
+        self.session.headers.update(
+            {
+                "Authorization": f"ApiToken {self.tenant_config.setup.api_token}",
+                "Content-Type": "application/json",
+            }
+        )
 
     def _http_errors(self, response: requests.Response, error) -> NoReturn:
         match response.status_code:
             case 400:
-                logger.critical('received_code_400_invalid_user_input_received', detail=str(response.text))
+                logger.critical(
+                    "received_code_400_invalid_user_input_received", detail=str(response.text)
+                )
                 raise error
             case 401:
-                logger.critical('received_code_401_unauthorized_access', detail=str(response.text), advice='Check your configuration and API permissions again')
+                logger.critical(
+                    "received_code_401_unauthorized_access",
+                    detail=str(response.text),
+                    advice="Check your configuration and API permissions again",
+                )
                 raise Errors.TideTenantConfigurationMissingPermissions()
             case 404:
-                logger.critical('fatal_error', detail=str(response.text), advice='Go to SentinelOne Console and check if your rule still exists. If not, remove the rule id entry from the MDR file')
+                logger.critical(
+                    "fatal_error",
+                    detail=str(response.text),
+                    advice=(
+                        "Go to SentinelOne Console and check if your rule still exists. If not, "
+                        "remove the rule id entry from the MDR file"
+                    ),
+                )
                 raise error
             case _:
-                logger.critical('fatal_error', detail=f'Unforeseen error with code [{response.status_code}]', context=str(response.json()))
+                logger.critical(
+                    "fatal_error",
+                    detail=f"Unforeseen error with code [{response.status_code}]",
+                    context=str(response.json()),
+                )
                 raise error
 
     def validate_query(self, query: str) -> bool:
         """
-        Performs a Power Query against the SentinelOne tenant to validate if the query is able to run
+        Performs a Power Query against the SentinelOne tenant to validate if the query can run.
         May not be able to catch every edge cases, but will replicate most frontend errors
         """
         request = {}
-        request['accountIds'] = str(self.tenant_config.setup.account_id)
-        if (site_id := self.tenant_config.setup.site_id):
-            request['site_id'] = str(site_id)
-        request['query'] = query
+        request["accountIds"] = str(self.tenant_config.setup.account_id)
+        if site_id := self.tenant_config.setup.site_id:
+            request["site_id"] = str(site_id)
+        request["query"] = query
         now = utc_now()
         from_date = now - timedelta(minutes=1)
-        request['toDate'] = format_utc_z(now)
-        request['fromDate'] = format_utc_z(from_date)
+        request["toDate"] = format_utc_z(now)
+        request["fromDate"] = format_utc_z(from_date)
         request = json.dumps(request, indent=4)
-        response = self.session.post(url=self.CREATE_QUERY_ENDPOINT, verify=self.verify, data=request)
+        response = self.session.post(
+            url=self.CREATE_QUERY_ENDPOINT, verify=self.verify, data=request
+        )
         if response.status_code == 200:
-            logger.info('the_query_was_able_to_run')
+            logger.info("the_query_was_able_to_run")
             return True
         if response.status_code == 400:
             try:
-                error = response.json().get('errors')[0].get('detail')
+                error = response.json().get("errors")[0].get("detail")
             except Exception:
                 error = str(response.json())
-            logger.critical('fatal_error', detail=f'The query failed to be validated on tenant {self.tenant_config.name}', arg0=error, advice='Double check your query on the Sentinel One Event Search interface')
+            logger.critical(
+                "fatal_error",
+                detail=f"The query failed to be validated on tenant {self.tenant_config.name}",
+                arg0=error,
+                advice="Double check your query on the Sentinel One Event Search interface",
+            )
             return False
-        logger.critical('fatal_error', detail=f'Unforeseen error with code [{response.status_code}]', context=str(response.json()))
-        raise Errors.TideQueryValidationError('Query validation failed')
+        logger.critical(
+            "fatal_error",
+            detail=f"Unforeseen error with code [{response.status_code}]",
+            context=str(response.json()),
+        )
+        raise Errors.TideQueryValidationError("Query validation failed")
 
-    def create_update_detection_rule(self, rule: DetectionRule, rule_id: Optional[int]=None) -> int:
+    def create_update_detection_rule(self, rule: DetectionRule, rule_id: int | None = None) -> int:
 
         def _remove_nulls(value):
             if isinstance(value, dict):
@@ -136,42 +178,57 @@ class SentinelOneService:
                 return [_remove_nulls(item) for item in value if item is not None]
             else:
                 return value
+
         rule_body = json.dumps(_remove_nulls(asdict(rule)))
-        logger.info('event', detail=str(rule_body))
+        logger.info("event", detail=str(rule_body))
         endpoint = self.CUSTOM_DETECTION_RULES_ENDPOINT
         if rule_id:
-            logger.info('executing_api_call_to_update_star_custom_rule_with_id', detail=str(rule_id))
-            endpoint += f'/{rule_id}'
+            logger.info(
+                "executing_api_call_to_update_star_custom_rule_with_id", detail=str(rule_id)
+            )
+            endpoint += f"/{rule_id}"
             error = Errors.DetectionRuleCreationFailed
             request = self.session.put(url=endpoint, verify=self.verify, data=rule_body)
         else:
-            logger.info('executing_api_call_to_create_star_custom_rule')
+            logger.info("executing_api_call_to_create_star_custom_rule")
             error = Errors.DetectionRuleCreationFailed
             request = self.session.post(url=endpoint, verify=self.verify, data=rule_body)
         if request.status_code == 200:
-            logger.info('created_rule_in_sentinelone', detail=str(request.json()))
-            return int(request.json()['data']['id'])
+            logger.info("created_rule_in_sentinelone", detail=str(request.json()))
+            return int(request.json()["data"]["id"])
         self._http_errors(request, error=error)
-        raise AssertionError('unreachable')
+        raise AssertionError("unreachable")
 
     def disable_detection_rule(self, rule_id: int):
-        filter = {'filter': {'ids': [rule_id]}}
+        filter = {"filter": {"ids": [rule_id]}}
         filter = json.dumps(filter)
-        logger.info('disabling_rule_with_id', detail=str(rule_id))
-        request = self.session.put(url=self.CUSTOM_DETECTION_RULES_ENDPOINT, verify=self.verify, data=filter)
+        logger.info("disabling_rule_with_id", detail=str(rule_id))
+        request = self.session.put(
+            url=self.CUSTOM_DETECTION_RULES_ENDPOINT, verify=self.verify, data=filter
+        )
         match request.status_code:
             case 200:
-                logger.info('step_completed', detail=f'Disabled rule with id {rule_id} in SentinelOne', context=str(request.json()))
+                logger.info(
+                    "step_completed",
+                    detail=f"Disabled rule with id {rule_id} in SentinelOne",
+                    context=str(request.json()),
+                )
             case _:
                 self._http_errors(request, error=Errors.DetectionRuleDisablingFailed)
 
     def delete_detection_rule(self, rule_id: int):
-        filter = {'filter': {'ids': [rule_id]}}
+        filter = {"filter": {"ids": [rule_id]}}
         filter = json.dumps(filter)
-        logger.info('deleting_rule_with_id', detail=str(rule_id))
-        request = self.session.delete(url=self.CUSTOM_DETECTION_RULES_ENDPOINT, verify=self.verify, data=filter)
+        logger.info("deleting_rule_with_id", detail=str(rule_id))
+        request = self.session.delete(
+            url=self.CUSTOM_DETECTION_RULES_ENDPOINT, verify=self.verify, data=filter
+        )
         match request.status_code:
             case 200:
-                logger.info('step_completed', detail=f'Deleted rule with id {rule_id} in SentinelOne', context=str(request.json()))
+                logger.info(
+                    "step_completed",
+                    detail=f"Deleted rule with id {rule_id} in SentinelOne",
+                    context=str(request.json()),
+                )
             case _:
                 self._http_errors(request, error=Errors.DetectionRuleDeletionFailed)

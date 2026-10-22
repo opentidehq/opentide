@@ -3,8 +3,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
-from opentide.core.logging import get_logger
 from opentide.core import registry
+from opentide.core.logging import get_logger
 from opentide.generation.framework import unroll_dot_dict
 from opentide.models.deployment_enums import (
     DetectionPlatforms,
@@ -102,9 +102,9 @@ class TideDeployment:
                     self.deployment_resolver(deployment, system, strategies)  # type:ignore
                 )
             case DetectionPlatforms.ELASTIC:
-                self.rule_deployment: Sequence[TenantDeployment.Elastic] = (
-                    self.deployment_resolver(deployment, system, strategies)  # type:ignore
-                )
+                self.rule_deployment: Sequence[TenantDeployment.Elastic] = self.deployment_resolver(
+                    deployment, system, strategies
+                )  # type:ignore
             case _:
                 raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
 
@@ -159,7 +159,10 @@ class TideDeployment:
         if not mdr_config:
             logger.error(
                 "was_not_able_to_retrieve_mdr_configuration_for_targeted_system",
-                detail=f"[{data.metadata.uuid}] {data.name} - Available configurations : [{data.configurations!s}]",
+                detail=(
+                    f"[{data.metadata.uuid}] {data.name} - Available configurations : "
+                    f"[{data.configurations!s}]"
+                ),
             )
             raise Exception(NotImplemented)
 
@@ -282,9 +285,8 @@ class TideDeployment:
                 if mod.conditions.default and mod.conditions.default is True:
                     match = True
 
-                if mod.conditions.status:
-                    if mdr_config.status in mod.conditions.status:
-                        match = True
+                if mod.conditions.status and mdr_config.status in mod.conditions.status:
+                    match = True
                 if mod.conditions.tenants:
                     match = target_tenant in mod.conditions.tenants
                 if mod.conditions.flags and mdr_config.flags:

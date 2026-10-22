@@ -73,8 +73,9 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
                         report = item
             else:
                 raise RuntimeError(
-                    f"The CBC Deployer cannot create a detection in a nonexistent Watchlist: "
-                    f"{selected_watchlist}. Create it on the console before retriggering deployment."
+                    "The CBC Deployer cannot create a detection in a nonexistent Watchlist: "
+                    f"{selected_watchlist}. Create it on the console before retriggering "
+                    "deployment."
                 )
 
         ioc = IOC_V2.create_query(service, uuid, query)

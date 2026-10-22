@@ -14,7 +14,6 @@ from opentide.deployment.external_ids import (
     report_failure,
     screen_tenant,
 )
-from opentide.states.deployment import DeploymentStateError
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.platforms.defender_for_endpoint.client import (
@@ -24,6 +23,7 @@ from opentide.platforms.defender_for_endpoint.client import (
 from opentide.platforms.defender_for_endpoint.client import DetectionRule as DefenderApiRule
 from opentide.platforms.kql import compile_kql_query
 from opentide.platforms.plugins import RuleDeployer
+from opentide.states.deployment import DeploymentStateError
 
 logger = get_logger(__name__)
 
@@ -100,9 +100,9 @@ class DefenderForEndpointDeploy(RuleDeployer):
                 if file_actions.allow_block:
                     scope = []
                     identifer = file_actions.allow_block.identifier
-                    if file_actions.allow_block.groups:
-                        if file_actions.allow_block.groups.selection == "Specific":
-                            scope = file_actions.allow_block.groups.device_groups
+                    groups = file_actions.allow_block.groups
+                    if groups and groups.selection == "Specific":
+                        scope = groups.device_groups
                     if file_actions.allow_block.action == "Allow":
                         response_actions.append(
                             ResponseActionFileActions(
@@ -193,9 +193,7 @@ class DefenderForEndpointDeploy(RuleDeployer):
             recommendedActions=mdr_config.alert.recommendation or None,
         )
         scheduling = mdr_config.scheduling if mdr_config.scheduling != "NRT" else "0"
-        is_enabled = (
-            False if check_status(mdr_config.status) is StatusStrategy.DISABLEMENT else True
-        )
+        is_enabled = check_status(mdr_config.status) is not StatusStrategy.DISABLEMENT
         query = compile_kql_query(mdr_config.query, mdr_config.exclusions, tenant)
         logger.info("final_compiled_query", detail=query)
         rule = DefenderApiRule(
@@ -217,15 +215,21 @@ class DefenderForEndpointDeploy(RuleDeployer):
                     status=mdr_config.status,
                 )
             except DeploymentStateError as error:
-                report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
+                report_failure(
+                    error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant
+                )
                 return
         if action.kind == "delete":
-            logger.info("proceeding_with_deletion_of_rule_against_tenant", detail=str(action.external_id))
+            logger.info(
+                "proceeding_with_deletion_of_rule_against_tenant", detail=str(action.external_id)
+            )
             service.delete_detection_rule(action.external_id)
             try:
                 record_deleted(object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
             except DeploymentStateError as error:
-                report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
+                report_failure(
+                    error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant
+                )
         elif action.kind == "update":
             logger.info(
                 "retrieved_id_for_tenant",
@@ -246,7 +250,9 @@ class DefenderForEndpointDeploy(RuleDeployer):
                     external_id=rule_id,
                 )
             except DeploymentStateError as error:
-                report_failure(error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
+                report_failure(
+                    error, object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant
+                )
 
     def deploy(self, mdr_deployment: Sequence[DetectionRule], strategies: RunStrategies):
         mdr_deployment = [Opentide.Rules[uuid] for uuid in mdr_deployment]

@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import ssl
 import urllib.request
-from abc import ABC
 from collections.abc import Callable
 from io import BytesIO
 from random import randrange
@@ -25,7 +24,7 @@ from opentide.models.rule import DetectionRule
 logger = structlog.get_logger("opentide.platforms.splunk.client")
 
 
-class SplunkConnection(ABC):
+class SplunkConnection:
     """
     Utility class used to initialize all constant relevant to operations with Splunk
     """
@@ -169,7 +168,8 @@ def cron_to_timeframe(
     if mode == "custom":
         if not custom_time:
             raise Exception(
-                "[FATAL] When selecting a custom time, you need to input a time in the correct format : HHhmm."
+                "[FATAL] When selecting a custom time, you need to input a time in the "
+                "correct format : HHhmm."
             )
         hour, min_val = custom_time.split("h")
     match unit:
@@ -206,7 +206,7 @@ class SplunkAnsweredHtmlError(ConnectionError):
 
 
 def splunk_route(url: str) -> str | None:
-    """The proxy ``urllib`` sends a request for *url* through, without credentials; ``None`` if direct."""
+    """The proxy ``urllib`` sends *url* through, without credentials; ``None`` if direct."""
     parts = urlsplit(url)
     proxy = urllib.request.getproxies().get(parts.scheme)
     if not proxy or urllib.request.proxy_bypass(parts.netloc):

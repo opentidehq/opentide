@@ -1,4 +1,5 @@
 import os
+from enum import Enum, auto
 from typing import Any
 
 from opentide.core.logging import get_logger
@@ -8,7 +9,6 @@ from opentide.models.deployment_enums import (
 )
 
 logger = get_logger(__name__)
-from enum import Enum, auto
 
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
 

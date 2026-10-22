@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core import registry
+from opentide.core.logging import get_logger
+from opentide.deployment.ci import CIEnvironment
 from opentide.deployment.git_backend import DulwichRepo, open_repo
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.registry.discovery import discover_workspace
@@ -19,9 +21,6 @@ def __getattr__(name: str) -> Any:
         return registry.Opentide.Configurations.Systems.Index
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-
-from opentide.core.logging import get_logger
-from opentide.deployment.ci import CIEnvironment
 
 logger = get_logger(__name__)
 
@@ -348,11 +347,13 @@ def diff_calculation(source: DiffSource) -> list:
                     BASE_COMMIT = base_commit[0].hexsha
                 else:
                     message = (
-                        "You may not have a sufficient Checkout Depth configuration"
-                        " | "
-                        "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR"
+                        "You may not have a sufficient Checkout Depth configuration | "
+                        "If you run very old Pull Requests, this setting may need to be "
+                        "increased, or reopen a PR"
                     )
-                    logger.critical("could_not_identify_the_base_of_the_pull_request", detail=message)
+                    logger.critical(
+                        "could_not_identify_the_base_of_the_pull_request", detail=message
+                    )
                     raise Exception(message)
             else:
                 raise _not_a_ci_diff_source(source)
@@ -436,9 +437,12 @@ def diff_calculation(source: DiffSource) -> list:
                     message = (
                         "You may not have a sufficient Opentide.Repo.Checkout.Depth configuration"
                         " | "
-                        "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR"
+                        "If you run very old Pull Requests, this setting may need to be "
+                        "increased, or reopen a PR"
                     )
-                    logger.critical("could_not_identify_the_base_of_the_pull_request", detail=message)
+                    logger.critical(
+                        "could_not_identify_the_base_of_the_pull_request", detail=message
+                    )
                     raise Exception(message)
 
             else:

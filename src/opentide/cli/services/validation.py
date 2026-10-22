@@ -550,7 +550,10 @@ def validate_query_platform(
 _NO_RULES_MESSAGES: dict[str | None, str] = {
     None: "No rule for this platform has a status that maps to the run's strategies",
     "changed": "No changed rule for this platform has a status that maps to the run's strategies",
-    "selected": "None of the selected rules has a status for this platform that maps to the run's strategies",
+    "selected": (
+        "None of the selected rules has a status for this platform that maps to the run's "
+        "strategies"
+    ),
 }
 
 

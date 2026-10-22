@@ -504,7 +504,9 @@ def test_validate_query_live_without_tenants_fails_before_loading_a_validator(
         "mode": "live",
         "status": "failed",
         "supported": True,
-        "message": f"Cannot run live query validation: splunk has no tenants configured in {config}",
+        "message": (
+            f"Cannot run live query validation: splunk has no tenants configured in {config}"
+        ),
         "advice": f"add (or uncomment) a [[tenants]] entry in {config}",
         "missing_tenants": {"splunk": config},
         "_exit_code": 1,
