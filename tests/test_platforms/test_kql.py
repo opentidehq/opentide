@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from opentide.models.platform_configs import DefenderExclusion, SentinelExclusion
 from opentide.platforms.kql import compile_kql_query
 
@@ -52,6 +54,28 @@ def test_compile_kql_query_global_exclusion_without_tenant() -> None:
     assert "let threshold = 5;" in result
     assert 'let label = "high";' in result
     assert "Severity != 'Informational'" in result
+
+
+@pytest.mark.parametrize(
+    ("value", "literal"),
+    [
+        ("C:\\Windows\\Temp\\", '"C:\\\\Windows\\\\Temp\\\\"'),
+        ("C:\\temp", '"C:\\\\temp"'),
+        ('say "hi"', '"say \\"hi\\""'),
+        ("two\nlines\tand\rmore", '"two\\nlines\\tand\\rmore"'),
+        ("plain", '"plain"'),
+    ],
+    ids=["trailing-backslash", "backslash-t", "double-quote", "control-characters", "plain"],
+)
+def test_let_string_values_are_escaped(value: str, literal: str) -> None:
+    """Values went into the literal as they were.
+
+    ``C:\\Windows\\Temp\\`` escaped the closing quote and broke the query;
+    ``C:\\temp`` matched a tab.
+    """
+    exclusions = [SentinelExclusion(query="| where true", reason="paths", let={"path": value})]
+    result = compile_kql_query("Table", exclusions, "tenant-a")
+    assert result.splitlines()[0] == f"let path = {literal};"
 
 
 def test_compile_kql_query_skips_unsupported_let_types() -> None:

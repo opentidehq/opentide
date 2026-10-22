@@ -9,6 +9,18 @@ MDE_Exclusion = DefenderExclusion
 Sentinel_Exclusion = SentinelExclusion
 KQLExclusion = MDE_Exclusion | Sentinel_Exclusion
 
+#: What a double-quoted KQL string literal escapes. Unescaped, a value ending
+#: in a backslash (``C:\Windows\Temp\``) ended the literal early, and ``\t`` in
+#: ``C:\temp`` became a tab.
+_KQL_STRING_ESCAPES = str.maketrans(
+    {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+)
+
+
+def kql_string(value: str) -> str:
+    """*value* as a double-quoted KQL string literal."""
+    return '"' + value.translate(_KQL_STRING_ESCAPES) + '"'
+
 
 def compile_kql_query(
     base_query: str, exclusions: Sequence[KQLExclusion] | None, tenant: str
@@ -50,7 +62,7 @@ def compile_kql_query(
                         elif isinstance(value, (int, float)):
                             formatted_value = str(value)
                         elif isinstance(value, str):
-                            formatted_value = f'"{value}"'
+                            formatted_value = kql_string(value)
                         else:
                             logger.warning(
                                 "event",
