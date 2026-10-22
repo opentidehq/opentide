@@ -5,6 +5,7 @@ side effects: it used to build a Tenant with an empty ``deployment`` at module
 scope, which raised ``KeyError: ''`` before the CLI could report anything.
 """
 
+import json
 from pathlib import Path
 
 from opentide.core.logging import get_logger
@@ -23,7 +24,7 @@ class DefenderForEndpointImporter(DefenderForEndpointService):
 
 
 template = """
-name: "{name}"
+name: {name}
 #references:
   #public:
     #1: 
@@ -57,7 +58,7 @@ configurations:
     status: {status}
     {contributors}
     tenants:
-      - PandoraStores
+      - {tenant}
     #flags:
       #-
     
@@ -159,8 +160,11 @@ def fix_multiline(string: str, indentation: int):
     return "\n".join(fixed_lines)
 
 
-def _render_rule(rule) -> tuple[str, str]:
-    """Return the file name and YAML body for one Defender custom detection."""
+def _render_rule(rule, tenant_name: str) -> tuple[str, str]:
+    """Return the file name and YAML body for one Defender custom detection.
+
+    The rule is imported for *tenant_name*, the tenant it was listed from.
+    """
     rule_name = rule["displayName"]
     rule_uuid = rule["detectorId"]
     rule_created = rule["createdDateTime"].split("T")[0]
@@ -217,7 +221,10 @@ def _render_rule(rule) -> tuple[str, str]:
             impacted_entities_flag = ""
 
     body = template.format(
-        name=rule_name,
+        # A JSON string is a valid YAML double-quoted scalar, so a `"` or `\`
+        # in a name or tenant cannot end the string early.
+        name=json.dumps(rule_name, ensure_ascii=False),
+        tenant=json.dumps(tenant_name, ensure_ascii=False),
         uuid=rule_uuid,
         created=rule_created,
         modified=rule_modified,
@@ -255,7 +262,7 @@ def _import_defender_rules() -> None:
     for tenant in tenants:
         service = DefenderForEndpointImporter(tenant)  # type: ignore[arg-type]
         for rule in service.list_rules()["value"]:
-            filename, body = _render_rule(rule)
+            filename, body = _render_rule(rule, tenant.name)
             (destination / f"{filename}.yaml").write_text(body, encoding="utf-8")
             # The Graph id is deployment state, not rule content (RFC 0010).
             record_external_id(rule["detectorId"], "defender_for_endpoint", tenant.name, rule["id"])
