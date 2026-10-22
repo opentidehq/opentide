@@ -715,3 +715,29 @@ def test_changed_push_never_publishes_a_nested_object_file(
     assert only.exit_code == 0, only.stdout
     assert "No changed objects to share" in only.stdout
     assert _Persistent.events == []
+
+
+@pytest.mark.parametrize("name", ["scratch.debug.yaml", "upper.YAML"])
+def test_changed_push_skips_a_changed_file_outside_the_catalogue(
+    name: str, invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A changed file the catalogue does not read is no changed object (#584).
+
+    ``--changed`` selected ``*.debug.yaml`` and ``*.YAML`` files beside the
+    objects, which the registry never indexes, so a push touching only one of
+    them failed with ``scope_no_match`` instead of having nothing to share.
+    """
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    _write_sharing(tide_corpus_repo)
+    source = tide_corpus_repo / _OBJECTIVE
+    (source.parent / name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+    def _diff(_plan: object) -> list[str]:
+        return [f"objects/objectives/{name}"]
+
+    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _diff)
+    pushed = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
+    assert pushed.exit_code == 0, pushed.stdout
+    assert "No changed objects to share" in pushed.stdout
+    assert _Persistent.events == []

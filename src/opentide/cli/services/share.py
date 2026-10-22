@@ -9,7 +9,7 @@ from typing import Any
 from opentide.cli.context import CliContext
 from opentide.core.logging import get_logger
 from opentide.core.registry import Opentide
-from opentide.registry.catalogue import report_nested_object_files
+from opentide.registry.catalogue import is_object_file_name, report_nested_object_files
 from opentide.sharing.config import MispBlock, SharingConfig, load_sharing
 from opentide.sharing.constants import (
     INTEGRATION_MISP,
@@ -39,7 +39,6 @@ _PREFLIGHT = {
     "changed_diff": "Could not calculate the changed objects",
 }
 
-_OBJECT_SUFFIXES = frozenset({".yaml", ".yml"})
 _NO_ENABLED_TARGET = "No enabled sharing target"
 _NO_CHANGED_OBJECTS = "No changed objects to share"
 
@@ -304,7 +303,8 @@ def _direct_object_files(workspace: Path, changed: object) -> list[Path]:
             resolved = path.resolve()
         except OSError:
             continue
-        if resolved.suffix.lower() not in _OBJECT_SUFFIXES:
+        # The catalogue's names: no ``*.debug.yaml``, suffixes as deploy spells them.
+        if not is_object_file_name(resolved.name):
             continue
         if resolved.parent not in allowed:
             continue
