@@ -12,6 +12,7 @@ from opentide.documentation.objects.rule import render_rule_page
 from opentide.documentation.objects.threat import render_threat_page
 from opentide.documentation.publish.index import write_index
 from opentide.documentation.publish.paths import page_path, targets
+from opentide.documentation.publish.prune import prune_stale_pages
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentFlavor
 from opentide.models.objective import DetectionObjective
@@ -143,7 +144,11 @@ def write_all(
     output: str | None = None,
     flavor: str | None = None,
 ) -> dict[str, int]:
-    """Write all object pages and optionally index pages."""
+    """Write all object pages and optionally index pages.
+
+    Generated pages that no object writes any more, after a rename or a
+    deletion, are removed.
+    """
     ctx = _context(output=output, flavor=flavor)
     cat = build_catalog()
     pub = targets(ctx)
@@ -152,6 +157,7 @@ def write_all(
         "objectives": write_objectives(ctx, cat),
         "threats": write_threats(ctx, cat),
     }
+    prune_stale_pages(ctx, cat)
     if include_index:
         write_index(ctx, pub, rules=cat.rules, objectives=cat.objectives, threats=cat.threats)
     return counts

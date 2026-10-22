@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Mapping, Set
 from pathlib import Path
 
 import structlog
@@ -17,6 +18,7 @@ from opentide.documentation.objects.rule import render_rule_page
 from opentide.documentation.objects.threat import render_threat_page
 from opentide.documentation.publish.index import write_index
 from opentide.documentation.publish.paths import page_path, targets
+from opentide.documentation.publish.prune import OBJECT_SCOPES, prune_stale_pages
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentScope
 from opentide.generation import framework as fw
@@ -84,16 +86,9 @@ def _object_uuid_and_name(body: object) -> tuple[str | None, str | None]:
     )
 
 
-def _load_object_body(
-    repo_root: Path, relative_path: Path, *, merge_base: str, absolute_path: Path
-) -> object | None:
-    from opentide.core.io import load_yaml, parse_yaml
+def _baseline_body(repo_root: Path, relative_path: Path, *, merge_base: str) -> object | None:
+    from opentide.core.io import parse_yaml
 
-    if absolute_path.exists():
-        try:
-            return load_yaml(absolute_path)
-        except Exception:
-            return None
     try:
         raw = _git_stdout(repo_root, "show", f"{merge_base}:{relative_path.as_posix()}")
     except (subprocess.CalledProcessError, OSError):
@@ -106,10 +101,27 @@ def _load_object_body(
         return None
 
 
+def _load_object_body(
+    repo_root: Path, relative_path: Path, *, merge_base: str, absolute_path: Path
+) -> object | None:
+    from opentide.core.io import load_yaml
+
+    if absolute_path.exists():
+        try:
+            return load_yaml(absolute_path)
+        except Exception:
+            return None
+    return _baseline_body(repo_root, relative_path, merge_base=merge_base)
+
+
 def _changed_object_paths_and_uuids(
     repo_root: Path,
-) -> tuple[set[Path], set[str], list[tuple[str, str, str]]]:
-    """Return changed paths, live UUIDs, and deleted (kind, uuid, name) tuples."""
+) -> tuple[set[Path], set[str], dict[str, str]]:
+    """Return changed paths, live UUIDs, and each changed object's baseline name.
+
+    The baseline names come from the merge-base revision of every changed path,
+    deleted or not, so a caller can tell which objects were renamed.
+    """
     from opentide.core.git_baseline import changed_paths, resolve_baseline
     from opentide.core.registry import Opentide
 
@@ -121,7 +133,7 @@ def _changed_object_paths_and_uuids(
     }
     changed_object_paths: set[Path] = set()
     changed_uuids: set[str] = set()
-    deleted_objects: list[tuple[str, str, str]] = []
+    previous_names: dict[str, str] = {}
     for change in changed_paths(repo_root, baseline):
         relative_path = change.relative
         absolute_path = change.absolute.resolve()
@@ -142,21 +154,30 @@ def _changed_object_paths_and_uuids(
             repo_root, relative_path, merge_base=merge_base, absolute_path=absolute_path
         )
         uuid, name = _object_uuid_and_name(body)
-        if uuid is None:
-            continue
         if absolute_path.exists():
-            changed_uuids.add(uuid)
-        elif name is not None:
-            deleted_objects.append((kind, uuid, name))
-    return changed_object_paths, changed_uuids, deleted_objects
+            if uuid is not None:
+                changed_uuids.add(uuid)
+            uuid, name = _object_uuid_and_name(
+                _baseline_body(repo_root, relative_path, merge_base=merge_base)
+            )
+        if uuid is not None and name is not None:
+            previous_names[uuid] = name
+    return changed_object_paths, changed_uuids, previous_names
 
 
-def _expand_referrer_closure(changed_uuids: set[str]) -> set[str]:
-    """Include upstream referrers so parent pages refresh when a child object changes."""
+def _expand_referrer_closure(changed_uuids: Set[str], renamed: Set[str] = frozenset()) -> set[str]:
+    """Include the referrers whose pages must be rewritten for *changed_uuids*.
+
+    Upstream referrers refresh so parent pages show a changed child. A renamed
+    object's page moves, so its downstream referrers are rewritten too, or they
+    keep linking the old page.
+    """
     closure = set(changed_uuids)
-    for uuid in tuple(changed_uuids):
+    walks = [(uuid, "upstream") for uuid in sorted(changed_uuids)]
+    walks += [(uuid, "downstream") for uuid in sorted(renamed)]
+    for uuid, direction in walks:
         try:
-            relations = fw.relations_list(uuid, mode="flat", direction="upstream")
+            relations = fw.relations_list(uuid, mode="flat", direction=direction)
         except Exception:
             continue
         for related in relations.values():
@@ -168,33 +189,15 @@ def _expand_referrer_closure(changed_uuids: set[str]) -> set[str]:
 
 
 def _resolve_changed_targets(
-    catalog_uuids: set[str], repo_root: Path
-) -> tuple[set[Path], set[str], set[str], list[tuple[str, str, str]]]:
-    changed_paths, changed_uuids, deleted_objects = _changed_object_paths_and_uuids(repo_root)
-    closure = _expand_referrer_closure(changed_uuids)
-    return changed_paths, changed_uuids, closure.intersection(catalog_uuids), deleted_objects
-
-
-def _remove_deleted_pages(
-    ctx: DocumentationContext, deleted_objects: list[tuple[str, str, str]]
-) -> int:
-    """Delete markdown pages for object YAMLs removed since the merge-base."""
-    pub = targets(ctx)
-    folder_for_kind = {
-        "rule": pub.rules_dir,
-        "objective": pub.objectives_dir,
-        "threat": pub.threats_dir,
+    catalog_names: Mapping[str, str], repo_root: Path
+) -> tuple[set[Path], set[str], set[str]]:
+    """Return changed paths, changed UUIDs, and the catalogue UUIDs to rewrite."""
+    changed_paths, changed_uuids, previous_names = _changed_object_paths_and_uuids(repo_root)
+    renamed = {
+        uuid for uuid, name in previous_names.items() if catalog_names.get(uuid, name) != name
     }
-    removed = 0
-    for kind, uuid, name in deleted_objects:
-        folder = folder_for_kind.get(kind)
-        if folder is None:
-            continue
-        path = page_path(ctx, folder=folder, name=name, uuid=uuid)
-        if path.exists():
-            path.unlink()
-            removed += 1
-    return removed
+    closure = _expand_referrer_closure(changed_uuids, renamed)
+    return changed_paths, changed_uuids, closure.intersection(catalog_names)
 
 
 def run_objects(
@@ -279,13 +282,13 @@ def run(
     if changed:
         catalog = build_catalog()
         catalog_records = [*catalog.rules, *catalog.objectives, *catalog.threats]
-        catalog_uuids = {record.uuid for record in catalog_records}
+        catalog_names = {record.uuid: record.name for record in catalog_records}
         from opentide.core.git_baseline import GitBaselineError
         from opentide.registry.discovery import discover_workspace
 
         try:
-            changed_paths, changed_uuids, target_uuids, deleted_objects = _resolve_changed_targets(
-                catalog_uuids, discover_workspace()
+            changed_paths, changed_uuids, target_uuids = _resolve_changed_targets(
+                catalog_names, discover_workspace()
             )
         except GitBaselineError as exc:
             logger.warning("docs_changed_requires_git", detail=str(exc))
@@ -307,7 +310,10 @@ def run(
                 "output": str(ctx.output_dir),
             }
         counts = run_objects(ctx, target_uuids=target_uuids)
-        removed = _remove_deleted_pages(ctx, deleted_objects)
+        # Pages are removed by what the catalogue no longer writes, not by the
+        # diff: a moved file shows up as a deletion, and a deleted object's name
+        # can be the name a live object now has.
+        removed = len(prune_stale_pages(ctx, catalog))
         run_index(ctx)
         touched_scopes = {
             _OBJECT_SCOPE_TO_KIND[record.object_type]
@@ -330,12 +336,19 @@ def run(
         return {"message": "Index pages written", "output": str(ctx.output_dir)}
 
     counts = run_objects(ctx, resolved)
+    scopes = OBJECT_SCOPES if resolved is None else (resolved,)
+    removed = len(prune_stale_pages(ctx, build_catalog(), scopes))
     if resolved is None:
         run_index(ctx)
         return {
             "message": "Full documentation pipeline completed",
             "counts": counts,
+            "removed": removed,
             "output": str(ctx.output_dir),
         }
 
-    return {"message": f"Documentation scope {resolved.value} completed", "counts": counts}
+    return {
+        "message": f"Documentation scope {resolved.value} completed",
+        "counts": counts,
+        "removed": removed,
+    }
