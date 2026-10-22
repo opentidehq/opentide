@@ -155,15 +155,9 @@ def render_rule_queries(rule: DetectionRule, formatter: MarkdownFormatter) -> st
     if rule.configurations is None:
         return ""
     chunks: list[str] = [formatter.heading(2, "Platform configurations")]
-    for platform_name in (
-        "sentinel",
-        "defender_for_endpoint",
-        "splunk",
-        "sentinel_one",
-        "crowdstrike",
-        "harfanglab",
-        "carbon_black_cloud",
-    ):
+    # Walk the model's own fields, in declaration order, so a platform added to
+    # RuleConfigurations is documented without a second list to keep in step.
+    for platform_name in type(rule.configurations).model_fields:
         config = getattr(rule.configurations, platform_name, None)
         if config is None:
             continue
