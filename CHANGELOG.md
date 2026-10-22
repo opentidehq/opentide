@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- **A signal's authored `parent` was overwritten by its objective.** `objective-1.0` defines `signals[].parent` as a parent *signal* UUID, but indexing (and the inflight overlay) replaced it with the UUID of the objective the signal is defined in. The indexed signal now keeps `parent` as written and records the objective as `owner`. Coverage and relation walks (`parents`/`childs`, documentation coverage graphs, explorer export, preflight) follow `owner` for the objective → signal hop. Code reading `Opentide.Signals[uuid]["parent"]` for the objective should read `owner`; `SignalRecord.parent_uuid`/`parent_name` are now `owner_uuid`/`owner_name`.
+- **Two signals sharing a UUID were indexed silently, and the last one won.** `opentide validate` (`id-uniqueness` check) now fails with `duplicate_signal_uuid`, naming both objectives. The index keeps the first definition.
+
 ## [0.17.2] — 2026-10-22
 
 Patch release. Nothing to regenerate. A `uv` install resolves a current boto3 again (python-dateutil 3.0.0 had sent it back to a 2014 release that cannot import). A Splunk tenant reached through a proxy that answers with its own HTML page now fails with a message naming the proxy and the `NO_PROXY` value to set, instead of `xml.etree.ElementTree.ParseError: mismatched tag`. If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step and list the Splunk host in `NO_PROXY` and `no_proxy`: the patch works only by skipping the proxy, and with `ssl = false` it turns certificate verification on.

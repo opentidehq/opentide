@@ -17,6 +17,7 @@ from opentide.indexing.inflight_shard import (
 )
 from opentide.registry.discovery import discover_workspace
 from opentide.registry.paths import resolve_workspace_paths
+from opentide.registry.signals import index_objective_signals
 
 logger = get_logger(__name__)
 
@@ -224,21 +225,7 @@ def load_inflight_shards(inflight_dir: Path | None = None) -> dict[str, dict[str
 def _ingest_signals(
     objects_index: dict[str, Any], objective_uuid: str, body: dict[str, Any]
 ) -> None:
-    objective = body.get("objective")
-    if not isinstance(objective, dict):
-        return
-    signals = objective.get("signals") or []
-    if not isinstance(signals, list):
-        return
-    for signal in signals:
-        if not isinstance(signal, dict):
-            continue
-        signal_uuid = signal.get("uuid")
-        if not signal_uuid:
-            continue
-        signal_copy = signal.copy()
-        signal_copy["parent"] = objective_uuid
-        objects_index.setdefault("signal", {})[str(signal_uuid)] = signal_copy
+    index_objective_signals(objects_index.setdefault("signal", {}), objective_uuid, body)
 
 
 def apply_inflight_overlay(

@@ -74,8 +74,8 @@ def load_documentation_bundle() -> DocumentationBundle:
     signal = SignalRecord(
         uuid=SIGNAL_UUID,
         name=signal_name,
-        parent_uuid=objective.metadata.uuid,
-        parent_name=objective.name,
+        owner_uuid=objective.metadata.uuid,
+        owner_name=objective.name,
     )
     related_map = {
         threat.metadata.uuid: [
