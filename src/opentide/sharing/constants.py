@@ -15,8 +15,15 @@ DEFAULT_RULE_STATUSES = ("PRODUCTION",)
 TLP_ORDER = ("clear", "green", "amber", "amber+strict", "red")
 
 NAME_PATTERN = r"^[a-z0-9_-]{1,64}$"
-API_KEY_ENV_PATTERN = r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$"
+# `${` + an uppercase letter + uppercase letters, digits or underscores + `}`.
+# `$MISP_KEY` without braces is a literal.
+API_KEY_ENV_PATTERN = r"^\$\{([A-Z][A-Z0-9_]*)\}$"
 CANONICAL_UUID_PATTERN = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+# `organisation_uuid`: the 36-character 8-4-4-4-12 hex form, either case. Not the
+# object `uuid-format` (UUIDv4) check.
+ORGANISATION_UUID_PATTERN = (
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 MISP_BLOCK_KEYS = frozenset(
     {

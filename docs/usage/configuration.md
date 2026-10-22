@@ -175,6 +175,10 @@ There is no separate promote command. Edit a rule's `status` in YAML for deliber
 
 opentide 0.17.0 removed deployment plans: `--plan`, `DEPLOYMENT_PLAN`, and the tenant `deployment` key fail with a message naming the replacement. A run now names the strategy it deploys with `--strategy`, and a tenant lists the strategies it accepts. The [migration table](./concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier) maps each old value.
 
+## Unknown keys are errors
+
+Each file is checked against its model when a command reads it, after your file is merged onto the package default. A misspelt key, a value of the wrong type, or a strategy outside the enum fails the command and names the file and key, for example `deployment.toml is invalid: promotion.enabeld: unknown key`. The value itself is never printed, so a credential in a tenant `setup` table stays out of logs. The JSON Schema of each file, for editor completion and hover, is generated from the same models; see [Configuration models](../sdk/configuration.md).
+
 ## Visibility and documentation
 
 - `visibility.toml` controls which objects are exposed/deployed in a given context; it is validated by a generated `visibility` schema.

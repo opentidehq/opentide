@@ -14,7 +14,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import urlparse
+
+from pydantic import ValidationError
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -23,26 +24,20 @@ else:
 
 from opentide.core.files import resolve_configurations
 from opentide.core.root import get_data_root, get_repo_root
+from opentide.models.configuration.sharing import MispIntegration
 from opentide.registry.discovery import client_configurations_dir, discover_workspace
 from opentide.sharing.constants import (
     API_KEY_ENV_PATTERN,
-    CANONICAL_UUID_PATTERN,
     DEFAULT_OBJECT_TYPES,
     DEFAULT_RULE_STATUSES,
     INTEGRATION_MISP,
     KNOWN_INTEGRATIONS,
-    MISP_BLOCK_KEYS,
-    NAME_PATTERN,
-    OBJECT_FAMILIES,
     REDACTION_MARKER,
-    REQUIRED_MISP_KEYS,
     SHARING_CONFIG_NAME,
     TLP_ORDER,
 )
 
-_NAME_RE = re.compile(NAME_PATTERN)
 _API_KEY_RE = re.compile(API_KEY_ENV_PATTERN)
-_UUID_RE = re.compile(CANONICAL_UUID_PATTERN)
 _Severity = Literal["error", "warning"]
 
 
@@ -154,7 +149,7 @@ def merge_sharing_documents(
             if key not in KNOWN_INTEGRATIONS:
                 issues.append(
                     SharingIssue(
-                        code="unknown_integration",
+                        code="unknown_connector",
                         severity="warning",
                         message=f"Unknown sharing integration {key!r} was skipped.",
                         integration=str(key),
@@ -360,144 +355,126 @@ def _merge_named(
     return [merged[name] for name in order]
 
 
+#: Code of an invalid value, by the key it was found on.
+_FIELD_CODES = {
+    "name": "name_invalid",
+    "url": "url_invalid",
+    "max_tlp": "max_tlp_unknown",
+    "organisation_uuid": "organisation_uuid_invalid",
+    "object_types": "object_type_unknown",
+}
+#: Pydantic error types that mean "wrong shape" rather than "unknown value".
+_SHAPE_ERRORS = frozenset({"bool_type", "list_type", "string_type", "int_type"})
+
+
 def _misp_block(
     raw: Mapping[str, Any],
     *,
     status_names: frozenset[str],
     tlp_names: tuple[str, ...],
 ) -> tuple[MispBlock | None, list[SharingIssue]]:
-    issues: list[SharingIssue] = []
+    """Validate one merged block with `MispIntegration`, then check what the schema cannot."""
     name = raw.get("name")
     block_name = name if isinstance(name, str) else None
-    for key in raw:
-        if key not in MISP_BLOCK_KEYS:
-            issues.append(
-                SharingIssue(
-                    code="unknown_key",
-                    message=(
-                        f"Unknown key {key!r} in [[{INTEGRATION_MISP}]] block {block_name!r}."
-                    ),
-                    block=block_name,
-                    integration=INTEGRATION_MISP,
-                    field_name=str(key),
-                )
-            )
-    if not isinstance(name, str) or not _NAME_RE.fullmatch(name):
-        issues.append(
-            SharingIssue(
-                code="missing_field" if name in (None, "") else "name_invalid",
-                message=(
-                    "Block name must be 1–64 characters of lowercase letters, "
-                    "digits, hyphen, and underscore."
-                ),
-                block=block_name,
-                integration=INTEGRATION_MISP,
-                field_name="name",
-            )
-        )
-        name = None
-    for required in sorted(REQUIRED_MISP_KEYS - {"name"}):
-        if required not in raw or raw.get(required) in (None, ""):
-            issues.append(
-                SharingIssue(
-                    code="missing_field",
-                    message=f"[[{INTEGRATION_MISP}]] block {block_name!r} is missing {required}.",
-                    block=block_name,
-                    integration=INTEGRATION_MISP,
-                    field_name=required,
-                )
-            )
-
-    url = _optional_url(raw.get("url"), block_name, issues)
-    max_tlp = _optional_tlp(raw.get("max_tlp"), tlp_names, block_name, issues)
+    issues: list[SharingIssue] = []
+    try:
+        model: MispIntegration | None = MispIntegration.model_validate(dict(raw))
+    except ValidationError as exc:
+        model = None
+        issues.extend(_model_issues(exc, raw, block_name))
+    if model is not None and model.max_tlp not in tlp_names:
+        issues.append(_issue("max_tlp_unknown", "max_tlp", block_name))
+    issues.extend(_rule_status_issues(raw.get("rule_statuses"), status_names, block_name))
     api_key, api_env, literal, unset = _api_key(raw.get("api_key"), block_name, issues)
-    enabled = _optional_bool(raw, "enabled", False, block_name, issues)
-    publish = _optional_bool(raw, "publish", False, block_name, issues)
-    verify_ssl = _optional_bool(raw, "verify_ssl", True, block_name, issues)
-    object_types = _string_list(
-        raw,
-        "object_types",
-        DEFAULT_OBJECT_TYPES,
-        set(OBJECT_FAMILIES),
-        "object_type_unknown",
-        block_name,
-        issues,
-    )
-    rule_statuses = _string_list(
-        raw,
-        "rule_statuses",
-        DEFAULT_RULE_STATUSES,
-        set(status_names),
-        "rule_status_unknown",
-        block_name,
-        issues,
-    )
-    organisation = _optional_uuid(raw.get("organisation_uuid"), block_name, issues)
-    if any(issue.severity == "error" for issue in issues):
-        return None, issues
-    if not isinstance(name, str) or url is None or max_tlp is None:
+    if model is None or any(issue.severity == "error" for issue in issues):
         return None, issues
     return (
         MispBlock(
-            name=name,
-            url=url,
-            max_tlp=max_tlp,
+            name=model.name,
+            url=model.url.strip().rstrip("/"),
+            max_tlp=model.max_tlp,
             api_key=None if unset else api_key,
             api_key_env=api_env,
             api_key_literal=literal,
             api_key_unset=unset,
-            enabled=enabled,
-            object_types=object_types,
-            rule_statuses=rule_statuses,
-            organisation_uuid=organisation,
-            publish=publish,
-            verify_ssl=verify_ssl,
+            enabled=model.enabled,
+            object_types=tuple(model.object_types),
+            rule_statuses=tuple(model.rule_statuses),
+            organisation_uuid=model.organisation_uuid,
+            publish=model.publish,
+            verify_ssl=model.verify_ssl,
         ),
         issues,
     )
 
 
-def _optional_url(value: object, block: str | None, issues: list[SharingIssue]) -> str | None:
-    if not isinstance(value, str) or not value.strip():
-        return None
-    parsed = urlparse(value.strip())
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        issues.append(
-            SharingIssue(
-                code="url_invalid",
-                message=f"[[{INTEGRATION_MISP}]] block {block!r} url must be an http(s) URL.",
-                block=block,
-                integration=INTEGRATION_MISP,
-                field_name="url",
-            )
-        )
-        return None
-    return value.strip().rstrip("/")
+def _issue(code: str, field_name: str, block: str | None, entry: object = None) -> SharingIssue:
+    """A finding on *field_name*. *entry* is a list item, never a secret."""
+    where = f"[[{INTEGRATION_MISP}]] block {block!r}"
+    messages = {
+        "missing_field": f"{where} is missing {field_name}.",
+        "unknown_key": f"Unknown key {field_name!r} in {where}.",
+        "name_invalid": (
+            "Block name must be 1–64 characters of lowercase letters, "
+            "digits, hyphen, and underscore."
+        ),
+        "url_invalid": f"{where} url must be an http(s) URL.",
+        "max_tlp_unknown": f"{where} max_tlp is not a tlp vocabulary name.",
+        "organisation_uuid_invalid": (
+            f"{where} organisation_uuid must be a 36-character hex UUID (8-4-4-4-12)."
+        ),
+        "object_type_unknown": f"{where} object_types entry {entry!r} is unknown.",
+        "rule_status_unknown": f"{where} rule_statuses entry {entry!r} is unknown.",
+    }
+    message = messages.get(code, f"{where} {field_name} has an invalid value.")
+    return SharingIssue(
+        code=code,
+        message=message,
+        block=block,
+        integration=INTEGRATION_MISP,
+        field_name=field_name,
+    )
 
 
-def _optional_tlp(
-    value: object,
-    tlp_names: tuple[str, ...],
-    block: str | None,
-    issues: list[SharingIssue],
-) -> str | None:
-    if not isinstance(value, str) or not value:
-        return None
-    if value not in tlp_names:
-        issues.append(
-            SharingIssue(
-                code="max_tlp_unknown",
-                message=(
-                    f"[[{INTEGRATION_MISP}]] block {block!r} max_tlp {value!r} "
-                    "is not a tlp vocabulary name."
-                ),
-                block=block,
-                integration=INTEGRATION_MISP,
-                field_name="max_tlp",
-            )
-        )
-        return None
-    return value
+def _model_issues(
+    exc: ValidationError, raw: Mapping[str, Any], block: str | None
+) -> list[SharingIssue]:
+    """Map `MispIntegration` errors onto sharing-config codes. Inputs are never echoed."""
+    issues: list[SharingIssue] = []
+    for err in exc.errors(include_url=False):
+        loc = err.get("loc", ())
+        if not loc:
+            continue
+        field_name = str(loc[0])
+        kind = str(err.get("type", ""))
+        if kind == "extra_forbidden":
+            code = "unknown_key"
+        elif kind == "missing" or raw.get(field_name) == "":
+            code = "missing_field"
+        elif kind in _SHAPE_ERRORS and field_name not in {"name", "max_tlp"}:
+            code = "invalid_value"
+        else:
+            code = _FIELD_CODES.get(field_name, "invalid_value")
+        entry = None
+        if field_name == "object_types" and len(loc) > 1:
+            items = raw.get("object_types")
+            if isinstance(items, list) and isinstance(loc[1], int) and loc[1] < len(items):
+                entry = items[loc[1]]
+        issues.append(_issue(code, field_name, block, entry))
+    return issues
+
+
+def _rule_status_issues(
+    value: object, status_names: frozenset[str], block: str | None
+) -> list[SharingIssue]:
+    """`rule_statuses` entries must name a status of merged `deployment.toml`."""
+    if not isinstance(value, list):
+        return []
+    return [
+        _issue("rule_status_unknown", "rule_statuses", block, item)
+        for item in value
+        if isinstance(item, str) and item and item not in status_names
+    ]
 
 
 def _api_key(
@@ -505,7 +482,7 @@ def _api_key(
     block: str | None,
     issues: list[SharingIssue],
 ) -> tuple[str | None, str | None, bool, bool]:
-    """Return ``(secret, env name, literal, unset)``. The secret is never put in an issue."""
+    """Return `(secret, env name, literal, unset)`. The secret is never put in an issue."""
     if not isinstance(value, str) or not value:
         return None, None, False, True
     match = _API_KEY_RE.fullmatch(value.strip())
@@ -529,89 +506,3 @@ def _api_key(
     if secret is None or secret == "":
         return None, env_name, False, True
     return secret, env_name, False, False
-
-
-def _optional_bool(
-    raw: Mapping[str, Any],
-    key: str,
-    default: bool,
-    block: str | None,
-    issues: list[SharingIssue],
-) -> bool:
-    if key not in raw:
-        return default
-    value = raw[key]
-    if isinstance(value, bool):
-        return value
-    issues.append(
-        SharingIssue(
-            code="invalid_value",
-            message=f"[[{INTEGRATION_MISP}]] block {block!r} {key} must be a boolean.",
-            block=block,
-            integration=INTEGRATION_MISP,
-            field_name=key,
-        )
-    )
-    return default
-
-
-def _string_list(
-    raw: Mapping[str, Any],
-    key: str,
-    default: tuple[str, ...],
-    allowed: set[str],
-    unknown_code: str,
-    block: str | None,
-    issues: list[SharingIssue],
-) -> tuple[str, ...]:
-    if key not in raw:
-        return default
-    value = raw[key]
-    if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
-        issues.append(
-            SharingIssue(
-                code="invalid_value",
-                message=f"[[{INTEGRATION_MISP}]] block {block!r} {key} must be a list of strings.",
-                block=block,
-                integration=INTEGRATION_MISP,
-                field_name=key,
-            )
-        )
-        return default
-    cleaned: list[str] = []
-    for item in value:
-        if item not in allowed:
-            issues.append(
-                SharingIssue(
-                    code=unknown_code,
-                    message=(
-                        f"[[{INTEGRATION_MISP}]] block {block!r} {key} entry {item!r} is unknown."
-                    ),
-                    block=block,
-                    integration=INTEGRATION_MISP,
-                    field_name=key,
-                )
-            )
-            continue
-        cleaned.append(item)
-    return tuple(cleaned)
-
-
-def _optional_uuid(value: object, block: str | None, issues: list[SharingIssue]) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, str) and _UUID_RE.fullmatch(value):
-        return value
-    issues.append(
-        SharingIssue(
-            code="organisation_uuid_invalid",
-            message=(
-                f"[[{INTEGRATION_MISP}]] block {block!r} organisation_uuid "
-                "must be a canonical lowercase UUID."
-            ),
-            block=block,
-            integration=INTEGRATION_MISP,
-            field_name="organisation_uuid",
-        )
-    )
-    return None

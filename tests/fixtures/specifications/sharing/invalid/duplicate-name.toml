@@ -1,0 +1,13 @@
+# Two blocks in one layer with the same name.
+
+[[misp]]
+name = "misp-internal"
+url = "https://misp.internal.example.org"
+api_key = "${MISP_INTERNAL_API_KEY}"
+max_tlp = "amber"
+
+[[misp]]
+name = "misp-internal"
+url = "https://misp.other.example.org"
+api_key = "${MISP_OTHER_API_KEY}"
+max_tlp = "amber"
