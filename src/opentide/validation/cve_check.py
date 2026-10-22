@@ -41,7 +41,7 @@ def check_cve_issues(
     file_paths = index.get("file_paths", {})
 
     for threat_id, threat_data in threats.items():
-        threat_uuid = str(threat_data.get("metadata", {}).get("uuid") or threat_id)
+        threat_uuid = str(_mapping(threat_data.get("metadata")).get("uuid") or threat_id)
         file_name = files_index.get(threat_uuid)
         raw_path = file_paths.get(threat_uuid)
         file_path = Path(raw_path) if raw_path else None
@@ -50,7 +50,7 @@ def check_cve_issues(
         ):
             continue
 
-        cve_list = normalize_identifiers(threat_data.get(THREAT_MODEL_FIELD, {}).get("cve"))
+        cve_list = normalize_identifiers(_mapping(threat_data.get(THREAT_MODEL_FIELD)).get("cve"))
         if not cve_list:
             continue
 
@@ -97,3 +97,8 @@ def check_cve_issues(
             )
 
     return issues
+
+
+def _mapping(block: object) -> Mapping[str, Any]:
+    """Return *block*, or ``{}`` when an all-commented-out block loaded as ``None``."""
+    return block if isinstance(block, Mapping) else {}

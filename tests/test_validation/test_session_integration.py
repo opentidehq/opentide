@@ -97,3 +97,27 @@ def test_id_scan_skips_a_non_mapping_metadata(tmp_path: Path) -> None:
         "name: Scalar\nuuid: 00000000-0000-4000-8003-000000000001\nmetadata: rule::1.0\n"
     )
     assert _scan_id_file((rule, "rule")) is None
+
+
+@pytest.mark.parametrize(
+    ("relative", "block"),
+    [
+        ("Objects/Threat Vectors/threat-0001-simulated-actor.yaml", "threat"),
+        ("Objects/Detection Objectives/objective-0001-credential-access.yaml", "objective"),
+    ],
+)
+def test_run_validation_reports_an_empty_body_block(
+    tide_corpus_repo: Path, relative: str, block: str
+) -> None:
+    """A block whose keys are all commented out used to crash the whole run.
+
+    It loads as ``None`` and the reference checks called ``.get`` on it, so
+    ``opentide --json validate`` printed a traceback instead of a report.
+    """
+    path = tide_corpus_repo / relative
+    head, _sep, _tail = path.read_text(encoding="utf-8").partition(f"{block}:\n")
+    path.write_text(f"{head}{block}:\n  # description: TODO\n", encoding="utf-8")
+
+    report = run_validation(workers=0)
+
+    assert [(i.code, i.field_path[:1]) for i in report.errors] == [("schema_validation", (block,))]

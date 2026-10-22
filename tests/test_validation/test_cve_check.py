@@ -163,6 +163,22 @@ def test_check_cve_issues_skips_threats_without_cve() -> None:
     client.get.assert_not_called()
 
 
+def test_check_cve_issues_skips_a_threat_whose_blocks_are_empty() -> None:
+    """``threat:`` and ``metadata:`` with every key commented out load as ``None``.
+
+    ``threat_data.get("threat", {}).get("cve")`` raised AttributeError on them.
+    """
+    index = {"objects": {"threat": {"t1": {"metadata": None, "threat": None}}}, "files": {}}
+    client = MagicMock()
+    with (
+        patch.object(cve_check_module, "load_cve_settings", return_value=CveSettings()),
+        patch.object(cve_check_module, "apply_cve_proxy_settings"),
+    ):
+        issues = cve_check_module.check_cve_issues(index, client=client)
+    assert issues == []
+    client.get.assert_not_called()
+
+
 def test_check_cve_issues_accepts_gcve0_mapped_to_cve() -> None:
     from tests.test_vulnerability_lookup.test_client import CVE5_PAYLOAD
 
