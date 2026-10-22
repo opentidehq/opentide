@@ -1,9 +1,11 @@
 import json
 from dataclasses import asdict, dataclass
 from enum import Enum
+from typing import Any
 
 import requests
 import structlog
+import yaml
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.errors import Errors
@@ -96,6 +98,29 @@ class YaraRule:
     rule_level_override: str | None = None
 
 
+#: Keep each scalar on one line, as a Sigma rule written by hand has it.
+_NO_LINE_WRAP = 1 << 30
+
+
+class _SigmaDumper(yaml.SafeDumper):
+    """Writes Sigma rules as they are written by hand.
+
+    Lists are indented under their key, and a multi-line string is a ``|``
+    block.
+    """
+
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
+        return super().increase_indent(flow, False)
+
+
+def _represent_str(dumper: yaml.SafeDumper, value: str) -> yaml.ScalarNode:
+    style = "|" if "\n" in value else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
+
+
+_SigmaDumper.add_representer(str, _represent_str)
+
+
 class SigmaRuleBuilder:
     """
     Builds a Sigma-compliant YAML string from opentide's selection-based format.
@@ -139,91 +164,41 @@ class SigmaRuleBuilder:
         Returns:
             A Sigma-compliant YAML string
         """
-        lines = []
-        lines.append(f"title: {title}")
-        lines.append(f"id: {rule_id}")
+        rule: dict[str, Any] = {"title": title, "id": rule_id}
         if description:
-            if "\n" in description:
-                lines.append("description: |")
-                for desc_line in description.split("\n"):
-                    lines.append(f"    {desc_line}")
-            else:
-                lines.append(f"description: {description}")
+            rule["description"] = description
         if author:
-            lines.append(f"author: {author}")
+            rule["author"] = author
         if references:
-            lines.append("references:")
-            for ref in references:
-                lines.append(f"    - {ref}")
-        lines.append(f"status: {status}")
+            rule["references"] = list(references)
+        rule["status"] = status
         if tags:
-            lines.append("tags:")
-            for tag in tags:
-                lines.append(f"    - {tag}")
-        lines.append("logsource:")
-        lines.append(f"    category: {logsource_category}")
-        lines.append(f"    product: {logsource_product}")
-        lines.append("detection:")
+            rule["tags"] = list(tags)
+        rule["logsource"] = {"category": logsource_category, "product": logsource_product}
+        detection: dict[str, Any] = {}
         for selection in selections:
-            selection_name = selection.get("name", "selection")
-            field_name = selection.get("field", "")
-            modifiers = selection.get("modifiers", [])
-            values = selection.get("value", [])
-            if modifiers:
-                field_with_modifiers = f"{field_name}|{'|'.join(modifiers)}"
-            else:
-                field_with_modifiers = field_name
-            lines.append(f"    {selection_name}:")
-            if isinstance(values, list):
-                lines.append(f"        {field_with_modifiers}:")
-                for val in values:
-                    lines.append(f"            - {SigmaRuleBuilder._escape_value(val)}")
-            else:
-                lines.append(
-                    f"        {field_with_modifiers}: {SigmaRuleBuilder._escape_value(values)}"
-                )
-        lines.append(f"    condition: {condition}")
+            field_with_modifiers = "|".join(
+                [selection.get("field", ""), *(selection.get("modifiers") or [])]
+            )
+            # Entries sharing a selection name are fields of that one selection.
+            detection.setdefault(selection.get("name", "selection"), {})[field_with_modifiers] = (
+                selection.get("value", [])
+            )
+        detection["condition"] = condition
+        rule["detection"] = detection
         if false_positives:
-            lines.append("falsepositives:")
-            for fp in false_positives:
-                lines.append(f"    - {fp}")
-        lines.append(f"level: {level}")
-        return "\n".join(lines)
-
-    @staticmethod
-    def _escape_value(value) -> str:
-        """Escape special characters in YAML values"""
-        if isinstance(value, bool):
-            return str(value).lower()
-        if isinstance(value, (int, float)):
-            return str(value)
-        value = str(value)
-        if any(
-            c in value
-            for c in [
-                ":",
-                "#",
-                "{",
-                "}",
-                "[",
-                "]",
-                ",",
-                "&",
-                "*",
-                "?",
-                "|",
-                "-",
-                "<",
-                ">",
-                "=",
-                "!",
-                "%",
-                "@",
-                "\\",
-            ]
-        ):
-            return f"'{value}'"
-        return value
+            rule["falsepositives"] = list(false_positives)
+        rule["level"] = level
+        # Built by hand, a title such as "Mimikatz: sekurlsa" or a value with a
+        # quote was invalid YAML, and the value yes read as true.
+        return yaml.dump(
+            rule,
+            Dumper=_SigmaDumper,
+            sort_keys=False,
+            allow_unicode=True,
+            indent=4,
+            width=_NO_LINE_WRAP,
+        )
 
 
 class HarfangLabService:
