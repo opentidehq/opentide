@@ -461,6 +461,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         for tenant_deployment in tide_deployment.rule_deployment:
             tenant = tenant_deployment.tenant
             logger.info("currently_targeting_tenant", tenant=tenant.name)
+            self.use_tenant(tenant)
             service = connect_splunk(
                 host=tenant.setup.url,
                 port=tenant.setup.port,

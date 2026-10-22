@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, Opentide
 from opentide.models.rule import DetectionRule
+from opentide.models.system_config import ConfigurationModels
 
 logger = structlog.get_logger("opentide.platforms.splunk.client")
 
@@ -28,6 +29,9 @@ class SplunkConnection:
     """
     Utility class used to initialize all constant relevant to operations with Splunk
     """
+
+    #: The tenant whose setup the per-tenant settings were last taken from.
+    _tenant: ConfigurationModels.Systems.Splunk.Tenant | None = None
 
     def __init__(self):
         self.DEBUG = DebugEnvironment.ENABLED
@@ -53,22 +57,34 @@ class SplunkConnection:
         }
 
     def _init_from_tenants(self, splunk_config, first_tenant) -> None:
-        setup = DebugHelpers.fetch_config_envvar(
-            {
-                "url": first_tenant.setup.url,
-                "port": first_tenant.setup.port,
-                "app": first_tenant.setup.app,
-                "correlation_searches": first_tenant.setup.correlation_searches,
-                "frequency_scheduling": first_tenant.setup.frequency_scheduling,
-                "actions_enabled": first_tenant.setup.actions_enabled or [],
-                "default_actions": first_tenant.setup.default_actions or [],
-                "allow_skew": first_tenant.setup.allow_skew,
-                "schedule_offset": first_tenant.setup.schedule_offset,
-            }
-        )
         self.DEFAULT_CONFIG = getattr(splunk_config, "defaults", {}) or {}
         self.STATUS_MODIFIERS = getattr(splunk_config, "modifiers", None) or []
-        self._apply_setup(setup, token=first_tenant.setup.token)
+        self.use_tenant(first_tenant)
+
+    def use_tenant(self, tenant: ConfigurationModels.Systems.Splunk.Tenant) -> None:
+        """Take the actions, scheduling, skew and offset of the rules built next from *tenant*.
+
+        A deploy calls this for every tenant it reaches; these used to come
+        from the first tenant only, whatever tenant a rule went to.
+        """
+        if tenant is self._tenant:
+            # Resolving the same tenant again would repeat its warnings.
+            return
+        setup = DebugHelpers.fetch_config_envvar(
+            {
+                "url": tenant.setup.url,
+                "port": tenant.setup.port,
+                "app": tenant.setup.app,
+                "correlation_searches": tenant.setup.correlation_searches,
+                "frequency_scheduling": tenant.setup.frequency_scheduling,
+                "actions_enabled": tenant.setup.actions_enabled or [],
+                "default_actions": tenant.setup.default_actions or [],
+                "allow_skew": tenant.setup.allow_skew,
+                "schedule_offset": tenant.setup.schedule_offset,
+            }
+        )
+        self._apply_setup(setup, token=tenant.setup.token)
+        self._tenant = tenant
 
     def _init_from_legacy(self, splunk_config) -> None:
         SPLUNK_SETUP = DebugHelpers.fetch_config_envvar(splunk_config.setup)
