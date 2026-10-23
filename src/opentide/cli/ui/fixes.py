@@ -193,28 +193,44 @@ def _unique(
     return unique
 
 
+def end_line(edit: TextEdit) -> int:
+    """The line the edit ends on: its own ``end_line`` when it has one, else its ``line``."""
+    value = getattr(edit, "end_line", None)
+    return value if isinstance(value, int) else edit.line
+
+
 def _overlaps(edit: TextEdit, other: TextEdit) -> bool:
-    return (
-        edit.line == other.line
-        and edit.column < other.end_column
-        and other.column < edit.end_column
-    )
+    return (edit.line, edit.column) < (end_line(other), other.end_column) and (
+        other.line,
+        other.column,
+    ) < (end_line(edit), edit.end_column)
+
+
+def _offset(lines: list[str], line: int, column: int) -> int | None:
+    """Where 1-based *line*, *column* (in code points) falls in the joined text."""
+    if not 1 <= line <= len(lines):
+        return None
+    content = lines[line - 1]
+    if content.endswith("\r"):
+        content = content[:-1]
+    if not 1 <= column <= len(content) + 1:
+        return None
+    return sum(len(text) + 1 for text in lines[: line - 1]) + column - 1
 
 
 def _apply(text: str, edit: TextEdit) -> tuple[str, str] | None:
-    """*text* with *edit* applied, and the text it replaced; ``None`` if it does not fit."""
+    """*text* with *edit* applied, and the text it replaced; ``None`` if it does not fit.
+
+    The edit replaces from (``line``, ``column``) up to (``end_line``,
+    ``end_column``), so it may span lines; columns count code points.
+    """
     # Split on "\n" only: a "\r" stays with its line, so CRLF files keep their endings.
     lines = text.split("\n")
-    if not 1 <= edit.line <= len(lines):
+    start = _offset(lines, edit.line, edit.column)
+    end = _offset(lines, end_line(edit), edit.end_column)
+    if start is None or end is None or end <= start:
         return None
-    line = lines[edit.line - 1]
-    content = line[:-1] if line.endswith("\r") else line
-    start, end = edit.column - 1, edit.end_column - 1
-    if not 0 <= start < end <= len(content):
-        return None
-    before = line[start:end]
-    lines[edit.line - 1] = line[:start] + edit.replacement + line[end:]
-    return "\n".join(lines), before
+    return text[:start] + edit.replacement + text[end:], text[start:end]
 
 
 _UNPARSABLE = object()
@@ -231,11 +247,19 @@ def _load(text: str) -> Any:
 
 
 def _only_change(before: Any, after: Any, old: str, new: str) -> bool:
-    """Whether *after* is *before* with exactly one scalar *old* replaced by *new*."""
-    return _changed_scalars(before, after, old, new) == 1
+    """Whether *after* is *before* with exactly one scalar *old* replaced by *new*.
+
+    *old* and *new* are the text as written; a plain scalar written over
+    several lines reads back with its line breaks folded into spaces.
+    """
+    return _changed_scalars(before, after, {old, _folded(old)}, {new, _folded(new)}) == 1
 
 
-def _changed_scalars(before: Any, after: Any, old: str, new: str) -> int | None:
+def _folded(text: str) -> str:
+    return " ".join(part.strip() for part in text.split("\n"))
+
+
+def _changed_scalars(before: Any, after: Any, old: set[str], new: set[str]) -> int | None:
     """How many scalars changed from *old* to *new*; ``None`` on any other difference."""
     if isinstance(before, dict) and isinstance(after, dict):
         if list(before) != list(after):
@@ -247,7 +271,7 @@ def _changed_scalars(before: Any, after: Any, old: str, new: str) -> int | None:
         return _sum(_changed_scalars(a, b, old, new) for a, b in zip(before, after, strict=True))
     if type(before) is type(after) and before == after:
         return 0
-    if before == old and after == new:
+    if isinstance(before, str) and isinstance(after, str) and before in old and after in new:
         return 1
     return None
 

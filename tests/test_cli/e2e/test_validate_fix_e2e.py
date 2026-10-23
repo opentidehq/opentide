@@ -1,8 +1,10 @@
 """CLI E2E: ``validate --fix``, ``--fix --dry-run`` and ``--watch`` on the tutorial workspace.
 
-Three typos are safe to fix (two ``tlp: clearr``, a quoted ``"Data Breech"``)
-and one is not (``criticality: Hihg``, under the similarity bar). Output is
-read with ANSI stripped, since CI forces colour.
+Two typos have a safe fix (``tlp: clearr`` in the rule and in the threat)
+and one finding never does: a dangling ``detection_model`` (``invalid_ref``).
+Output is read with ANSI stripped, since CI forces colour. Which values the
+engine calls safe is the diagnostics' rule; ``test_validate_fix.py`` covers
+the edits themselves.
 """
 
 from __future__ import annotations
@@ -45,6 +47,8 @@ _LEAKY_ENV = (
 )
 _RULE = Path("objects/rules/sentinel-kql-rule.yaml")
 _THREAT = Path("objects/threats/simulated-actor.yaml")
+_OBJECTIVE = "00000000-0000-4000-8002-000000000001"
+_DANGLING = "00000000-0000-4000-8002-DEADBEEF0000"
 _ANSI = re.compile(r"\x1b\[[0-9;]*m|\x1b\]8;[^\x1b]*\x1b\\")
 _TIME = r"\d+\.\ds"
 
@@ -85,11 +89,10 @@ def _edit(repo: Path, relpath: Path, old: str, new: str) -> None:
 
 
 def _typos(repo: Path) -> None:
-    """Three safe fixes in two files, and one fix that is not safe."""
+    """Two safe fixes in two files, and a finding no fix is safe for."""
     _edit(repo, _RULE, "  tlp: clear\n", "  tlp: clearr\n")
     _edit(repo, _THREAT, "  tlp: clear\n", "  tlp: clearr\n")
-    _edit(repo, _THREAT, "    - Data Breach\n", '    - "Data Breech"\n')
-    _edit(repo, _THREAT, "criticality: High\n", "criticality: Hihg\n")
+    _edit(repo, _RULE, f"detection_model: {_OBJECTIVE}", f"detection_model: {_DANGLING}")
 
 
 def _env(repo: Path) -> dict[str, str | None]:
@@ -119,26 +122,30 @@ def test_validate_points_at_fix_when_safe_fixes_exist(tutorial: Path) -> None:
     assert result.exit_code == 1
     text = _text(result)
     assert re.search(
-        rf"✗ 4 errors in 2 files · 3 fixable with --fix · 3 objects checked · {_TIME}\n"
-        r"→ opentide validate --fix · apply 3 safe fixes\n",
+        rf"✗ 3 errors in 2 files · 2 fixable with --fix · 3 objects checked · {_TIME}\n"
+        r"→ opentide validate --fix · apply 2 safe fixes\n",
         text,
     ), text
 
     payload = json.loads(_run(tutorial, "validate", json_output=True).stdout)
     assert payload["summary"] == {
         "objects": 3,
-        "errors": 4,
+        "errors": 3,
         "warnings": 0,
         "files": 2,
-        "fixable": 3,
+        "fixable": 2,
     }
     assert payload["next_actions"] == [
-        {"command": "opentide validate --fix", "reason": "apply 3 safe fixes"}
+        {"command": "opentide validate --fix", "reason": "apply 2 safe fixes"}
     ]
     assert "fixed" not in payload
 
 
-def test_fix_applies_only_the_safe_fixes_and_keeps_every_other_byte(tutorial: Path) -> None:
+def test_fix_applies_only_the_safe_fixes_and_keeps_every_other_byte(
+    tutorial: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Paths print relative to the current directory when they are inside it.
+    monkeypatch.chdir(tutorial)
     _typos(tutorial)
     before = _files(tutorial)
     result = _run(tutorial, "validate", "--fix")
@@ -147,23 +154,18 @@ def test_fix_applies_only_the_safe_fixes_and_keeps_every_other_byte(tutorial: Pa
     assert (
         "fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'clearr' → 'clear'\n"
         "fixed: objects/threats/simulated-actor.yaml:9:8 'clearr' → 'clear'\n"
-        "fixed: objects/threats/simulated-actor.yaml:18:8 'Data Breech' → 'Data Breach'\n"
     ) in text
-    assert "error[vocab_unknown]: Value 'Hihg' is not a valid 'criticality::1.0'" in text
+    assert f"error[invalid_ref]: Unknown objective or signal reference '{_DANGLING}'" in text
     assert text.count("error[") == 1
     assert re.search(
-        rf"✗ 1 error in 1 file · fixed 3 values in 2 files · 3 objects checked · {_TIME}\n", text
+        rf"✗ 1 error in 1 file · fixed 2 values in 2 files · 3 objects checked · {_TIME}\n", text
     )
     assert "→ opentide validate --fix" not in text
 
     after = _files(tutorial)
     assert after[_RULE] == before[_RULE].replace(b"  tlp: clearr\n", b"  tlp: clear\n")
-    assert after[_THREAT] == (
-        before[_THREAT]
-        .replace(b"  tlp: clearr\n", b"  tlp: clear\n")
-        .replace(b'"Data Breech"', b'"Data Breach"')
-    )
-    assert b"criticality: Hihg" in after[_THREAT]
+    assert after[_THREAT] == before[_THREAT].replace(b"  tlp: clearr\n", b"  tlp: clear\n")
+    assert _DANGLING.encode() in after[_RULE], "a reference is never fixed"
     assert b"# the objective from step 4" in after[_RULE]
 
     # A second run has nothing left to apply and changes nothing.
@@ -197,13 +199,6 @@ def test_fix_reports_each_value_in_json(tutorial: Path) -> None:
             "before": "clearr",
             "after": "clear",
         },
-        {
-            "path": "objects/threats/simulated-actor.yaml",
-            "line": 18,
-            "code": "vocab_unknown",
-            "before": "Data Breech",
-            "after": "Data Breach",
-        },
     ]
     assert payload["summary"] == {
         "objects": 3,
@@ -211,11 +206,11 @@ def test_fix_reports_each_value_in_json(tutorial: Path) -> None:
         "warnings": 0,
         "files": 1,
         "fixable": 0,
-        "fixed": 3,
+        "fixed": 2,
     }
     (remaining,) = payload["report"]["issues"]
-    assert remaining["context"]["value"] == "Hihg"
-    assert remaining["fix"]["safe"] is False
+    assert remaining["code"] == "invalid_ref"
+    assert remaining["fix"] is None or remaining["fix"]["safe"] is False
     assert payload["next_actions"] == []
     assert payload["exit_code"] == 1
     assert payload["failure"]["code"] == "issues_found"
@@ -248,22 +243,23 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tutorial: Path) -> None:
         "-  tlp: clearr\n"
         "+  tlp: clear\n"
     ) in text
-    assert '-    - "Data Breech"\n+    - "Data Breach"\n' in text
+    assert "-  tlp: clearr\n+  tlp: clear\n" in text
+    assert text.count("+++ b/") == 2
     # The diff covers the three it would fix; the frame shows the one it would not.
     assert text.count("error[") == 1
-    assert "'Hihg'" in text
+    assert "error[invalid_ref]" in text
     assert re.search(
-        rf"✗ 4 errors in 2 files · would fix 3 values in 2 files · 3 objects checked · {_TIME}\n"
-        r"→ opentide validate --fix · apply 3 safe fixes\n",
+        rf"✗ 3 errors in 2 files · would fix 2 values in 2 files · 3 objects checked · {_TIME}\n"
+        r"→ opentide validate --fix · apply 2 safe fixes\n",
         text,
     ), text
     assert _files(tutorial) == before
 
     payload = json.loads(_run(tutorial, "validate", "--fix", "--dry-run", json_output=True).stdout)
-    assert [entry["after"] for entry in payload["would_fix"]] == ["clear", "clear", "Data Breach"]
+    assert [entry["after"] for entry in payload["would_fix"]] == ["clear", "clear"]
     assert payload["diff"].startswith("--- a/objects/rules/sentinel-kql-rule.yaml\n")
     assert "fixed" not in payload["summary"]
-    assert payload["summary"]["fixable"] == 3
+    assert payload["summary"]["fixable"] == 2
     assert _files(tutorial) == before
 
 

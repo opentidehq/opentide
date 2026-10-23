@@ -74,7 +74,7 @@ Each entry of `report.issues` and `report.warnings` keeps its keys (`yaml_line` 
 
 ### Fixing typos: `--fix`
 
-A `fix` is safe when it replaces a vocabulary value with one at least 0.8 similar to it: `clearr` with `clear`, `Data Breech` with `Data Breach`. A reference (`invalid_ref`) is never safe, and neither is a value too far from the suggestion (`Hihg` for `High`): a person or an agent decides those. When a run finds safe fixes, its outcome line counts them (`3 fixable with --fix`) and its next step is the same command with `--fix`, also in `next_actions`.
+`--fix` applies the fixes whose `safe` is `true` (see [Diagnostic fields](#diagnostic-fields)), such as `clear` for the vocabulary typo `clearr`, and never one whose `safe` is `false`. A reference (`invalid_ref`) is never safe to fix: a person or an agent decides those. When a run finds safe fixes, its outcome line counts them (`2 fixable with --fix`) and its next step is the same command with `--fix`, also in `next_actions`.
 
 ```bash
 opentide validate --fix --dry-run
@@ -102,16 +102,16 @@ opentide validate --fix
 
 ```text illustrative
 fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'clearr' → 'clear'
-fixed: objects/threats/simulated-actor.yaml:18:8 'Data Breech' → 'Data Breach'
+fixed: objects/threats/simulated-actor.yaml:9:8 'clearr' → 'clear'
 
-error[vocab_unknown]: Value 'Hihg' is not a valid 'criticality::1.0' vocabulary entry
-  ╭─▶ objects/threats/simulated-actor.yaml:2:14
-  │
-1 │ name: Simulated Actor
-2 │ criticality: Hihg
-  │              ━━━━ not in criticality::1.0
-  │
-  ╰─ help: did you mean 'High'?
+error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+   ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
+   │
+16 │ techniques: [T1059]
+17 │ detection_model: 00000000-0000-4000-8002-DEADBEEF0000   # the objective from step 4
+   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+   │
+   ╰─ help: opentide info objectives lists the ones that exist
 
 ✗ 1 error in 1 file · fixed 2 values in 2 files · 3 objects checked · 1.8s
 ```
