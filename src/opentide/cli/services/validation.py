@@ -16,7 +16,7 @@ from opentide.cli.ui.contract import (
     USAGE_INVALID_CHOICE,
     USAGE_INVALID_VALUE,
 )
-from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, annotate, diagnostics_from_issues
+from opentide.cli.ui.diagnostics import Diagnostic, annotate_report
 from opentide.core.logging.console import emit_section
 from opentide.registry.builder import parse_errors_reported_by_caller
 from opentide.registry.discovery import discover_workspace
@@ -276,17 +276,7 @@ def _annotate_report(
     result: dict[str, object], report: ValidationReport, workspace: Path
 ) -> list[Diagnostic]:
     """Add the diagnostic fields to each JSON issue and warning; return the diagnostics."""
-    sources = SourceFiles()
-    payload = cast(dict[str, Any], result["report"])
-    diagnostics: list[Diagnostic] = []
-    for bucket in ("issues", "warnings"):
-        found = diagnostics_from_issues(
-            getattr(report, bucket), workspace=workspace, sources=sources
-        )
-        for entry, diagnostic in zip(payload.get(bucket, []), found, strict=True):
-            annotate(entry, diagnostic)
-        diagnostics.extend(found)
-    return diagnostics
+    return annotate_report(cast(dict[str, Any], result["report"]), report, workspace=workspace)
 
 
 def _summary(report: ValidationReport, diagnostics: Sequence[Diagnostic]) -> dict[str, int]:
