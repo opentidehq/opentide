@@ -41,7 +41,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `message` | The error message (the same text as `error` on a failure) |
 | `argument` | The input at fault, such as `--type`, `section` or the mistyped command; otherwise `null` |
 | `suggestion` | The closest valid value, such as `validate` for `valdate`; otherwise `null` |
-| `crash_log` | Reserved for unexpected errors; `null` |
+| `crash_log` | With `internal`: the path of the redacted crash log, or `null` if it could not be written. Otherwise `null` |
 
 ## Failure codes
 
@@ -64,6 +64,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `issues_found` | 1 | The command found issues it was asked to fail on (`--strict`) |
 | `not_run` | non-zero | The command was skipped and says why in `message` |
 | `command_failed` | 1 | Any other failure |
+| `internal` | 1 | An unexpected error: a bug in opentide. See [An unexpected error](#an-unexpected-error) |
 
 Exit codes are in [Exit codes](./exit-codes.md).
 
@@ -104,6 +105,30 @@ Without `--json` the same error is one line on stderr, with the suggestion under
 error: Unknown info section: rulez. Choose rules, threats, objectives, coverage.
   help: did you mean 'rules'?
 ```
+
+## An unexpected error
+
+An exception no command handles is a bug in opentide. The run exits `1` and, under `--json`, still prints one document on stdout, with `failure.code` `internal` and `failure.crash_log` naming the log written for it. The message also goes to stderr, for the person reading the terminal. No command in a healthy repository prints this, so the sample is illustrative:
+
+```json illustrative
+{
+  "error": "RuntimeError: index exploded",
+  "ok": false,
+  "status": "failed",
+  "message": "RuntimeError: index exploded",
+  "command": "info",
+  "exit_code": 1,
+  "failure": {
+    "code": "internal",
+    "message": "RuntimeError: index exploded",
+    "argument": null,
+    "suggestion": null,
+    "crash_log": "/home/me/.local/state/opentide/crash-20261023T110335102704Z-648.log"
+  }
+}
+```
+
+Where the log goes, what it holds and how to report the bug: [Troubleshooting](../usage/troubleshooting.md#opentide-stops-with-errorinternal).
 
 ## Output modes
 

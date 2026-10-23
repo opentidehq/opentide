@@ -14,9 +14,10 @@ opentide uses the same result semantics in human and JSON modes: presentation fo
 | Code | Meaning | Emitted when |
 |-----:|---------|--------------|
 | `0` | Success | The command completed or intentionally skipped without an operational failure. Success JSON includes `"ok": true`. |
-| `1` | Error | Validation/deployment errors, a [`generate` phase](./generate.md#when-a-phase-fails) that raised or logged an error, network/runtime failure, or `--strict` with a warning other than `platform_not_enabled`. |
+| `1` | Error | Validation/deployment errors, a [`generate` phase](./generate.md#when-a-phase-fails) that raised or logged an error, network/runtime failure, an unexpected error (`failure.code` `internal`, see [JSON output](./json-output.md#an-unexpected-error)), or `--strict` with a warning other than `platform_not_enabled`. |
 | `2` | Usage error | An unknown command or option, a value outside the accepted ones (an `info` section, a `generate` phase, `--type`, `--platform`, `share --target`), a missing required flag, a prompt nobody can answer (`setup` without a terminal, under `--json` or under a coding agent), or an explicitly unsupported command. Also the `validate query --live`, `migrate vocab-scope` and `share` cases below. |
 | `3` | Partial success | `share` only: see [Share](#share). |
+| `130` | Interrupted | Ctrl-C. One `error: interrupted` line on stderr, no traceback. |
 
 With `--json`, `failure.code` tells the cases of one exit code apart: `usage_unknown_command`, `usage_invalid_choice`, `no_tenant_reached`, `share_unreachable` and so on. `failure` is `null` exactly when the exit code is `0`. The codes are listed in [JSON output](./json-output.md#failure-codes).
 

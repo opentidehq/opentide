@@ -79,6 +79,8 @@ A `proxy` key under a tenant's `[tenants.setup]`, in `deployment.toml` `[proxy]`
 
 opentide exports `OPENTIDE_DEBUG=1` to the processes it starts when debugging, never `DEBUG`.
 
+When opentide stops on an unexpected error, `--debug` also prints the traceback, above the `error[internal]` line. Without it the traceback is only in the crash log; see [Troubleshooting](../usage/troubleshooting.md#opentide-stops-with-errorinternal).
+
 ## Environment propagation
 
 The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.
