@@ -67,18 +67,18 @@ def test_render_agent_entrypoint_missing() -> None:
 
 
 def test_copy_skill_pack(tmp_path: Path) -> None:
-    written = copy_skill_pack("detection-engineering", tmp_path / "pack")
+    written = copy_skill_pack("detection-workflow", tmp_path / "pack")
     assert written
     skill = (tmp_path / "pack" / "SKILL.md").read_text(encoding="utf-8")
-    assert "name: opentide-detection-engineering" in skill
+    assert "name: opentide-detection-workflow" in skill
 
 
 def test_copy_skill_pack_accepts_former_name(tmp_path: Path) -> None:
-    """``detection-ops`` was the pack's name before it became ``detection-engineering``."""
+    """``detection-ops`` was the pack's name before it became ``detection-workflow``."""
     written = copy_skill_pack("detection-ops", tmp_path / "pack")
-    assert written == copy_skill_pack("detection-engineering", tmp_path / "renamed")
+    assert written == copy_skill_pack("detection-workflow", tmp_path / "renamed")
     skill = (tmp_path / "pack" / "SKILL.md").read_text(encoding="utf-8")
-    assert "name: opentide-detection-engineering" in skill
+    assert "name: opentide-detection-workflow" in skill
 
 
 def test_render_agent_entrypoint() -> None:
@@ -118,18 +118,18 @@ def test_copy_skill_pack_missing_directory(monkeypatch, tmp_path: Path) -> None:
         lambda: tmp_path / "setup-root",
     )
     with pytest.raises(SetupTemplateError, match="Skill pack missing"):
-        _ = copy_skill_pack("detection-engineering", tmp_path / "dest")
+        _ = copy_skill_pack("detection-workflow", tmp_path / "dest")
 
 
 def test_copy_skill_pack_skips_non_files(tmp_path: Path, monkeypatch) -> None:
-    pack_root = tmp_path / "setup-root" / "skills" / "detection-engineering"
+    pack_root = tmp_path / "setup-root" / "skills" / "detection-workflow"
     (pack_root / "nested").mkdir(parents=True)
     (pack_root / "SKILL.md").write_text("# skill\n", encoding="utf-8")
     monkeypatch.setattr(
         "opentide.cli.services.setup.templates.setup_data_root",
         lambda: tmp_path / "setup-root",
     )
-    written = copy_skill_pack("detection-engineering", tmp_path / "out")
+    written = copy_skill_pack("detection-workflow", tmp_path / "out")
     assert "SKILL.md" in written
 
 

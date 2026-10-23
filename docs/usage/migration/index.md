@@ -160,9 +160,9 @@ Keys on every other platform (Sentinel, Splunk, HarfangLab, Carbon Black Cloud, 
 
 ## Skill pack `detection-ops` renamed
 
-The skill pack bundled under `data/setup/skills/detection-ops/` is now `data/setup/skills/detection-engineering/`, and its skill is named `opentide-detection-engineering` instead of `opentide-detection-ops`. A request for the pack by its former name still returns it, so scripts that copy `detection-ops` keep working.
+The skill pack bundled under `data/setup/skills/detection-ops/` is now `data/setup/skills/detection-workflow/`, and its skill is named `opentide-detection-workflow` instead of `opentide-detection-ops`. `copy_skill_pack("detection-ops", …)` still copies it.
 
-`opentide setup skills` never installed this pack, so repositories set up with that command have nothing to change. If you copied the pack into your repository by hand, the copy keeps working. To match the new name, rename its folder to `detection-engineering` and its `name:` line to `opentide-detection-engineering`, or delete the copy and run `opentide setup skills`.
+`opentide setup skills` never installed this pack, so repositories set up with that command have nothing to change. If you copied the pack into your repository by hand, the copy keeps working. To match the new name, rename its folder to `detection-workflow` and its `name:` line to `opentide-detection-workflow`. Do not name it `detection-engineering`: `opentide setup skills` installs a different skill under that name and replaces the folder.
 
 ## Layout migration
 

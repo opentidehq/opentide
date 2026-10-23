@@ -9,9 +9,9 @@ from pathlib import Path
 from opentide.core.root import get_data_root
 
 MCP_HOSTS = frozenset({"vscode", "cursor", "claude-code", "generic"})
-SKILL_PACKS = frozenset({"detection-engineering"})
+SKILL_PACKS = frozenset({"detection-workflow"})
 #: Former pack names, still accepted so existing scripts keep working.
-SKILL_PACK_ALIASES = {"detection-ops": "detection-engineering"}
+SKILL_PACK_ALIASES = {"detection-ops": "detection-workflow"}
 ENTRYPOINT_TEMPLATES = frozenset(
     {"AGENTS.md.template", "CLAUDE.md.template", "copilot-instructions.md"}
 )

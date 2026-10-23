@@ -9,7 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Changed
 
 - opentide describes itself as "spec-driven development for agentic detection engineering" instead of "DetectionOps engine", in the PyPI description, the README and the documentation.
-- The bundled skill pack `detection-ops` is now `detection-engineering`, and its skill is named `opentide-detection-engineering` instead of `opentide-detection-ops`. Asking for the pack as `detection-ops` still returns it. `opentide setup skills` never installed this pack, so repositories set up with it have nothing to change; for copies made by hand, see [Client migration](https://opentide.org/docs/usage/migration/#skill-pack-detection-ops-renamed).
+- The bundled skill pack `detection-ops` is now `detection-workflow`, and its skill is named `opentide-detection-workflow` instead of `opentide-detection-ops`. Its platform table now lists Elastic. `copy_skill_pack("detection-ops", …)` still copies it. `opentide setup skills` never installed this pack, so repositories set up with it have nothing to change; for copies made by hand, see [Client migration](https://opentide.org/docs/usage/migration/#skill-pack-detection-ops-renamed).
 
 ## [0.17.2] — 2026-10-22
 
