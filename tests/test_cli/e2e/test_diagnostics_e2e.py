@@ -146,7 +146,13 @@ def test_a_dangling_reference_is_one_framed_finding(tutorial: Path) -> None:
         "explain": "opentide explain invalid_ref",
     }
     assert payload["message"] == "Validation failed"
-    assert payload["summary"] == {"objects": 3, "errors": 1, "warnings": 0, "files": 1}
+    assert payload["summary"] == {
+        "objects": 3,
+        "errors": 1,
+        "warnings": 0,
+        "files": 1,
+        "fixable": 0,
+    }
     assert payload["failure"]["code"] == "issues_found"
 
 

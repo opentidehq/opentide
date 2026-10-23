@@ -54,6 +54,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `usage_missing_option` | 2 | A required option or argument is missing (`--platform`, `--strategy`, `--technique`) |
 | `usage_needs_input` | 2 | The command would prompt, but nobody can answer: `--json`, no terminal, or a coding agent. The message names the flags that answer the prompt |
 | `usage_error` | 2 | Another usage error, such as options that cannot be combined |
+| `usage_watch_needs_tty` | 2 | `validate --watch` under `--json`, a coding agent or `OPENTIDE_OUTPUT=agent`: it redraws a terminal until Ctrl-C, and nobody would see it |
 | `no_tenant_reached` | 2 | `validate query --live` sent no query because no configured tenant takes the rules |
 | `needs_human_decision` | 2 | `migrate vocab-scope` left values only a person can place |
 | `not_implemented` | 2 | A reserved command, such as `deploy metadata` |

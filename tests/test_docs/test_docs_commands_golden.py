@@ -115,6 +115,8 @@ REPO_STATES: dict[str, Callable[[Path], None]] = {
         "detection_model: 00000000-0000-4000-8002-000000000001",
         "detection_model: 00000000-0000-4000-8002-DEADBEEF0000",
     ),
+    # A vocabulary typo with a safe fix (`validate --fix`).
+    "vocabulary-typo": _edit_tutorial_rule("  tlp: clear\n", "  tlp: clearr\n"),
 }
 
 
