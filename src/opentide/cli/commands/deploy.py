@@ -90,6 +90,10 @@ def deploy_cmd(
         skip_unconfigured=skip_unconfigured,
         persist_state_externally=persist_state_externally,
     )
+    from opentide.cli.findings import publish_summary
+    from opentide.cli.ui.summary import deploy_summary
+
+    publish_summary(cli, deploy_summary(result), command="deploy")
     emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 
 
