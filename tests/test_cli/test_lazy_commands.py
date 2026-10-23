@@ -6,6 +6,7 @@ import contextlib
 import inspect
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -15,11 +16,19 @@ from typer.testing import CliRunner
 
 import opentide.cli as cli_package
 from opentide import __version__
-from opentide.cli import app
 from opentide.cli.commands import ROOT_COMMANDS
 from opentide.cli.lazy import LazyTyperGroup
 
 runner = CliRunner()
+
+# Under GITHUB_ACTIONS (or FORCE_COLOR) Typer forces a terminal for help, so
+# names arrive wrapped in SGR escapes even with NO_COLOR set.
+_SGR = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(text: str) -> str:
+    return _SGR.sub("", text)
+
 
 # Modules a listing must not pull in: the engine, platforms, setup and the
 # command modules themselves.
@@ -38,6 +47,7 @@ _ENGINE_PREFIXES = (
 
 _LOADED_MODULES = """
 import json
+import re
 import sys
 
 from opentide.cli import main
@@ -71,7 +81,7 @@ def _engine_modules(modules: set) -> list[str]:
 
 
 def _root() -> LazyTyperGroup:
-    group = typer.main.get_command(app)
+    group = typer.main.get_command(cli_package.app)
     assert isinstance(group, LazyTyperGroup)
     return group
 
@@ -97,19 +107,19 @@ def test_root_help_from_the_index_matches_the_loaded_commands(
 ) -> None:
     """Same panels, order and text whether the listing reads the index or the commands."""
     env = {"NO_COLOR": "1", "COLUMNS": "100", "TERMINAL_WIDTH": "100"}
-    from_index = runner.invoke(app, ["--help"], env=env)
+    from_index = runner.invoke(cli_package.app, ["--help"], env=env)
     monkeypatch.setattr(LazyTyperGroup, "_list_from_index", lambda self: contextlib.nullcontext())
-    from_commands = runner.invoke(app, ["--help"], env=env)
+    from_commands = runner.invoke(cli_package.app, ["--help"], env=env)
     assert from_index.exit_code == from_commands.exit_code == 0
     assert from_index.stdout == from_commands.stdout
     for spec in ROOT_COMMANDS:
-        assert (f" {spec.name} " in from_index.stdout) is not spec.hidden, spec.name
+        assert (f" {spec.name} " in _plain(from_index.stdout)) is not spec.hidden, spec.name
 
 
 def test_unknown_command_still_suggests_the_closest_name() -> None:
-    result = runner.invoke(app, ["validat"])
+    result = runner.invoke(cli_package.app, ["validat"])
     assert result.exit_code == 2
-    assert "Did you mean 'validate'?" in result.stderr
+    assert "Did you mean 'validate'?" in _plain(result.stderr)
 
 
 def test_version_imports_neither_typer_nor_the_registry() -> None:
@@ -128,7 +138,7 @@ def test_version_imports_neither_typer_nor_the_registry() -> None:
 )
 def test_root_help_imports_no_engine_module(argv: list[str]) -> None:
     done, modules = _modules_after(argv)
-    assert "validate" in done.stdout, done.stderr
+    assert "validate" in _plain(done.stdout), done.stderr
     assert _engine_modules(modules) == []
 
 
@@ -212,6 +222,6 @@ def test_fast_version_flags_match_the_root_options() -> None:
     ],
 )
 def test_fast_version_answers_exactly_when_typer_would(argv: list[str]) -> None:
-    result = runner.invoke(app, argv)
+    result = runner.invoke(cli_package.app, argv)
     typer_prints_version = result.exit_code == 0 and result.stdout == f"opentide {__version__}\n"
     assert cli_package._asks_only_for_version(argv) is typer_prints_version
