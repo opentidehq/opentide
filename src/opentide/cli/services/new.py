@@ -753,14 +753,13 @@ def scaffold_object(
         "platforms": list(options.platforms),
         "placeholders": filled.placeholders,
         "_summary": {"created": 1, "placeholders": count},
-        # Printed as a note under the outcome line in human output.
-        "detail": f"replace the placeholder value of {', '.join(filled.placeholders)}"
-        if count
-        else None,
         "_next_actions": [
             NextAction(f"opentide validate --file {shown}", f"check the new {family}"),
         ],
     }
+    if count:
+        # Printed as a note under the outcome line in human output.
+        payload["detail"] = f"replace the placeholder value of {', '.join(filled.placeholders)}"
     return payload
 
 

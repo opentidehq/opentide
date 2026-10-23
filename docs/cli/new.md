@@ -76,6 +76,7 @@ A rule block for a platform the workspace has not enabled is written anyway, wit
 | `type`, `schema` | The family and its schema identifier (`rule`, `rule::1.0`) |
 | `name`, `author`, `organisation`, `platforms` | What was written; `author` and `organisation` are `null` when left out |
 | `placeholders` | Dotted keys whose value is a placeholder to replace |
+| `detail` | The note human output prints under the outcome line; absent when there is no placeholder |
 | `generated` | The generation phases that ran first; absent when none did |
 
 `summary` holds `created` and `placeholders`; `next_actions` holds the `opentide validate --file` command.
