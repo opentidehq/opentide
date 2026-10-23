@@ -1,6 +1,6 @@
 ---
 title: How opentide works
-description: The end-to-end DetectionOps lifecycle — from authoring objects to deploying and documenting detections in CI.
+description: The end-to-end opentide lifecycle — from authoring objects to deploying and documenting detections in CI.
 ---
 
 # How opentide works

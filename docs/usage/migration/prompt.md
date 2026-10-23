@@ -53,7 +53,7 @@ Steps:
 6. Agents and IDE
    - opentide setup mcp --cursor --vscode (as needed)
    - opentide setup skills discover then opentide setup skills --yes --install <slugs>
-   - Remove references to vendored detection-ops skill packs.
+   - Remove references to vendored detection-ops skill packs. That pack is now `detection-workflow`, and `opentide setup skills` does not install it.
 
 7. Verification checklist
    - pip install 'opentide==0.17.2' succeeds
