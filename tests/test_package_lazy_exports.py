@@ -202,3 +202,30 @@ def test_module_imports_first_in_a_fresh_interpreter(module: str) -> None:
         env={**os.environ},
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("package", "name", "loads"),
+    [
+        ("opentide", "Opentide", "opentide.core.registry"),
+        ("opentide.core", "Opentide", "opentide.core.registry"),
+        ("opentide.registry", "RegistryBuilder", "opentide.registry.builder"),
+    ],
+)
+def test_lazy_names_are_listed_without_being_loaded(package: str, name: str, loads: str) -> None:
+    """``dir()`` lists the lazy export for REPL and IDE completion, and loads nothing."""
+    script = f"""
+import sys
+import {package} as package
+
+assert {name!r} in dir(package), dir(package)
+assert {loads!r} not in sys.modules, "dir() loaded {loads}"
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        check=False,
+        text=True,
+        env={**os.environ},
+    )
+    assert result.returncode == 0, result.stderr

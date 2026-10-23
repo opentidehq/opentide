@@ -225,3 +225,39 @@ def test_fast_version_answers_exactly_when_typer_would(argv: list[str]) -> None:
     result = runner.invoke(cli_package.app, argv)
     typer_prints_version = result.exit_code == 0 and result.stdout == f"opentide {__version__}\n"
     assert cli_package._asks_only_for_version(argv) is typer_prints_version
+
+
+_RUN_MAIN = "from opentide.cli import main\nraise SystemExit(main())"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="closes descriptor 1 with preexec_fn")
+def test_version_without_stdout_exits_quietly() -> None:
+    """A closed descriptor (``opentide --version >&-``) or ``pythonw``: exit 0, as Click did."""
+    done = subprocess.run(
+        [sys.executable, "-c", _RUN_MAIN, "--version"],
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+        preexec_fn=lambda: os.close(1),
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stderr == ""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX pipe semantics")
+def test_version_into_a_closed_pipe_exits_1_without_a_traceback() -> None:
+    """The reader is gone before anything is written: exit 1 and no traceback, as Click did."""
+    read_end, write_end = os.pipe()
+    os.close(read_end)
+    try:
+        done = subprocess.run(
+            [sys.executable, "-c", _RUN_MAIN, "--version"],
+            stdout=write_end,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    finally:
+        os.close(write_end)
+    assert done.returncode == 1
+    assert done.stderr == ""

@@ -63,6 +63,24 @@ def _asks_only_for_version(argv: Sequence[str]) -> bool:
     return asked
 
 
+def _print_version(line: str) -> None:
+    """Write *line* the way ``typer.echo`` under Click's ``main()`` did.
+
+    No stdout (a closed descriptor, a ``pythonw`` launcher) prints nothing and
+    exits 0. A pipe whose reader has gone exits 1 without a traceback.
+    """
+    out = sys.stdout
+    if out is None:
+        return
+    try:
+        out.write(line)
+        out.flush()
+    except BrokenPipeError:
+        # Nothing is left for the interpreter to flush on the way out.
+        sys.stdout = None
+        raise SystemExit(1) from None
+
+
 def main() -> None:
     """Console script entry point."""
     argv = sys.argv[1:]
@@ -71,8 +89,7 @@ def main() -> None:
         # it installed should not pay for them.
         from opentide import __version__
 
-        sys.stdout.write(f"opentide {__version__}\n")
-        sys.stdout.flush()
+        _print_version(f"opentide {__version__}\n")
         return
 
     from opentide.cli.context import sync_typer_rendering
