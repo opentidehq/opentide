@@ -135,8 +135,33 @@ def render_error(
         console.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
 
 
-def render_next_actions(console: Console, actions: Sequence[NextAction]) -> None:
-    """At most :data:`MAX_NEXT_ACTIONS` ``→`` lines. Printed after the outcome line."""
+def render_next_actions(
+    console: Console, actions: Sequence[NextAction], *, numbered: bool = False
+) -> None:
+    """At most :data:`MAX_NEXT_ACTIONS` ``→`` lines. Printed after the outcome line.
+
+    *numbered* prints them as an ordered list under a ``Next steps`` header,
+    for a sequence the reader follows step by step (``setup``).
+    """
     encoding = _encoding(console)
-    for action in actions[:MAX_NEXT_ACTIONS]:
-        console.print(next_action_text(action, encoding=encoding), soft_wrap=True)
+    shown = actions[:MAX_NEXT_ACTIONS]
+    if not shown:
+        return
+    if not numbered:
+        for action in shown:
+            console.print(next_action_text(action, encoding=encoding), soft_wrap=True)
+        return
+    from opentide.cli.ui import brand
+
+    console.print()
+    if brand.can_draw(console):
+        console.print(brand.header("Next steps", mono=brand.is_mono(console), encoding=encoding))
+    else:
+        console.print(Text("Next steps", style="bold"))
+    for number, action in enumerate(shown, start=1):
+        line = Text(f"  {number}  ", style="dim")
+        line.append(action.command, style="bold")
+        if action.reason:
+            line.append(f" {glyph('separator', encoding=encoding)} ", style="dim")
+            line.append(action.reason, style="dim")
+        console.print(line, soft_wrap=True)

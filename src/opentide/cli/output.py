@@ -63,6 +63,8 @@ class CommandResult:
     failure: Failure | None = None
     #: The outcome line's kind when the status alone does not say (``plan``).
     outcome: OutcomeKind | None = None
+    #: Print the next steps as a numbered list (a sequence to follow, ``setup``).
+    numbered_next: bool = False
 
     @classmethod
     def from_payload(
@@ -74,7 +76,8 @@ class CommandResult:
         or ``{"command", "reason"}`` items), ``_failure_code``,
         ``_failure_argument`` and ``_failure_suggestion``; they are moved into
         the envelope rather than left in the payload. ``_outcome_kind`` names
-        the outcome line's kind (``plan``) and never reaches JSON.
+        the outcome line's kind (``plan``) and ``_next_numbered`` numbers the
+        next steps; neither reaches JSON.
         """
         data = dict(payload)
         exit_code = int(data.pop("_exit_code", 0))
@@ -87,6 +90,7 @@ class CommandResult:
         failure_argument = data.pop("_failure_argument", None)
         failure_suggestion = data.pop("_failure_suggestion", None)
         outcome = data.pop("_outcome_kind", None)
+        numbered_next = bool(data.pop("_next_numbered", False))
         ok = status != "failed"
         failure = None
         if not ok or exit_code:
@@ -108,6 +112,7 @@ class CommandResult:
             next_actions=next_actions,
             failure=failure,
             outcome=outcome,
+            numbered_next=numbered_next,
         )
 
     def payload(self) -> dict[str, Any]:
@@ -243,7 +248,7 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
         render_outcome(stdout, kind, result.message)
         if not ctx.quiet:
             render_notes(stdout, notes)
-            render_next_actions(stdout, result.next_actions)
+            render_next_actions(stdout, result.next_actions, numbered=result.numbered_next)
     if result.exit_code:
         raise SystemExit(result.exit_code)
 

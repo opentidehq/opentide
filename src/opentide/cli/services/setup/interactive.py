@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, TypeVar
 
 import questionary
@@ -13,15 +13,24 @@ from opentide.cli.enums import DetectionPlatform, McpHost, SkillTarget, platform
 
 T = TypeVar("T")
 
+#: The wizard in the brand: the question mark is a Reflex Blue square with the
+#: white wave, answers and the pointer are bold in the terminal's own colour
+#: (blue is a fill, never a text colour), and a refused answer shows on a
+#: toolbar that cannot be missed.
+QMARK = "≋"
 PROMPT_STYLE = Style(
     [
-        ("qmark", "fg:#00aaff bold"),
+        ("qmark", "fg:#ffffff bg:#001489 bold"),
         ("question", "bold"),
-        ("answer", "fg:#00aaff bold"),
-        ("pointer", "fg:#00aaff bold"),
-        ("highlighted", "fg:#00aaff bold"),
-        ("selected", "fg:#00aa88"),
-        ("instruction", "fg:#888888"),
+        ("answer", "bold"),
+        ("pointer", "bold"),
+        ("highlighted", "bold"),
+        ("selected", "bold"),
+        ("separator", "fg:#8b949e"),
+        ("instruction", "fg:#8b949e"),
+        ("text", ""),
+        ("disabled", "fg:#8b949e italic"),
+        ("validation-toolbar", "fg:#ffffff bg:#a40e26 bold"),
     ]
 )
 
@@ -58,14 +67,33 @@ def _answer(value: T | None) -> T:
     return value
 
 
-def ask_text(message: str, *, default: str = "") -> str:
-    """Ask for free text using the shared prompt theme."""
-    return _answer(questionary.text(message, default=default, style=PROMPT_STYLE).ask())
+def require_text(what: str) -> Callable[[str], bool | str]:
+    """A validator that refuses an empty answer, naming what is missing."""
+
+    def validate(value: str) -> bool | str:
+        return bool(value.strip()) or f"Enter {what}; the field cannot be empty"
+
+    return validate
+
+
+def ask_text(
+    message: str,
+    *,
+    default: str = "",
+    validate: Callable[[str], bool | str] | None = None,
+) -> str:
+    """Ask for free text using the shared prompt theme; *validate* refuses an answer visibly."""
+    extra: dict[str, Any] = {} if validate is None else {"validate": validate}
+    return _answer(
+        questionary.text(message, default=default, style=PROMPT_STYLE, qmark=QMARK, **extra).ask()
+    )
 
 
 def ask_confirm(message: str, *, default: bool = False) -> bool:
     """Ask for an explicit yes/no confirmation."""
-    return _answer(questionary.confirm(message, default=default, style=PROMPT_STYLE).ask())
+    return _answer(
+        questionary.confirm(message, default=default, style=PROMPT_STYLE, qmark=QMARK).ask()
+    )
 
 
 def ask_select(
@@ -82,6 +110,7 @@ def ask_select(
             choices=entries,
             default=default,
             style=PROMPT_STYLE,
+            qmark=QMARK,
             use_shortcuts=True,
         ).ask()
     )
@@ -100,6 +129,7 @@ def ask_checkbox(
     prompt_kwargs: dict[str, Any] = {
         "choices": entries,
         "style": PROMPT_STYLE,
+        "qmark": QMARK,
     }
     if require_selection:
         prompt_kwargs["validate"] = lambda values: bool(values) or "Select at least one option"

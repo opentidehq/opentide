@@ -36,6 +36,7 @@ from rich.table import Table
 from rich.text import Text
 
 from opentide.cli.ui.glyphs import glyph
+from opentide.cli.ui.layout import columns
 from opentide.cli.ui.mode import OutputMode, get_mode
 from opentide.core import progress as engine_progress
 
@@ -145,6 +146,8 @@ def checklist_table(
     encoding: str = "utf-8",
 ) -> RenderableType:
     """The checklist as ``human`` mode draws it: one row per step, the running one last."""
+    if running is None:
+        return columns([_row(step, encoding) for step in steps], indent=2, right=(2, 3))
     grid = Table.grid(padding=(0, 2))
     grid.add_column(no_wrap=True)
     grid.add_column(style="bold", no_wrap=True)
@@ -169,6 +172,20 @@ def checklist_table(
             running.detail or running.where or "",
         )
     return Padding(grid, (0, 0, 0, 2), expand=False)
+
+
+def _row(step: Step, encoding: str) -> tuple[Text, ...]:
+    status = step.status if step.status != "running" else "failed"
+    mark = Text(glyph(_GLYPH[status], encoding=encoding), style=_STYLE[status])
+    if step.status == "skipped":
+        return (mark, Text(step.name, style="dim"), Text(), Text(), Text(step.detail, style="dim"))
+    return (
+        mark,
+        Text(step.name, style="bold"),
+        Text(plural(step.count, step.unit) if step.count is not None else "", style="dim"),
+        Text(seconds_text(step.seconds), style="dim"),
+        Text(step.where or "", style="dim"),
+    )
 
 
 class Checklist:

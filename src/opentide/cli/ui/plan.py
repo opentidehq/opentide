@@ -18,11 +18,10 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from rich.console import Console, Group, RenderableType
-from rich.padding import Padding
-from rich.table import Table
 from rich.text import Text
 
 from opentide.cli.ui.glyphs import glyph
+from opentide.cli.ui.layout import columns
 from opentide.cli.ui.progress import plural
 
 #: Action → (glyph name, label, style).
@@ -73,20 +72,18 @@ def plan_view(
         for tenant, members in groups.items():
             if tenant is not None:
                 parts.append(Text.assemble(("  ", ""), (str(tenant), "bold")))
-            grid = Table.grid(padding=(0, 2))
-            grid.add_column(no_wrap=True)
-            grid.add_column(style="bold")
-            grid.add_column(style="dim", no_wrap=True)
-            grid.add_column(style="dim", no_wrap=True)
+            rows = []
             for row in members:
                 name, label, style = _ROWS.get(str(row["action"]), _ROWS["upsert"])
-                grid.add_row(
-                    Text(f"{glyph(name, encoding=encoding)} {label}", style=style),
-                    Text(str(row.get("name") or row["uuid"])),
-                    _short_uuid(str(row["uuid"])),
-                    f"status {row['status']}" if row.get("status") else "",
+                rows.append(
+                    (
+                        Text(f"{glyph(name, encoding=encoding)} {label}", style=style),
+                        Text(str(row.get("name") or row["uuid"]), style="bold"),
+                        Text(_short_uuid(str(row["uuid"])), style="dim"),
+                        Text(f"status {row['status']}" if row.get("status") else "", style="dim"),
+                    )
                 )
-            parts.append(Padding(grid, (0, 0, 0, 4 if tenant is not None else 2), expand=False))
+            parts.append(columns(rows, indent=4 if tenant is not None else 2))
     parts.append(Text())
     return Group(*parts)
 
