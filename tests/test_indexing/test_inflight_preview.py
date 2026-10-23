@@ -115,7 +115,7 @@ def test_validate_strict_checks_the_file_not_a_shard(repo: Path) -> None:
     rule = repo / "objects" / "rules" / "rule-0001-sentinel-kql.yaml"
     rule.write_text(
         rule.read_text(encoding="utf-8").replace(
-            "severity: Substantial incident", "severity: NOT_A_SEVERITY\nbogus_field: 1"
+            "\nseverity: High\n", "\nseverity: NOT_A_SEVERITY\nbogus_field: 1\n"
         ),
         encoding="utf-8",
     )
