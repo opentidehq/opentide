@@ -51,7 +51,7 @@ def mask_query(text: str, *, nested_comments: bool, keep_strings: bool = False) 
     """Blank comments and literal contents, keeping offsets and newlines.
 
     Comments are ``//`` to end of line and ``/* */`` (nested when
-    ``nested_comments``, as in ES|QL). Literals are double-quoted strings with
+    ``nested_comments``, as in ES|QL and EQL). Literals are double-quoted strings with
     backslash escapes, raw triple-quoted strings, and backquoted identifiers
     (a doubled backquote escapes one). Their delimiters stay; their contents
     are blanked unless ``keep_strings``.
@@ -123,12 +123,12 @@ def esql_has_metadata_id(query: str) -> bool:
 
 def eql_is_sequence(query: str) -> bool:
     """True when the EQL query is a ``sequence``."""
-    return bool(_EQL_SEQUENCE.match(mask_query(query, nested_comments=False)))
+    return bool(_EQL_SEQUENCE.match(mask_query(query, nested_comments=True)))
 
 
 def eql_maxspans(query: str) -> list[tuple[str, int]]:
     """Every ``maxspan=`` in the EQL query as ``(text, milliseconds)``."""
-    masked = mask_query(query, nested_comments=False)
+    masked = mask_query(query, nested_comments=True)
     return [
         (match.group(1), int(match.group(2)) * _UNIT_MS[match.group(3).lower()])
         for match in _EQL_MAXSPAN.finditer(masked)

@@ -98,6 +98,8 @@ def test_esql_has_metadata_id(query: str, expected: bool) -> None:
         ('process where process.name : "sequence.exe"', False),
         ('process where process.name : """sequence"""', False),
         ("/* sequence */ process where true", False),
+        # Elasticsearch's EQL grammar nests block comments, as ES|QL does.
+        ("/* a /* b */ sequence */ process where true", False),
     ],
 )
 def test_eql_is_sequence(query: str, expected: bool) -> None:
@@ -118,6 +120,7 @@ def test_eql_is_sequence(query: str, expected: bool) -> None:
         ),
         ('sequence with maxspan=1m [a where x : "maxspan=1d"] // maxspan=2d', [("1m", 60_000)]),
         ("sequence with maxspan=5min [a where true]", []),
+        ("/* x /* y */ maxspan=1d */ sequence with maxspan=1m [a where true]", [("1m", 60_000)]),
     ],
 )
 def test_eql_maxspans(query: str, expected: list[tuple[str, int]]) -> None:
