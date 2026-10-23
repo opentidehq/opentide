@@ -275,7 +275,12 @@ def test_issue_url_carries_only_version_python_os_and_command() -> None:
     assert set(query) == {"title", "body"}
     assert query["title"] == ["Crash in opentide generate docs rules"]
     body = query["body"][0]
-    for fact in ("1.2.3", "3.12.1 (CPython)", "Linux 6.1 (x86_64)", "`opentide generate docs rules`"):
+    for fact in (
+        "1.2.3",
+        "3.12.1 (CPython)",
+        "Linux 6.1 (x86_64)",
+        "`opentide generate docs rules`",
+    ):
         assert fact in body
     assert "/" not in body.replace("`opentide generate docs rules`", "")
     # GitHub rejects new-issue links past about 8 KB.
