@@ -695,3 +695,29 @@ def test_a_failed_run_names_its_failure_code(
     payload = json.loads(result.stdout)
     assert payload["exit_code"] == exit_code
     assert payload["failure"]["code"] == code
+
+
+def test_share_runs_inside_terminal_progress(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The catalogue and destination calls run inside one tab or taskbar progress block."""
+    from opentide.cli.ui import terminal_progress
+
+    seen: list[str] = []
+
+    class _Recorder(terminal_progress.TerminalProgress):
+        def __enter__(self) -> terminal_progress.TerminalProgress:
+            seen.append("enter")
+            return super().__enter__()
+
+        def __exit__(self, *exc: object) -> None:
+            seen.append("exit")
+            super().__exit__(None, None, None)
+
+    monkeypatch.setattr(terminal_progress, "TerminalProgress", _Recorder)
+    _write_sharing(tide_corpus_repo)
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    preview = invoke_cli("share", "preview", "--type", "objective", repo=tide_corpus_repo)
+    assert preview.exit_code == 0, preview.stdout
+    assert seen == ["enter", "exit"]

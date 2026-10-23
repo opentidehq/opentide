@@ -97,11 +97,9 @@ def iter_objects(root: Path, kinds: Sequence[str] = tuple(OBJECT_FOLDERS)) -> It
     for kind in OBJECT_FOLDERS:
         if kind not in kinds or not folders[kind].is_dir():
             continue
+        # A folder named like a YAML file reads as an empty header, not a crash.
         paths = sorted(
-            path
-            for pattern in ("*.yaml", "*.yml")
-            for path in folders[kind].rglob(pattern)
-            if path.is_file()
+            path for pattern in ("*.yaml", "*.yml") for path in folders[kind].rglob(pattern)
         )
         for path in paths:
             uuid, name = read_header(path)
@@ -210,8 +208,9 @@ def object_files(kinds: Sequence[str] = tuple(OBJECT_FOLDERS)) -> Source:
     """
 
     def source(ctx: Any, incomplete: str) -> list[Candidate]:
-        root = workspace_root(ctx)
-        cwd = Path.cwd()
+        # Resolved once: the object paths found under the root then need no resolving.
+        root = workspace_root(ctx).resolve()
+        cwd = Path.cwd().resolve()
         entries = list(iter_objects(root, _selected_kinds(ctx, kinds)))
         paths = [(_shown_path(entry.path, cwd, root), entry) for entry in entries]
         found = [
@@ -231,8 +230,8 @@ def object_files(kinds: Sequence[str] = tuple(OBJECT_FOLDERS)) -> Source:
 def _shown_path(path: Path, cwd: Path, root: Path) -> str:
     for base in (cwd, root):
         try:
-            return path.resolve().relative_to(base.resolve()).as_posix()
-        except (ValueError, OSError):
+            return path.relative_to(base).as_posix()
+        except ValueError:
             continue
     return path.as_posix()
 
