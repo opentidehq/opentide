@@ -27,6 +27,7 @@ Run `opentide --help` for the live command tree.
 | [`deploy`](./deploy.md) | Platform rule deployment |
 | [`share`](./share.md) | Publish objects to a MISP destination |
 | [`info`](./info.md) | Repository and platform statistics |
+| [`explain`](./diagnostics.md) | What a diagnostic code means, an example, and how to fix it |
 | [`mcp`](../mcp/index.md) | Stdio MCP server (`mcp start`); the editor owns the process |
 
 <Callout type="info">

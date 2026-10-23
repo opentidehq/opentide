@@ -32,7 +32,39 @@ opentide validate --check schema
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
-Without `--json`, issues are listed in a **Validation issues** panel, grouped by file, one `[severity] field: message` line each — for example `[error] detection_model: Unknown objective or signal reference '…'`.
+Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A typo in a vocabulary value:
+
+```text illustrative
+error[vocab_unknown]: Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry
+  ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8
+  │
+7 │   modified: 2026-01-02
+8 │   tlp: clearr
+  │        ━━━━━━ not in tlp::1.0
+  │
+  ╰─ help: did you mean 'clear'?
+
+✗ 1 error in 1 file · 3 objects checked · 0.9s
+```
+
+The sample is illustrative because the outcome line carries the run time. Paths are relative to the current directory when you run inside it, otherwise to the workspace; in a terminal they are links your editor opens (`OPENTIDE_LINKS=file|vscode|cursor|none` picks the scheme). `opentide explain <code>` prints what a code means and how to fix it; [Diagnostic codes](./diagnostics.md) lists them all.
+
+One cause is one finding: a dangling reference such as `detection_model` is reported as `invalid_ref` only, not also as `vocab_unknown`.
+
+### Diagnostic fields
+
+Each entry of `report.issues` and `report.warnings` keeps its keys (`yaml_line` stays zero-based, `file_path` stays absolute) and gains:
+
+| Key | Value |
+|-----|-------|
+| `path` | The file, relative to the workspace, with `/` separators. `null` when no file is at fault |
+| `line` | One-based line. `null` when unknown |
+| `column`, `end_column` | One-based columns of the value (of the key, for a block or a missing field); `end_column` is just past the last character. Best effort, `null` when unknown |
+| `help` | What to do, in prose (`did you mean 'clear'?`), or `null` |
+| `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_column", "replacement" }] }`: replace the text from `column` up to `end_column`. `safe` is `true` for a vocabulary typo, never for a reference |
+| `explain` | `opentide explain <code>` |
+
+`summary` counts `objects`, `errors`, `warnings` and `files`. A run that fails on its findings has `failure.code` `issues_found`.
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 
@@ -110,7 +142,7 @@ Every issue reports the `file_path` of the object it concerns, so issues from tw
 
 ### Unparseable object files
 
-An object file that is not valid YAML is reported as a `yaml_parse` issue against that path (exit `1`, and a complete report in `--json` mode) instead of raising a parser traceback. The file is not indexed, so no other check can see it — the issue is emitted regardless of `--check`.
+An object file that is not valid YAML is reported as a `yaml_parse` issue against that path (exit `1`, and a complete report in `--json` mode) instead of raising a parser traceback. The message and the frame name the line and column where the parser stopped, and a note says what it was reading and where that started (`while parsing a flow sequence that starts at line 8, column 8`). It is reported once: `validate` does not also log it. The file is not indexed, so no other check can see it — the issue is emitted regardless of `--check`.
 
 ### Schema identifier
 
@@ -125,11 +157,18 @@ The `schema` check validates each object against the revision its `metadata.sche
 A rule may carry a block for a platform this workspace has not enabled, for example a rule imported from a repository that deploys to Splunk. The block is still validated against that platform's model: an empty `query`, an unknown key, or a missing required field fails, and so does a key that is not a platform (`configurations.splnk`). A well-formed block passes with one `platform_not_enabled` warning per disabled platform, at `configurations.<platform>`:
 
 ```text illustrative
-warning: /repo/objects/rules/imported.yaml:24: configurations.splunk: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
-✓ Validation passed
+warning[platform_not_enabled]: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
+   ╭─▶ objects/rules/imported.yaml:24:3
+   │
+23 │ configurations:
+24 │   splunk:
+   │   ━━━━━━
+   │
+
+✓ 3 objects valid · 1 warning · 0.9s
 ```
 
-In `--json` mode the line is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.
+In `--json` mode a line naming it is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.
 
 ### CVE check
 

@@ -48,7 +48,7 @@ With `--json`, failures still write one complete object to stdout before exiting
   "status": "failed",
   "message": "Validation failed",
   "exit_code": 1,
-  "failure": { "code": "command_failed", "message": "Validation failed" }
+  "failure": { "code": "issues_found", "message": "Validation failed" }
 }
 ```
 

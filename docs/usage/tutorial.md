@@ -230,14 +230,20 @@ Re-run:
 opentide validate
 ```
 
-Issues print in a "Validation issues" panel, grouped by file. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check):
+Each finding prints as a code frame: its code, the file, line and column, the line itself with the value underlined, and what to do. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check). The process exits `1`, and the last line counts the errors (`✗ 1 error in 1 file · 3 objects checked · 0.9s`):
 
-```text
-## objects/rules/sentinel-kql-rule.yaml
-  [error] detection_model: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+```text output-of="opentide validate" exit=1 state=dangling-reference
+error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+   ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
+   │
+16 │ techniques: [T1059]
+17 │ detection_model: 00000000-0000-4000-8002-DEADBEEF0000   # the objective from step 4
+   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+   │
+   ╰─ help: opentide info objectives lists the ones that exist
 ```
 
-The process exits `1`. This is the **dangling reference** anti-pattern from the [object model](./concepts/object-model.md#anti-patterns-to-avoid). Restore the correct UUID and validation passes again.
+`opentide explain invalid_ref` says what the code means and how to fix it. With `--json`, the same finding is in `report.issues` with `line`, `column`, `help` and `explain`. This is the **dangling reference** anti-pattern from the [object model](./concepts/object-model.md#anti-patterns-to-avoid). Restore the correct UUID and validation passes again.
 
 ## 8. Check the coverage graph
 
