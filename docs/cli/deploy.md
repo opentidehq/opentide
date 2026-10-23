@@ -73,6 +73,10 @@ Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
   help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
 ```
 
+At a terminal the plan is in colour, recorded from [`docs/tapes/deploy-plan.tape`](https://github.com/opentidehq/opentide/blob/development/docs/tapes/deploy-plan.tape):
+
+![The deploy plan for the tutorial rule: one create-or-update row for Sentinel, the missing-tenant warning and the tally](https://raw.githubusercontent.com/opentidehq/opentide/development/docs/assets/cli/deploy-plan.png)
+
 Defender for Endpoint, SentinelOne and CrowdStrike keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule by its UUID whether it exists or not, and opentide does not claim either: their rows say `create or update`. A real run ends with a counted outcome line, `✓ Deployed 3 rules to 2 tenants · 1 created, 2 updated · 12.4s`. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
 
 ```bash

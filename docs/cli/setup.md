@@ -18,6 +18,12 @@ opentide setup hooks --yes
 
 The interactive wizard opens with the opentide logo and the tagline (the one-line pill in a terminal narrower than 82 columns, and no mark with `--no-color` or `NO_COLOR`), then uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. An empty repository name is refused on screen. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
 
+![The setup wizard's welcome: the opentide logo, the tagline and the first question](https://raw.githubusercontent.com/opentidehq/opentide/development/docs/assets/cli/setup-welcome.png)
+
+A whole run in an empty directory, choosing Sentinel and leaving CI, MCP and agent skills for later, recorded from [`docs/tapes/setup-wizard.tape`](https://github.com/opentidehq/opentide/blob/development/docs/tapes/setup-wizard.tape):
+
+![The setup wizard from the welcome to the setup plan, the files written and the next steps](https://raw.githubusercontent.com/opentidehq/opentide/development/docs/assets/cli/setup-wizard.gif)
+
 Every `setup` command, scripted or interactive, ends the same way: the files it wrote, its warnings (each once), one outcome line, and numbered next steps when it created a repository:
 
 ```text illustrative

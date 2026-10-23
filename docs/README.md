@@ -109,6 +109,54 @@ Prefer a `state=` over `illustrative`: an illustrative sample is never compared 
 
 None of these attributes renders: Fumadocs reads only `title`, `tab`, `noCopy` and `lineNumbers` from fence meta, and GitHub reads only the language.
 
+### Terminal recordings (tapes)
+
+Screenshots of the CLI are not taken by hand. Each one is a [VHS](https://github.com/charmbracelet/vhs) tape in [`tapes/`](./tapes/) that types the commands into a real terminal and writes a GIF of the run and a PNG of its last screen to `assets/cli/`:
+
+| Tape | Records | Writes |
+|------|---------|--------|
+| `tutorial.tape` | Tutorial steps 1, 2 and 6: `setup --yes`, `generate`, `validate` | `tutorial.gif`, `tutorial.png` |
+| `validate-failure.tape` | Tutorial step 7: `validate` on a dangling `detection_model` | `validate-failure.gif`, `validate-failure.png` |
+| `deploy-plan.tape` | Tutorial step 9: the deploy plan of a dry run | `deploy-plan.gif`, `deploy-plan.png` |
+| `home.tape` | `opentide` with no command, in the tutorial repository | `home.gif`, `home.png` |
+| `setup-wizard.tape` | The interactive `setup` wizard in an empty directory | `setup-wizard.gif`, `setup-welcome.png`, `setup-wizard.png` |
+
+The `tapes` job in [`.github/workflows/docs.yml`](../.github/workflows/docs.yml) renders every tape when docs, tapes or the CLI's output code change, fails when one no longer runs, and uploads what it rendered as the `cli-tapes` artifact. It never commits.
+
+**Refresh the committed images** after a change to what a recorded command prints. Download the artifact from the pull request's Docs run and commit it over the old files:
+
+```bash
+gh run download <run-id> --name cli-tapes --dir docs/assets/cli
+git add docs/assets/cli
+```
+
+Or render locally from the repository root. You need VHS 0.12.1, ttyd, ffmpeg, Chrome or Chromium, and the JetBrains Mono font; `opentide` comes from the checkout:
+
+```bash
+uv sync
+export PATH="$PWD/.venv/bin:$PATH"
+vhs docs/tapes/home.tape            # one tape
+for tape in docs/tapes/*.tape; do vhs "$tape"; done
+```
+
+As root (in a container), set `VHS_NO_SANDBOX=1` so Chrome starts.
+
+**Add a tape** by copying one that is closest to what you need:
+
+- Keep the settings block as it is: shell, font, size, padding, margin, the Reflex Blue frame and the white theme are pinned in every tape so renders match. Change `Width` and `Height` only to fit the output without wrapping.
+- Keep `Env OPENTIDE_OUTPUT "human"`, so the tape records what a person sees even when CI or a coding agent runs it.
+- Build the repository off camera with `Hide`, [`tapes/tutorial_repo.py`](./tapes/tutorial_repo.py) and `clear`, then `Show`. The script scaffolds the tutorial repository, writes its objects from the tutorial page, and can generate, commit, or break it the way a `state=` sample does.
+- After each command, `Wait+Screen /…/` for text it must print, then `Wait` for the prompt. A command that crashes or prints something else then times out the tape and fails the job. `Wait+Screen` reads the first screenful only; once output scrolls, wait on the current line (`Wait+Line`) or check a file the command wrote.
+- Name the outputs after the tape, under `docs/assets/cli/`, and end with `Screenshot`, then a short `Sleep` so VHS captures it.
+
+**Show a recording** on a page with an absolute URL on `development`, next to the text sample (the sample stays: it is what the golden test checks, and what readers copy):
+
+```markdown
+![What the image shows, in words](https://raw.githubusercontent.com/opentidehq/opentide/development/docs/assets/cli/home.png)
+```
+
+The website publishes only the four tabs, so a relative path to `assets/` would not resolve there. `scripts/validate-docs.sh` still fails when the file is missing from the checkout. VHS writes GIF, MP4, WebM and PNG, not SVG, so the still of each tape is a PNG.
+
 ## Agent maintenance
 
 Agents working on documentation should read [`.agents/skills/docs-maintenance/SKILL.md`](../.agents/skills/docs-maintenance/SKILL.md).

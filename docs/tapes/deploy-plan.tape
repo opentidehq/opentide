@@ -15,7 +15,7 @@ Set FontFamily "JetBrains Mono"
 Set FontSize 16
 Set LineHeight 1.0
 Set Width 1400
-Set Height 400
+Set Height 340
 Set Padding 24
 Set Margin 24
 Set MarginFill "#001489"

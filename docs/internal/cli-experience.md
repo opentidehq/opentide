@@ -280,6 +280,7 @@ The output contract (#619) is in place. Where it differs from the sections above
 | Brand | The pill logo, rasterised as prototyped, is 80 × 10 cells (not 73): the welcome falls back to the one-line pill below 82 columns, the home screen below 76. |
 | Soft wrap | Outcome, warning, error and next-step lines are soft-wrapped in `human` mode too, not only `plain`: Rich would otherwise break a long path mid-word on a TTY. |
 | `opentide --json` with no command | Still prints help (`no_args_is_help`), not a JSON document. |
+| Tapes | `docs/tapes/*.tape` render to a GIF and a PNG still each, not SVG: VHS 0.12.1 writes GIF, MP4, WebM and PNG only. There is also a tape for the setup wizard. Pages link the images in `docs/assets/cli/` by absolute URL on `development`, because the website publishes only the four tabs; `scripts/validate-docs.sh` checks the files exist. |
 
 ## Code references
 

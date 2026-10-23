@@ -50,6 +50,10 @@ This is the output with `--no-color`, in a pipe or in CI: one line per finished 
 
 Your editor can now validate YAML under `objects/` because `opentide setup vscode` maps `objects/**/*.yaml` to the router, which applies the schema revision each object names in `metadata.schema`.
 
+Steps 1, 2 and 6 at a terminal, recorded from [`docs/tapes/tutorial.tape`](https://github.com/opentidehq/opentide/blob/development/docs/tapes/tutorial.tape):
+
+![opentide setup, then opentide generate drawing its phases as a live checklist, then opentide validate passing](https://raw.githubusercontent.com/opentidehq/opentide/development/docs/assets/cli/tutorial.gif)
+
 ## 3. Author the threat
 
 Create `objects/threats/simulated-actor.yaml`:
@@ -239,6 +243,10 @@ Issues print in a "Validation issues" panel, grouped by file. A dangling `detect
 
 The process exits `1`. This is the **dangling reference** anti-pattern from the [object model](./concepts/object-model.md#anti-patterns-to-avoid). Restore the correct UUID and validation passes again.
 
+The same failure at a terminal, recorded from [`docs/tapes/validate-failure.tape`](https://github.com/opentidehq/opentide/blob/development/docs/tapes/validate-failure.tape):
+
+![opentide validate reporting the unknown detection_model reference and exiting with an error](https://raw.githubusercontent.com/opentidehq/opentide/development/docs/assets/cli/validate-failure.png)
+
 ## 8. Check the coverage graph
 
 ```bash
@@ -290,6 +298,10 @@ Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
 ```
 
 `--dry-run` selects the rules without touching the platform. In CI, the pull request job runs `--strategy PREVIEW` and the default-branch job `--strategy RELEASE`; see [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md). This scaffold still has `[[tenants]]` commented out, so the dry-run warns that a real deploy would stop and leaves Sentinel out of `deployed` until you uncomment a tenant. The plan lists each rule with what a deploy would do to it: Sentinel writes a rule by its UUID, so opentide cannot tell a create from an update without asking Sentinel and says `create or update`. `opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all` returns the selected rules, the tenants each would reach, and a payload preview for each rule (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
+
+The plan at a terminal, recorded from [`docs/tapes/deploy-plan.tape`](https://github.com/opentidehq/opentide/blob/development/docs/tapes/deploy-plan.tape):
+
+![The deploy plan for the tutorial rule: one create-or-update row for Sentinel, the missing-tenant warning and the tally](https://raw.githubusercontent.com/opentidehq/opentide/development/docs/assets/cli/deploy-plan.png)
 
 ## 10. Generate documentation
 

@@ -14,6 +14,14 @@ pip install 'opentide==0.17.2'
 
 Run `opentide --help` for the live command tree.
 
+## Home screen
+
+At a terminal, `opentide` with no command prints a home screen instead of the help: the workspace and its git state, how many rules, threats and objectives it holds, whether the schemas are generated, the enabled platforms, and up to three commands worth running next. It reads files on disk only, so it is as quick as `--help`. In a pipe, in CI, under a coding agent or with `NO_COLOR`, it prints the help.
+
+![The home screen in the tutorial repository: the opentide icon, the workspace facts and the suggested next commands](https://raw.githubusercontent.com/opentidehq/opentide/development/docs/assets/cli/home.png)
+
+Recorded in the [tutorial](../usage/tutorial.md) repository from [`docs/tapes/home.tape`](https://github.com/opentidehq/opentide/blob/development/docs/tapes/home.tape).
+
 ## Command overview
 
 | Command | Purpose |

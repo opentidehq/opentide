@@ -85,11 +85,17 @@ jobs:
           set -euo pipefail
           # The artifact then holds only what this run rendered.
           rm -f docs/assets/cli/*.gif docs/assets/cli/*.png
+          # Every tape runs, so one failure does not hide another.
+          failed=0
           for tape in docs/tapes/*.tape; do
             echo "::group::${tape}"
-            vhs "${tape}"
+            if ! vhs "${tape}"; then
+              failed=1
+              echo "::error file=${tape}::${tape} no longer runs; VHS says why just above"
+            fi
             echo "::endgroup::"
           done
+          exit "${failed}"
 
       - name: Upload rendered tapes
         if: always()

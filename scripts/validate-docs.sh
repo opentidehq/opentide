@@ -75,11 +75,19 @@ from pathlib import Path
 
 docs = Path(sys.argv[1])
 link_re = re.compile(r'\[[^\]]+\]\(([^)]+)\)')
+# Images under docs/assets are linked by absolute URL, because the website
+# publishes only the four tabs; the file must still be in this checkout.
+asset_re = re.compile(r'^https://raw\.githubusercontent\.com/opentidehq/opentide/[^/]+/(docs/assets/.+)$')
 errors = 0
 
 for md in docs.rglob("*.md"):
     text = md.read_text()
     for target in link_re.findall(text):
+        asset = asset_re.match(target)
+        if asset and not (docs.parent / asset.group(1)).is_file():
+            print(f"missing asset in {md.relative_to(docs)}: {target}", file=sys.stderr)
+            errors += 1
+            continue
         if target.startswith(("http://", "https://", "#", "mailto:", "/")):
             continue
         path_part = target.split("#")[0]
