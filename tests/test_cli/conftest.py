@@ -20,6 +20,7 @@ from tests.corpus_support import (
 from typer.testing import CliRunner, Result
 
 from opentide.cli import app
+from opentide.cli.output import ENVELOPE_KEYS
 from opentide.cli.services.setup import skills_registry as skills_registry_mod
 from opentide.cli.services.setup.skills_registry import SkillEntry
 
@@ -113,12 +114,6 @@ def mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
         "opentide.cli.services.setup.skills.fetch_github_bytes",
         lambda path, **_: None,
     )
-
-
-#: Keys every ``--json`` document carries (docs/cli/json-output.md).
-ENVELOPE_KEYS = frozenset(
-    {"schema_version", "command", "duration_ms", "exit_code", "summary", "next_actions", "failure"}
-)
 
 
 def without_envelope(payload: dict[str, Any]) -> dict[str, Any]:

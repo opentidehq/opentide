@@ -265,6 +265,19 @@ Generated JSON schemas carry `title` and `description` for every field, `markdow
 
 `docs/tapes/*.tape` (VHS) record the tutorial path, a validation failure, the plan view and the home screen. The docs workflow renders them to GIF and SVG and fails when a tape no longer runs, so screenshots never drift from the product.
 
+## Built so far, and deviations
+
+The output contract (#619) is in place. Where it differs from the sections above, the code is right and this list says how:
+
+| Topic | As built |
+|-------|----------|
+| Logs under `--json --debug` | DEBUG and above, like `--debug` in every other mode (not INFO). Without `--debug`, `--json` and the MCP server log WARNING and above. |
+| JSON indentation | Always indented. Compact output on a pipe and `OPENTIDE_JSON_INDENT` come later (PR K). |
+| `failure` | Set on every non-zero exit, `ok` true or not, so `failure.code` tells the cases of one exit code apart; `null` exactly when `exit_code` is `0`. Codes in use: the five `usage_*` codes above plus `usage_invalid_value` and `usage_error`; `command_failed`, `issues_found` (`--strict`), `not_run`; `no_tenant_reached`, `needs_human_decision`, `not_implemented`; `share_failed`, `share_unreachable`, `share_partial`, and the share preflight codes (`scope_no_match`, ...). The list is in `docs/cli/json-output.md`. |
+| Outcome lines | The glyph grammar is in place; each command keeps its current message (`✓ Validation passed`). The counted wordings in the table above come with diagnostics and progress (PRs C and E). A skipped result prints `Skipped: <message>`. |
+| Soft wrap | Outcome, warning, error and next-step lines are soft-wrapped in `human` mode too, not only `plain`: Rich would otherwise break a long path mid-word on a TTY. |
+| `opentide --json` with no command | Still prints help (`no_args_is_help`), not a JSON document. |
+
 ## Code references
 
 What is built, and the APIs the next changes extend.
