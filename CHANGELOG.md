@@ -21,6 +21,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - **Imported rules with the same display name overwrote each other** on Sentinel and Defender, and across Defender tenants. The second file name now gets the first eight characters of the rule's UUID, and Defender file names include the tenant.
 - **`generate extract defender` read only the first page of rules and could hang.** The listing now follows `@odata.nextLink`, times out after 60 s per page, and an HTTP error names the tenant and status instead of raising `KeyError`.
 - **Imported Elastic rules were marked TLP:CLEAR.** Enabled rules import as PRODUCTION, which `share push` shares by default, so an organisation's private detections would have been published as TLP:CLEAR. They now import as `amber`, as Sentinel's do.
+- **Splunk retirements never removed anything.** The request handler built `urllib` requests without a method, so splunklib's DELETE went out as a GET; Splunk answered with the saved search and the run reported it deleted. A lookup that failed for any reason (401, TLS, a refused connection) was also read as "already absent". DELETE is sent as DELETE, and only a missing saved search counts as absent.
+- **A Splunk deploy answered with a gateway redirect counted as success.** A `307` on the update request was logged and returned as success; it now fails the deploy.
+- **Splunk and Carbon Black deployed every tenant with the first tenant's settings** (Splunk actions, scheduling, skew and offset; the Carbon Black watchlist). Each tenant now uses its own.
+- **Carbon Black updates appended a second IOC and retirements removed nothing.** `remove_iocs_by_id` was given a string, which the SDK read as a set of characters. A shared report is now deleted only when no other rule's IOC remains in it.
+- **Defender, SentinelOne, CrowdStrike, HarfangLab and Splunk calls had no timeout,** so a tenant that accepted the connection and never answered hung the job until the runner killed it. Every platform session now times out.
+- **Defender's minimal-configuration retry posted to the wrong endpoint** and could never succeed; it now retries where the rule is created, and an error body that is not JSON no longer hides the HTTP status.
+- **CrowdStrike rejected the `US-GOV-1` API domain** because of a stray colon in the match.
+- **SentinelOne sent `cool_off` as the raw string** (`"30m"`) instead of minutes.
+- **KQL `let` values with a backslash or quote broke the Sentinel and Defender query** (`C:\Windows\Temp\` escaped the closing quote). String values are now escaped.
+- **HarfangLab Sigma rules with `:` or quotes in a title or value were invalid YAML, and a value like `yes` became a boolean.** The rule is now serialised with a YAML dumper.
+- **Deploys could ship another open pull request's unreviewed query.** Every registry build applied the inflight preview shards, so deploy and `validate --strict` read a shard of the same or higher version instead of the committed file. Only preview output applies shards now.
+- **Pull request runs deployed and validated rules the target branch changed.** The diff ran from the merge base to the merge commit GitHub, Azure and GitLab merged-results build; it now starts at the merge commit's first parent. A `pull_request_target` run saw none of the request's changes. Both are fixed.
+- **A push of several commits deployed only the last commit's rules** on GitHub; the diff now starts at the push's `before`.
+- **`setup ci github --explorer-pages` could cancel queued production deploys:** `concurrency: group: pages` sat on the whole workflow and Pages permissions on every job. Both are now on the `deploy-explorer` job.
+- **Rules saved as `.yml` were never validated** and failed deploy with `KeyError: '<uuid>'`. The registry indexes `.yml` objects.
+- **A platform modifier applied when only some of its conditions held** (`tenants` replaced the `status` result, and a `flags` condition was skipped for rules without flags). All set conditions must now hold.
+- **`setup hooks` could corrupt an existing `.pre-commit-config.yaml`** in the `pre-commit sample-config` layout or with a top-level key after `repos:`. The hook is inserted after the last repo, and the file is written only if it still parses.
+- **Hook scripts were written with CRLF on Windows,** which Git Bash refuses; they are written with LF and re-running setup repairs a broken one.
+- **Options typed before a subcommand were silently dropped:** `opentide share --dry-run push` really pushed and `opentide deploy --dry-run migrate-state` rewrote files. They are passed to the subcommand or refused.
+- **`DEBUG=*` (the Node convention) made every command exit 2.** `DEBUG` is now read leniently.
+- **`setup mcp` overwrote `.mcp.json` and `setup skills` overwrote `AGENTS.md`, `CLAUDE.md` and Copilot instructions.** MCP configs are merged; existing agent entrypoints are kept with a warning.
+- **A `TypeError` inside a deployer surfaced as an unrelated "unexpected keyword argument 'deployment'" traceback** with no JSON result. The legacy retry is gone; a platform failure is a failed result naming it.
+- **`migrate vocab-scope --apply` rewrote every line ending,** and **`migrate objects` reported success while leaving `Configurations/` behind.** Line endings are kept, and every skipped path is a warning (exit 1 under `--apply`).
+- **`setup skills --install X` without a target ignored `--install`, `--all` and `--name`;** **`lint --fix` could not fix a case-only filename on macOS/Windows;** **`rules unreviewed` crashed on one unreadable rule;** **`generate docs --rules --threats` generated only rules;** **`setup --json --no-promotion` reported no platforms;** **`setup skills --all` made one GitHub API call per skill.** All fixed.
+- **`validate` crashed on a `threat:` or `objective:` block whose keys are all commented out,** and on a YAML parse error recorded without an object type. Both are now reported as issues.
+- **A Defender block without `scope` passed validation, then broke loading of every rule.**
+- **The `uuid-format` check accepted any UUID** (v1, v5, nil, braced, unhyphenated). It now requires a hyphenated version-4 UUID.
+- **Duplicate signal UUIDs were never reported;** a copied objective silently took over its original's signals.
+- **An unreachable CVE lookup passed silently, even with `--strict`.** It is now a `cve_lookup_unavailable` warning.
+- **A small YAML file of nested aliases took seconds to minutes to validate, and a recursive alias crashed `validate`.** Parsing is linear and a recursive alias is a YAML error.
+- **The MCP `validate_rule` and `validation_report` tools validated the workspace as it was when the server started,** and one rule that failed to load broke `validate_rule` for all. They now reload and look rules up individually.
+- **`validate_all_objects(objects_index)` and `DetectionRule.validate_query` in the SDK ignored their input / always returned `ok=True`.**
+- **Generated schemas:** the visibility configuration schema rejected every valid configuration; a misspelled rule tenant passed and deployed nowhere (tenants are now an enum of the configured ones); a Splunk rule from the shipped template was flagged for missing `scheduling`; `metadata.tlp` ignored its vocabulary pin; a scoped vocabulary entry without stages crashed generation.
+- **ATT&CK groups present in several domains kept the Mobile entry** (`G0007` read `[Mobile] APT28`); the generator now keeps the Enterprise one. The bundled vocabulary is regenerated upstream in `opentidehq/specifications`.
 
 ## [0.17.2] — 2026-10-22
 
