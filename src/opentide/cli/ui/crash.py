@@ -301,12 +301,18 @@ def crash_log_dir(
     if platform_name == "win32":
         local = env.get("LOCALAPPDATA", "")
         base = Path(local) if local else home / "AppData" / "Local"
-        return base / "opentide" / "logs"
-    if platform_name == "darwin":
-        return home / "Library" / "Logs" / "opentide"
-    state = env.get("XDG_STATE_HOME", "")
-    base = Path(state) if state and Path(state).is_absolute() else home / ".local" / "state"
-    return base / "opentide"
+        directory = base / "opentide" / "logs"
+    elif platform_name == "darwin":
+        directory = home / "Library" / "Logs" / "opentide"
+    else:
+        state = env.get("XDG_STATE_HOME", "")
+        base = Path(state) if state and Path(state).is_absolute() else home / ".local" / "state"
+        directory = base / "opentide"
+    if not directory.is_absolute():
+        # No home directory: "~" stays as it is, and a relative path would put
+        # the log under the current directory, the repository more often than not.
+        raise RuntimeError("no home directory to keep crash logs in")
+    return directory
 
 
 def write_crash_log(
@@ -521,8 +527,8 @@ def handle_crash(
                 facts=facts,
             )
             log_path = write_crash_log(text, log_dir or crash_log_dir(env=env))
-        except (OSError, RuntimeError) as problem:
-            # RuntimeError: Path.home() with no home directory to find.
+        except Exception as problem:
+            # Still report the error, and in json mode still print the document.
             log_problem = f"{type(problem).__name__}: {problem}"
 
         if debug:

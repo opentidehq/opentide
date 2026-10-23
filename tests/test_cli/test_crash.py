@@ -244,6 +244,12 @@ def test_log_dir_windows(tmp_path: Path) -> None:
     )
 
 
+def test_log_dir_is_never_relative() -> None:
+    """With no home directory, ``~`` stays as it is: never write under the current directory."""
+    with pytest.raises(RuntimeError, match="no home directory"):
+        crash_log_dir(env={}, platform_name="linux", home=Path("~"))
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
 def test_log_dir_and_log_are_private(tmp_path: Path) -> None:
     directory = tmp_path / "state" / "opentide"
