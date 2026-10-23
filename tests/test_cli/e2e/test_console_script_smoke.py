@@ -36,6 +36,16 @@ def test_opentide_console_script_help(script_runner, tide_corpus_repo) -> None:
     assert "validate" in result.stdout
 
 
+def test_opentide_console_script_version(script_runner) -> None:
+    """``--version`` is answered in ``main()`` before Typer loads; check it through the launcher."""
+    from opentide import __version__
+
+    result = script_runner.run(["opentide", "--json", "--version"])
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == f"opentide {__version__}"
+    assert result.stderr == ""
+
+
 def test_opentide_console_script_json_is_single_document(script_runner, tide_corpus_repo) -> None:
     result = script_runner.run(["opentide", "--json", "info"])
     assert result.returncode == 0, result.stderr
