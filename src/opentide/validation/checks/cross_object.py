@@ -37,6 +37,7 @@ def check_references_for_object(
                     field_path=("detection_model",),
                     message=message,
                     suggestion=suggestion,
+                    context={"value": str(parent)},
                 )
             )
     if object_type == "objective":
@@ -52,6 +53,7 @@ def check_references_for_object(
                         field_path=("objective", "threats"),
                         message=graph.format_invalid_ref("threat", str(threat_id)),
                         suggestion=graph.suggest_ref("threat", str(threat_id)),
+                        context={"value": str(threat_id)},
                     )
                 )
     if object_type == "threat":
@@ -71,6 +73,7 @@ def check_references_for_object(
                         field_path=("threat", "chaining", str(index), "vector"),
                         message=graph.format_invalid_ref("threat", str(vector)),
                         suggestion=graph.suggest_ref("threat", str(vector)),
+                        context={"value": str(vector)},
                     )
                 )
     return issues
