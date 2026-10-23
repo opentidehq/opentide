@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -186,7 +187,7 @@ def _watch(
     stdout = get_stdout_console()
     try:
         if mode is OutputMode.HUMAN:
-            footer = "watching " + ", ".join(_shown(root) for root in roots)
+            footer = f"watching {_shown(roots)}"
             with LiveView(stdout, describe, footer=footer, quiet=cli.quiet) as view:
                 watcher.run(view)
         else:
@@ -207,11 +208,15 @@ def watched_folders() -> list[Path]:
     ]
 
 
-def _shown(path: Path) -> str:
+def _shown(roots: Sequence[Path]) -> str:
+    """The folder that holds every watched one, relative to the current directory."""
+    if not roots:
+        return "nothing: no object folder exists"
+    common = Path(os.path.commonpath([str(root) for root in roots]))
     try:
-        return path.relative_to(Path.cwd()).as_posix() or "."
+        return common.relative_to(Path.cwd()).as_posix()
     except ValueError:
-        return path.as_posix()
+        return common.as_posix()
 
 
 @validate_app.command("query")

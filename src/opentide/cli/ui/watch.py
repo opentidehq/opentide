@@ -332,6 +332,10 @@ class LiveView:
     def renderable(self, run: WatchRun) -> Group:
         """The frames that fit above the outcome line, the outcome line, and the footer."""
         encoding = self.console.encoding or "utf-8"
+        width = self.console.size.width
+        footer = Text(self.footer_text(run), style="dim")
+        outcome = outcome_text(outcome_kind_of(run), self.describe(run), encoding=encoding)
+        room = self.console.size.height - self._height(outcome, width) - self._height(footer, width)
         sources = SourceFiles()
         frames: list[Text] = []
         shown = [item for item in run.diagnostics if not self.quiet or item.severity == "error"]
@@ -340,30 +344,29 @@ class LiveView:
                 diagnostic_lines(diagnostic, sources=sources, encoding=encoding, cwd=self.cwd)
             )
             frames.append(Text(""))
-        room = max(self.console.size.height - 3, 1)
-        if len(frames) > room:
-            hidden = len(frames) - (room - 1)
-            frames = [*frames[: room - 1], Text(f"… {hidden} more lines", style="dim")]
-        footer = Text(self.footer_text(run), style="dim")
-        outcome = outcome_text(outcome_kind_of(run), self.describe(run), encoding=encoding)
+        heights = [self._height(line, width) for line in frames]
+        if sum(heights) > room:
+            # Keep the outcome line on screen: cut the frames, and say how much.
+            kept, used = 0, 1
+            while kept < len(frames) and used + heights[kept] <= room:
+                used += heights[kept]
+                kept += 1
+            hidden = len(frames) - kept
+            frames = [*frames[:kept], Text(f"… {hidden} more lines", style="dim")]
         return Group(*frames, outcome, footer)
 
+    def _height(self, text: Text, width: int) -> int:
+        return max(len(text.wrap(self.console, width)), 1)
+
     def footer_text(self, run: WatchRun) -> str:
+        """``watching objects · re-checked rule.yaml · 12:42:23 · Ctrl-C to stop``."""
         separator = glyph("separator", encoding=self.console.encoding or "utf-8")
         parts = [self.footer] if self.footer else []
         if run.changed:
-            what = _display(run.changed[0], self.cwd)
+            what = run.changed[0].name
             if len(run.changed) > 1:
                 what += f" and {len(run.changed) - 1} more"
-            parts.append(f"{'re-checked' if run.scoped else 'changed'}: {what}")
-        parts.append(f"run {run.number} at {time.strftime('%H:%M:%S')}")
+            parts.append(f"{'re-checked' if run.scoped else 'changed'} {what}")
+        parts.append(time.strftime("%H:%M:%S"))
         parts.append("Ctrl-C to stop")
         return f" {separator} ".join(parts)
-
-
-def _display(path: Path, cwd: Path | None) -> str:
-    base = cwd or Path.cwd()
-    try:
-        return path.resolve().relative_to(base.resolve()).as_posix()
-    except (OSError, ValueError):
-        return path.as_posix()

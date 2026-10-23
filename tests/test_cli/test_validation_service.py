@@ -549,7 +549,13 @@ def test_run_validate_returns_diagnostics_and_prints_nothing() -> None:
     (issue,) = result["report"]["issues"]
     assert issue["explain"] == "opentide explain schema_validation"
     assert result["_failure_code"] == "issues_found"
-    assert result["_summary"] == {"objects": 0, "errors": 1, "warnings": 0, "files": 0}
+    assert result["_summary"] == {
+        "objects": 0,
+        "errors": 1,
+        "warnings": 0,
+        "files": 0,
+        "fixable": 0,
+    }
 
 
 @pytest.mark.parametrize(
@@ -569,11 +575,86 @@ def test_run_validate_returns_diagnostics_and_prints_nothing() -> None:
             "1 warning in 1 file · 3 objects checked · 0.9s",
         ),
         ({"errors": 1}, True, "1 error · 0.9s"),
+        (
+            {"objects": 3, "errors": 4, "files": 2, "fixable": 3},
+            True,
+            "4 errors in 2 files · 3 fixable with --fix · 3 objects checked · 0.9s",
+        ),
+        (
+            {"objects": 3, "warnings": 1, "fixable": 1},
+            False,
+            "3 objects valid · 1 warning · 1 fixable with --fix · 0.9s",
+        ),
     ],
 )
 def test_validate_outcome_line(summary: dict[str, int], failed: bool, expected: str) -> None:
     assert (
         validation_service.validate_outcome_line(summary, failed=failed, seconds=0.94) == expected
+    )
+
+
+@pytest.mark.parametrize(
+    ("summary", "failed", "fix", "expected"),
+    [
+        (
+            {"objects": 3, "fixed": 3},
+            False,
+            "Fixed 3 values in 2 files",
+            "Fixed 3 values in 2 files · 3 objects valid · 0.9s",
+        ),
+        (
+            {"objects": 3, "errors": 1, "files": 1, "fixed": 3},
+            True,
+            "Fixed 3 values in 2 files",
+            "1 error in 1 file · fixed 3 values in 2 files · 3 objects checked · 0.9s",
+        ),
+        (
+            {"objects": 3, "errors": 4, "files": 2, "fixable": 3},
+            True,
+            "Would fix 3 values in 2 files",
+            "4 errors in 2 files · would fix 3 values in 2 files · 3 objects checked · 0.9s",
+        ),
+        (
+            {"objects": 3, "errors": 1, "files": 1},
+            True,
+            "No safe fix to apply",
+            "1 error in 1 file · no safe fix to apply · 3 objects checked · 0.9s",
+        ),
+    ],
+)
+def test_validate_outcome_line_after_fix(
+    summary: dict[str, int], failed: bool, fix: str, expected: str
+) -> None:
+    line = validation_service.validate_outcome_line(summary, failed=failed, seconds=0.94, fix=fix)
+    assert line == expected
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        ((3, 2), "Fixed 3 values in 2 files"),
+        ((1, 1), "Fixed 1 value in 1 file"),
+        ((0, 0), "No safe fix to apply"),
+    ],
+)
+def test_fix_phrase(args: tuple[int, int], expected: str) -> None:
+    assert validation_service.fix_phrase(*args) == expected
+    if args[0]:
+        assert validation_service.fix_phrase(*args, dry_run=True) == expected.replace(
+            "Fixed", "Would fix"
+        )
+
+
+def test_the_fix_command_keeps_the_scope_of_the_run() -> None:
+    assert validation_service.fix_command() == "opentide validate --fix"
+    assert validation_service.fix_command(
+        check=ValidateCheck.schema,
+        files=["objects/rules/my rule.yaml"],
+        uuids=["u1"],
+        object_types=["rule"],
+    ) == (
+        "opentide validate --fix --check schema --file 'objects/rules/my rule.yaml' "
+        "--uuid u1 --type rule"
     )
 
 
