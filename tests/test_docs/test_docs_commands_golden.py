@@ -90,8 +90,9 @@ EXECUTABLE_COMMANDS = [command for command in DOC_COMMANDS if _is_executable(com
 
 DOC_OUTPUTS = documented_outputs()
 #: An output sample may also pair with `deploy`: its tests stub the vendor
-#: boundary, so a sample cannot reach a platform API.
-SAMPLE_ROOTS = EXECUTABLE_ROOTS | {"deploy"}
+#: boundary, so a sample cannot reach a platform API. And with `tui`, which
+#: refuses to start without a terminal, as it always is under CliRunner.
+SAMPLE_ROOTS = EXECUTABLE_ROOTS | {"deploy", "tui"}
 
 _TUTORIAL_RULE = Path("objects", "rules", "sentinel-kql-rule.yaml")
 

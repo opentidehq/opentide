@@ -127,7 +127,7 @@ def _text(app: OpentideTui, selector: str) -> str:
     """What a Static shows, as plain text."""
     console = Console(width=200, file=io.StringIO())
     console.print(app.query_one(selector, Static).content)
-    return console.file.getvalue()  # ty: ignore[unresolved-attribute]
+    return console.file.getvalue()
 
 
 def _log_text(app: OpentideTui) -> str:
@@ -393,8 +393,8 @@ def test_pill_is_white_on_reflex_blue() -> None:
     text = pill()
     assert text.plain == "▐ ≋ opentide ▌"
     middle = text.spans[1].style
-    assert str(middle.bgcolor.name) == "#001489"  # ty: ignore[unresolved-attribute]
-    assert str(middle.color.name) == "#ffffff"  # ty: ignore[unresolved-attribute]
+    assert str(middle.bgcolor.name) == "#001489"
+    assert str(middle.color.name) == "#ffffff"
 
 
 # -- the command ------------------------------------------------------------

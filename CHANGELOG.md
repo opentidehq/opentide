@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`opentide tui`**, a terminal UI: the catalogue as a tree (threats → objectives → rules, with counts), each object's YAML with the diagnostics from the last validate run, coverage by ATT&CK technique, and `validate`, `generate` and `deploy --dry-run` from the command palette (`ctrl+p`) or a key, with their results printed as the commands print them. It runs only at an interactive terminal; under `--json`, in a pipe, in CI or under a coding agent it exits `2` with `failure.code` `usage_tui_needs_tty`. See [opentide tui](docs/cli/tui.md). It needs [Textual](https://textual.textualize.io/), now a dependency of `opentide` (there are no extras); no other command imports it, so start-up is unchanged.
+
 ### Changed
 
 - **Usage errors a command detects exit `2`, not `1`.** An unknown `info` section, an unknown `generate` phase, an invalid `validate --type`, a `share --target` that names no configured block, `info coverage` without `--technique`, `generate docs --changed` combined with a scope, and a `setup` prompt with no terminal (or under `--json`) now exit `2`, as [exit codes](docs/cli/exit-codes.md) already promised. A pipeline that tested for `1` on these should test for non-zero, or read `failure.code` from `--json`. A `share --target` naming a block that exists but is disabled still exits `1`.
