@@ -44,14 +44,15 @@ def debug_requested(env: Mapping[str, str] | None = None) -> bool:
 def is_debug() -> bool:
     """Return True when running in a debug context.
 
-    ``--debug`` exports ``OPENTIDE_DEBUG=1``. ``DEBUG=True`` is still read for
+    ``--debug`` exports ``OPENTIDE_DEBUG=1``, and ``OPENTIDE_DEBUG`` decides
+    whenever it is a boolean. Otherwise ``DEBUG=True`` is still read for
     workspaces that set it by hand.
     """
-    return (
-        bool(boolean_env("OPENTIDE_DEBUG"))
-        or os.environ.get("DEBUG") == "True"
-        or os.environ.get("TERM_PROGRAM") == "vscode"
-    )
+    vscode = os.environ.get("TERM_PROGRAM") == "vscode"
+    own = boolean_env("OPENTIDE_DEBUG")
+    if own is not None:
+        return own or vscode
+    return os.environ.get("DEBUG") == "True" or vscode
 
 
 def is_ci() -> bool:

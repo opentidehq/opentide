@@ -115,6 +115,12 @@ def run_share(
             code=USAGE_INVALID_CHOICE,
             argument="--target",
         )
+        # A usage error, but still the scope_no_match preflight scripts read.
+        payload["preflight"] = "scope_no_match"
+        payload["records"] = []
+        warnings = [issue.message for issue in config.issues if issue.severity == "warning"]
+        if warnings:
+            payload["warnings"] = warnings
         payload["_failure_suggestion"] = did_you_mean(missing[0], names)
         return _redact(payload, secrets)
     selected, problem = _select_blocks(config.blocks, targets)
