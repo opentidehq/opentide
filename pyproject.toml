@@ -175,33 +175,20 @@ extend-immutable-calls = ["typer.Option", "typer.Argument"]
 
 [tool.ty.src]
 include = ["src/opentide"]
+# Debt, not policy: the platform clients/deployers ported from CoreTide still
+# carry ~100 diagnostics. Everything else is type-checked. Remove an entry when
+# its package is clean; never add one (see .agents/skills/python-typing).
 exclude = [
-    "src/opentide/mutation",
-    "src/opentide/cli",
-    "src/opentide/deployment",
+    "src/opentide/platforms/carbon_black",
+    "src/opentide/platforms/config.py",
     "src/opentide/platforms/crowdstrike",
     "src/opentide/platforms/defender_for_endpoint",
+    "src/opentide/platforms/elastic",
     "src/opentide/platforms/harfanglab",
+    "src/opentide/platforms/plugins.py",
     "src/opentide/platforms/sentinel",
     "src/opentide/platforms/sentinel_one",
     "src/opentide/platforms/splunk",
-    "src/opentide/platforms/carbon_black",
-    "src/opentide/platforms/elastic",
-    "src/opentide/platforms/kql.py",
-    "src/opentide/platforms/plugins.py",
-    "src/opentide/platforms/config.py",
-    "src/opentide/indexing",
-    "src/opentide/generation/framework.py",
-    "src/opentide/generation/schema_pipeline.py",
-    "src/opentide/generation/template_engine.py",
-    "src/opentide/generation/vscode_snippets.py",
-    "src/opentide/models/deployment_enums.py",
-    "src/opentide/core/logging",
-    "src/opentide/core/debug.py",
-    "src/opentide/core/environment.py",
-    "src/opentide/core/index_manager.py",
-    "src/opentide/core/registry.py",
-    "src/opentide/validation",
 ]
 
 [tool.ty.rules]

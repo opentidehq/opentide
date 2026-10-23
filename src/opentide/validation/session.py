@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -82,7 +83,7 @@ def run_validation(
     scope: ValidationScope | None = None,
     checks: frozenset[ValidateCheck] | None = None,
     *,
-    index: dict[str, Any] | None = None,
+    index: Mapping[str, Any] | None = None,
     workers: int | None = None,
 ) -> ValidationReport:
     """Run validation checks and return a structured report."""
@@ -92,7 +93,7 @@ def run_validation(
 
     Opentide.initialise()
     if index is None:
-        index = Opentide.Index
+        index = cast("Mapping[str, Any]", Opentide.Index)  # an IndexSnapshot TypedDict
 
     graph = PreflightGraph.build(index)
     objects = index.get("objects", {})
@@ -321,7 +322,8 @@ def _yaml_parse_issues(
             ValidationIssue(
                 code=code,
                 severity="error",
-                object_type=entry.get("object_type"),
+                # A parse failure may not know its family; None failed validation.
+                object_type=entry.get("object_type") or "",
                 file_path=path,
                 message=message,
             )
