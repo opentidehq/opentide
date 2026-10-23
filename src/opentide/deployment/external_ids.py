@@ -63,6 +63,15 @@ class ExternalIdAction:
     kind: Literal["create", "update", "delete"]
     external_id: str | None = None
 
+    def known_id(self) -> str:
+        """The platform id an update or a delete acts on.
+
+        The planner only plans those for a rule whose id is recorded.
+        """
+        if self.external_id is None:
+            raise ValueError(f"cannot {self.kind} a rule without its recorded external id")
+        return self.external_id
+
 
 def _status_strategy(status: object) -> StatusStrategy:
     if isinstance(status, StatusStrategy):

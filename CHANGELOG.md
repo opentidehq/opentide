@@ -59,6 +59,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - **A small YAML file of nested aliases took seconds to minutes to validate, and a recursive alias crashed `validate`.** Parsing is linear and a recursive alias is a YAML error.
 - **The MCP `validate_rule` and `validation_report` tools validated the workspace as it was when the server started,** and one rule that failed to load broke `validate_rule` for all. They now reload and look rules up individually.
 - **`validate_all_objects(objects_index)` and `DetectionRule.validate_query` in the SDK ignored their input / always returned `ok=True`.**
+- **`DetectionRule.validate_query()` in the SDK raised `TypeError` or checked nothing.** It called the platform validator without run strategies, which most validators require; without them no tenant is targeted. It now validates against the strategies the CLI uses by default.
+- **A Carbon Black org without any watchlist failed with `AttributeError`** instead of the "nonexistent Watchlist" error that names the watchlist to create.
+- **Defender's deployer rejected rule objects and its validator an empty selection** (SDK callers). Both now accept rules as objects or UUIDs, like the other platforms.
+- **A rule without a `configurations` block failed deep in a deployer with `'NoneType' object has no attribute …`.** The error now names the rule.
 - **Generated schemas:** the visibility configuration schema rejected every valid configuration; a misspelled rule tenant passed and deployed nowhere (tenants are now an enum of the configured ones); a Splunk rule from the shipped template was flagged for missing `scheduling`; `metadata.tlp` ignored its vocabulary pin; a scoped vocabulary entry without stages crashed generation.
 - **ATT&CK groups present in several domains kept the Mobile entry** (`G0007` read `[Mobile] APT28`); the generator now keeps the Enterprise one. The bundled vocabulary is regenerated upstream in `opentidehq/specifications`.
 

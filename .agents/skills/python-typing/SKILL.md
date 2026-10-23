@@ -1,15 +1,14 @@
 ---
 name: python-typing
-description: Keep opentide typed — ty over src/opentide (the ported platform packages are the only, shrinking exclusion), annotation expectations, and the policy for casts and ignores. Use when ty reports a diagnostic (CI, pre-commit, ci-local.sh), when adding or changing typed code, when burning down the platform exclusions, or after a ty version bump.
+description: Keep opentide typed — ty over the whole src/opentide package with no exclude list, annotation expectations, the shared typed helpers for optional rule blocks and platform tenants, and the policy for casts and ignores. Use when ty reports a diagnostic (CI, pre-commit, ci-local.sh), when adding or changing typed code, or after a ty version bump.
 ---
 
 # Python typing — opentide
 
 The package is type-checked by [ty](https://docs.astral.sh/ty/): `[tool.ty.src]` includes
-`src/opentide`. The only exclusions are the platform client/deployer packages ported from
-CoreTide (about 100 diagnostics left), listed in `pyproject.toml` as debt: remove an entry
-when its package is clean, never add one. ty runs in `scripts/ci-local.sh --quick`, the
-pre-commit hooks and the CI lint job (`--output-format github` there).
+`src/opentide` and excludes nothing. Keep it that way: never add an exclusion. ty runs in
+`scripts/ci-local.sh --quick`, the pre-commit hooks and the CI lint job
+(`--output-format github` there).
 
 ty checks the annotations that exist; it does not require them. Until ruff `ANN` is enabled
 for `src/`, annotating new and touched functions is a review requirement.
@@ -30,11 +29,16 @@ for `src/`, annotating new and touched functions is a review requirement.
 - Python 3.10 is the floor: no `Self` from `typing` (use `typing_extensions`), no PEP 695
   `type X = ...` / `def f[T]()` syntax.
 
-## Burning down the platform exclusions
+## Typed helpers for recurring shapes
 
-Delete one package's entry from `[tool.ty.src].exclude`, run `uv run ty check src/opentide`,
-fix, run that platform's tests (`tests/test_platforms/`), commit. Most diagnostics there are
-`possibly-missing-attribute` on optional tenant settings and untyped vendor SDK objects.
+- `rule.platform_configs()` — a rule's `configurations`, or a `ValueError` naming the rule
+  when it has none (instead of `'NoneType' object has no attribute 'sentinel'`).
+- `rule.alert_severity` — `response.alert_severity`, or its default without a response.
+- `batch_tenant(batch, ConfigurationModels.Systems.<Platform>.Tenant)` — a deployment
+  batch's tenant as the platform's own class (checked at runtime). Tests build real tenant
+  objects, not `SimpleNamespace`.
+- `ExternalIdAction.known_id()` — the recorded platform id an update or delete acts on.
+- `opentide.platforms.plugins.resolve_rules(...)` — rules given as objects or UUIDs.
 
 ## Fixing a diagnostic
 

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 from opentide.models.metadata import ObjectMetadata
 from opentide.models.rule import DetectionRule
 
@@ -94,10 +95,33 @@ def test_detection_rule_deploy_and_validate_query_success(metadata: dict[str, An
 
 
 def _raise_flag(flag: str) -> MagicMock:
-    """A validator that reports its verdict the way the platform validators do."""
+    """A validator that reports its verdict the way the platform validators do.
+
+    It takes run strategies, as every platform validator's ``validate`` does.
+    """
     validator = MagicMock()
-    validator.validate.side_effect = lambda _uuids: os.environ.__setitem__(flag, "True")
+    validator.validate.side_effect = lambda _uuids, _strategies: os.environ.__setitem__(
+        flag, "True"
+    )
     return validator
+
+
+def test_validate_query_checks_the_rule_for_every_deployable_strategy(
+    metadata: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It called ``validate([uuid])``: most validators require strategies (TypeError),
+    and without them the planner targets no tenant, so nothing was checked."""
+    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
+    bound, _ = _bound(_sentinel_rule(metadata))
+    validator = _raise_flag("VALIDATION_WARNING_RAISED")
+    bound._registry.Platforms["sentinel"].validator = validator
+
+    bound.validate_query("sentinel")
+
+    assert validator.validate.call_args.args == (
+        [str(bound.metadata.uuid)],
+        DEPLOYABLE_STRATEGIES,
+    )
 
 
 def test_validate_query_reports_a_query_the_validator_refused(

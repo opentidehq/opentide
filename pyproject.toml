@@ -202,21 +202,6 @@ extend-immutable-calls = ["typer.Option", "typer.Argument"]
 
 [tool.ty.src]
 include = ["src/opentide"]
-# Debt, not policy: the platform clients/deployers ported from CoreTide still
-# carry ~100 diagnostics. Everything else is type-checked. Remove an entry when
-# its package is clean; never add one (see .agents/skills/python-typing).
-exclude = [
-    "src/opentide/platforms/carbon_black",
-    "src/opentide/platforms/config.py",
-    "src/opentide/platforms/crowdstrike",
-    "src/opentide/platforms/defender_for_endpoint",
-    "src/opentide/platforms/elastic",
-    "src/opentide/platforms/harfanglab",
-    "src/opentide/platforms/plugins.py",
-    "src/opentide/platforms/sentinel",
-    "src/opentide/platforms/sentinel_one",
-    "src/opentide/platforms/splunk",
-]
 
 [tool.ty.rules]
 # Tide domain models intentionally shadow Pydantic BaseModel.validate (instance delegation).

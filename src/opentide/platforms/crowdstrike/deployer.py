@@ -16,7 +16,7 @@ from opentide.deployment.external_ids import (
 )
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.crowdstrike.client import CrowdstrikeService
 from opentide.platforms.crowdstrike.client import DetectionRule as CrowdstrikeRule
 from opentide.platforms.plugins import RuleDeployer
@@ -54,7 +54,7 @@ class CrowdstrikeDeploy(RuleDeployer):
                     raise Errors.TideConfigurationErrors("Invalid Severity")
             raise AssertionError("unreachable")
 
-        configuration = data.configurations.crowdstrike
+        configuration = data.platform_configs().crowdstrike
         if not configuration:
             logger.critical(
                 "fatal_error",
@@ -71,7 +71,7 @@ class CrowdstrikeDeploy(RuleDeployer):
             if check_status(configuration.status) is StatusStrategy.DISABLEMENT
             else "active"
         )
-        severity = configuration.details.severity or data.response.alert_severity
+        severity = configuration.details.severity or data.alert_severity
         severity = map_severity(severity)
         filter = configuration.query
         lookback = configuration.schedule.lookback
@@ -123,8 +123,8 @@ class CrowdstrikeDeploy(RuleDeployer):
         stop_on = fix_datetime(stop_on) if stop_on else None
         operation = CrowdstrikeRule.Operation(schedule=schedule, start_on=start_on, stop_on=stop_on)
         contributors = configuration.contributors
-        author = contributors or [data.metadata.author]
-        author = ", ".join(author)
+        authors = contributors or [data.metadata.author]
+        author = ", ".join(name for name in authors if name)
         comment = f"Updated by opentide Crowdstrike Deployer - Author(s) : {author}"
         return CrowdstrikeRule(
             name=name,
@@ -149,7 +149,7 @@ class CrowdstrikeDeploy(RuleDeployer):
         """
         Deploys the detection rule : creation, update, deletion and disabling.
         """
-        mdr_config = data.configurations.crowdstrike
+        mdr_config = data.platform_configs().crowdstrike
         if not mdr_config:
             raise Errors.TideSystemConfigurationErrors("Missing Crowdstrike")
         rule = self.compile_deployment(data=data, tenant_config=tenant_config)
@@ -174,7 +174,7 @@ class CrowdstrikeDeploy(RuleDeployer):
                 detail=f"Proceeding with deletion of rule against tenant {tenant}",
                 context=str(action.external_id),
             )
-            service.delete_detection_rule(rule_id=action.external_id)
+            service.delete_detection_rule(rule_id=action.known_id())
             try:
                 record_deleted(object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
             except DeploymentStateError as error:
@@ -183,7 +183,7 @@ class CrowdstrikeDeploy(RuleDeployer):
                 )
         elif action.kind == "update":
             logger.info("event", detail=str(action.external_id), advice="Going to update the rule")
-            service.update_detection_rule(rule=rule, rule_id=action.external_id)
+            service.update_detection_rule(rule=rule, rule_id=action.known_id())
         else:
             logger.info(
                 "event",
@@ -204,8 +204,10 @@ class CrowdstrikeDeploy(RuleDeployer):
                 )
 
     def deploy(
-        self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies
-    ):
+        self,
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
+        strategies: RunStrategies | None = None,
+    ) -> None:
         """
         Triggers the deployment sequence for a series of MDR uuids or DetectionRule Objects
         """
@@ -220,23 +222,26 @@ class CrowdstrikeDeploy(RuleDeployer):
             deployment=mdr_deployment, system=DetectionPlatforms.CROWDSTRIKE, strategies=strategies
         )
         for tenant_deployment in deployment.rule_deployment:
-            logger.info("currently_targeting_tenant", detail=tenant_deployment.tenant.name)
+            tenant_config = batch_tenant(
+                tenant_deployment, ConfigurationModels.Systems.Crowdstrike.Tenant
+            )
+            logger.info("currently_targeting_tenant", detail=tenant_config.name)
             # Plan against the deployment state before the client exists, so a
             # refused rule makes no HTTP call.
             planned = screen_tenant(
                 list(tenant_deployment.rules),
                 platform=PLATFORM,
-                tenant_name=tenant_deployment.tenant.name,
-                status_of=lambda mdr: mdr.configurations.crowdstrike.status,
+                tenant_name=tenant_config.name,
+                status_of=lambda mdr: mdr.platform_configs().crowdstrike.status,
                 strategies=strategies,
             )
             if not planned:
                 continue
-            service = CrowdstrikeService(tenant_deployment.tenant)
+            service = CrowdstrikeService(tenant_config)
             for mdr, action in planned:
                 logger.info("processing_rule", detail=mdr.name, advice=mdr.metadata.uuid)
                 self.deploy_mdr(
-                    data=mdr, service=service, tenant_config=tenant_deployment.tenant, action=action
+                    data=mdr, service=service, tenant_config=tenant_config, action=action
                 )
 
 

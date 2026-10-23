@@ -208,3 +208,14 @@ def test_a_rule_without_a_watchlist_uses_its_own_tenants(
     )
 
     assert console.iocs() == [(RULE_IOC, "process_name:new.exe")]
+
+
+def test_an_org_without_any_watchlist_names_the_missing_watchlist(
+    console: _Console, metadata: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no watchlist at all the lookup fell through and failed on ``None.add_reports``."""
+    monkeypatch.setattr(console.api, "select", lambda *_args, **_kwargs: [])
+    _strategy(monkeypatch, StatusStrategy.RELEASE)
+
+    with pytest.raises(RuntimeError, match="nonexistent Watchlist"):
+        _deploy(console, _rule(metadata))

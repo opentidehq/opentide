@@ -13,13 +13,14 @@ from opentide.core.registry import Opentide
 from opentide.deployment import DetectionPlatforms
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels, TenantDeployment
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.plugins import QueryValidator
 from opentide.platforms.transport import tenant_tls_verify
 
 logger = structlog.get_logger("opentide.platforms.sentinel.validator")
 
 if TYPE_CHECKING:
+    from azure.core.exceptions import HttpResponseError
     from azure.monitor.query import LogsQueryClient
 
 
@@ -38,9 +39,10 @@ class SentinelQueryValidator(QueryValidator):
         from azure.identity import CredentialUnavailableError
 
         mdr_uuid = mdr.metadata.uuid
-        if not mdr.configurations.sentinel:
+        sentinel = mdr.platform_configs().sentinel
+        if not sentinel:
             raise Errors.TideMDRDataModelErrors("Missing Sentinel")
-        query: str = mdr.configurations.sentinel.query
+        query: str = sentinel.query
         if not query:
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
             logger.critical("missing_query_in_mdr", detail=f"{mdr.name} ({mdr_uuid})")
@@ -92,7 +94,7 @@ class SentinelQueryValidator(QueryValidator):
                 logger.critical(
                     "fatal_error",
                     detail=f"The KQL query is invalid for : {mdr.name} ({mdr_uuid})",
-                    context_1=error.error.innererror["innererror"]["message"],
+                    context_1=_inner_message(error),
                     advice=(
                         "Review the error and ensure your search can work in the relevant "
                         f"Sentinel workspace ({tenant_config.setup.workspace_name})"
@@ -116,8 +118,10 @@ class SentinelQueryValidator(QueryValidator):
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
 
     def validate(
-        self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies
-    ):
+        self,
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
+        strategies: RunStrategies | None = None,
+    ) -> None:
         loaded_mdr = []
         for mdr in mdr_deployment:
             if type(mdr) is str:
@@ -135,11 +139,11 @@ class SentinelQueryValidator(QueryValidator):
             deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL, strategies=strategies
         )
         for tenant_deployment in deployment.rule_deployment:
-            tenant_deployment: TenantDeployment.Sentinel
-            tenant_setup = tenant_deployment.tenant.setup
-            logger.info(
-                "acquiring_azure_credentials_for_tenant", detail=tenant_deployment.tenant.name
+            tenant_config = batch_tenant(
+                tenant_deployment, ConfigurationModels.Systems.Sentinel.Tenant
             )
+            tenant_setup = tenant_config.setup
+            logger.info("acquiring_azure_credentials_for_tenant", detail=tenant_config.name)
             reject_unsubstituted_placeholders(
                 tenant_setup.azure_tenant_id,
                 tenant_setup.azure_client_id,
@@ -147,7 +151,7 @@ class SentinelQueryValidator(QueryValidator):
                 client="Azure",
             )
             verify = tenant_tls_verify(
-                tenant_setup.ssl, platform="sentinel", tenant=tenant_deployment.tenant.name
+                tenant_setup.ssl, platform="sentinel", tenant=tenant_config.name
             )
             credentials = ClientSecretCredential(
                 tenant_setup.azure_tenant_id,
@@ -157,21 +161,19 @@ class SentinelQueryValidator(QueryValidator):
             )
             logger.info(
                 "azure_credentials_prepared_for_tenant",
-                detail=tenant_deployment.tenant.name,
+                detail=tenant_config.name,
                 advice="Note: credentials are validated lazily on first API call",
             )
-            logger.info(
-                "initialising_logsqueryclient_for_tenant", detail=tenant_deployment.tenant.name
-            )
+            logger.info("initialising_logsqueryclient_for_tenant", detail=tenant_config.name)
             service = LogsQueryClient(credential=credentials, connection_verify=verify)
-            logger.info("logsqueryclient_ready_for_tenant", detail=tenant_deployment.tenant.name)
+            logger.info("logsqueryclient_ready_for_tenant", detail=tenant_config.name)
             for mdr in tenant_deployment.rules:
                 logger.info("validating_kql_query", detail=f"{mdr.name} ({mdr.metadata.uuid})")
                 logger.info(
                     "sending_query_to_azure_monitor_workspace",
                     detail=f"{mdr.name} ({mdr.metadata.uuid})",
                 )
-                self.check_query(mdr=mdr, service=service, tenant_config=tenant_deployment.tenant)
+                self.check_query(mdr=mdr, service=service, tenant_config=tenant_config)
 
 
 def declare():
@@ -182,3 +184,11 @@ if __name__ == "__main__" and DebugEnvironment.ENABLED:
     SentinelQueryValidator().validate(
         ["5e791284-684c-4245-9ac7-cf00a1d041d6"], (StatusStrategy.PREVIEW,)
     )
+
+
+def _inner_message(error: HttpResponseError) -> str:
+    """The KQL parser's message inside an Azure Monitor error; KeyError when absent."""
+    odata = error.error
+    if odata is None or not odata.innererror:
+        raise KeyError("innererror")
+    return odata.innererror["innererror"]["message"]

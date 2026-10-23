@@ -46,7 +46,7 @@ class DetectionRule:
 
             entity: str
             matchInOrder: bool
-            subQueries: SubQueries
+            subQueries: list[SubQueries]
             timeWindow: TimeWindow | None = None
 
         expirationMode: Literal["Permanent", "Temporary"]

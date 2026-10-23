@@ -8,7 +8,7 @@ from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.harfanglab.client import (
     HarfangLabService,
     SigmaRule,
@@ -36,7 +36,7 @@ class HarfangLabDeploy(RuleDeployer):
         Builds the Sigma Rule for deployment to HarfangLab API.
         Converts opentide's selection-based format to HarfangLab's Sigma format.
         """
-        mdr_config = data.configurations.harfanglab
+        mdr_config = data.platform_configs().harfanglab
         if not mdr_config:
             logger.critical("missing_harfanglab_configuration_in_mdr", detail=data.metadata.uuid)
             raise Exception("Missing HarfangLab configuration")
@@ -53,7 +53,7 @@ class HarfangLabDeploy(RuleDeployer):
             enabled = False
             global_state = "disabled"
         rule_confidence = HarfangLabService.map_confidence(mdr_config.confidence)
-        rule_level = HarfangLabService.map_level(data.response.alert_severity)
+        rule_level = HarfangLabService.map_level(data.alert_severity)
         selections = []
         for sel in sigma_config.selections:
             selections.append(
@@ -109,7 +109,7 @@ class HarfangLabDeploy(RuleDeployer):
         - Import statements for YARA modules
         - Rule name from MDR name (lowercased, underscored)
         """
-        mdr_config = data.configurations.harfanglab
+        mdr_config = data.platform_configs().harfanglab
         if not mdr_config:
             logger.critical("missing_harfanglab_configuration_in_mdr", detail=data.metadata.uuid)
             raise Exception("Missing HarfangLab configuration")
@@ -185,7 +185,7 @@ class HarfangLabDeploy(RuleDeployer):
         if yara_config.meta.score:
             score = SCORE_OVERRIDE_MAP.get(yara_config.meta.score)
         if score is None:
-            score = SEVERITY_TO_SCORE.get(data.response.alert_severity, 50)
+            score = SEVERITY_TO_SCORE.get(data.alert_severity, 50)
         yara_lines.append(f"        score = {score}")
         confidence_value = HarfangLabService.map_confidence(mdr_config.confidence)
         yara_lines.append(f'        confidence = "{confidence_value}"')
@@ -216,12 +216,11 @@ class HarfangLabDeploy(RuleDeployer):
             "event",
             detail=f"Action mapping: '{mdr_config.action}' -> global_state='{global_state}'",
         )
-        rule_level = HarfangLabService.map_level(data.response.alert_severity)
+        rule_level = HarfangLabService.map_level(data.alert_severity)
         logger.debug(
             "event",
             detail=(
-                f"Severity mapping: '{data.response.alert_severity}' -> "
-                f"rule_level_override='{rule_level}'"
+                f"Severity mapping: '{data.alert_severity}' -> rule_level_override='{rule_level}'"
             ),
         )
         return YaraRule(
@@ -245,7 +244,7 @@ class HarfangLabDeploy(RuleDeployer):
         Supports both Sigma rules and YARA rules.
         Uses the MDR UUID as the rule identifier - no external ID tracking needed.
         """
-        mdr_config = data.configurations.harfanglab
+        mdr_config = data.platform_configs().harfanglab
         if not mdr_config:
             logger.critical("missing_harfanglab_configuration", detail=data.metadata.uuid)
             raise Exception("Missing HarfangLab configuration")
@@ -278,8 +277,10 @@ class HarfangLabDeploy(RuleDeployer):
             service.create_or_update_yara_rule(rule=rule, rule_id=rule_id)
 
     def deploy(
-        self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies
-    ):
+        self,
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
+        strategies: RunStrategies | None = None,
+    ) -> None:
         """
         Triggers the deployment sequence for a series of MDR uuids or DetectionRule Objects
         """
@@ -295,11 +296,14 @@ class HarfangLabDeploy(RuleDeployer):
             deployment=mdr_deployment, system=DetectionPlatforms.HARFANGLAB, strategies=strategies
         )
         for tenant_deployment in deployment.rule_deployment:
-            logger.info("currently_targeting_tenant", detail=tenant_deployment.tenant.name)
-            service = HarfangLabService(tenant_deployment.tenant)
-            tenant_type = tenant_deployment.tenant.setup.type
+            tenant_config = batch_tenant(
+                tenant_deployment, ConfigurationModels.Systems.HarfangLab.Tenant
+            )
+            logger.info("currently_targeting_tenant", detail=tenant_config.name)
+            service = HarfangLabService(tenant_config)
+            tenant_type = tenant_config.setup.type
             for mdr in tenant_deployment.rules:
-                mdr_config = mdr.configurations.harfanglab
+                mdr_config = mdr.platform_configs().harfanglab
                 if not mdr_config:
                     logger.warning("skipping_mdr_no_harfanglab_config", detail=mdr.name)
                     continue
@@ -311,11 +315,11 @@ class HarfangLabDeploy(RuleDeployer):
                         "event",
                         detail=f"Skipping {rule_type} rule on {tenant_type} tenant",
                         context_1=mdr.name,
-                        advice=tenant_deployment.tenant.name,
+                        advice=tenant_config.name,
                     )
                     continue
                 logger.info("processing_rule", detail=mdr.name, advice=mdr.metadata.uuid)
-                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_deployment.tenant)
+                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_config)
 
 
 def declare():

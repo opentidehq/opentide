@@ -13,14 +13,14 @@ from opentide.deployment import check_status
 from opentide.generation.framework import get_vocab_entry, techniques_resolver
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.kql import compile_kql_query
 from opentide.platforms.plugins import RuleDeployer
 
 logger = structlog.get_logger("opentide.platforms.sentinel.deployer")
 
 if TYPE_CHECKING:
-    from opentide.models.system_config import TenantDeployment
+    pass
 
 # The ARM ``AttackTactic`` enum (Microsoft.SecurityInsights alertRules).
 SENTINEL_TACTICS = frozenset(
@@ -103,7 +103,7 @@ class SentinelDeploy(RuleDeployer):
         def duration(value: str) -> str:
             return duration_isoformat(iso_duration_timedelta(value))
 
-        configuration = data.configurations.sentinel
+        configuration = data.platform_configs().sentinel
         if not configuration:
             raise Errors.TideMDRDataModelErrors(
                 f"Rule {data.metadata.uuid} ({data.name}): configurations.sentinel is missing"
@@ -224,7 +224,7 @@ class SentinelDeploy(RuleDeployer):
                 }
                 for entity in entity_data
             ]
-        severity = configuration.alert.severity or data.response.alert_severity
+        severity = configuration.alert.severity or data.alert_severity
         if severity == "Critical":
             severity = "High"
         properties["severity"] = severity
@@ -253,11 +253,12 @@ class SentinelDeploy(RuleDeployer):
         """
         Deploys the detection rule : creation, update, deletion and disabling.
         """
-        if not data.configurations.sentinel:
+        sentinel = data.platform_configs().sentinel
+        if not sentinel:
             raise Errors.TideSystemConfigurationErrors("Missing Sentinel")
         mdr_name = data.name
         mdr_uuid = data.metadata.uuid
-        if check_status(data.configurations.sentinel.status) is StatusStrategy.DELETION:
+        if check_status(sentinel.status) is StatusStrategy.DELETION:
             logger.warning("the_rule_will_be_removed_from_the_sentinel_workspace", arg0=mdr_name)
             service.alert_rules.delete(
                 resource_group_name=tenant_config.setup.resource_group,
@@ -279,8 +280,10 @@ class SentinelDeploy(RuleDeployer):
         return True
 
     def deploy(
-        self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies
-    ):
+        self,
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
+        strategies: RunStrategies | None = None,
+    ) -> None:
         """
         Triggers the deployment sequence for a series of MDR uuids or DetectionRule Objects
         """
@@ -305,12 +308,14 @@ class SentinelDeploy(RuleDeployer):
             deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL, strategies=strategies
         )
         for tenant_deployment in deployment.rule_deployment:
-            tenant_deployment: TenantDeployment.Sentinel
-            logger.info("currently_targeting_tenant", detail=tenant_deployment.tenant.name)
-            service = SentinelService(tenant_deployment.tenant).connect()
+            tenant_config = batch_tenant(
+                tenant_deployment, ConfigurationModels.Systems.Sentinel.Tenant
+            )
+            logger.info("currently_targeting_tenant", detail=tenant_config.name)
+            service = SentinelService(tenant_config).connect()
             for mdr in tenant_deployment.rules:
                 logger.info("processing_rule", detail=mdr.name, advice=mdr.metadata.uuid)
-                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_deployment.tenant)
+                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_config)
 
 
 def declare():

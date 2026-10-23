@@ -14,7 +14,7 @@ from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.generation.framework import get_type, techniques_resolver
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.plugins import RuleDeployer
 from opentide.platforms.splunk.client import (
     SplunkConnection,
@@ -60,7 +60,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
     ) -> dict[str, Any]:
         """Build savedsearches.conf attributes from a typed DetectionRule."""
         config: dict[str, Any] = {}
-        splunk_config = data.configurations.splunk
+        splunk_config = data.platform_configs().splunk
         if not splunk_config:
             raise ValueError("Missing Splunk configuration in MDR")
 
@@ -132,7 +132,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                     config["alert.suppress.group_name"] = throt.group_name
 
         if "alert.severity" not in config and data.response:
-            alert_severity = data.response.alert_severity
+            alert_severity = data.alert_severity
             if alert_severity:
                 config["alert.severity"] = self.ALERT_SEVERITY_MAPPING.get(alert_severity, 3)
 
@@ -331,9 +331,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                     actions_config["action.notable.param.rule_title"] = name
                     actions_config["action.notable.param.rule_description"] = mdr.description or ""
                     if mdr.response:
-                        actions_config["action.notable.param.severity"] = (
-                            mdr.response.alert_severity.lower()
-                        )
+                        actions_config["action.notable.param.severity"] = mdr.alert_severity.lower()
                 if security_domain := mdr_config.get("action.notable.param.security_domain"):
                     mdr_config["action.notable.param.security_domain"] = security_domain.lower()
             if "risk" in triggered_actions:
@@ -400,7 +398,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         tenant_config: ConfigurationModels.Systems.Splunk.Tenant,
     ) -> bool | None:
         """Deploy a single typed MDR to Splunk."""
-        splunk_config = data.configurations.splunk
+        splunk_config = data.platform_configs().splunk
         if not splunk_config:
             logger.info("mdr_skipped", mdr_name=data.name, reason="no Splunk configuration")
             return None
@@ -432,7 +430,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
 
     def deploy(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
     ) -> None:
         """Deploy Splunk MDRs through TideDeployment tenant routing."""
@@ -459,7 +457,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             strategies=strategies,
         )
         for tenant_deployment in tide_deployment.rule_deployment:
-            tenant = tenant_deployment.tenant
+            tenant = batch_tenant(tenant_deployment, ConfigurationModels.Systems.Splunk.Tenant)
             logger.info("currently_targeting_tenant", tenant=tenant.name)
             self.use_tenant(tenant)
             service = connect_splunk(

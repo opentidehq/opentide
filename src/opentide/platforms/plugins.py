@@ -42,7 +42,7 @@ class RuleDeployer(PlatformEngine, ABC):
     @abstractmethod
     def deploy(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
     ) -> None:
         """Deploy detection rules onto the target platform."""
@@ -52,10 +52,17 @@ class QueryValidator(ValidationEngine, ABC):
     @abstractmethod
     def validate(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
-    ):
+    ) -> None:
         """Validate that queries can be executed on the target platform."""
+
+
+def resolve_rules(rules: Sequence[DetectionRule] | Sequence[str]) -> list[DetectionRule]:
+    """Rules given as objects or as UUIDs, as rule objects."""
+    from opentide.core.registry import Opentide
+
+    return [rule if isinstance(rule, DetectionRule) else Opentide.Rules[rule] for rule in rules]
 
 
 class PlatformLoader:
@@ -68,7 +75,9 @@ class PlatformLoader:
 
     @staticmethod
     def import_engine(module_path: str) -> EngineModule:
-        return importlib.import_module(module_path)
+        # An engine module is any module exposing declare(); the class above
+        # documents that shape.
+        return cast("PlatformLoader.EngineModule", importlib.import_module(module_path))
 
     def _load_engines(
         self, tier: PlatformEngineBase, identifier: str, only: Sequence[str] | None = None

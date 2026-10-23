@@ -296,12 +296,12 @@ def request_handler(*, verify: bool, allow_http_errors: bool = False) -> Request
             status = error.code
             failed = True
         body = response.read()
-        if _looks_like_html(response.info(), body):
+        if _looks_like_html(response.headers, body):
             raise _html_answer(url, body)
         answer = {
             "status": HTTP_ERROR_STATUS if failed and allow_http_errors else status,
             "reason": response.msg,
-            "headers": dict(response.info()),
+            "headers": dict(response.headers),
             "body": BytesIO(body),
         }
         if failed and not allow_http_errors:
@@ -328,7 +328,7 @@ def connect_splunk(
     token: str,
     app: str,
     allow_http_errors: bool = False,
-    ssl_enabled: bool = True,
+    ssl_enabled: bool | str = True,
 ) -> Service:
     from opentide.core.environment import reject_unsubstituted_placeholders
 
@@ -370,7 +370,7 @@ def connect_splunk(
 def create_query(data: DetectionRule) -> str:
     """Build the final SPL query from a typed DetectionRule."""
     uuid = data.metadata.uuid
-    splunk_config = data.configurations.splunk
+    splunk_config = data.platform_configs().splunk
     if not splunk_config or not splunk_config.query:
         raise ValueError("Missing Splunk query in typed MDR")
     status = splunk_config.status

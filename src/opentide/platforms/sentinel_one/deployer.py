@@ -16,7 +16,7 @@ from opentide.deployment.external_ids import (
 )
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.plugins import RuleDeployer
 from opentide.platforms.sentinel_one.client import DetectionRule as SentinelOneApiRule
 from opentide.platforms.sentinel_one.client import SentinelOneService, SeverityMapping
@@ -49,13 +49,13 @@ class SentinelOneDeploy(RuleDeployer):
                 )
             return int(timespan_in_minute)
 
-        mdr_config = data.configurations.sentinel_one
+        mdr_config = data.platform_configs().sentinel_one
         if not mdr_config:
             sys.exit(1)
         rule_name = data.name
         rule_description = data.description
         rule_expiration_mode = "Permanent"
-        rule_severity = SeverityMapping[data.response.alert_severity].value
+        rule_severity = SeverityMapping[data.alert_severity].value
         rule_expiration = None
         rule_status = (
             "Disabled"
@@ -163,7 +163,7 @@ class SentinelOneDeploy(RuleDeployer):
         """
         Deploys the detection rule : creation, update, deletion and disabling.
         """
-        mdr_config = data.configurations.sentinel_one
+        mdr_config = data.platform_configs().sentinel_one
         if not mdr_config:
             raise Exception
         rule = self.compile_deployment(data=data, tenant_config=tenant_config)
@@ -188,7 +188,7 @@ class SentinelOneDeploy(RuleDeployer):
                 detail=f"Proceeding with deletion of rule against tenant {tenant}",
                 context=str(action.external_id),
             )
-            service.delete_detection_rule(rule_id=int(action.external_id))
+            service.delete_detection_rule(rule_id=int(action.known_id()))
             try:
                 record_deleted(object_uuid=object_uuid, platform=PLATFORM, tenant_name=tenant)
             except DeploymentStateError as error:
@@ -197,7 +197,7 @@ class SentinelOneDeploy(RuleDeployer):
                 )
         elif action.kind == "update":
             logger.info("event", detail=str(action.external_id), advice="Going to update the rule")
-            service.create_update_detection_rule(rule, int(action.external_id))
+            service.create_update_detection_rule(rule, int(action.known_id()))
         else:
             logger.info(
                 "event",
@@ -218,8 +218,10 @@ class SentinelOneDeploy(RuleDeployer):
                 )
 
     def deploy(
-        self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies
-    ):
+        self,
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
+        strategies: RunStrategies | None = None,
+    ) -> None:
         """
         Triggers the deployment sequence for a series of MDR uuids or DetectionRule objects
         """
@@ -235,21 +237,24 @@ class SentinelOneDeploy(RuleDeployer):
             deployment=mdr_deployment, system=DetectionPlatforms.SENTINEL_ONE, strategies=strategies
         )
         for tenant_deployment in deployment.rule_deployment:
+            tenant_config = batch_tenant(
+                tenant_deployment, ConfigurationModels.Systems.SentinelOne.Tenant
+            )
             # Plan against the deployment state before the client exists, so a
             # refused rule makes no HTTP call.
             planned = screen_tenant(
                 list(tenant_deployment.rules),
                 platform=PLATFORM,
-                tenant_name=tenant_deployment.tenant.name,
-                status_of=lambda mdr: mdr.configurations.sentinel_one.status,
+                tenant_name=tenant_config.name,
+                status_of=lambda mdr: mdr.platform_configs().sentinel_one.status,
                 strategies=strategies,
             )
             if not planned:
                 continue
-            service = SentinelOneService(tenant_deployment.tenant)
+            service = SentinelOneService(tenant_config)
             for mdr, action in planned:
                 self.deploy_mdr(
-                    data=mdr, service=service, tenant_config=tenant_deployment.tenant, action=action
+                    data=mdr, service=service, tenant_config=tenant_config, action=action
                 )
 
 

@@ -16,6 +16,7 @@ from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.plugins import QueryValidator
 from opentide.platforms.splunk.client import (
     HTTP_ERROR_STATUS,
@@ -30,7 +31,7 @@ logger = structlog.get_logger(__name__)
 
 class SplunkQueryValidator(SplunkConnection, QueryValidator):
     def check_query(self, data: DetectionRule, service: Service) -> None:
-        splunk_config = data.configurations.splunk
+        splunk_config = data.platform_configs().splunk
         if not splunk_config or not splunk_config.query:
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
             logger.critical("missing_query_in_mdr", mdr_name=data.name, uuid=data.metadata.uuid)
@@ -80,7 +81,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
 
     def validate(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
     ) -> None:
         if not strategies:
@@ -99,7 +100,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
             strategies=strategies,
         )
         for tenant_deployment in tide_deployment.rule_deployment:
-            tenant = tenant_deployment.tenant
+            tenant = batch_tenant(tenant_deployment, ConfigurationModels.Systems.Splunk.Tenant)
             host = f"{tenant.setup.url}:{tenant.setup.port}"
             with reaching_tenant("splunk", tenant.name, host):
                 service = connect_splunk(
@@ -111,7 +112,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
                     ssl_enabled=tenant.setup.ssl,
                 )
                 for mdr in tenant_deployment.rules:
-                    if mdr.configurations.splunk:
+                    if mdr.platform_configs().splunk:
                         logger.info(
                             "validating_spl_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid
                         )

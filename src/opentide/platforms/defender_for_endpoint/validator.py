@@ -4,12 +4,13 @@ from collections.abc import Sequence
 
 from opentide.core.debug import DebugEnvironment
 from opentide.core.logging import get_logger
-from opentide.core.registry import DetectionPlatforms, Opentide
+from opentide.core.registry import DetectionPlatforms
 from opentide.deployment import TideDeployment
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService
-from opentide.platforms.plugins import QueryValidator
+from opentide.platforms.plugins import QueryValidator, resolve_rules
 from opentide.platforms.transport import reaching_tenant, transport_error
 
 logger = get_logger(__name__)
@@ -142,7 +143,7 @@ def returned_schema_columns(response: dict) -> set[str]:
 
 class DefenderForEndpointQueryValidator(QueryValidator):
     def check_query(self, mdr: DetectionRule, service: DefenderForEndpointService):
-        config = mdr.configurations.defender_for_endpoint
+        config = mdr.platform_configs().defender_for_endpoint
         if not config:
             raise ValueError(f"Missing MDE configuration for {mdr.name}")
         query = config.query
@@ -179,17 +180,18 @@ class DefenderForEndpointQueryValidator(QueryValidator):
     def validate(
         self,
         mdr_deployment: Sequence[DetectionRule] | Sequence[str],
-        strategies: RunStrategies,
-    ):
-        if type(mdr_deployment[0]) is str:
-            mdr_deployment = [Opentide.Rules[uuid] for uuid in mdr_deployment]
+        strategies: RunStrategies | None = None,
+    ) -> None:
+        mdr_deployment = resolve_rules(mdr_deployment)
         deployment = TideDeployment(
             deployment=mdr_deployment,
             system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,
             strategies=strategies,
         )
         for tenant_deployment in deployment.rule_deployment:
-            tenant = tenant_deployment.tenant
+            tenant = batch_tenant(
+                tenant_deployment, ConfigurationModels.Systems.DefenderForEndpoint.Tenant
+            )
             # Fixed Microsoft endpoints: a requests error names the one that failed.
             graph = "https://graph.microsoft.com"
             with reaching_tenant("defender_for_endpoint", tenant.name, graph):
