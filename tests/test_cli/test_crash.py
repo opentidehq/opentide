@@ -563,3 +563,359 @@ def test_crash_in_a_console_script_process(tmp_path: Path) -> None:
 )
 def test_command_words_name_commands_never_values(argv: list[str], words: tuple[str, ...]) -> None:
     assert command_words(typer.main.get_command(app), argv) == words
+
+
+@pytest.mark.parametrize(
+    ("argv", "words"),
+    [
+        (["--json", "mcp", "start"], ("mcp", "start")),
+        (["mcp", "--json", "start"], ("mcp", "start")),
+        (["--repo", "/x", "--proxy=http://p", "mcp", "start", "extra"], ("mcp", "start")),
+        (["validate", "--type", "rule"], ("validate",)),
+        (["--", "mcp", "start"], ()),
+    ],
+)
+def test_raw_command_words_need_no_typer(argv: list[str], words: tuple[str, ...]) -> None:
+    assert cli_package._raw_command_words(argv) == words
+
+
+# Combined strings, every Authorization scheme
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # requests' HTTPError text: the URL's ``https:`` must not hide the query token.
+        (
+            "401 Client Error: Unauthorized for url: "
+            "https://splunk.example:8089/services/search?token=abcd1234secret&output_mode=json",
+            "401 Client Error: Unauthorized for url: "
+            "https://splunk.example:8089/services/search?token=***&output_mode=json",
+        ),
+        (
+            "GET https://api.example/v1?api_key=abcd1234secret failed",
+            "GET https://api.example/v1?api_key=*** failed",
+        ),
+        ("conn: password=abcd1234secret", "conn: password=***"),
+        ("host:443 password=abcd1234secret", "host:443 password=***"),
+        (
+            "mode=fast, token=abcd1234secret; user: bob secret: 's3cr3t value'",
+            "mode=fast, token=***; user: bob secret: '***'",
+        ),
+        (
+            "proxy http://bob:pw@proxy:3128 then https://h/x?sig=1&access_token=zzz9 KeyError: x",
+            "proxy http://***@proxy:3128 then https://h/x?sig=1&access_token=*** KeyError: x",
+        ),
+    ],
+)
+def test_secret_pairs_after_other_pairs_are_redacted(text: str, expected: str) -> None:
+    assert Redactor()(text) == expected
+
+
+def test_secret_url_query_in_argv_is_redacted() -> None:
+    argv = ["validate", "--technique", "https://h/x?token=SECRETVALUE&page=2"]
+    assert Redactor().argv(argv) == ["validate", "--technique", "https://h/x?token=***&page=2"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Authorization: Token hlab1234key", "Authorization: ***"),
+        ("Authorization: ApiKey abcd1234secret==", "Authorization: ***"),
+        ("Authorization: ApiToken s1tok3nvalue99", "Authorization: ***"),
+        ("Authorization: Splunk 0f0e0d0c-aaaa", "Authorization: ***"),
+        ("Authorization: Bearer eyJabc.def.ghi", "Authorization: ***"),
+        ("Proxy-Authorization: Basic dXNlcjpwYXNz", "Proxy-Authorization: ***"),
+        ("authorization=Digest username=bob, response=6629fae4", "authorization=***"),
+        (
+            "{'Authorization': 'ApiToken s1tok3nvalue99', 'Accept': 'json'}",
+            "{'Authorization': '***', 'Accept': 'json'}",
+        ),
+        ('{"Authorization": "Token hlab1234key", "x": 1}', '{"Authorization": "***", "x": 1}'),
+        (
+            "X-Request-Id: 1\nAuthorization: ApiKey k3y==\nHost: h",
+            "X-Request-Id: 1\nAuthorization: ***\nHost: h",
+        ),
+    ],
+)
+def test_every_authorization_scheme_is_redacted(text: str, expected: str) -> None:
+    assert Redactor()(text) == expected
+
+
+# Tenants from the shipped templates
+
+_SHIPPED_PLATFORMS = Path(cli_package.__file__).parents[1] / "data" / "configurations" / "platforms"
+
+
+def _enable_tenants(template: str, values: dict[str, str]) -> str:
+    """A shipped platform template with its sample tenant uncommented and filled in."""
+    lines: list[str] = []
+    active = False
+    for line in template.splitlines():
+        if re.match(r"^# ?\[\[tenants\]\]", line):
+            active = True
+        elif active and not line.strip():
+            active = False
+        if active:
+            line = re.sub(r"^# ?", "", line)
+            key = line.split("=", 1)[0].strip()
+            if key in values:
+                line = f"{key} = {values[key]}"
+        lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
+_TEMPLATE_ENV = {
+    "AZURE_WORKSPACE_ID": "6f1d2c3b-1111-4222-8333-944455556666",
+    "AZURE_TENANT_ID": "0a1b2c3d-1111-4222-8333-944455556667",
+    "AZURE_SUBSCRIPTION_ID": "9e8d7c6b-1111-4222-8333-944455556668",
+    "AZURE_CLIENT_ID": "1f2e3d4c-1111-4222-8333-944455556669",
+    "AZURE_CLIENT_SECRET": "azure-client-secret-value",
+    "SENTINEL_ONE_API_TOKEN": "s1-api-token-value",
+    "SPLUNK_URL": "https://splunk.acme.example",
+    "SPLUNK_TOKEN": "splunk-token-value",
+    "SPLUNK_APP": "acme_detections",
+    "MISP_INTERNAL_API_KEY": "misp-api-key-value",
+}
+
+
+@pytest.fixture
+def template_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Sentinel, SentinelOne and Splunk tenants from the shipped templates, and a MISP block."""
+    root = tmp_path / "templated"
+    platforms = root / ".opentide" / "configurations" / "platforms"
+    platforms.mkdir(parents=True)
+    (root / "objects").mkdir()
+    filled = {
+        "sentinel": {
+            "name": '"acme-sentinel-prod"',
+            "resource_group": '"rg-acme-soc-prod"',
+            "workspace_name": '"acmesocws"',
+        },
+        "sentinel_one": {
+            "name": '"acme-s1-eu"',
+            "url": '"https://acme-eu.sentinelone.example"',
+            "account_id": "1234567890123456789",
+        },
+        "splunk": {"name": '"acme-splunk"'},
+    }
+    for platform, values in filled.items():
+        template = (_SHIPPED_PLATFORMS / f"{platform}.toml").read_text(encoding="utf-8")
+        (platforms / f"{platform}.toml").write_text(
+            _enable_tenants(template, values), encoding="utf-8"
+        )
+    (root / ".opentide" / "configurations" / "sharing.toml").write_text(
+        "[[misp]]\n"
+        'name = "misp-internal"\n'
+        "enabled = true\n"
+        'url = "https://misp.internal.example.org"\n'
+        'api_key = "${MISP_INTERNAL_API_KEY}"\n',
+        encoding="utf-8",
+    )
+    for name, value in _TEMPLATE_ENV.items():
+        monkeypatch.setenv(name, value)
+    return root
+
+
+_TEMPLATE_LEAKS = (
+    "rg-acme-soc-prod",
+    "acmesocws",
+    "acme-sentinel-prod",
+    "acme-s1-eu",
+    "acme-eu.sentinelone.example",
+    "1234567890123456789",
+    "acme-splunk",
+    "splunk.acme.example",
+    "acme_detections",
+    "misp-internal",
+    "misp.internal.example.org",
+    *_TEMPLATE_ENV.values(),
+)
+
+
+def _template_crash_text() -> str:
+    env = _TEMPLATE_ENV
+    return (
+        f"/subscriptions/{env['AZURE_SUBSCRIPTION_ID']}/resourceGroups/rg-acme-soc-prod"
+        f"/providers/Microsoft.OperationalInsights/workspaces/acmesocws tenant "
+        f"{env['AZURE_TENANT_ID']} client {env['AZURE_CLIENT_ID']} workspace "
+        f"{env['AZURE_WORKSPACE_ID']} secret {env['AZURE_CLIENT_SECRET']}; "
+        "acme-sentinel-prod failed; S1 account 1234567890123456789 at "
+        "https://acme-eu.sentinelone.example (acme-s1-eu) with s1-api-token-value; "
+        "acme-splunk https://splunk.acme.example:8089/servicesNS/nobody/acme_detections "
+        "splunk-token-value; MISP misp-internal https://misp.internal.example.org/events "
+        "key misp-api-key-value; port 8089 and count 42 stay"
+    )
+
+
+def test_tenant_identifiers_from_the_shipped_templates_are_redacted(
+    template_workspace: Path,
+) -> None:
+    redacted = workspace_redactor([template_workspace])(_template_crash_text())
+    for leaked in _TEMPLATE_LEAKS:
+        assert leaked not in redacted, (leaked, redacted)
+    # Short numbers are ports and counts, not ids.
+    assert "port 8089 and count 42 stay" in redacted
+
+
+def test_a_crash_in_a_templated_workspace_leaks_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    state_dirs: Path,
+    template_workspace: Path,
+) -> None:
+    _crash_in_info(monkeypatch, ConnectionError(_template_crash_text()))
+    assert (
+        _run_main(monkeypatch, "--repo", str(template_workspace), "--json", "info", "--debug") == 1
+    )
+    captured = capsys.readouterr()
+    [log] = _logs(state_dirs)
+    for text in (captured.out, captured.err, log.read_text(encoding="utf-8")):
+        for leaked in _TEMPLATE_LEAKS:
+            assert leaked not in text, (leaked, text)
+
+
+# Crashes before the mode is known, and in the handler itself
+
+
+@pytest.mark.parametrize("argv", [["--json", "mcp", "start"], ["mcp", "start"]])
+def test_an_early_crash_under_mcp_start_never_writes_stdout(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    state_dirs: Path,
+    argv: list[str],
+) -> None:
+    """A crash before LazyTyperGroup.main resolves the mode, with OPENTIDE_OUTPUT=json too."""
+    import opentide.cli.context as context_module
+
+    def explode(*, no_color: bool) -> None:
+        raise RuntimeError("early failure")
+
+    monkeypatch.setenv("OPENTIDE_OUTPUT", "json")
+    monkeypatch.setattr(context_module, "sync_typer_rendering", explode)
+    assert _run_main(monkeypatch, *argv) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "error[internal]: RuntimeError: early failure" in captured.err
+    assert len(_logs(state_dirs)) == 1
+
+
+def test_an_early_crash_under_json_prints_the_document(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], state_dirs: Path
+) -> None:
+    import opentide.cli.context as context_module
+
+    def explode(*, no_color: bool) -> None:
+        raise RuntimeError("early failure")
+
+    monkeypatch.setattr(context_module, "sync_typer_rendering", explode)
+    assert _run_main(monkeypatch, "--json", "info") == 1
+    document = json.loads(capsys.readouterr().out)
+    assert document["failure"]["code"] == INTERNAL
+    assert document["command"] == "info"
+
+
+class _UnprintableError(Exception):
+    def __str__(self) -> str:
+        raise ZeroDivisionError("no message for you")
+
+
+def test_an_exception_whose_str_raises_is_still_reported(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], state_dirs: Path
+) -> None:
+    _crash_in_info(monkeypatch, _UnprintableError())
+    assert _run_main(monkeypatch, "--no-color", "info") == 1
+    err = _plain(capsys.readouterr().err)
+    assert err.startswith("error[internal]: _UnprintableError: (its message could not be read)\n")
+    assert "Traceback" not in err
+    assert len(_logs(state_dirs)) == 1
+
+
+@pytest.mark.parametrize("failure", [RuntimeError("handler broke"), KeyboardInterrupt()])
+def test_a_failing_handler_exits_1_without_a_chained_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: BaseException,
+) -> None:
+    import opentide.cli.ui.crash as crash_module
+
+    def broken(*args: object, **kwargs: object) -> int:
+        raise failure
+
+    _crash_in_info(monkeypatch, RuntimeError("token=abcd1234secret"))
+    monkeypatch.setattr(crash_module, "handle_crash", broken)
+    monkeypatch.setattr(sys, "argv", ["opentide", "--no-color", "info"])
+    with pytest.raises(SystemExit) as raised:
+        cli_package.main()
+    assert raised.value.code == 1
+    # Python prints neither the cause nor the context of this exit.
+    assert raised.value.__cause__ is None
+    assert raised.value.__suppress_context__ is True
+    assert "abcd1234secret" not in capsys.readouterr().err
+
+
+def test_the_fallback_prints_only_the_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    import opentide.cli.ui.crash as crash_module
+
+    def broken(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("context lookup failed")
+
+    monkeypatch.setattr(crash_module, "_active_context", broken)
+    out, err = _Capture(), _Capture()
+    code = crash_module.handle_crash(
+        ValueError("password=abcd1234secret"), argv=["info"], env={}, stdout=out, stderr=err
+    )
+    assert code == 1
+    assert err.getvalue() == "error[internal]: ValueError\n"
+    assert out.getvalue() == ""
+
+
+def test_json_document_is_utf8_with_one_trailing_newline(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], state_dirs: Path
+) -> None:
+    _crash_in_info(monkeypatch, RuntimeError("boom été"))
+    assert _run_main(monkeypatch, "--json", "info") == 1
+    out = capsys.readouterr().out
+    assert "boom été" in out
+    assert out.endswith("}\n")
+    assert not out.endswith("\n\n")
+    assert json.loads(out)["error"] == "RuntimeError: boom été"
+
+
+def test_python_dash_m_opentide_reports_a_crash(tmp_path: Path) -> None:
+    """``python -m opentide`` goes through ``main()`` too: one internal envelope, exit 1."""
+    script = textwrap.dedent(
+        """
+        import runpy
+        import sys
+        import opentide.cli.commands.info as info_command
+
+        def explode(*args, **kwargs):
+            raise RuntimeError("index exploded")
+
+        info_command.collect_info = explode
+        sys.argv = ["opentide", "--json", "info"]
+        runpy.run_module("opentide", run_name="__main__", alter_sys=True)
+        """
+    )
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path),
+        "USERPROFILE": str(tmp_path),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+        "LOCALAPPDATA": str(tmp_path / "local"),
+    }
+    done = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+        env=env,
+    )
+    assert done.returncode == 1, done.stderr
+    document = json.loads(done.stdout)
+    assert document["exit_code"] == 1
+    assert document["failure"]["code"] == INTERNAL
+    assert Path(document["failure"]["crash_log"]).is_file()
+    assert "Traceback" not in done.stderr

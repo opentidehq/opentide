@@ -60,23 +60,55 @@ _SECRET_WORDS = ("token", "secret", "passw", "authorization", "credential", "coo
 _SECRET_SUFFIXES = ("key", "keys")
 _SECRET_PARTS = frozenset({"pass", "auth"})
 
-#: Configuration keys whose value identifies a tenant: its address or its ids.
-_IDENTIFYING_WORDS = ("tenant", "url", "host", "domain", "workspace", "subscription", "endpoint")
+#: Configuration keys whose value identifies a tenant: its address, its ids,
+#: the Azure resource group or the Splunk app it lives in.
+_IDENTIFYING_WORDS = (
+    "tenant",
+    "url",
+    "host",
+    "domain",
+    "workspace",
+    "subscription",
+    "endpoint",
+    "group",
+    "resource",
+)
 _IDENTIFYING_PARTS = frozenset(
-    {"id", "org", "organization", "account", "server", "instance", "project", "client", "site"}
+    {
+        "id",
+        "org",
+        "organization",
+        "account",
+        "server",
+        "instance",
+        "project",
+        "client",
+        "site",
+        "app",
+    }
 )
 
 _BOOLEAN_LITERALS = frozenset({"true", "false", "yes", "no", "on", "off", "none", "null"})
 #: Shorter values are not searched for in free text: too many false matches.
 _MIN_SECRET_LENGTH = 6
 _MIN_IDENTIFIER_LENGTH = 3
+#: A number this long is an id (a SentinelOne account id), not a port or a count.
+_MIN_NUMERIC_LENGTH = 6
 
 #: Environment variables a crash log lists (values redacted).
 _LOGGED_ENV_PREFIXES = ("OPENTIDE_",)
 _PROXY_VARIABLES = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY")
 
 _URL_CREDENTIALS = re.compile(r"(?P<scheme>\b[A-Za-z][A-Za-z0-9+.-]*://)[^\s/?#@]+@")
-_AUTH_HEADER = re.compile(
+#: ``Authorization`` / ``Proxy-Authorization``, whatever the scheme (``Token``,
+#: ``ApiKey``, ``ApiToken``, ``Splunk``, ...): everything up to the end of the
+#: line, or the closing quote of a quoted value.
+_AUTH_FIELD = re.compile(
+    r"""(?i)(?P<key>\b(?:proxy-)?authorization)(?P<sep>["']?\s*[:=]\s*)"""
+    r"""(?P<value>"[^"\n]*"|'[^'\n]*'|[^\n"']*)"""
+)
+#: A ``Bearer`` or ``Basic`` credential outside a header field.
+_AUTH_SCHEME = re.compile(
     r"(?i)\b(?P<scheme>bearer\s+)[A-Za-z0-9\-._~+/]+=*|\b(?P<basic>basic\s+)[A-Za-z0-9+/]{8,}={0,2}"
 )
 _TOKEN_SHAPES = re.compile(
@@ -87,9 +119,12 @@ _TOKEN_SHAPES = re.compile(
     r"|\bAKIA[0-9A-Z]{16}\b"
     r"|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"
 )
+#: ``key=value``, ``key: value``, ``"key": "value"``. The value is a lookahead,
+#: so a key that names no secret (``https:`` in a URL, ``conn:``) consumes only
+#: itself and a secret pair right after it is still found.
 _ASSIGNMENT = re.compile(
     r"""(?P<key>[A-Za-z_][\w.-]*)(?P<sep>["']?\s*[:=]\s*)"""
-    r"""(?P<value>"[^"\n]*"|'[^'\n]*'|[^\s"',;&)}\]]+)"""
+    r"""(?=(?P<value>"[^"\n]*"|'[^'\n]*'|[^\s"',;&)}\]]+))"""
 )
 _ENV_REFERENCE = re.compile(r"^\$\{?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}?$")
 
@@ -112,12 +147,9 @@ def _identifies_tenant(key: str) -> bool:
 
 def _meaningful(value: str, minimum: int) -> bool:
     value = value.strip()
-    return (
-        len(value) >= minimum
-        and value.lower() not in _BOOLEAN_LITERALS
-        and not value.isdigit()
-        and value != REDACTED
-    )
+    if value.isdigit():
+        return len(value) >= _MIN_NUMERIC_LENGTH
+    return len(value) >= minimum and value.lower() not in _BOOLEAN_LITERALS and value != REDACTED
 
 
 class Redactor:
@@ -157,9 +189,10 @@ class Redactor:
         if self._identifier_pattern is not None:
             text = self._identifier_pattern.sub(REDACTED, text)
         text = _URL_CREDENTIALS.sub(rf"\g<scheme>{REDACTED}@", text)
-        text = _AUTH_HEADER.sub(_redact_auth_header, text)
+        text = _AUTH_FIELD.sub(_redact_value, text)
+        text = _AUTH_SCHEME.sub(_redact_auth_scheme, text)
         text = _TOKEN_SHAPES.sub(REDACTED, text)
-        return _ASSIGNMENT.sub(_redact_assignment, text)
+        return _redact_assignments(text)
 
     def argv(self, argv: Sequence[str]) -> list[str]:
         """*argv* with the value of every option named like a secret replaced."""
@@ -181,16 +214,31 @@ class Redactor:
         return redacted
 
 
-def _redact_auth_header(match: re.Match[str]) -> str:
+def _redact_auth_scheme(match: re.Match[str]) -> str:
     return (match["scheme"] or match["basic"]) + REDACTED
 
 
-def _redact_assignment(match: re.Match[str]) -> str:
-    if not is_secret_name(match["key"]):
-        return match[0]
-    value = match["value"]
+def _masked(value: str) -> str:
     quote = value[0] if value[:1] in ("'", '"') else ""
-    return f"{match['key']}{match['sep']}{quote}{REDACTED}{quote}"
+    return f"{quote}{REDACTED}{quote}"
+
+
+def _redact_value(match: re.Match[str]) -> str:
+    return f"{match['key']}{match['sep']}{_masked(match['value'])}"
+
+
+def _redact_assignments(text: str) -> str:
+    """Mask the value of every ``key=value`` pair whose key names a secret."""
+    parts: list[str] = []
+    position = 0
+    for match in _ASSIGNMENT.finditer(text):
+        # A pair inside a value already masked, or a key that is no secret.
+        if match.start() < position or not is_secret_name(match["key"]):
+            continue
+        value = match["value"]
+        parts += [text[position : match.end()], _masked(value)]
+        position = match.end() + len(value)
+    return "".join([*parts, text[position:]])
 
 
 def _url_secrets(value: str) -> tuple[list[str], list[str]]:
@@ -231,6 +279,11 @@ def _walk(
         if isinstance(value, (Mapping, list)):
             _walk(value, env, secrets, identifiers, tenant=tenant or key == "tenants")
             continue
+        if isinstance(value, int) and not isinstance(value, bool):
+            # ``account_id = 1234567890123456789``: _meaningful keeps long ones only.
+            if tenant and _identifies_tenant(key):
+                identifiers.append(str(value))
+            continue
         if not isinstance(value, str):
             continue
         value = _expand(value, env)
@@ -253,6 +306,8 @@ def workspace_redactor(
     ``.opentide/configurations/platforms/*.toml`` (and the older ``systems/``)
     adds its secret values and, for every ``[[tenants]]`` entry, its name and
     the values of its address and id keys, ``$VARIABLE`` references resolved.
+    ``.opentide/configurations/sharing.toml`` does the same for every sharing
+    destination (a MISP block's name, URL and API key).
     """
     env = os.environ if env is None else env
     secrets: list[str] = []
@@ -264,22 +319,26 @@ def workspace_redactor(
             secrets.append(value)
     seen: set[Path] = set()
     for workspace in workspaces:
+        configurations = workspace / ".opentide" / "configurations"
+        # (file, whether every block in it is a destination like a tenant)
+        files: list[tuple[Path, bool]] = [(configurations / "sharing.toml", True)]
         for folder in ("platforms", "systems"):
-            directory = workspace / ".opentide" / "configurations" / folder
             try:
-                files = sorted(directory.glob("*.toml"))
+                files += [
+                    (path, False) for path in sorted((configurations / folder).glob("*.toml"))
+                ]
             except OSError:
                 continue
-            for path in files:
-                try:
-                    resolved = path.resolve()
-                    if resolved in seen:
-                        continue
-                    seen.add(resolved)
-                    document = tomllib.loads(path.read_text(encoding="utf-8"))
-                except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        for path, destinations in files:
+            try:
+                resolved = path.resolve()
+                if resolved in seen or not path.is_file():
                     continue
-                _walk(document, env, secrets, identifiers, tenant=False)
+                seen.add(resolved)
+                document = tomllib.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+                continue
+            _walk(document, env, secrets, identifiers, tenant=destinations)
     return Redactor(secrets, identifiers)
 
 
@@ -422,10 +481,16 @@ def _debug_requested(options: Sequence[str], context: Any, env: Mapping[str, str
     return debug_requested(env)
 
 
-def _crash_mode(options: Sequence[str]) -> OutputMode:
+def _crash_mode(options: Sequence[str], words: Sequence[str]) -> OutputMode:
+    """The mode to report in, from the raw command line first.
+
+    ``get_mode()`` knows about ``mcp start`` only once ``LazyTyperGroup.main``
+    has run; a crash before that (importing the root app) must still leave
+    the JSON-RPC stdout alone, whatever ``--json`` or ``OPENTIDE_OUTPUT`` say.
+    """
+    if tuple(words[:2]) == ("mcp", "start"):
+        return OutputMode.MCP
     mode = get_mode()
-    # The mode was guessed before parsing; a crash before even that still
-    # honours --json.
     if "--json" in options and mode is not OutputMode.MCP:
         return OutputMode.JSON
     return mode
@@ -479,7 +544,10 @@ def _write(stream: TextIO | None, text: str) -> None:
 
 def _summary(error: BaseException) -> str:
     name = type(error).__name__
-    message = str(error).strip().splitlines()
+    try:
+        message = str(error).strip().splitlines()
+    except Exception:
+        return f"{name}: (its message could not be read)"
     return f"{name}: {message[0]}" if message else name
 
 
@@ -488,6 +556,7 @@ def handle_crash(
     *,
     argv: Sequence[str],
     command: str = "",
+    words: Sequence[str] = (),
     env: Mapping[str, str] | None = None,
     log_dir: Path | None = None,
     stdout: TextIO | None = None,
@@ -497,22 +566,24 @@ def handle_crash(
 
     *argv* is the command line without the program name; *command* the
     command path it named (``generate docs rules``), which alone goes into
-    the issue link.
+    the issue link; *words* the leading words of *argv* read without Typer,
+    for a crash before the command could be resolved.
     """
     env = os.environ if env is None else env
     out = sys.stdout if stdout is None else stdout
     err = sys.stderr if stderr is None else stderr
-    options = list(argv[: list(argv).index("--")] if "--" in argv else argv)
-    summary = _summary(error)
+    # Until the message is redacted, the type is all that may be printed.
+    summary = type(error).__name__
     try:
+        options = list(argv[: list(argv).index("--")] if "--" in argv else argv)
         context = _active_context()
         debug = _debug_requested(options, context, env)
-        mode = _crash_mode(options)
+        mode = _crash_mode(options, words or command.split())
         redactor = workspace_redactor(_workspaces(context, env), env=env)
         if context is not None and getattr(context, "proxy", None):
             passwords, _ = _url_secrets(str(context.proxy))
             redactor = Redactor([*redactor.secrets, *passwords], redactor.identifiers)
-        summary = redactor(summary)
+        summary = redactor(_summary(error))
         facts = system_facts()
         log_path: Path | None = None
         log_problem = ""
@@ -552,11 +623,20 @@ def handle_crash(
                 message=summary,
                 crash_log=None if log_path is None else str(log_path),
             )
-            _write(out, json.dumps(_document(summary, failure, command), indent=2) + "\n")
+            _write(out, _json_text(_document(summary, failure, command)))
     except Exception:
         # Reporting must not crash in turn; say the least that is still true.
         _write(err, f"error[{INTERNAL}]: {summary}\n")
     return CRASH_EXIT_CODE
+
+
+def _json_text(document: Mapping[str, Any]) -> str:
+    """*document* as the output stack serialises it (orjson, UTF-8), one newline after it."""
+    try:
+        from opentide.core.io import dump_json_text
+    except Exception:
+        return json.dumps(document, indent=2, ensure_ascii=False, default=str) + "\n"
+    return dump_json_text(document, indent=True, default=str)
 
 
 def _document(summary: str, failure: Failure, command: str) -> dict[str, Any]:

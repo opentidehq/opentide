@@ -28,7 +28,7 @@ The crash log holds the version, the command line, the `OPENTIDE_*` and proxy va
 | macOS | `~/Library/Logs/opentide` |
 | Windows | `%LOCALAPPDATA%\opentide\logs` |
 
-Before anything is printed or written, opentide removes: proxy and URL credentials (`http://user:pass@proxy` becomes `http://***@proxy`), `Bearer` tokens and well-known token formats, the values of environment variables and options named like a secret (`*_TOKEN`, `*_SECRET`, `*PASSWORD*`, `*_KEY`, `Authorization`), and, from `.opentide/configurations/platforms/*.toml`, every secret value and each tenant's name, URLs, hosts and ids. Read the log before you attach it to the issue all the same: a value opentide cannot recognise as a secret is left as it is.
+Before anything is printed or written, opentide removes: proxy and URL credentials (`http://user:pass@proxy` becomes `http://***@proxy`), the value of an `Authorization` or `Proxy-Authorization` header whatever its scheme (`Bearer`, `Basic`, `Token`, `ApiKey`, `ApiToken`, ...), well-known token formats, the values of environment variables, options and `key=value` pairs (URL query strings included) named like a secret (`*_TOKEN`, `*_SECRET`, `*PASSWORD*`, `*_KEY`), and, from `.opentide/configurations/platforms/*.toml` and `sharing.toml`, every secret value and each tenant's or destination's name, URLs, hosts, ids, resource group and Splunk app. Read the log before you attach it to the issue all the same: a value opentide cannot recognise as a secret is left as it is.
 
 Add `--debug` (or set `OPENTIDE_DEBUG=1`) to print the traceback on stderr too, redacted the same way.
 

@@ -111,9 +111,41 @@ def main() -> None:
     except Exception as error:
         # SystemExit, typer.Exit and Click's usage errors never get here:
         # Click's standalone mode turns them into an exit code first.
-        from opentide.cli.ui.crash import handle_crash
+        try:
+            from opentide.cli.ui.crash import handle_crash
 
-        raise SystemExit(handle_crash(error, argv=argv, command=_command_path(argv))) from None
+            code = handle_crash(
+                error, argv=argv, command=_command_path(argv), words=_raw_command_words(argv)
+            )
+        except BaseException:
+            # Even Ctrl-C while reporting: exit 1, and never Python's chained
+            # traceback, which would print the unredacted original.
+            code = 1
+        raise SystemExit(code) from None
+
+
+def _raw_command_words(argv: Sequence[str]) -> tuple[str, ...]:
+    """The first two command words of *argv*, read without Typer: ``("mcp", "start")``.
+
+    Root options are skipped wherever they appear, as they are hoisted; the
+    words end at any other option.
+    """
+    words: list[str] = []
+    tokens = iter(argv)
+    for token in tokens:
+        if token == "--" or len(words) == 2:
+            break
+        if token in _ROOT_FLAGS or token in _VERSION_FLAGS:
+            continue
+        if token in _ROOT_VALUE_OPTIONS:
+            next(tokens, None)
+            continue
+        if token.startswith("-"):
+            if token.partition("=")[0] in _ROOT_VALUE_OPTIONS:
+                continue
+            break
+        words.append(token)
+    return tuple(words)
 
 
 def _command_path(argv: Sequence[str]) -> str:
