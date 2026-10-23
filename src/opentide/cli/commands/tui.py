@@ -164,8 +164,8 @@ class OpentideTui(App[None]):
     SUB_TITLE = TAGLINE
     CSS = """
     #masthead { height: 1; dock: top; padding: 0 1; }
-    #brand { width: 1fr; }
-    #summary { width: auto; color: $text-muted; }
+    #brand { width: 1fr; text-wrap: nowrap; text-overflow: ellipsis; }
+    #summary { width: auto; margin-left: 2; color: $text-muted; }
     #tree { width: 2fr; min-width: 30; border-right: solid $panel; }
     #detail { width: 3fr; padding: 0 1; }
     #heading { margin-bottom: 1; }
