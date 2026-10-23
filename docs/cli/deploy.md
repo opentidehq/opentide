@@ -56,18 +56,24 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 
 ## Output
 
-A dry-run in the [tutorial](../usage/tutorial.md) repository prints the section header on stderr and the result on stdout:
+A dry-run in the [tutorial](../usage/tutorial.md) repository prints the plan: each rule on each tenant with what a deploy would do (`+ create`, `~ update`, `+ create or update`, `- disable`, `× delete`), then the tally as the outcome line:
 
 ```bash
 opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
 ```text output-of="opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all"
-== MDR Deployment ==
-✓ Deployment completed
+Deploy plan · strategy PREVIEW · dry run, nothing is sent
+
+sentinel · 0 tenants
+  + create or update  Sentinel KQL Rule  …000000000001  status STAGING
+
+warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete · 1 platform, 0 tenants
+  help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
 ```
 
-A colour terminal draws the header as a rule. Human output does not list the rules; `OPENTIDE_DEBUG=1` logs each selected rule to stderr, and `--json` returns the selection:
+Defender for Endpoint, SentinelOne and CrowdStrike keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule by its UUID whether it exists or not, and opentide does not claim either: their rows say `create or update`. A real run ends with a counted outcome line, `✓ Deployed 3 rules to 2 tenants · 1 created, 2 updated · 12.4s`. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
 
 ```bash
 opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
@@ -93,7 +99,7 @@ opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
   "advice": "add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
   "ok": true,
   "status": "completed",
-  "message": "Deployment completed",
+  "message": "Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete · 1 platform, 0 tenants",
   "warnings": [
     "sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop"
   ]

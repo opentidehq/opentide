@@ -176,9 +176,9 @@ Assets: `opentidehq/.github/assets` (Pantone Reflex Blue `#001489`, white, the M
 
 | Mark | Size | Where |
 |------|------|-------|
-| Pill logo | 73 × 10 | `setup` wizard welcome only |
+| Pill logo | 80 × 10 | `setup` wizard welcome only |
 | Icon | 28 × 14 | bare `opentide` home screen |
-| One-line pill `▐ ≋ opentide ▌` | 1 line | section headers, terminals narrower than 76 columns |
+| One-line pill `▐ ≋ opentide ▌` | 1 line | section headers; the home screen narrower than 76 columns, the welcome narrower than 82 |
 
 Rules: only in `human` mode, and only when the stream encoding can encode the block characters (otherwise none). Blue is a fill, never a text colour. `NO_COLOR` keeps the shapes. No yellow, no gradients. `print_banner()` is public API: it is deprecated with a warning and renders the new mark, and is removed in a later release. `coretide-logo.png` is removed.
 
@@ -280,6 +280,14 @@ What is built, and the APIs the next changes extend.
 | `opentide.cli.lazy` | `HOISTED_FLAGS` and `hoist_root_flags()`, called from `LazyTyperGroup.parse_args`. `LazyTyperGroup.main` guesses the mode before parsing and starts the clock; `make_context` and `invoke` route usage errors through `opentide.cli.usage`. |
 | `opentide.core.runtime` | `boolean_env()`, `debug_requested()` (`OPENTIDE_DEBUG`, then `DEBUG` when it is a boolean literal). |
 | `opentide.core.logging.render` | `OpentideConsoleRenderer` writes `label: Readable text · key: value`; `ConsoleLogHandler` styles the label and adds the time under `--debug`. |
+| `opentide.cli.ui.brand` | `ICON` (28 × 28 px) and `LOGO` (80 × 20 px) as `B`/`W`/`.` grids; `render()` draws any grid with upper half-blocks (`mono=` keeps the shape without colour); `icon()`, `logo()`, `pill()`, `header()`; `can_draw(console)` (`human` mode and an encoding with the blocks); `TAGLINE`. |
+| `opentide.core.progress` | `report_stage(name)`: an engine module says which stage it is in; `listen(callback)` receives them. No Rich. |
+| `opentide.cli.ui.progress` | `Checklist(total=)` and `Checklist.step(name, where=, unit=)` yielding a `Step` (`done(count, where=)`, `skip(reason)`); a live checklist in `human`, `step_line()` per finished step in `plain`/`agent`, nothing in `json`, `mcp` or `--quiet`. `total` and `completed` are there for a percentage display. `plural()`, `seconds_text()`. |
+| `opentide.cli.ui.plan` | `plan_view(changes, strategies=, tenants=)` and `render_plan(console, payload)`; the rows come from `opentide.cli.services.deploy_plan` (`plan_changes`, `plan_message`, `deployed_message`). |
+| `opentide.cli.ui.setup` | `welcome()`, `render_summary()`, `setup_outcome()` for every `setup` command. |
+| `opentide.cli.ui.home` | `gather()` reads the home screen's facts from disk; `home_view()` draws them; `next_steps()`. |
+| `opentide.cli.ui.layout`, `opentide.cli.ui.paths` | `columns()` aligns rows without trailing blanks; `display_path()` shortens a path to the current directory or the workspace. |
+| `opentide.cli.help` | `SUMMARIES` (≤ 60 characters) and `EXAMPLES` by command path; `decorate()` applies them when the lazy group loads a command. Panels come from `CommandSpec.rich_help_panel`. |
 | `opentide.mcp_server.server` | `reserve_stdout()` keeps file descriptor 1 for JSON-RPC and sends `sys.stdout`, descriptor 1 and child processes to stderr while the server runs. |
 
-A diagnostic renderer adds its lines next to `render_outcome` and passes its counts as `summary`. A progress or plan renderer reads `get_mode()` and draws only in `human`. A crash handler builds `Failure(code="internal", crash_log=...)` and passes it to `envelope()`.
+A service payload may also carry `_outcome_kind` (`plan`, `warning`) when its status alone does not say how the outcome line reads, and `_next_numbered` for next steps that form a sequence. A diagnostic renderer adds its lines next to `render_outcome` and passes its counts as `summary`. A progress or plan renderer reads `get_mode()` and draws only in `human`. A crash handler builds `Failure(code="internal", crash_log=...)` and passes it to `envelope()`.

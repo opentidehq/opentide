@@ -616,16 +616,25 @@ def documented_repo(
     yield repo
 
 
+#: A duration (``0.9s``, ``12.4s``, ``2m05s``): it differs on every run, so any
+#: duration in a sample matches any duration printed in the same place.
+_DURATION = re.compile(r"\b\d+(?:\.\d+)?s\b|\b\d+m\d{2}s\b")
+
+
+def _comparable(line: str) -> str:
+    return _DURATION.sub("<duration>", line.strip())
+
+
 def _lines_in_order(sample: str, live: str) -> list[str]:
     """Sample lines missing from *live*, matched as whole lines and in order."""
-    live_lines = [line.strip() for line in live.splitlines()]
+    live_lines = [_comparable(line) for line in live.splitlines()]
     missing: list[str] = []
     cursor = 0
     for line in (line.strip() for line in sample.splitlines()):
         if not line:
             continue
         try:
-            cursor = live_lines.index(line, cursor) + 1
+            cursor = live_lines.index(_comparable(line), cursor) + 1
         except ValueError:
             missing.append(line)
     return missing

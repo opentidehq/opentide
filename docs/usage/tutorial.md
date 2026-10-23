@@ -37,16 +37,16 @@ opentide generate
 ```
 
 ```text output-of="opentide generate"
-== Documentation generation ==
-== Export generation ==
-== Object vocabulary generation ==
-== Template generation ==
-== JSON schema generation ==
-== VS Code snippet generation ==
-✓ Full generation pipeline completed
+✓ docs · 7 files · 1.2s · docs/
+✓ exports · 3 files · 0.0s · .opentide/exports/
+✓ vocabularies · 0 files · 0.0s
+✓ templates · 4 files · 1.9s · .opentide/templates/
+✓ schemas · 6 files · 2.6s · .opentide/schemas/
+✓ snippets · 1 file · 0.0s · .vscode/
+✓ Generated 21 files in 5.8s · 6 phases
 ```
 
-This is the output with `--no-color` or `NO_COLOR` set; otherwise each `== … ==` header is drawn as a horizontal rule. Phase headers go to stderr and the final status to stdout, so `opentide generate > log.txt` keeps the headers on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
+This is the output with `--no-color`, in a pipe or in CI: one line per finished phase, with the files it wrote, how long it took and where they went, then the outcome line. At a terminal the phases draw as a live checklist with a spinner on the running one. Phase lines go to stderr and the outcome line to stdout, so `opentide generate > log.txt` keeps the phases on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
 
 Your editor can now validate YAML under `objects/` because `opentide setup vscode` maps `objects/**/*.yaml` to the router, which applies the schema revision each object names in `metadata.schema`.
 
@@ -279,11 +279,17 @@ opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
 ```text output-of="opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all"
-== MDR Deployment ==
-✓ Deployment completed
+Deploy plan · strategy PREVIEW · dry run, nothing is sent
+
+sentinel · 0 tenants
+  + create or update  Sentinel KQL Rule  …000000000001  status STAGING
+
+warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete · 1 platform, 0 tenants
+  help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
 ```
 
-`--dry-run` selects the rules without touching the platform. In CI, the pull request job runs `--strategy PREVIEW` and the default-branch job `--strategy RELEASE`; see [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md). This scaffold still has `[[tenants]]` commented out, so the dry-run warns that a real deploy would stop and leaves Sentinel out of `deployed` until you uncomment a tenant. The human output does not list rules: `OPENTIDE_DEBUG=1` logs each selected rule to stderr, and `opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all` returns the selected rules, the tenants each would reach, and a payload preview for each rule (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
+`--dry-run` selects the rules without touching the platform. In CI, the pull request job runs `--strategy PREVIEW` and the default-branch job `--strategy RELEASE`; see [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md). This scaffold still has `[[tenants]]` commented out, so the dry-run warns that a real deploy would stop and leaves Sentinel out of `deployed` until you uncomment a tenant. The plan lists each rule with what a deploy would do to it: Sentinel writes a rule by its UUID, so opentide cannot tell a create from an update without asking Sentinel and says `create or update`. `opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all` returns the selected rules, the tenants each would reach, and a payload preview for each rule (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.
 
 ## 10. Generate documentation
 
