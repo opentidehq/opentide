@@ -199,15 +199,13 @@ def fetch_latest_version(timeout: float = NETWORK_TIMEOUT) -> str:
     return version
 
 
-def check_latest_version(
-    ctx: DoctorContext, fetch: Callable[[], str] = fetch_latest_version
-) -> list[Check]:
+def check_latest_version(ctx: DoctorContext) -> list[Check]:
     from opentide import __version__
 
     if ctx.offline:
         return [Check("opentide_latest", "skip", "Not checked: --offline")]
     try:
-        latest = fetch()
+        latest = fetch_latest_version()
     except Exception as exc:
         return [
             Check(
@@ -411,15 +409,13 @@ def _importable(module: str) -> str | None:
     return None
 
 
-def check_platform_sdks(
-    ctx: DoctorContext, importable: Callable[[str], str | None] = _importable
-) -> list[Check]:
+def check_platform_sdks(ctx: DoctorContext) -> list[Check]:
     checks: list[Check] = []
     for platform in _enabled_platforms(_configurations(ctx)):
         failures = [
             (module, reason)
             for module in PLATFORM_SDKS.get(platform, ())
-            if (reason := importable(module)) is not None
+            if (reason := _importable(module)) is not None
         ]
         if failures:
             module, reason = failures[0]
@@ -529,7 +525,7 @@ def connect(host: str, port: int, timeout: float = NETWORK_TIMEOUT) -> None:
         pass
 
 
-def check_proxy(ctx: DoctorContext, connector: Callable[[str, int], None] = connect) -> list[Check]:
+def check_proxy(ctx: DoctorContext) -> list[Check]:
     environ = ctx.environ
     url = next((environ[name] for name in _PROXY_VARIABLES if environ.get(name)), None)
     if url is None:
@@ -555,7 +551,7 @@ def check_proxy(ctx: DoctorContext, connector: Callable[[str, int], None] = conn
         ]
     try:
         port = parts.port or (443 if parts.scheme == "https" else 80)
-        connector(host, port)
+        connect(host, port)
     except (OSError, ValueError) as exc:
         return [
             Check(
@@ -732,11 +728,11 @@ def _guarded(check: Callable[[DoctorContext], list[Check]], ctx: DoctorContext) 
 
 
 def run_doctor(
-    ctx: DoctorContext, checks: Sequence[Callable[[DoctorContext], list[Check]]] = CHECKS
+    ctx: DoctorContext, checks: Sequence[Callable[[DoctorContext], list[Check]]] | None = None
 ) -> dict[str, Any]:
     """Run every check and build the ``CommandResult`` payload."""
     results: list[Check] = []
-    for check in checks:
+    for check in CHECKS if checks is None else checks:
         results.extend(_guarded(check, ctx))
     counts = {
         status: sum(1 for item in results if item.status == status)
