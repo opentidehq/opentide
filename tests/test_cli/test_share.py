@@ -700,7 +700,7 @@ def test_a_failed_run_names_its_failure_code(
 def test_share_runs_inside_terminal_progress(
     invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The catalogue and destination calls run inside one tab or taskbar progress block."""
+    """A share run sits inside one tab or taskbar progress block; listing targets does not."""
     from opentide.cli.ui import terminal_progress
 
     seen: list[str] = []
@@ -720,4 +720,7 @@ def test_share_runs_inside_terminal_progress(
     monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
     preview = invoke_cli("share", "preview", "--type", "objective", repo=tide_corpus_repo)
     assert preview.exit_code == 0, preview.stdout
+    assert seen == ["enter", "exit"]
+    listed = invoke_cli("share", "targets", repo=tide_corpus_repo)
+    assert listed.exit_code == 0, listed.stdout
     assert seen == ["enter", "exit"]

@@ -128,30 +128,27 @@ def run_share(
         if changed and mode == "push" and not targets and problem == "scope_no_match":
             return _redact(_quiet(_NO_ENABLED_TARGET, config), secrets)
         return _redact(_preflight(problem or "scope_no_match", config), secrets)
-    from opentide.cli.ui.terminal_progress import TerminalProgress
-
-    with TerminalProgress():
-        documents = _catalogue()
-        filters = _filters(cli.repo, uuids, types, files)
-        if changed and mode == "push":
-            filters, stop = _changed_files(cli.repo, filters)
-            if stop == "empty":
-                return _redact(_quiet(_NO_CHANGED_OBJECTS, config), secrets)
-            if stop is not None:
-                return _redact(_preflight("changed_diff", config, message=stop), secrets)
-        validate = _validator(documents) if effective in {"push", "preview"} else None
-        outcome = run_misp(
-            documents,
-            selected,
-            mode=effective,  # type: ignore[arg-type]
-            ledger=ShareLedger.load(ledger_path(cli.repo)),
-            filters=filters,
-            publish=publish,
-            workers=workers,
-            delete=delete,
-            confirmed=confirmed,
-            validate=validate,
-        )
+    documents = _catalogue()
+    filters = _filters(cli.repo, uuids, types, files)
+    if changed and mode == "push":
+        filters, stop = _changed_files(cli.repo, filters)
+        if stop == "empty":
+            return _redact(_quiet(_NO_CHANGED_OBJECTS, config), secrets)
+        if stop is not None:
+            return _redact(_preflight("changed_diff", config, message=stop), secrets)
+    validate = _validator(documents) if effective in {"push", "preview"} else None
+    outcome = run_misp(
+        documents,
+        selected,
+        mode=effective,  # type: ignore[arg-type]
+        ledger=ShareLedger.load(ledger_path(cli.repo)),
+        filters=filters,
+        publish=publish,
+        workers=workers,
+        delete=delete,
+        confirmed=confirmed,
+        validate=validate,
+    )
     log.info(
         "share.completed", mode=effective, exit_code=outcome.exit_code, records=len(outcome.records)
     )
