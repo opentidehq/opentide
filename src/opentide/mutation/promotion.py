@@ -151,7 +151,7 @@ class PromoteMDR:
         report_stage("status promotion")
         logger.info(
             "mdr_promotion_started",
-            detail="Promotes the status of modified MDR files according to configuration",
+            detail="Promotes the status of modified rule files according to configuration",
         )
 
         if PROMOTION_ENABLED:
@@ -205,5 +205,5 @@ class PromoteMDR:
         else:
             logger.info(
                 "mdr_promotion_disabled_in_config",
-                detail="You can enable MDR Promotion under config>deployment>status>promotion",
+                detail="Enable status promotion under [promotion] in deployment.toml",
             )

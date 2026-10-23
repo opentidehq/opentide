@@ -22,7 +22,8 @@ from opentide.cli.ui.glyphs import glyph
 from opentide.cli.ui.mode import OutputMode, get_mode
 
 #: ``completed`` → ok, ``issues`` → warning, ``skipped`` → skipped, ``failed`` → failed.
-OutcomeKind = Literal["ok", "warning", "skipped", "failed"]
+#: ``plan`` is a dry run's tally (``Plan: 1 to create, …``): nothing happened, so no glyph.
+OutcomeKind = Literal["ok", "warning", "skipped", "failed", "plan"]
 
 #: At most this many next steps follow an outcome line.
 MAX_NEXT_ACTIONS = 3
@@ -34,6 +35,7 @@ _OUTCOME_STYLE: dict[str, str] = {
     "warning": "bold yellow",
     "failed": "bold red",
     "skipped": "bold",
+    "plan": "bold",
 }
 _LABEL_STYLE: dict[str, str] = {
     "error": "bold red",
@@ -60,9 +62,17 @@ def _encoding(console: Console) -> str:
 
 
 def outcome_text(kind: OutcomeKind, message: str, *, encoding: str = "utf-8") -> Text:
-    """``✓ message``, ``! message``, ``✗ message`` or ``Skipped: message``."""
+    """``✓ message``, ``! message``, ``✗ message``, ``Skipped: message`` or ``Plan: …``."""
     line = Text()
     style = _OUTCOME_STYLE[kind]
+    if kind == "plan":
+        label, colon, rest = message.partition(":")
+        if colon and " " not in label:
+            line.append(label + colon, style=style)
+            line.append(rest)
+        else:
+            line.append(message)
+        return line
     if kind == "skipped":
         line.append("Skipped:", style=style)
     else:

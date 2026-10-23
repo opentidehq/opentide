@@ -185,7 +185,9 @@ def run() -> None:
             subschema_template_path = (
                 subschemas_folder / subschema_type_folder / "Templates" / subchema_template_name
             )
-            title = f"{subschema_type_folder} : {subschema_name} Template".strip()
+            # The folder name ("MDR Systems Deployment") stays a package path;
+            # people see "Platform configuration".
+            title = f"Platform configuration : {subschema_name} Template".strip()
             _require_template(subschema_template_path, kind=f"platform {platform_id}")
             snippets[title] = vs_code_snippet_generator(
                 subschema_template_path,

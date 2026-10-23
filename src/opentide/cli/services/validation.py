@@ -11,7 +11,6 @@ import structlog
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
 from opentide.cli.ui.contract import USAGE_ERROR, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE
 from opentide.core.logging.config import get_stdout_console
-from opentide.core.logging.console import emit_section
 from opentide.registry.discovery import discover_workspace
 from opentide.validation.errors import format_issues_for_console
 from opentide.validation.issues import ValidationIssue, ValidationReport
@@ -683,29 +682,40 @@ def _run_live_validator(
         system_name = LegacyOpentide.Configurations.Systems.Index[platform]["tide"]["name"]
     except Exception:
         system_name = LegacyOpentide.Configurations.Systems.Index[platform]["platform"]["name"]
-    emit_section(f"Query Validation - {system_name}")
+    from opentide.cli.ui.progress import Checklist
+
     validator = cast(Any, query_validators[platform])
-    try:
+    early: dict[str, object] | None = None
+    with (
+        Checklist(total=1) as checklist,
+        checklist.step(f"{system_name} queries", unit="rule") as step,
+    ):
+        step.done(len(rules))
         try:
-            validator.validate(mdr_deployment=rules, strategies=strategies)
-        except TypeError:
-            logger.warning("trying_mdrv3_style_method")
-            validator.validate(deployment=rules)
-    except ModuleNotFoundError as exc:
-        return _missing_sdk_result(platform, exc)
-    except TenantUnreachableError as exc:
-        return _unreachable_tenant_result(exc)
-    except ValueError as exc:
-        # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
-        # TypeError stays uncaught here so the legacy validator signature retry works.
-        return {
-            "platform": platform,
-            "mode": "live",
-            "status": "failed",
-            "supported": True,
-            "message": str(exc),
-            "_exit_code": 1,
-        }
+            try:
+                validator.validate(mdr_deployment=rules, strategies=strategies)
+            except TypeError:
+                logger.warning("trying_mdrv3_style_method")
+                validator.validate(deployment=rules)
+        except ModuleNotFoundError as exc:
+            early = _missing_sdk_result(platform, exc)
+        except TenantUnreachableError as exc:
+            early = _unreachable_tenant_result(exc)
+        except ValueError as exc:
+            # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
+            # TypeError stays uncaught here so the legacy validator signature retry works.
+            early = {
+                "platform": platform,
+                "mode": "live",
+                "status": "failed",
+                "supported": True,
+                "message": str(exc),
+                "_exit_code": 1,
+            }
+        if early is not None:
+            step.status = "skipped" if early.get("status") == "skipped" else "failed"
+    if early is not None:
+        return early
     from opentide.cli.exit_codes import validation_outcome
 
     outcome = validation_outcome()

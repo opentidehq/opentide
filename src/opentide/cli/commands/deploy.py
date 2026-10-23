@@ -90,6 +90,11 @@ def deploy_cmd(
         skip_unconfigured=skip_unconfigured,
         persist_state_externally=persist_state_externally,
     )
+    if dry_run and not cli.json_output and not cli.quiet:
+        from opentide.cli.ui.plan import render_plan
+        from opentide.core.logging.config import get_stdout_console
+
+        render_plan(get_stdout_console(), result)
     emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 
 

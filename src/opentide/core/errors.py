@@ -68,14 +68,17 @@ class Errors(Exception):
         Raised when a tenant uses a non existing deployment plan
         """
 
-    class TideMDRDataModelErrors(TideDataModelErrors):
+    class TideRuleDataModelErrors(TideDataModelErrors):
         """
-        Raised for all errors related to incorrect MDR Data Structures
+        Raised for all errors related to incorrect detection rule data structures
         """
+
+    #: Former name, kept so existing ``except`` clauses still match.
+    TideMDRDataModelErrors = TideRuleDataModelErrors
 
     class TideQueryValidationError(Exception):
         """
-        Raised when the MDR query failed validation
+        Raised when a rule query failed validation
         """
 
 

@@ -28,6 +28,7 @@ from opentide.cli.ui.contract import (
 )
 from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
 from opentide.cli.ui.render import (
+    OutcomeKind,
     outcome_kind,
     render_error,
     render_next_actions,
@@ -60,6 +61,8 @@ class CommandResult:
     summary: dict[str, Any] = field(default_factory=dict)
     next_actions: tuple[NextAction, ...] = ()
     failure: Failure | None = None
+    #: The outcome line's kind when the status alone does not say (``plan``).
+    outcome: OutcomeKind | None = None
 
     @classmethod
     def from_payload(
@@ -70,7 +73,8 @@ class CommandResult:
         Services may also return ``_summary``, ``_next_actions`` (``NextAction``
         or ``{"command", "reason"}`` items), ``_failure_code``,
         ``_failure_argument`` and ``_failure_suggestion``; they are moved into
-        the envelope rather than left in the payload.
+        the envelope rather than left in the payload. ``_outcome_kind`` names
+        the outcome line's kind (``plan``) and never reaches JSON.
         """
         data = dict(payload)
         exit_code = int(data.pop("_exit_code", 0))
@@ -82,6 +86,7 @@ class CommandResult:
         failure_code = data.pop("_failure_code", None)
         failure_argument = data.pop("_failure_argument", None)
         failure_suggestion = data.pop("_failure_suggestion", None)
+        outcome = data.pop("_outcome_kind", None)
         ok = status != "failed"
         failure = None
         if not ok or exit_code:
@@ -102,6 +107,7 @@ class CommandResult:
             summary=summary,
             next_actions=next_actions,
             failure=failure,
+            outcome=outcome,
         )
 
     def payload(self) -> dict[str, Any]:
@@ -224,6 +230,8 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
     if not ctx.quiet:
         render_warnings(stderr, result.warnings)
     kind = outcome_kind(result.status, ok=result.ok)
+    if result.outcome is not None and kind != "failed":
+        kind = result.outcome
     if kind == "failed":
         suggestion = result.failure.suggestion if result.failure else None
         if suggestion and repr(suggestion) not in result.message:

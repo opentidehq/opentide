@@ -168,7 +168,7 @@ def checklist_table(
             seconds_text(elapsed),
             running.detail or running.where or "",
         )
-    return Padding(grid, (0, 0, 0, 2))
+    return Padding(grid, (0, 0, 0, 2), expand=False)
 
 
 class Checklist:

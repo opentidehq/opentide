@@ -61,8 +61,8 @@ def _technique_tactics(technique: str) -> list[str]:
     return tactics
 
 
-def _missing_field(data: DetectionRule, field: str, requirement: str) -> Errors.TideMDRDataModelErrors:
-    return Errors.TideMDRDataModelErrors(
+def _missing_field(data: DetectionRule, field: str, requirement: str) -> Errors.TideRuleDataModelErrors:
+    return Errors.TideRuleDataModelErrors(
         f'Rule {data.metadata.uuid} ({data.name}): configurations.sentinel.{field} is missing; {requirement}'
     )
 
@@ -83,7 +83,7 @@ class SentinelDeploy(RuleDeployer):
 
         configuration = data.configurations.sentinel
         if not configuration:
-            raise Errors.TideMDRDataModelErrors(
+            raise Errors.TideRuleDataModelErrors(
                 f'Rule {data.metadata.uuid} ({data.name}): configurations.sentinel is missing'
             )
         # Checked before anything is built so the failure names the rule and the
@@ -112,7 +112,7 @@ class SentinelDeploy(RuleDeployer):
             properties['suppressionEnabled'] = False
             properties['suppressionDuration'] = duration('1h')
         else:
-            raise Errors.TideMDRDataModelErrors('Suppression set to true, must be false or int')
+            raise Errors.TideRuleDataModelErrors('Suppression set to true, must be false or int')
         if configuration.scheduling.nrt is True:
             rule['kind'] = 'NRT'
         else:

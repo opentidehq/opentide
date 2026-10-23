@@ -24,7 +24,7 @@ class SentinelQueryValidator(QueryValidator):
         from azure.identity import CredentialUnavailableError
         mdr_uuid = mdr.metadata.uuid
         if not mdr.configurations.sentinel:
-            raise Errors.TideMDRDataModelErrors('Missing Sentinel')
+            raise Errors.TideRuleDataModelErrors('Missing Sentinel')
         query: str = mdr.configurations.sentinel.query
         if not query:
             os.environ['VALIDATION_ERROR_RAISED'] = 'True'
