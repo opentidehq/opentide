@@ -9,7 +9,9 @@ import json
 import re
 import subprocess
 import sys
+import threading
 from collections.abc import Awaitable, Callable, Iterator
+from functools import partial
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -24,7 +26,7 @@ from typer.testing import CliRunner
 
 from opentide.cli import app as cli_app
 from opentide.cli.commands import tui as tui_command
-from opentide.cli.commands.tui import OpentideTui, outcome_text, pill
+from opentide.cli.commands.tui import OpentideTui, diagnostic_text, outcome_text, pill
 from opentide.cli.context import CliContext
 from opentide.cli.services import tui as tui_service
 from opentide.cli.services.tui import (
@@ -124,10 +126,10 @@ async def _settle(app: OpentideTui, pilot: Pilot[None]) -> None:
 
 
 def _text(app: OpentideTui, selector: str) -> str:
-    """What a Static shows, as plain text."""
-    console = Console(width=200, file=io.StringIO())
-    console.print(app.query_one(selector, Static).content)
-    return console.file.getvalue()
+    """What a Static shows, as plain text, whatever FORCE_COLOR says."""
+    buffer = io.StringIO()
+    Console(width=200, file=buffer).print(app.query_one(selector, Static).content)
+    return _plain(buffer.getvalue())
 
 
 def _log_text(app: OpentideTui) -> str:
@@ -177,6 +179,11 @@ def test_tree_nests_threats_objectives_and_rules_with_counts(tutorial_repo: Path
         assert "1 threat · 1 objective · 1 rule" in _text(app, "#summary")
         assert "Spec-driven development for agentic detection engineering" in _text(app, "#brand")
         assert app.theme == "opentide"
+        # Blue is a fill, never a text colour.
+        variables = app.get_css_variables()
+        assert variables["block-cursor-background"].lower() == "#001489"
+        for name in ("footer-key-foreground", "text-accent", "border", "accent"):
+            assert variables[name].lower() != "#001489", name
         # The first object is shown before anything is selected.
         assert app.selected == THREAT
         assert "Not validated yet" in _text(app, "#diagnostics")
@@ -305,6 +312,42 @@ def test_deploy_dry_run_shows_the_plan(
         deployer.deploy.assert_not_called()
 
 
+def test_quit_waits_for_the_running_command(tutorial_repo: Path) -> None:
+    """A worker thread cannot be cancelled: q keeps the UI up until it is done."""
+    release = threading.Event()
+
+    def slow(ctx: CliContext) -> dict[str, Any]:
+        assert release.wait(10)
+        return {"message": "Slow command completed"}
+
+    slow_action = Action("slow", "opentide slow", "Takes a while", slow)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        app._start("slow", partial(app._run, slow_action), slow_action.command)
+        await pilot.press("q")
+        await pilot.pause()
+        assert app.is_running
+        assert "Waiting for opentide slow to finish" in _text(app, "#status")
+        # Nothing new starts while it waits.
+        await pilot.press("v")
+        assert app.running == "opentide slow"
+        release.set()
+        await _settle(app, pilot)
+        assert not app.is_running
+        assert app.outcomes[-1].result.message == "Slow command completed"
+
+    _drive(tutorial_repo, script)
+
+
+def test_quit_with_nothing_running_exits_at_once(tutorial_repo: Path) -> None:
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("q")
+        await pilot.pause()
+        assert not app.is_running
+
+    _drive(tutorial_repo, script)
+
+
 def test_one_command_at_a_time(tutorial_repo: Path) -> None:
     async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
         app.running = "generate"
@@ -330,6 +373,30 @@ def test_a_worker_that_raises_is_reported(
         app.action_reload()
         await _settle(app, pilot)
         assert "error[internal]: RuntimeError: index unreadable" in await _results(app, pilot)
+        assert app.running is None
+
+    _drive(tutorial_repo, script)
+
+
+def test_a_failed_reload_keeps_the_outcome(
+    tutorial_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        def explode(ctx: CliContext) -> Catalogue:
+            raise RuntimeError("index unreadable")
+
+        monkeypatch.setattr(tui_command, "load_catalogue", explode)
+        app.action_run("validate")
+        await _settle(app, pilot)
+        assert app.validated
+        log = await _results(app, pilot)
+        assert "✓ Validation passed" in log
+        # RichLog wraps the line to the tab's width: compare it unwrapped.
+        assert (
+            "error[internal]: the catalogue could not be read again: RuntimeError: index unreadable"
+            in " ".join(line.strip() for line in log.splitlines())
+        )
+        assert app.catalogue is not None  # the snapshot from before stays on screen
         assert app.running is None
 
     _drive(tutorial_repo, script)
@@ -389,6 +456,39 @@ def test_diagnostics_match_by_uuid_or_file(tmp_path: Path) -> None:
     assert Diagnostic.from_issue({"code": "x", "message": "m", "yaml_line": 0}).line == 1
 
 
+def test_help_asks_did_you_mean_only_for_a_value() -> None:
+    def help_for(code: str, suggestion: str) -> str | None:
+        return Diagnostic.from_issue(
+            {"code": code, "message": "m", "suggestion": suggestion}
+        ).help_text()
+
+    assert help_for("vocab_unknown", "clear") == "did you mean 'clear'?"
+    assert help_for("invalid_ref", THREAT) == f"did you mean '{THREAT}'?"
+    advice = "Confirm each identifier on Vulnerability-Lookup (https://vulnerability.circl.lu)."
+    assert help_for("invalid_cve", advice) == advice
+    diagnostic = Diagnostic.from_issue(
+        {"code": "invalid_cve", "message": "m", "suggestion": advice}
+    )
+    assert _plain(diagnostic_text(diagnostic, Path(".")).plain).splitlines()[-1] == (
+        f"  help: {advice}"
+    )
+    assert Diagnostic.from_issue({"code": "x", "message": "m"}).help_text() is None
+
+
+def test_results_text_carries_no_line_breaks_of_its_own(tutorial_repo: Path) -> None:
+    """RichLog wraps to the width of the Results tab; the text must not wrap first."""
+    warning = "sentinel has no tenants configured in " + "x/" * 80 + "sentinel.toml"
+    action = Action(
+        "long", "opentide long", "Long", lambda ctx: {"message": "Done", "warnings": [warning]}
+    )
+    outcome = run_action(CliContext(repo=tutorial_repo), action)
+    assert _plain(outcome_text(outcome, tutorial_repo).plain).splitlines() == [
+        "$ opentide long",
+        f"warning: {warning}",
+        "✓ Done",
+    ]
+
+
 def test_pill_is_white_on_reflex_blue() -> None:
     text = pill()
     assert text.plain == "▐ ≋ opentide ▌"
@@ -418,6 +518,51 @@ def test_refused_with_json(tmp_path: Path) -> None:
         "opentide info",
         "opentide validate",
     ]
+
+
+@pytest.mark.parametrize(
+    ("argv", "env", "reason"),
+    [
+        ([], {"NO_COLOR": "1"}, "NO_COLOR is set"),
+        (["--no-color"], {}, "--no-color was passed"),
+        ([], {"CI": "true"}, "a CI environment was detected"),
+        ([], {"OPENTIDE_OUTPUT": "plain"}, "OPENTIDE_OUTPUT is plain"),
+    ],
+    ids=["no-color-env", "no-color-flag", "ci", "opentide-output"],
+)
+def test_at_a_terminal_in_plain_mode_the_refusal_names_the_setting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+    env: dict[str, str],
+    reason: str,
+) -> None:
+    monkeypatch.setattr(tui_command, "_interactive", lambda: True)
+    for name in ("NO_COLOR", "CI", "GITHUB_ACTIONS", "GITLAB_CI", "TF_BUILD", "TERM"):
+        monkeypatch.delenv(name, raising=False)
+    result = CliRunner().invoke(cli_app, ["--repo", str(tmp_path), *argv, "tui"], env=env)
+    assert result.exit_code == 2
+    assert _plain(result.stderr).splitlines()[:2] == [
+        "error: opentide tui runs only in the human output mode; "
+        f"this run is in plain mode because {reason}",
+        "  help: set OPENTIDE_OUTPUT=human to open it anyway",
+    ]
+
+
+def test_at_a_terminal_the_json_refusal_carries_the_advice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tui_command, "_interactive", lambda: True)
+    result = CliRunner().invoke(
+        cli_app, ["--repo", str(tmp_path), "--json", "tui"], env={"NO_COLOR": "1"}
+    )
+    payload = json.loads(result.stdout)
+    # --json is not a setting a person can be told to drop: the plain wording.
+    assert payload["message"] == (
+        "opentide tui needs an interactive terminal; this run is in json mode"
+    )
+    assert "advice" not in payload
+    assert payload["failure"]["code"] == "usage_tui_needs_tty"
 
 
 def test_human_mode_without_a_terminal_on_stdin_is_refused(tmp_path: Path) -> None:

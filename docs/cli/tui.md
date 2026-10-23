@@ -35,7 +35,7 @@ Run them with their key, or from the command palette (`ctrl+p`), which lists the
 | `d` | `opentide deploy --dry-run --strategy PREVIEW --all` | The same command: the payloads a PREVIEW deploy of every rule file would send. No platform is called |
 | | `opentide deploy --dry-run --strategy RELEASE --all` | The same command, for a RELEASE run |
 | `r` | Reload the catalogue | Read every object file again, after editing one elsewhere |
-| `q` | | Quit |
+| `q` | | Quit. While a command runs, the UI stays up, shows `Waiting for opentide generate to finish…` and closes when it is done: a command cannot be stopped halfway, and it would otherwise go on writing files and printing into the shell after the UI had gone |
 
 A command runs in the background, one at a time, so the UI stays responsive. When it finishes, the catalogue is read again (generate may have rewritten it), and an object the last validate run found issues in shows `✗ 2` (errors) or `! 1` (warnings) after its name.
 
@@ -64,7 +64,14 @@ opentide --json tui
 }
 ```
 
-`NO_COLOR` and `--no-color` select the `plain` mode too, so the UI does not start. To open it without colour, set `OPENTIDE_OUTPUT=human` as well: `NO_COLOR=1 OPENTIDE_OUTPUT=human opentide tui` draws it in monochrome.
+At a terminal, `NO_COLOR`, `--no-color`, `TERM=dumb`, a CI environment and `OPENTIDE_OUTPUT=plain` select the `plain` mode too. The refusal then names the setting and how to open the UI anyway:
+
+```text illustrative
+error: opentide tui runs only in the human output mode; this run is in plain mode because NO_COLOR is set
+  help: set OPENTIDE_OUTPUT=human to open it anyway
+```
+
+`NO_COLOR=1 OPENTIDE_OUTPUT=human opentide tui` opens it in monochrome. This sample is not captured: the docs harness has no terminal, so it gets the refusal above.
 
 ## Source
 

@@ -196,6 +196,11 @@ def _parents(
     return ()
 
 
+#: Codes whose ``suggestion`` is the value to write instead: an object UUID or
+#: a vocabulary entry. Every other code's suggestion is prose.
+VALUE_SUGGESTION_CODES = frozenset({"invalid_ref", "vocab_unknown", "chaining_relation_unknown"})
+
+
 @dataclass(frozen=True)
 class Diagnostic:
     """A validation issue as the detail pane shows it. ``line`` is 1-based."""
@@ -224,6 +229,18 @@ class Diagnostic:
             field_path=tuple(str(part) for part in issue.get("field_path") or ()),
             help=issue.get("suggestion") or None,
         )
+
+    def help_text(self) -> str | None:
+        """``did you mean 'clear'?`` when the suggestion is a value, else the suggestion as written.
+
+        Most codes suggest the value to write instead of the wrong one; others
+        (``invalid_cve``, the external-id codes) carry a sentence of advice.
+        """
+        if not self.help:
+            return None
+        if self.code in VALUE_SUGGESTION_CODES:
+            return f"did you mean {self.help!r}?"
+        return self.help
 
     def concerns(self, entry: CatalogueEntry) -> bool:
         """Whether this diagnostic is about *entry*: by UUID, else by file."""

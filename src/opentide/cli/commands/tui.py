@@ -9,6 +9,7 @@ and runs comes from :mod:`opentide.cli.services.tui`; results print through
 from __future__ import annotations
 
 import io
+import os
 import sys
 from collections.abc import Callable, Iterable
 from functools import partial
@@ -29,7 +30,7 @@ from textual.widgets.tree import TreeNode
 from textual.worker import Worker, WorkerState
 
 from opentide.cli.context import CliContext, get_context
-from opentide.cli.output import emit_error, render_result
+from opentide.cli.output import CommandResult, emit_result, render_result
 from opentide.cli.services.tui import (
     ACTIONS,
     ACTIONS_BY_NAME,
@@ -45,8 +46,8 @@ from opentide.cli.services.tui import (
     run_action,
     summary_line,
 )
-from opentide.cli.ui.contract import USAGE_EXIT_CODE, NextAction
-from opentide.cli.ui.mode import OutputMode, get_mode
+from opentide.cli.ui.contract import USAGE_EXIT_CODE, Failure, NextAction
+from opentide.cli.ui.mode import OutputMode, detect_ci, get_mode
 
 # TODO: take the pill and colours from opentide.cli.ui.brand once the brand
 # marks land there; they are defined here until both changes are merged.
@@ -57,9 +58,18 @@ TAGLINE = "Spec-driven development for agentic detection engineering"
 THEME = Theme(
     name="opentide",
     primary=BLUE,
+    # Textual draws accent-coloured text (footer keys, links); Reflex Blue on a
+    # dark surface would be all but invisible there.
+    accent=WHITE,
     dark=True,
-    # Blue is a fill, never a text colour: cursors are white on Reflex Blue.
-    variables={"block-cursor-foreground": WHITE},
+    # Blue is a fill, never a text colour: cursors are white on Reflex Blue,
+    # and borders, footer keys and accent text are white.
+    variables={
+        "block-cursor-foreground": WHITE,
+        "footer-key-foreground": WHITE,
+        "text-accent": WHITE,
+        "border": WHITE,
+    },
 )
 
 #: The widget each tab focuses when shown.
@@ -88,18 +98,35 @@ def tui_cmd(ctx: typer.Context) -> None:
     """
     cli = get_context(ctx)
     mode = get_mode()
-    if mode is not OutputMode.HUMAN or not _interactive():
-        emit_error(
-            cli,
-            f"opentide tui needs an interactive terminal; {_why_not(mode)}",
+    interactive = _interactive()
+    if mode is OutputMode.HUMAN and interactive:
+        OpentideTui(cli).run()
+        return
+    data: dict[str, Any] = {}
+    reason = _plain_reason(cli) if mode is OutputMode.PLAIN and interactive else None
+    if reason is not None:
+        # A person at a terminal, put in plain mode by a setting: say which one.
+        message = f"opentide tui runs only in the human output mode; this run is in plain mode because {reason}"
+        data["advice"] = "set OPENTIDE_OUTPUT=human to open it anyway"
+    elif mode is OutputMode.HUMAN:
+        message = "opentide tui needs an interactive terminal; stdin or stdout is not one"
+    else:
+        message = f"opentide tui needs an interactive terminal; this run is in {mode.value} mode"
+    emit_result(
+        cli,
+        CommandResult(
+            message=message,
+            ok=False,
+            status="failed",
+            data={"error": message, **data},
             exit_code=USAGE_EXIT_CODE,
-            code=USAGE_TUI_NEEDS_TTY,
             next_actions=(
                 NextAction("opentide info", "catalogue counts and platforms"),
                 NextAction("opentide validate", "diagnostics for every object"),
             ),
-        )
-    OpentideTui(cli).run()
+            failure=Failure(code=USAGE_TUI_NEEDS_TTY, message=message),
+        ),
+    )
 
 
 def _interactive() -> bool:
@@ -107,10 +134,19 @@ def _interactive() -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
-def _why_not(mode: OutputMode) -> str:
-    if mode is OutputMode.HUMAN:
-        return "stdin or stdout is not one"
-    return f"this run is in {mode.value} mode"
+def _plain_reason(cli: CliContext) -> str | None:
+    """The setting that chose ``plain`` mode at a terminal, in the order the mode rules read them."""
+    if os.environ.get("OPENTIDE_OUTPUT", "").strip().lower() == "plain":
+        return "OPENTIDE_OUTPUT is plain"
+    if cli.no_color:
+        return "--no-color was passed"
+    if os.environ.get("NO_COLOR"):
+        return "NO_COLOR is set"
+    if os.environ.get("TERM", "").strip().lower() == "dumb":
+        return "TERM is dumb"
+    if detect_ci() is not None:
+        return "a CI environment was detected"
+    return None
 
 
 def diagnostic_text(diagnostic: Diagnostic, root: Any) -> Text:
@@ -130,18 +166,28 @@ def diagnostic_text(diagnostic: Diagnostic, root: Any) -> Text:
     if where:
         line.append("\n  --> ", style="bold blue")
         line.append(where)
-    if diagnostic.help:
+    help_text = diagnostic.help_text()
+    if help_text:
         line.append("\n  help:", style="bold cyan")
-        line.append(f" did you mean {diagnostic.help!r}?")
+        line.append(f" {help_text}")
     return line
 
 
-def outcome_text(outcome: ActionOutcome, root: Any, *, width: int = 100) -> Text:
-    """The command line, its diagnostics and plan, then the result as the CLI prints it."""
+#: Wide enough that Rich never breaks a line: the Results log wraps to its own width.
+_UNWRAPPED = 10_000
+
+
+def outcome_text(outcome: ActionOutcome, root: Any) -> Text:
+    """The command line, its diagnostics and plan, then the result as the CLI prints it.
+
+    Every line is printed with ``soft_wrap`` on a console too wide to wrap, so
+    the text carries no line breaks of its own; ``RichLog(wrap=True)`` wraps it
+    to the width the Results tab has.
+    """
     buffer = io.StringIO()
     console = Console(
         file=buffer,
-        width=width,
+        width=_UNWRAPPED,
         force_terminal=True,
         color_system="truecolor",
         highlight=False,
@@ -172,6 +218,11 @@ class OpentideTui(App[None]):
     #diagnostics { margin-bottom: 1; }
     TabbedContent { height: 1fr; }
     #status { height: 1; padding: 0 1; color: $text-muted; }
+    /* Blue is a fill, never a text colour: the tab underline and the tree
+       guides are drawn as coloured characters, so they take the foreground. */
+    Underline > .underline--bar { color: $foreground; }
+    Tree > .tree--guides-selected { color: $foreground 60%; }
+    Tree:focus > .tree--guides-selected { color: $foreground; }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("v", "run('validate')", "Validate"),
@@ -196,6 +247,10 @@ class OpentideTui(App[None]):
         #: Name of the worker running, if any. One at a time: they share the registry.
         self.running: str | None = None
         self.outcomes: list[ActionOutcome] = []
+        #: Set by quit while a command runs: the app exits when it finishes.
+        self.quit_pending = False
+        #: Why the reload after the last action failed, if it did.
+        self.reload_error: str | None = None
         self.register_theme(THEME)
         self.theme = THEME.name
 
@@ -243,10 +298,10 @@ class OpentideTui(App[None]):
 
     def action_run(self, name: str) -> None:
         action = ACTIONS_BY_NAME[name]
-        self._start(name, partial(self._run, action), f"Running {action.command}")
+        self._start(name, partial(self._run, action), action.command)
 
     def action_reload(self) -> None:
-        self._start("load", self._load, "Reloading the catalogue")
+        self._start("load", self._load, "the catalogue reload")
 
     def action_show_tab(self, tab: str) -> None:
         self.query_one(TabbedContent).active = tab
@@ -254,23 +309,47 @@ class OpentideTui(App[None]):
         # focused widget, so a focus left in the hidden pane switches back.
         self.query_one(_TAB_FOCUS[tab]).focus()
 
+    async def action_quit(self) -> None:
+        """Quit, but never with a command half done.
+
+        A worker thread cannot be cancelled: quitting under it would leave it
+        writing files, and printing into the shell, after the UI has gone. So
+        the UI stays up, says what it waits for, and quits when it is done.
+        """
+        if self.running is None:
+            self.exit()
+            return
+        self.quit_pending = True
+        message = f"Waiting for {self.running} to finish…"
+        self._status(f"{message} The UI closes when it is done.")
+        self.notify(message, title="Quitting", severity="warning")
+
     # -- workers ------------------------------------------------------------
 
-    def _start(self, name: str, work: Callable[[], object], status: str) -> None:
+    def _start(self, name: str, work: Callable[[], object], label: str) -> None:
+        if self.quit_pending:
+            return
         if self.running is not None:
             self.notify(f"Wait for {self.running} to finish", severity="warning")
             return
-        self.running = name
-        self._status(f"{status}…")
+        self.running = label
+        self._status(f"Running {label}…")
         self.run_worker(work, name=name, group="opentide", thread=True, exit_on_error=False)
 
     def _load(self) -> Catalogue:
         return load_catalogue(self.cli)
 
-    def _run(self, action: Action) -> tuple[ActionOutcome, Catalogue]:
+    def _run(self, action: Action) -> tuple[ActionOutcome, Catalogue | None]:
         outcome = run_action(self.cli, action)
-        # generate rewrites what the registry reads, and any run may follow an edit.
-        return outcome, load_catalogue(self.cli)
+        # generate rewrites what the registry reads, and any run may follow an
+        # edit. A reload that fails must not lose the outcome of the action.
+        self.reload_error = None
+        try:
+            catalogue = load_catalogue(self.cli)
+        except Exception as exc:  # noqa: BLE001 -- shown in the UI with the outcome
+            self.reload_error = f"{type(exc).__name__}: {exc}"
+            return outcome, None
+        return outcome, catalogue
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.worker.group != "opentide":
@@ -278,12 +357,14 @@ class OpentideTui(App[None]):
         if event.state not in (WorkerState.SUCCESS, WorkerState.ERROR, WorkerState.CANCELLED):
             return
         self.running = None
+        self._finish(event)
+        if self.quit_pending:
+            self.exit()
+
+    def _finish(self, event: Worker.StateChanged) -> None:
         if event.state is WorkerState.ERROR:
             error = event.worker.error
-            message = f"{type(error).__name__}: {error}"
-            self._log(Text.assemble(("error[internal]:", "bold red"), f" {message}"))
-            self._status(f"error: {message}")
-            self.notify(message, severity="error", title="opentide")
+            self._internal_error(f"{type(error).__name__}: {error}")
             return
         if event.state is WorkerState.CANCELLED:
             self._status("")
@@ -295,7 +376,15 @@ class OpentideTui(App[None]):
             return
         outcome, catalogue = result
         self._show_outcome(outcome)
+        if catalogue is None:
+            self._internal_error(f"the catalogue could not be read again: {self.reload_error}")
+            return
         self._show_catalogue(catalogue)
+
+    def _internal_error(self, message: str) -> None:
+        self._log(Text.assemble(("error[internal]:", "bold red"), f" {message}"))
+        self._status(f"error: {message}")
+        self.notify(message, severity="error", title="opentide")
 
     # -- rendering ----------------------------------------------------------
 
