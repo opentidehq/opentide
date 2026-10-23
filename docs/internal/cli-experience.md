@@ -277,6 +277,7 @@ The output contract (#619) is in place. Where it differs from the sections above
 | Outcome lines | The glyph grammar is in place; each command keeps its current message (`✓ Validation passed`). The counted wordings in the table above come with diagnostics and progress (PRs C and E). A skipped result prints `Skipped: <message>`. |
 | Soft wrap | Outcome, warning, error and next-step lines are soft-wrapped in `human` mode too, not only `plain`: Rich would otherwise break a long path mid-word on a TTY. |
 | `opentide --json` with no command | Still prints help (`no_args_is_help`), not a JSON document. |
+| `opentide tui` (#632) | Refused, with `usage_tui_needs_tty`, outside `human` mode and also when stdin or stdout is not a terminal (`OPENTIDE_OUTPUT=human` alone does not give Textual a terminal). `NO_COLOR` selects `plain`, so it refuses too; `NO_COLOR=1 OPENTIDE_OUTPUT=human` opens it in monochrome. Its deploy actions are `deploy --dry-run --strategy PREVIEW --all` and `... RELEASE --all`. Results print through `opentide.cli.output.render_result()`, the body of `emit_result()`, into a recording console. |
 
 ## Code references
 
