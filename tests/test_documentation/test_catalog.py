@@ -292,7 +292,8 @@ def test_build_catalog_indexes_nested_signals() -> None:
 
 
 def test_build_catalog_collects_records() -> None:
-    rule = MagicMock(metadata=MagicMock(uuid="r1"), name="Rule")
+    rule = MagicMock(metadata=MagicMock(uuid="r1"))
+    rule.name = "Rule"
     with patch("opentide.documentation.catalog.Opentide") as mock_ot:
         mock_ot.Rules.values.return_value = [rule]
         mock_ot.Objectives.values.return_value = []
@@ -300,3 +301,4 @@ def test_build_catalog_collects_records() -> None:
         catalog = build_catalog()
     assert len(catalog.rules) == 1
     assert catalog.rules[0].uuid == "r1"
+    assert catalog.rules[0].slug == "rule"

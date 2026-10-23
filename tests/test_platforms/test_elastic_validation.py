@@ -92,7 +92,7 @@ def test_aggregation_fields_check_misspelt_field_fails() -> None:
                 },
             },
         )
-        with pytest.raises(ValueError, match="Field 'source.misspelt' not found in mappings"):
+        with pytest.raises(ValueError, match=r"Field 'source\.misspelt' not found in mappings"):
             run_aggregation_fields_check(client, block)
 
 

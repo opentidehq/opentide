@@ -137,7 +137,7 @@ def test_bundled_pins_resolve_against_bundled_vocabularies() -> None:
     for family in ("threat", "objective", "rule"):
         for schema_id, pins in pins_for_family(family).items():
             for dot_path, contract in pins.items():
-                field, version = parse_vocab_contract(contract)
+                field, _version = parse_vocab_contract(contract)
                 path = vocab_dir / f"{field}.vocab.toml"
                 if not path.is_file():
                     unresolved.append(f"[{schema_id}] {dot_path}: no {path.name}")

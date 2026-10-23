@@ -89,13 +89,13 @@ def clear_runtime_caches() -> None:
 
     # The schema pipeline caches registry-backed globals; a stale binding points
     # generation at the previous test's repo root.
-    schema_pipeline._runtime_ready = False  # noqa: SLF001
+    schema_pipeline._runtime_ready = False
     get_repo_root.cache_clear()
     get_data_root.cache_clear()
-    IndexManager._cache = None  # noqa: SLF001
-    Opentide._initialised = False  # noqa: SLF001
-    Opentide._objects_loaded = False  # noqa: SLF001
-    Opentide._index = None  # noqa: SLF001
+    IndexManager._cache = None
+    Opentide._initialised = False
+    Opentide._objects_loaded = False
+    Opentide._index = None
     Opentide._rules = {}
     Opentide._threats = {}
     Opentide._objectives = {}

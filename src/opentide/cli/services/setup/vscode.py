@@ -180,10 +180,7 @@ def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
     vscode_dir.mkdir(parents=True, exist_ok=True)
     settings_path = vscode_dir / "settings.json"
     mappings = build_yaml_schema_mappings(workspace=target.resolve())
-    if merge and settings_path.is_file():
-        existing = _load_jsonc(settings_path)
-    else:
-        existing = {}
+    existing = _load_jsonc(settings_path) if merge and settings_path.is_file() else {}
     yaml_schemas = existing.get("yaml.schemas", {})
     if not isinstance(yaml_schemas, dict):
         yaml_schemas = {}
@@ -206,10 +203,7 @@ def write_vscode_extensions(target: Path, *, merge: bool = True) -> str:
     vscode_dir = target / ".vscode"
     vscode_dir.mkdir(parents=True, exist_ok=True)
     extensions_path = vscode_dir / "extensions.json"
-    if merge and extensions_path.is_file():
-        existing = _load_jsonc(extensions_path)
-    else:
-        existing = {}
+    existing = _load_jsonc(extensions_path) if merge and extensions_path.is_file() else {}
     recommendations = existing.get("recommendations", [])
     if not isinstance(recommendations, list):
         recommendations = []
@@ -311,11 +305,19 @@ def run_vscode_setup(
         if snippet_path:
             files.append(snippet_path)
 
+    warnings: list[str] = []
     if mcp:
         from opentide.cli.enums import McpHost
-        from opentide.cli.services.setup.mcp import write_mcp_config
+        from opentide.cli.services.setup.mcp import (
+            McpConfigError,
+            mcp_config_warning,
+            write_mcp_config,
+        )
 
-        files.append(write_mcp_config(target, McpHost.vscode))
+        try:
+            files.append(write_mcp_config(target, McpHost.vscode))
+        except McpConfigError as exc:
+            warnings.append(mcp_config_warning(McpHost.vscode, exc))
 
     payload: dict[str, object] = {
         "message": "VS Code setup complete (deprecated)",
@@ -324,6 +326,8 @@ def run_vscode_setup(
         "deprecated": DEPRECATION_MESSAGE,
         "status": "completed",
     }
+    if warnings:
+        payload["warnings"] = warnings
     if snippets and snippet_path is None:
         payload["status"] = "failed"
         payload["_exit_code"] = 1

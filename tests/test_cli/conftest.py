@@ -102,7 +102,7 @@ def stub_remote_skills_manifest(
 def mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
     """Avoid network calls when tests install skills from opentidehq/skills."""
 
-    def _fake(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
+    def _fake(slug: str, dest: Path, *, source: str, ref: str, **_: object) -> list[str]:
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "SKILL.md").write_text(f"# {slug} ({source}@{ref})\n", encoding="utf-8")
         return ["SKILL.md"]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -9,7 +10,9 @@ from typing import Literal, Protocol
 class MarkdownFormatter(Protocol):
     """Flavor-specific markdown formatting hooks."""
 
-    flavor: str
+    # Read-only: the formatters are frozen dataclasses.
+    @property
+    def flavor(self) -> str: ...
 
     def heading(self, level: int, text: str) -> str:
         pass
@@ -48,6 +51,9 @@ class MarkdownFormatter(Protocol):
         pass
 
     def page_filename(self, slug: str, uuid: str | None) -> str:
+        pass
+
+    def heading_anchor(self, title: str) -> str:
         pass
 
     def diagram_relations_type(self) -> Literal["mindmap", "flowchart", "graph"]:
@@ -92,9 +98,9 @@ class BaseFormatter:
         return self.link(text, target)
 
     def table(self, headers: list[str], rows: list[list[str]]) -> str:
-        header = "| " + " | ".join(headers) + " |"
+        header = "| " + " | ".join(_cell(text) for text in headers) + " |"
         sep = "| " + " | ".join("---" for _ in headers) + " |"
-        body = ["| " + " | ".join(row) + " |" for row in rows]
+        body = ["| " + " | ".join(_cell(text) for text in row) + " |" for row in rows]
         return "\n".join([header, sep, *body]) + "\n"
 
     def index_table(self, headers: list[str], rows: list[list[str]]) -> str:
@@ -116,6 +122,12 @@ class BaseFormatter:
     def page_filename(self, slug: str, uuid: str | None) -> str:
         return f"{uuid or slug}.md"
 
+    def heading_anchor(self, title: str) -> str:
+        # Imported here: the links module imports this one.
+        from opentide.documentation.markdown.links import heading_anchor
+
+        return heading_anchor(title)
+
     def diagram_relations_type(self) -> Literal["mindmap", "flowchart", "graph"]:
         return "flowchart"
 
@@ -130,3 +142,13 @@ class BaseFormatter:
 
     def diagram_mindmap(self, diagram: str) -> str:
         return diagram
+
+
+# A ``|`` that is not already escaped, so cells built with ``_table_cell`` are
+# not escaped twice.
+_BARE_PIPE = re.compile(r"(?<!\\)\|")
+
+
+def _cell(text: str) -> str:
+    """One table cell: a pipe or a line break would end the cell or the row."""
+    return _BARE_PIPE.sub(r"\\|", " ".join(text.splitlines()))

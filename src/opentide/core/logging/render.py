@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import MutableMapping
 from io import StringIO
 from typing import Any
 
@@ -23,10 +24,10 @@ class OpentideConsoleRenderer:
     def __init__(self, *, use_color: bool = True) -> None:
         self._use_color = use_color
 
-    def __call__(self, _logger: Any, method_name: str, event_dict: dict[str, Any]) -> str:
+    def __call__(self, _logger: Any, method_name: str, event_dict: MutableMapping[str, Any]) -> str:
         return self.render(event_dict, method_name)
 
-    def render(self, event_dict: dict[str, Any], method_name: str) -> str:
+    def render(self, event_dict: MutableMapping[str, Any], method_name: str) -> str:
         event = event_dict.pop("event", "")
         level = str(event_dict.pop("level", method_name)).upper()
         timestamp = event_dict.pop("timestamp", "")
