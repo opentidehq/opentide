@@ -518,8 +518,8 @@ docs = "Specifies an alternative method for serializing the input table to the P
 required = false
 
 [[plugins]]
-name = "R"
-signature = "R(output_schema, script [, script_parameters] [, external_artifacts])"
+name = "r"
+signature = "r(output_schema, script [, script_parameters] [, external_artifacts])"
 docs = "The R plugin runs a user-defined function (UDF) using an R script."
 citation = "https://learn.microsoft.com/kusto/query/r-plugin"
 warning = "am_no"
@@ -547,4 +547,632 @@ required = false
 [[plugins.parameters]]
 name = "external_artifacts"
 docs = "A property bag of name and URL pairs for artifacts that are accessible from cloud storage."
+required = false
+
+# Added from Learn for the KQL oracle. Plugins that call external HTTP or AI services are am_no.
+[[plugins]]
+name = "active_users_count"
+signature = "active_users_count(IdColumn, TimelineColumn, Start, End, LookbackWindow, Period, ActivePeriodsCount, Bin, [dim1, dim2, ...])"
+docs = "Calculates distinct count of values, where each value has appeared in at least a minimum number of periods in a lookback period."
+citation = "https://learn.microsoft.com/kusto/query/active-users-count-plugin"
+
+[[plugins.parameters]]
+name = "IdColumn"
+docs = "The name of the column with ID values that represent user activity."
+required = true
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The name of the column that represents timeline."
+required = true
+
+[[plugins.parameters]]
+name = "Start"
+docs = "The analysis start period."
+required = true
+
+[[plugins.parameters]]
+name = "End"
+docs = "The analysis end period."
+required = true
+
+[[plugins.parameters]]
+name = "LookbackWindow"
+docs = "The time window defining a period where user appearance is checked."
+required = true
+
+[[plugins.parameters]]
+name = "Period"
+docs = "A constant to count as single appearance (a user will be counted as active if it appears in at least distinct ActivePeriodsCount of this timespan."
+required = true
+
+[[plugins.parameters]]
+name = "ActivePeriodsCount"
+docs = "The minimal number of distinct active periods to decide if user is active."
+required = true
+
+[[plugins.parameters]]
+name = "Bin"
+docs = "A constant value of the analysis step period."
+required = true
+
+[[plugins.parameters]]
+name = "dim1, dim2, ..."
+docs = "An array of the dimensions columns that slice the activity metrics calculation."
+required = false
+
+[[plugins]]
+name = "activity_counts_metrics"
+signature = "activity_counts_metrics(IdColumn, TimelineColumn, Start, End, Step [, Dimensions])"
+docs = "Calculates useful activity metrics for each time window compared/aggregated to all previous time windows."
+citation = "https://learn.microsoft.com/kusto/query/activity-counts-metrics-plugin"
+
+[[plugins.parameters]]
+name = "IdColumn"
+docs = "The name of the column with ID values that represent user activity."
+required = true
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The name of the column that represents the timeline."
+required = true
+
+[[plugins.parameters]]
+name = "Start"
+docs = "The analysis start period."
+required = true
+
+[[plugins.parameters]]
+name = "End"
+docs = "The analysis end period."
+required = true
+
+[[plugins.parameters]]
+name = "Step"
+docs = "The analysis window period."
+required = true
+
+[[plugins.parameters]]
+name = "Dimensions"
+docs = "Zero or more comma-separated dimensions columns that slice the activity metrics calculation."
+required = false
+
+[[plugins]]
+name = "activity_engagement"
+signature = "activity_engagement(IdColumn, TimelineColumn, [Start, End,] InnerActivityWindow, OuterActivityWindow [, dim1, dim2, ...])"
+docs = "Calculates activity engagement ratio based on ID column over a sliding timeline window."
+citation = "https://learn.microsoft.com/kusto/query/activity-engagement-plugin"
+
+[[plugins.parameters]]
+name = "IdCoumn"
+docs = "The name of the column with ID values that represent user activity."
+required = true
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The name of the column that represents timeline."
+required = true
+
+[[plugins.parameters]]
+name = "Start"
+docs = "The analysis start period."
+required = false
+
+[[plugins.parameters]]
+name = "End"
+docs = "The analysis end period."
+required = false
+
+[[plugins.parameters]]
+name = "InnerActivityWindow"
+docs = "The inner-scope analysis window period."
+required = true
+
+[[plugins.parameters]]
+name = "OuterActivityWindow"
+docs = "The outer-scope analysis window period."
+required = true
+
+[[plugins.parameters]]
+name = "dim1, dim2, ..."
+docs = "An array of the dimensions columns that slice the activity metrics calculation."
+required = false
+
+[[plugins]]
+name = "activity_metrics"
+signature = "activity_metrics(IdColumn, TimelineColumn, [Start, End,] Window [, dim1, dim2, ...])"
+docs = "Calculates useful metrics that include distinct count values, distinct count of new values, retention rate, and churn rate."
+citation = "https://learn.microsoft.com/kusto/query/activity-metrics-plugin"
+
+[[plugins.parameters]]
+name = "IdCoumn"
+docs = "The name of the column with ID values that represent user activity."
+required = true
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The name of the column that represents timeline."
+required = true
+
+[[plugins.parameters]]
+name = "Start"
+docs = "The analysis start period."
+required = true
+
+[[plugins.parameters]]
+name = "End"
+docs = "The analysis end period."
+required = true
+
+[[plugins.parameters]]
+name = "Step"
+docs = "The analysis window period."
+required = true
+
+[[plugins.parameters]]
+name = "dim1, dim2, ..."
+docs = "An array of the dimensions columns that slice the activity metrics calculation."
+required = false
+
+[[plugins]]
+name = "ai_chat_completion"
+signature = "ai_chat_completion(Chat, ConnectionString [, Options [, IncludeErrorMessages]])"
+docs = "The ai_chat_completion plugin enables generating chat completions using language models, supporting AI-related scenarios such as conversational AI and interactive systems."
+citation = "https://learn.microsoft.com/kusto/query/ai-chat-completion-plugin"
+warning = "am_no"
+
+[[plugins.parameters]]
+name = "Chat"
+docs = "An array of messages comprising the conversation so far."
+required = true
+
+[[plugins.parameters]]
+name = "ConnectionString"
+docs = "The connection string for the language model in the format ; ; replace and with the AI model deployment URI and the authentication method respectively."
+required = true
+
+[[plugins.parameters]]
+name = "Options"
+docs = "The options that control calls to the chat model endpoint."
+required = false
+
+[[plugins.parameters]]
+name = "IncludeErrorMessages"
+docs = "Indicates whether to output errors in a new column in the output table."
+required = false
+
+[[plugins]]
+name = "ai_chat_completion_prompt"
+signature = "ai_chat_completion_prompt(Prompt, ConnectionString [, Options [, IncludeErrorMessages]])"
+docs = "The ai_chat_completion_prompt plugin enables generating chat completions using language models, supporting AI-related scenarios such as conversational AI and interactive systems."
+citation = "https://learn.microsoft.com/kusto/query/ai-chat-completion-prompt-plugin"
+warning = "am_no"
+
+[[plugins.parameters]]
+name = "Prompt"
+docs = "The prompt for generating chat completions."
+required = true
+
+[[plugins.parameters]]
+name = "ConnectionString"
+docs = "The connection string for the language model in the format ; ; replace and with the AI model deployment URI and the authentication method respectively."
+required = true
+
+[[plugins.parameters]]
+name = "Options"
+docs = "The options that control calls to the chat model endpoint."
+required = false
+
+[[plugins.parameters]]
+name = "IncludeErrorMessages"
+docs = "Indicates whether to output errors in a new column in the output table."
+required = false
+
+[[plugins]]
+name = "ai_embeddings"
+signature = "ai_embeddings(text, connectionString [, options [, IncludeErrorMessages]])"
+docs = "The ai_embeddings plugin allows embedding of text using language models, enabling various AI-related scenarios such as Retrieval Augmented Generation (RAG) applications and semantic search."
+citation = "https://learn.microsoft.com/kusto/query/ai-embeddings-plugin"
+warning = "am_no"
+
+[[plugins.parameters]]
+name = "text"
+docs = "The text to embed."
+required = true
+
+[[plugins.parameters]]
+name = "connectionString"
+docs = "The connection string for the language model in the format ; ; replace and with the AI model deployment URI and the authentication method respectively."
+required = true
+
+[[plugins.parameters]]
+name = "options"
+docs = "The options that control calls to the embedding model endpoint."
+required = false
+
+[[plugins.parameters]]
+name = "IncludeErrorMessages"
+docs = "Indicates whether to output errors in a new column in the output table."
+required = false
+
+[[plugins]]
+name = "funnel_sequence"
+signature = "funnel_sequence(IdColumn, TimelineColumn, Start, End, MaxSequenceStepWindow, Step, StateColumn, Sequence)"
+docs = "Calculates distinct count of users who have taken a sequence of states, and the distribution of previous/next states that have led to/were followed by the sequence."
+citation = "https://learn.microsoft.com/kusto/query/funnel-sequence-plugin"
+
+[[plugins.parameters]]
+name = "IdColum"
+docs = "The column reference representing the ID."
+required = true
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The column reference representing the timeline."
+required = true
+
+[[plugins.parameters]]
+name = "Start"
+docs = "The analysis start period."
+required = true
+
+[[plugins.parameters]]
+name = "End"
+docs = "The analysis end period."
+required = true
+
+[[plugins.parameters]]
+name = "MaxSequenceStepWindow"
+docs = "The value of the max allowed timespan between two sequential steps in the sequence."
+required = true
+
+[[plugins.parameters]]
+name = "Step"
+docs = "The analysis step period, or bin."
+required = true
+
+[[plugins.parameters]]
+name = "StateColumn"
+docs = "The column reference representing the state."
+required = true
+
+[[plugins.parameters]]
+name = "Sequence"
+docs = "An array with the sequence values that are looked up in StateColumn."
+required = true
+
+[[plugins]]
+name = "funnel_sequence_completion"
+signature = "funnel_sequence_completion(IdColumn, TimelineColumn, Start, End, BinSize, StateColumn, Sequence, MaxSequenceStepWindows)"
+docs = "Calculates a funnel of completed sequence steps while comparing different time periods."
+citation = "https://learn.microsoft.com/kusto/query/funnel-sequence-completion-plugin"
+
+[[plugins.parameters]]
+name = "IdColum"
+docs = "The column reference representing the ID."
+required = true
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The column reference representing the timeline."
+required = true
+
+[[plugins.parameters]]
+name = "Start"
+docs = "The analysis start period."
+required = true
+
+[[plugins.parameters]]
+name = "End"
+docs = "The analysis end period."
+required = true
+
+[[plugins.parameters]]
+name = "BinSize"
+docs = "The analysis window size."
+required = true
+
+[[plugins.parameters]]
+name = "StateColumn"
+docs = "The column reference representing the state."
+required = true
+
+[[plugins.parameters]]
+name = "Sequence"
+docs = "An array with the sequence values that are looked up in StateColumn."
+required = true
+
+[[plugins.parameters]]
+name = "MaxSequenceStepPeriods"
+docs = "An array with the values of the max allowed timespan between the first and last sequential steps in the sequence."
+required = true
+
+[[plugins]]
+name = "geo_line_lookup"
+signature = "geo_line_lookup(LookupTable, LookupLineKey, SourceLongitude, SourceLatitude, Radius, [return_unmatched], [lookup_area_radius], [return_lookup_key])"
+docs = "The geo_line_lookup plugin looks up a Line value in a lookup table and returns rows with matched values."
+citation = "https://learn.microsoft.com/kusto/query/geo-line-lookup-plugin"
+
+[[plugins.parameters]]
+name = "LookupTable"
+docs = "Table or tabular expression with lines lookup data, whose column LookupLineKey is used for line matching."
+required = true
+
+[[plugins.parameters]]
+name = "LookupLineKey"
+docs = "The column of LookupTable with line or multiline in the GeoJSON format and of dynamic type that is matched against each SourceLongitude, SourceLatitudes values."
+required = true
+
+[[plugins.parameters]]
+name = "SourceLongitude"
+docs = "The column of T with longitude value to be looked up in LookupTable."
+required = true
+
+[[plugins.parameters]]
+name = "SourceLatitude"
+docs = "The column of T with latitude value to be looked up in LookupTable."
+required = true
+
+[[plugins.parameters]]
+name = "Radius"
+docs = "Length from the line where the source location is considered a match."
+required = true
+
+[[plugins.parameters]]
+name = "return_unmatched"
+docs = "An optional boolean flag that defines if the result should include all or only matching rows (default: false - only matching rows returned)."
+required = false
+
+[[plugins.parameters]]
+name = "lookup_area_radius"
+docs = "An optional lookup area radius distance in meters value that might help in matching locations to their respective lines."
+required = false
+
+[[plugins.parameters]]
+name = "return_lookup_key"
+docs = "An optional boolean flag that defines if the result should include column LookupLineKey (default: false)."
+required = false
+
+[[plugins]]
+name = "geo_polygon_lookup"
+signature = "geo_polygon_lookup(LookupTable, LookupPolygonKey, SourceLongitude, SourceLatitude, [radius], [return_unmatched], [lookup_area_radius], [return_lookup_key])"
+docs = "The geo_polygon_lookup plugin looks up a Polygon value in a lookup table and returns rows with matched values."
+citation = "https://learn.microsoft.com/kusto/query/geo-polygon-lookup-plugin"
+
+[[plugins.parameters]]
+name = "LookupTable"
+docs = "Table or tabular expression with polygons lookup data, whose column LookupPolygonKey is used for polygon matching."
+required = true
+
+[[plugins.parameters]]
+name = "LookupPolygonKey"
+docs = "The column of LookupTable with Polygon or multipolygon in the GeoJSON format and of dynamic type that is matched against each SourceLongitude, SourceLatitudes values."
+required = true
+
+[[plugins.parameters]]
+name = "SourceLongitude"
+docs = "The column of T with longitude value to be looked up in LookupTable."
+required = true
+
+[[plugins.parameters]]
+name = "SourceLatitude"
+docs = "The column of T with latitude value to be looked up in LookupTable."
+required = true
+
+[[plugins.parameters]]
+name = "radius"
+docs = "An optional radius value that defines the length from the polygon borders where the location is considered a match."
+required = false
+
+[[plugins.parameters]]
+name = "return_unmatched"
+docs = "An optional boolean flag that defines if the result should include all or only matching rows (default: false - only matching rows returned)."
+required = false
+
+[[plugins.parameters]]
+name = "lookup_area_radius"
+docs = "An optional lookup area radius distance in meters value that might help in matching locations to their respective polygons."
+required = false
+
+[[plugins.parameters]]
+name = "return_lookup_key"
+docs = "An optional boolean flag that defines if the result should include column LookupPolygonKey (default: false)."
+required = false
+
+[[plugins]]
+name = "http_request"
+signature = "http_request(Uri [, RequestHeaders [, Options]])"
+docs = "The http_request plugin sends an HTTP GET request and converts the response into a table."
+citation = "https://learn.microsoft.com/kusto/query/http-request-plugin"
+warning = "am_no"
+
+[[plugins.parameters]]
+name = "Uri"
+docs = "The destination URI for the HTTPS request."
+required = true
+
+[[plugins.parameters]]
+name = "RequestHeaders"
+docs = "A property bag containing HTTP headers to send with the request."
+required = false
+
+[[plugins.parameters]]
+name = "Options"
+docs = "A property bag containing additional properties of the request."
+required = false
+
+[[plugins]]
+name = "http_request_post"
+signature = "http_request_post(Uri [, RequestHeaders [, Options [, Content]]])"
+docs = "The http_request_post plugin sends an HTTP POST request and converts the response into a table."
+citation = "https://learn.microsoft.com/kusto/query/http-request-post-plugin"
+warning = "am_no"
+
+[[plugins.parameters]]
+name = "Uri"
+docs = "The destination URI for the HTTPS request."
+required = true
+
+[[plugins.parameters]]
+name = "RequestHeaders"
+docs = "A property bag containing HTTP headers to send with the request."
+required = false
+
+[[plugins.parameters]]
+name = "Options"
+docs = "A property bag containing additional properties of the request."
+required = false
+
+[[plugins.parameters]]
+name = "Content"
+docs = "The body content to send with the request."
+required = false
+
+[[plugins]]
+name = "infer_storage_schema_with_suggestions"
+signature = "infer_storage_schema_with_suggestions(Options)"
+docs = "This infer_storage_schema_with_suggestions plugin infers the schema of external data and returns a JSON object."
+citation = "https://learn.microsoft.com/kusto/query/infer-storage-schema-with-suggestions-plugin"
+
+[[plugins.parameters]]
+name = "Options"
+docs = "A property bag specifying the properties of the request."
+required = true
+
+[[plugins]]
+name = "new_activity_metrics"
+signature = "new_activity_metrics(IdColumn, TimelineColumn, Start, End, Window [, Cohort] [, dim1, dim2, ...] [, Lookback])"
+docs = "Calculates useful activity metrics (distinct count values, distinct count of new values, retention rate, and churn rate) for the cohort of New Users."
+citation = "https://learn.microsoft.com/kusto/query/new-activity-metrics-plugin"
+
+[[plugins.parameters]]
+name = "TabularExpression"
+docs = "The tabular expression for which to calculate activity metrics."
+required = true
+
+[[plugins.parameters]]
+name = "IdColumn"
+docs = "The name of the column with ID values that represent user activity."
+required = true
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The name of the column that represents the timeline."
+required = true
+
+[[plugins.parameters]]
+name = "Start"
+docs = "The value of the analysis start period."
+required = true
+
+[[plugins.parameters]]
+name = "End"
+docs = "The value of the analysis end period."
+required = true
+
+[[plugins.parameters]]
+name = "Window"
+docs = "The value of the analysis window period."
+required = true
+
+[[plugins.parameters]]
+name = "Cohort"
+docs = "Indicates a specific cohort."
+required = false
+
+[[plugins.parameters]]
+name = "dim1, dim2, ..."
+docs = "An array of the dimensions columns that slice the activity metrics calculation."
+required = false
+
+[[plugins.parameters]]
+name = "Lookback"
+docs = "A tabular expression with a set of IDs that belong to the 'look back' period."
+required = false
+
+[[plugins]]
+name = "session_count"
+signature = "session_count(IdColumn, TimelineColumn, Start, End, Bin, LookBackWindow [, dim1, dim2, ...])"
+docs = "Calculates the session count based on the ID column over a timeline."
+citation = "https://learn.microsoft.com/kusto/query/session-count-plugin"
+
+[[plugins.parameters]]
+name = "TabularExpression"
+docs = "The tabular expression that serves as input."
+required = true
+
+[[plugins.parameters]]
+name = "IdColumn"
+docs = "The name of the column with ID values that represents user activity."
+required = true
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The name of the column that represents the timeline."
+required = true
+
+[[plugins.parameters]]
+name = "Start"
+docs = "The start of the analysis period."
+required = true
+
+[[plugins.parameters]]
+name = "End"
+docs = "The end of the analysis period."
+required = true
+
+[[plugins.parameters]]
+name = "Bin"
+docs = "The session's analysis step period."
+required = true
+
+[[plugins.parameters]]
+name = "LookBackWindow"
+docs = "The session lookback period."
+required = true
+
+[[plugins.parameters]]
+name = "dim1, dim2, ..."
+docs = "A list of the dimensions columns that slice the session count calculation."
+required = false
+
+[[plugins]]
+name = "sliding_window_counts"
+signature = "sliding_window_counts(IdColumn, TimelineColumn, Start, End, LookbackWindow, Bin, [dim1, dim2, ...])"
+docs = "Calculates counts and distinct count of values in a sliding window over a lookback period, using the technique described in the Perform aggregations over a sliding window example."
+citation = "https://learn.microsoft.com/kusto/query/sliding-window-counts-plugin"
+
+[[plugins.parameters]]
+name = "IdColumn"
+docs = "The name of the column with ID values that represent user activity."
+required = true
+
+[[plugins.parameters]]
+name = "TimelineColumn"
+docs = "The name of the column representing the timeline."
+required = true
+
+[[plugins.parameters]]
+name = "Start"
+docs = "The analysis start period."
+required = true
+
+[[plugins.parameters]]
+name = "End"
+docs = "The analysis end period."
+required = true
+
+[[plugins.parameters]]
+name = "LookbackWindow"
+docs = "The lookback period."
+required = true
+
+[[plugins.parameters]]
+name = "Bin"
+docs = "The analysis step period."
+required = true
+
+[[plugins.parameters]]
+name = "dim1, dim2, ..."
+docs = "A list of the dimensions columns that slice the activity metrics calculation."
 required = false

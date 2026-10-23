@@ -28,6 +28,20 @@ SQL is out of scope. There is no `opentide-sql`.
 | kql.string | `string` | `string__valid` | `string` |
 | kql.number | `number` | `number__valid` | `number` |
 | kql.comment | `comment` | `comment__valid` | `comment` |
+| kql.function-definition | `function_definition` | `function_definition__valid` | `variable` (parameters), `type` |
+| kql.datatable | `datatable_expression` | `datatable_expression__valid` | `keyword` |
+| kql.option | `operator_option` | `operator_option__valid` | `keyword` |
+| kql.hint | `hint_option` | `hint_option__valid` | `keyword` |
+| kql.mv-apply | `mv_apply_operator` | `mv_apply_operator__valid` | `keyword` |
+| kql.make-series | `make_series_operator` | `make_series_operator__valid` | `keyword` |
+| kql.evaluate | `evaluate_operator` | `evaluate_operator__valid` | `keyword` |
+| kql.set | `expression_list` | `expression_list__valid` | `punctuation.bracket` |
+| kql.between | `range` | `range__valid` | `operator` |
+| kql.member | `member_expression` | `member_expression__valid` | `property` |
+| kql.index | `index_expression` | `index_expression__valid` | `punctuation.bracket` |
+| kql.dynamic | `dynamic_literal` | `dynamic_literal__valid` | `type` |
+| kql.materialize | `materialize_expression` | `materialize_expression__valid` | `function.builtin` |
+| kql.toscalar | `toscalar_expression` | `toscalar_expression__valid` | `function.builtin` |
 
 Control commands are parsed so the engine can reject them. They are not valid detections.
 
@@ -55,6 +69,9 @@ Control commands are parsed so the engine can reject them. They are not valid de
 | spl.tstats | `tstats_command` | `tstats_command__valid` | `keyword` |
 | spl.unknown | `unknown_command` | `unknown_command__valid` | `error` (`spl_unknown_command`) |
 | spl.pipe | `"\|"` | `head_command__valid` | `operator.pipe` |
+| spl.search-group | `search_group` | `search_group__valid` | `punctuation.bracket` |
+| spl.field-name | `field_name` | `field_name__valid` | `variable` |
+| spl.dedup-option | `dedup_option` | `dedup_option__valid` | `keyword` |
 
 Authored text is tokenized as written. An implicit leading `| search` is a Splunk runtime default, not a rewrite of the source.
 

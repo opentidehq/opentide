@@ -1,2 +1,2 @@
 // prod:summarize_operator invalid
-SecurityEvent | summarize
+SecurityEvent | summarize count() by

@@ -10,7 +10,7 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 | `grammars/`, `crates/opentide-syntax`, `highlights/queries/` | `skills/tree-sitter/SKILL.md` |
 | `crates/opentide-lsp`, `editors/`, stdio tests | `skills/lsp-host/SKILL.md` |
 | `crates/opentide-wasm`, `packages/`, `pyproject.toml` | `skills/wasm-hosts/SKILL.md` |
-| `catalogs/`, `highlights/spec.toml`, `testdata/conformance`, schema sync | `skills/catalogs/SKILL.md` |
+| `catalogs/`, `highlights/spec.toml`, `testdata/conformance`, `testdata/oracles`, `scripts/oracles`, schema sync | `skills/catalogs/SKILL.md` |
 | A new query language (S1QL, Lucene, Sigma, YARA) | `skills/add-language/SKILL.md` (then the rows above) |
 
 ## Product
@@ -45,7 +45,7 @@ cargo test --workspace
 cargo run -p opentide-lsp -- generate-highlights --check
 ```
 
-Grammar edits also need `bash scripts/check-grammars.sh` from the repository root (CLI 0.25.10). CI sets `RUSTFLAGS=-Dwarnings`.
+Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/oracles/README.md`). Grammar edits also need `bash scripts/check-grammars.sh` from the repository root (CLI 0.25.10). CI sets `RUSTFLAGS=-Dwarnings`.
 
 ## Upstream docs, not downloaded skills
 

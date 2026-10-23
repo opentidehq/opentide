@@ -1,10 +1,137 @@
-# Oracles are CI-only. Do not ship Microsoft Kusto.Language or Splunk SDKs
-# in the language-server binary.
+# Known disagreements between the opentide engine and the reference parsers.
+# scripts/ci-oracle.sh enforces this file (see scripts/oracles/README.md):
+#
+# - A query where ours and the reference disagree fails CI unless an entry
+#   lists it in `paths`. Paths are repository-relative; a query inside a Tide
+#   rule is `<file>#configurations.<platform>.<field>`.
+# - A function, plugin or command name the two sides disagree on fails CI
+#   unless an entry lists it in `names`.
+# - A listed path or name that no longer disagrees fails CI too. Delete it
+#   in the change that fixes it.
+#
+# Every entry has an `id`, a `reason`, and exactly one of `paths` or `names`.
+# The references are CI-only. Do not ship Microsoft Kusto.Language, Splunk,
+# or a Splunk SDK in any release artifact (scripts/license-scan.sh).
+
+# ---------------------------------------------------------------------------
+# KQL: Microsoft Kusto.Language
+# ---------------------------------------------------------------------------
+
+# Probes in testdata/oracles/kql/ are one form each, taken from real Sentinel
+# and Defender rules. Ours must accept each with no error-severity diagnostic;
+# that check cannot be excepted.
+
+# Corpus fixtures labelled invalid that Kusto.Language accepts.
 
 [[kql]]
-id = "control-command-syntax"
-reason = "Control commands are parsed by our grammar but rejected as detections."
+id = "kql-empty-column-lists"
+reason = "Kept on purpose. Kusto.Language parses `T | project`, `project-away` and `project-rename` with no columns; ours reports a syntax error because an empty column list is always a mistake in a detection. (`summarize` with no aggregates parses, since `summarize by x` is valid.)"
+paths = [
+  "testdata/corpus/kql/project_operator__invalid.kql",
+  "testdata/corpus/kql/project_away_operator__invalid.kql",
+  "testdata/corpus/kql/project_rename_operator__invalid.kql",
+]
+
+[[kql]]
+id = "kql-number-suffix"
+reason = "Kusto.Language lexes `42x` as a name and rejects it only in semantic analysis (KS142); our lexer rejects it as a malformed number."
+paths = ["testdata/corpus/kql/number__invalid.kql"]
+
+[[kql]]
+id = "kql-control-command-arguments"
+reason = "Kusto.Language parses the whole `.create table X (a:string)` command; our grammar parses only enough of a control command to report kql_control_command_unsupported, which still fires."
+paths = ["testdata/corpus/kql/control_command__invalid.kql"]
+
+# Names: catalogs/kql/core against Kusto.Language GlobalState.Default.
+
+[[kql]]
+id = "kql-log-analytics-functions"
+reason = "Log Analytics / Sentinel functions. Kusto.Language's default GlobalState holds Azure Data Explorer functions only."
+names = ["_GetWatchlist", "workspace"]
+
+[[kql]]
+id = "kql-special-forms"
+reason = "Kusto.Language parses `materialize(...)` and `toscalar(...)` as their own syntax, not as function symbols."
+names = ["materialize", "toscalar"]
+
+[[kql]]
+id = "kql-plugins-missing-from-kusto-language"
+reason = "Documented on Learn and in catalogs/kql/core/evaluate-plugins.toml, but absent from Kusto.Language 12.4.1."
+names = ["diffpatterns_text", "schema_merge"]
+
+[[kql]]
+id = "kql-obsolete-without-learn-replacement"
+reason = "Obsolete in Kusto.Language, and no Learn article names a replacement, so the catalog has nothing to cite for them."
+names = ["cnt", "row_rank", "ai_embed_text"]
+
+[[kql]]
+id = "kql-hidden-symbols"
+reason = "Hidden in Kusto.Language and undocumented on Learn. Not catalogued on purpose; ours reports them only when they look like a typo of a catalogued name."
+names = [
+  "current_node_id", "hll_isvalid", "iscolumnexists", "rowstore_ordinal_range",
+  "tdigest_isvalid", "make_dictionary", "passthrough", "dax_request", "postgresql_request",
+]
+
+[[kql]]
+id = "kql-no-learn-article"
+reason = "Kusto.Language functions and plugins with no Learn article: graph-match internals (all, map, node_*, inner_nodes), Azure Data Explorer service plugins (execute_query, csharp, identity, ...). Not catalogued until Learn documents them."
+names = [
+  "all", "array_strcat", "entity_group", "inner_nodes", "map", "node_degree_in",
+  "node_degree_out", "node_id", "row_id", "set_equals",
+  "csharp", "estimate_rows_count", "execute_query", "execute_show_command",
+  "external_datatable", "identity", "identity_v3",
+]
+
+# ---------------------------------------------------------------------------
+# SPL: Splunk search/parser (scripts/oracles/oracle.py prefixes `search` to
+# text that does not start with `|`, as Splunk does; docs/spl/README.md)
+# ---------------------------------------------------------------------------
+
+# Probes in testdata/oracles/spl/ are one form each, taken from ESCU
+# detections. Ours must accept each with no error-severity diagnostic; that
+# check cannot be excepted.
+
+# Corpus fixtures labelled invalid that Splunk's parser accepts. Each is kept
+# on purpose: the form is always an authoring mistake in a detection.
 
 [[spl]]
-id = "implicit-search-prefix"
-reason = "Authored text is not rewritten with an implicit `| search`."
+id = "spl-trailing-pipe"
+reason = "Kept on purpose. Splunk ignores an empty trailing pipeline stage (`search |`, `index=main |`); ours reports a syntax error because it is always a truncated query."
+paths = [
+  "testdata/corpus/spl/search_command__invalid.spl",
+  "testdata/corpus/spl/unknown_command__invalid.spl",
+]
+
+[[spl]]
+id = "spl-argumentless-commands"
+reason = "Kept on purpose. Splunk's search parser accepts `fields`, `lookup`, `stats` and `where` with no arguments; ours reports a syntax error because none of them does anything useful without one."
+paths = [
+  "testdata/corpus/spl/fields_command__invalid.spl",
+  "testdata/corpus/spl/lookup_command__invalid.spl",
+  "testdata/corpus/spl/stats_command__invalid.spl",
+  "testdata/corpus/spl/where_command__invalid.spl",
+]
+
+[[spl]]
+id = "spl-leading-word-is-a-search-term"
+reason = "Kept on purpose. Without a leading `|`, Splunk reads `index` and `tstats` as search terms of the implicit `search`, so the query silently searches for those words; ours reports the missing pipe."
+paths = [
+  "testdata/corpus/spl/bare_search__invalid.spl",
+  "testdata/corpus/spl/tstats_command__invalid.spl",
+]
+
+# Names: catalogs/spl/commands.toml against Splunk searchbnf.conf.
+
+[[spl]]
+id = "spl-public-commands-missing"
+reason = "searchbnf marks these usage = public, but no Search Reference page could be cited for them, so they are not catalogued; ours reports spl_unknown_command."
+names = ["federate", "ingestpreview", "oldreturn"]
+
+[[spl]]
+id = "spl-internal-commands"
+reason = "searchbnf marks these usage = internal, debug or deprecated. Not for detections, so not catalogued; Splunk still runs them."
+names = [
+  "createrss", "debug", "dump", "editinfo", "findkeywords", "makejson", "mcatalog",
+  "mrollup", "nokv", "outputraw", "outputtelemetry", "prjob", "rawstats",
+  "runshellscript", "showargs", "surrounding",
+]

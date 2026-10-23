@@ -29,7 +29,8 @@ module.exports = grammar({
       token(
         seq(
           "`",
-          /[A-Za-z_][A-Za-z0-9_]*/,
+          // ESCU filter macros can start with a digit (`7zip_..._filter`).
+          /[A-Za-z0-9_]+/,
           optional(seq("(", /[^)`\n]*/, ")")),
           "`",
         ),
@@ -43,9 +44,14 @@ module.exports = grammar({
       ),
 
     // Authored `index=main sourcetype=foo` without a `search` keyword.
-    // Requires at least one field=value so it does not steal unknown commands.
+    // Starts with a field=value, a macro followed by more terms, or a group,
+    // so it does not steal unknown commands.
     bare_search: ($) =>
-      seq(field("first", $.field_value), repeat($.search_term)),
+      choice(
+        seq(field("first", $.field_value), repeat($.search_term)),
+        seq(field("first", $.macro), repeat1($.search_term)),
+        seq(field("first", $.search_group), repeat($.search_term)),
+      ),
 
     command: ($) =>
       choice(
@@ -74,6 +80,8 @@ module.exports = grammar({
 
     search_term: ($) =>
       choice(
+        $.search_group,
+        $.search_boolean,
         $.in_clause,
         $.term_clause,
         $.case_clause,
@@ -85,6 +93,11 @@ module.exports = grammar({
         $.identifier,
         $.number,
       ),
+
+    // `(EventCode=4624 OR EventCode=4625)`
+    search_group: ($) => seq("(", repeat1($.search_term), ")"),
+
+    search_boolean: (_) => choice("OR", "AND", "NOT"),
 
     in_clause: ($) =>
       seq(
@@ -107,11 +120,12 @@ module.exports = grammar({
     eval_command: ($) =>
       seq("eval", field("assignments", commaSep1($.assignment))),
 
+    // Aggregations and by-fields are separated by spaces or commas.
     stats_command: ($) =>
       seq(
         "stats",
-        field("aggregates", commaSep1($.aggregate_item)),
-        optional(seq("by", field("by", commaSep1($.identifier)))),
+        field("aggregates", sepBy1($.aggregate_item)),
+        optional(seq(choice("by", "BY"), field("by", sepBy1($.identifier)))),
       ),
 
     aggregate_item: ($) =>
@@ -127,7 +141,10 @@ module.exports = grammar({
         field("pattern", $.string),
       ),
 
-    table_command: ($) => seq("table", field("fields", commaSep1($.identifier))),
+    table_command: ($) => seq("table", field("fields", sepBy1($.field_name))),
+
+    // A field list entry: a name or a wildcard pattern (`user*`, `*`).
+    field_name: ($) => choice($.identifier, $.glob),
 
     rename_command: ($) =>
       seq("rename", field("renames", commaSep1($.rename_item))),
@@ -136,11 +153,26 @@ module.exports = grammar({
       seq(
         "fields",
         optional(choice("-", "+")),
-        field("fields", commaSep1($.identifier)),
+        field("fields", sepBy1($.field_name)),
       ),
 
+    // Splunk requires at least one field.
     dedup_command: ($) =>
-      seq("dedup", optional($.number), optional(commaSep1($.identifier))),
+      seq(
+        "dedup",
+        optional($.number),
+        repeat($.dedup_option),
+        field("fields", sepBy1($.identifier)),
+        repeat($.dedup_option),
+        optional(seq("sortby", field("sortby", sepBy1($.sort_item)))),
+      ),
+
+    dedup_option: ($) =>
+      seq(
+        choice("keepevents", "keepempty", "consecutive"),
+        "=",
+        choice($.boolean, $.identifier),
+      ),
 
     sort_command: ($) =>
       seq("sort", optional($.number), field("keys", commaSep1($.sort_item))),
@@ -174,16 +206,17 @@ module.exports = grammar({
       seq(
         "tstats",
         repeat($.tstats_preamble),
-        field("aggregates", commaSep1($.aggregate_item)),
+        field("aggregates", sepBy1($.aggregate_item)),
         optional(
           seq(
-            "from",
+            choice("from", "FROM"),
             optional(seq("datamodel", "=")),
             field("datamodel", $.identifier),
           ),
         ),
-        optional(seq("where", $.expression)),
-        optional(seq("by", commaSep1($.identifier))),
+        // Search syntax: adjacent terms are ANDed, macros and groups allowed.
+        optional(seq(choice("where", "WHERE"), field("where", repeat1($.search_term)))),
+        optional(seq(choice("by", "BY"), sepBy1($.identifier))),
       ),
 
     tstats_preamble: ($) =>
@@ -368,7 +401,7 @@ module.exports = grammar({
     field_value: ($) =>
       seq(
         field("field", $.identifier),
-        "=",
+        field("operator", choice("=", "!=", "<", ">", "<=", ">=")),
         field("value", choice($.string, $.glob, $.identifier, $.number, $.value_list)),
       ),
 
@@ -478,6 +511,10 @@ module.exports = grammar({
     boolean: (_) => choice("true", "false", "TRUE", "FALSE"),
   },
 });
+
+function sepBy1(rule) {
+  return seq(rule, repeat(seq(optional(","), rule)));
+}
 
 function commaSep1(rule) {
   return seq(rule, repeat(seq(",", rule)));

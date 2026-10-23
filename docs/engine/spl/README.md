@@ -28,7 +28,7 @@ That implied command is a **Splunk runtime default**, not a source rewrite:
 - Splunk then runs it as if `| search index=main sourcetype=WinEventLog EventCode=4688`.
 - A query that already starts with a generating command (`| tstats …`, `| inputlookup …`, `| makeresults`) is **not** prefixed with `search`.
 
-CI oracle `implicit-search-prefix` (`testdata/oracles/exceptions.toml`) records this: authored text is not rewritten with an implicit `| search`. See also `docs/LANGUAGE.md` (SPL section) and `docs/ARCHITECTURE.md` (injection table).
+The Splunk oracle (`scripts/oracles/README.md`) sends Splunk `search <text>` for text that does not start with `|`, because that is what Splunk runs. The engine still sees the authored text: it is not rewritten with an implicit `| search`. See also `docs/LANGUAGE.md` (SPL section) and `docs/ARCHITECTURE.md` (injection table).
 
 ## Command kinds
 

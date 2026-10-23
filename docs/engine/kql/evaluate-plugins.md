@@ -46,7 +46,7 @@ Detection legend: same as [`README.md`](README.md). Source list aligned with [`o
 | `cosmosdb_sql_request` | Query Cosmos DB. | [cosmosdb](https://learn.microsoft.com/kusto/query/cosmosdb-plugin) | **AM-no** |
 | `azure_digital_twins_query_request` | Query Azure Digital Twins. | [ADT plugin](https://learn.microsoft.com/kusto/query/azure-digital-twins-query-request-plugin) | **AM-no** |
 | `python` | Sandboxed Python plugin. | [python](https://learn.microsoft.com/kusto/query/python-plugin) | **AM-no** |
-| `R` | Sandboxed R plugin. | [R](https://learn.microsoft.com/kusto/query/r-plugin) | **AM-no** |
+| `r` | Sandboxed R plugin. | [r](https://learn.microsoft.com/kusto/query/r-plugin) | **AM-no** |
 
 ADX also documents HTTP egress plugins (`http_request` / `http_request_post`) — **not** for Sentinel/Defender detections.
 

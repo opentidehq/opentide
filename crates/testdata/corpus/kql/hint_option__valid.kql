@@ -1,0 +1,2 @@
+// prod:hint_option valid
+SecurityEvent | summarize hint.shufflekey=Computer count() by Computer

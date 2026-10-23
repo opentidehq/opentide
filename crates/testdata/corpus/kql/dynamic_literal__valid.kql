@@ -1,0 +1,4 @@
+// prod:dynamic_literal valid
+let Servers = dynamic(["ADFS01", "ADFS02"]);
+let Limits = dynamic({"max": 10, "min": -1});
+SecurityEvent | where Computer in (Servers)

@@ -5,8 +5,8 @@
 // Start be identifying ADFS servers to reduce FP chance
 let ADFS_Servers = (
 Event
-//| frobnicate TimeGenerated > ago(timeframe+lookback)
-| where Source == "Microsoft-Windows-Sysmon"
+//| where TimeGenerated > ago(timeframe+lookback)
+| frobnicate Source == "Microsoft-Windows-Sysmon"
 | where EventID == 18
 | extend EventData = parse_xml(EventData).DataItem.EventData.Data
 | mv-expand bagexpansion=array EventData

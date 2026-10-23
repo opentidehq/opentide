@@ -270,6 +270,7 @@ pub mod codes {
     pub const KQL_CONTROL_COMMAND_UNSUPPORTED: &str = "kql_control_command_unsupported";
     pub const KQL_UNKNOWN_OPERATOR: &str = "kql_unknown_operator";
     pub const KQL_UNKNOWN_FUNCTION: &str = "kql_unknown_function";
+    pub const KQL_DEPRECATED_FUNCTION: &str = "kql_deprecated_function";
     pub const KQL_UNKNOWN_TABLE: &str = "kql_unknown_table";
     pub const KQL_RENDER_NOT_VALID: &str = "kql_render_not_valid";
     pub const KQL_PARSE_ERROR: &str = "kql_parse_error";

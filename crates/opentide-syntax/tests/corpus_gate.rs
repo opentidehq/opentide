@@ -140,6 +140,18 @@ fn kql_named_rules_in_grammar_json_are_known() {
         "project_keep_operator",
         "project_reorder_operator",
         "top_operator",
+        // pieces of the productions above, covered by their fixtures
+        "column_item",
+        "subquery",
+        "type",
+        "parameter",
+        "json_value",
+        "hint_name",
+        "parse_column",
+        "mv_expand_item",
+        "mv_option",
+        "series_aggregate",
+        "star",
     ]
     .into_iter()
     .collect();
@@ -192,6 +204,30 @@ fn kql_invalid_fixtures_exist_per_required_rule() {
         assert!(
             invalid.contains(*rule),
             "missing invalid fixture for {rule}"
+        );
+    }
+}
+
+#[test]
+fn spl_valid_fixtures_parse() {
+    let dir = repo_root().join("testdata/corpus/spl");
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy();
+        if !name.contains("__valid") {
+            continue;
+        }
+        let src = fs::read_to_string(&path).unwrap();
+        let body = src
+            .lines()
+            .filter(|l| !l.starts_with("``` prod:"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tree = parse(LanguageId::Spl, &body).expect("parser");
+        assert!(
+            !has_error(&tree),
+            "{name} sexp={}",
+            tree.root_node().to_sexp()
         );
     }
 }

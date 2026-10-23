@@ -23,8 +23,13 @@
       "name": "invalid.illegal.opentide"
     },
     {
+      "comment": "capture:function.builtin",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:materialize|toscalar)(?![A-Za-z0-9_])",
+      "name": "support.function.opentide"
+    },
+    {
       "comment": "capture:keyword",
-      "match": "(?i)(?<![A-Za-z0-9_])(?:and|as|asc|by|consume|datatable|desc|distinct|evaluate|extend|externaldata|facet|filter|find|fork|getschema|graph\\-mark\\-components|graph\\-match|graph\\-shortest\\-paths|graph\\-to\\-table|invoke|join|kind|let|limit|lookup|make\\-graph|make\\-series|mv\\-apply|mv\\-expand|mvexpand|on|order|parse|parse\\-kv|parse\\-where|partition|print|project|project\\-away|project\\-keep|project\\-rename|project\\-reorder|range|reduce|render|sample|sample\\-distinct|scan|search|serialize|sort|summarize|take|top|top\\-hitters|top\\-nested|union|where|with)(?![A-Za-z0-9_])",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:and|as|asc|by|consume|datatable|default|desc|distinct|evaluate|extend|externaldata|facet|filter|find|first|fork|from|getschema|graph\\-mark\\-components|graph\\-match|graph\\-shortest\\-paths|graph\\-to\\-table|invoke|join|kind|last|let|limit|lookup|make\\-graph|make\\-series|mv\\-apply|mv\\-expand|mvexpand|nulls|on|order|parse|parse\\-kv|parse\\-where|partition|print|project|project\\-away|project\\-keep|project\\-rename|project\\-reorder|range|reduce|render|sample|sample\\-distinct|scan|search|serialize|sort|step|summarize|take|to|top|top\\-hitters|top\\-nested|typeof|union|where|with)(?![A-Za-z0-9_])",
       "name": "keyword.control.opentide"
     },
     {
@@ -134,6 +139,11 @@
     },
     {
       "comment": "capture:operator",
+      "match": "\\.\\.",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
       "match": "/",
       "name": "keyword.operator.opentide"
     },
@@ -198,6 +208,26 @@
       "name": "punctuation.bracket.opentide"
     },
     {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\[",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\]",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\{",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\}",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
       "comment": "capture:punctuation.delimiter",
       "match": ",",
       "name": "punctuation.delimiter.opentide"
@@ -206,6 +236,11 @@
       "comment": "capture:punctuation.delimiter",
       "match": ";",
       "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "capture:type",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:dynamic)(?![A-Za-z0-9_])",
+      "name": "entity.name.type.opentide"
     }
   ],
   "scopeName": "source.kql"

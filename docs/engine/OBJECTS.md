@@ -32,6 +32,7 @@ Query extras (engine may add these inside `query: |`):
 - `kql_control_command_unsupported`
 - `kql_unknown_operator`
 - `kql_unknown_function`
+- `kql_deprecated_function`
 - `kql_unknown_table`
 - `kql_render_not_valid`
 - `kql_parse_error`

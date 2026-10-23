@@ -536,6 +536,8 @@ def write_functions(path: Path, rows: list[dict], skipped: list[str]) -> None:
             chunks.append(f'citation = "{toml_escape(row["citation"])}"')
         if row.get("kind"):
             chunks.append(f'kind = "{toml_escape(row["kind"])}"')
+        if row.get("deprecated"):
+            chunks.append(f'deprecated = "{toml_escape(row["deprecated"])}"')
         chunks.append("")
         for param in row.get("parameters") or []:
             chunks.append("[[functions.parameters]]")
@@ -672,6 +674,8 @@ def main() -> None:
     skipped: list[str] = []
     repaired = 0
     for row in functions:
+        if row.get("deprecated"):
+            continue  # signature follows the replacement it names
         applied, reason = apply_article(row["name"], row.get("citation"), index, operator=False)
         if not applied:
             skipped.append(f'{row["name"]}: {reason}')

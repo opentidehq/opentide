@@ -1,0 +1,1 @@
+SecurityEvent | make-series kind=nonempty Logons = count() default=0 on TimeGenerated in range(ago(7d), now(), 1h) by Computer

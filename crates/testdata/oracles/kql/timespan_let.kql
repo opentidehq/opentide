@@ -1,0 +1,2 @@
+let lookback = 1d;
+SecurityEvent | where TimeGenerated > ago(lookback)

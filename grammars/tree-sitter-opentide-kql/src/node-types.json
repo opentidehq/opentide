@@ -34,9 +34,21 @@
     "named": true,
     "fields": {
       "name": {
-        "multiple": false,
+        "multiple": true,
         "required": true,
         "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": ",",
+            "named": false
+          },
           {
             "type": "identifier",
             "named": true
@@ -61,9 +73,49 @@
     "fields": {}
   },
   {
-    "type": "comparison_expression",
+    "type": "column_item",
     "named": true,
     "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "assignment",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "comparison_expression",
+    "named": true,
+    "fields": {
+      "range": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "range",
+            "named": true
+          }
+        ]
+      },
+      "set": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression_list",
+            "named": true
+          }
+        ]
+      }
+    },
     "children": {
       "multiple": true,
       "required": true,
@@ -102,6 +154,29 @@
     }
   },
   {
+    "type": "datatable_expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "distinct_operator",
     "named": true,
     "fields": {
@@ -122,6 +197,47 @@
     }
   },
   {
+    "type": "dynamic_literal",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "json_value",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "evaluate_operator",
+    "named": true,
+    "fields": {
+      "plugin": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "function_call",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "hint_option",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "expression",
     "named": true,
     "fields": {},
@@ -131,6 +247,25 @@
       "types": [
         {
           "type": "or_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "expression_list",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "tabular_expression",
           "named": true
         }
       ]
@@ -149,7 +284,7 @@
             "named": false
           },
           {
-            "type": "assignment",
+            "type": "column_item",
             "named": true
           }
         ]
@@ -187,6 +322,10 @@
           {
             "type": "expression",
             "named": true
+          },
+          {
+            "type": "star",
+            "named": true
           }
         ]
       },
@@ -203,10 +342,82 @@
     }
   },
   {
-    "type": "join_operator",
+    "type": "function_definition",
     "named": true,
     "fields": {
-      "condition": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          },
+          {
+            "type": "tabular_expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "let_statement",
+          "named": true
+        },
+        {
+          "type": "parameter",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "hint_option",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "hint_name",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "index_expression",
+    "named": true,
+    "fields": {
+      "index": {
         "multiple": false,
         "required": true,
         "types": [
@@ -216,12 +427,32 @@
           }
         ]
       },
-      "kind": {
+      "object": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
-            "type": "identifier",
+            "type": "primary_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "join_operator",
+    "named": true,
+    "fields": {
+      "condition": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "expression",
             "named": true
           }
         ]
@@ -236,6 +467,47 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "operator_option",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "json_value",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "json_value",
+          "named": true
+        },
+        {
+          "type": "null",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -262,14 +534,6 @@
           },
           {
             "type": "consume",
-            "named": false
-          },
-          {
-            "type": "datatable",
-            "named": false
-          },
-          {
-            "type": "evaluate",
             "named": false
           },
           {
@@ -314,14 +578,6 @@
           },
           {
             "type": "make-graph",
-            "named": false
-          },
-          {
-            "type": "make-series",
-            "named": false
-          },
-          {
-            "type": "mv-apply",
             "named": false
           },
           {
@@ -389,6 +645,14 @@
           {
             "type": "expression",
             "named": true
+          },
+          {
+            "type": "function_definition",
+            "named": true
+          },
+          {
+            "type": "tabular_expression",
+            "named": true
           }
         ]
       }
@@ -415,9 +679,13 @@
     "named": true,
     "fields": {
       "condition": {
-        "multiple": false,
+        "multiple": true,
         "required": true,
         "types": [
+          {
+            "type": ",",
+            "named": false
+          },
           {
             "type": "expression",
             "named": true
@@ -429,7 +697,153 @@
         "required": true,
         "types": [
           {
+            "type": "tabular_primary",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "operator_option",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "make_series_operator",
+    "named": true,
+    "fields": {
+      "aggregates": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "series_aggregate",
+            "named": true
+          }
+        ]
+      },
+      "axis": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "by": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "column_item",
+            "named": true
+          }
+        ]
+      },
+      "from": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "range": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "function_call",
+            "named": true
+          }
+        ]
+      },
+      "step": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "to": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "mv_option",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "materialize_expression",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "tabular_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "member_expression",
+    "named": true,
+    "fields": {
+      "member": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
             "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "object": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "primary_expression",
             "named": true
           }
         ]
@@ -452,15 +866,162 @@
     }
   },
   {
-    "type": "mv_expand_operator",
+    "type": "mv_apply_operator",
     "named": true,
     "fields": {
-      "args": {
+      "columns": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "mv_expand_item",
+            "named": true
+          }
+        ]
+      },
+      "limit": {
         "multiple": false,
         "required": false,
         "types": [
           {
             "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "subquery": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "subquery",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "mv_option",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "mv_expand_item",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "assignment",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "mv_expand_operator",
+    "named": true,
+    "fields": {
+      "columns": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "mv_expand_item",
+            "named": true
+          }
+        ]
+      },
+      "limit": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "mv_option",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "mv_option",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "bagexpansion",
+            "named": false
+          },
+          {
+            "type": "hint_name",
+            "named": true
+          },
+          {
+            "type": "kind",
+            "named": false
+          },
+          {
+            "type": "with_itemindex",
+            "named": false
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "string",
             "named": true
           }
         ]
@@ -483,6 +1044,48 @@
     }
   },
   {
+    "type": "operator_option",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "hint_name",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "boolean",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "or_expression",
     "named": true,
     "fields": {},
@@ -492,6 +1095,61 @@
       "types": [
         {
           "type": "and_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "parameter",
+    "named": true,
+    "fields": {
+      "default": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "parse_column",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "type",
           "named": true
         }
       ]
@@ -522,21 +1180,39 @@
         "required": true,
         "types": [
           {
-            "type": "identifier",
+            "type": "expression",
             "named": true
           }
         ]
       },
       "pattern": {
-        "multiple": false,
+        "multiple": true,
         "required": true,
         "types": [
+          {
+            "type": "*",
+            "named": false
+          },
+          {
+            "type": "parse_column",
+            "named": true
+          },
           {
             "type": "string",
             "named": true
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "operator_option",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -568,6 +1244,10 @@
           "named": true
         },
         {
+          "type": "dynamic_literal",
+          "named": true
+        },
+        {
           "type": "expression",
           "named": true
         },
@@ -577,6 +1257,14 @@
         },
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "index_expression",
+          "named": true
+        },
+        {
+          "type": "member_expression",
           "named": true
         },
         {
@@ -594,6 +1282,10 @@
         {
           "type": "timespan",
           "named": true
+        },
+        {
+          "type": "toscalar_expression",
+          "named": true
         }
       ]
     }
@@ -607,7 +1299,7 @@
       "required": true,
       "types": [
         {
-          "type": "expression",
+          "type": "column_item",
           "named": true
         }
       ]
@@ -646,7 +1338,7 @@
           "named": true
         },
         {
-          "type": "identifier",
+          "type": "expression",
           "named": true
         }
       ]
@@ -749,6 +1441,21 @@
     }
   },
   {
+    "type": "range",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "rename_item",
     "named": true,
     "fields": {
@@ -788,6 +1495,32 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "series_aggregate",
+    "named": true,
+    "fields": {
+      "default": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "column_item",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -850,19 +1583,40 @@
     }
   },
   {
+    "type": "star",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "subquery",
+    "named": true,
+    "fields": {
+      "operator": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "tabular_operator",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "summarize_operator",
     "named": true,
     "fields": {
       "aggregates": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": ",",
             "named": false
           },
           {
-            "type": "expression",
+            "type": "column_item",
             "named": true
           }
         ]
@@ -876,11 +1630,21 @@
             "named": false
           },
           {
-            "type": "expression",
+            "type": "column_item",
             "named": true
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "hint_option",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -926,6 +1690,10 @@
           "named": true
         },
         {
+          "type": "evaluate_operator",
+          "named": true
+        },
+        {
           "type": "extend_operator",
           "named": true
         },
@@ -947,6 +1715,14 @@
         },
         {
           "type": "lookup_operator",
+          "named": true
+        },
+        {
+          "type": "make_series_operator",
+          "named": true
+        },
+        {
+          "type": "mv_apply_operator",
           "named": true
         },
         {
@@ -1040,11 +1816,27 @@
       "required": false,
       "types": [
         {
+          "type": "datatable_expression",
+          "named": true
+        },
+        {
+          "type": "function_call",
+          "named": true
+        },
+        {
+          "type": "materialize_expression",
+          "named": true
+        },
+        {
           "type": "print_operator",
           "named": true
         },
         {
           "type": "tabular_expression",
+          "named": true
+        },
+        {
+          "type": "union_operator",
           "named": true
         }
       ]
@@ -1097,6 +1889,41 @@
     }
   },
   {
+    "type": "toscalar_expression",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "tabular_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "unary_expression",
     "named": true,
     "fields": {},
@@ -1120,15 +1947,37 @@
         "required": true,
         "types": [
           {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
             "type": ",",
             "named": false
           },
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "tabular_expression",
+            "named": true
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "operator_option",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1274,7 +2123,15 @@
     "named": false
   },
   {
+    "type": "..",
+    "named": false
+  },
+  {
     "type": "/",
+    "named": false
+  },
+  {
+    "type": ":",
     "named": false
   },
   {
@@ -1314,6 +2171,30 @@
     "named": false
   },
   {
+    "type": "FALSE",
+    "named": false
+  },
+  {
+    "type": "False",
+    "named": false
+  },
+  {
+    "type": "TRUE",
+    "named": false
+  },
+  {
+    "type": "True",
+    "named": false
+  },
+  {
+    "type": "[",
+    "named": false
+  },
+  {
+    "type": "]",
+    "named": false
+  },
+  {
     "type": "and",
     "named": false
   },
@@ -1323,6 +2204,10 @@
   },
   {
     "type": "asc",
+    "named": false
+  },
+  {
+    "type": "bagexpansion",
     "named": false
   },
   {
@@ -1359,11 +2244,19 @@
     "named": false
   },
   {
+    "type": "default",
+    "named": false
+  },
+  {
     "type": "desc",
     "named": false
   },
   {
     "type": "distinct",
+    "named": false
+  },
+  {
+    "type": "dynamic",
     "named": false
   },
   {
@@ -1403,7 +2296,15 @@
     "named": false
   },
   {
+    "type": "first",
+    "named": false
+  },
+  {
     "type": "fork",
+    "named": false
+  },
+  {
+    "type": "from",
     "named": false
   },
   {
@@ -1475,6 +2376,10 @@
     "named": false
   },
   {
+    "type": "hint_name",
+    "named": true
+  },
+  {
     "type": "identifier",
     "named": true
   },
@@ -1496,6 +2401,10 @@
   },
   {
     "type": "kind",
+    "named": false
+  },
+  {
+    "type": "last",
     "named": false
   },
   {
@@ -1523,6 +2432,10 @@
     "named": false
   },
   {
+    "type": "materialize",
+    "named": false
+  },
+  {
     "type": "mv-apply",
     "named": false
   },
@@ -1541,6 +2454,10 @@
   {
     "type": "null",
     "named": true
+  },
+  {
+    "type": "nulls",
+    "named": false
   },
   {
     "type": "number",
@@ -1647,6 +2564,10 @@
     "named": false
   },
   {
+    "type": "step",
+    "named": false
+  },
+  {
     "type": "string",
     "named": true
   },
@@ -1663,6 +2584,10 @@
     "named": true
   },
   {
+    "type": "to",
+    "named": false
+  },
+  {
     "type": "top",
     "named": false
   },
@@ -1675,7 +2600,15 @@
     "named": false
   },
   {
+    "type": "toscalar",
+    "named": false
+  },
+  {
     "type": "true",
+    "named": false
+  },
+  {
+    "type": "typeof",
     "named": false
   },
   {
@@ -1691,7 +2624,19 @@
     "named": false
   },
   {
+    "type": "with_itemindex",
+    "named": false
+  },
+  {
+    "type": "{",
+    "named": false
+  },
+  {
     "type": "|",
+    "named": false
+  },
+  {
+    "type": "}",
     "named": false
   }
 ]

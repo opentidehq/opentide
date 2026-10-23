@@ -31,16 +31,16 @@
 (keyword_operator "search" @keyword)
 (keyword_operator "find" @keyword)
 (keyword_operator "invoke" @keyword)
-(keyword_operator "evaluate" @keyword)
+(evaluate_operator "evaluate" @keyword)
 (keyword_operator "serialize" @keyword)
 (keyword_operator "scan" @keyword)
 (keyword_operator "as" @keyword)
 (keyword_operator "getschema" @keyword)
-(keyword_operator "make-series" @keyword)
+(make_series_operator "make-series" @keyword)
 (keyword_operator "sample" @keyword)
 (keyword_operator "sample-distinct" @keyword)
-(keyword_operator "mv-apply" @keyword)
-(keyword_operator "datatable" @keyword)
+(mv_apply_operator "mv-apply" @keyword)
+(datatable_expression "datatable" @keyword)
 (keyword_operator "range" @keyword)
 (keyword_operator "externaldata" @keyword)
 (keyword_operator "partition" @keyword)
@@ -55,6 +55,31 @@
 (keyword_operator "graph-mark-components" @keyword)
 (keyword_operator "top-hitters" @keyword)
 (keyword_operator "top-nested" @keyword)
+
+(mv_expand_operator "limit" @keyword)
+(mv_expand_item "to" @keyword)
+(mv_expand_item "typeof" @keyword)
+(mv_apply_operator "on" @keyword)
+(make_series_operator "on" @keyword)
+(make_series_operator "from" @keyword)
+(make_series_operator "to" @keyword)
+(make_series_operator "step" @keyword)
+(make_series_operator "by" @keyword)
+(sort_item "nulls" @keyword)
+(sort_item "first" @keyword)
+(sort_item "last" @keyword)
+(operator_option name: _ @keyword)
+(mv_option name: _ @keyword)
+(series_aggregate "default" @keyword)
+(hint_option name: (hint_name) @keyword)
+(materialize_expression "materialize" @function.builtin)
+(toscalar_expression "toscalar" @function.builtin)
+(dynamic_literal "dynamic" @type)
+(type "dynamic" @type)
+(type (identifier) @type)
+(parameter name: (identifier) @variable)
+(member_expression member: (identifier) @property)
+(star) @operator
 
 (control_command "." @error)
 (control_command (identifier) @error)
@@ -124,10 +149,15 @@
 "!in~" @operator
 "between" @operator
 "!between" @operator
+".." @operator
 "matches" @operator
 "regex" @operator
 "(" @punctuation.bracket
 ")" @punctuation.bracket
+"[" @punctuation.bracket
+"]" @punctuation.bracket
+"{" @punctuation.bracket
+"}" @punctuation.bracket
 "," @punctuation.delimiter
 "=" @operator
 ";" @punctuation.delimiter

@@ -1,0 +1,1 @@
+index=main | stats count min(_time) as firstTime max(_time) as lastTime by host

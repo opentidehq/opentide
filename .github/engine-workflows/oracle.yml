@@ -1,0 +1,61 @@
+name: Oracle
+
+# CI-only differential oracles (scripts/oracles/README.md). The engine is
+# compared with Microsoft Kusto.Language and with Splunk's search parser. A
+# disagreement not listed in testdata/oracles/exceptions.toml is a red build,
+# and so is a listed one that is gone. The references never ship; release.yml
+# runs scripts/license-scan.sh on every artifact.
+on:
+  push:
+    branches: [main, development]
+    tags: ["v*.*.*"]
+  pull_request:
+    paths:
+      - "crates/**"
+      - "grammars/**"
+      - "catalogs/kql/**"
+      - "catalogs/spl/**"
+      - "testdata/**"
+      - "scripts/oracles/**"
+      - "scripts/ci-oracle.sh"
+      - ".github/workflows/oracle.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  OPENTIDE_ORACLE_REQUIRED: "1"
+
+jobs:
+  kql:
+    name: Kusto.Language
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - run: bash scripts/ci-oracle.sh kql
+
+  spl:
+    name: Splunk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      # Not a service container: splunkd takes minutes to start and the runner's
+      # readiness check needs a health status, so start.sh runs it and
+      # oracle.py waits. Starting it accepts the Splunk General Terms for this
+      # throwaway instance, bound to 127.0.0.1, which only answers search/parser.
+      - name: Splunk oracle
+        run: |
+          eval "$(bash scripts/oracles/splunk/start.sh)"
+          bash scripts/ci-oracle.sh spl

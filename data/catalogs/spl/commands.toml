@@ -708,6 +708,115 @@ kind = "streaming"
 docs = "Anonymize results (PII scrubbing)."
 citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Scrub"
 
+# searchbnf.conf aliases. Splunk runs them as the command they name; the oracle checks this list.
+[[commands]]
+name = "af"
+kind = "reporting"
+docs = "Same as analyzefields."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Analyzefields"
+
+[[commands]]
+name = "ar"
+kind = "streaming"
+docs = "Same as autoregress."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Autoregress"
+
+[[commands]]
+name = "common"
+kind = "transforming"
+docs = "Same as top."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Top"
+
+[[commands]]
+name = "counttable"
+kind = "transforming"
+docs = "Same as contingency."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Contingency"
+
+[[commands]]
+name = "ctable"
+kind = "transforming"
+docs = "Same as contingency."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Contingency"
+
+[[commands]]
+name = "discretize"
+kind = "dataset"
+docs = "Same as bin."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"
+
+[[commands]]
+name = "excerpt"
+kind = "reporting"
+docs = "Same as abstract."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Abstract"
+
+[[commands]]
+name = "hilite"
+kind = "streaming"
+docs = "Same as highlight."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Highlight"
+
+[[commands]]
+name = "macro"
+kind = "generating"
+docs = "Same as savedsearch."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Savedsearch"
+
+[[commands]]
+name = "maketable"
+kind = "transforming"
+docs = "Same as xyseries."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Xyseries"
+
+[[commands]]
+name = "outlierfilter"
+kind = "dataset"
+docs = "Same as outlier."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Outlier"
+
+[[commands]]
+name = "run"
+kind = "streaming"
+docs = "Same as script."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Script"
+
+[[commands]]
+name = "savedsplunk"
+kind = "generating"
+docs = "Same as savedsearch."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Savedsearch"
+
+[[commands]]
+name = "slc"
+kind = "dataset"
+docs = "Same as cluster."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Cluster"
+
+[[commands]]
+name = "stash"
+kind = "streaming"
+docs = "Same as collect."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Collect"
+
+[[commands]]
+name = "sumindex"
+kind = "streaming"
+docs = "Same as collect."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Collect"
+
+[[commands]]
+name = "summaryindex"
+kind = "streaming"
+docs = "Same as collect."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Collect"
+
+[[commands]]
+name = "transam"
+kind = "dataset"
+docs = "Same as transaction."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Transaction"
+
 [[functions]]
 name = "if"
 kind = "eval"

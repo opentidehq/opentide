@@ -9,6 +9,7 @@ mod perf;
 
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
+use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use tree_sitter::Node;
 
@@ -73,6 +74,9 @@ pub struct FunctionRow {
     pub citation: Option<String>,
     #[serde(default)]
     pub parameters: Vec<ParamRow>,
+    /// The function that replaces this deprecated alias.
+    #[serde(default)]
+    pub deprecated: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -523,8 +527,10 @@ pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
     collect_control_commands(tree.root_node(), source, &mut diagnostics);
 
     collect_operator_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
-    collect_function_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
-    collect_table_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
+    let mut lets = BTreeSet::new();
+    let_names(tree.root_node(), source, &mut lets);
+    collect_function_diagnostics(tree.root_node(), source, catalog, &lets, &mut diagnostics);
+    collect_table_diagnostics(tree.root_node(), source, catalog, &lets, &mut diagnostics);
     perf::collect(tree.root_node(), source, &mut diagnostics);
 
     let tokens = highlight_tree(&spec, source, tree.root_node(), catalog).unwrap_or_default();
@@ -619,20 +625,74 @@ fn collect_operator_diagnostics(
     }
 }
 
+/// Names bound by `let` anywhere in the query: tables, scalars and functions the
+/// author declared, which the catalog cannot know.
+fn let_names(node: Node, source: &str, out: &mut BTreeSet<String>) {
+    if node.kind() == "let_statement" {
+        if let Some(name) = child_text(node, "name", source) {
+            out.insert(name);
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        let_names(child, source, out);
+    }
+}
+
+/// The range of a call's name, which a quick fix replaces with the suggestion
+/// without touching the arguments.
+fn call_name_range(source: &str, node: Node) -> Range {
+    node_range(source, node.child_by_field_name("name").unwrap_or(node))
+}
+
 fn collect_function_diagnostics(
     node: Node,
     source: &str,
     catalog: &Catalog,
+    lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
 ) {
     if node.kind() == "function_call" {
         if let Some(name) = child_text(node, "name", source) {
-            if catalog.function(&name).is_none() && catalog.operator(&name).is_none() {
+            let is_plugin = node.parent().map(|p| p.kind()) == Some("evaluate_operator");
+            let function = catalog.function(&name);
+            if lets.contains(&name) {
+                // A function the query declares with `let`.
+            } else if is_plugin {
+                if catalog.plugin(&name).is_none() {
+                    let mut d = Diagnostic::error(
+                        codes::KQL_UNKNOWN_FUNCTION,
+                        format!("unknown evaluate plugin '{name}'"),
+                        call_name_range(source, node),
+                    );
+                    if let Some(s) = catalog
+                        .plugins
+                        .iter()
+                        .map(|p| (p.name.clone(), strsim_distance(&p.name, &name)))
+                        .filter(|(_, d)| *d <= 2)
+                        .min_by_key(|(_, d)| *d)
+                        .map(|(n, _)| n)
+                    {
+                        d = d.with_suggestion(s);
+                    }
+                    out.push(d);
+                }
+            } else if let Some(replacement) = function.and_then(|f| f.deprecated.as_ref()) {
+                out.push(
+                    Diagnostic::warning(
+                        codes::KQL_DEPRECATED_FUNCTION,
+                        format!("'{name}' is deprecated; use {replacement}()"),
+                        call_name_range(source, node),
+                    )
+                    .with_suggestion(replacement.clone()),
+                );
+            } else if function.is_none() && catalog.operator(&name).is_none() {
                 // Operators used as functions are fine; unknown names get a diagnostic.
                 // Many scalar functions are not yet catalogued — only flag if it looks like a typo of a known one.
                 if let Some(suggestion) = catalog
                     .functions
                     .iter()
+                    .filter(|f| f.deprecated.is_none())
                     .map(|f| (f.name.clone(), strsim_distance(&f.name, &name)))
                     .filter(|(_, d)| *d > 0 && *d <= 2)
                     .min_by_key(|(_, d)| *d)
@@ -642,7 +702,7 @@ fn collect_function_diagnostics(
                         Diagnostic::error(
                             codes::KQL_UNKNOWN_FUNCTION,
                             format!("unknown function '{name}'"),
-                            node_range(source, node),
+                            call_name_range(source, node),
                         )
                         .with_suggestion(suggestion),
                     );
@@ -652,7 +712,7 @@ fn collect_function_diagnostics(
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_function_diagnostics(child, source, catalog, out);
+        collect_function_diagnostics(child, source, catalog, lets, out);
     }
 }
 
@@ -660,6 +720,7 @@ fn collect_table_diagnostics(
     node: Node,
     source: &str,
     catalog: &Catalog,
+    lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
 ) {
     if catalog.tables.is_empty() {
@@ -667,7 +728,8 @@ fn collect_table_diagnostics(
     }
     if node.kind() == "tabular_primary" {
         if let Some(table) = child_text(node, "table", source) {
-            if catalog.table(&table).is_none()
+            if !lets.contains(&table)
+                && catalog.table(&table).is_none()
                 && catalog.operator(&table).is_none()
                 && table.chars().next().is_some_and(|c| c.is_ascii_uppercase())
             {
@@ -685,7 +747,7 @@ fn collect_table_diagnostics(
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_table_diagnostics(child, source, catalog, out);
+        collect_table_diagnostics(child, source, catalog, lets, out);
     }
 }
 
@@ -1108,6 +1170,7 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
     let mut items: Vec<CompletionItem> = catalog
         .functions
         .iter()
+        .filter(|f| f.deprecated.is_none())
         .map(|f| {
             complete_item(
                 f.name.clone(),

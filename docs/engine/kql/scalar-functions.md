@@ -300,7 +300,7 @@ Related: `hash_sha2_256` may appear as an alias in some docs versions of `hash_s
 | `dcount_hll` | `dcount_hll(hll)` | [dcount_hll](https://learn.microsoft.com/kusto/query/dcount-hll-function) |
 | `hll_merge` | `hll_merge(hll1, …)` scalar merge | [hll_merge](https://learn.microsoft.com/kusto/query/hll-merge-function) |
 | `percentile_tdigest` | `percentile_tdigest(tdigest, p)` | [percentile_tdigest](https://learn.microsoft.com/kusto/query/percentile-tdigest-function) |
-| `percentile_array_tdigest` | `percentile_array_tdigest(tdigest, pArray)` | [percentile-array-tdigest](https://learn.microsoft.com/kusto/query/percentile-array-tdigest-function) |
+| `percentiles_array_tdigest` | `percentiles_array_tdigest(tdigest, pArray)` | [percentile-array-tdigest](https://learn.microsoft.com/kusto/query/percentile-array-tdigest-function) |
 | `percentrank_tdigest` | `percentrank_tdigest(digest, value)` | [percentrank_tdigest](https://learn.microsoft.com/kusto/query/percentrank-tdigest-function) |
 | `rank_tdigest` | `rank_tdigest(digest, value)` | [rank_tdigest](https://learn.microsoft.com/kusto/query/rank-tdigest-function) |
 | `merge_tdigest` | `merge_tdigest(t1, t2, …)` | [merge_tdigest](https://learn.microsoft.com/kusto/query/merge-tdigest-function) |

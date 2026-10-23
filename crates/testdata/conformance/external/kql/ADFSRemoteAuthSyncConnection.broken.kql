@@ -7,8 +7,8 @@
 // Identify ADFS Servers
 let ADFS_Servers = (
     SecurityEvent
-    //| frobnicate TimeGenerated > ago(timeframe+lookback)
-    | where EventSourceName == 'AD FS Auditing'
+    //| where TimeGenerated > ago(timeframe+lookback)
+    | frobnicate EventSourceName == 'AD FS Auditing'
     | distinct Computer
 );
 SecurityEvent

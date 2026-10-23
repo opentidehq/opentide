@@ -21,6 +21,7 @@ CrowdStrike stays unsupported until its language is specified. SQL stays unsuppo
 - `generate-highlights --check` passes, and capture names are an append-only change to HighlightSpec.
 - `testdata/conformance/external/<id>/` contains real public rules and a `.broken.` twin with one injected fault. The full valid file may still parse-error where the grammar does not cover the rule yet. The harness keeps that file, takes the longest prefix that parses, and requires the injected fault on that prefix to diagnose. The broken full file must produce at least one diagnostic. Copy `crates/opentide-analysis/tests/external_corpus.rs`.
 - Unsupported platforms still produce no fake validation.
+- The language has an oracle in `scripts/oracles/` against its reference parser (pySigma for Sigma, yara-python for YARA), or `scripts/oracles/README.md` says why none exists.
 - `cargo clippy --workspace --all-targets -- -D warnings` is clean.
 
 ## Steps
@@ -35,8 +36,9 @@ CrowdStrike stays unsupported until its language is specified. SQL stays unsuppo
 8. Register the engine in `opentide-analysis` on `LanguageId`. Hover, completion, and signature help dispatch here. Do not copy a second implementation into `opentide-tide` except the injection remap.
 9. If Tide YAML embeds the language, add a row to the injection table in `docs/ARCHITECTURE.md` and to `language_for_field_path`. Remap tokens onto YAML coordinates after stripping block-scalar indent.
 10. Add `testdata/conformance/external/<id>/`: unmodified public rules, plus `<name>.broken.<ext>` with one injected fault. Record the source and license in `SOURCES.md`. Follow `external_corpus.rs`: do not delete a public rule because the full text parse-errors; assert the fault on the longest prefix the grammar accepts, and assert the broken full file emits some diagnostic.
-11. Extend `crates/opentide-lsp` only for host behaviour (language id from the URI suffix, e2e frame). The CLI `analyze` / `highlight` path must keep printing plain JSON.
-12. WASM: `highlight(language_id, bytes)` already goes through `LanguageId::parse` and `opentide_analysis::highlight`. Do not add a wasm-bindgen export per language, and do not link `opentide-wasm` into a WASI build.
+11. Add an oracle: a `<lang>` mode in `scripts/oracles/oracle.py` that runs the reference over the same corpus, `[[<lang>]]` entries in `testdata/oracles/exceptions.toml`, a job in `.github/workflows/oracle.yml`, and the reference's package names in `scripts/license-scan.sh`. The reference never ships.
+12. Extend `crates/opentide-lsp` only for host behaviour (language id from the URI suffix, e2e frame). The CLI `analyze` / `highlight` path must keep printing plain JSON.
+13. WASM: `highlight(language_id, bytes)` already goes through `LanguageId::parse` and `opentide_analysis::highlight`. Do not add a wasm-bindgen export per language, and do not link `opentide-wasm` into a WASI build.
 
 ## Dispatch
 

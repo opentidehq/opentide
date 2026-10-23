@@ -13,3 +13,6 @@ grammars/*/node_modules
 coverage
 lcov.info
 /tmp
+scripts/oracles/kusto/bin
+scripts/oracles/kusto/obj
+__pycache__/

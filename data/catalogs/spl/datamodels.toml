@@ -103,3 +103,11 @@ model = "Alerts"
 docs = "Product alerts."
 fields = ["signature", "severity", "src", "dest", "user", "vendor_product"]
 citation = "https://docs.splunk.com/Documentation/CIM/latest/User/CIMfields"
+
+[[datamodels]]
+name = "Risk.All_Risk"
+prefix = "All_Risk"
+model = "Risk"
+docs = "Risk events from Enterprise Security risk-based alerting (not part of the CIM)."
+fields = ["risk_object", "risk_object_type", "risk_score", "calculated_risk_score", "source", "analyticstories", "tag", "annotations.mitre_attack.mitre_tactic", "annotations.mitre_attack.mitre_tactic_id", "annotations.mitre_attack.mitre_technique_id"]
+citation = "https://github.com/splunk/security_content/blob/develop/detections/endpoint/active_directory_lateral_movement_identified.yml"

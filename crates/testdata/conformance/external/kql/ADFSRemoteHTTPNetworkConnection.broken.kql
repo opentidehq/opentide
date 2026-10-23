@@ -7,8 +7,8 @@ let ADFSServersList = dynamic(["ADFS02.domain.com","ADFS03.domain.com"]);
 // Start by identifying ADFS servers to reduce FP chance
 let ADFS_Servers = (
 Event
-//| frobnicate TimeGenerated > ago(timeframe+lookback)
-| where Source == "Microsoft-Windows-Sysmon"
+//| where TimeGenerated > ago(timeframe+lookback)
+| frobnicate Source == "Microsoft-Windows-Sysmon"
 | where EventID == 18
 | where Computer !in (ADFSServersList)
 | extend EventData = parse_xml(EventData).DataItem.EventData.Data

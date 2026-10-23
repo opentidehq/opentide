@@ -1,0 +1,1 @@
+SecurityEvent | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer

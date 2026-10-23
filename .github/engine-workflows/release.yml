@@ -106,10 +106,13 @@ jobs:
     needs: [native, highlights, pypi]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      - name: license scan (no oracle references)
+        run: bash scripts/license-scan.sh dist
       - name: attach GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
