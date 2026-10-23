@@ -218,9 +218,12 @@ def test_emit_fatal_json_mode() -> None:
 
 
 def test_print_banner_returns_text() -> None:
+    """Deprecated: warns, and returns the icon and the tagline as plain text."""
     init_logging(LoggingConfig(plain=True), force=True)
-    banner = print_banner()
-    assert ":--==-:." in banner
+    with pytest.warns(DeprecationWarning, match="print_banner"):
+        banner = print_banner()
+    assert "Spec-driven development for agentic detection engineering" in banner
+    assert "▄" in banner
 
 
 def test_console_renderer_uses_level_styling_only() -> None:
