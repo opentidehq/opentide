@@ -81,4 +81,4 @@ opentide --show-completion
 
 ## Source
 
-Command definitions: `src/opentide/cli/__init__.py`, `src/opentide/cli/setup_app.py`, `src/opentide/cli/share_app.py`.
+Command definitions: `src/opentide/cli/commands/` (the root list is `src/opentide/cli/commands/__init__.py`; global options are in `src/opentide/cli/root.py`), `src/opentide/cli/setup_app.py`, `src/opentide/cli/share_app.py`.

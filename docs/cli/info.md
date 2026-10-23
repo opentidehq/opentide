@@ -87,4 +87,4 @@ With coverage, the payload adds a `coverage` object:
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/info.py`
+`src/opentide/cli/commands/info.py`, `src/opentide/cli/services/info.py`

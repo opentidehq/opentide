@@ -30,7 +30,8 @@ from typing import TYPE_CHECKING
 
 from typer.main import get_command
 
-from opentide.cli import _NAMED_GENERATE_PHASES, app
+from opentide.cli import app
+from opentide.cli.commands.generate import _NAMED_GENERATE_PHASES
 
 if TYPE_CHECKING:  # pragma: no cover - import only for annotations
     import click

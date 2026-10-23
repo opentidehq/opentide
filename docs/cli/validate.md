@@ -346,4 +346,4 @@ See [SDK validation](../sdk/validation.md).
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/validation.py`
+`src/opentide/cli/commands/validate.py`, `src/opentide/cli/services/validation.py`
