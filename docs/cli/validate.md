@@ -60,7 +60,7 @@ opentide validate --strict --format sarif --output opentide-reports/validate.sar
 opentide validate --format codequality > gl-code-quality-report.json
 ```
 
-`--format sarif` writes SARIF 2.1.0: one run whose rules are the [diagnostic codes](./diagnostics.md), each with its `opentide explain` page as help, and one result per finding with its region and, for a vocabulary typo, its fix. `--format codequality` writes the Code Climate JSON GitLab reads from `artifacts:reports:codequality`. Paths are relative to the CI checkout when opentide runs in CI, else to the workspace. A finding that names no file is left out of both. The exit code is the same as without `--format`.
+`--format sarif` writes SARIF 2.1.0: one run whose rules are the [diagnostic codes](./diagnostics.md), each with its `opentide explain` page as help, and one result per finding with its region (columns count Unicode code points), the object's UUID as its logical location and, for a vocabulary typo, its fix. `--format codequality` writes the Code Climate JSON GitLab reads from `artifacts:reports:codequality`. Paths are relative to the CI checkout when opentide runs in CI, else to the workspace. A finding that names no file is left out of both. The exit code is the same as without `--format`.
 
 In a GitHub Actions or Azure Pipelines job, each finding is also written to stdout as an annotation (`::error file=…,line=…,col=…,title=<code>::<message>`, or `##vso[task.logissue …]`), and the outcome line and a table of findings go to the job summary; GitLab gets the summary as `opentide-reports/summary.md`. `--json` turns these off. See [CI/CD](../usage/workflows/ci-cd.md#annotations-summaries-and-reports).
 

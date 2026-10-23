@@ -20,8 +20,9 @@ from typer.testing import CliRunner, Result
 
 from opentide.cli import app
 from opentide.cli.services.explain import diagnostic_codes, load_page
+from opentide.cli.services.validation import VALIDATION_CODES
 from opentide.cli.ui import ci, reports, summary
-from opentide.cli.ui.diagnostics import Diagnostic, Fix, TextEdit
+from opentide.cli.ui.diagnostics import LINT_CODES, Diagnostic, Fix, TextEdit
 from opentide.cli.ui.mode import OutputMode
 
 SCHEMA = Path(__file__).resolve().parents[1] / "fixtures" / "sarif" / "sarif-schema-2.1.0.json"
@@ -423,7 +424,16 @@ def _sarif(diagnostics: list[Diagnostic]) -> dict[str, Any]:
 def test_sarif_matches_the_2_1_0_schema() -> None:
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
-    document = _sarif([_typo(), _WARNING, _NOTE, _NO_FILE])
+    named = Diagnostic(
+        code="schema_validation",
+        severity="error",
+        message="m",
+        path="objects/rules/b.yaml",
+        line=2,
+        object_uuid="00000000-0000-4000-8002-000000000002",
+        fix=Fix(False, (TextEdit(2, 1, 4, "x", end_line=3),)),
+    )
+    document = _sarif([_typo(), _WARNING, _NOTE, _NO_FILE, named])
     jsonschema.Draft4Validator(schema).validate(document)
     # Round-trips through JSON, as the file is written.
     jsonschema.Draft4Validator(schema).validate(json.loads(json.dumps(document)))
@@ -432,7 +442,12 @@ def test_sarif_matches_the_2_1_0_schema() -> None:
 def test_sarif_rules_come_from_the_explain_pages() -> None:
     run = _sarif([_typo()])["runs"][0]
     rules = run["tool"]["driver"]["rules"]
-    assert [rule["id"] for rule in rules] == diagnostic_codes()
+    ids = [rule["id"] for rule in rules]
+    assert ids == reports.rule_codes()
+    assert set(diagnostic_codes()) | VALIDATION_CODES | set(LINT_CODES.values()) == set(ids)
+    # Every code validation can emit has a page, so every rule has its help.
+    assert all("help" in rule for rule in rules)
+    assert run["columnKind"] == "unicodeCodePoints"
     rule = next(rule for rule in rules if rule["id"] == "vocab_unknown")
     page = load_page("vocab_unknown")
     assert page is not None
@@ -460,10 +475,35 @@ def test_sarif_result_carries_position_fix_and_fingerprint() -> None:
     assert fix["description"]["text"] == "Replace with 'clear' (safe to apply without review)"
     (replacement,) = fix["artifactChanges"][0]["replacements"]
     assert replacement == {
-        "deletedRegion": {"startLine": 8, "startColumn": 8, "endColumn": 14},
+        "deletedRegion": {"startLine": 8, "startColumn": 8, "endLine": 8, "endColumn": 14},
         "insertedContent": {"text": "clear"},
     }
     assert len(result["partialFingerprints"]["opentide/v1"]) == 64
+    assert "logicalLocations" not in result["locations"][0]
+
+
+def test_sarif_names_the_object_and_a_fix_across_lines() -> None:
+    uuid = "00000000-0000-4000-8002-000000000002"
+    diagnostic = Diagnostic(
+        code="vocab_unknown",
+        severity="error",
+        message="m",
+        path="objects/rules/a.yaml",
+        line=8,
+        column=3,
+        object_uuid=uuid,
+        fix=Fix(False, (TextEdit(8, 3, 5, "- clear", end_line=9),)),
+    )
+    (result,) = _sarif([diagnostic])["runs"][0]["results"]
+    assert result["locations"][0]["logicalLocations"] == [{"name": uuid, "kind": "object"}]
+    (replacement,) = result["fixes"][0]["artifactChanges"][0]["replacements"]
+    assert replacement["deletedRegion"] == {
+        "startLine": 8,
+        "startColumn": 3,
+        "endLine": 9,
+        "endColumn": 5,
+    }
+    assert result["fixes"][0]["description"]["text"] == "Replace with '- clear'"
 
 
 def test_sarif_lists_a_code_that_has_no_page() -> None:

@@ -2,8 +2,10 @@
 
 ``opentide validate --format sarif`` and ``opentide lint --format codequality``
 build their document here from the same :class:`Diagnostic` list the code
-frames print. SARIF rules come from the ``opentide explain`` pages, so each
-alert links to what the code means and how to fix it.
+frames print. SARIF rules are every code validation and lint can emit,
+described by its ``opentide explain`` page, so each alert links to what the
+code means and how to fix it. Columns are Unicode code points, as in
+:class:`Diagnostic`, and the SARIF run says so with ``columnKind``.
 
 Paths are relative to the repository (the CI checkout when known, else the
 workspace). A finding that names no file is left out of both reports: GitHub
@@ -19,7 +21,7 @@ from collections.abc import Callable, Sequence
 from enum import Enum
 from typing import Any
 
-from opentide.cli.ui.diagnostics import Diagnostic
+from opentide.cli.ui.diagnostics import LINT_CODES, Diagnostic
 from opentide.cli.ui.summary import DIAGNOSTICS_DOCS_URL, explain_url
 
 SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
@@ -103,6 +105,7 @@ def _sarif_fixes(diagnostic: Diagnostic, path: str) -> list[dict[str, Any]]:
             "deletedRegion": {
                 "startLine": edit.line,
                 "startColumn": edit.column,
+                "endLine": edit.last_line,
                 "endColumn": edit.end_column,
             },
             "insertedContent": {"text": edit.replacement},
@@ -121,6 +124,14 @@ def _sarif_fixes(diagnostic: Diagnostic, path: str) -> list[dict[str, Any]]:
     ]
 
 
+def rule_codes() -> list[str]:
+    """Every code validation and lint can emit, and every code with an explain page."""
+    from opentide.cli.services.explain import diagnostic_codes
+    from opentide.cli.services.validation import VALIDATION_CODES
+
+    return sorted({*diagnostic_codes(), *VALIDATION_CODES, *LINT_CODES.values()})
+
+
 def sarif_report(
     diagnostics: Sequence[Diagnostic],
     *,
@@ -130,14 +141,13 @@ def sarif_report(
 ) -> dict[str, Any]:
     """One SARIF 2.1.0 log with one run of opentide *command*.
 
-    The driver lists a rule for every ``opentide explain`` page, plus any
-    code a finding carries that has none. ``automationDetails.id`` is
+    The driver lists a rule for every code in :func:`rule_codes`, plus any
+    code a finding carries that is not there. ``automationDetails.id`` is
     ``opentide/<command>/``, so GitHub keeps the alerts of ``validate`` and
-    ``lint`` apart.
+    ``lint`` apart. A finding about one object names its UUID as a logical
+    location.
     """
-    from opentide.cli.services.explain import diagnostic_codes
-
-    codes = list(diagnostic_codes())
+    codes = rule_codes()
     codes.extend(sorted({item.code for item in diagnostics} - set(codes)))
     index = {code: position for position, code in enumerate(codes)}
     results: list[dict[str, Any]] = []
@@ -146,17 +156,20 @@ def sarif_report(
         path = path_for(diagnostic)
         if path is None:
             continue
-        location: dict[str, Any] = {"artifactLocation": {"uri": path}}
+        physical: dict[str, Any] = {"artifactLocation": {"uri": path}}
         region = _region(diagnostic)
         if region is not None:
-            location["region"] = region
+            physical["region"] = region
+        location: dict[str, Any] = {"physicalLocation": physical}
+        if diagnostic.object_uuid:
+            location["logicalLocations"] = [{"name": diagnostic.object_uuid, "kind": "object"}]
         text = diagnostic.message + (f"\nhelp: {diagnostic.help}" if diagnostic.help else "")
         result: dict[str, Any] = {
             "ruleId": diagnostic.code,
             "ruleIndex": index[diagnostic.code],
             "level": diagnostic.severity,
             "message": {"text": text},
-            "locations": [{"physicalLocation": location}],
+            "locations": [location],
             "partialFingerprints": {"opentide/v1": _fingerprint(diagnostic, path, seen)},
         }
         if fixes := _sarif_fixes(diagnostic, path):
