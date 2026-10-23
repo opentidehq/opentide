@@ -1,6 +1,8 @@
 name: Docs
 
 # Content-only checks in opentide. Build and deploy live in opentidehq/website (Fumadocs).
+# The tapes job renders docs/tapes/*.tape against this checkout, so it also runs
+# when the code that draws CLI output changes.
 
 on:
   push:
@@ -9,11 +11,19 @@ on:
       - 'docs/**'
       - 'scripts/validate-docs.sh'
       - '.github/workflows/docs.yml'
+      - 'src/opentide/cli/**'
+      - 'src/opentide/core/progress.py'
+      - 'src/opentide/core/logging/**'
+      - 'tests/test_cli/e2e/helpers.py'
   pull_request:
     paths:
       - 'docs/**'
       - 'scripts/validate-docs.sh'
       - '.github/workflows/docs.yml'
+      - 'src/opentide/cli/**'
+      - 'src/opentide/core/progress.py'
+      - 'src/opentide/core/logging/**'
+      - 'tests/test_cli/e2e/helpers.py'
   workflow_dispatch:
 
 concurrency:
@@ -32,3 +42,62 @@ jobs:
 
       - name: Validate Fumadocs-ready content
         run: scripts/validate-docs.sh
+
+  # Renders every tape to the GIF and PNG it names under docs/assets/cli/ and
+  # uploads them. VHS exits non-zero when a tape no longer runs: a command it
+  # needs is missing, or a `Wait` does not see the output it expects in time.
+  # Nothing is committed from here; docs/README.md says how to refresh the
+  # committed assets from the artifact.
+  tapes:
+    name: Render CLI tapes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Full history, so the version on screen reads like a local build.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+
+      - name: Install opentide
+        run: |
+          uv sync --no-dev
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
+      # No `path`: the action installs VHS, ttyd, ffmpeg and JetBrains Mono,
+      # and the next step runs each tape.
+      - name: Install VHS
+        uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2.1.1
+        with:
+          version: v0.12.1
+
+      - name: Render tapes
+        run: |
+          set -euo pipefail
+          # The artifact then holds only what this run rendered.
+          rm -f docs/assets/cli/*.gif docs/assets/cli/*.png
+          for tape in docs/tapes/*.tape; do
+            echo "::group::${tape}"
+            vhs "${tape}"
+            echo "::endgroup::"
+          done
+
+      - name: Upload rendered tapes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cli-tapes
+          path: |
+            docs/assets/cli/*.gif
+            docs/assets/cli/*.png
+          if-no-files-found: error
+          retention-days: 14
