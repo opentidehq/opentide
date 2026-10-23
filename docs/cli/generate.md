@@ -71,6 +71,8 @@ Every phase that loads the registry parses every object file, and the `schemas` 
 
 JSON Schema generation (`generate schemas`) stays a separate pipeline. It writes one schema per registered revision (`rule.1.0.schema.json`, `rule.1.1.schema.json`, …) and the router `opentide.schema.json`, which applies the revision named in each object's `metadata.schema`. Map the router in your editor; see [Schema revision](../usage/concepts/schema-revision.md). VS Code snippets copy the YAML templates and add tabstops; they do not re-walk models.
 
+Generated schemas are written for editor hovers and completions. Every field carries a `title` and a `description`, taken from the docstring under the model field; a description that uses Markdown also gets a `markdownDescription`. Vocabulary enums carry one description per value: the full entry in `markdownEnumDescriptions`, and its name and first sentence in `enumDescriptions` (VS Code) and `x-enumDescriptions` (the same list, for other editors). Configuration enums (statuses, log sources, detectors, tenants) carry their whole description as plain text in the same two keys. Each schema's `$comment` names opentide and its tagline. These are annotation keywords: they change what an editor shows, never what validates. Each snippet carries a description naming the object or platform block it inserts.
+
 ## generate docs
 
 The only supported entry point for markdown documentation.

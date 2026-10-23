@@ -130,7 +130,10 @@ def test_run_uses_legacy_subschemas_when_platform_templates_missing(tmp_path: Pa
     entry = payload["Detection Rules Template"]
     assert entry["prefix"] == "tide-rule"
     assert entry["scope"] == "yaml"
-    assert entry["description"] == "Detection Rules Template"
+    assert entry["description"] == (
+        "Detection Rules: a new object from the generated template, "
+        "with a tabstop on every field to fill."
+    )
 
 
 def test_run_uses_platform_templates_when_subschemas_missing(tmp_path: Path) -> None:
@@ -198,6 +201,10 @@ def test_run_emits_enabled_platform_snippets(tmp_path: Path) -> None:
     assert payload[key]["scope"] == "yaml"
     assert payload[key]["body"][0] == ""
     assert "query: ${1:query}" in payload[key]["body"]
+    assert payload[key]["description"] == (
+        "Microsoft Sentinel: the platform block for a detection rule's "
+        "configurations, from the generated template."
+    )
 
 
 def test_run_honors_snippets_path_override(tmp_path: Path) -> None:
