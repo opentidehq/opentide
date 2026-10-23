@@ -219,3 +219,27 @@ def test_an_empty_plan_is_falsy_and_writes_nothing(tmp_path: Path) -> None:
         after="y",
     )
     assert FixPlan(changes=(change,))
+
+
+def test_a_file_that_cannot_be_written_is_reported_and_left_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    locked = _write(tmp_path, "tlp: clearr\n", "locked.yaml")
+    open_ = _write(tmp_path, "tlp: clearr\n", "open.yaml")
+    real_write = Path.write_bytes
+
+    def write_bytes(self: Path, data: bytes) -> int:
+        if self == locked:
+            raise PermissionError(13, "Permission denied")
+        return real_write(self, data)
+
+    monkeypatch.setattr(Path, "write_bytes", write_bytes)
+    plan = plan_fixes(
+        [_diagnostic(locked, 1, 6, 12, "clear"), _diagnostic(open_, 1, 6, 12, "clear")]
+    )
+    written, failed = plan.write()
+    assert failed == ["locked.yaml: Permission denied"]
+    assert [change.path for change in written.changes] == ["open.yaml"]
+    assert written.file_count == 1
+    assert locked.read_text() == "tlp: clearr\n"
+    assert open_.read_text() == "tlp: clear\n"

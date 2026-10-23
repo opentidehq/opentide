@@ -75,10 +75,23 @@ class FixPlan:
             )
         return "".join(chunks)
 
-    def write(self) -> None:
-        """Write each changed file. Bytes outside the edits are written back unchanged."""
-        for file_path, (_path, _before, after) in self.files.items():
-            file_path.write_bytes(after.encode("utf-8"))
+    def write(self) -> tuple[FixPlan, list[str]]:
+        """Write each changed file; bytes outside the edits are written back unchanged.
+
+        Returns the plan of the files written, and one line per file that
+        could not be (``objects/rules/x.yaml: Permission denied``).
+        """
+        written: dict[Path, tuple[str, str, str]] = {}
+        failed: list[str] = []
+        for file_path, entry in self.files.items():
+            try:
+                file_path.write_bytes(entry[2].encode("utf-8"))
+            except OSError as exc:
+                failed.append(f"{entry[0]}: {exc.strerror or exc}")
+                continue
+            written[file_path] = entry
+        changes = tuple(change for change in self.changes if change.file_path in written)
+        return FixPlan(changes=changes, files=written), failed
 
 
 def _diff_lines(text: str) -> list[str]:

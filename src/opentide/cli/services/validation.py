@@ -321,12 +321,17 @@ def run_validate_fix(
                 )
             ]
         return result
+    unwritten: list[str] = []
     if plan:
-        plan.write()
+        plan, unwritten = plan.write()
         # run_validate rebuilds the registry, so it reads the files just written.
         result = run_validate(ctx, **scope)
         # A fix this run could not apply would not apply on the next one either.
         result.pop("_next_actions", None)
+    if unwritten:
+        warnings = cast(list[str], result.setdefault("warnings", []))
+        warnings.extend(f"Could not write the fix to {line}" for line in unwritten)
+        result["_unwritten"] = unwritten
     summary = cast(dict[str, int], result["_summary"])
     summary["fixed"] = len(plan.changes)
     result["fixed"] = [change.to_dict() for change in plan.changes]

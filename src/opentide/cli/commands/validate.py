@@ -37,8 +37,9 @@ from opentide.cli.ui.contract import (
 )
 from opentide.cli.ui.diagnostics import Diagnostic
 from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
+from opentide.cli.ui.render import render_warnings
 from opentide.cli.ui.watch import LiveView, PlainView, Watcher, WatchRun
-from opentide.core.logging.config import get_stdout_console
+from opentide.core.logging.config import get_console, get_stdout_console
 
 validate_app = typer.Typer(help="Object and query validation")
 
@@ -106,6 +107,7 @@ def validate_group(
     diagnostics = result.pop("_diagnostics", [])
     plan = result.pop("_fix_plan", None)
     fixed = result.pop("_fixed", None)
+    unwritten = result.pop("_unwritten", [])
     outcome = CommandResult.from_payload(result, default_message="Validation passed")
     if cli.json_output:
         emit_result(cli, outcome)
@@ -121,6 +123,7 @@ def validate_group(
         ]
     if fixed and not cli.quiet:
         render_fixed(stdout, fixed.changes)
+    render_warnings(get_console(), [f"Could not write the fix to {line}" for line in unwritten])
     render_diagnostics(stdout, diagnostics, mode=mode, quiet=cli.quiet)
     line = outcome.message
     if not line.startswith("Validation passed, but"):
