@@ -23,6 +23,8 @@ USAGE_INVALID_VALUE = "usage_invalid_value"
 USAGE_MISSING_OPTION = "usage_missing_option"
 USAGE_NEEDS_INPUT = "usage_needs_input"
 USAGE_ERROR = "usage_error"
+#: ``validate --watch`` where no terminal shows it: ``json``, ``agent`` or ``mcp`` mode.
+USAGE_WATCH_NEEDS_TTY = "usage_watch_needs_tty"
 
 #: ``failure.code`` when a command names no more specific code: it failed,
 #: it found issues it was asked to fail on (``--strict``), or it did not run.
