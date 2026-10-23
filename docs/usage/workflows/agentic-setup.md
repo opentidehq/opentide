@@ -89,7 +89,7 @@ After setup, point your agent at the generated `AGENTS.md` at the repo root — 
 
 - Run `opentide --json <command>`; stdout is one JSON document. `opentide --json commands` lists every command, option and an example.
 - Branch on the exit code, then on `failure.code` (`issues_found`, `usage_invalid_choice`, `no_tenant_reached`, …).
-- Apply each finding's `fix` (`safe: true` edits are typo fixes), and run `opentide explain <code>` for the others.
+- Apply each finding's `fix` (`safe: true` edits only respell the same word; check the others against `help`), and run `opentide explain <code>` for a finding without one.
 - Follow `next_actions`.
 - Work in a loop: search, draft, validate until clean, preview the deployment with `--dry-run`. People review and merge the change, and run real deployments.
 
@@ -118,7 +118,7 @@ flowchart LR
 > **Agent:** `search(query="T1059")` → finds the *Credential Access* objective `…8002…0001`.
 > `get_chaining(uuid="…8002…0001")` → confirms it covers the *Simulated Actor* threat and has no rule yet.
 > Writes `objects/rules/sentinel-t1059.yaml` from `opentide://templates/rule`, with `detection_model` pointing at the objective.
-> `validation_report(file="objects/rules/sentinel-t1059.yaml")` → one `vocab_unknown` issue at line 8, column 8: `tlp: clearr`, with a safe `fix` replacing it with `clear`.
+> `validation_report(file="objects/rules/sentinel-t1059.yaml")` → one `vocab_unknown` issue at line 8, column 8: `tlp: clearr`, with a `fix` replacing it with `clear`. The fix is not `safe` (another spelling, not only another case), so the agent checks it against `help`: `did you mean 'clear'?`.
 > Applies the edit. `validation_report(file=…)` → `ok: true`.
 > Runs `opentide validate query --platform sentinel --live --file objects/rules/sentinel-t1059.yaml` (CLI), which checks that one rule's query against the tenant.
 > `deploy_rule(uuid=…, platform="sentinel", dry_run=true)` → shows the planned change.

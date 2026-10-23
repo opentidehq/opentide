@@ -77,7 +77,7 @@ An agent in a shell drives the same commands as a person. Four rules cover it, a
 
 1. Run `opentide --json <command>`. stdout is one [JSON document](./json-output.md) and nothing else.
 2. Branch on the exit code, then on `failure.code` (`issues_found`, `usage_invalid_choice`, `no_tenant_reached`, …). A usage error carries the closest valid value in `failure.suggestion`.
-3. Apply each finding's `fix`: every edit replaces `[column, end_column)` on `line` (1-based) with `replacement`, and `safe: true` edits are typo fixes. For a finding with no fix, `opentide explain <code>` says what it means and how to fix it.
+3. Apply each finding's `fix`: every edit replaces the text from (`line`, `column`) up to (`end_line`, `end_column`), 1-based, with `replacement`. `safe: true` edits only respell the same word and can be applied as they are; check the others against `help`. For a finding with no fix, `opentide explain <code>` says what it means and how to fix it.
 4. Follow `next_actions`, each a `{command, reason}`.
 
 The loop: search what exists (`opentide --json info coverage --technique T1059`), draft from `.opentide/templates/`, run `opentide --json validate --file <file>` until `ok` is `true`, then preview with `opentide --json deploy --dry-run --strategy PREVIEW --all`. People review and merge the change and run real deployments. An agent never gets a prompt: a command that needs input exits `2` with `usage_needs_input` and names the flags to pass.

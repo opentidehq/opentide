@@ -33,7 +33,7 @@ _UUID = CORPUS_RULE_UUIDS["sentinel"]
 
 @pytest.fixture
 def broken_rule(tide_corpus_repo: Path) -> Path:
-    """The Sentinel rule with ``tlp: clearr``, a typo with a safe fix."""
+    """The Sentinel rule with ``tlp: clearr``: a typo with a fix to review (not safe)."""
     path = tide_corpus_repo / _RULE
     text = path.read_text(encoding="utf-8")
     assert "  tlp: clear\n" in text
@@ -64,16 +64,32 @@ def test_validation_report_issues_gain_the_diagnostic_fields(broken_rule: Path) 
     assert Path(issue["file_path"]).is_absolute()
     assert issue["explain"] == "opentide explain vocab_unknown"
     assert issue["help"] == "did you mean 'clear'?"
-    assert issue["fix"]["safe"] is True
-    (edit,) = issue["fix"]["edits"]
-    # The CLI's TextEdit shape, whatever keys it carries: MCP adds nothing of its own.
-    expected = {
-        "line": issue["line"],
-        "column": issue["column"],
-        "end_column": issue["end_column"],
-        "replacement": "clear",
-    }
-    assert expected.items() <= edit.items()
+    assert issue["fix"]["safe"] is False
+    assert issue["object_uuid"] == _UUID
+    # The CLI's TextEdit shape: a one-line edit ends on the line it starts on.
+    assert issue["fix"]["edits"] == [
+        {
+            "line": issue["line"],
+            "column": issue["column"],
+            "end_line": issue["line"],
+            "end_column": issue["end_column"],
+            "replacement": "clear",
+        }
+    ]
+
+
+def test_mcp_and_validate_json_carry_the_same_diagnostic_fields(broken_rule: Path) -> None:
+    """One adapter serves both surfaces: the issue MCP returns is the one --json prints."""
+    import json
+
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+
+    mcp_issue = _tlp_issue(tools.tool_validation_report(file=str(_RULE))["issues"])
+    result = CliRunner().invoke(app, ["--json", "validate", "--file", str(_RULE)])
+    cli_issue = _tlp_issue(json.loads(result.stdout)["report"]["issues"])
+    assert mcp_issue == cli_issue
 
 
 def test_validation_report_next_actions_explain_then_validate_again(broken_rule: Path) -> None:
@@ -110,7 +126,7 @@ def test_validate_rule_issues_gain_the_diagnostic_fields(broken_rule: Path) -> N
     assert all(isinstance(error, str) for error in payload["errors"])
     issue = _tlp_issue(payload["issues"])
     assert set(_ISSUE_KEYS) <= issue.keys()
-    assert issue["fix"]["safe"] is True
+    assert issue["fix"]["safe"] is False
     assert payload["next_actions"][-1]["tool"] == "validate_rule"
     assert payload["next_actions"][-1]["arguments"] == {"uuid": _UUID}
 
@@ -153,6 +169,16 @@ def test_explain_without_a_code_lists_every_code() -> None:
     assert payload["found"] is True
     assert [entry["code"] for entry in payload["codes"]] == diagnostic_codes()
     assert all(entry["meaning"] for entry in payload["codes"])
+
+
+def test_explain_answers_for_every_code_validate_and_lint_emit() -> None:
+    from opentide.cli.services.validation import VALIDATION_CODES
+    from opentide.cli.ui.diagnostics import LINT_CODES
+
+    for code in sorted(VALIDATION_CODES | set(LINT_CODES.values())):
+        payload = tools.tool_explain(code)
+        assert payload["found"] is True, code
+        assert payload["code"] == code
 
 
 def test_explain_unknown_code_suggests_the_closest() -> None:

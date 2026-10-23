@@ -47,9 +47,11 @@ get_chaining shows threat -> objective -> rule.
 opentide://schemas/{{object_type}} and opentide://vocabularies/{{name}}, and write the \
 file with your own tools: this server does not write files.
 3. Validate until clean. Call validation_report with file or uuid after every edit. \
-Each issue has code, severity, message, path, line and column (1-based), help, and \
-fix ({{safe, edits}}: replace line's [column, end_column) with replacement; apply \
-safe edits directly). explain(code) says what a code means. Repeat until ok is true.
+Each issue has code, severity, message, object_uuid, path, line and column (1-based), \
+help, and fix ({{safe, edits}}: each edit replaces the text from (line, column) up \
+to (end_line, end_column) with replacement). Apply safe edits as they are: they \
+only respell the same word; check the others against help. explain(code) says what \
+a code means. Repeat until ok is true.
 4. Preview. deploy_rule with dry_run true shows the deployment; nothing is sent.
 
 People review and merge changes and run real deployments. Call deploy_rule with \
@@ -132,10 +134,12 @@ def validation_report(
     matches every object file of that name), uuid, or object_type (rule |
     threat | objective). No argument validates the whole catalogue.
     Returns {ok, issues, warnings, stats, next_actions}. Each issue: code,
-    severity, message, field_path, path, line, column, end_column (1-based;
-    end_column exclusive), help, fix ({safe, edits: [{line, column, end_column,
-    replacement}]} or null), explain. yaml_line is 0-based and file_path
-    absolute, kept for older clients. Done when ok is true.
+    severity, message, object_uuid, field_path, path, line, column, end_column
+    (1-based Unicode code points; end_column exclusive), help, fix ({safe,
+    edits: [{line, column, end_line, end_column, replacement}]} or null),
+    explain. safe edits only respell the same word; check the others against
+    help. yaml_line is 0-based and file_path absolute, kept for older clients.
+    Done when ok is true.
     """
     return tool_validation_report(
         file=file or None,

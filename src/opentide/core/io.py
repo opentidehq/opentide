@@ -67,6 +67,9 @@ def json_timestamp_default(value: Any) -> str:
 class DuplicateKeyError(yaml.MarkedYAMLError):
     """A mapping repeats a key. Carries the repeated key's position like a parser error."""
 
+    #: Where the repeated key ends, so a diagnostic can underline all of it.
+    end_mark: yaml.Mark | None = None
+
     def __str__(self) -> str:
         mark = self.problem_mark
         return f"{self.problem} at line {mark.line + 1}" if mark else str(self.problem)
@@ -83,6 +86,8 @@ class YamlProblem:
     context: str | None = None
     context_line: int | None = None
     context_column: int | None = None
+    #: Just past the text at fault, when the error spans more than one character.
+    end_column: int | None = None
 
     @property
     def context_note(self) -> str | None:
@@ -117,13 +122,26 @@ def describe_yaml_error(exc: BaseException) -> YamlProblem:
         problem_mark = exc.problem_mark
         context_mark = exc.context_mark
         mark = problem_mark or context_mark
+        problem = str(exc.problem or exc.context or type(exc).__name__)
+        context = str(exc.context) if exc.problem and exc.context else None
+        if context and problem.startswith("but "):
+            # "expected a single document in the stream" / "but found another
+            # document" reads as one sentence, not as a problem and a context.
+            problem, context = f"{context}, {problem}", None
+        end_mark = getattr(exc, "end_mark", None)
+        end_column = (
+            end_mark.column + 1
+            if mark is not None and end_mark is not None and end_mark.line == mark.line
+            else None
+        )
         return YamlProblem(
-            problem=str(exc.problem or exc.context or type(exc).__name__),
+            problem=problem,
             line=mark.line + 1 if mark else None,
             column=mark.column + 1 if mark else None,
-            context=str(exc.context) if exc.problem and exc.context else None,
-            context_line=context_mark.line + 1 if context_mark and exc.problem else None,
-            context_column=context_mark.column + 1 if context_mark and exc.problem else None,
+            context=context,
+            context_line=context_mark.line + 1 if context_mark and context else None,
+            context_column=context_mark.column + 1 if context_mark and context else None,
+            end_column=end_column,
         )
     text = str(exc).strip()
     return YamlProblem(problem=text.splitlines()[0] if text else type(exc).__name__)
@@ -136,9 +154,11 @@ def _reject_duplicate_keys(node: yaml.Node) -> None:
         for key_node, value_node in node.value:
             key = key_node.value if isinstance(key_node, yaml.ScalarNode) else repr(key_node)
             if key in seen:
-                raise DuplicateKeyError(
+                error = DuplicateKeyError(
                     problem=f"duplicate key {key!r}", problem_mark=key_node.start_mark
                 )
+                error.end_mark = key_node.end_mark
+                raise error
             seen.add(str(key))
             _reject_duplicate_keys(value_node)
         return

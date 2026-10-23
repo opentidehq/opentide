@@ -18,6 +18,6 @@ opentide validate query --platform <platform> --live --file <rule file>
 opentide deploy --dry-run --strategy PREVIEW --all
 ```
 
-With `--json`, stdout is one JSON document. Each finding has `code`, `path`, `line`, `column`, `help` and `fix`: apply `fix.edits` (replace `[column, end_column)` on `line` with `replacement`), run `opentide explain <code>` when there is none, and repeat until the exit code is `0`. On a non-zero exit, `failure.code` says why; follow `next_actions`.
+With `--json`, stdout is one JSON document. Each finding has `code`, `path`, `line`, `column`, `help` and `fix`: apply `fix.edits` (replace the text from (`line`, `column`) up to (`end_line`, `end_column`) with `replacement`; check an edit that is not `safe` against `help`), run `opentide explain <code>` when there is none, and repeat until the exit code is `0`. On a non-zero exit, `failure.code` says why; follow `next_actions`.
 
 `validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.

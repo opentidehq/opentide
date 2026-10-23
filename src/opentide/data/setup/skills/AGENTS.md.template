@@ -36,7 +36,7 @@ opentide explain <code>                          # what a finding's code means a
 ```
 
 - **Branch on the exit code, then on `failure.code`.** `0` success. `1` failure: `issues_found` (findings to fix) or `command_failed`. `2` usage error (`usage_unknown_option`, `usage_invalid_choice`, …, with `failure.suggestion`) or a check that could not run (`no_tenant_reached`, `needs_human_decision`). `3` partial `share`.
-- **Read each finding's `fix`.** Findings (`report.issues` from `validate`, `findings` from `lint`) carry `code`, `path`, `line`, `column` and `end_column` (1-based, end exclusive), `help` and `fix`. `fix.edits` replace `[column, end_column)` on `line` with `replacement`; `safe: true` edits are typo fixes you can apply as they are. When there is no fix, run `opentide explain <code>`.
+- **Read each finding's `fix`.** Findings (`report.issues` from `validate`, `findings` from `lint`) carry `code`, `path`, `line`, `column` and `end_column` (1-based, end exclusive), `help` and `fix`. Each of `fix.edits` replaces the text from (`line`, `column`) up to (`end_line`, `end_column`) with `replacement`. Apply `safe: true` edits as they are: they only respell the same word. Check the others against `help` first. When there is no fix, run `opentide explain <code>`.
 - **Follow `next_actions`.** Each is `{command, reason}`: the command to run next.
 - **Never answer a prompt.** opentide does not prompt agents: a command that needs input exits `2` with `usage_needs_input` and names the flags to pass.
 

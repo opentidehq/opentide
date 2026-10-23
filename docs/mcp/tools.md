@@ -220,8 +220,10 @@ Returns the validation report (`ok`, `issues`, `warnings`, `stats`) plus `next_a
       "end_column": 14,
       "help": "did you mean 'clear'?",
       "fix": {
-        "safe": true,
-        "edits": [{ "line": 8, "column": 8, "end_column": 14, "replacement": "clear" }]
+        "safe": false,
+        "edits": [
+          { "line": 8, "column": 8, "end_line": 8, "end_column": 14, "replacement": "clear" }
+        ]
       },
       "explain": "opentide explain vocab_unknown"
     }
@@ -255,9 +257,10 @@ Each entry of `issues` and `warnings` (and of `validate_rule`'s `issues`) carrie
 |-------|---------|
 | `path` | Workspace-relative, `/`-separated. `file_path` stays absolute. |
 | `line` | 1-based. `yaml_line` stays 0-based. |
-| `column`, `end_column` | 1-based, best effort; `end_column` is one past the last character. `null` when unknown. |
+| `object_uuid` | Already on every issue: the object at fault, or `""` |
+| `column`, `end_column` | 1-based Unicode code points, best effort; `end_column` is one past the last character. `null` when unknown. |
 | `help` | A suggestion in prose (`did you mean 'clear'?`), or `null` |
-| `fix` | `{safe, edits: [{line, column, end_column, replacement}]}` or `null`. Each edit replaces `[column, end_column)` on `line`. `safe: true` is a typo fix to apply as it is; an `invalid_ref` fix is never safe. |
+| `fix` | `{safe, edits: [{line, column, end_line, end_column, replacement}]}` or `null`. Each edit replaces the text from (`line`, `column`) up to (`end_line`, `end_column`). `safe` is `true` only when the value and the replacement spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit: apply those as they are. Check any other edit against `help` first; `clearr` → `clear` is not safe, and an ATT&CK id or an `invalid_ref` fix never is. See [`validate`](../cli/validate.md). |
 | `explain` | `opentide explain <code>`; the `explain` tool returns the same page |
 
 ## explain
@@ -282,6 +285,8 @@ What a diagnostic code means, an example, and how to fix it: the page `opentide 
 ```
 
 An unknown code returns `{"found": false, "code", "message", "suggestion"}`, with the closest code as `suggestion` (or `null`). An empty `code` returns `{"found": true, "codes": [{"code", "meaning"}, …]}`.
+
+One cause is one issue, here and in `validate_rule`: a dangling reference (`detection_model`, `objective.threats`, `threat.chaining[].vector`) is an `invalid_ref`, not also a `vocab_unknown`, with the value in `context.value`. `opentide explain <code>` says what each code means.
 
 ## validate_query
 
@@ -467,7 +472,7 @@ get_chaining(uuid=<rule>)                 → inspect related objects in chainin
 ## Agent guidelines
 
 1. Call `validation_report` before suggesting YAML edits, and again after each edit until `ok` is `true`.
-2. Apply `fix.edits` from the issue rather than guessing; `safe: true` edits need no review. Call `explain` for a code you do not know.
+2. Apply `fix.edits` from the issue rather than guessing; `safe: true` edits need no review, the others need a look at `help`. Call `explain` for a code you do not know.
 3. Use `search` before `get_chaining` when the UUID is unknown.
 4. Default to `dry_run=true` for `deploy_rule`; require explicit human approval for a real deploy. People review and merge changes.
 5. Never claim query validation for unsupported platforms. `validate_query` refuses unless `live` is true, and that call checks catalogue rules against the tenant; `run_query` is not implemented at all.

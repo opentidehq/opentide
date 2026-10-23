@@ -302,7 +302,7 @@ def test_explain_over_stdio(mcp_stdio: StdioClient) -> None:
 
 
 def test_validation_report_over_stdio_carries_diagnostic_fields(tmp_path: Path) -> None:
-    """A typo on disk comes back with its position, a safe fix and next actions."""
+    """A typo on disk comes back with its position, a fix and next actions."""
     repo = materialise_corpus(tmp_path / "corpus")
     rule = repo / "objects" / "rules" / "rule-0001-sentinel-kql.yaml"
     rule.write_text(
@@ -328,7 +328,7 @@ def test_validation_report_over_stdio_carries_diagnostic_fields(tmp_path: Path) 
         )
         issue = next(item for item in report["issues"] if item["code"] == "vocab_unknown")
         assert issue["line"] == issue["yaml_line"] + 1
-        assert issue["fix"]["safe"] is True
+        assert issue["fix"]["safe"] is False
         assert issue["fix"]["edits"][0]["replacement"] == "clear"
         assert issue["explain"] == "opentide explain vocab_unknown"
         assert report["next_actions"][0]["tool"] == "explain"
