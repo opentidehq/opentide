@@ -173,6 +173,9 @@ class LazyTyperGroup(TyperGroup):
         else:
             holder.command(spec.name, **panel)(target)
         command = typer.main.get_group(holder).commands[spec.name]
+        from opentide.cli.help import decorate
+
+        decorate(command, spec.name)
         self._loaded[spec.name] = command
         return command
 

@@ -6,7 +6,7 @@ import typer
 
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
-from opentide.cli.enums import DetectionPlatform, ValidateCheck
+from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, ValidateCheck, platform_help
 from opentide.cli.output import CommandResult, emit_result, emit_success, emit_usage_error
 from opentide.cli.services.validation import run_validate, validate_query_platform
 
@@ -59,7 +59,9 @@ def validate_group(
 @validate_app.command("query")
 def validate_query_cmd(
     ctx: typer.Context,
-    platform: DetectionPlatform = typer.Option(..., "--platform"),
+    platform: DetectionPlatform = typer.Option(
+        ..., "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    ),
     strategy: list[str] | None = typer.Option(None, "--strategy", help=QUERY_STRATEGY_HELP),
     plan: str | None = typer.Option(None, "--plan", hidden=True, help=REMOVED_PLAN_HELP),
     wide: bool = typer.Option(

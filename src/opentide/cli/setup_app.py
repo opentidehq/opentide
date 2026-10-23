@@ -10,7 +10,14 @@ from rich.markup import escape
 from typer._types import TyperChoice
 
 from opentide.cli.context import CliContext, get_context
-from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
+from opentide.cli.enums import (
+    PLATFORM_METAVAR,
+    CiPlatform,
+    DetectionPlatform,
+    McpHost,
+    SkillTarget,
+    platform_help,
+)
 from opentide.cli.output import emit, emit_deprecation, emit_error, emit_success
 from opentide.cli.services.setup.ci import CiSetupOptions, is_valid_branch_name, run_ci_setup
 from opentide.cli.services.setup.interactive import (
@@ -322,7 +329,8 @@ def setup_cmd(
     platform: list[DetectionPlatform] = typer.Option(
         [],
         "--platform",
-        help="Detection platforms — runs setup platforms step (repeatable)",
+        metavar=PLATFORM_METAVAR,
+        help=platform_help("Enable a detection platform (repeatable)"),
     ),
     ci: CiPlatform | None = typer.Option(None, "--ci"),
     staging: bool = typer.Option(True, "--staging/--no-staging"),
@@ -433,7 +441,8 @@ def setup_repo_cmd(
     platform: list[DetectionPlatform] = typer.Option(
         [],
         "--platform",
-        help="Detection platforms — writes enabled platform TOML (repeatable)",
+        metavar=PLATFORM_METAVAR,
+        help=platform_help("Enable a detection platform (repeatable)"),
     ),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:

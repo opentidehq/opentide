@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from opentide.cli.context import get_context
-from opentide.cli.enums import DetectionPlatform
+from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
 from opentide.cli.output import emit_success, emit_usage_error
 from opentide.cli.services.info import collect_info, render_info
 from opentide.cli.ui.contract import USAGE_MISSING_OPTION
@@ -16,7 +16,9 @@ from opentide.cli.ui.contract import USAGE_MISSING_OPTION
 # (``info coverage --technique T1059``) as a subcommand name.
 def info_cmd(
     ctx: typer.Context,
-    platform: DetectionPlatform | None = typer.Option(None, "--platform"),
+    platform: DetectionPlatform | None = typer.Option(
+        None, "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    ),
     section: str | None = typer.Argument(None),
     technique: str | None = typer.Option(None, "--technique"),
     strict: bool = typer.Option(

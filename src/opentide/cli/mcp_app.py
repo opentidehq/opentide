@@ -7,9 +7,10 @@ import typer
 mcp_app = typer.Typer(
     no_args_is_help=True,
     help=(
-        "Run the opentide MCP server on stdio. The editor owns the process: "
-        "stop is the host closing stdin, and reload is the host spawning this "
-        "command again. There is no reload or stop subcommand."
+        "Run the opentide MCP server for editors and agents\n\n"
+        "The server speaks on stdio. The editor owns the process: stop is the "
+        "host closing stdin, and reload is the host spawning this command "
+        "again. There is no reload or stop subcommand."
     ),
 )
 

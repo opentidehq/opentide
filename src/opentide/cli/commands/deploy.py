@@ -6,7 +6,7 @@ import typer
 
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
-from opentide.cli.enums import DetectionPlatform
+from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
 from opentide.cli.output import CommandResult, emit_error, emit_result
 from opentide.cli.services.deploy import run_deploy
 
@@ -26,7 +26,9 @@ deploy_app = typer.Typer(help="Rule deployment")
 @deploy_app.callback(invoke_without_command=True)
 def deploy_cmd(
     ctx: typer.Context,
-    platform: DetectionPlatform | None = typer.Option(None, "--platform"),
+    platform: DetectionPlatform | None = typer.Option(
+        None, "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    ),
     strategy: list[str] | None = typer.Option(None, "--strategy", help=DEPLOY_STRATEGY_HELP),
     all_files: bool = typer.Option(
         False,
@@ -137,7 +139,10 @@ def deploy_replay_state_cmd(
 
 @deploy_app.command("metadata", hidden=True)
 def deploy_metadata_cmd(
-    ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")
+    ctx: typer.Context,
+    platform: DetectionPlatform = typer.Option(
+        ..., "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    ),
 ) -> None:
     """Reserved for a future metadata deployment implementation."""
     cli = get_context(ctx)
