@@ -134,6 +134,7 @@ def test_validate_points_at_fix_when_safe_fixes_exist(tutorial: Path) -> None:
         "errors": 3,
         "warnings": 0,
         "files": 2,
+        "warning_files": 0,
         "fixable": 2,
     }
     assert payload["next_actions"] == [
@@ -206,6 +207,7 @@ def test_fix_reports_each_value_in_json(tutorial: Path) -> None:
         "errors": 1,
         "warnings": 0,
         "files": 1,
+        "warning_files": 0,
         "fixable": 0,
         "fixed": 2,
     }
