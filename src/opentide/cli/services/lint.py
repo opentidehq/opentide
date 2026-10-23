@@ -19,6 +19,7 @@ from opentide.cli.ui.diagnostics import (
     annotate,
     diagnostic_from_lint_finding,
 )
+from opentide.cli.ui.glyphs import glyph
 from opentide.core.io import describe_yaml_error, parse_yaml
 from opentide.documentation.markdown.links import slugify
 
@@ -367,4 +368,4 @@ def _outcome_line(findings: list[dict[str, object]], *, files: int, fixed: int, 
         return f"{_plural(files, 'file')} clean"
     touched = len({str(item.get("path")) for item in findings})
     line = f"{_plural(len(findings), 'finding')} in {_plural(touched, 'file')}"
-    return f"{line} · {fixed} fixed" if fixed else line
+    return f"{line} {glyph('separator')} {fixed} fixed" if fixed else line

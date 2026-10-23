@@ -14,16 +14,23 @@
 Diagnostics are grouped by file and ordered by line. Lines are Rich ``Text``
 printed with ``soft_wrap``, so a source line is never wrapped into the gutter
 and a path stays whole. The frame characters fall back to ASCII when the
-stream cannot encode them. In ``human`` mode the location is an OSC 8 link.
+stream cannot encode them, and any text the stream cannot encode (an emoji in
+a YAML comment on a cp1252 pipe) prints as ``?``. The underline is placed by
+terminal cell, so it stays under its value after a tab or a wide character.
+In ``human`` mode the location is an OSC 8 link.
 """
 
 from __future__ import annotations
 
+import codecs
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from urllib.parse import quote
 
+from rich.cells import cell_len
 from rich.console import Console
+from rich.style import Style
 from rich.text import Text
 
 from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, relative_path
@@ -58,12 +65,31 @@ def link_url(
     absolute = file_path if file_path.is_absolute() else Path.cwd() / file_path
     if scheme == "file":
         return absolute.as_uri()
-    target = absolute.as_posix()
+    # Percent-encoded like a file URI, so a space or a '#' cannot end the target.
+    target = quote(absolute.as_posix(), safe="/:")
     if line is not None:
         target += f":{line}" + (f":{column}" if column is not None else "")
     return (
         f"{scheme}://file/{target.lstrip('/')}" if os.name == "nt" else f"{scheme}://file{target}"
     )
+
+
+def encodable(text: str, encoding: str) -> str:
+    """*text* with each character *encoding* cannot write replaced by ``?``."""
+    try:
+        codecs.lookup(encoding)
+    except LookupError:
+        return text
+    return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+
+
+def underline_offset(source: str, column: int) -> str:
+    """Blanks that reach *column* in *source* as the terminal draws it.
+
+    Tabs are kept, so they expand to the same stop as in the source line, and
+    a wide character becomes as many spaces as the cells it takes.
+    """
+    return "".join(char if char == "\t" else " " * cell_len(char) for char in source[: column - 1])
 
 
 def display_path(diagnostic: Diagnostic, cwd: Path | None = None) -> str | None:
@@ -108,10 +134,14 @@ def diagnostic_lines(
 ) -> list[Text]:
     """The lines of one diagnostic's frame."""
     style = _SEVERITY_STYLE.get(diagnostic.severity, "bold")
+
+    def safe(text: str) -> str:
+        return encodable(text, encoding)
+
     header = Text()
     header.append(f"{diagnostic.severity}[{diagnostic.code}]", style=style)
     header.append(": ", style="bold")
-    header.append(diagnostic.message, style="bold")
+    header.append(safe(diagnostic.message), style="bold")
     lines = [header]
 
     source: str | None = None
@@ -139,7 +169,7 @@ def diagnostic_lines(
             if (links and diagnostic.file_path is not None)
             else None
         )
-        line.append(location, style=f"link {url}" if url else "")
+        line.append(safe(location), style=Style(link=url) if url else "")
         lines.append(line)
 
     if source is not None and diagnostic.line is not None:
@@ -151,18 +181,22 @@ def diagnostic_lines(
         )
         if previous is not None and previous.strip():
             row = gutter(str(diagnostic.line - 1))
-            row.append(" " + previous.rstrip())
+            row.append(" " + safe(previous.rstrip()))
             lines.append(row)
         row = gutter(str(diagnostic.line))
-        row.append(" " + source.rstrip())
+        row.append(" " + safe(source.rstrip()))
         lines.append(row)
         if diagnostic.column is not None:
-            length = max(1, (diagnostic.end_column or diagnostic.column + 1) - diagnostic.column)
+            # Measured on the text as printed: a replaced character is one cell.
+            shown = safe(source)
+            end = diagnostic.end_column or diagnostic.column + 1
+            marked = shown[diagnostic.column - 1 : end - 1].replace("\t", " ")
+            length = max(1, cell_len(marked) if marked else end - diagnostic.column)
             row = gutter()
-            row.append(" " + " " * (diagnostic.column - 1))
+            row.append(" " + underline_offset(shown, diagnostic.column))
             row.append(glyph("underline", encoding=encoding) * length, style=style)
             if diagnostic.label:
-                row.append(" " + diagnostic.label, style=style)
+                row.append(" " + safe(diagnostic.label), style=style)
             lines.append(row)
         if notes:
             lines.append(gutter())
@@ -175,7 +209,7 @@ def diagnostic_lines(
         )
         row.append(" ")
         row.append(f"{label}:", style=_NOTE_STYLE.get(label, "bold"))
-        row.append(" " + text)
+        row.append(" " + safe(text))
         lines.append(row)
     return lines
 

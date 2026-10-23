@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping, Sequence
+from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -17,6 +18,7 @@ from opentide.cli.ui.contract import (
     USAGE_INVALID_VALUE,
 )
 from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, annotate, diagnostics_from_issues
+from opentide.cli.ui.glyphs import glyph
 from opentide.core.logging.console import emit_section
 from opentide.registry.builder import parse_errors_reported_by_caller
 from opentide.registry.discovery import discover_workspace
@@ -101,8 +103,10 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "missing_uuid",
             "invalid_ref",
             "vocab_unknown",
+            "config_enum_unknown",
             "chaining_relation_unknown",
             "external_id_in_rule",
+            "external_id_shape",
             "deployment_state_uuid_mismatch",
             "deployment_state_platform",
             "deployment_state_shape",
@@ -126,6 +130,19 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
         }
     ),
 }
+
+#: Warning codes each check can report. They never fail the check's status.
+_CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
+    ValidateCheck.schema.value: frozenset({"deprecated_field", "platform_not_enabled"}),
+    ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_integration"}),
+}
+
+#: Every code a ``validate`` finding can carry. ``tests/test_cli/test_explain.py``
+#: requires an ``opentide explain`` page for each, and fails on a code emitted
+#: in the source but missing here.
+VALIDATION_CODES: frozenset[str] = frozenset(
+    {"scope_no_match"}.union(*_CHECK_ISSUE_CODES.values(), *_CHECK_WARNING_CODES.values())
+)
 
 _OBJECT_CHECKS = frozenset({ValidateCheck.uuid_format.value, ValidateCheck.schema.value})
 
@@ -218,18 +235,20 @@ def run_validate(
     :class:`Diagnostic` per issue and warning, for the code frames) and
     ``_summary``; the command pops both before rendering.
     """
-    # Each unreadable object file becomes a yaml_parse diagnostic, so the
-    # registry does not also log it.
-    with parse_errors_reported_by_caller():
+    file_list = list(files or [])
+    if file:
+        file_list.append(file)
+    scope = _build_scope(files=file_list or None, uuids=uuids, object_types=object_types)
+    checks = _checks_for(check)
+    # The schema check turns each unreadable object file into a yaml_parse or
+    # missing_uuid diagnostic, so the registry need not also log it. Any other
+    # check would not report the file at all: then the log line stays.
+    reported = (
+        parse_errors_reported_by_caller() if ValidateCheck.schema in checks else nullcontext()
+    )
+    with reported:
         ctx.apply_environment()
         _reset_validation_env()
-
-        file_list = list(files or [])
-        if file:
-            file_list.append(file)
-        scope = _build_scope(files=file_list or None, uuids=uuids, object_types=object_types)
-        checks = _checks_for(check)
-
         report = run_validation(scope=scope, checks=checks)
     if not report.ok:
         os.environ["VALIDATION_ERROR_RAISED"] = "1"
@@ -290,12 +309,27 @@ def _annotate_report(
 
 
 def _summary(report: ValidationReport, diagnostics: Sequence[Diagnostic]) -> dict[str, int]:
-    """Counts behind the outcome line."""
+    """Counts behind the outcome line.
+
+    ``files`` counts the files with an error; ``warning_files`` those with a
+    warning (a file can be in both).
+    """
+
+    def files_with(severity: str) -> int:
+        return len(
+            {
+                item.path
+                for item in diagnostics
+                if item.path is not None and item.severity == severity
+            }
+        )
+
     return {
         "objects": int(report.stats.get("objects_checked") or 0),
         "errors": len(report.errors),
         "warnings": len(report.warnings),
-        "files": len({item.path for item in diagnostics if item.path is not None}),
+        "files": files_with("error"),
+        "warning_files": files_with("warning"),
     }
 
 
@@ -306,22 +340,26 @@ def plural(count: int, noun: str) -> str:
 
 def validate_outcome_line(summary: Mapping[str, int], *, failed: bool, seconds: float) -> str:
     """``3 objects valid · 0.9s`` or ``2 errors in 1 file · 3 objects checked · 0.9s``."""
+    sep = f" {glyph('separator')} "
     objects = plural(summary.get("objects", 0), "object")
     errors, warnings = summary.get("errors", 0), summary.get("warnings", 0)
-    files = summary.get("files", 0)
     took = f"{seconds:.1f}s"
     if not failed and not summary.get("objects"):
         # A check that reads no object (id-uniqueness, cve, sharing-config).
-        return f"Validation passed · {took}"
+        return f"Validation passed{sep}{took}"
     if not failed:
         line = f"{objects} valid"
         if warnings:
-            line += f" · {plural(warnings, 'warning')}"
-        return f"{line} · {took}"
-    counted = plural(errors, "error") if errors else plural(warnings, "warning")
+            line += f"{sep}{plural(warnings, 'warning')}"
+        return f"{line}{sep}{took}"
+    # Under --strict a run can fail on warnings alone; count where they are.
+    if errors:
+        counted, files = plural(errors, "error"), summary.get("files", 0)
+    else:
+        counted, files = plural(warnings, "warning"), summary.get("warning_files", 0)
     where = f" in {plural(files, 'file')}" if files else ""
-    checked = f" · {objects} checked" if summary.get("objects") else ""
-    return f"{counted}{where}{checked} · {took}"
+    checked = f"{sep}{objects} checked" if summary.get("objects") else ""
+    return f"{counted}{where}{checked}{sep}{took}"
 
 
 def _exempt_warning_lines(report: ValidationReport) -> list[str]:

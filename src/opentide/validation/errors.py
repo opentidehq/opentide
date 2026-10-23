@@ -109,9 +109,8 @@ def merge_reference_findings(issues: list[ValidationIssue]) -> list[ValidationIs
 
     A reference field such as ``detection_model`` is also a vocabulary field
     whose values are the known object UUIDs, so one dangling UUID failed both
-    checks. The ``invalid_ref`` stays, and takes the vocabulary suggestion when
-    it has none of its own. A repeated ``invalid_ref`` for the same value is
-    dropped too.
+    checks. Every ``invalid_ref`` stays, one per occurrence of the value, and
+    takes the vocabulary suggestion when it has none of its own.
     """
     refs = {
         key for issue in issues if issue.code == "invalid_ref" and (key := _reference_key(issue))
@@ -120,17 +119,13 @@ def merge_reference_findings(issues: list[ValidationIssue]) -> list[ValidationIs
         return issues
     suggestions: dict[tuple[str, tuple[str, ...], str], str] = {}
     kept: list[ValidationIssue] = []
-    seen: set[tuple[str, tuple[str, ...], str]] = set()
     for issue in issues:
         key = _reference_key(issue)
-        if key is None or key not in refs or issue.code not in ("invalid_ref", "vocab_unknown"):
-            kept.append(issue)
-        elif issue.code == "vocab_unknown":
-            if issue.suggestion is not None:
+        if issue.code == "vocab_unknown" and key in refs:
+            if issue.suggestion is not None and key is not None:
                 suggestions.setdefault(key, issue.suggestion)
-        elif key not in seen:
-            seen.add(key)
-            kept.append(issue)
+            continue
+        kept.append(issue)
     return [
         issue.model_copy(update={"suggestion": suggestions[key]})
         if issue.code == "invalid_ref"

@@ -8,8 +8,11 @@ the diagnostic fields. Output is read with ANSI stripped, since CI forces colour
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -146,11 +149,17 @@ def test_a_dangling_reference_is_one_framed_finding(tutorial: Path) -> None:
         "explain": "opentide explain invalid_ref",
     }
     assert payload["message"] == "Validation failed"
-    assert payload["summary"] == {"objects": 3, "errors": 1, "warnings": 0, "files": 1}
+    assert payload["summary"] == {
+        "objects": 3,
+        "errors": 1,
+        "warnings": 0,
+        "files": 1,
+        "warning_files": 0,
+    }
     assert payload["failure"]["code"] == "issues_found"
 
 
-def test_a_vocabulary_typo_carries_a_safe_fix(tutorial: Path) -> None:
+def test_a_vocabulary_typo_carries_a_fix_for_review(tutorial: Path) -> None:
     _edit_rule(tutorial, "  tlp: clear\n", "  tlp: clearr\n")
     text = _text(_run(tutorial, "validate"))
     assert (
@@ -166,8 +175,10 @@ def test_a_vocabulary_typo_carries_a_safe_fix(tutorial: Path) -> None:
     (issue,) = _issues(_run(tutorial, "validate", json_output=True))
     assert issue["suggestion"] == "clear"
     assert issue["fix"] == {
-        "safe": True,
-        "edits": [{"line": 8, "column": 8, "end_column": 14, "replacement": "clear"}],
+        "safe": False,
+        "edits": [
+            {"line": 8, "column": 8, "end_line": 8, "end_column": 14, "replacement": "clear"}
+        ],
     }
 
 
@@ -212,3 +223,50 @@ def test_info_strict_says_why_it_fails(tutorial: Path) -> None:
     relaxed = _run(tutorial, "info")
     assert relaxed.exit_code == 0
     assert "! 0 rules · 1 threat · 1 objective · 1 load error\n" in _text(relaxed)
+
+
+def test_a_check_that_does_not_report_unreadable_files_still_logs_them(tutorial: Path) -> None:
+    """Only the schema check turns a broken file into a finding; others must not hide it."""
+    broken = tutorial / "objects" / "rules" / "broken.yaml"
+    broken.write_text("metadata: [oops\n", encoding="utf-8")
+    narrow = _text(_run(tutorial, "validate", "--check", "uuid-format"))
+    assert "objects/rules/broken.yaml" in narrow or str(broken) in narrow, narrow
+    assert "Malformed object yaml" in narrow
+    full = _text(_run(tutorial, "validate"))
+    assert "Malformed object yaml" not in full, "the schema check reports it once, as a frame"
+    assert "error[yaml_parse]" in full
+
+
+def test_an_ascii_stream_gets_ascii_separators(tutorial: Path) -> None:
+    clear_runtime_caches()
+    env = dict.fromkeys(_LEAKY_ENV) | {
+        "OPENTIDE_REPO_ROOT": str(tutorial),
+        "OPENTIDE_TIDE_WORKSPACE": str(tutorial),
+    }
+    result = CliRunner(charset="ascii").invoke(app, ["--repo", str(tutorial), "lint"], env=env)
+    assert result.exit_code == 0, result.output
+    assert result.output == "ok 3 files clean\n"
+
+
+def test_a_cp1252_pipe_prints_a_frame_with_an_emoji_in_the_file(tutorial: Path) -> None:
+    """Windows pipes default to cp1252: a source line it cannot write must not crash."""
+    _edit_rule(tutorial, "  tlp: clear\n", "  tlp: clearr  # \U0001f525 hot\n")
+    env = {key: value for key, value in os.environ.items() if key not in _LEAKY_ENV}
+    env |= {
+        "PYTHONIOENCODING": "cp1252",
+        "OPENTIDE_REPO_ROOT": str(tutorial),
+        "OPENTIDE_TIDE_WORKSPACE": str(tutorial),
+    }
+    env.pop("PYTHONUTF8", None)
+    result = subprocess.run(
+        [sys.executable, "-m", "opentide", "--repo", str(tutorial), "validate"],
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    stdout = result.stdout.decode("cp1252")
+    stderr = result.stderr.decode("cp1252", errors="replace")
+    assert result.returncode == 1, stdout + stderr
+    assert "Traceback" not in stderr
+    assert "8 |   tlp: clearr  # ? hot" in stdout
+    assert "  |        ^^^^^^ not in tlp::1.0" in stdout

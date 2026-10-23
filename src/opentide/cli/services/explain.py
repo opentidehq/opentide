@@ -38,7 +38,8 @@ def diagnostic_codes() -> list[str]:
 
 
 def load_page(code: str) -> ExplainPage | None:
-    """The page for *code*, or ``None`` when there is none."""
+    """The page for *code* (in any case), or ``None`` when there is none."""
+    code = code.strip().lower()
     if not code or code != Path(code).name:
         return None
     path = pages_root() / f"{code}.md"
