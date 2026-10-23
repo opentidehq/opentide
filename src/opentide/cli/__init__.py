@@ -92,15 +92,41 @@ def main() -> None:
         _print_version(f"opentide {__version__}\n")
         return
 
-    from opentide.cli.context import sync_typer_rendering
-    from opentide.cli.root import app
+    try:
+        from opentide.cli.context import sync_typer_rendering
+        from opentide.cli.root import app
 
-    # Here rather than at import: opentide.ci imports this package, and a host
-    # Typer app must keep its own rendering settings. Click parses root
-    # options, and exits on a bad one, before the eager callback runs.
-    options = argv[: argv.index("--")] if "--" in argv else argv
-    sync_typer_rendering(no_color="--no-color" in options or bool(os.getenv("NO_COLOR")))
-    app()
+        # Here rather than at import: opentide.ci imports this package, and a
+        # host Typer app must keep its own rendering settings. Click parses root
+        # options, and exits on a bad one, before the eager callback runs.
+        options = argv[: argv.index("--")] if "--" in argv else argv
+        sync_typer_rendering(no_color="--no-color" in options or bool(os.getenv("NO_COLOR")))
+        app()
+    except KeyboardInterrupt:
+        # Typer turns Ctrl-C inside a command into exit 130 itself; this is
+        # Ctrl-C while the CLI was still loading.
+        from opentide.cli.ui.crash import report_interrupt
+
+        raise SystemExit(report_interrupt()) from None
+    except Exception as error:
+        # SystemExit, typer.Exit and Click's usage errors never get here:
+        # Click's standalone mode turns them into an exit code first.
+        from opentide.cli.ui.crash import handle_crash
+
+        raise SystemExit(handle_crash(error, argv=argv, command=_command_path(argv))) from None
+
+
+def _command_path(argv: Sequence[str]) -> str:
+    """The command path *argv* names (``generate docs rules``), without argument values."""
+    try:
+        import typer
+
+        from opentide.cli.lazy import command_words
+        from opentide.cli.root import app
+
+        return " ".join(command_words(typer.main.get_command(app), argv))
+    except Exception:
+        return ""
 
 
 if __name__ == "__main__":
