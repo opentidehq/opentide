@@ -152,7 +152,7 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         for entry in IndexManager.load().get("parse_errors") or []
     )
     return Catalogue(
-        repo=Path(ctx.repo), entries=entries, coverage=coverage, load_errors=load_errors
+        repo=Path(ctx.repo).resolve(), entries=entries, coverage=coverage, load_errors=load_errors
     )
 
 
