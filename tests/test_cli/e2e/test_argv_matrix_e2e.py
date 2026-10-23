@@ -365,8 +365,9 @@ def test_setup_path_agreement_reads_dot_as_the_repo(
 def test_document_subcommand_warns_once(cli_runner, monkeypatch: pytest.MonkeyPatch) -> None:
     """The ``document`` group callback must not add its own warning to a subcommand's."""
     from opentide import cli as cli_module
+    from opentide.cli.commands import legacy
 
-    monkeypatch.setattr(cli_module, "_emit_docs", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(legacy, "_emit_docs", lambda *_args, **_kwargs: None)
     result = cli_runner.invoke(cli_module.app, ["document", "rules"])
     assert result.exit_code == 0, result.stdout + result.stderr
     output = result.stdout + result.stderr

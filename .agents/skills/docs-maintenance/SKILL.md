@@ -55,7 +55,7 @@ When modifying source, update docs in the **same PR**:
 
 | Source file | Doc target |
 |-------------|------------|
-| `src/opentide/cli/__init__.py` | `docs/cli/*.md` |
+| `src/opentide/cli/root.py`, `src/opentide/cli/commands/*.py` | `docs/cli/*.md` |
 | `src/opentide/cli/setup_app.py` | `docs/cli/setup.md`, `docs/usage/repository-setup.md` |
 | `src/opentide/mcp_server/server.py` | `docs/mcp/tools.md`, `docs/mcp/resources.md` |
 | `src/opentide/mcp_server/tools.py` | `docs/mcp/tools.md` |
