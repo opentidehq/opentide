@@ -11,7 +11,7 @@ Standard library and structlog only, so any module can import it.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 
 import structlog
@@ -38,7 +38,7 @@ def is_listening() -> bool:
 
 
 @contextmanager
-def listen(listener: StageListener) -> Iterator[None]:
+def listen(listener: StageListener) -> Generator[None, None, None]:
     """Send every stage reported inside this block to *listener*."""
     _listeners.append(listener)
     try:

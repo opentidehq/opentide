@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -221,7 +221,7 @@ def _scan_roots(workspace: Path, *extra: str | None) -> list[Path]:
 @contextmanager
 def generation_step(
     checklist: Checklist, phase: str, *, outputs: Sequence[str | None] = ()
-) -> Iterator[Step]:
+) -> Generator[Step, None, None]:
     """Run one generation phase as a checklist step that counts the files it wrote."""
     workspace = get_repo_root().resolve()
     watch = WrittenFiles(*_scan_roots(workspace, *outputs))

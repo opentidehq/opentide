@@ -178,9 +178,9 @@ def test_checklist_shows_engine_stages_on_the_running_step() -> None:
 
 def test_human_checklist_leaves_only_the_final_rows() -> None:
     console = _console(OutputMode.PLAIN)  # not a terminal: Live draws no frames
-    with Checklist(console, mode=OutputMode.HUMAN, quiet=False) as run:
-        with run.step("schemas", where=".opentide/schemas/") as step:
-            step.done(6)
+    checklist = Checklist(console, mode=OutputMode.HUMAN, quiet=False)
+    with checklist as run, run.step("schemas", where=".opentide/schemas/") as step:
+        step.done(6)
     text = console.export_text()
     assert len(text.splitlines()) == 1
     assert "6 files" in text

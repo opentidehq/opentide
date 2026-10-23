@@ -22,7 +22,7 @@ checklist's job; the command prints it from its result.
 from __future__ import annotations
 
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Sequence
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from types import TracebackType
@@ -265,7 +265,9 @@ class Checklist:
                 self.console.print(self._final())
 
     @contextmanager
-    def step(self, name: str, *, where: str | None = None, unit: str = "file") -> Iterator[Step]:
+    def step(
+        self, name: str, *, where: str | None = None, unit: str = "file"
+    ) -> Generator[Step, None, None]:
         """Run one step. Its row prints when the block ends, failed if it raised."""
         step = Step(name=name, where=where, unit=unit)
         self.current = step
