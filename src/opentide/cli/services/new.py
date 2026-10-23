@@ -50,6 +50,14 @@ _DEFAULTS: dict[str, Any] = {"tlp": "amber", "version": 1}
 #: What an empty free-text value becomes; a valid string nobody will mistake for content.
 _TEXT_PLACEHOLDER = "..."
 
+#: Keys a platform block needs beyond its model's required fields: Elastic's
+#: model validator wants a ``query`` for the default ``type: query``, and the
+#: Defender loader reads ``scope`` unconditionally.
+PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
+    "defender_for_endpoint": (("scope",), ("scope", "selection")),
+    "elastic": (("query",),),
+}
+
 _LINE = re.compile(r"^(?P<indent> *)(?P<hash>#?)(?P<dash>- ?)?(?P<rest>.*)$")
 _KEY = re.compile(r"^(?P<key>[A-Za-z_][\w.\-]*):(?:\s(?P<value>.*))?$")
 _PLAIN_SCALAR = re.compile(r"^[A-Za-z0-9_./:+-][A-Za-z0-9_./:+ -]*$")
@@ -715,6 +723,7 @@ def scaffold_object(
             if status:
                 values[(*block, "status")] = status
             wanted.extend([block, (*block, "enabled")])
+            wanted.extend((*block, *extra) for extra in PLATFORM_EXTRA_KEYS.get(platform, ()))
     if family == "objective" and options.threats:
         values[("objective", "threats")] = list(options.threats)
         wanted.append(("objective", "threats"))
