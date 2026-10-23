@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from opentide.cli.enums import DetectionPlatform, platform_label
+from opentide.cli.ui.glyphs import glyph
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.object_fields import as_body, matches_technique, object_platforms
@@ -86,7 +87,7 @@ def info_outcome(summary: dict[str, int]) -> str:
 
     parts = [counted(summary.get(family, 0), noun) for family, noun in _COUNT_NOUNS]
     parts.append(counted(summary.get("load_errors", 0), "load error"))
-    return " · ".join(parts)
+    return f" {glyph('separator')} ".join(parts)
 
 
 def render_info(payload: dict[str, Any], *, section: str | None = None) -> None:

@@ -71,13 +71,13 @@ Each entry of `report.issues` and `report.warnings` keeps its keys (`yaml_line` 
 | Key | Value |
 |-----|-------|
 | `path` | The file, relative to the workspace, with `/` separators. `null` when no file is at fault |
-| `line` | One-based line. `null` when unknown |
-| `column`, `end_column` | One-based columns of the value (of the key, for a block or a missing field); `end_column` is just past the last character. Best effort, `null` when unknown |
+| `line` | One-based line of what the frame points at. `null` when unknown. Not always `yaml_line + 1`: for a block value (a mapping or a list) it is the line of the key, where `yaml_line` is the block's first child; for a missing field it is the key of the mapping the field belongs in |
+| `column`, `end_column` | One-based columns of the value (of the key, for a block, a missing field or an unknown key); `end_column` is just past the last character. Columns count Unicode code points (`🔥` is one column), not UTF-16 code units. Best effort, `null` when unknown |
 | `help` | What to do, in prose (`did you mean 'clear'?`), or `null` |
-| `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_column", "replacement" }] }`: replace the text from `column` up to `end_column`. `safe` is `true` for a vocabulary typo, never for a reference |
+| `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_line", "end_column", "replacement" }] }`: replace the text from (`line`, `column`) up to (`end_line`, `end_column`). Every suggested value gets a fix. `safe` is `true` only when the two values spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit, so an ATT&CK id, a UUID or `clearr` → `clear` is left for a person or an agent to confirm. A reference fix is never safe |
 | `explain` | `opentide explain <code>` |
 
-`summary` counts `objects`, `errors`, `warnings` and `files`. A run that fails on its findings has `failure.code` `issues_found`.
+`summary` counts `objects`, `errors`, `warnings`, `files` (files with an error) and `warning_files` (files with a warning). A run that fails on its findings has `failure.code` `issues_found`.
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 

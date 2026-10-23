@@ -16,6 +16,7 @@ from opentide.cli.services.explain import (
     load_page,
     reference_markdown,
 )
+from opentide.cli.services.validation import VALIDATION_CODES
 from opentide.cli.ui.diagnostics import LINT_CODES
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -78,9 +79,34 @@ def test_the_scan_finds_the_codes_it_protects() -> None:
     } <= codes
 
 
-def test_every_emitted_code_has_a_page() -> None:
-    missing = sorted(emitted_codes() - set(diagnostic_codes()))
+#: Every code a finding of ``validate`` or ``lint`` can carry, from the tables
+#: that decide each check's status.
+REGISTERED = VALIDATION_CODES | set(LINT_CODES.values())
+
+
+def test_every_registered_code_has_a_page() -> None:
+    missing = sorted(REGISTERED - set(diagnostic_codes()))
     assert not missing, f"add src/opentide/data/diagnostics/<code>.md for: {missing}"
+
+
+def test_every_code_in_the_source_is_registered() -> None:
+    """The scan is the safety net: a new code must be in the check table too."""
+    unregistered = sorted(emitted_codes() - REGISTERED)
+    assert not unregistered, (
+        "register these codes in _CHECK_ISSUE_CODES or _CHECK_WARNING_CODES "
+        f"(src/opentide/cli/services/validation.py): {unregistered}"
+    )
+
+
+def test_the_table_covers_what_the_scan_cannot_see() -> None:
+    """``code="missing_field" if … else "name_invalid"`` hides the second code from the scan."""
+    assert "name_invalid" in REGISTERED
+    assert "name_invalid" in diagnostic_codes()
+
+
+def test_explain_ignores_case() -> None:
+    page = load_page("VOCAB_UNKNOWN ")
+    assert page is not None and page.code == "vocab_unknown"
 
 
 @pytest.mark.parametrize("code", diagnostic_codes())
@@ -101,7 +127,7 @@ def test_the_reference_page_is_generated_from_the_pages() -> None:
     )
 
 
-@pytest.mark.parametrize("code", ["", "../README", "vocab_unknown.md", "nope"])
+@pytest.mark.parametrize("code", ["", "../README", "vocab_unknown.md", "nope", "../VOCAB_UNKNOWN"])
 def test_only_a_page_name_loads(code: str) -> None:
     assert load_page(code) is None
 

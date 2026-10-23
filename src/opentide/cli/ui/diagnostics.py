@@ -6,9 +6,18 @@ and merged into the JSON entry it came from by :func:`annotate`, which adds
 keys and never changes one. See "Diagnostics" in
 ``docs/internal/cli-experience.md``.
 
-Positions are 1-based. ``end_column`` is the column just after the last
-character, so ``end_column - column`` is the length of the span, and a fix
-edit replaces the text from ``column`` up to ``end_column``.
+Positions are 1-based. Columns count Unicode code points, as Python
+indexes a ``str``: ``🔥`` is one column. A SARIF or LSP consumer that wants
+UTF-16 code units converts (SARIF ``columnKind: "unicodeCodePoints"`` says
+it as is). ``end_column`` is the column just after the last character, so
+``end_column - column`` is the length of a one-line span, and an edit
+replaces the text from (``line``, ``column``) up to (``end_line``,
+``end_column``).
+
+``line`` is where the frame points, which is not always ``yaml_line + 1``:
+for a block value (a mapping or a list) it is the line of its key, while
+``yaml_line`` is the block's first child. For a missing field it is the key
+of the mapping the field belongs in.
 
 Kept free of Rich and Typer. The YAML parsers load only when a position is
 looked up.
@@ -16,7 +25,7 @@ looked up.
 
 from __future__ import annotations
 
-import difflib
+import re
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,9 +43,9 @@ DIAGNOSTIC_FIELDS = ("path", "line", "column", "end_column", "help", "fix", "exp
 #: Codes whose ``suggestion`` is a replacement value for the one at fault.
 VALUE_SUGGESTION_CODES = frozenset({"vocab_unknown", "invalid_ref", "chaining_relation_unknown"})
 
-#: A suggested value at least this similar to the one written is a typo fix,
-#: safe to apply without reading it. Below it, a person or an agent decides.
-SAFE_FIX_SIMILARITY = 0.8
+#: Codes whose fix may be ``safe``. A reference fix never is: its suggestion
+#: is a fuzzy match on an object's name.
+SAFE_FIX_CODES = frozenset({"vocab_unknown", "chaining_relation_unknown"})
 
 #: Lint finding codes, by what the finding is about.
 LINT_CODES = {
@@ -54,17 +63,27 @@ def explain_command(code: str) -> str:
 
 @dataclass(frozen=True)
 class TextEdit:
-    """Replace the text of *line* from *column* up to *end_column* with *replacement*."""
+    """Replace the text from (*line*, *column*) up to (*end_line*, *end_column*).
+
+    Columns are 1-based Unicode code points; *end_column* is exclusive.
+    *end_line* defaults to *line*: an edit within one line.
+    """
 
     line: int
     column: int
     end_column: int
     replacement: str
+    end_line: int | None = None
+
+    @property
+    def last_line(self) -> int:
+        return self.line if self.end_line is None else self.end_line
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "line": self.line,
             "column": self.column,
+            "end_line": self.last_line,
             "end_column": self.end_column,
             "replacement": self.replacement,
         }
@@ -83,7 +102,11 @@ class Fix:
 
 @dataclass(frozen=True)
 class Diagnostic:
-    """One finding, in the shape every renderer reads."""
+    """One finding, in the shape every renderer reads.
+
+    ``line``, ``column`` and ``end_column`` follow the module docstring: 1-based,
+    code points, ``end_column`` exclusive, a block value at its key.
+    """
 
     code: str
     severity: Severity
@@ -102,6 +125,8 @@ class Diagnostic:
     label: str | None = None
     #: Further ``(label, text)`` lines, such as ``("expected", "…")``.
     notes: tuple[tuple[str, str], ...] = ()
+    #: The object the finding is about, when one is.
+    object_uuid: str | None = None
 
     @property
     def explain(self) -> str:
@@ -125,6 +150,7 @@ class Diagnostic:
             "code": self.code,
             "severity": self.severity,
             "message": self.message,
+            "object_uuid": self.object_uuid,
             "field_path": list(self.field_path),
             **self.fields(),
         }
@@ -170,21 +196,45 @@ class Span:
     end_column: int
     #: The text inside the span, unquoted.
     text: str = ""
+    #: ``False`` when the path stopped short of a missing key: the span is the
+    #: deepest key that exists.
+    found: bool = True
+
+
+#: The line breaks YAML counts. ``str.splitlines`` also breaks on U+2028,
+#: U+0085 and others, which YAML keeps inside a scalar.
+_YAML_LINE_BREAK = re.compile(r"\r\n|\r|\n")
+
+
+def split_yaml_lines(text: str) -> list[str]:
+    """*text* split the way YAML numbers its lines."""
+    lines = _YAML_LINE_BREAK.split(text)
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 @dataclass
 class SourceFiles:
     """Reads each file once, for every diagnostic that points into it."""
 
+    _texts: dict[Path, str | None] = field(default_factory=dict)
     _lines: dict[Path, list[str] | None] = field(default_factory=dict)
     _documents: dict[Path, Any] = field(default_factory=dict)
 
+    def text(self, path: Path) -> str | None:
+        if path not in self._texts:
+            try:
+                with path.open(encoding="utf-8", newline="") as handle:
+                    self._texts[path] = handle.read()
+            except (OSError, UnicodeDecodeError):
+                self._texts[path] = None
+        return self._texts[path]
+
     def lines(self, path: Path) -> list[str] | None:
         if path not in self._lines:
-            try:
-                self._lines[path] = path.read_text(encoding="utf-8").splitlines()
-            except (OSError, UnicodeDecodeError):
-                self._lines[path] = None
+            text = self.text(path)
+            self._lines[path] = None if text is None else split_yaml_lines(text)
         return self._lines[path]
 
     def line(self, path: Path, number: int) -> str | None:
@@ -206,37 +256,52 @@ class SourceFiles:
 
         from opentide.core.io import describe_yaml_error, parse_yaml
 
-        lines = self.lines(path)
-        if lines is None:
+        text = self.text(path)
+        if text is None:
             return None
         try:
-            parse_yaml("\n".join(lines))
+            parse_yaml(text)
         except yaml.YAMLError as exc:
             return describe_yaml_error(exc)
         return None
 
-    def span(self, path: Path, field_path: Sequence[str], value: str | None = None) -> Span | None:
+    def span(
+        self,
+        path: Path,
+        field_path: Sequence[str],
+        value: str | None = None,
+        *,
+        occurrence: int = 0,
+        at_key: bool = False,
+    ) -> Span | None:
         """The value at *field_path*; its key when the value is a block or empty.
 
         When the path stops short of a missing key, the deepest key that exists
-        is returned, so "field required" points at the mapping it belongs in.
-        *value* picks the list item when the path names a whole list.
+        is returned with ``found=False``, so "field required" points at the
+        mapping it belongs in. *value* picks the list item when the path names
+        a whole list, its *occurrence*-th one when it repeats. *at_key* points
+        at the key even when the value is a scalar.
         """
         document = self._document(path)
         if document is None or not field_path:
             return None
         node, parent, key = document, None, None
+        found = True
         for part in field_path:
             child = _child(node, part)
             if child is _MISSING:
+                found = False
                 break
             node, parent, key = child, node, part
         if parent is None or key is None:
             return None
-        if isinstance(node, list) and value is not None and value in node:
-            parent, key, node = node, str(node.index(value)), value
+        if found and isinstance(node, list) and value is not None:
+            indexes = [index for index, item in enumerate(node) if item == value]
+            if indexes:
+                index = indexes[min(occurrence, len(indexes) - 1)]
+                parent, key, node = node, str(index), value
         position = _value_position(parent, key)
-        if position is not None and not isinstance(node, (dict, list)):
+        if found and not at_key and position is not None and not isinstance(node, (dict, list)):
             span = self._token(path, *position)
             if span is not None:
                 return span
@@ -249,9 +314,11 @@ class SourceFiles:
             return None
         length = len(key) if isinstance(parent, dict) else 1
         if isinstance(parent, dict):
-            found = text.find(key, column)
-            column = found if found >= 0 else column
-        return Span(line + 1, column + 1, column + 1 + length, text[column : column + length])
+            located = text.find(key, column)
+            column = located if located >= 0 else column
+        return Span(
+            line + 1, column + 1, column + 1 + length, text[column : column + length], found
+        )
 
     def _token(self, path: Path, line: int, column: int) -> Span | None:
         text = self.line(path, line + 1)
@@ -340,13 +407,51 @@ _REFERENCE_LISTINGS = {
 }
 
 
+_IGNORABLE = re.compile(r"[\s_\-]+")
+
+
+def is_safe_replacement(code: str, value: str, suggestion: str) -> bool:
+    """Whether replacing *value* with *suggestion* is certainly what the author meant.
+
+    Only when the two spell the same word: they differ in case, whitespace,
+    ``-`` or ``_`` alone, so no second candidate can be closer. Never for a
+    value with a digit, which is how identifiers look (``T1059``, a UUID, a
+    CVE): one changed character there is another identifier, not a typo.
+    """
+    if code not in SAFE_FIX_CODES or value == suggestion:
+        return False
+    if any(char.isdigit() for char in value + suggestion):
+        return False
+    return _IGNORABLE.sub("", value).casefold() == _IGNORABLE.sub("", suggestion).casefold()
+
+
 def _value_fix(code: str, value: str, suggestion: str, span: Span | None) -> Fix | None:
     """Replace *value* with *suggestion* where it is written; ``None`` if it is not there."""
-    if span is None or span.text != value or value == suggestion:
+    if span is None or not span.found or span.text != value or value == suggestion:
         return None
-    similarity = difflib.SequenceMatcher(None, value.casefold(), suggestion.casefold()).ratio()
-    safe = code != "invalid_ref" and similarity >= SAFE_FIX_SIMILARITY
+    safe = is_safe_replacement(code, value, suggestion)
     return Fix(safe, (TextEdit(span.line, span.column, span.end_column, suggestion),))
+
+
+def _yaml_parse_frame(
+    file_path: Path, sources: SourceFiles
+) -> tuple[str, Span, tuple[tuple[str, str], ...]] | None:
+    """Message, span and notes of a file that does not parse, read from the file itself.
+
+    ``validate`` and ``lint`` render it the same way: the problem in the
+    message, the parser's position as the span, its context as a note.
+    """
+    problem = sources.yaml_problem(file_path)
+    if problem is None or problem.line is None or problem.column is None:
+        return None
+    end_column = problem.end_column or problem.column + 1
+    span = Span(problem.line, problem.column, end_column)
+    notes = (("note", note),) if (note := problem.context_note) else ()
+    return f"Could not parse object YAML: {problem.problem}", span, notes
+
+
+#: ``schema_validation`` messages about a key rather than its value.
+_KEY_ERRORS = ("Extra inputs are not permitted",)
 
 
 def _issue_label(issue: ValidationIssue) -> str | None:
@@ -368,25 +473,41 @@ def _issue_value(issue: ValidationIssue) -> str | None:
 
 
 def diagnostic_from_issue(
-    issue: ValidationIssue, *, workspace: Path | None, sources: SourceFiles
+    issue: ValidationIssue,
+    *,
+    workspace: Path | None,
+    sources: SourceFiles,
+    occurrence: int = 0,
 ) -> Diagnostic:
-    """A validation issue as a diagnostic, with its position read from the file."""
+    """A validation issue as a diagnostic, with its position read from the file.
+
+    *occurrence* is how many earlier issues reported the same value in the
+    same list, so a value that repeats is pointed at each time it is written.
+    """
     file_path = issue.file_path
     value = _issue_value(issue)
     message = issue.message
     notes: list[tuple[str, str]] = []
+    label = _issue_label(issue)
     line = None if issue.yaml_line is None else issue.yaml_line + 1
     span: Span | None = None
     if file_path is not None and issue.code == "yaml_parse":
-        problem = sources.yaml_problem(file_path)
-        if problem is not None and problem.line is not None and problem.column is not None:
-            message = f"Could not parse object YAML: {problem.problem}"
-            span = Span(problem.line, problem.column, problem.column + 1)
-            if note := problem.context_note:
-                notes.append(("note", note))
+        frame = _yaml_parse_frame(file_path, sources)
+        if frame is not None:
+            message, span, parse_notes = frame
+            notes.extend(parse_notes)
     elif file_path is not None and issue.field_path:
         # A block's yaml_line is its first child; the frame points at its key.
-        span = sources.span(file_path, issue.field_path, value)
+        at_key = issue.code == "schema_validation" and issue.message.startswith(_KEY_ERRORS)
+        span = sources.span(
+            file_path, issue.field_path, value, occurrence=occurrence, at_key=at_key
+        )
+    if issue.code == "schema_validation" and issue.field_path:
+        # The schema's message ("Field required") does not say which field.
+        message = f"{'.'.join(issue.field_path)}: {message}"
+        if span is not None and not span.found:
+            missing, parent = issue.field_path[-1], ".".join(issue.field_path[:-1])
+            label = f"missing field {missing!r} in {parent}"
     if span is not None:
         line = span.line
     help_text = issue.suggestion
@@ -416,16 +537,29 @@ def diagnostic_from_issue(
         field_path=tuple(issue.field_path),
         help=help_text,
         fix=fix,
-        label=_issue_label(issue),
+        label=label,
         notes=tuple(notes),
+        object_uuid=issue.object_uuid or None,
     )
 
 
 def diagnostics_from_issues(
     issues: Iterable[ValidationIssue], *, workspace: Path | None, sources: SourceFiles | None = None
 ) -> list[Diagnostic]:
+    """One diagnostic per issue, in order. A value repeated in a list is found each time."""
     sources = sources or SourceFiles()
-    return [diagnostic_from_issue(issue, workspace=workspace, sources=sources) for issue in issues]
+    seen: dict[tuple[object, ...], int] = {}
+    diagnostics: list[Diagnostic] = []
+    for issue in issues:
+        key = (issue.code, issue.file_path, issue.field_path, _issue_value(issue))
+        occurrence = seen.get(key, 0)
+        seen[key] = occurrence + 1
+        diagnostics.append(
+            diagnostic_from_issue(
+                issue, workspace=workspace, sources=sources, occurrence=occurrence
+            )
+        )
+    return diagnostics
 
 
 # --------------------------------------------------------------------------
@@ -456,6 +590,11 @@ def diagnostic_from_lint_finding(
         if text is not None and key and (found := text.find(key)) >= 0:
             column, end_column = found + 1, found + 1 + len(key)
     notes: list[tuple[str, str]] = []
+    message = str(finding.get("message", ""))
+    if code == LINT_CODES["parse"] and (frame := _yaml_parse_frame(file_path, sources)):
+        message, span, parse_notes = frame
+        line, column, end_column = span.line, span.column, span.end_column
+        notes.extend(parse_notes)
     help_text: str | None = None
     expected = finding.get("expected")
     if code == LINT_CODES["filename"] and expected and finding.get("fixed") is not True:
@@ -471,7 +610,7 @@ def diagnostic_from_lint_finding(
     return Diagnostic(
         code=code,
         severity=_LINT_SEVERITY.get(str(finding.get("severity")), "warning"),
-        message=str(finding.get("message", "")),
+        message=message,
         path=path,
         file_path=file_path,
         line=line,
@@ -480,4 +619,5 @@ def diagnostic_from_lint_finding(
         field_path=field_path,
         help=help_text,
         notes=tuple(notes),
+        object_uuid=str(finding["uuid"]) if finding.get("uuid") else None,
     )
