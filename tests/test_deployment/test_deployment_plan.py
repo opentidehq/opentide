@@ -417,9 +417,10 @@ def test_make_deploy_plan_names_the_rule_files_in_subfolders(
         "files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): "
         + ", ".join(nested)
     ]
+    # Returned in `warnings`, so logged once more only at DEBUG.
     assert _skipped_subfolder_logs(plan_log) == [
         (
-            "info",
+            "debug",
             {
                 "count": 2,
                 "files": nested,

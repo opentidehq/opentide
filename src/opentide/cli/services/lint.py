@@ -12,6 +12,7 @@ import structlog
 import yaml
 
 from opentide.cli.enums import LintCheck
+from opentide.cli.ui.contract import NextAction
 from opentide.core.io import parse_yaml
 from opentide.core.logging.config import get_stdout_console
 from opentide.documentation.markdown.links import slugify
@@ -287,7 +288,10 @@ def run_lint(
         status = "issues"
     else:
         status = "completed"
-    return {
+    renamable = sum(
+        1 for item in findings if item.get("expected") and item.get("fixed") is not True
+    )
+    result: dict[str, Any] = {
         "message": ("Catalogue lint found issues" if findings else "Catalogue lint passed"),
         "path": str(target),
         "checks": [item.value for item in selected],
@@ -297,6 +301,11 @@ def run_lint(
         "status": status,
         "_exit_code": 1 if status == "failed" else 0,
     }
+    if renamable:
+        result["_next_actions"] = [
+            NextAction("opentide lint --fix", f"rename {renamable} file(s) to match their names")
+        ]
+    return result
 
 
 def render_findings(findings: list[dict[str, object]]) -> None:

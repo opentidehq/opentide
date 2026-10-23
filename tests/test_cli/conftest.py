@@ -115,6 +115,17 @@ def mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+#: Keys every ``--json`` document carries (docs/cli/json-output.md).
+ENVELOPE_KEYS = frozenset(
+    {"schema_version", "command", "duration_ms", "exit_code", "summary", "next_actions", "failure"}
+)
+
+
+def without_envelope(payload: dict[str, Any]) -> dict[str, Any]:
+    """*payload* without the envelope keys, for pinning a command's own document."""
+    return {key: value for key, value in payload.items() if key not in ENVELOPE_KEYS}
+
+
 def parse_cli_json(result: Result) -> dict[str, Any]:
     text = result.stdout.strip()
     assert text, "expected JSON on stdout"

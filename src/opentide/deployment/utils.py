@@ -149,7 +149,7 @@ def _report_nested_rules(nested: tuple[str, ...], warnings: list[str] | None) ->
         logger.warning("deploy_nested_rules_skipped", **fields)
         return
     # The caller prints the message: a warning-level log would print it twice.
-    logger.info("deploy_nested_rules_skipped", **fields)
+    logger.debug("deploy_nested_rules_skipped", **fields)
     warnings.append(_nested_rules_warning(nested))
 
 
@@ -294,7 +294,7 @@ def _refuse_external_ids(
     error = legacy_key_error(uuid, data)
     if error is None:
         return False
-    report_failure(error, object_uuid=uuid, platform="*")
+    report_failure(error, object_uuid=uuid, platform="*", reported=warnings is not None)
     if warnings is not None:
         warnings.append(f"{error} -- {rule} was not deployed to any platform")
     return True

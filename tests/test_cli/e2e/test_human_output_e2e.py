@@ -50,7 +50,7 @@ _LEAKY_ENV = (
 _GENERIC_MESSAGES = {"Completed successfully"}
 
 #: Top-level string fields that hold data for scripts rather than prose for a reader.
-_DATA_FIELDS = frozenset({"path", "repo", "workspace", "version", "status"})
+_DATA_FIELDS = frozenset({"path", "repo", "workspace", "version", "status", "command"})
 
 _RULE = "00000000-0000-4000-8003-000000000001"
 _THREAT = "00000000-0000-4000-8001-000000000001"
@@ -177,7 +177,7 @@ def test_live_validation_with_a_broken_sdk_prints_the_advice(tutorial: Path) -> 
     uncomment_tenants(tutorial / ".opentide/configurations/platforms/sentinel.toml")
     with _without_azure():
         output = _human(tutorial, "validate", "query", "--platform", "sentinel", "--live", "--wide")
-    assert "advice: reinstall opentide: pip install --force-reinstall opentide" in output
+    assert "help: reinstall opentide: pip install --force-reinstall opentide" in output
     assert "opentide[" not in output
 
 
@@ -211,8 +211,8 @@ def test_info_sections_render_their_payload(
 
 def test_info_rejects_an_unknown_section(tutorial: Path) -> None:
     result = _run(tutorial, "info", "platforms", json_output=False)
-    assert result.exit_code == 1
-    assert "Unknown info section: platforms" in result.output
+    assert result.exit_code == 2
+    assert "error: Unknown info section: platforms" in result.output
 
 
 # --------------------------------------------------------------------------

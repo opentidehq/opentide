@@ -128,16 +128,17 @@ def test_server_main_forces_json_logging_after_cli_init(
     """The root callback installs Rich logging. start must replace it before run."""
     init_logging(LoggingConfig(json_output=False, plain=False), force=True)
 
-    def fake_run(*, transport: str) -> None:
-        assert transport == "stdio"
+    async def fake_serve() -> None:
         logging.getLogger("opentide.mcp.stdio").warning("mcp_ready")
 
-    monkeypatch.setattr("opentide.mcp_server.server.mcp.run", fake_run)
+    monkeypatch.setattr("opentide.mcp_server.server.serve_stdio", fake_serve)
+    from opentide.cli.ui.mode import OutputMode, get_mode
     from opentide.core.logging.config import current_config
     from opentide.mcp_server.server import main as serve
 
     try:
         serve()
+        assert get_mode() is OutputMode.MCP
         assert current_config().json_output is True
         assert current_config().plain is True
         err = capsys.readouterr().err
@@ -146,3 +147,30 @@ def test_server_main_forces_json_logging_after_cli_init(
     line = next(item for item in err.splitlines() if "mcp_ready" in item)
     payload = json.loads(line)
     assert payload["event"] == "mcp_ready"
+
+
+_STRAY_WRITERS = """
+import subprocess, sys
+from opentide.mcp_server.server import reserve_stdout
+
+with reserve_stdout() as rpc:
+    print("stray print")
+    sys.stdout.flush()
+    subprocess.run([sys.executable, "-c", "print('child process')"], check=True)
+    rpc.write('{"jsonrpc": "2.0"}\\n')
+print("after the server")
+"""
+
+
+def test_reserve_stdout_sends_every_other_writer_to_stderr() -> None:
+    """A print, a Rich console or a child process must not corrupt a JSON-RPC frame."""
+    done = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", _STRAY_WRITERS],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    assert done.stdout == '{"jsonrpc": "2.0"}\nafter the server\n'
+    assert "stray print" in done.stderr
+    assert "child process" in done.stderr

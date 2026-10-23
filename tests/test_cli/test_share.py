@@ -123,9 +123,13 @@ def test_unknown_target_and_unconfirmed_delete_are_preflight(
     _write_sharing(tide_corpus_repo)
     monkeypatch.setenv("MISP_LAB_KEY", KEY)
     monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
-    unknown = invoke_cli("share", "push", "--target", "missing", repo=tide_corpus_repo)
-    assert unknown.exit_code == 1
-    assert "No sharing target matched" in unknown.stdout
+    unknown = invoke_cli("share", "push", "--target", "labb", repo=tide_corpus_repo)
+    assert unknown.exit_code == 2
+    failure = json.loads(unknown.stdout)["failure"]
+    assert failure["code"] == "usage_invalid_choice"
+    assert failure["argument"] == "--target"
+    assert failure["suggestion"] == "lab"
+    assert "Unknown sharing target 'labb'" in failure["message"]
     assert _Persistent.events == []
     unconfirmed = invoke_cli(
         "share", "retract", "--delete", "--type", "objective", repo=tide_corpus_repo
@@ -242,7 +246,8 @@ def test_human_tables_and_retract(
     empty = invoke_cli(
         "share", "status", "--target", "missing", repo=tide_corpus_repo, json_output=False
     )
-    assert empty.exit_code == 1
+    assert empty.exit_code == 2
+    assert "error: Unknown sharing target 'missing'" in empty.stderr
 
     removed = invoke_cli(
         "share",
@@ -474,8 +479,8 @@ def test_changed_stops_before_git_or_http(
         repo=tide_corpus_repo,
         extra_env=_GITHUB_PUSH,
     )
-    assert unknown.exit_code == 1
-    assert json.loads(unknown.stdout)["preflight"] == "scope_no_match"
+    assert unknown.exit_code == 2
+    assert json.loads(unknown.stdout)["failure"]["code"] == "usage_invalid_choice"
 
     _write_sharing(tide_corpus_repo, enabled=False)
     idle = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)

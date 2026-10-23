@@ -231,7 +231,9 @@ exclude = [
     "src/opentide/documentation",
     "src/opentide/extraction",
     "src/opentide/export",
-    "src/opentide/cli",
+    # Everything in the CLI but the output contract, which is checked.
+    "src/opentide/cli/*",
+    "!src/opentide/cli/ui",
     "src/opentide/deployment",
     "src/opentide/platforms/crowdstrike",
     "src/opentide/platforms/defender_for_endpoint",

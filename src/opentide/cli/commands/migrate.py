@@ -111,4 +111,5 @@ def migrate_vocab_scope_cmd(
             "for each by hand, then re-run. Pass --force to treat this as success."
         )
         payload["_exit_code"] = 2
+        payload["_failure_code"] = "needs_human_decision"
     emit_success(cli, payload)

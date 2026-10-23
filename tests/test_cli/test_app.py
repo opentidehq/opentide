@@ -312,8 +312,12 @@ def test_info_rules_section_json() -> None:
 
 def test_info_rejects_unknown_section() -> None:
     result = runner.invoke(app, ["--json", "info", "mystery"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     assert "Unknown info section" in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["error"] == payload["message"]
+    assert payload["failure"]["code"] == "usage_invalid_choice"
+    assert payload["failure"]["argument"] == "section"
 
 
 def test_deploy_metadata_json(monkeypatch: pytest.MonkeyPatch) -> None:

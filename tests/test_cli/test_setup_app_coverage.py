@@ -361,9 +361,10 @@ def test_json_refuses_the_interactive_wizard(
 
     result = runner.invoke(app, ["--json", *command, str(tmp_path)])
 
-    assert result.exit_code == 1, f"{label}: {result.stdout}"
+    assert result.exit_code == 2, f"{label}: {result.stdout}"
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
+    assert payload["failure"]["code"] == "usage_needs_input"
     assert "--json" in payload["message"]
     assert "--yes" in payload["message"]
 
@@ -375,8 +376,9 @@ def test_json_refuses_to_prompt_before_writing(tmp_path: Path) -> None:
         ["--json", "setup", "--platform", "sentinel", "--path", str(tmp_path)],
     )
 
-    assert result.exit_code == 1, result.stdout
+    assert result.exit_code == 2, result.stdout
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
+    assert payload["failure"]["code"] == "usage_needs_input"
     assert "--yes" in payload["message"]
     assert not (tmp_path / "objects").exists()

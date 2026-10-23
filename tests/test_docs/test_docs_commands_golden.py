@@ -345,6 +345,13 @@ CLI_OUTPUT_DIRS = (DOCS / "cli", DOCS / "usage")
         ("  WARNING rule has no author", True),
         ("DEPRECATED opentide x; use opentide y.", True),
         ("FATAL: Validation failed", True),
+        ("✓ Full generation pipeline completed", True),
+        ("! Catalogue lint found issues", True),
+        ("error: Validation failed", True),
+        ("  warning: rule has no author", True),
+        ("Skipped: nothing to deploy", True),
+        ("→ opentide lint --fix", True),
+        ("!important", False),
         ("== Documentation generation ==", True),
         ("OKAY", False),
         ("status: STAGING", False),
@@ -475,13 +482,26 @@ def test_every_documented_command_resolves(command: DocCommand) -> None:
 
 
 @pytest.mark.parametrize(
+    "argv",
+    [
+        ("validate", "--json"),
+        ("setup", "--json", "repo"),
+        ("validate", "query", "--platform", "sentinel", "--quiet", "--no-color", "--debug"),
+    ],
+)
+def test_resolution_accepts_root_flags_after_the_command(argv: tuple[str, ...]) -> None:
+    """``--json`` and the other boolean root flags are hoisted from anywhere before ``--``."""
+    assert resolve(argv) == []
+
+
+@pytest.mark.parametrize(
     ("argv", "fragment"),
     [
         # #202: emitted into CI templates, never registered as a command.
         (("explorer", "build"), "no subcommand 'explorer'"),
-        # #257: --json lives on the root callback only.
-        (("validate", "--json"), "no option '--json'"),
-        (("setup", "--json", "repo"), "no option '--json'"),
+        # Only the boolean root flags are hoisted; value options stay on the root.
+        (("validate", "--repo", "."), "no option '--repo'"),
+        (("validate", "--jsn"), "no option '--jsn'"),
         # A flag that never existed must not quietly pass.
         (("validate", "--strict", "--make-it-work"), "no option '--make-it-work'"),
         (("generate", "nonsense"), "no subcommand 'nonsense'"),

@@ -6,8 +6,9 @@ import typer
 
 from opentide.cli.context import get_context
 from opentide.cli.enums import DetectionPlatform
-from opentide.cli.output import emit_error, emit_success
+from opentide.cli.output import emit_success, emit_usage_error
 from opentide.cli.services.info import collect_info, render_info
+from opentide.cli.ui.contract import USAGE_MISSING_OPTION
 
 
 # ``info`` has no subcommands: the command index mounts it as a plain command,
@@ -24,11 +25,22 @@ def info_cmd(
 ) -> None:
     """Show repository and platform information."""
     cli = get_context(ctx)
-    valid_sections = {None, "rules", "threats", "objectives", "coverage"}
-    if section not in valid_sections:
-        emit_error(cli, f"Unknown info section: {section}")
+    sections = ("rules", "threats", "objectives", "coverage")
+    if section is not None and section not in sections:
+        emit_usage_error(
+            cli,
+            f"Unknown info section: {section}. Choose {', '.join(sections)}.",
+            argument="section",
+            value=section,
+            choices=sections,
+        )
     if section == "coverage" and not technique:
-        emit_error(cli, "The coverage section requires --technique")
+        emit_usage_error(
+            cli,
+            "The coverage section requires --technique",
+            argument="--technique",
+            code=USAGE_MISSING_OPTION,
+        )
     result = collect_info(cli, platform=platform, section=section, technique=technique)
     strict_failure = strict and int(result.get("parse_error_count") or 0) > 0
     if strict_failure:

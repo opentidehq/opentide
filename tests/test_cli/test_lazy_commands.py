@@ -119,7 +119,7 @@ def test_root_help_from_the_index_matches_the_loaded_commands(
 def test_unknown_command_still_suggests_the_closest_name() -> None:
     result = runner.invoke(cli_package.app, ["validat"])
     assert result.exit_code == 2
-    assert "Did you mean 'validate'?" in _plain(result.stderr)
+    assert "did you mean 'validate'?" in _plain(result.stderr)
 
 
 def test_version_imports_neither_typer_nor_the_registry() -> None:

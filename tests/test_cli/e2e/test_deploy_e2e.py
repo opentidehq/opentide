@@ -20,7 +20,7 @@ from tests.corpus_support import (
     real_rules_folder,
     write_rule_variant,
 )
-from tests.test_cli.conftest import LOCAL_SHELL_UNSET, assert_json_ok
+from tests.test_cli.conftest import LOCAL_SHELL_UNSET, assert_json_ok, without_envelope
 from tests.test_cli.e2e.helpers import EVERY_RULE, uncomment_tenants
 
 from opentide.core.root import find_repo_root
@@ -378,10 +378,10 @@ def test_deploy_dry_run_without_rules_folder_reports_no_rules(
     assert "No such file or directory" not in output
     assert refuse_deployment_engines == []
     if not json_output:
-        assert "SKIPPED No rules to deploy for this platform" in result.stdout
+        assert "Skipped: No rules to deploy for this platform" in result.stdout
         return
     payload = json.loads(result.stdout)
-    assert payload == {
+    assert without_envelope(payload) == {
         "platform": "sentinel",
         "deployed": [],
         "dry_run": True,
@@ -450,9 +450,9 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
     deployer.deploy.assert_not_called()
     warning = f"1 {SUBFOLDER_RULES_LEAD}objects/rules/team-a/rule-0101-subfolder.yaml"
     if not json_output:
-        assert "OK Deployment completed" in result.stdout
+        assert "✓ Deployment completed" in result.stdout
         stderr = " ".join(result.stderr.split())
-        assert stderr.count(f"WARNING {warning}") == 1
+        assert stderr.count(f"warning: {warning}") == 1
         assert stderr.count("in subfolders of") == 1
         return
     payload = json.loads(result.stdout)
@@ -460,9 +460,8 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
     assert payload["warnings"] == [warning]
     assert CORPUS_RULE_UUIDS["sentinel"] in payload["plan"]["sentinel"]
     assert nested_uuid not in payload["plan"]["sentinel"]
-    assert [
-        event["files"] for event in _log_events(result.stderr, "deploy_nested_rules_skipped")
-    ] == [["objects/rules/team-a/rule-0101-subfolder.yaml"]]
+    # Reported once, in `warnings`: the log event is INFO, below --json's WARNING level.
+    assert _log_events(result.stderr, "deploy_nested_rules_skipped") == []
 
 
 @pytest.mark.parametrize("json_output", [True, False], ids=["json", "human"])
@@ -513,10 +512,10 @@ def test_deploy_dry_run_with_rules_only_in_subfolders_is_skipped_with_the_warnin
         ]
     )
     if not json_output:
-        assert f"SKIPPED {message}" in result.stdout
-        assert " ".join(result.stderr.split()).count(f"WARNING {warning}") == 1
+        assert f"Skipped: {message}" in result.stdout
+        assert " ".join(result.stderr.split()).count(f"warning: {warning}") == 1
         return
-    assert json.loads(result.stdout) == {
+    assert without_envelope(json.loads(result.stdout)) == {
         **fields,
         "deployed": [],
         "dry_run": True,

@@ -23,6 +23,8 @@ class CliContext:
     json_output: bool = False
     debug: bool = False
     no_color: bool = False
+    #: ``--quiet``: print only the outcome line and errors.
+    quiet: bool = False
     show_banner: bool = True
     #: True when ``--repo`` was typed on the command line rather than inherited
     #: from ``OPENTIDE_REPO_ROOT``. An explicit path has to win over a stale
@@ -49,7 +51,10 @@ class CliContext:
             for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
                 os.environ[name] = self.proxy
         if self.debug:
-            os.environ["DEBUG"] = "True"
+            # opentide's own names only: a ``DEBUG`` export would switch on
+            # debug output in every child process that reads it (Node's debug
+            # package, for one).
+            os.environ["OPENTIDE_DEBUG"] = "1"
             os.environ["DEBUG_ENABLED"] = "1"
         if self.no_color:
             os.environ["NO_COLOR"] = "1"
