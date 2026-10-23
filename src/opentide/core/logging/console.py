@@ -105,5 +105,7 @@ def print_banner() -> str:
         return banner
     mark = brand.icon(mono=brand.is_mono(console))
     console.print(mark)
-    console.print(Text.assemble(brand.pill(mono=brand.is_mono(console)), " ", (brand.TAGLINE, "italic")))
+    console.print(
+        Text.assemble(brand.pill(mono=brand.is_mono(console)), " ", (brand.TAGLINE, "italic"))
+    )
     return banner
