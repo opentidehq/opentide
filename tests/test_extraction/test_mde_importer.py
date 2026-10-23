@@ -126,8 +126,20 @@ def test_a_rule_in_several_tenants_is_one_file_targeting_all_of_them(
 
 
 def test_tenant_copies_that_differ_are_reported(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    warned: list[str] = []
+
+    class Logger:
+        def warning(self, event: str, **_fields: object) -> None:
+            warned.append(event)
+
+        def info(self, *_args: object, **_fields: object) -> None:
+            pass
+
+    # The module logger, not caplog: whether a structlog event reaches caplog
+    # depends on logging setup earlier tests in the worker leave behind.
+    monkeypatch.setattr(mde_importer, "logger", Logger())
     shared = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
     edited = _graph_rule(shared)
     edited["queryCondition"] = {"queryText": "DeviceLogonEvents\n| take 2"}
@@ -137,7 +149,7 @@ def test_tenant_copies_that_differ_are_reported(
 
     document = written["Suspicious logon.yaml"]
     assert "take 1" in document["configurations"]["defender_for_endpoint"]["query"]
-    assert "defender_import_tenants_differ" in caplog.text
+    assert warned == ["defender_import_tenants_differ"]
 
 
 class _Response:
