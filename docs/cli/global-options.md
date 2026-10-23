@@ -1,16 +1,19 @@
 ---
 title: Global options
-description: Repository root, data root, debug logging, colour, JSON output, and version flags shared by all CLI commands.
+description: Repository root, data root, debug logging, quiet, colour, JSON output, and version flags shared by all CLI commands.
 ---
 
 # Global options
 
-Set on the root `opentide` callback before any subcommand.
+Set on the root `opentide` callback. The boolean flags (`--json`, `--no-color`, `--debug`, `--quiet`) are accepted anywhere before `--`, after the command too; options that take a value (`--repo`, `--data`, `--proxy`) go before the command.
 
 ```bash
 opentide --repo /path/to/repo --json validate --strict
+opentide validate --strict --json
 opentide --debug --no-color generate
 ```
+
+A flag that is the value of the option before it stays that option's value: in `opentide setup skills discover --query --json`, `--json` is the search text. There are no short forms (`-q` belongs to `--query`).
 
 ## Options
 
@@ -18,9 +21,10 @@ opentide --debug --no-color generate
 |------|---------------------|---------|-------------|
 | `--repo` | `OPENTIDE_REPO_ROOT` | Discovered from the current directory | Detection workspace root |
 | `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Override vocabulary and default configs |
-| `--debug` | `DEBUG` | off | Enable structlog debug logging |
+| `--debug` | `OPENTIDE_DEBUG`, or `DEBUG` when it is a boolean | off | Enable debug logging, with timestamps |
+| `--quiet` | — | off | Print only the outcome line and errors |
 | `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable Rich colour output |
-| `--json` | — | off | Emit JSON instead of Rich tables / logs |
+| `--json` | `OPENTIDE_OUTPUT=json` | off | Print one JSON document on stdout; see [JSON output](./json-output.md) |
 | `--proxy` | `OPENTIDE_PROXY` | none | HTTP(S) proxy for platform and lookup calls; see [Proxy](#proxy) |
 | `--version`, `-V` | — | — | Print `opentide <version>` and exit |
 
@@ -69,21 +73,27 @@ opentide --proxy http://proxy.internal.example:8080 deploy --strategy RELEASE
 
 A `proxy` key under a tenant's `[tenants.setup]`, in `deployment.toml` `[proxy]` or in `[cve]` is retired: the command fails and names `opentide --proxy`. For pipelines behind a proxy, see [CI/CD → Behind a proxy or a private CA](../usage/workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
 
+## Debug
+
+`--debug` turns on debug logging on stderr, each line with its time. `OPENTIDE_DEBUG=1` does the same for every command. `DEBUG` is read too, but only when its value is a boolean (`1`, `true`, `yes`, `on`, or `0`, `false`, `no`, `off`): `DEBUG='*'`, which Node tooling exports, is ignored instead of failing every command. `OPENTIDE_DEBUG` wins when both are set.
+
+opentide exports `OPENTIDE_DEBUG=1` to the processes it starts when debugging, never `DEBUG`.
+
 ## Environment propagation
 
 The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.
 
 ## Terminal output
 
-Interactive terminals receive Rich colours. Redirected or captured streams automatically use clean plain text. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it.
+Interactive terminals receive Rich colours. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
 
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 
-With `--json`, stdout is one machine-readable JSON document. Diagnostics and debug logs use stderr.
+With `--json`, stdout is one machine-readable JSON document, usage errors included. Logs use stderr, at `WARNING` and above unless `--debug`.
 
-Without `--json`, a result prints its `message` first, then any `detail` and `advice` from the payload as indented `detail:` / `advice:` lines, then its warnings. The text is printed as-is: brackets such as `[error]` or `[deploy, validate]` are shown, never read as Rich markup.
+Without `--json`, a result prints its warnings first (`warning: …`), then one outcome line (`✓ message`, `! message` when there are issues, `Skipped: message`), then any `detail` and `advice` from the payload as indented `note:` / `help:` lines, then at most three next steps (`→ command`). A failure prints `error: message` on stderr instead of the outcome line. The text is printed as-is: brackets such as `[error]` or `[deploy, validate]` are shown, never read as Rich markup. `--quiet` keeps only the outcome line and errors.
 
-`--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits non-zero with a JSON error naming the flags to pass instead — `--yes` plus the explicit selections. Without `--json` the same commands open the wizard as before.
+`--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits `2` with `failure.code` `usage_needs_input`, naming the flags to pass instead — `--yes` plus the explicit selections. A coding agent gets the same refusal without `--json`, even on a terminal. Otherwise the same commands open the wizard as before.
 
 ## Strategy
 
@@ -96,5 +106,6 @@ Without `--json`, a result prints its `message` first, then any `detail` and `ad
 
 ## Related
 
+- [JSON output](./json-output.md)
 - [Usage: Installation](../usage/installation.md)
 - [CLI validate](./validate.md)

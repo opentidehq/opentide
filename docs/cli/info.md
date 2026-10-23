@@ -71,11 +71,18 @@ An empty section prints `No rules found` (or threats, objectives).
   ],
   "ok": true,
   "status": "completed",
-  "message": "Completed successfully"
+  "message": "Completed successfully",
+  "schema_version": 1,
+  "command": "info",
+  "duration_ms": "...",
+  "exit_code": 0,
+  "summary": {},
+  "next_actions": [],
+  "failure": null
 }
 ```
 
-Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
+The keys from `schema_version` on are the envelope every command adds; see [JSON output](./json-output.md). Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
 
 With coverage, the payload adds a `coverage` object:
 
