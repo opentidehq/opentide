@@ -87,7 +87,7 @@ opentide generate docs index
 | Flag | Purpose |
 |------|---------|
 | `--output` | Docs output directory |
-| `--flavor` | Renderer flavour (for example `github`) |
+| `--flavor` | `github`, `gitlab`, `azure_devops` or `generic` (CommonMark). Omitted: the CI platform running the job, else the `origin` remote's host, else `[flavor] default` |
 | `--changed` | Generate only docs for changed object YAMLs (from git merge-base diff + untracked files), expanded with upstream referrer closure and with the pages that link to a renamed object, remove generated pages no object writes any more, then rewrite affected indexes |
 | `--rules` / `--threats` / `--objectives` | Limit scopes on the default callback |
 

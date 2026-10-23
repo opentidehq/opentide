@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **The docs flavor adapts to where the docs are read.** Without `--flavor`, `generate docs` uses the CI platform running the job (`GITHUB_ACTIONS`, `GITLAB_CI`, `TF_BUILD`), then the host of the repository's `origin` remote, so a local run renders what CI would, then `[flavor] default` (CommonMark `generic`). Any CI that sets only `CI` (Jenkins, CircleCI) used to get the GitLab flavor; it now follows the remote or the default.
+
 ### Fixed
 
 - **`ssl = false` was ignored on Elastic when a CA bundle is exported.** With `REQUESTS_CA_BUNDLE` or `CURL_CA_BUNDLE` set, as on many corporate hosts and CI runners, `requests` replaces a session's `verify` with the bundle for every request that does not pass its own (psf/requests#3829). Elastic set verification only on its session, so `deploy` and `validate query --live` against a self-signed Kibana failed with `CERTIFICATE_VERIFY_FAILED`; Defender's Graph API fallback and Sentinel's ARM calls had the same gap. Every platform's HTTP session now keeps the tenant's `ssl` for every request; with `ssl = true` an exported bundle is still used.
