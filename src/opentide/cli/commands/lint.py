@@ -40,12 +40,15 @@ def lint_cmd(
     refuse_report_on_json_stdout(cli, report_format, output)
     cli.apply_environment()
     result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)
+    outcome = CommandResult.from_payload(result, default_message="Catalogue lint passed")
+    if cli.json_output and report_format is ReportFormat.text:
+        emit_result(cli, outcome)
+        return
     root, sources = Path(result["path"]), SourceFiles()
     diagnostics = [
         diagnostic_from_lint_finding(finding, root=root, sources=sources)
         for finding in result["findings"]
     ]
-    outcome = CommandResult.from_payload(result, default_message="Catalogue lint passed")
     write_report_file(report_format, output, diagnostics, command="lint")
     if not cli.json_output:
         from opentide.cli.ui.codeframe import render_diagnostics
