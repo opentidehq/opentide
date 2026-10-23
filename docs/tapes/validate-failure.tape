@@ -31,9 +31,10 @@ Set Theme { "name": "opentide", "background": "#FFFFFF", "foreground": "#1B1F2A"
 Env OPENTIDE_OUTPUT "human"
 Env COLORTERM "truecolor"
 
-# A fresh HOME, so paths read ~/tutorial-detections on every machine.
+# validate prints absolute paths, so HOME is a fixed directory and the
+# still reads the same on every machine.
 Hide
-Type "export PS1='$ ' TAPES=$PWD/docs/tapes HOME=$(mktemp -d) && cd && python3 $TAPES/tutorial_repo.py tutorial-detections --setup --generate --state dangling-reference && cd tutorial-detections && clear || exit 1"
+Type "export PS1='$ ' TAPES=$PWD/docs/tapes HOME=/tmp/opentide-tape && rm -rf $HOME && mkdir $HOME && cd && python3 $TAPES/tutorial_repo.py tutorial-detections --setup --generate --state dangling-reference && cd tutorial-detections && clear || exit 1"
 Enter
 Wait
 Show
