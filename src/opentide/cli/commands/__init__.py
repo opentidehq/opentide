@@ -52,8 +52,7 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "commands",
         "opentide.cli.commands.introspect",
         "commands_cmd",
-        "List every command with its options, defaults and an example. "
-        "Use --json for the tree.",
+        "List every command with its options, defaults and an example. Use --json for the tree.",
     ),
     CommandSpec(
         "mcp",

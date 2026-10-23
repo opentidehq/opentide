@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 from typing import Any
 
 from opentide.core.registry import Opentide
@@ -60,7 +61,7 @@ def _annotate(payload: dict[str, Any], report: Any, buckets: tuple[str, ...]) ->
 
 
 def _validation_next_actions(
-    diagnostics: list[Any], *, again: dict[str, Any] | None
+    diagnostics: list[Any], *, again: dict[str, Any]
 ) -> list[dict[str, Any]]:
     """Explain each code found, then validate again once the fixes are written."""
     actions: list[dict[str, Any]] = []
@@ -74,7 +75,7 @@ def _validation_next_actions(
                 reason=f"what {code} means and how to fix it",
             )
         )
-    if codes and again is not None:
+    if codes:
         reason = (
             "validate again after applying the fix edits"
             if any(item.fix is not None for item in diagnostics)
@@ -121,7 +122,10 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
     dumped = report.model_dump_json_ready()
     diagnostics = _annotate(dumped, report, ("issues",))
     again = next_action(
-        "validate_rule", {"uuid": uuid}, command=f"opentide --json validate --uuid {uuid}", reason=""
+        "validate_rule",
+        {"uuid": uuid},
+        command=f"opentide --json validate --uuid {shlex.quote(uuid)}",
+        reason="",
     )
     actions = _validation_next_actions(diagnostics, again=again)
     if report.ok:
@@ -133,7 +137,7 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
                 command=f"opentide --json deploy --dry-run --platform {platform}",
                 reason=f"preview the {platform} deployment; nothing is sent",
             )
-            for platform in _rule_platforms(uuid)[:MAX_EXPLAIN_ACTIONS]
+            for platform in _rule_platforms(uuid)
         )
     return {
         "valid": report.ok,
@@ -170,14 +174,12 @@ def tool_validation_report(
         for key, value in (("file", file), ("uuid", uuid), ("object_type", object_type))
         if value
     }
-    flags = " ".join(
-        f"--{'type' if key == 'object_type' else key} {value}" for key, value in arguments.items()
+    flags = "".join(
+        f" --{'type' if key == 'object_type' else key} {shlex.quote(value)}"
+        for key, value in arguments.items()
     )
     again = next_action(
-        "validation_report",
-        arguments,
-        command=f"opentide --json validate {flags}".rstrip(),
-        reason="",
+        "validation_report", arguments, command=f"opentide --json validate{flags}", reason=""
     )
     payload["next_actions"] = _validation_next_actions(diagnostics, again=again)
     return payload

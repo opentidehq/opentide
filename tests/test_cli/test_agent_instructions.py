@@ -72,9 +72,7 @@ def test_entrypoint_teaches_the_agent_output_contract(name: str) -> None:
 
 
 def test_skill_pack_teaches_the_agent_output_contract() -> None:
-    text = (setup_data_root() / "skills" / "detection-ops" / "SKILL.md").read_text(
-        encoding="utf-8"
-    )
+    text = (setup_data_root() / "skills" / "detection-ops" / "SKILL.md").read_text(encoding="utf-8")
     for phrase in _CONTRACT:
         assert phrase in text, phrase
 
