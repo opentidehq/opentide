@@ -49,6 +49,13 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "Explain a diagnostic code: what it means, an example, and how to fix it.",
     ),
     CommandSpec(
+        "commands",
+        "opentide.cli.commands.introspect",
+        "commands_cmd",
+        "List every command with its options, defaults and an example. "
+        "Use --json for the tree.",
+    ),
+    CommandSpec(
         "mcp",
         "opentide.cli.mcp_app",
         "mcp_app",
