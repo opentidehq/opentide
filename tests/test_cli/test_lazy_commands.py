@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 import typer.main
@@ -156,6 +157,94 @@ def test_top_level_completion_imports_no_engine_module(words: str) -> None:
     )
     assert done.stdout.strip() and "Usage" not in done.stdout, done.stdout + done.stderr
     assert _engine_modules(modules) == []
+
+
+def _workspace(root: Path) -> Path:
+    rules = root / "objects" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "rule.yaml").write_text(
+        "name: A rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n",
+        encoding="utf-8",
+    )
+    platforms = root / ".opentide" / "configurations" / "platforms"
+    platforms.mkdir(parents=True)
+    (platforms / "splunk.toml").write_text("[platform]\nenabled = true\n", encoding="utf-8")
+    return root
+
+
+_COMPLETE_AND_REPORT = """
+import json
+import sys
+
+from opentide.cli import main
+
+sys.argv[0] = "opentide"
+try:
+    main()
+except SystemExit:
+    pass
+sys.stdout.flush()
+registry = sys.modules.get("opentide.core.registry")
+built = bool(registry and registry.Opentide.is_initialised)
+print("\\n" + json.dumps({"modules": sorted(sys.modules), "built": built}), file=sys.stderr)
+"""
+
+
+def _complete_bash(words: str, **env: str) -> tuple[str, set, bool]:
+    """Complete *words* as bash would: the output, the modules loaded, whether the registry was built."""
+    done = subprocess.run(
+        [sys.executable, "-c", _COMPLETE_AND_REPORT],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "NO_COLOR": "1",
+            "_OPENTIDE_COMPLETE": "complete_bash",
+            "COMP_WORDS": words,
+            "COMP_CWORD": str(len(words.split()) - (0 if words.endswith(" ") else 1)),
+            **env,
+        },
+    )
+    report = json.loads(done.stderr.strip().splitlines()[-1])
+    return done.stdout, set(report["modules"]), report["built"]
+
+
+#: Modules a completion source may add: the package that holds the bundled data.
+_COMPLETION_MAY_IMPORT = frozenset({"opentide.data"})
+
+
+@pytest.mark.parametrize(
+    ("command", "option"),
+    [
+        ("validate", "--uuid"),
+        ("validate", "--file"),
+        ("validate", "--type"),
+        ("validate query", "--uuid"),
+        ("validate query", "--strategy"),
+        ("deploy", "--platform"),
+        ("deploy", "--strategy"),
+        ("info", "--technique"),
+        ("share", "--uuid"),
+    ],
+)
+def test_completing_a_value_imports_nothing_new(tmp_path: Path, command: str, option: str) -> None:
+    """Completing a value costs what completing the command's option names does.
+
+    The command's own module loads either way; a completion source adds only
+    standard library modules and never builds the registry.
+    """
+    env = {"OPENTIDE_REPO_ROOT": str(_workspace(tmp_path))}
+    _, baseline, _ = _complete_bash(f"opentide {command} --", **env)
+    output, modules, built = _complete_bash(f"opentide {command} {option} ", **env)
+    assert output.strip()
+    added = sorted(
+        name
+        for name in modules - baseline - _COMPLETION_MAY_IMPORT
+        if name.split(".")[0] not in sys.stdlib_module_names
+    )
+    assert added == []
+    assert built is False
 
 
 def test_completion_lists_the_visible_commands_in_order() -> None:

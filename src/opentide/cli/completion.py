@@ -3,9 +3,9 @@
 Completion runs on every Tab press, so nothing here builds the registry or
 parses YAML: object UUIDs and names come from the first lines of each object
 file, ATT&CK ids from a scan of the bundled vocabulary, platforms from the
-``enabled = true`` lines :mod:`opentide.ci.discovery` reads, and diagnostic
-codes from the names of the ``explain`` pages. Standard library only at import
-time; a source that cannot be read completes nothing rather than failing.
+``enabled = true`` line of each platform file, and diagnostic codes from the
+names of the ``explain`` pages. Standard library only at import time; a
+source that cannot be read completes nothing rather than failing.
 
 :func:`attach` gives a command's parameters their completion when the lazy
 group loads it (:meth:`opentide.cli.lazy.LazyTyperGroup.load`), by option
@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from importlib.resources import files
@@ -44,6 +45,8 @@ Source = Callable[[Any, str], Iterable[Candidate]]
 
 _TOP_KEY = re.compile(r"^([A-Za-z_][\w-]*)\s*:(.*)$")
 _NESTED_UUID = re.compile(r"^\s+uuid\s*:(.*)$")
+_PLATFORM_SECTION = re.compile(r"^\[platform\]\s*$", re.MULTILINE)
+_ENABLED = re.compile(r"^enabled\s*=\s*true\s*$", re.MULTILINE | re.IGNORECASE)
 # A ``[[keys]]`` entry of the vocabulary: ``id = "T1059.001"`` then ``name = "..."``.
 _TECHNIQUE = re.compile(
     r'^id = "(T\d{4}(?:\.\d{3})?)"\s*\nname = ("(?:[^"\\\n]|\\.)*")', re.MULTILINE
@@ -72,7 +75,7 @@ def workspace_root(ctx: Any = None) -> Path:
 
 
 def object_folders(root: Path) -> dict[str, Path]:
-    """Each object kind's folder: ``[paths.objects]`` in the workspace's ``paths.toml``, or the default."""
+    """Each object kind's folder, from the workspace's ``paths.toml`` or the default."""
     folders = dict(OBJECT_FOLDERS)
     override = root / ".opentide" / "configurations" / "paths.toml"
     if override.is_file():
@@ -155,9 +158,9 @@ def _scalar(raw: str) -> str | None:
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
-    try:
+    if sys.version_info >= (3, 11):
         import tomllib
-    except ModuleNotFoundError:  # Python 3.10
+    else:
         import tomli as tomllib
 
     with path.open("rb") as handle:
@@ -272,13 +275,9 @@ def _technique_key(technique: str) -> tuple[int, int]:
 
 def platforms(ctx: Any, incomplete: str, *, choices: Sequence[str] = ()) -> list[Candidate]:
     """``--platform``: the platforms enabled in the workspace first, then the others."""
-    from opentide.ci.discovery import discover_enabled_platforms
-
     names = list(choices) or [platform.value for platform in _detection_platforms()]
-    try:
-        enabled = [name for name in discover_enabled_platforms(workspace_root(ctx)) if name in names]
-    except OSError:
-        enabled = []
+    found = enabled_platforms(workspace_root(ctx))
+    enabled = [name for name in found if name in names]
     ordered = [*enabled, *(name for name in names if name not in enabled)]
     prefix = incomplete.lower()
     return [
@@ -286,6 +285,24 @@ def platforms(ctx: Any, incomplete: str, *, choices: Sequence[str] = ()) -> list
         for name in ordered
         if name.lower().startswith(prefix)
     ]
+
+
+def enabled_platforms(root: Path) -> list[str]:
+    """Platforms whose ``.opentide/configurations/platforms/<name>.toml`` says ``enabled = true``.
+
+    The test :func:`opentide.ci.discovery.discover_enabled_platforms` makes,
+    without importing the CI renderers that its package loads.
+    """
+    folder = root / ".opentide" / "configurations" / "platforms"
+    enabled: list[str] = []
+    for path in sorted(folder.glob("*.toml")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if _PLATFORM_SECTION.search(text) and _ENABLED.search(text):
+            enabled.append(path.stem)
+    return enabled
 
 
 def _detection_platforms() -> Any:

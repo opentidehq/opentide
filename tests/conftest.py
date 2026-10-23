@@ -128,6 +128,15 @@ def _isolate_output_mode(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     reset_mode()
 
 
+@pytest.fixture(autouse=True)
+def _no_terminal_progress(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No OSC 9;4 in captured output when the suite runs inside Ghostty, kitty, tmux, ...
+
+    Tests of the sequence itself pass their own environment.
+    """
+    monkeypatch.setenv("OPENTIDE_PROGRESS", "0")
+
+
 @pytest.fixture
 def metadata() -> dict[str, Any]:
     return {

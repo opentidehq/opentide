@@ -14,6 +14,10 @@ where it went) and how long it took:
 ``json`` and ``mcp``, and ``--quiet``
     Nothing. The command's result carries the steps instead.
 
+In ``human`` mode the checklist also sets the terminal's tab or taskbar
+progress (OSC 9;4) from :attr:`Checklist.completed` and :attr:`Checklist.total`,
+where the terminal reads it (:mod:`opentide.cli.ui.terminal_progress`).
+
 Engine modules never print: they call :func:`opentide.core.progress.report_stage`,
 which a checklist shows beside the running step. The outcome line is not the
 checklist's job; the command prints it from its result.
@@ -38,6 +42,7 @@ from rich.text import Text
 from opentide.cli.ui.glyphs import glyph
 from opentide.cli.ui.layout import columns
 from opentide.cli.ui.mode import OutputMode, get_mode
+from opentide.cli.ui.terminal_progress import TerminalProgress
 from opentide.core import progress as engine_progress
 
 StepStatus = Literal["running", "ok", "failed", "skipped"]
@@ -221,6 +226,7 @@ class Checklist:
         self._live: Live | None = None
         self._spinner = Spinner("dots", style=_STYLE["running"])
         self._stack = ExitStack()
+        self._terminal: TerminalProgress | None = None
 
     @property
     def silent(self) -> bool:
@@ -240,6 +246,9 @@ class Checklist:
     def __enter__(self) -> Checklist:
         self._stack.enter_context(engine_progress.listen(self._stage))
         if self.live:
+            self._terminal = self._stack.enter_context(
+                TerminalProgress(self.console, total=self.total, mode=self.mode, quiet=False)
+            )
             self._live = Live(
                 get_renderable=self._renderable,
                 console=self.console,
@@ -258,6 +267,7 @@ class Checklist:
         traceback: TracebackType | None,
     ) -> None:
         self._stack.close()
+        self._terminal = None
         if self._live is not None:
             self._live.stop()
             self._live = None
@@ -292,6 +302,8 @@ class Checklist:
             self.current.detail = name
 
     def _finished(self, step: Step) -> None:
+        if self._terminal is not None:
+            self._terminal.update(self.completed)
         if self.silent:
             return
         if self._live is not None:

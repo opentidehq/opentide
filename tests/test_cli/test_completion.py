@@ -1,0 +1,361 @@
+"""Shell completion of option values: each source, through Click's shell-complete API.
+
+Completion reads object file headers, the bundled vocabulary and the platform
+files; it never builds the registry. The import-graph budget is checked in
+``test_lazy_commands.py`` with the other start-up tests.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+import typer
+import typer.main
+from typer._click.shell_completion import CompletionItem
+from typer._completion_classes import BashComplete
+
+import opentide.cli as cli_package
+from opentide.cli import completion
+from opentide.cli.completion import attach, read_header
+
+RULE_A = "00000000-0000-4000-8003-000000000001"
+RULE_B = "00000000-0000-4000-8003-000000000002"
+THREAT = "00000000-0000-4000-8001-000000000001"
+OBJECTIVE = "00000000-0000-4000-8002-000000000001"
+
+
+def _object(path: Path, uuid: str, name: str, *, schema: str = "rule::1.0") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"name: {name}\n\nmetadata:\n  uuid: {uuid}\n  schema: {schema}\n  version: 1\n\n"
+        "description: |\n  uuid: not-this-one\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.fixture
+def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A workspace with two rules, a threat and an objective; splunk enabled."""
+    root = tmp_path / "detections"
+    _object(root / "objects/rules/sentinel-rule.yaml", RULE_A, "Sentinel KQL Rule")
+    _object(root / "objects/rules/splunk-rule.yaml", RULE_B, '"Splunk: SPL Rule"')
+    _object(root / "objects/threats/actor.yaml", THREAT, "Simulated Actor", schema="threat::1.0")
+    _object(
+        root / "objects/objectives/credentials.yml",
+        OBJECTIVE,
+        "Credential Access",
+        schema="objective::1.0",
+    )
+    platforms = root / ".opentide/configurations/platforms"
+    platforms.mkdir(parents=True)
+    (platforms / "splunk.toml").write_text("[platform]\nenabled = true\n", encoding="utf-8")
+    (platforms / "sentinel.toml").write_text("[platform]\nenabled = false\n", encoding="utf-8")
+    # In-process tests pin the workspace through this variable (tests/conftest.py).
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(root))
+    monkeypatch.chdir(root)
+    return root
+
+
+def _complete(words: str) -> list[CompletionItem]:
+    """Complete the last word of ``opentide <words>`` as a shell would."""
+    args = words.split()
+    incomplete = "" if words.endswith(" ") or not args else args.pop()
+    group = typer.main.get_command(cli_package.app)
+    return BashComplete(group, {}, "opentide", "_OPENTIDE_COMPLETE").get_completions(
+        args, incomplete
+    )
+
+
+def _values(words: str) -> list[str]:
+    return [item.value for item in _complete(words)]
+
+
+def _helps(words: str) -> dict[str, str | None]:
+    return {item.value: item.help for item in _complete(words)}
+
+
+# --------------------------------------------------------------------------
+# Object UUIDs and files
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("command", ["validate", "share", "share push", "share retract"])
+def test_uuid_completes_every_object_with_its_name(workspace: Path, command: str) -> None:
+    helps = _helps(f"{command} --uuid ")
+    assert helps == {
+        RULE_A: "Sentinel KQL Rule (rule)",
+        RULE_B: "Splunk: SPL Rule (rule)",
+        THREAT: "Simulated Actor (threat)",
+        OBJECTIVE: "Credential Access (objective)",
+    }
+
+
+def test_uuid_filters_by_prefix_and_type(workspace: Path) -> None:
+    assert _values("validate --uuid 00000000-0000-4000-8001") == [THREAT]
+    assert _values("validate --type objective --uuid ") == [OBJECTIVE]
+    assert _values("share --type threat --type rule --uuid ") == [RULE_A, RULE_B, THREAT]
+
+
+def test_validate_query_completes_rules_only(workspace: Path) -> None:
+    assert _values("validate query --uuid ") == [RULE_A, RULE_B]
+    assert _values("validate query --file ") == [
+        "objects/rules/sentinel-rule.yaml",
+        "objects/rules/splunk-rule.yaml",
+    ]
+
+
+def test_repo_option_points_completion_at_another_workspace(
+    workspace: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(elsewhere))
+    assert _values("validate --uuid ") == []
+    assert _values(f"--repo {workspace} validate --uuid ") == [RULE_A, RULE_B, THREAT, OBJECTIVE]
+
+
+def test_file_completes_object_paths_from_the_current_directory(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    helps = _helps("validate --file objects/")
+    assert helps == {
+        "objects/rules/sentinel-rule.yaml": "Sentinel KQL Rule",
+        "objects/rules/splunk-rule.yaml": "Splunk: SPL Rule",
+        "objects/threats/actor.yaml": "Simulated Actor",
+        "objects/objectives/credentials.yml": "Credential Access",
+    }
+    # Inside objects/rules, rules are relative to it and the rest to the workspace.
+    monkeypatch.chdir(workspace / "objects" / "rules")
+    assert _values("share --file ") == [
+        "sentinel-rule.yaml",
+        "splunk-rule.yaml",
+        "objects/threats/actor.yaml",
+        "objects/objectives/credentials.yml",
+    ]
+
+
+def test_file_falls_back_to_bare_names_then_to_the_shell(workspace: Path) -> None:
+    assert _values("validate --file spl") == ["splunk-rule.yaml"]
+    # Nothing matches: an empty answer lets bash and zsh complete file names.
+    assert _values("validate --file nothing") == []
+    assert _values("validate --file objects/nothing") == []
+
+
+def test_object_folders_follow_paths_toml(workspace: Path) -> None:
+    (workspace / ".opentide/configurations/paths.toml").write_text(
+        '[paths.objects]\nrule = "detections/"\n', encoding="utf-8"
+    )
+    _object(workspace / "detections/moved.yaml", "00000000-0000-4000-8003-0000000000ff", "Moved")
+    assert _values("validate --type rule --uuid ") == ["00000000-0000-4000-8003-0000000000ff"]
+    (workspace / ".opentide/configurations/paths.toml").write_text("not = [toml", encoding="utf-8")
+    assert _values("validate --type rule --uuid ") == [RULE_A, RULE_B]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (f"name: Plain\nmetadata:\n  uuid: {RULE_A}\n", (RULE_A, "Plain")),
+        (f"name: 'Quoted # not a comment'\nuuid: \"{RULE_A}\"\n", (RULE_A, "Quoted # not a comment")),
+        (f'# header\nname: "Esc \\" quote" # comment\nmetadata:\n  uuid: {RULE_A} # c\n', (RULE_A, 'Esc \\" quote')),
+        ("description: |\n  name: nested\nname: Late\nconfigurations:\n  uuid: wrong\n", (None, "Late")),
+        ("name: |\n  block scalar\n", (None, None)),
+        ("", (None, None)),
+    ],
+)  # fmt: skip
+def test_read_header(tmp_path: Path, text: str, expected: tuple[str | None, str | None]) -> None:
+    path = tmp_path / "object.yaml"
+    path.write_text(text, encoding="utf-8")
+    assert read_header(path) == expected
+
+
+def test_read_header_of_a_missing_file(tmp_path: Path) -> None:
+    assert read_header(tmp_path / "gone.yaml") == (None, None)
+
+
+# --------------------------------------------------------------------------
+# Types, strategies, techniques, platforms
+# --------------------------------------------------------------------------
+
+
+def test_type_completes_object_kinds(workspace: Path) -> None:
+    assert _helps("validate --type ") == {
+        "rule": "objects/rules/",
+        "threat": "objects/threats/",
+        "objective": "objects/objectives/",
+    }
+    assert _values("share preview --type th") == ["threat"]
+
+
+@pytest.mark.parametrize("command", ["deploy", "validate query"])
+def test_strategy_completes_the_deployable_strategies(workspace: Path, command: str) -> None:
+    helps = _helps(f"{command} --strategy ")
+    assert list(helps) == ["PREVIEW", "RELEASE"]
+    assert helps["PREVIEW"] == "Deployment from Pull/Merge Requests"
+    assert _values(f"{command} --strategy re") == ["RELEASE"]
+
+
+def test_technique_completes_attack_ids_with_titles(workspace: Path) -> None:
+    helps = _helps("info --technique T1059")
+    assert helps["T1059"] == "Command and Scripting Interpreter"
+    assert helps["T1059.001"] == "Command and Scripting Interpreter: PowerShell"
+    assert all(value.startswith("T1059") for value in helps)
+    assert list(helps)[:2] == ["T1059", "T1059.001"]
+    assert _values("info --technique t1059.00")[0] == "T1059.001"
+
+
+def test_technique_reads_the_data_root_override(
+    workspace: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = tmp_path / "data"
+    (data / "vocabulary").mkdir(parents=True)
+    (data / "vocabulary" / "att&ck.vocab.toml").write_text(
+        '[[keys]]\nid = "T9999"\nname = "Made Up \\u00e9"\n'
+        '[[keys]]\nid = "T9999.001"\nname = "Made Up: Sub"\n'
+        '[[keys]]\nid = "T1000"\nname = "Earlier"\n',
+        encoding="utf-8",
+    )
+    assert _helps(f"--data {data} info --technique ") == {
+        "T1000": "Earlier",
+        "T9999": "Made Up é",
+        "T9999.001": "Made Up: Sub",
+    }
+    monkeypatch.setenv("OPENTIDE_DATA_ROOT", str(tmp_path / "missing"))
+    assert _values("info --technique ") == []
+
+
+@pytest.mark.parametrize("command", ["deploy", "validate query", "info", "setup"])
+def test_platform_lists_enabled_platforms_first(workspace: Path, command: str) -> None:
+    items = _complete(f"{command} --platform ")
+    assert items[0].value == "splunk"
+    assert items[0].help == "enabled"
+    assert {item.value for item in items[1:]} >= {"sentinel", "elastic", "defender_for_endpoint"}
+    assert all(item.help is None for item in items[1:])
+    assert _values(f"{command} --platform SENT") == ["sentinel", "sentinel_one"]
+
+
+def test_platform_outside_a_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(tmp_path))
+    values = _values("deploy --platform ")
+    assert values[0] == "sentinel"
+    assert len(values) == 8
+
+
+def test_enabled_platforms_agree_with_ci_discovery(workspace: Path) -> None:
+    from opentide.ci.discovery import discover_enabled_platforms
+
+    platforms = workspace / ".opentide/configurations/platforms"
+    (platforms / "elastic.toml").write_text("[platform]\nEnabled = TRUE\n", encoding="utf-8")
+    (platforms / "notes.toml").write_text("enabled = true\n", encoding="utf-8")
+    assert completion.enabled_platforms(workspace) == discover_enabled_platforms(workspace)
+    assert completion.enabled_platforms(workspace) == ["elastic", "splunk"]
+
+
+# --------------------------------------------------------------------------
+# explain <code>
+# --------------------------------------------------------------------------
+
+
+def _explain_app() -> typer.Typer:
+    app = typer.Typer()
+
+    @app.command()
+    def explain(code: str | None = typer.Argument(None)) -> None:
+        """Explain a diagnostic code."""
+
+    @app.command()
+    def other(code: str | None = typer.Argument(None)) -> None:
+        """Another command with an argument named code."""
+
+    return app
+
+
+def _pages(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    data = tmp_path / "package-data"
+    pages = data / "diagnostics"
+    pages.mkdir(parents=True)
+    (pages / "vocab_unknown.md").write_text(
+        "# vocab_unknown\n\nA value is not in the vocabulary\nthe field uses.\n\n## Example\n",
+        encoding="utf-8",
+    )
+    (pages / "duplicate_id.md").write_text(
+        "# duplicate_id\n\nTwo object files carry the same UUID.\n", encoding="utf-8"
+    )
+    (pages / "README.txt").write_text("not a page\n", encoding="utf-8")
+    monkeypatch.setattr(completion, "files", lambda package: data)
+    return pages
+
+
+def test_explain_completes_diagnostic_codes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _pages(tmp_path, monkeypatch)
+    group = typer.main.get_command(_explain_app())
+    for name in ("explain", "other"):
+        attach(group.commands[name], name)
+    complete = BashComplete(group, {}, "opentide", "_OPENTIDE_COMPLETE").get_completions
+    items = complete(["explain"], "")
+    assert [(item.value, item.help) for item in items] == [
+        ("duplicate_id", "Two object files carry the same UUID."),
+        ("vocab_unknown", "A value is not in the vocabulary the field uses."),
+    ]
+    assert [item.value for item in complete(["explain"], "voc")] == ["vocab_unknown"]
+    # Only explain's argument completes codes.
+    assert complete(["other"], "") == []
+
+
+def test_explain_completes_nothing_without_the_pages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(completion, "files", lambda package: tmp_path / "no-data")
+    assert completion.diagnostic_codes(None, "") == []
+
+
+# --------------------------------------------------------------------------
+# Wiring
+# --------------------------------------------------------------------------
+
+
+def test_a_failing_source_completes_nothing(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(root: Path, kinds: object = ()) -> object:
+        raise RuntimeError("unreadable")
+
+    monkeypatch.setattr(completion, "iter_objects", broken)
+    assert _values("validate --uuid ") == []
+
+
+def test_attach_keeps_a_parameter_s_own_completion() -> None:
+    app = typer.Typer()
+
+    def own(incomplete: str) -> list[str]:
+        return ["mine"]
+
+    @app.command()
+    def run(uuid: str = typer.Option("", "--uuid", autocompletion=own)) -> None:
+        """Run."""
+
+    command = typer.main.get_command(app)
+    attach(command, "run")
+    items = BashComplete(command, {}, "run", "_RUN_COMPLETE").get_completions(["--uuid"], "")
+    assert [item.value for item in items] == ["mine"]
+
+
+def test_completion_never_builds_the_registry(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.core.registry import OpentideRegistry
+
+    calls: list[str] = []
+    monkeypatch.setattr(OpentideRegistry, "initialise", lambda self: calls.append("initialise"))
+    for words in (
+        "validate --uuid ",
+        "validate --file ",
+        "share --type ",
+        "deploy --platform ",
+        "deploy --strategy ",
+        "info --technique T10",
+    ):
+        assert _values(words), words
+    assert calls == []
