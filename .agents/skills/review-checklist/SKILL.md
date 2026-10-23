@@ -107,7 +107,7 @@ triggers it; drop anything you cannot tie to a trigger.
    and passes with it, next to the existing tests for that module.
 2. `scripts/ci-local.sh` green (`--full` before pushing anything that touches `src/` or tests).
 3. No new `# noqa` / `# ty: ignore` without a reason on the same line; new and touched
-   functions fully annotated (`ANN` is enforced on `src/`).
+   functions fully annotated.
 4. User-visible behaviour change → an entry under `## [Unreleased]` in `CHANGELOG.md`, in
    the house style (bold symptom first, then cause and fix).
 5. CLI/MCP/SDK surface change → docs updated ([`docs-maintenance`](../docs-maintenance/SKILL.md)).

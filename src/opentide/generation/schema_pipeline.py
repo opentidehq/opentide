@@ -373,7 +373,7 @@ _Vocabulary_ : `{source_vocab}`
     class Logsources:
         """Resolve log source entries from visibility configuration."""
 
-        def resolve(self, *, qualified: bool = True) -> None | tuple[list[str], list[str]]:
+        def resolve(self, *, qualified: bool = True) -> tuple[list[str], list[str]] | None:
             visibility = VocabularyResolver._visibility()
             if not visibility or not visibility.logsources:
                 return None
@@ -420,7 +420,7 @@ _Vocabulary_ : `{source_vocab}`
     class Detectors:
         """Resolve external detector entries from visibility configuration."""
 
-        def resolve(self) -> None | tuple[list[str], list[str]]:
+        def resolve(self) -> tuple[list[str], list[str]] | None:
             visibility = VocabularyResolver._visibility()
             if not visibility or not visibility.detectors:
                 return None
@@ -563,7 +563,7 @@ _Vocabulary_ : `{source_vocab}`
             if not system_config:
                 logger.critical(
                     "could_not_retrieve_configuration_for_system",
-                    detail=f"Indexed Configurations : {str(config.keys())}",
+                    detail=f"Indexed Configurations : {config.keys()!s}",
                 )
                 raise ValueError(f"Missing configuration for system {self.system}")
 

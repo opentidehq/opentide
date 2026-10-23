@@ -167,7 +167,34 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+# Why each family is here: .agents/skills/ruff/SKILL.md
+select = [
+    "E", "F", "I", "UP", "B", "SIM",
+    "C4", "DTZ", "ERA", "FURB", "G", "ISC", "LOG", "PGH", "PIE", "PLE", "PLW1510", "RUF", "T20",
+    "TID251",
+]
+ignore = [
+    "C408",    # dict(a=1) vs {"a": 1} is style, not a defect
+    "ISC004",  # parenthesising every multi-line string in a list is churn; ISC001-003 stay on
+]
+allowed-confusables = ["–", "×"]
+
+[tool.ruff.lint.per-file-ignores]
+# Entry points whose job is to print: the CLI's JSON writer and small `main()`s.
+"src/opentide/cli/output.py" = ["T201"]
+"src/opentide/ci/state_replay.py" = ["T201"]
+"src/opentide/mcp_server/launcher.py" = ["T201"]
+"src/opentide/vocabulary/sync_upstream.py" = ["T201"]
+"scripts/**" = ["T201"]
+# Tests assert on return codes, and their fakes use class attributes.
+"tests/**" = ["PLW1510", "RUF012"]
+# The requests.Session ban guards tenant TLS policy: platform clients only,
+# minus transport.py, which defines TenantSession.
+"!src/opentide/platforms/**" = ["TID251"]
+"src/opentide/platforms/transport.py" = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"requests.Session".msg = "Platform clients use opentide.platforms.transport.TenantSession, which keeps the tenant's ssl over REQUESTS_CA_BUNDLE and applies a timeout."
 
 [tool.ruff.lint.flake8-bugbear]
 # Typer declares CLI parameters as call defaults; they are immutable markers.

@@ -217,11 +217,9 @@ def _render_rule(rule: dict[str, Any], tenant_name: str) -> tuple[str, str]:
     if not rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions"):
         alert_recommendation = no_recommendation_template.strip()
     else:
-        rule_description += (
-            "\n\n---\n"
-            + "Recommended Actions : "
-            + rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions")
-        )
+        rule_description += "\n\n---\nRecommended Actions : " + rule["detectionAction"].get(
+            "alertTemplate", {}
+        ).get("recommendedActions")
         alert_recommendation = recommendation_template.format(
             recommendation=fix_multiline(
                 rule["detectionAction"].get("alertTemplate", {}).get("recommendedActions"), 8

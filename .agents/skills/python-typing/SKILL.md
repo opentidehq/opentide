@@ -1,20 +1,18 @@
 ---
 name: python-typing
-description: Keep opentide fully typed — ty over the whole src/opentide package with no excluded modules, ruff ANN for annotation coverage, and the policy for casts and ignores. Use when ty reports a diagnostic (CI, pre-commit, ci-local.sh), when adding or changing typed code, or after a ty version bump.
+description: Keep opentide typed — ty over src/opentide (the ported platform packages are the only, shrinking exclusion), annotation expectations, and the policy for casts and ignores. Use when ty reports a diagnostic (CI, pre-commit, ci-local.sh), when adding or changing typed code, when burning down the platform exclusions, or after a ty version bump.
 ---
 
 # Python typing — opentide
 
-The package is type-checked by [ty](https://docs.astral.sh/ty/) end to end: `[tool.ty.src]`
-includes `src/opentide` and excludes nothing. Two checks keep it that way:
+The package is type-checked by [ty](https://docs.astral.sh/ty/): `[tool.ty.src]` includes
+`src/opentide`. The only exclusions are the platform client/deployer packages ported from
+CoreTide (about 100 diagnostics left), listed in `pyproject.toml` as debt: remove an entry
+when its package is clean, never add one. ty runs in `scripts/ci-local.sh --quick`, the
+pre-commit hooks and the CI lint job (`--output-format github` there).
 
-| Check | Guarantees |
-|-------|------------|
-| `uv run ty check src/opentide` | the annotations that exist are consistent |
-| ruff `ANN` (on `src/`) | every function has parameter and return annotations, so ty has something to check |
-
-Both run in `scripts/ci-local.sh --quick`, the pre-commit hooks and the CI lint job
-(`--output-format github` there). The only per-file relief is `ANN` in `tests/`.
+ty checks the annotations that exist; it does not require them. Until ruff `ANN` is enabled
+for `src/`, annotating new and touched functions is a review requirement.
 
 ## Writing typed code
 
@@ -31,6 +29,12 @@ Both run in `scripts/ci-local.sh --quick`, the pre-commit hooks and the CI lint 
   under `TYPE_CHECKING`.
 - Python 3.10 is the floor: no `Self` from `typing` (use `typing_extensions`), no PEP 695
   `type X = ...` / `def f[T]()` syntax.
+
+## Burning down the platform exclusions
+
+Delete one package's entry from `[tool.ty.src].exclude`, run `uv run ty check src/opentide`,
+fix, run that platform's tests (`tests/test_platforms/`), commit. Most diagnostics there are
+`possibly-missing-attribute` on optional tenant settings and untyped vendor SDK objects.
 
 ## Fixing a diagnostic
 
@@ -65,6 +69,6 @@ tries a version without touching the lockfile.
 
 ## Related
 
-- [`ruff`](../ruff/SKILL.md) — `ANN`, `PGH` and the rest of the lint bar
+- [`ruff`](../ruff/SKILL.md) — `PGH` and the rest of the lint bar
 - [`review-checklist`](../review-checklist/SKILL.md) — the definition of done
 - [`uv`](../uv/SKILL.md) — upgrading ty through Dependabot

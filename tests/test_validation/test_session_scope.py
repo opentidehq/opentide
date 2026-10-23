@@ -272,11 +272,11 @@ def twin_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
             encoding="utf-8",
         )
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path.resolve()))
-    IndexManager._cache = None  # noqa: SLF001
+    IndexManager._cache = None
     try:
         return build_registry()
     finally:
-        IndexManager._cache = None  # noqa: SLF001
+        IndexManager._cache = None
 
 
 @pytest.mark.parametrize(

@@ -135,7 +135,7 @@ def vocab_metadata(vocab: str, field=None) -> str | dict:
     return metadata.to_dict()
 
 
-def get_vocab_stage_details(vocabulary: str, stage_identifier: str) -> None | tuple[str, str]:
+def get_vocab_stage_details(vocabulary: str, stage_identifier: str) -> tuple[str, str] | None:
     """
     Return a tuple of the name and description for a particular stage of a vocabulary.
     If no stage correspond, or the vocabulary has no stages, returns nothing.
@@ -563,7 +563,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
 
 def relations_downstream(id):
     tree = {}
-    if get_type(id) in ["signal"]:
+    if get_type(id) == "signal":
         tree = keep_active_rules(childs(id))
     elif get_type(id) == "objective":
         for child in childs(id):

@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 def _venv_bin(env_dir: Path, name: str) -> Path:
     if sys.platform == "win32":
-        suffix = "" if name in {"python"} else ".exe"
+        suffix = "" if name == "python" else ".exe"
         candidate = env_dir / "Scripts" / f"{name}{suffix}"
         if name == "python" and not candidate.exists():
             return env_dir / "Scripts" / "python.exe"
@@ -387,7 +387,7 @@ def test_bare_wheel_imports_every_platform_sdk(tmp_path: Path) -> None:
     assert probe.returncode == 0, probe.stdout + probe.stderr
     print_extras = (
         "from importlib.metadata import metadata; "
-        + "print(metadata('opentide').get_all('Provides-Extra') or [])"
+        "print(metadata('opentide').get_all('Provides-Extra') or [])"
     )
     metadata = _run([str(python), "-c", print_extras], timeout=60)
     assert metadata.stdout.strip() == "[]", metadata.stdout + metadata.stderr

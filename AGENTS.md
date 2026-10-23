@@ -103,10 +103,12 @@ CrowdStrike and HarfangLab: `can_validate is False` — return `supported: False
 
 ## Code quality bar
 
-- **One bar for the whole package.** ruff and ty cover every module under `src/opentide` and
-  `tests`; there is no exclude list. Do not add one: fix the code or, where a tool is wrong,
-  suppress the single site with a reason (`# noqa: RULE -- why`, `# ty: ignore[rule]  # why`).
-- **Fully typed.** Every function in `src/` is annotated (ruff `ANN`) and ty-clean.
+- **One bar for the whole package.** ruff covers every module under `src/opentide`, `tests`
+  and `scripts` with no exclude list. ty covers `src/opentide` except the ported platform
+  packages, listed in `pyproject.toml` as debt to burn down. Never add an exclusion: fix the
+  code or, where a tool is wrong, suppress the single site with a reason
+  (`# noqa: RULE -- why`, `# ty: ignore[rule]  # why`).
+- **Typed.** New and touched functions are fully annotated and ty-clean.
 - **Correctness over style.** [`review-checklist`](.agents/skills/review-checklist/SKILL.md)
   lists the defect classes that have shipped here before; check every diff against it.
 

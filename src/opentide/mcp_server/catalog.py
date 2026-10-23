@@ -208,7 +208,7 @@ def get_chaining_graph(uuid: str) -> dict[str, Any]:
     if not isinstance(relation, dict):
         relation = {}
     lineage = lineages.get(node_uuid)
-    graph: dict[str, Any] = relation if relation else (lineage or {})
+    graph: dict[str, Any] = relation or (lineage or {})
     payload: dict[str, Any] = {
         "uuid": node_uuid,
         "found": True,

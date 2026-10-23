@@ -55,7 +55,7 @@ def get_valid_statuses() -> list[str]:
     for status in statuses_config:
         name = status.get("name")
         if not name:
-            raise Exception(f"Missing name in status definition: {str(status)}")
+            raise Exception(f"Missing name in status definition: {status!s}")
         valid_statuses.append(name)
         logger.info("found_valid_status", detail=name)
 

@@ -125,7 +125,6 @@ def run():
                 body = header + new_references + large_block
 
                 output_path = folder / file
-                # output_path = Path("./DEBUG") / file
                 with open(output_path, "w+", encoding="utf-8") as export:
                     export.write(body)
                     logger.info("migrated_reference_schema_correctly")

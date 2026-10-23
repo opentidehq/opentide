@@ -19,7 +19,7 @@ logger = structlog.get_logger("opentide.platforms.sentinel_one.client")
 
 class SeverityMapping(Enum):
     Informational = "Low"
-    Low = "Low"
+    Low = "Low"  # noqa: PIE796 -- S1 has no informational; Informational aliases it
     Medium = "Medium"
     High = "High"
     Critical = "Critical"

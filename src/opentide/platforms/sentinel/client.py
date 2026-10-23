@@ -117,7 +117,7 @@ class AlertRules:
     """The ``Microsoft.SecurityInsights/alertRules`` operations of one subscription."""
 
     def __init__(
-        self, session: requests.Session, credential: Any, subscription_id: str, timeout: float = 60
+        self, session: TenantSession, credential: Any, subscription_id: str, timeout: float = 60
     ):
         self._session = session
         self._credential = credential

@@ -697,7 +697,7 @@ def _run_live_validator(
             "message": str(exc),
             "_exit_code": 1,
         }
-    except Exception as exc:  # noqa: BLE001 -- one result document is the contract
+    except Exception as exc:
         detail = str(exc).strip()
         error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
         logger.error("query_validation_failed", system=platform, detail=error)

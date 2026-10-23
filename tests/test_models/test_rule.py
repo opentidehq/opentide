@@ -175,6 +175,6 @@ def test_detection_rule_deploy_refuses_a_plan_name_as_a_strategy(
     metadata: dict[str, Any],
 ) -> None:
     bound, deployer = _bound(_sentinel_rule(metadata))
-    with pytest.raises(ValueError, match="STAGING was a deployment plan, removed in 0.17.0"):
+    with pytest.raises(ValueError, match=r"STAGING was a deployment plan, removed in 0\.17\.0"):
         bound.deploy("sentinel", strategies=["STAGING"])
     deployer.assert_not_called()

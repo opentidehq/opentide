@@ -94,7 +94,7 @@ def resolve_run_strategies(values: Iterable[str]) -> RunStrategies:
     try:
         for status in Opentide.Configurations.Deployment.statuses:
             statuses[str(status.name).upper()] = status.strategy
-    except Exception:  # noqa: BLE001 -- the hint is optional; the refusal is not
+    except Exception:
         statuses = {}
     return parse_strategies(values, statuses=statuses)
 
@@ -319,7 +319,7 @@ def _deploy(
                 "plan": plan_payload,
                 "_exit_code": 1,
             }
-        except Exception as exc:  # noqa: BLE001 -- the deployer reports its own failure
+        except Exception as exc:
             logger.warning("tenant_targets_failed", system=system, detail=str(exc))
     for system, uuids in deployment_list.items():
         if system not in mdr_deployers:
@@ -347,7 +347,7 @@ def _deploy(
                     deployer.deploy(mdr_deployment=uuids, strategies=run)
             else:
                 deployer.deploy(mdr_deployment=uuids, strategies=run)
-        except Exception as exc:  # noqa: BLE001 -- one result document is the contract
+        except Exception as exc:
             # A TypeError used to be retried as the pre-strategy signature
             # `deploy(deployment=...)`, which no engine has: its own TypeError
             # replaced the real one. Any other error escaped as a traceback,

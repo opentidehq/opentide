@@ -40,7 +40,7 @@ from opentide.cli.services.validation import run_validate, validate_query_platfo
 from opentide.cli.setup_app import setup_app
 from opentide.cli.share_app import share_app
 from opentide.core.logging import LoggingConfig, init_logging
-from opentide.core.logging import print_banner as print_banner  # noqa: F401
+from opentide.core.logging import print_banner as print_banner
 from opentide.core.root import get_repo_root
 
 logger = structlog.get_logger("opentide.cli.__init__")
@@ -390,7 +390,7 @@ def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
     cli = get_context(ctx)
     try:
         result = run_extract(cli, import_target=target)
-    except Exception as exc:  # noqa: BLE001 - one JSON document is the contract
+    except Exception as exc:
         # Enumerating exception types is how #242 escaped: the importers reach
         # vendor SDKs and half-typed config, so anything they raise has to come
         # back as a result document rather than a Rich traceback. `str(exc)` is

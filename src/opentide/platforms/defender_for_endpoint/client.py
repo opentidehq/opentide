@@ -30,7 +30,7 @@ class SeverityMapping(Enum):
     Low = Severity.low
     Medium = Severity.medium
     High = Severity.high
-    Critical = Severity.high
+    Critical = Severity.high  # noqa: PIE796 -- Defender has no critical; alias of High
 
 
 @dataclass

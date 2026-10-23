@@ -81,4 +81,4 @@ class ConfigurationsLoader:
                 "visibility_config_load_failed",
                 detail=str(exc),
             )
-            raise ValueError(f"Failed to load visibility configuration: {str(exc)}") from exc
+            raise ValueError(f"Failed to load visibility configuration: {exc!s}") from exc

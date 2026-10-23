@@ -1,13 +1,13 @@
 ---
 name: ruff
-description: Lint and format opentide with ruff — one rule set for the whole package and test suite (no excluded modules), what each selected family guards against, how to fix findings safely and when a noqa is acceptable. Use when ruff check or ruff format fails locally, in pre-commit or in CI, or when changing the ruff configuration.
+description: Lint and format opentide with ruff — one rule set for the package, tests and scripts (no excluded modules), what each selected family guards against, how to fix findings safely and when a noqa is acceptable. Use when ruff check or ruff format fails locally, in pre-commit or in CI, or when changing the ruff configuration.
 ---
 
 # Ruff — opentide
 
 `pyproject.toml` → `[tool.ruff]`. Every file under `src/opentide`, `tests` and `scripts` is linted and
-formatted with the same configuration; there is no exclude list and no per-module relief
-beyond the few documented `per-file-ignores`.
+formatted with the same configuration; there is no exclude list, only the few documented
+`per-file-ignores`.
 
 ```bash
 uv run ruff check src/opentide tests scripts
@@ -23,16 +23,22 @@ The pre-commit hooks run the same ruff (`uv run ruff`, pinned by `uv.lock`) on s
 | Family | Guards against |
 |--------|----------------|
 | `E`, `F`, `I`, `UP`, `B`, `SIM` | errors, unused names, import order, outdated syntax, bugbear, simplifications |
-| `ANN` (src) | unannotated functions — see [`python-typing`](../python-typing/SKILL.md); `ANN401` (`Any`) is allowed |
-| `ISC` | implicit string concatenation, e.g. a missing comma in a list |
+| `ISC` | implicit string concatenation, e.g. a missing comma (`ISC004` is off: parenthesising every multi-line string in a list was churn) |
 | `PIE` | duplicate enum values, needless placeholders |
 | `RUF` | mutable class/`fromkeys` defaults, unused `noqa`, ambiguous characters |
 | `PLE`, `PLW1510` | pylint errors; `subprocess.run` without `check=` |
 | `DTZ` | naive datetimes |
 | `PGH` | blanket `# noqa` / `# type: ignore` |
 | `T20` | `print()` — output goes through `opentide.core.logging` (stderr) or `opentide.cli.output` |
-| `TID251` | banned APIs (see `[tool.ruff.lint.flake8-tidy-imports.banned-api]`), e.g. a plain `requests.Session` in place of `TenantSession` |
-| `C4`, `FURB`, `ERA`, `G`, `LOG`, `PT` | comprehensions, modern idioms, commented-out code, logging calls, pytest style |
+| `TID251` | banned APIs: a plain `requests.Session` in `platforms/` instead of `TenantSession` |
+| `C4`, `FURB`, `ERA`, `G`, `LOG` | comprehensions, modern idioms, commented-out code, logging calls |
+
+`per-file-ignores` (each commented in `pyproject.toml`): `T201` for the few entry points
+whose job is to print and for `scripts/`; `TID251` outside `src/opentide/platforms/`;
+`PLW1510`/`RUF012` in tests.
+
+Next candidates, not yet on: `ANN` for `src/` (about 140 unannotated functions) and `PT`
+for tests. Turn one on only together with its fixes.
 
 `typer.Option`/`typer.Argument` are configured as immutable calls, so Typer's call defaults
 don't trip `B008`.

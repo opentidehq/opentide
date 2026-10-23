@@ -170,7 +170,7 @@ def cron_to_timeframe(
     unit = frequency[-1]
     count = int(frequency[:-1])
     min_val = hour = ""
-    if unit == "m" and count > 59 or (unit == "h" and count > 23) or (unit == "d" and count > 30):
+    if (unit == "m" and count > 59) or (unit == "h" and count > 23) or (unit == "d" and count > 30):
         logger.warning(
             "time_boundaries_were_bypassed_expected_usage_1_59m_1_23h_or_1_30",
             detail="Proceeding, but note that behaviour is not guaranteed",

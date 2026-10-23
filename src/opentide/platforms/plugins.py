@@ -65,7 +65,6 @@ class PlatformLoader:
         @staticmethod
         def declare():
             """Registers the engine class for a platform."""
-            pass
 
     @staticmethod
     def import_engine(module_path: str) -> EngineModule:
