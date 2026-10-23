@@ -337,7 +337,9 @@ def test_proxy_reachable_hides_credentials(
     assert check.status == "pass"
     assert seen == [("proxy.example.test", 3128)]
     assert SECRET not in check.message and "alice" not in check.message
-    assert "http://proxy.example.test:3128" in check.message
+    shown = re.match(r"Proxy (\S+) accepts connections", check.message)
+    assert shown is not None, check.message
+    assert shown.group(1) == "http://proxy.example.test:3128"
     assert "NO_PROXY" in check.message
 
 
