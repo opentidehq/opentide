@@ -43,6 +43,11 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger("opentide.cli.output")
 
+#: Keys :func:`envelope` adds to every ``--json`` document.
+ENVELOPE_KEYS = frozenset(
+    {"schema_version", "command", "duration_ms", "exit_code", "summary", "next_actions", "failure"}
+)
+
 #: Payload fields that tell the reader what to do about a result, and the
 #: severity word each one prints under in human output.
 REMEDIATION_FIELDS = ("detail", "advice")
@@ -165,13 +170,18 @@ def envelope(
     failure: Failure | None = None,
     command: str | None = None,
 ) -> dict[str, Any]:
-    """Add the contract's keys to *payload*. Keys the payload already has are kept.
+    """Add the contract's keys to *payload*.
 
+    A payload that already holds one of them raises ``ValueError``: a command
+    key silently shadowing the envelope would change what scripts read.
     ``failure`` is null exactly when the exit code is 0. A payload that failed
     or exits non-zero without an explicit *failure* gets one built from its
     ``error`` or ``message``.
     """
     document = dict(payload)
+    clashes = sorted(ENVELOPE_KEYS & document.keys())
+    if clashes:
+        raise ValueError(f"payload already has envelope key(s): {', '.join(clashes)}")
     if failure is None and (exit_code or document.get("ok") is False):
         failure = Failure(
             code=default_failure_code(str(document.get("status", "failed"))),
@@ -186,15 +196,19 @@ def envelope(
         "next_actions": [action.to_dict() for action in next_actions],
         "failure": None if failure is None else failure.to_dict(),
     }
-    for key, value in additions.items():
-        document.setdefault(key, value)
+    document.update(additions)
     return document
 
 
+def print_document(document: Mapping[str, Any]) -> None:
+    """Write one finished JSON document to stdout."""
+    print(dump_json_text(document, indent=True, default=str))
+
+
 def emit(ctx: CliContext, payload: dict[str, Any], *, exit_code: int = 0) -> None:
-    """Emit machine-readable JSON or raise SystemExit for errors."""
+    """Emit *payload* with the envelope as JSON, or raise SystemExit for errors."""
     if ctx.json_output:
-        print(dump_json_text(envelope(payload, exit_code=exit_code), indent=True, default=str))
+        print_document(envelope(payload, exit_code=exit_code))
     if exit_code != 0:
         raise SystemExit(exit_code)
 
@@ -214,7 +228,9 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
     for a failure), then its notes and at most three next steps.
     """
     if ctx.json_output:
-        emit(ctx, result.payload(), exit_code=result.exit_code)
+        print_document(result.payload())
+        if result.exit_code:
+            raise SystemExit(result.exit_code)
         return
 
     render_result(

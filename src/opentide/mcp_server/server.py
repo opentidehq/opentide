@@ -208,6 +208,7 @@ async def serve_stdio() -> None:
     import anyio
     from mcp.server.stdio import stdio_server
 
+    # Mirrors FastMCP.run_stdio_async (mcp 1.30), with our stdout stream passed in.
     with reserve_stdout() as rpc:
         async with stdio_server(stdout=anyio.wrap_file(rpc)) as (read_stream, write_stream):
             server = mcp._mcp_server  # noqa: SLF001 - what run_stdio_async drives

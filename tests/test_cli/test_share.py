@@ -125,7 +125,11 @@ def test_unknown_target_and_unconfirmed_delete_are_preflight(
     monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
     unknown = invoke_cli("share", "push", "--target", "labb", repo=tide_corpus_repo)
     assert unknown.exit_code == 2
-    failure = json.loads(unknown.stdout)["failure"]
+    payload = json.loads(unknown.stdout)
+    assert payload["preflight"] == "scope_no_match"
+    assert payload["records"] == []
+    assert payload["error"] == payload["message"]
+    failure = payload["failure"]
     assert failure["code"] == "usage_invalid_choice"
     assert failure["argument"] == "--target"
     assert failure["suggestion"] == "lab"
@@ -480,7 +484,10 @@ def test_changed_stops_before_git_or_http(
         extra_env=_GITHUB_PUSH,
     )
     assert unknown.exit_code == 2
-    assert json.loads(unknown.stdout)["failure"]["code"] == "usage_invalid_choice"
+    payload = json.loads(unknown.stdout)
+    assert payload["preflight"] == "scope_no_match"
+    assert payload["records"] == []
+    assert payload["failure"]["code"] == "usage_invalid_choice"
 
     _write_sharing(tide_corpus_repo, enabled=False)
     idle = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
@@ -648,3 +655,43 @@ def test_changed_path_filter_keeps_direct_yaml_children(
     narrowed, stop = _changed_files(tmp_path, None)
     assert narrowed is None
     assert stop == _PREFLIGHT["changed_diff"]
+
+
+@pytest.mark.parametrize(
+    ("actions", "exit_code", "code"),
+    [
+        pytest.param(
+            [("failed", "authentication"), ("failed", "connectivity")],
+            2,
+            "share_unreachable",
+            id="unreachable",
+        ),
+        pytest.param([("created", None), ("failed", "server")], 3, "share_partial", id="partial"),
+        pytest.param([("failed", "server")], 1, "share_failed", id="failed"),
+    ],
+)
+def test_a_failed_run_names_its_failure_code(
+    invoke_cli,
+    tide_corpus_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    actions: list[tuple[str, str | None]],
+    exit_code: int,
+    code: str,
+) -> None:
+    """``failure.code`` tells share's exit 1, 2 and 3 apart."""
+    from opentide.sharing.report import ShareRecord, ShareRun
+
+    _write_sharing(tide_corpus_repo)
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    records = tuple(
+        ShareRecord(object_uuid=f"uuid-{index}", target="lab", action=action, kind=kind)
+        for index, (action, kind) in enumerate(actions)
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.share.run_misp", lambda *args, **kwargs: ShareRun(records)
+    )
+    result = invoke_cli("share", "push", "--type", "objective", repo=tide_corpus_repo)
+    assert result.exit_code == exit_code, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["exit_code"] == exit_code
+    assert payload["failure"]["code"] == code
