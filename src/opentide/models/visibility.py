@@ -37,7 +37,7 @@ class VisibilityLogSource(TideModel):
 
 class VisibilityDetector(TideModel):
     name: str
-    """Detector name. Signals reference it in `detectors`."""
+    """Detector name."""
     description: str
     """What the detector covers."""
     references: list[str] | None = None
@@ -53,10 +53,7 @@ class VisibilityConfig(TideModel):
 
     assets: list[VisibilityAsset] | None = TideField(
         default=None,
-        schema_extra={
-            "title": "Assets",
-            "description": "List of assets that generate logs in the environment",
-        },
+        schema_extra={"title": "Assets"},
     )
     """Assets that generate logs in the environment."""
     logsources: list[VisibilityLogSource] = TideField(

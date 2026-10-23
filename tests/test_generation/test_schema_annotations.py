@@ -74,8 +74,8 @@ def test_enum_descriptions_derive_from_markdown_and_are_mirrored() -> None:
     }
     annotate_editor_schema({"properties": {"status": node}})
     assert node["enumDescriptions"] == [
-        "Strategy: INERT - Does not deploy Being designed",
-        "Staging Deployed to preview tenants",
+        "Strategy: INERT - Does not deploy. Being designed",
+        "Staging. Deployed to preview tenants",
     ]
     assert node["x-enumDescriptions"] == node["enumDescriptions"]
 
@@ -130,7 +130,19 @@ def test_first_sentence(text: str, expected: str) -> None:
 
 def test_plain_text_one_line() -> None:
     assert plain_text("### Title\n\n**Bold** and _italic_ `code`", one_line=True) == (
-        "Title Bold and italic code"
+        "Title. Bold and italic code"
+    )
+    # A log source dropdown: heading and label lines, no blank lines between.
+    logsource = "### Proxy\n**System**: splunk\n**Description**: Web proxy logs.\n\n"
+    assert plain_text(logsource, one_line=True) == (
+        "Proxy. System: splunk. Description: Web proxy logs."
+    )
+    assert plain_text("Ends with a colon:\n\nthen text", one_line=True) == (
+        "Ends with a colon: then text"
+    )
+    # A soft-wrapped sentence stays one sentence.
+    assert plain_text("One sentence\nwrapped here.", one_line=True) == (
+        "One sentence wrapped here."
     )
     assert plain_text("snake_case_name stays") == "snake_case_name stays"
 

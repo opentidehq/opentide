@@ -2,9 +2,12 @@
 
 The field contract, including every optional key, is ``specs/platforms/`` in the
 specifications repository. This module implements that contract. Do not document
-the keys anywhere else. The docstring under each field is the spec table's
-description, shown as the JSON Schema ``description`` in editors; when they
-disagree, the spec wins and the docstring is fixed to match.
+the keys anywhere else. The docstring under each field is the editor hover
+(the JSON Schema ``description``). It starts from the spec table's text but
+describes what this model enforces: where the two differ (``status`` is required
+here, optional in the spec), the docstring follows the code and the difference
+is raised upstream. ``tests/test_models/test_spec_field_descriptions.py``
+reports any other drift.
 """
 
 from __future__ import annotations

@@ -45,6 +45,8 @@ _ITALIC = re.compile(r"(?<![\w`])_(?=\S)([^_\n]+?)(?<=\S)_(?![\w`])")
 _CITATION = re.compile(r"\s*\(Citation:[^)]*\)")
 _HTML_TAG = re.compile(r"</?[a-zA-Z][^>]*>")
 _HEADING = re.compile(r"^#{1,6}\s+", re.MULTILINE)
+_HEADING_LINE = re.compile(r"^(#{1,6}\s.*)$", re.MULTILINE)
+_BLOCK_START = re.compile(r"\n(?=[ \t]*(?:#{1,6}\s|\*\*|[-*+]\s|\d+\.\s))")
 _MARKDOWN = re.compile(r"`|\*\*|__|\[[^\]]+\]\([^)]*\)|^#{1,6}\s", re.MULTILINE)
 
 
@@ -77,11 +79,24 @@ def first_sentence(text: str) -> str:
 def plain_text(markdown: str, *, one_line: bool = False) -> str:
     """Markdown to plain text: one paragraph per Markdown paragraph, or one line."""
     text = _LINK.sub(r"\1", markdown)
+    # A heading, a list item or a bold label line starts a new block even
+    # without a blank line before it.
+    text = _BLOCK_START.sub("\n\n", text)
+    text = _HEADING_LINE.sub(r"\1\n\n", text)
     text = _HEADING.sub("", text)
     text = _EMPHASIS.sub(r"\2", text)
     text = _ITALIC.sub(r"\1", text)
-    text = text.replace("`", "")
-    return " ".join(text.split()) if one_line else _unwrap(text)
+    text = _unwrap(text.replace("`", ""))
+    if not one_line:
+        return text
+    # Paragraphs become sentences, so a heading and the text under it do not
+    # run together.
+    joined = ""
+    for paragraph in text.split("\n\n"):
+        if joined:
+            joined += " " if joined[-1] in ".!?:;" else ". "
+        joined += paragraph
+    return joined
 
 
 def _annotate_description(node: dict[str, Any]) -> None:
