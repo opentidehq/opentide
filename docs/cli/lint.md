@@ -32,8 +32,12 @@ Lint walks `objects/{threats,objectives,rules}/**/*.yaml` and does not rebuild t
 | `--check` | Repeatable. `filenames` or `metadata` |
 | `--fix` | Apply safe filename renames |
 | `--strict` | Exit `1` when any finding exists (CI gate). Default is report-only |
+| `--format` | `text` (code frames, the default), `sarif` or `codequality`: the findings as a SARIF 2.1.0 or GitLab Code Quality report, as for [`validate`](./validate.md#reports-and-ci-annotations) |
+| `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json` |
 
 `--fix` is idempotent.
+
+In a GitHub Actions or Azure Pipelines job each finding is also an annotation on stdout, and the outcome line and the findings go to the job summary, as for [`validate`](./validate.md#reports-and-ci-annotations). A `note` finding (an `info` severity) is a GitHub notice and is not sent to Azure, which has no such level.
 
 ## Output
 

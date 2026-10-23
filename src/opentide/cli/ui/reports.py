@@ -229,4 +229,3 @@ def build_report(
     if report_format is ReportFormat.codequality:
         return codequality_report(diagnostics, path_for=path_for)
     raise ValueError(f"{report_format} is not a report format")
-

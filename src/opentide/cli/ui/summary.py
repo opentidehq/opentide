@@ -201,4 +201,3 @@ def query_summary(result: Mapping[str, Any], *, message: str | None = None) -> s
         lines.append("")
         lines.extend(table(("Tenant", "Queries"), rows[:MAX_ROWS], total=len(rows)))
     return "\n".join(lines) + "\n"
-

@@ -1,12 +1,11 @@
 """CI sinks: inline annotations and a job summary for the CI provider running opentide.
 
-=================  =============================================  ==============================
-Provider           Inline, one line per diagnostic on stdout      Summary (Markdown)
-=================  =============================================  ==============================
-GitHub Actions     ``::error file=,line=,col=,title=<code>::…``   appended to ``$GITHUB_STEP_SUMMARY``
-GitLab CI          none: ``--format codequality`` is the report   ``opentide-reports/summary.md``
-Azure Pipelines    ``##vso[task.logissue type=…;…]…``             ``##vso[task.uploadsummary]<file>``
-=================  =============================================  ==============================
+- GitHub Actions: ``::error file=,line=,col=,title=<code>::<message>`` per
+  diagnostic on stdout; the summary is appended to ``$GITHUB_STEP_SUMMARY``.
+- GitLab CI: nothing inline (``--format codequality`` is the report GitLab
+  shows); the summary is appended to ``opentide-reports/summary.md``.
+- Azure Pipelines: ``##vso[task.logissue type=…;…]<message>`` per diagnostic;
+  the summary is a file attached with ``##vso[task.uploadsummary]<file>``.
 
 The sinks are additive to the ``human``, ``plain`` and ``agent`` modes and
 off in ``json`` and ``mcp``: GitHub and Azure read their commands from
@@ -71,9 +70,7 @@ def active_provider(
     return ci_provider(env)
 
 
-def checkout_root(
-    provider: CiProvider | None, env: Mapping[str, str] | None = None
-) -> Path | None:
+def checkout_root(provider: CiProvider | None, env: Mapping[str, str] | None = None) -> Path | None:
     """The directory the provider checked the repository out to, when it says."""
     env = os.environ if env is None else env
     if provider is None:
@@ -118,9 +115,7 @@ def github_escape_property(text: str) -> str:
     return github_escape_data(text).replace(":", "%3A").replace(",", "%2C")
 
 
-def github_command(
-    level: str, message: str, properties: Iterable[tuple[str, object]] = ()
-) -> str:
+def github_command(level: str, message: str, properties: Iterable[tuple[str, object]] = ()) -> str:
     """``::<level> k=v,…::<message>``, with ``None`` properties left out."""
     rendered = ",".join(
         f"{name}={github_escape_property(str(value))}"

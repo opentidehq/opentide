@@ -27,6 +27,8 @@ opentide validate --check schema
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` |
+| `--format` | `text` (code frames, the default), `sarif` (SARIF 2.1.0 for code scanning) or `codequality` (GitLab Code Quality). See [Reports and CI annotations](#reports-and-ci-annotations) |
+| `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json` |
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. The one exception is `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), which `--strict` reports without failing. Validation failures in `--json` mode include the complete report before the process exits.
 
@@ -50,6 +52,17 @@ error[vocab_unknown]: Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry
 The sample is illustrative because the outcome line carries the run time. Paths are relative to the current directory when you run inside it, otherwise to the workspace; in a terminal they are links your editor opens (`OPENTIDE_LINKS=file|vscode|cursor|none` picks the scheme). `opentide explain <code>` prints what a code means and how to fix it; [Diagnostic codes](./diagnostics.md) lists them all.
 
 One cause is one finding: a dangling reference such as `detection_model` is reported as `invalid_ref` only, not also as `vocab_unknown`.
+
+### Reports and CI annotations
+
+```bash
+opentide validate --strict --format sarif --output opentide-reports/validate.sarif
+opentide validate --format codequality > gl-code-quality-report.json
+```
+
+`--format sarif` writes SARIF 2.1.0: one run whose rules are the [diagnostic codes](./diagnostics.md), each with its `opentide explain` page as help, and one result per finding with its region and, for a vocabulary typo, its fix. `--format codequality` writes the Code Climate JSON GitLab reads from `artifacts:reports:codequality`. Paths are relative to the CI checkout when opentide runs in CI, else to the workspace. A finding that names no file is left out of both. The exit code is the same as without `--format`.
+
+In a GitHub Actions or Azure Pipelines job, each finding is also written to stdout as an annotation (`::error file=…,line=…,col=…,title=<code>::<message>`, or `##vso[task.logissue …]`), and the outcome line and a table of findings go to the job summary; GitLab gets the summary as `opentide-reports/summary.md`. `--json` turns these off. See [CI/CD](../usage/workflows/ci-cd.md#annotations-summaries-and-reports).
 
 ### Diagnostic fields
 
