@@ -301,7 +301,11 @@ def run_generate_docs(
         return phase_failure(exc)
     if result.get("status") == "failed":
         return result
-    return {**result, **generation_result(checklist, **_without_message(result))}
+    # A run that wrote nothing keeps the reason the docs pipeline gave
+    # ("No changed object documentation detected").
+    wrote = any(step.count for step in checklist.steps)
+    message = None if wrote else str(result.get("message") or "") or None
+    return {**result, **generation_result(checklist, message, **_without_message(result))}
 
 
 def _without_message(result: dict[str, object]) -> dict[str, object]:

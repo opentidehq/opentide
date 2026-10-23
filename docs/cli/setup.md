@@ -16,7 +16,27 @@ opentide setup env --yes
 opentide setup hooks --yes
 ```
 
-The interactive wizard uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
+The interactive wizard opens with the opentide logo and the tagline (the one-line pill in a terminal narrower than 82 columns, and no mark with `--no-color` or `NO_COLOR`), then uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. An empty repository name is refused on screen. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
+
+Every `setup` command, scripted or interactive, ends the same way: the files it wrote, its warnings (each once), one outcome line, and numbered next steps when it created a repository:
+
+```text illustrative
+  objects/{threats,objectives,rules}/                your detection catalogue
+  README.md                                          quick start
+  .gitignore                                         files git leaves out
+  .opentide/configurations/platforms/sentinel.toml   platform configuration
+  .github/workflows/opentide.yml                     GitHub Actions pipeline
+
+warning: Found no origin/HEAD, checked-out branch or init.defaultBranch; the pipeline targets 'main', which is not a branch of this repository. Re-run with --default-branch <branch>.
+✓ Created Tutorial Detections in ./tutorial-detections
+
+Next steps
+  1  cd tutorial-detections
+  2  opentide generate · schemas, templates and editor snippets
+  3  opentide validate · check every object before you commit
+```
+
+This is `opentide setup --yes --name "Tutorial Detections" --platform sentinel --ci github --path tutorial-detections` outside a git repository; it is not captured by the docs harness, which runs no `setup`. `--json` returns the same facts: the outcome under `message`, each step's `files`, and the next steps under `next_actions`.
 
 The wizard needs a terminal and a stdout it can draw on, so it is incompatible with `--json`. Combining the two exits non-zero with a JSON error listing the flags to script instead; see [global options](global-options.md).
 
