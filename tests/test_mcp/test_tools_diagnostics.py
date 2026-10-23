@@ -65,14 +65,15 @@ def test_validation_report_issues_gain_the_diagnostic_fields(broken_rule: Path) 
     assert issue["explain"] == "opentide explain vocab_unknown"
     assert issue["help"] == "did you mean 'clear'?"
     assert issue["fix"]["safe"] is True
-    assert issue["fix"]["edits"] == [
-        {
-            "line": issue["line"],
-            "column": issue["column"],
-            "end_column": issue["end_column"],
-            "replacement": "clear",
-        }
-    ]
+    (edit,) = issue["fix"]["edits"]
+    # The CLI's TextEdit shape, whatever keys it carries: MCP adds nothing of its own.
+    expected = {
+        "line": issue["line"],
+        "column": issue["column"],
+        "end_column": issue["end_column"],
+        "replacement": "clear",
+    }
+    assert expected.items() <= edit.items()
 
 
 def test_validation_report_next_actions_explain_then_validate_again(broken_rule: Path) -> None:
