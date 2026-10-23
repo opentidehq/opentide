@@ -39,7 +39,7 @@ def test_render_rule_targets_the_tenant_it_was_listed_from() -> None:
     """Every imported rule used to name the original author's tenant, ``PandoraStores``."""
     rule = _graph_rule("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name='Logon by "admin"')
 
-    _filename, body = mde_importer._render_rule(rule, "Contoso")
+    _filename, body = mde_importer._render_rule(rule, ["Contoso"])
 
     document = yaml.safe_load(body)
     assert document["name"] == 'Logon by "admin"'
@@ -48,18 +48,9 @@ def test_render_rule_targets_the_tenant_it_was_listed_from() -> None:
     assert "PandoraStores" not in body
 
 
-def test_import_never_overwrites_a_rule_from_this_run(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Two rules with one display name, or one per tenant, used to share one file."""
-    listed = {
-        "Contoso": [
-            _graph_rule("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
-            _graph_rule("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
-        ],
-        "Fabrikam": [_graph_rule("cccccccc-cccc-4ccc-8ccc-cccccccccccc")],
-    }
-
+def _run_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, listed: dict[str, list[dict[str, Any]]]
+) -> tuple[dict[str, dict[str, Any]], list[tuple[str, ...]]]:
     class Importer:
         def __init__(self, tenant: SimpleNamespace) -> None:
             self.tenant = tenant
@@ -77,8 +68,9 @@ def test_import_never_overwrites_a_rule_from_this_run(
             )
         ),
     )
+    recorded: list[tuple[str, ...]] = []
     monkeypatch.setattr(mde_importer, "DefenderForEndpointImporter", Importer)
-    monkeypatch.setattr(mde_importer, "record_external_id", lambda *_args: None)
+    monkeypatch.setattr(mde_importer, "record_external_id", lambda *args: recorded.append(args))
     monkeypatch.chdir(tmp_path)
 
     mde_importer.run()
@@ -87,11 +79,65 @@ def test_import_never_overwrites_a_rule_from_this_run(
         path.name: yaml.safe_load(path.read_text(encoding="utf-8"))
         for path in (tmp_path / "Imported").iterdir()
     }
+    return written, recorded
+
+
+def test_import_never_overwrites_a_rule_from_this_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two rules with one display name used to share one file."""
+    written, _recorded = _run_import(
+        tmp_path,
+        monkeypatch,
+        {
+            "Contoso": [
+                _graph_rule("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+                _graph_rule("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+            ],
+            "Fabrikam": [_graph_rule("cccccccc-cccc-4ccc-8ccc-cccccccccccc")],
+        },
+    )
     assert {name: document["metadata"]["uuid"] for name, document in written.items()} == {
-        "Suspicious logon - Contoso.yaml": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        "Suspicious logon - Contoso bbbbbbbb.yaml": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-        "Suspicious logon - Fabrikam.yaml": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "Suspicious logon.yaml": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "Suspicious logon bbbbbbbb.yaml": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "Suspicious logon cccccccc.yaml": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
     }
+
+
+def test_a_rule_in_several_tenants_is_one_file_targeting_all_of_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One detection deployed to two tenants used to import as two files with one UUID."""
+    shared = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+    contoso, fabrikam = _graph_rule(shared), _graph_rule(shared)
+    fabrikam["id"] = "456"
+    written, recorded = _run_import(
+        tmp_path, monkeypatch, {"Contoso": [contoso], "Fabrikam": [fabrikam]}
+    )
+
+    assert list(written) == ["Suspicious logon.yaml"]
+    block = written["Suspicious logon.yaml"]["configurations"]["defender_for_endpoint"]
+    assert block["tenants"] == ["Contoso", "Fabrikam"]
+    # Each tenant keeps its own Graph id as deployment state.
+    assert sorted(recorded) == [
+        (shared, "defender_for_endpoint", "Contoso", "123"),
+        (shared, "defender_for_endpoint", "Fabrikam", "456"),
+    ]
+
+
+def test_tenant_copies_that_differ_are_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    shared = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+    edited = _graph_rule(shared)
+    edited["queryCondition"] = {"queryText": "DeviceLogonEvents\n| take 2"}
+    written, _recorded = _run_import(
+        tmp_path, monkeypatch, {"Contoso": [_graph_rule(shared)], "Fabrikam": [edited]}
+    )
+
+    document = written["Suspicious logon.yaml"]
+    assert "take 1" in document["configurations"]["defender_for_endpoint"]["query"]
+    assert "defender_import_tenants_differ" in caplog.text
 
 
 class _Response:

@@ -207,7 +207,8 @@ opentide generate extract elastic --space staging --include-prebuilt
 
 Configure tenant credentials under `.opentide/configurations/platforms/` before running.
 
-- Sentinel and Defender imports never overwrite one another: when two rules share a display name, the second file name gets the first eight characters of its UUID. Defender file names also include the tenant (`<name> - <tenant>.yaml`), and each imported rule targets the tenant it was listed from.
+- Sentinel and Defender imports never overwrite one another: when two rules share a display name, the second file name gets the first eight characters of its UUID.
+- A Defender detection found in several tenants (one `detectorId`) is imported once, with every one of those tenants under `tenants`; each tenant's Graph id is recorded as deployment state. When the tenants' copies differ, the first tenant's is imported and `defender_import_tenants_differ` names the others.
 - Every Sentinel file is parsed before it is written; one that would not parse is skipped with `sentinel_import_rule_skipped`.
 - The Defender listing follows `@odata.nextLink`, times out after 60 s per page and reports an HTTP error with the tenant and status.
 

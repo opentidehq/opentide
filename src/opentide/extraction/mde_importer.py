@@ -6,6 +6,7 @@ scope, which raised ``KeyError: ''`` before the CLI could report anything.
 """
 
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -79,7 +80,7 @@ configurations:
     status: {status}
     {contributors}
     tenants:
-      - {tenant}
+      - {tenants}
     #flags:
       #-
     
@@ -181,11 +182,11 @@ def fix_multiline(string: str, indentation: int) -> str:
     return "\n".join(fixed_lines)
 
 
-def _render_rule(rule: dict[str, Any], tenant_name: str) -> tuple[str, str]:
+def _render_rule(rule: dict[str, Any], tenant_names: Sequence[str]) -> tuple[str, str]:
     """Return the file name and YAML body for one Defender custom detection.
 
-    The rule is imported for *tenant_name*, the tenant it was listed from, and
-    the file name carries that tenant so two tenants never share a file.
+    The rule targets *tenant_names*, every tenant it was listed from: one
+    detection deployed to several tenants is one opentide rule.
     """
     rule_name = rule["displayName"]
     rule_uuid = rule["detectorId"]
@@ -244,7 +245,7 @@ def _render_rule(rule: dict[str, Any], tenant_name: str) -> tuple[str, str]:
         # A JSON string is a valid YAML double-quoted scalar, so a `"` or `\`
         # in a name or tenant cannot end the string early.
         name=json.dumps(rule_name, ensure_ascii=False),
-        tenant=json.dumps(tenant_name, ensure_ascii=False),
+        tenants="\n      - ".join(json.dumps(name, ensure_ascii=False) for name in tenant_names),
         uuid=rule_uuid,
         created=rule_created,
         modified=rule_modified,
@@ -262,7 +263,7 @@ def _render_rule(rule: dict[str, Any], tenant_name: str) -> tuple[str, str]:
         query=fix_multiline(rule_query, 6),
         status=rule_status,
     ).strip()
-    return sanitize_filename(f"{rule_name} - {tenant_name}"), body
+    return sanitize_filename(rule_name), body
 
 
 def _import_defender_rules() -> None:
@@ -279,19 +280,43 @@ def _import_defender_rules() -> None:
         raise RuntimeError("No Defender for Endpoint tenants are configured")
     destination = Path("Imported")
     destination.mkdir(exist_ok=True)
+    # One detection deployed to several tenants shares its detectorId: it is
+    # one rule targeting all of them, rendered from the first tenant's copy.
+    listed: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for tenant in tenants:
+        for rule in DefenderForEndpointImporter(tenant).list_rules():
+            listed.setdefault(rule["detectorId"], []).append((tenant.name, rule))
+            # The Graph id is per tenant: deployment state, not rule content (RFC 0010).
+            record_external_id(rule["detectorId"], "defender_for_endpoint", tenant.name, rule["id"])
     # Display names are not unique in Defender; never overwrite a file from this run.
     written: set[str] = set()
-    for tenant in tenants:
-        service = DefenderForEndpointImporter(tenant)
-        for rule in service.list_rules():
-            filename, body = _render_rule(rule, tenant.name)
-            if filename.lower() in written:
-                filename = f"{filename} {rule['detectorId'][:8]}"
-            written.add(filename.lower())
-            (destination / f"{filename}.yaml").write_text(body, encoding="utf-8")
-            # The Graph id is deployment state, not rule content (RFC 0010).
-            record_external_id(rule["detectorId"], "defender_for_endpoint", tenant.name, rule["id"])
-            logger.info("imported_defender_rule", detail=filename, arg0=tenant.name)
+    for detector_id, copies in listed.items():
+        names = [name for name, _rule in copies]
+        first = copies[0][1]
+        if any(_content(rule) != _content(first) for _name, rule in copies[1:]):
+            logger.warning(
+                "defender_import_tenants_differ",
+                rule=first["displayName"],
+                uuid=detector_id,
+                detail=f"Imported from {names[0]}; the copies in {', '.join(names[1:])} differ",
+            )
+        filename, body = _render_rule(first, names)
+        if filename.lower() in written:
+            filename = f"{filename} {detector_id[:8]}"
+        written.add(filename.lower())
+        (destination / f"{filename}.yaml").write_text(body, encoding="utf-8")
+        logger.info("imported_defender_rule", detail=filename, tenants=names)
+
+
+def _content(rule: Mapping[str, Any]) -> tuple[object, ...]:
+    """What makes two tenants' copies of one detection the same rule."""
+    return (
+        rule.get("displayName"),
+        rule.get("isEnabled"),
+        rule.get("schedule"),
+        rule.get("queryCondition"),
+        rule.get("detectionAction"),
+    )
 
 
 def run() -> None:
