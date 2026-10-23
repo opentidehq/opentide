@@ -88,12 +88,13 @@ def migrate_vocab_scope_cmd(
     warnings += [f"{path}: {reason}" for path, reason in report["failed_files"].items()]
 
     verb = "Rewrote" if apply else "Would rewrite"
+    changed = len(report["changed_files"])
+    files = f"{changed} file" if changed == 1 else f"{changed} files"
     payload: dict[str, Any] = {
         **report,
-        "message": (
-            f"{verb} {len(report['changed_files'])} file(s) across {report['scanned']} scanned."
-        ),
+        "message": f"{verb} {files} · {report['scanned']} scanned",
         "warnings": warnings,
+        "_summary": {"files": changed, "scanned": report["scanned"]},
     }
     if report["failed_files"]:
         payload["status"] = "issues"
@@ -106,7 +107,7 @@ def migrate_vocab_scope_cmd(
         count = sum(len(items) for items in blocked.values())
         payload["status"] = "issues"
         payload["message"] = (
-            f"{verb} {len(report['changed_files'])} file(s); {count} value(s) "
+            f"{verb} {files}; {count} value(s) "
             "are defined under several stages and cannot be inferred. Choose a stage "
             "for each by hand, then re-run. Pass --force to treat this as success."
         )
