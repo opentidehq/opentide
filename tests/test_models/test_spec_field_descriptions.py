@@ -2,6 +2,8 @@
 
 Skipped without a specifications checkout. Point ``OPENTIDE_SPECIFICATIONS_ROOT``
 at one (as the vocabulary drift check does), or clone it next to this repository.
+CI sets ``OPENTIDE_REQUIRE_SPECIFICATIONS=1``, which turns a missing checkout into
+a failure so the check cannot switch itself off.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from opentide.models.schema_registry import registered_identifiers, resolve_mode
 
 _REPO = Path(__file__).resolve().parents[2]
 SPECS = Path(os.environ.get("OPENTIDE_SPECIFICATIONS_ROOT", _REPO.parent / "specifications"))
+REQUIRED = os.environ.get("OPENTIDE_REQUIRE_SPECIFICATIONS") == "1"
 SPEC_FILES = ["platforms/*.md", "objects/*-1.0.md", "metadata.md"]
 
 #: Deliberate rewrites: the spec row points at another spec page, or describes
@@ -87,9 +90,14 @@ def _spec_rows() -> list[tuple[str, str, str]]:
     return rows
 
 
-@pytest.mark.skipif(not (SPECS / "specs").is_dir(), reason="no specifications checkout")
 def test_field_docstrings_match_the_spec_tables() -> None:
+    if not (SPECS / "specs").is_dir():
+        message = f"no specifications checkout at {SPECS}"
+        if REQUIRED:
+            pytest.fail(f"{message}, and OPENTIDE_REQUIRE_SPECIFICATIONS=1")
+        pytest.skip(message)
     models = _models()
+    checked = 0
     drift = []
     for model_name, key, spec_text in _spec_rows():
         model = models.get(model_name)
@@ -100,6 +108,9 @@ def test_field_docstrings_match_the_spec_tables() -> None:
         info = model.model_fields.get(name)
         if info is None or (model_name, name) in REWRITTEN:
             continue
+        checked += 1
         if _normalise(info.description or "") != _normalise(spec_text):
             drift.append(f"{model_name}.{name}: spec {spec_text!r} != {info.description!r}")
+    # A spec layout change that hides every table must not read as "no drift".
+    assert checked >= 100, f"only {checked} spec rows matched a model field"
     assert drift == []
