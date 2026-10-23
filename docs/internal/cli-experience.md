@@ -280,6 +280,8 @@ The output contract (#619) is in place. Where it differs from the sections above
 | Brand | The pill logo, rasterised as prototyped, is 80 × 10 cells (not 73): the welcome falls back to the one-line pill below 82 columns, the home screen below 76. |
 | Soft wrap | Outcome, warning, error and next-step lines are soft-wrapped in `human` mode too, not only `plain`: Rich would otherwise break a long path mid-word on a TTY. |
 | `opentide --json` with no command | Still prints help (`no_args_is_help`), not a JSON document. |
+| Completion sources | Object UUIDs, names and paths come from the first lines of each object file (`name`, `metadata.uuid`), not from `objects.export.json`: the export is written only by `generate exports objects`, goes stale between runs, and has no file paths. ATT&CK titles come from a line scan of the bundled `att&ck.vocab.toml`, not a TOML parse. Sources attach by option name when a command loads, so every `share` subcommand completes like `share`. Completing a value loads the command's module, as resolving any subcommand option does; the sources add only standard library modules. |
+| Terminal progress | Also recognises `TERM=xterm-ghostty`, and inside tmux the outer terminal's own variables (`KITTY_WINDOW_ID`, `GHOSTTY_RESOURCES_DIR`, `WEZTERM_PANE`, `LC_TERMINAL=iTerm2`), since tmux replaces `TERM` and `TERM_PROGRAM`. `OPENTIDE_PROGRESS=1` sends it to any terminal in `human` mode. Nothing is sent under `--quiet`. A single-step run shows the busy state (3), not 0 then 100 %. |
 
 ## Code references
 
@@ -299,6 +301,8 @@ What is built, and the APIs the next changes extend.
 | `opentide.cli.ui.brand` | `ICON` (28 × 28 px) and `LOGO` (80 × 20 px) as `B`/`W`/`.` grids; `render()` draws any grid with upper half-blocks (`mono=` keeps the shape without colour); `icon()`, `logo()`, `pill()`, `header()`; `can_draw(console)` (`human` mode and an encoding with the blocks); `TAGLINE`. |
 | `opentide.core.progress` | `report_stage(name)`: an engine module says which stage it is in; `listen(callback)` receives them. No Rich. |
 | `opentide.cli.ui.progress` | `Checklist(total=)` and `Checklist.step(name, where=, unit=)` yielding a `Step` (`done(count, where=)`, `skip(reason)`); a live checklist in `human`, `step_line()` per finished step in `plain`/`agent`, nothing in `json`, `mcp` or `--quiet`. `total` and `completed` are there for a percentage display. `plural()`, `seconds_text()`. |
+| `opentide.cli.ui.terminal_progress` | `TerminalProgress(console, total=)` as a context manager, `update(completed)`; `detected(env)`, `enabled(console, mode=, quiet=, env=)`, `sequence(state, percent, tmux=)`. Only the outermost block draws. `Checklist` owns one in `human` mode; `share` opens one directly. |
+| `opentide.cli.completion` | Completion sources (`object_uuids(kinds)`, `object_files(kinds)`, `object_types`, `techniques`, `platforms`, `strategies`, `diagnostic_codes`) and `attach(command, path)`, called from `LazyTyperGroup.load` next to `decorate()`. Standard library only at import time. |
 | `opentide.cli.ui.plan` | `plan_view(changes, strategies=, tenants=)` and `render_plan(console, payload)`; the rows come from `opentide.cli.services.deploy_plan` (`plan_changes`, `plan_message`, `deployed_message`). |
 | `opentide.cli.ui.setup` | `welcome()`, `render_summary()`, `setup_outcome()` for every `setup` command. |
 | `opentide.cli.ui.home` | `gather()` reads the home screen's facts from disk; `home_view()` draws them; `next_steps()`. |

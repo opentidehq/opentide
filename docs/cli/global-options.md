@@ -1,6 +1,6 @@
 ---
 title: Global options
-description: Repository root, data root, debug logging, quiet, colour, JSON output, and version flags shared by all CLI commands.
+description: Repository root, data root, debug logging, quiet, colour, JSON output, version flags, shell completion and terminal progress shared by all CLI commands.
 ---
 
 # Global options
@@ -94,6 +94,36 @@ With `--json`, stdout is one machine-readable JSON document, usage errors includ
 Without `--json`, a result prints its warnings first (`warning: …`), then one outcome line (`✓ message`, `! message` when there are issues, `Skipped: message`), then any `detail` and `advice` from the payload as indented `note:` / `help:` lines, then at most three next steps (`→ command`). A failure prints `error: message` on stderr instead of the outcome line. The text is printed as-is: brackets such as `[error]` or `[deploy, validate]` are shown, never read as Rich markup. `--quiet` keeps only the outcome line and errors: it drops section headers, progress lines, warnings, notes and next steps, but keeps the result tables a command prints as its output, such as `info` and `setup skills discover`.
 
 `--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits `2` with `failure.code` `usage_needs_input`, naming the flags to pass instead — `--yes` plus the explicit selections. A coding agent gets the same refusal without `--json`, even on a terminal. Otherwise the same commands open the wizard as before.
+
+### Progress in the tab and taskbar
+
+While a long command runs (`generate` and its subcommands, `deploy`, `validate query --live`, `share`), opentide also sends the terminal's progress sequence (OSC 9;4), so the tab or the taskbar shows how far the run is: a percentage for a run of several steps, a busy indicator for a single step. The bar is cleared when the command ends, fails, or is stopped with Ctrl-C.
+
+It is sent only in `human` mode, without `--quiet`, to a terminal that reads it: Windows Terminal (`WT_SESSION` set), Ghostty, WezTerm and iTerm2 (`TERM_PROGRAM`), and kitty (`TERM=xterm-kitty`). Inside tmux (`TMUX` set) the sequence goes through tmux passthrough, which needs `set -g allow-passthrough on` in `tmux.conf`; there the outer terminal is recognised from `WT_SESSION`, `KITTY_WINDOW_ID`, `GHOSTTY_RESOURCES_DIR`, `WEZTERM_PANE` or `LC_TERMINAL=iTerm2`, because tmux replaces `TERM` and `TERM_PROGRAM`.
+
+| `OPENTIDE_PROGRESS` | Effect |
+|---------------------|--------|
+| unset | Sent to the terminals above |
+| `0`, `false`, `no`, `off` | Never sent |
+| `1`, `true`, `yes`, `on` | Sent to any terminal in `human` mode, for one that reads OSC 9;4 but is not recognised |
+
+## Shell completion
+
+`opentide --install-completion` installs completion for the current shell (bash, zsh, fish or PowerShell); `opentide --show-completion` prints the script instead. Besides commands and option names, it completes these values from the workspace:
+
+| Value | Completes with | Read from |
+|-------|----------------|-----------|
+| `--uuid` (`validate`, `validate query`, `share`) | Object UUIDs, with the object's name and kind | The `name` and `metadata.uuid` lines at the top of each object file |
+| `--file` (same commands) | Object file paths, relative to the current directory when inside it, otherwise to the workspace; a bare file name when no path matches | The object folders |
+| `--type` | `rule`, `threat`, `objective` | — |
+| `--technique` (`info`) | ATT&CK ids, with their titles | The bundled ATT&CK vocabulary (`--data` or `OPENTIDE_DATA_ROOT` when set) |
+| `--platform` | The platforms enabled in the workspace first, marked `enabled`, then the others | `.opentide/configurations/platforms/*.toml` |
+| `--strategy` (`deploy`, `validate query`) | `PREVIEW`, `RELEASE` | — |
+| `explain <code>` | Diagnostic codes, with what each one means | The pages bundled with `opentide explain` |
+
+`validate query` completes rules only, and a `--type` already on the command line narrows `--uuid` and `--file`. The workspace is the one the command would use: `--repo`, then `OPENTIDE_REPO_ROOT`, then the nearest one up from the current directory. Object folders follow `[paths.objects]` in `.opentide/configurations/paths.toml` when it sets them.
+
+Completion never loads the catalogue the way a command does, so it stays about as fast as `--help`. When nothing matches `--file`, the shell completes file names itself.
 
 ## Strategy
 

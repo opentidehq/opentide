@@ -80,6 +80,8 @@ opentide --install-completion
 opentide --show-completion
 ```
 
+Completion also fills in object UUIDs, object files, ATT&CK techniques, platforms and strategies from the workspace; see [Global options → Shell completion](./global-options.md#shell-completion).
+
 ## Source
 
 Command definitions: `src/opentide/cli/commands/` (the root list is `src/opentide/cli/commands/__init__.py`; global options are in `src/opentide/cli/root.py`), `src/opentide/cli/setup_app.py`, `src/opentide/cli/share_app.py`.
