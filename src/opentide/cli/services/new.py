@@ -316,9 +316,7 @@ def collect_fields(
         fields[path] = shape
         child = shape.model or shape.item_model
         if child is not None:
-            fields.update(
-                collect_fields(child, wanted=wanted, overrides=overrides, prefix=path)
-            )
+            fields.update(collect_fields(child, wanted=wanted, overrides=overrides, prefix=path))
     return fields
 
 
@@ -496,7 +494,9 @@ def fill_template(
         for other in entries:
             if other.index <= entry.index:
                 continue
-            if other.indent <= entry.indent and not (other.role == "item" and other.path == entry.path):
+            if other.indent <= entry.indent and not (
+                other.role == "item" and other.path == entry.path
+            ):
                 break
             if other.role == "item" and other.path == entry.path and not other.commented:
                 found.append(other)
