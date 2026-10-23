@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from opentide.cli.ui.diagnostics import Diagnostic, TextEdit
+from opentide.cli.ui.diagnostics import Diagnostic, TextEdit, split_yaml_lines
 
 
 @dataclass(frozen=True)
@@ -193,41 +193,47 @@ def _unique(
     return unique
 
 
-def end_line(edit: TextEdit) -> int:
-    """The line the edit ends on: its own ``end_line`` when it has one, else its ``line``."""
-    value = getattr(edit, "end_line", None)
-    return value if isinstance(value, int) else edit.line
-
-
 def _overlaps(edit: TextEdit, other: TextEdit) -> bool:
-    return (edit.line, edit.column) < (end_line(other), other.end_column) and (
+    return (edit.line, edit.column) < (other.last_line, other.end_column) and (
         other.line,
         other.column,
-    ) < (end_line(edit), edit.end_column)
+    ) < (edit.last_line, edit.end_column)
 
 
-def _offset(lines: list[str], line: int, column: int) -> int | None:
-    """Where 1-based *line*, *column* (in code points) falls in the joined text."""
-    if not 1 <= line <= len(lines):
+def line_starts(text: str) -> list[tuple[int, int]]:
+    """``(start, end)`` offsets of each line's content, numbered as YAML numbers them.
+
+    ``\r\n``, ``\r`` and ``\n`` each end a line (:func:`split_yaml_lines`).
+    """
+    spans: list[tuple[int, int]] = []
+    position = 0
+    for line in split_yaml_lines(text):
+        spans.append((position, position + len(line)))
+        position += len(line)
+        position += 2 if text.startswith("\r\n", position) else 1
+    return spans
+
+
+def _offset(spans: list[tuple[int, int]], line: int, column: int) -> int | None:
+    """Where 1-based *line*, *column* (in code points) falls in the text."""
+    if not 1 <= line <= len(spans):
         return None
-    content = lines[line - 1]
-    if content.endswith("\r"):
-        content = content[:-1]
-    if not 1 <= column <= len(content) + 1:
+    start, end = spans[line - 1]
+    if not 1 <= column <= end - start + 1:
         return None
-    return sum(len(text) + 1 for text in lines[: line - 1]) + column - 1
+    return start + column - 1
 
 
 def _apply(text: str, edit: TextEdit) -> tuple[str, str] | None:
     """*text* with *edit* applied, and the text it replaced; ``None`` if it does not fit.
 
     The edit replaces from (``line``, ``column``) up to (``end_line``,
-    ``end_column``), so it may span lines; columns count code points.
+    ``end_column``), so it may span lines. The line breaks are left as they
+    are, so a CRLF file keeps its endings.
     """
-    # Split on "\n" only: a "\r" stays with its line, so CRLF files keep their endings.
-    lines = text.split("\n")
-    start = _offset(lines, edit.line, edit.column)
-    end = _offset(lines, end_line(edit), edit.end_column)
+    spans = line_starts(text)
+    start = _offset(spans, edit.line, edit.column)
+    end = _offset(spans, edit.last_line, edit.end_column)
     if start is None or end is None or end <= start:
         return None
     return text[:start] + edit.replacement + text[end:], text[start:end]

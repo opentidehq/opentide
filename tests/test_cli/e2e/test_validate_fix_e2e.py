@@ -1,6 +1,7 @@
 """CLI E2E: ``validate --fix``, ``--fix --dry-run`` and ``--watch`` on the tutorial workspace.
 
-Two typos have a safe fix (``tlp: clearr`` in the rule and in the threat)
+Two values have a safe fix (``tlp: Clear`` in the rule and in the threat: the
+same word as ``clear``, in another case)
 and one finding never does: a dangling ``detection_model`` (``invalid_ref``).
 Output is read with ANSI stripped, since CI forces colour. Which values the
 engine calls safe is the diagnostics' rule; ``test_validate_fix.py`` covers
@@ -90,8 +91,8 @@ def _edit(repo: Path, relpath: Path, old: str, new: str) -> None:
 
 def _typos(repo: Path) -> None:
     """Two safe fixes in two files, and a finding no fix is safe for."""
-    _edit(repo, _RULE, "  tlp: clear\n", "  tlp: clearr\n")
-    _edit(repo, _THREAT, "  tlp: clear\n", "  tlp: clearr\n")
+    _edit(repo, _RULE, "  tlp: clear\n", "  tlp: Clear\n")
+    _edit(repo, _THREAT, "  tlp: clear\n", "  tlp: Clear\n")
     _edit(repo, _RULE, f"detection_model: {_OBJECTIVE}", f"detection_model: {_DANGLING}")
 
 
@@ -152,8 +153,8 @@ def test_fix_applies_only_the_safe_fixes_and_keeps_every_other_byte(
     assert result.exit_code == 1, result.output
     text = _text(result)
     assert (
-        "fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'clearr' → 'clear'\n"
-        "fixed: objects/threats/simulated-actor.yaml:9:8 'clearr' → 'clear'\n"
+        "fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'\n"
+        "fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'\n"
     ) in text
     assert f"error[invalid_ref]: Unknown objective or signal reference '{_DANGLING}'" in text
     assert text.count("error[") == 1
@@ -163,8 +164,8 @@ def test_fix_applies_only_the_safe_fixes_and_keeps_every_other_byte(
     assert "→ opentide validate --fix" not in text
 
     after = _files(tutorial)
-    assert after[_RULE] == before[_RULE].replace(b"  tlp: clearr\n", b"  tlp: clear\n")
-    assert after[_THREAT] == before[_THREAT].replace(b"  tlp: clearr\n", b"  tlp: clear\n")
+    assert after[_RULE] == before[_RULE].replace(b"  tlp: Clear\n", b"  tlp: clear\n")
+    assert after[_THREAT] == before[_THREAT].replace(b"  tlp: Clear\n", b"  tlp: clear\n")
     assert _DANGLING.encode() in after[_RULE], "a reference is never fixed"
     assert b"# the objective from step 4" in after[_RULE]
 
@@ -189,14 +190,14 @@ def test_fix_reports_each_value_in_json(tutorial: Path) -> None:
             "path": "objects/rules/sentinel-kql-rule.yaml",
             "line": 8,
             "code": "vocab_unknown",
-            "before": "clearr",
+            "before": "Clear",
             "after": "clear",
         },
         {
             "path": "objects/threats/simulated-actor.yaml",
             "line": 9,
             "code": "vocab_unknown",
-            "before": "clearr",
+            "before": "Clear",
             "after": "clear",
         },
     ]
@@ -217,7 +218,7 @@ def test_fix_reports_each_value_in_json(tutorial: Path) -> None:
 
 
 def test_fix_with_nothing_left_passes(tutorial: Path) -> None:
-    _edit(tutorial, _RULE, "  tlp: clear\n", "  tlp: clearr\n")
+    _edit(tutorial, _RULE, "  tlp: clear\n", "  tlp: Clear\n")
     result = _run(tutorial, "validate", "--fix")
     assert result.exit_code == 0, result.output
     assert re.search(
@@ -240,10 +241,10 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tutorial: Path) -> None:
         "   version: 1\n"
         "   created: 2026-01-01\n"
         "   modified: 2026-01-02\n"
-        "-  tlp: clearr\n"
+        "-  tlp: Clear\n"
         "+  tlp: clear\n"
     ) in text
-    assert "-  tlp: clearr\n+  tlp: clear\n" in text
+    assert "-  tlp: Clear\n+  tlp: clear\n" in text
     assert text.count("+++ b/") == 2
     # The diff covers the three it would fix; the frame shows the one it would not.
     assert text.count("error[") == 1
@@ -297,14 +298,14 @@ def test_watch_is_refused_where_no_terminal_shows_it(tutorial: Path) -> None:
 def test_watch_in_plain_mode_prints_one_outcome_line_per_run(
     tutorial: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _edit(tutorial, _RULE, "  tlp: clear\n", "  tlp: clearr\n")
+    _edit(tutorial, _RULE, "  tlp: clear\n", "  tlp: Clear\n")
     naps: list[float] = []
 
     def sleep(seconds: float) -> None:
         naps.append(seconds)
         if len(naps) == 1:
             # A save: the next poll sees a new size and re-checks the rule alone.
-            _edit(tutorial, _RULE, "  tlp: clearr\n", "  tlp: clear\n")
+            _edit(tutorial, _RULE, "  tlp: Clear\n", "  tlp: clear\n")
         elif len(naps) == 3:
             raise KeyboardInterrupt
 
@@ -325,7 +326,7 @@ def test_watch_in_plain_mode_prints_one_outcome_line_per_run(
 
 def test_watch_in_a_terminal_redraws_and_exits_0_on_ctrl_c(tutorial: Path) -> None:
     requires_pty()
-    _edit(tutorial, _RULE, "  tlp: clear\n", "  tlp: clearr\n")
+    _edit(tutorial, _RULE, "  tlp: clear\n", "  tlp: Clear\n")
     env = clean_env(tutorial)
     for name in (*AGENT_VARIABLES, *(variable for variable, _ in CI_PROVIDERS), "CI"):
         env.pop(name, None)
@@ -334,7 +335,7 @@ def test_watch_in_a_terminal_redraws_and_exits_0_on_ctrl_c(tutorial: Path) -> No
     session = PtySession(["validate", "--watch"], env=env, cwd=tutorial, timeout=90)
     session.expect("Ctrl-C to stop")
     time.sleep(0.3)
-    _edit(tutorial, _RULE, "  tlp: clearr\n", "  tlp: clear\n")
+    _edit(tutorial, _RULE, "  tlp: Clear\n", "  tlp: clear\n")
     session.expect("re-checked sentinel-kql-rule.yaml")
     session.child.sendcontrol("c")
     run = session.finish()

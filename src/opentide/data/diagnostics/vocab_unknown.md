@@ -13,4 +13,4 @@ metadata:
 
 ## How to fix
 
-Use a value from the vocabulary the label names. When a close value exists, `help` names it and `fix` carries the edit; the edit is marked `safe` when the two differ by a typo. Your editor completes vocabulary values from the generated schemas (`opentide setup vscode`).
+Use a value from the vocabulary the label names. When a close value exists, `help` names it and `fix` carries the edit; the edit is marked `safe` only when the two spell the same word (they differ in case, spaces, `-` or `_`) and hold no digit, so an ATT&CK id is never replaced unreviewed. Your editor completes vocabulary values from the generated schemas (`opentide setup vscode`).

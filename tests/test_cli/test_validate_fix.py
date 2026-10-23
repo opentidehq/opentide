@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from opentide.cli.ui.diagnostics import Diagnostic, Fix, TextEdit
-from opentide.cli.ui.fixes import FixChange, FixPlan, end_line, plan_fixes, safe_edits
+from opentide.cli.ui.fixes import FixChange, FixPlan, line_starts, plan_fixes, safe_edits
 
 _THREAT = (
     "# Simulated threat, kept for the tutorial\n"
@@ -246,29 +246,16 @@ def test_a_file_that_cannot_be_written_is_reported_and_left_out(
     assert open_.read_text() == "tlp: clear\n"
 
 
-@dataclass(frozen=True)
-class _SpanningEdit:
-    """A ``TextEdit`` with ``end_line``, as diagnostics may carry."""
-
-    line: int
-    column: int
-    end_line: int
-    end_column: int
-    replacement: str
-
-
 def test_an_edit_may_span_lines_and_counts_code_points(tmp_path: Path) -> None:
     path = _write(tmp_path, "note: é\ndescription: Detects\n  credential acces\nname: x\n")
-    edit = _SpanningEdit(
+    edit = TextEdit(
         line=2, column=14, end_line=3, end_column=19, replacement="Detects credential access"
     )
-    diagnostic = replace(_diagnostic(path, 2, 14, 21, "unused"), fix=Fix(True, (edit,)))  # type: ignore[arg-type]
+    diagnostic = replace(_diagnostic(path, 2, 14, 21, "unused"), fix=Fix(True, (edit,)))
     written, failed = plan_fixes([diagnostic]).write()
     assert failed == []
     assert [change.before for change in written.changes] == ["Detects\n  credential acces"]
     assert path.read_text() == "note: é\ndescription: Detects credential access\nname: x\n"
-    assert end_line(edit) == 3  # type: ignore[arg-type]
-    assert end_line(TextEdit(4, 1, 2, "x")) == 4
     # "é" is one column, whatever its UTF-8 length.
     accented = _write(tmp_path, "tlp: [é, clearr]\n", "accented.yaml")
     plan = plan_fixes([_diagnostic(accented, 1, 10, 16, "clear")])
@@ -277,9 +264,27 @@ def test_an_edit_may_span_lines_and_counts_code_points(tmp_path: Path) -> None:
 
 def test_an_edit_that_changes_two_values_is_left_out(tmp_path: Path) -> None:
     path = _write(tmp_path, "values: [clearr,\n  ambre]\nother: {a: 1}\n")
-    edit = _SpanningEdit(line=1, column=10, end_line=2, end_column=8, replacement="clear, amber")
-    diagnostic = replace(_diagnostic(path, 1, 10, 16, "unused"), fix=Fix(True, (edit,)))  # type: ignore[arg-type]
+    edit = TextEdit(line=1, column=10, end_line=2, end_column=8, replacement="clear, amber")
+    diagnostic = replace(_diagnostic(path, 1, 10, 16, "unused"), fix=Fix(True, (edit,)))
     assert not plan_fixes([diagnostic])
-    shape = _SpanningEdit(line=3, column=8, end_line=3, end_column=14, replacement="[1]")
-    changed = replace(_diagnostic(path, 3, 8, 14, "unused"), fix=Fix(True, (shape,)))  # type: ignore[arg-type]
+    shape = TextEdit(line=3, column=8, end_line=3, end_column=14, replacement="[1]")
+    changed = replace(_diagnostic(path, 3, 8, 14, "unused"), fix=Fix(True, (shape,)))
     assert not plan_fixes([changed]), "a mapping turned into a list"
+
+
+def test_lines_are_numbered_as_yaml_numbers_them() -> None:
+    text = "a: 1\r\nb: 2\rc: 3\nd: 4"
+    assert [text[start:end] for start, end in line_starts(text)] == [
+        "a: 1",
+        "b: 2",
+        "c: 3",
+        "d: 4",
+    ]
+
+
+def test_an_old_mac_line_ending_file_is_edited_in_place(tmp_path: Path) -> None:
+    text = "name: x\rmetadata:\r  tlp: CLEAR\r"
+    path = _write(tmp_path, text)
+    plan = plan_fixes([_diagnostic(path, 3, 8, 13, "clear")])
+    plan.write()
+    assert path.read_bytes() == text.replace("CLEAR", "clear").encode()

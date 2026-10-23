@@ -64,33 +64,33 @@ Each entry of `report.issues` and `report.warnings` keeps its keys (`yaml_line` 
 | Key | Value |
 |-----|-------|
 | `path` | The file, relative to the workspace, with `/` separators. `null` when no file is at fault |
-| `line` | One-based line. `null` when unknown |
-| `column`, `end_column` | One-based columns of the value (of the key, for a block or a missing field); `end_column` is just past the last character. Best effort, `null` when unknown |
+| `line` | One-based line of what the frame points at. `null` when unknown. Not always `yaml_line + 1`: for a block value (a mapping or a list) it is the line of the key, where `yaml_line` is the block's first child; for a missing field it is the key of the mapping the field belongs in |
+| `column`, `end_column` | One-based columns of the value (of the key, for a block, a missing field or an unknown key); `end_column` is just past the last character. Columns count Unicode code points (`🔥` is one column), not UTF-16 code units. Best effort, `null` when unknown |
 | `help` | What to do, in prose (`did you mean 'clear'?`), or `null` |
-| `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_column", "replacement" }] }`: replace the text from `column` up to `end_column`. `safe` is `true` for a vocabulary typo, never for a reference |
+| `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_line", "end_column", "replacement" }] }`: replace the text from (`line`, `column`) up to (`end_line`, `end_column`). Every suggested value gets a fix. `safe` is `true` only when the two values spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit, so an ATT&CK id, a UUID or `clearr` → `clear` is left for a person or an agent to confirm. A reference fix is never safe |
 | `explain` | `opentide explain <code>` |
 
-`summary` counts `objects`, `errors`, `warnings`, `files`, and `fixable`: the values `--fix` would replace. A run that fails on its findings has `failure.code` `issues_found`.
+`summary` counts `objects`, `errors`, `warnings`, `files` (files with an error), `warning_files` (files with a warning) and `fixable` (the values `--fix` would replace). A run that fails on its findings has `failure.code` `issues_found`.
 
 ### Fixing typos: `--fix`
 
-`--fix` applies the fixes whose `safe` is `true` (see [Diagnostic fields](#diagnostic-fields)), such as `clear` for the vocabulary typo `clearr`, and never one whose `safe` is `false`. A reference (`invalid_ref`) is never safe to fix: a person or an agent decides those. When a run finds safe fixes, its outcome line counts them (`2 fixable with --fix`) and its next step is the same command with `--fix`, also in `next_actions`.
+`--fix` applies the fixes whose `safe` is `true` (see [Diagnostic fields](#diagnostic-fields)), such as `clear` for `tlp: Clear` or `Data Breach` for `Data-Breach`, and never one whose `safe` is `false`: `clear` for `clearr`, an ATT&CK id, a reference (`invalid_ref`). A person or an agent decides those. When a run finds safe fixes, its outcome line counts them (`2 fixable with --fix`) and its next step is the same command with `--fix`, also in `next_actions`.
 
 ```bash
 opentide validate --fix --dry-run
 opentide validate --fix
 ```
 
-`--fix --dry-run` prints the edits as a unified diff, then the findings no safe fix resolves, and writes nothing. The files are unchanged, so the run exits `1` while they have errors. With a vocabulary typo in the tutorial rule:
+`--fix --dry-run` prints the edits as a unified diff, then the findings no safe fix resolves, and writes nothing. The files are unchanged, so the run exits `1` while they have errors. With `tlp: Clear` in the tutorial rule:
 
-```text output-of="opentide validate --fix --dry-run" exit=1 state=vocabulary-typo
+```text output-of="opentide validate --fix --dry-run" exit=1 state=vocabulary-case
 --- a/objects/rules/sentinel-kql-rule.yaml
 +++ b/objects/rules/sentinel-kql-rule.yaml
 @@ -5,7 +5,7 @@
    version: 1
    created: 2026-01-01
    modified: 2026-01-02
--  tlp: clearr
+-  tlp: Clear
 +  tlp: clear
    author: Tutorial Author
    organisation:
@@ -101,8 +101,8 @@ opentide validate --fix
 `--fix` writes the safe fixes, validates again and prints a `fixed:` line per value, then the findings that are left. Only the replaced value changes in each file: comments, quoting, key order, indentation and line endings stay as they were. Each edit is checked before it is written: the file must still parse and differ in that value alone, or the edit is left out and its finding stays. A second run has nothing to apply. The outcome line says what it fixed and what is left:
 
 ```text illustrative
-fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'clearr' → 'clear'
-fixed: objects/threats/simulated-actor.yaml:9:8 'clearr' → 'clear'
+fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
+fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'
 
 error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
    ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
@@ -124,14 +124,14 @@ With `--json` the document is the second run's, so `report` holds what is left, 
 opentide --json validate --fix
 ```
 
-```json output-of="opentide --json validate --fix" state=vocabulary-typo
+```json output-of="opentide --json validate --fix" state=vocabulary-case
 {
   "fixed": [
     {
       "path": "objects/rules/sentinel-kql-rule.yaml",
       "line": 8,
       "code": "vocab_unknown",
-      "before": "clearr",
+      "before": "Clear",
       "after": "clear"
     }
   ],
