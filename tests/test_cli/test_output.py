@@ -8,6 +8,7 @@ import pytest
 
 from opentide.cli.context import CliContext
 from opentide.cli.output import (
+    ENVELOPE_KEYS,
     CommandResult,
     emit,
     emit_error,
@@ -192,9 +193,12 @@ def test_from_payload_moves_private_keys_into_the_envelope(capsys) -> None:
     assert payload["next_actions"] == [{"command": "opentide lint --fix", "reason": "rename"}]
 
 
-def test_envelope_keeps_keys_the_payload_already_has() -> None:
-    document = envelope({"ok": True, "summary": {"kept": 1}}, exit_code=0, command="info")
-    assert document["summary"] == {"kept": 1}
+def test_envelope_refuses_a_payload_that_shadows_its_keys() -> None:
+    """A command key named like an envelope key would silently change what scripts read."""
+    with pytest.raises(ValueError, match="summary"):
+        envelope({"ok": True, "summary": {"kept": 1}}, exit_code=0, command="info")
+    document = envelope({"ok": True}, exit_code=0, command="info")
+    assert set(ENVELOPE_KEYS) <= set(document)
     assert document["command"] == "info"
     assert document["failure"] is None
 
