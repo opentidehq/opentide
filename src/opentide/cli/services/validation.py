@@ -3,25 +3,29 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
-from opentide.cli.ui.contract import USAGE_ERROR, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE
-from opentide.core.logging.config import get_stdout_console
+from opentide.cli.ui.contract import (
+    ISSUES_FOUND,
+    USAGE_ERROR,
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+)
+from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, annotate, diagnostics_from_issues
 from opentide.core.logging.console import emit_section
+from opentide.registry.builder import parse_errors_reported_by_caller
 from opentide.registry.discovery import discover_workspace
-from opentide.validation.errors import format_issues_for_console
 from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.scope import ValidationScope
 from opentide.validation.session import run_validation
 
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from opentide.cli.context import CliContext
     from opentide.deployment.git_repo import RuleScope
     from opentide.platforms.transport import TenantUnreachableError
@@ -208,17 +212,25 @@ def run_validate(
     uuids: list[str] | None = None,
     object_types: list[str] | None = None,
 ) -> dict[str, object]:
-    """Entry point for validate command."""
-    ctx.apply_environment()
-    _reset_validation_env()
+    """Entry point for validate command.
 
-    file_list = list(files or [])
-    if file:
-        file_list.append(file)
-    scope = _build_scope(files=file_list or None, uuids=uuids, object_types=object_types)
-    checks = _checks_for(check)
+    Besides the JSON document, the result carries ``_diagnostics`` (one
+    :class:`Diagnostic` per issue and warning, for the code frames) and
+    ``_summary``; the command pops both before rendering.
+    """
+    # Each unreadable object file becomes a yaml_parse diagnostic, so the
+    # registry does not also log it.
+    with parse_errors_reported_by_caller():
+        ctx.apply_environment()
+        _reset_validation_env()
 
-    report = run_validation(scope=scope, checks=checks)
+        file_list = list(files or [])
+        if file:
+            file_list.append(file)
+        scope = _build_scope(files=file_list or None, uuids=uuids, object_types=object_types)
+        checks = _checks_for(check)
+
+        report = run_validation(scope=scope, checks=checks)
     if not report.ok:
         os.environ["VALIDATION_ERROR_RAISED"] = "1"
 
@@ -232,18 +244,7 @@ def run_validate(
         result["check"] = check.value
     workspace = discover_workspace()
     result["workspace"] = str(workspace)
-
-    if not ctx.json_output and report.issues:
-        from rich.panel import Panel
-        from rich.text import Text
-
-        get_stdout_console().print(
-            Panel(
-                Text(format_issues_for_console(report.issues)),
-                title="[bold red]Validation issues[/]",
-                border_style="red",
-            )
-        )
+    diagnostics = _annotate_report(result, report, workspace)
 
     from opentide.cli.exit_codes import validation_outcome
 
@@ -264,7 +265,63 @@ def run_validate(
     if warnings:
         result["warnings"] = warnings
     result["_exit_code"] = outcome.exit_code
+    if outcome.failed:
+        result["_failure_code"] = ISSUES_FOUND
+    result["_summary"] = _summary(report, diagnostics)
+    result["_diagnostics"] = diagnostics
     return result
+
+
+def _annotate_report(
+    result: dict[str, object], report: ValidationReport, workspace: Path
+) -> list[Diagnostic]:
+    """Add the diagnostic fields to each JSON issue and warning; return the diagnostics."""
+    sources = SourceFiles()
+    payload = cast(dict[str, Any], result["report"])
+    diagnostics: list[Diagnostic] = []
+    for bucket in ("issues", "warnings"):
+        found = diagnostics_from_issues(
+            getattr(report, bucket), workspace=workspace, sources=sources
+        )
+        for entry, diagnostic in zip(payload.get(bucket, []), found, strict=True):
+            annotate(entry, diagnostic)
+        diagnostics.extend(found)
+    return diagnostics
+
+
+def _summary(report: ValidationReport, diagnostics: Sequence[Diagnostic]) -> dict[str, int]:
+    """Counts behind the outcome line."""
+    return {
+        "objects": int(report.stats.get("objects_checked") or 0),
+        "errors": len(report.errors),
+        "warnings": len(report.warnings),
+        "files": len({item.path for item in diagnostics if item.path is not None}),
+    }
+
+
+def plural(count: int, noun: str) -> str:
+    """``1 error``, ``2 errors``."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def validate_outcome_line(summary: Mapping[str, int], *, failed: bool, seconds: float) -> str:
+    """``3 objects valid · 0.9s`` or ``2 errors in 1 file · 3 objects checked · 0.9s``."""
+    objects = plural(summary.get("objects", 0), "object")
+    errors, warnings = summary.get("errors", 0), summary.get("warnings", 0)
+    files = summary.get("files", 0)
+    took = f"{seconds:.1f}s"
+    if not failed and not summary.get("objects"):
+        # A check that reads no object (id-uniqueness, cve, sharing-config).
+        return f"Validation passed · {took}"
+    if not failed:
+        line = f"{objects} valid"
+        if warnings:
+            line += f" · {plural(warnings, 'warning')}"
+        return f"{line} · {took}"
+    counted = plural(errors, "error") if errors else plural(warnings, "warning")
+    where = f" in {plural(files, 'file')}" if files else ""
+    checked = f" · {objects} checked" if summary.get("objects") else ""
+    return f"{counted}{where}{checked} · {took}"
 
 
 def _exempt_warning_lines(report: ValidationReport) -> list[str]:

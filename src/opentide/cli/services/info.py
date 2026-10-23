@@ -66,6 +66,29 @@ def collect_info(
     return payload
 
 
+#: Singular nouns of the counts on the outcome line, in order.
+_COUNT_NOUNS = (("rules", "rule"), ("threats", "threat"), ("objectives", "objective"))
+
+
+def info_summary(payload: dict[str, Any]) -> dict[str, int]:
+    """Counts behind the outcome line: objects by family, and files that failed to load."""
+    counts = payload.get("counts") or {}
+    summary = {family: int(counts.get(family) or 0) for family, _ in _COUNT_NOUNS}
+    summary["load_errors"] = int(payload.get("parse_error_count") or 0)
+    return summary
+
+
+def info_outcome(summary: dict[str, int]) -> str:
+    """``1 rule · 1 threat · 1 objective · 0 load errors``."""
+
+    def counted(count: int, noun: str) -> str:
+        return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+    parts = [counted(summary.get(family, 0), noun) for family, noun in _COUNT_NOUNS]
+    parts.append(counted(summary.get("load_errors", 0), "load error"))
+    return " · ".join(parts)
+
+
 def render_info(payload: dict[str, Any], *, section: str | None = None) -> None:
     """Print the human view of :func:`collect_info`: the section asked for, else the summary."""
     console = get_stdout_console()

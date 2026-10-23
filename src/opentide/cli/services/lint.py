@@ -12,9 +12,14 @@ import structlog
 import yaml
 
 from opentide.cli.enums import LintCheck
-from opentide.cli.ui.contract import NextAction
-from opentide.core.io import parse_yaml
-from opentide.core.logging.config import get_stdout_console
+from opentide.cli.ui.contract import ISSUES_FOUND, NextAction
+from opentide.cli.ui.diagnostics import (
+    LINT_CODES,
+    SourceFiles,
+    annotate,
+    diagnostic_from_lint_finding,
+)
+from opentide.core.io import describe_yaml_error, parse_yaml
 from opentide.documentation.markdown.links import slugify
 
 logger = structlog.get_logger("opentide.cli.services.lint")
@@ -35,6 +40,8 @@ class _ObjectRecord:
     author: str | None = None
     organisation: str | None = None
     parse_error: str | None = None
+    #: 1-based position of the YAML error, when the parser gives one.
+    parse_position: tuple[int, int] | None = None
     expected_stem: str | None = None
     key_lines: dict[str, int] = field(default_factory=dict)
 
@@ -93,7 +100,13 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
     try:
         text = path.read_text(encoding="utf-8")
         data: Any = parse_yaml(text)
-    except (yaml.YAMLError, UnicodeDecodeError, OSError) as exc:
+    except yaml.YAMLError as exc:
+        problem = describe_yaml_error(exc)
+        record.parse_error = problem.message
+        if problem.line is not None and problem.column is not None:
+            record.parse_position = (problem.line, problem.column)
+        return record
+    except (UnicodeDecodeError, OSError) as exc:
         record.parse_error = str(exc)
         return record
     record.key_lines = _top_level_key_lines(text)
@@ -122,10 +135,16 @@ def _finding(
     record: _ObjectRecord,
     message: str,
     *,
+    code: str,
+    field: str | None = None,
     yaml_line: int | None = None,
     **extra: object,
 ) -> dict[str, object]:
-    """One finding. ``uuid`` and ``yaml_line`` are ``None`` when the file does not say."""
+    """One finding. ``uuid`` and ``yaml_line`` are ``None`` when the file does not say.
+
+    *code* and *field* become the ``code`` and ``field_path`` keys, which
+    :func:`_add_diagnostic_fields` appends after the original ones.
+    """
     return {
         "check": check.value,
         "severity": severity,
@@ -134,6 +153,8 @@ def _finding(
         "uuid": record.uuid,
         **extra,
         "message": message,
+        "_code": code,
+        "_field_path": [field] if field else [],
     }
 
 
@@ -180,6 +201,8 @@ def _filename_findings(
                     "error",
                     record,
                     f"Could not parse object YAML: {record.parse_error}",
+                    code=LINT_CODES["parse"],
+                    _position=record.parse_position,
                 )
             )
             continue
@@ -190,6 +213,8 @@ def _filename_findings(
                     "error",
                     record,
                     "Object has no name; cannot check filename slug",
+                    code=LINT_CODES["name"],
+                    field="name",
                     yaml_line=_key_line(record, "name"),
                 )
             )
@@ -203,6 +228,7 @@ def _filename_findings(
             "warning",
             record,
             f"Filename {record.path.name!r} does not match slugify(name)={expected!r}",
+            code=LINT_CODES["filename"],
             expected=dest.relative_to(root).as_posix(),
         )
         if fix:
@@ -237,6 +263,8 @@ def _metadata_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
                     "info",
                     record,
                     "Recommended metadata missing: " + ", ".join(missing),
+                    code=LINT_CODES["metadata"],
+                    field="metadata",
                     yaml_line=_key_line(record, "metadata"),
                 )
             )
@@ -291,16 +319,23 @@ def run_lint(
     renamable = sum(
         1 for item in findings if item.get("expected") and item.get("fixed") is not True
     )
+    _add_diagnostic_fields(target, findings)
+    files = len(records)
+    fixed = sum(1 for item in findings if item.get("fixed") is True)
     result: dict[str, Any] = {
         "message": ("Catalogue lint found issues" if findings else "Catalogue lint passed"),
         "path": str(target),
         "checks": [item.value for item in selected],
         "findings": findings,
         "count": len(findings),
-        "fixed": sum(1 for item in findings if item.get("fixed") is True),
+        "fixed": fixed,
         "status": status,
         "_exit_code": 1 if status == "failed" else 0,
+        "_summary": {"files": files, "findings": len(findings), "fixed": fixed},
+        "_outcome": _outcome_line(findings, files=files, fixed=fixed, root=target),
     }
+    if status == "failed":
+        result["_failure_code"] = ISSUES_FOUND
     if renamable:
         result["_next_actions"] = [
             NextAction("opentide lint --fix", f"rename {renamable} file(s) to match their names")
@@ -308,15 +343,28 @@ def run_lint(
     return result
 
 
-def render_findings(findings: list[dict[str, object]]) -> None:
-    """Print one line per finding for the human view, ahead of the summary line."""
-    console = get_stdout_console()
+def _add_diagnostic_fields(root: Path, findings: list[dict[str, object]]) -> None:
+    """Append ``code``, ``field_path`` and the diagnostic fields to each finding."""
+    sources = SourceFiles()
     for finding in findings:
-        renamed = f" (renamed from {finding['from']})" if finding.get("fixed") is True else ""
-        line = finding.get("yaml_line")
-        where = f"{finding['path']}:{line + 1}" if isinstance(line, int) else finding["path"]
-        console.print(
-            f"[{finding['check']}/{finding['severity']}] {where}: {finding['message']}{renamed}",
-            markup=False,
-            soft_wrap=True,
-        )
+        finding["code"] = finding.pop("_code")
+        finding["field_path"] = finding.pop("_field_path")
+        position = finding.pop("_position", None)
+        if isinstance(position, tuple):
+            finding["line"], finding["column"] = position
+        annotate(finding, diagnostic_from_lint_finding(finding, root=root, sources=sources))
+
+
+def _plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def _outcome_line(findings: list[dict[str, object]], *, files: int, fixed: int, root: Path) -> str:
+    """``3 files clean`` or ``3 findings in 2 files · 1 fixed``."""
+    if not findings:
+        if not files:
+            return f"Catalogue lint passed, but found no object files under {root}"
+        return f"{_plural(files, 'file')} clean"
+    touched = len({str(item.get("path")) for item in findings})
+    line = f"{_plural(len(findings), 'finding')} in {_plural(touched, 'file')}"
+    return f"{line} · {fixed} fixed" if fixed else line

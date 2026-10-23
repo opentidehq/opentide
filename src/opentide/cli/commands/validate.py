@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import typer
 
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
 from opentide.cli.enums import DetectionPlatform, ValidateCheck
-from opentide.cli.output import CommandResult, emit_result, emit_success, emit_usage_error
-from opentide.cli.services.validation import run_validate, validate_query_platform
+from opentide.cli.output import (
+    CommandResult,
+    emit_result,
+    emit_success,
+    emit_usage_error,
+    text_mode,
+)
+from opentide.cli.services.validation import (
+    run_validate,
+    validate_outcome_line,
+    validate_query_platform,
+)
+from opentide.cli.ui.codeframe import render_diagnostics
+from opentide.cli.ui.mode import elapsed_ms
+from opentide.core.logging.config import get_stdout_console
 
 validate_app = typer.Typer(help="Object and query validation")
 
@@ -53,7 +68,19 @@ def validate_group(
         uuids=uuid,
         object_types=object_type,
     )
-    emit_result(cli, CommandResult.from_payload(result, default_message="Validation passed"))
+    diagnostics = result.pop("_diagnostics", [])
+    outcome = CommandResult.from_payload(result, default_message="Validation passed")
+    if cli.json_output:
+        emit_result(cli, outcome)
+        return
+    render_diagnostics(get_stdout_console(), diagnostics, mode=text_mode(cli), quiet=cli.quiet)
+    line = outcome.message
+    if not line.startswith("Validation passed, but"):
+        line = validate_outcome_line(
+            outcome.summary, failed=not outcome.ok, seconds=elapsed_ms() / 1000
+        )
+    # The code frames above show every warning; a warning line would repeat it.
+    emit_result(cli, replace(outcome, outcome=line, warnings=()))
 
 
 @validate_app.command("query")

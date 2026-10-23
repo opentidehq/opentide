@@ -1,0 +1,143 @@
+"""``opentide explain``: a page for every code the CLI emits, and the generated reference."""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+import pytest
+from typer.testing import CliRunner
+
+from opentide.cli import app
+from opentide.cli.services.explain import (
+    REFERENCE_PAGE,
+    diagnostic_codes,
+    load_page,
+    reference_markdown,
+)
+from opentide.cli.ui.diagnostics import LINT_CODES
+
+ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src" / "opentide"
+
+#: Where validation and lint findings get their codes.
+_EMITTERS = (
+    *sorted((SRC / "validation").rglob("*.py")),
+    SRC / "sharing" / "config.py",
+    SRC / "states" / "deployment.py",
+    SRC / "loading" / "object_loader.py",
+    SRC / "registry" / "builder.py",
+)
+_LITERAL = re.compile(r"""\bcode\s*=\s*"([a-z_]+)"|"code":\s*"([a-z_]+)\"""")
+_NAMED = re.compile(r"\bcode\s*=\s*([A-Z_]+)\b")
+_STATE_ERROR = re.compile(r"""DeploymentStateError\(\s*"([a-z_]+)\"""")
+#: ``_string_list(..., "object_type_unknown", ...)`` passes the code positionally.
+_UNKNOWN_CODE = re.compile(r"""^\s*"([a-z_]+_unknown)",$""", re.MULTILINE)
+
+runner = CliRunner()
+
+
+def emitted_codes() -> set[str]:
+    """Every code a validation or lint finding can carry, read from the source."""
+    codes = set(LINT_CODES.values())
+    for path in _EMITTERS:
+        text = path.read_text(encoding="utf-8")
+        codes.update(next(group for group in match if group) for match in _LITERAL.findall(text))
+        codes.update(_STATE_ERROR.findall(text))
+        if path.name == "config.py":
+            codes.update(_UNKNOWN_CODE.findall(text))
+        for name in _NAMED.findall(text):
+            constant = re.search(rf'^{name}\s*=\s*"([a-z_]+)"', text, re.MULTILINE)
+            assert constant, f"{path}: code={name} is not a string constant in that file"
+            codes.add(constant.group(1))
+    return codes
+
+
+def test_the_scan_finds_the_codes_it_protects() -> None:
+    codes = emitted_codes()
+    assert len(codes) >= 30
+    assert {
+        "invalid_ref",
+        "vocab_unknown",
+        "schema_validation",
+        "yaml_parse",
+        "invalid_uuid",
+        "duplicate_id",
+        "invalid_cve",
+        "scope_no_match",
+        "external_id_in_rule",
+        "deprecated_field",
+        "config_enum_unknown",
+        "chaining_relation_unknown",
+        "platform_not_enabled",
+        "object_type_unknown",
+        "external_id_shape",
+        "missing_uuid",
+        "schema_missing",
+    } <= codes
+
+
+def test_every_emitted_code_has_a_page() -> None:
+    missing = sorted(emitted_codes() - set(diagnostic_codes()))
+    assert not missing, f"add src/opentide/data/diagnostics/<code>.md for: {missing}"
+
+
+@pytest.mark.parametrize("code", diagnostic_codes())
+def test_every_page_has_a_summary_an_example_and_a_fix(code: str) -> None:
+    page = load_page(code)
+    assert page is not None
+    assert page.markdown.startswith(f"# {code}\n\n")
+    assert page.summary and page.summary.endswith(".")
+    assert "\n## Example\n" in page.markdown
+    assert "\n## How to fix\n" in page.markdown
+
+
+def test_the_reference_page_is_generated_from_the_pages() -> None:
+    committed = (ROOT / REFERENCE_PAGE).read_text(encoding="utf-8")
+    assert committed == reference_markdown(), (
+        "docs/cli/diagnostics.md is stale: run "
+        "uv run python scripts/build/render_diagnostics_docs.py"
+    )
+
+
+@pytest.mark.parametrize("code", ["", "../README", "vocab_unknown.md", "nope"])
+def test_only_a_page_name_loads(code: str) -> None:
+    assert load_page(code) is None
+
+
+def test_explain_prints_the_page() -> None:
+    result = runner.invoke(app, ["--no-color", "explain", "vocab_unknown"])
+    assert result.exit_code == 0, result.output
+    assert result.stdout.startswith("# vocab_unknown\n\nA value is not in the vocabulary")
+    assert "## How to fix" in result.stdout
+
+
+def test_explain_json_carries_the_page() -> None:
+    result = runner.invoke(app, ["--json", "explain", "invalid_ref"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["code"] == "invalid_ref"
+    assert payload["meaning"] == "A reference names an object that does not exist."
+    assert payload["markdown"].startswith("# invalid_ref")
+    assert payload["ok"] is True
+
+
+def test_an_unknown_code_is_a_usage_error_with_a_suggestion() -> None:
+    result = runner.invoke(app, ["--json", "explain", "vocab_unknwn"])
+    assert result.exit_code == 2
+    failure = json.loads(result.stdout)["failure"]
+    assert failure["code"] == "usage_invalid_choice"
+    assert failure["suggestion"] == "vocab_unknown"
+
+
+def test_explain_without_a_code_lists_them() -> None:
+    result = runner.invoke(app, ["--json", "explain"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert [item["code"] for item in payload["codes"]] == diagnostic_codes()
+    assert payload["summary"] == {"codes": len(diagnostic_codes())}
+    human = runner.invoke(app, ["--no-color", "explain"])
+    assert human.exit_code == 0, human.output
+    assert any(line.startswith("yaml_parse ") for line in human.stdout.splitlines())
+    assert human.stdout.endswith(f"✓ {len(diagnostic_codes())} diagnostic codes\n")

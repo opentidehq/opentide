@@ -99,7 +99,9 @@ def test_hoist_root_flags(argv: list[str], expected: list[str]) -> None:
 def test_quiet_prints_only_the_outcome(tmp_path: Path) -> None:
     result = _invoke("--repo", str(tmp_path), "lint", "--quiet")
     assert result.exit_code == 0, result.output
-    assert result.stdout == "✓ Catalogue lint passed\n"
+    assert result.stdout == (
+        f"✓ Catalogue lint passed, but found no object files under {tmp_path.resolve()}\n"
+    )
     assert result.stderr == ""
 
 

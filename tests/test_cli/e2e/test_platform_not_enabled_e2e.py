@@ -77,10 +77,12 @@ def test_human_output_names_the_disabled_platform(invoke_cli) -> None:
     result = invoke_cli("validate", "--strict", json_output=False)
     assert result.exit_code == 0, result.stdout + result.stderr
     output = " ".join((result.stdout + result.stderr).split())
-    assert "✓ Validation passed" in output
-    assert "warning: " in output
-    assert "configurations.splunk:" in output
+    assert "warning[platform_not_enabled]: this block will not deploy while splunk" in output
+    assert "rule-0003-splunk-spl.yaml:23:3" in output
     assert "opentide setup platforms --splunk" in output
+    assert " valid · 1 warning · " in output
+    # The frame is the warning; it is not printed a second time as a warning line.
+    assert "warning: " not in output
 
 
 @pytest.mark.parametrize(
