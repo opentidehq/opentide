@@ -98,4 +98,11 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "migrate_app",
         "Migrate legacy client repository layouts",
     ),
+    CommandSpec(
+        "tui",
+        "opentide.cli.commands.tui",
+        "tui_cmd",
+        "Browse the catalogue, its diagnostics and ATT&CK coverage in a terminal UI.",
+        rich_help_panel="Workspace",
+    ),
 )
