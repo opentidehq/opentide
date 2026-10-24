@@ -127,3 +127,18 @@ def test_prompt_cancel_raises_keyboard_interrupt(monkeypatch) -> None:
     _construct_and_stub_ask(monkeypatch, "text", None)
     with pytest.raises(KeyboardInterrupt):
         interactive.ask_text("Text")
+
+
+@pytest.mark.parametrize(
+    "token",
+    ["answer", "question", "pointer", "highlighted", "selected", "text", "instruction", "separator"],
+)
+def test_prompt_style_inherits_no_questionary_colour(token: str) -> None:
+    """questionary merges its own style under ours; its amber answer must not survive."""
+    from questionary.constants import DEFAULT_STYLE
+    from questionary.styles import merge_styles_default
+
+    merged = merge_styles_default([DEFAULT_STYLE, interactive.PROMPT_STYLE])
+    attrs = merged.get_attrs_for_style_str(f"class:{token}")
+    assert attrs.color.lower() not in {"ff9d00", "5f819d"}
+    assert attrs.color in ("", "8b949e"), (token, attrs.color)

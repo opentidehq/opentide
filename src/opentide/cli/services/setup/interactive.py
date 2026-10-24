@@ -16,13 +16,14 @@ T = TypeVar("T")
 #: The wizard in the brand: the question mark is a Reflex Blue square with the
 #: white wave, answers and the pointer are bold in the terminal's own colour
 #: (blue is a fill, never a text colour), and a refused answer shows on a
-#: toolbar that cannot be missed.
+#: toolbar that cannot be missed. questionary merges its own style underneath
+#: (an amber answer); ``noinherit`` drops it, so no yellow reaches the screen.
 QMARK = "≋"
 PROMPT_STYLE = Style(
     [
         ("qmark", "fg:#ffffff bg:#001489 bold"),
         ("question", "bold"),
-        ("answer", "bold"),
+        ("answer", "noinherit bold"),
         ("pointer", "bold"),
         ("highlighted", "bold"),
         ("selected", "bold"),
