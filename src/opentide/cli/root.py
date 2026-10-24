@@ -63,7 +63,13 @@ def main_callback(
     data: str | None = typer.Option(
         None, "--data", envvar="OPENTIDE_DATA_ROOT", help="Bundled data root"
     ),
-    debug: bool = typer.Option(False, "--debug", envvar="DEBUG", help="Enable debug logging"),
+    # No envvar here: Click would reject DEBUG='*' (Node tooling exports it) as
+    # an invalid boolean and fail every command. OPENTIDE_DEBUG, and DEBUG when
+    # it is a boolean literal, are read in the callback instead.
+    debug: bool = typer.Option(
+        False, "--debug", help="Enable debug logging. Also OPENTIDE_DEBUG=1"
+    ),
+    quiet: bool = typer.Option(False, "--quiet", help="Print only the outcome line and errors"),
     no_color: bool = typer.Option(
         False,
         "--no-color",
@@ -71,7 +77,9 @@ def main_callback(
         callback=_no_color_before_help,
         help="Disable Rich colour output",
     ),
-    json_output: bool = typer.Option(False, "--json", help="Machine-readable JSON output"),
+    json_output: bool = typer.Option(
+        False, "--json", help="Machine-readable output: one JSON object on stdout"
+    ),
     proxy: str | None = typer.Option(
         None,
         "--proxy",
@@ -93,12 +101,24 @@ def main_callback(
 ) -> None:
     from pathlib import Path
 
+    from opentide.cli.lazy import COMMAND_WORDS_KEY
+    from opentide.cli.ui.mode import OutputMode, resolve_mode, set_mode
+    from opentide.core.runtime import debug_requested
+
+    mode = set_mode(
+        resolve_mode(
+            json_flag=json_output,
+            no_color=no_color,
+            command=ctx.meta.get(COMMAND_WORDS_KEY, ()),
+        )
+    )
     cli_ctx = CliContext(
         repo=Path(repo) if repo else get_repo_root(),
         data=Path(data) if data else None,
-        json_output=json_output,
-        debug=debug,
+        json_output=mode is OutputMode.JSON,
+        debug=debug or debug_requested(),
         no_color=no_color,
+        quiet=quiet,
         repo_explicit=_came_from_command_line(ctx, "repo"),
         proxy=proxy,
     )

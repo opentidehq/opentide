@@ -77,8 +77,8 @@ def test_human_output_names_the_disabled_platform(invoke_cli) -> None:
     result = invoke_cli("validate", "--strict", json_output=False)
     assert result.exit_code == 0, result.stdout + result.stderr
     output = " ".join((result.stdout + result.stderr).split())
-    assert "OK Validation passed" in output
-    assert "WARNING" in output
+    assert "✓ Validation passed" in output
+    assert "warning: " in output
     assert "configurations.splunk:" in output
     assert "opentide setup platforms --splunk" in output
 

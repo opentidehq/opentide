@@ -10,9 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 from rich.console import Console
-from rich.logging import RichHandler
 
-from opentide.core.logging.render import OpentideConsoleRenderer
+from opentide.core.logging.render import ConsoleLogHandler, OpentideConsoleRenderer
 
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
@@ -29,6 +28,10 @@ class LoggingConfig:
     debug: bool = False
     json_output: bool = False
     plain: bool = False
+    #: ``--quiet``: errors only.
+    quiet: bool = False
+    #: Print log lines unwrapped (every mode but ``human``).
+    soft_wrap: bool = False
 
     @classmethod
     def from_env(cls) -> LoggingConfig:
@@ -43,11 +46,15 @@ class LoggingConfig:
     @classmethod
     def from_cli_context(cls, ctx: CliContext) -> LoggingConfig:
         """Build configuration from an active CLI context."""
+        from opentide.cli.ui.mode import OutputMode, get_mode
+
         no_color = bool(os.getenv("NO_COLOR")) or os.getenv("FORCE_COLOR") == "0"
         return cls(
             debug=ctx.debug,
             json_output=ctx.json_output,
             plain=ctx.no_color or no_color,
+            quiet=ctx.quiet,
+            soft_wrap=get_mode() is not OutputMode.HUMAN,
         )
 
 
@@ -124,6 +131,15 @@ def _shared_pre_chain() -> list[Any]:
     ]
 
 
+def log_level(config: LoggingConfig) -> int:
+    """DEBUG with ``--debug``, ERROR with ``--quiet``, WARNING otherwise (JSON included)."""
+    if config.debug:
+        return logging.DEBUG
+    if config.quiet:
+        return logging.ERROR
+    return logging.WARNING
+
+
 def init_logging(config: LoggingConfig | None = None, *, force: bool = False) -> None:
     """Initialise structlog and stdlib logging once per process."""
     global _config, _console, _stdout_console
@@ -131,15 +147,13 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
         return
 
     _config = config or LoggingConfig.from_env()
-    log_level = (
-        logging.DEBUG if _config.debug else logging.INFO if _config.json_output else logging.WARNING
-    )
+    level = log_level(_config)
     _console = _make_console(stderr=True, config=_config)
     _stdout_console = _make_console(stderr=False, config=_config)
 
     root = logging.getLogger()
     root.handlers.clear()
-    root.setLevel(log_level)
+    root.setLevel(level)
 
     if _config.json_output:
         import orjson
@@ -156,14 +170,8 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
             ],
         )
     else:
-        handler = RichHandler(
-            console=_console,
-            rich_tracebacks=not _config.plain,
-            show_path=_config.debug,
-            markup=False,
-            show_level=True,
-            show_time=False,
-        )
+        # One label per line: the renderer writes it, the handler only styles it.
+        handler = ConsoleLogHandler(_console, soft_wrap=_config.soft_wrap, show_time=_config.debug)
         formatter = structlog.stdlib.ProcessorFormatter(
             foreign_pre_chain=_shared_pre_chain(),
             processors=[
@@ -173,7 +181,7 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
         )
 
     handler.setFormatter(formatter)
-    handler.setLevel(log_level)
+    handler.setLevel(level)
     root.addHandler(handler)
 
     structlog.configure(

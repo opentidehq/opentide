@@ -20,6 +20,7 @@ from tests.corpus_support import (
 from typer.testing import CliRunner, Result
 
 from opentide.cli import app
+from opentide.cli.output import ENVELOPE_KEYS
 from opentide.cli.services.setup import skills_registry as skills_registry_mod
 from opentide.cli.services.setup.skills_registry import SkillEntry
 
@@ -113,6 +114,11 @@ def mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
         "opentide.cli.services.setup.skills.fetch_github_bytes",
         lambda path, **_: None,
     )
+
+
+def without_envelope(payload: dict[str, Any]) -> dict[str, Any]:
+    """*payload* without the envelope keys, for pinning a command's own document."""
+    return {key: value for key, value in payload.items() if key not in ENVELOPE_KEYS}
 
 
 def parse_cli_json(result: Result) -> dict[str, Any]:

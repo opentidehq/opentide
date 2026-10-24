@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NoReturn
 
 import typer
 from rich.markup import escape
@@ -41,6 +42,7 @@ from opentide.cli.services.setup.skills_registry import (
     show_skill,
 )
 from opentide.cli.services.setup.vscode import run_vscode_setup
+from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_MISSING_OPTION, USAGE_NEEDS_INPUT
 from opentide.core.logging.config import get_console, get_stdout_console
 
 setup_app = typer.Typer(help="Repository and tooling setup")
@@ -261,11 +263,16 @@ def _require_scripted_for_json(cli: CliContext, command: str, flags: str) -> Non
     """
     if not cli.json_output:
         return
-    emit_error(
+    _needs_input(
         cli,
         f"--json cannot drive the interactive wizard. Run '{command}' with --yes "
         f"and explicit flags ({flags}), or drop --json to use the wizard.",
     )
+
+
+def _needs_input(cli: CliContext, message: str) -> NoReturn:
+    """A prompt nobody can answer (no TTY, ``--json``, an agent): exit 2 naming the flags."""
+    emit_error(cli, message, exit_code=USAGE_EXIT_CODE, code=USAGE_NEEDS_INPUT)
 
 
 def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) -> bool:
@@ -274,14 +281,14 @@ def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) ->
         return True
     if cli.json_output:
         shown = target.as_posix() if isinstance(target, Path) else str(target)
-        emit_error(
+        _needs_input(
             cli,
             f"--json cannot prompt for confirmation. Add --yes to write to '{shown}'.",
         )
     try:
         require_interactive()
     except InteractiveRequiredError as exc:
-        emit_error(cli, f"{exc} Add --yes to confirm this write.")
+        _needs_input(cli, f"{exc} Add --yes to confirm this write.")
     get_stdout_console().print(f"[bold]Target:[/] {escape(str(target.resolve()))}")
     return ask_confirm(message, default=True)
 
@@ -389,7 +396,9 @@ def setup_cmd(
         _require_scripted_for_json(cli, "opentide setup", "--platform, --ci")
         try:
             result = run_interactive_setup(cli, base)
-        except (InteractiveRequiredError, RuntimeError) as exc:
+        except InteractiveRequiredError as exc:
+            _needs_input(cli, str(exc))
+        except RuntimeError as exc:
             emit_error(cli, str(exc))
     emit_success(cli, result)
 
@@ -432,7 +441,7 @@ def setup_repo_cmd(
         try:
             result = run_interactive_repo_setup(cli, base)
         except InteractiveRequiredError as exc:
-            emit_error(cli, str(exc))
+            _needs_input(cli, str(exc))
     emit_success(cli, result)
 
 
@@ -622,7 +631,8 @@ def setup_mcp_cmd(
         emit_error(
             cli,
             "Choose at least one MCP host (--vscode, --cursor, --claude-code, --generic)",
-            exit_code=2,
+            exit_code=USAGE_EXIT_CODE,
+            code=USAGE_MISSING_OPTION,
         )
 
     if yes or hosts:
@@ -637,7 +647,7 @@ def setup_mcp_cmd(
         try:
             result = run_interactive_mcp_setup(base)
         except InteractiveRequiredError as exc:
-            emit_error(cli, str(exc))
+            _needs_input(cli, str(exc))
     emit_success(cli, result)
 
 
@@ -682,7 +692,8 @@ def setup_skills_install_cmd(
             cli,
             "Choose at least one skills target "
             "(--cursor, --claude-code, --generic, --github-copilot)",
-            exit_code=2,
+            exit_code=USAGE_EXIT_CODE,
+            code=USAGE_MISSING_OPTION,
         )
 
     if yes or targets:
@@ -708,7 +719,9 @@ def setup_skills_install_cmd(
         _require_scripted_for_json(cli, "opentide setup skills", "--skill, --all")
         try:
             result = run_interactive_skills_setup(base)
-        except (InteractiveRequiredError, RuntimeError, SkillsManifestError) as exc:
+        except InteractiveRequiredError as exc:
+            _needs_input(cli, str(exc))
+        except (RuntimeError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     emit_success(cli, result)
 

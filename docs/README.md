@@ -78,7 +78,7 @@ opentide deploy metadata --platform splunk
 ```
 
 ```text output-of="opentide deploy metadata --platform splunk" exit=2
-FATAL: Metadata deployment is not implemented for splunk
+error: Metadata deployment is not implemented for splunk
 ```
 ````
 
@@ -86,7 +86,7 @@ FATAL: Metadata deployment is not implemented for splunk
 
 - the command is not in a shell fence on the same page, or is not one the harness runs (`validate`, `lint`, `info`, `generate`, `deploy`);
 - the command returns a code other than `exit=` (`0` when absent), or a non-zero `exit=` sits in a section that never says it exits `` `N` ``;
-- a `text` line is not printed whole and in order, reading stdout and stderr interleaved as a terminal shows them. Write the `--no-color` view; a colour run must carry the same lines, with its rules and FATAL panel read back as `== Title ==` and `FATAL: …`;
+- a `text` line is not printed whole and in order, reading stdout and stderr interleaved as a terminal shows them. Write the `--no-color` view; a colour run must carry the same lines, with its rules read back as `== Title ==`;
 - a `json` value differs from the document returned. Objects may return keys the sample leaves out, and `"..."` stands for any value.
 
 A sample of a failure the finished tutorial does not produce names the edit it needs with `state=NAME`, and the harness makes that edit to its copy of the repository before running the command:
@@ -97,11 +97,11 @@ A sample of a failure the finished tutorial does not produce names the edit it n
 
 The edits live in `REPO_STATES` in the golden test. Add one there instead of leaving a failure sample unchecked.
 
-Pairing is required, not optional, for anything that reads like CLI output. Under `cli/` and `usage/`, a `text`, `json`, or unlabelled fence that holds a result-envelope key (`"ok"` or `"status"`), or a line starting `OK `, `SKIPPED `, `WARNING `, `DEPRECATED `, `FATAL`, or `== … ==`, must carry `output-of=`. If no command the harness runs can print it, mark it `illustrative` instead and say in the prose that it is not captured output:
+Pairing is required, not optional, for anything that reads like CLI output. Under `cli/` and `usage/`, a `text`, `json`, or unlabelled fence that holds a result-envelope key (`"ok"` or `"status"`), or a line starting with an outcome glyph (`✓ `, `✗ `, `! `, `→ `), `error: `, `warning: `, `Skipped: `, `DEPRECATED `, `== … ==`, or a label older releases printed (`OK `, `SKIPPED `, `WARNING `, `FATAL`), must carry `output-of=`. If no command the harness runs can print it, mark it `illustrative` instead and say in the prose that it is not captured output:
 
 ````markdown
 ```text illustrative
-WARNING …
+warning: …
 ```
 ````
 

@@ -43,9 +43,10 @@ All commands inherit [global options](./global-options.md):
 |------|---------|---------|
 | `--repo` | `OPENTIDE_REPO_ROOT` | Detection repository root |
 | `--data` | `OPENTIDE_DATA_ROOT` | Bundled data root override |
-| `--debug` | `DEBUG` | Debug logging |
+| `--debug` | `OPENTIDE_DEBUG` | Debug logging |
+| `--quiet` | — | Only the outcome line and errors |
 | `--no-color` | `NO_COLOR` | Disable Rich colour |
-| `--json` | — | Machine-readable JSON output |
+| `--json` | `OPENTIDE_OUTPUT=json` | One [JSON document](./json-output.md) on stdout |
 | `--version`, `-V` | — | Print the installed version and exit |
 
 ## Typical CI sequence

@@ -8,6 +8,11 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 
 from opentide.cli.enums import DetectionPlatform
+from opentide.cli.ui.contract import (
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+)
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
@@ -185,9 +190,19 @@ def _deploy(
         os.environ.pop(flag, None)
     removed = removed_plan_error()
     if removed is not None:
-        return {"status": "failed", "message": removed, "_exit_code": 2}
+        return {
+            "status": "failed",
+            "message": removed,
+            "_exit_code": 2,
+            "_failure_code": USAGE_INVALID_VALUE,
+        }
     if not strategies:
-        return {"status": "failed", "message": STRATEGY_REQUIRED, "_exit_code": 2}
+        return {
+            "status": "failed",
+            "message": STRATEGY_REQUIRED,
+            "_exit_code": 2,
+            "_failure_code": USAGE_MISSING_OPTION,
+        }
     from opentide.core.registry import Opentide
     from opentide.deployment import CIEnvironment, make_deploy_plan, modified_mdr_files
     from opentide.deployment.ci import is_change_request
@@ -200,7 +215,12 @@ def _deploy(
     try:
         run = resolve_run_strategies(strategies)
     except ValueError as exc:
-        return {"status": "failed", "message": str(exc), "_exit_code": 2}
+        return {
+            "status": "failed",
+            "message": str(exc),
+            "_exit_code": 2,
+            "_failure_code": USAGE_INVALID_CHOICE,
+        }
     try:
         environment = CIEnvironment().environment
         local_debug = environment is CIEnvironment.CIPlatforms.LocalDebug

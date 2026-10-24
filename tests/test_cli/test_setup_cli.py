@@ -29,8 +29,9 @@ def test_setup_without_tty_fails_with_scripted_guidance(tmp_path) -> None:
         app,
         ["--json", "--repo", str(tmp_path), "setup"],
     )
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     assert '"ok": false' in result.stdout
+    assert '"code": "usage_needs_input"' in result.stdout
     assert "--yes" in result.stdout
 
 
