@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import typer
 
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
 from opentide.cli.enums import DetectionPlatform, ValidateCheck
+from opentide.cli.findings import (
+    FORMAT_HELP,
+    OUTPUT_HELP,
+    print_report,
+    publish_findings,
+    publish_summary,
+    refuse_report_on_json_stdout,
+    write_report_file,
+)
 from opentide.cli.output import (
     CommandResult,
     emit_result,
@@ -23,6 +33,7 @@ from opentide.cli.services.validation import (
 )
 from opentide.cli.ui.codeframe import render_diagnostics
 from opentide.cli.ui.mode import elapsed_ms
+from opentide.cli.ui.reports import ReportFormat
 from opentide.core.logging.config import get_stdout_console
 
 validate_app = typer.Typer(help="Object and query validation")
@@ -43,11 +54,14 @@ def validate_group(
     uuid: list[str] | None = typer.Option(None, "--uuid"),
     object_type: list[str] | None = typer.Option(None, "--type"),
     strict: bool = typer.Option(False, "--strict"),
+    report_format: ReportFormat = typer.Option(ReportFormat.text, "--format", help=FORMAT_HELP),
+    output: Path | None = typer.Option(None, "--output", help=OUTPUT_HELP),
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
+    refuse_report_on_json_stdout(cli, report_format, output)
     valid_object_types = ("rule", "threat", "objective")
     unknown_types = sorted(set(object_type or []) - set(valid_object_types))
     if unknown_types:
@@ -70,15 +84,19 @@ def validate_group(
     )
     diagnostics = result.pop("_diagnostics", [])
     outcome = CommandResult.from_payload(result, default_message="Validation passed")
+    write_report_file(report_format, output, diagnostics, command="validate")
     if cli.json_output:
         emit_result(cli, outcome)
         return
+    if report_format is not ReportFormat.text and output is None:
+        print_report(report_format, diagnostics, outcome, command="validate")
     render_diagnostics(get_stdout_console(), diagnostics, mode=text_mode(cli), quiet=cli.quiet)
     line = outcome.message
     if not line.startswith("Validation passed, but"):
         line = validate_outcome_line(
             outcome.summary, failed=not outcome.ok, seconds=elapsed_ms() / 1000
         )
+    publish_findings(cli, diagnostics, outcome, command="validate", outcome=line)
     # The code frames above show every warning; a warning line would repeat it.
     emit_result(cli, replace(outcome, outcome=line, warnings=()))
 
@@ -125,4 +143,7 @@ def validate_query_cmd(
         files=file or (),
         uuids=uuid or (),
     )
+    from opentide.cli.ui.summary import query_summary
+
+    publish_summary(cli, query_summary(result), command="validate query")
     emit_success(cli, result)

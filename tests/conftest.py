@@ -110,6 +110,21 @@ def _isolate_ci_event_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
+#: Variables that switch on the CLI's CI sinks: annotations on stdout and a job
+#: summary file. This suite runs in GitHub Actions, where every CLI test would
+#: otherwise print ``::error`` lines into the output it asserts on and append
+#: to the real job summary. ``CI`` goes too, so a run there sees the same
+#: provider as a local run: none. A test that needs one sets it.
+_CI_SINK_ENV = ("CI", "GITHUB_ACTIONS", "GITLAB_CI", "TF_BUILD", "GITHUB_STEP_SUMMARY")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ci_sinks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start every test outside CI."""
+    for name in _CI_SINK_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
 #: Variables that pick the CLI output mode. A developer running the suite from a
 #: coding agent (``CLAUDECODE``, ``AI_AGENT``, ...) would otherwise get agent
 #: mode in every CLI test, and ``OPENTIDE_DEBUG`` would turn on debug logging.

@@ -9,6 +9,8 @@ from opentide.ci.gates import github_premerge_if
 from opentide.ci.inflight import github_inflight_job, github_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    GATE_COMMANDS,
+    REPORTS_DIR,
     document_steps,
     github_deploy_env,
     header_comment,
@@ -16,6 +18,7 @@ from opentide.ci.stages import (
     pip_install,
     production_deploy_steps,
     query_platforms,
+    report_path,
     reviewed_query_validation_command,
     staging_deploy_steps,
     trusted_platform_config_commands,
@@ -49,6 +52,40 @@ def _setup_steps(options: CiRenderOptions, *, full_history: bool = False) -> str
 
 def _run_steps(commands: list[str]) -> str:
     return "\n".join(f"- run: {cmd}" for cmd in commands)
+
+
+#: The validate job writes SARIF and uploads it, so findings show as code
+#: scanning alerts. Code scanning is free on public repositories and needs
+#: GitHub Advanced Security on private ones, so private repositories skip the
+#: upload: remove ``!github.event.repository.private`` once it is enabled. The
+#: upload never fails the job (a fork's pull request cannot write alerts).
+VALIDATE_PERMISSIONS = "contents: read\nactions: read\nsecurity-events: write"
+
+
+def _report_upload_steps() -> str:
+    """Keep the reports as an artifact, and send the SARIF to code scanning."""
+    steps = [
+        "- name: Upload opentide reports\n"
+        "  if: ${{ !cancelled() }}\n"
+        "  uses: actions/upload-artifact@v4\n"
+        "  with:\n"
+        "    name: opentide-reports\n"
+        f"    path: {REPORTS_DIR}/\n"
+        "    if-no-files-found: ignore"
+    ]
+    for command in GATE_COMMANDS:
+        sarif = report_path(command, "sarif")
+        steps.append(
+            f"- name: Upload {command} findings to code scanning\n"
+            "  if: ${{ !cancelled() && !github.event.repository.private && "
+            f"hashFiles('{sarif}') != '' }}}}\n"
+            "  uses: github/codeql-action/upload-sarif@v3\n"
+            "  continue-on-error: true\n"
+            "  with:\n"
+            f"    sarif_file: {sarif}\n"
+            f"    category: opentide-{command}"
+        )
+    return "\n".join(steps)
 
 
 def _reviewed_tenants_step(name: str, default_branch: str, commands: list[str]) -> str:
@@ -252,14 +289,21 @@ def render_github(options: CiRenderOptions) -> str:
         # ``--changed`` diffs from the pull request's merge base, or from the
         # pushed commit's parent: neither is in a one-commit checkout.
         _setup_steps(options, full_history=bool(queries)),
-        _run_steps(object_validate_commands()),
+        _run_steps(object_validate_commands("sarif")),
         _reviewed_tenants_step("Validate queries on reviewed tenants", branch, queries),
+        _report_upload_steps(),
     )
     deploy_env = github_deploy_env()
     generate_steps = join_blocks(setup, _run_steps(["opentide generate"]))
 
     jobs: list[str] = [
-        _github_job("validate", name="Validate", env=deploy_env, steps=validate_steps),
+        _github_job(
+            "validate",
+            name="Validate",
+            env=deploy_env,
+            permissions=VALIDATE_PERMISSIONS,
+            steps=validate_steps,
+        ),
         _github_job("generate", name="Generate", needs="validate", steps=generate_steps),
     ]
 

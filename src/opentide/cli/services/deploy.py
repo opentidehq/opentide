@@ -14,7 +14,6 @@ from opentide.cli.ui.contract import (
     USAGE_MISSING_OPTION,
 )
 from opentide.core.index_manager import IndexManager
-from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 
 logger = structlog.get_logger("opentide.cli.services.deploy")
@@ -259,15 +258,11 @@ def _deploy(
             )
         deployment_list = {platform_key: deployment_list[platform_key]}
     if len(deployment_list) == 0:
-        environment = CIEnvironment().environment
-        if environment is CIEnvironment.CIPlatforms.GitHubActions and not ctx.json_output:
-            # GitHub only parses workflow commands from stdout, and never wrapped.
-            get_stdout_console().print(
-                f"::warning::{_NO_RULES_MATCHED}",
-                markup=False,
-                highlight=False,
-                soft_wrap=True,
-            )
+        if not ctx.json_output:
+            from opentide.cli.ui.ci import emit_warning
+
+            # A run-level annotation on GitHub and Azure; nothing elsewhere.
+            emit_warning(_NO_RULES_MATCHED)
         return _nothing_to_deploy(_NO_RULES_MATCHED, dry_run=dry_run)
     deployed: list[str] = []
     plan_payload: dict[str, list[str]] = {
