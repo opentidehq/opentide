@@ -33,6 +33,7 @@ _COMMAND_KEYS = {
     "arguments",
     "options",
     "example",
+    "output_schema",
 }
 _OPTION_KEYS = {
     "name",
@@ -86,6 +87,39 @@ def test_every_entry_has_the_documented_keys(tree: dict) -> None:
             assert set(option) == _OPTION_KEYS, (entry["path"], option["name"])
     for option in tree["global_options"]:
         assert set(option) == _OPTION_KEYS
+
+
+def test_each_command_that_runs_names_its_output_schema(tree: dict) -> None:
+    """A $ref into the document's $defs; null for a group that only prints help."""
+    for entry in tree["commands"]:
+        schema = entry["output_schema"]
+        if not entry["runs_alone"] or entry["path"] == "mcp start":
+            assert schema is None, entry["path"]
+            continue
+        refs = [option["$ref"] for option in schema["anyOf"]]
+        assert refs[-1] == "#/$defs/CommandError", entry["path"]
+        for ref in refs:
+            assert ref.removeprefix("#/$defs/") in tree["$defs"], (entry["path"], ref)
+
+
+def test_output_schemas_resolve_and_check_a_real_document(tree: dict) -> None:
+    import jsonschema
+
+    jsonschema.Draft202012Validator.check_schema({"$defs": tree["$defs"]})
+    schema = {**_entry(tree, "commands")["output_schema"], "$defs": tree["$defs"]}
+    jsonschema.validate(tree, schema)
+    broken = {**tree, "commands": "not a list"}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(broken, schema)
+
+
+def test_human_tree_builds_no_schema() -> None:
+    from opentide.cli.services.introspect import command_tree
+
+    root = typer.main.get_command(app)
+    payload = command_tree(root, schemas=False)
+    assert "$defs" not in payload
+    assert all("output_schema" not in entry for entry in payload["commands"])
 
 
 def test_tree_lists_every_visible_root_command_in_help_order(tree: dict) -> None:

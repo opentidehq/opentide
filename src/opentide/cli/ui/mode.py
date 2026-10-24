@@ -133,6 +133,23 @@ def resolve_mode(
     return OutputMode.HUMAN
 
 
+#: ``OPENTIDE_JSON_INDENT`` values: ``0`` prints one line, ``2`` indents by two spaces.
+JSON_INDENT_VALUES = {"0": False, "2": True}
+
+
+def json_indent(*, env: Mapping[str, str] | None = None, stdout: TextIO | None = None) -> bool:
+    """Whether a JSON document is indented: on a TTY, unless ``OPENTIDE_JSON_INDENT`` says.
+
+    A pipe, a file or a parser gets one compact line. Any value of
+    ``OPENTIDE_JSON_INDENT`` other than ``0`` or ``2`` is ignored.
+    """
+    env = os.environ if env is None else env
+    requested = JSON_INDENT_VALUES.get(env.get("OPENTIDE_JSON_INDENT", "").strip())
+    if requested is not None:
+        return requested
+    return _is_tty(sys.stdout if stdout is None else stdout)
+
+
 def set_mode(mode: OutputMode) -> OutputMode:
     """Fix the mode for the rest of this command run."""
     global _mode

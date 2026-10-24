@@ -7,6 +7,7 @@ one JSON document (``--json``) or as warnings, one outcome line and next steps
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, NoReturn
@@ -26,7 +27,7 @@ from opentide.cli.ui.contract import (
     NextAction,
     did_you_mean,
 )
-from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
+from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode, json_indent
 from opentide.cli.ui.render import (
     AGENT_TIP,
     labelled_text,
@@ -205,9 +206,18 @@ def envelope(
     return document
 
 
+def document_text(document: Mapping[str, Any]) -> str:
+    """*document* as JSON ending in exactly one newline: indented on a TTY, else one line.
+
+    ``OPENTIDE_JSON_INDENT=0|2`` overrides the terminal check.
+    """
+    return dump_json_text(document, indent=json_indent(), default=str)
+
+
 def print_document(document: Mapping[str, Any]) -> None:
     """Write one finished JSON document to stdout."""
-    print(dump_json_text(document, indent=True, default=str))
+    sys.stdout.write(document_text(document))
+    sys.stdout.flush()
 
 
 def emit(ctx: CliContext, payload: dict[str, Any], *, exit_code: int = 0) -> None:

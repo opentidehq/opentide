@@ -129,9 +129,16 @@ opentide --json commands
           "…": "…"
         }
       ],
-      "example": "opentide validate query --platform sentinel"
+      "example": "opentide validate query --platform sentinel",
+      "output_schema": {
+        "anyOf": [
+          { "$ref": "#/$defs/QueryValidationResult" },
+          { "$ref": "#/$defs/CommandError" }
+        ]
+      }
     }
   ],
+  "$defs": { "QueryValidationResult": { "…": "…" }, "CommandError": { "…": "…" } },
   "ok": true,
   "status": "completed",
   "message": "49 commands",
@@ -148,6 +155,8 @@ opentide --json commands
 | `options[].type` | `string`, `integer`, `number`, `boolean`, `choice` (with `choices`), `path`, … |
 | `options[].envvars` | Environment variables that set the option. |
 | `example` | A command line to paste: the first example in the command's `--help`, or the command with its required arguments and options filled in. |
+| `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. `null` for a group that only prints its help, and for `mcp start`, which prints JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
+| `$defs` | The schemas each `output_schema` refers to. |
 
 Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 49 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
 
