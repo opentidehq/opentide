@@ -14,7 +14,13 @@ from typer.testing import CliRunner, Result
 
 from opentide.cli import app
 from opentide.cli.services import new as new_service
-from opentide.cli.services.new import Organisation, collect_fields, fill_template, index_template
+from opentide.cli.services.new import (
+    PLACEHOLDER_MARKER,
+    Organisation,
+    collect_fields,
+    fill_template,
+    index_template,
+)
 from opentide.core.io import parse_yaml
 
 _SGR = re.compile(r"\x1b\[[0-9;]*m")
@@ -150,6 +156,121 @@ def test_new_rule_with_platforms_warns_about_disabled_ones(workspace: Path) -> N
 def test_name_collision_appends_the_uuid(workspace: Path) -> None:
     first = parse_cli_json(_new(workspace, "threat", "--name", "Seed Threat"))
     assert Path(first["file_path"]).name == f"seed-threat-{first['uuid'][:8]}.yaml"
+
+
+def _lint(root: Path, *args: str) -> Result:
+    clear_runtime_caches()
+    env = {"OPENTIDE_REPO_ROOT": str(root), "OPENTIDE_TIDE_WORKSPACE": str(root)}
+    return CliRunner().invoke(app, ["--json", "--repo", str(root), "lint", *args], env=env)
+
+
+def test_placeholders_are_marked_and_fail_lint_strict(workspace: Path) -> None:
+    payload = parse_cli_json(_new(workspace, "threat", "--name", "Marked Threat"))
+    path = Path(payload["file_path"])
+    marked = [
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.endswith(f"  {PLACEHOLDER_MARKER}")
+    ]
+    assert len(marked) == len(payload["placeholders"]), marked
+    # The invented ATT&CK technique is marked, so it cannot pass as chosen coverage.
+    assert any(line.lstrip().startswith("- T") for line in marked), marked
+
+    plain = _lint(workspace, "--check", "placeholders")
+    assert plain.exit_code == 0, plain.stdout + plain.stderr
+    strict = _lint(workspace, "--strict", "--check", "placeholders")
+    assert strict.exit_code == 1
+    findings = [
+        finding
+        for finding in parse_cli_json(strict)["findings"]
+        if finding["path"].endswith(path.name)
+    ]
+    assert len(findings) == len(marked)
+    assert {(finding["code"], finding["severity"]) for finding in findings} == {
+        ("placeholder", "warning")
+    }
+
+
+def test_rule_blocks_stay_disabled_without_an_inert_status(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(new_service, "inert_status", lambda workspace: None)
+    payload = parse_cli_json(
+        _new(workspace, "rule", "--name", "No Inert", "--platform", "sentinel")
+    )
+    assert any("INERT" in warning for warning in payload["warnings"])
+    assert "configurations.sentinel.status" in payload["placeholders"]
+    text = Path(payload["file_path"]).read_text(encoding="utf-8")
+    assert parse_yaml(text)["configurations"]["sentinel"]["enabled"] is False
+    status = next(line for line in text.splitlines() if line.strip().startswith("status:"))
+    assert status.endswith(PLACEHOLDER_MARKER)
+
+
+def test_platform_blocks_hold_detection_logic(workspace: Path) -> None:
+    payload = parse_cli_json(
+        _new(
+            workspace,
+            "rule",
+            "--name",
+            "Logic",
+            "--platform",
+            "sentinel_one",
+            "--platform",
+            "harfanglab",
+        )
+    )
+    data = parse_yaml(Path(payload["file_path"]).read_text(encoding="utf-8"))
+    blocks = data["configurations"]
+    assert blocks["sentinel_one"]["condition"]["single_event"]["query"]
+    assert "configurations.sentinel_one.condition.single_event.query" in payload["placeholders"]
+    assert blocks["harfanglab"]["sigma"]
+    assert any(
+        path.startswith("configurations.harfanglab.sigma") for path in payload["placeholders"]
+    )
+
+
+def test_new_objects_start_on_the_latest_revision(workspace: Path) -> None:
+    from opentide.models.schema_registry import latest_identifier
+
+    payload = parse_cli_json(_new(workspace, "rule", "--name", "Latest"))
+    assert payload["schema"] == latest_identifier("rule")
+    data = parse_yaml(Path(payload["file_path"]).read_text(encoding="utf-8"))
+    assert data["metadata"]["schema"] == latest_identifier("rule")
+
+
+def test_new_refuses_outside_a_workspace(tmp_path: Path) -> None:
+    empty = tmp_path / "home"
+    empty.mkdir()
+    result = _new(empty, "threat", "--name", "Stray")
+    assert result.exit_code == 1
+    failure = parse_cli_json(result)["failure"]
+    assert failure["code"] == "workspace_not_found"
+    assert list(empty.iterdir()) == []
+
+
+def test_path_without_a_yaml_suffix_gets_one(workspace: Path) -> None:
+    target = workspace / "objects" / "threats" / "oddfile"
+    payload = parse_cli_json(_new(workspace, "threat", "--name", "Odd", "--path", str(target)))
+    assert Path(payload["file_path"]) == target.with_name("oddfile.yaml")
+    assert payload["next_actions"][0]["command"].endswith("oddfile.yaml")
+    assert not target.exists()
+
+
+def test_a_file_that_appears_while_filling_is_not_overwritten(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = workspace / "objects" / "threats" / "racer.yaml"
+    fill = new_service.fill_template
+
+    def racing_fill(*args: object, **kwargs: object) -> object:
+        target.write_text("theirs\n", encoding="utf-8")
+        return fill(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(new_service, "fill_template", racing_fill)
+    result = _new(workspace, "threat", "--name", "Racer")
+    assert result.exit_code == 1
+    assert parse_cli_json(result)["failure"]["code"] == "path_exists"
+    assert target.read_text(encoding="utf-8") == "theirs\n"
 
 
 def test_path_folder_and_existing_file(workspace: Path, tmp_path: Path) -> None:
@@ -383,11 +504,38 @@ def test_fill_template_on_a_toy_model() -> None:
         "tags": ["..."],
         "items": [{"label": "..."}],
         "block": {"flag": False},
-        "empty": {},
+        "empty": {"level": 1},
         "note": "hello",
     }
-    assert result.placeholders == ["kind", "tags", "items.label"]
-    assert "  #level:" in result.text
+    assert result.placeholders == ["kind", "tags", "items.label", "empty.level"]
+    # A default the template shows is kept and is not a placeholder; the
+    # other optional key stays commented.
+    assert "  flag: false\n  #level:" in result.text
+    # A block with no default gets one live key instead of ``{}``, so
+    # uncommenting another key below it keeps the YAML valid.
+    assert "  level: 1  # opentide:placeholder" in result.text
+    marked = [line for line in result.text.splitlines() if line.endswith(PLACEHOLDER_MARKER)]
+    assert marked == [
+        f"kind: first  {PLACEHOLDER_MARKER}",
+        f"  - ...  {PLACEHOLDER_MARKER}",
+        f"  - label: ...  {PLACEHOLDER_MARKER}",
+        f"  level: 1  {PLACEHOLDER_MARKER}",
+    ]
+
+
+class _Lists(BaseModel):
+    values: list[str] | None = None
+
+
+class _ListsOnly(BaseModel):
+    holder: _Lists
+
+
+def test_a_block_with_no_scalar_key_says_to_delete_the_braces() -> None:
+    template = "holder:\n  #values:\n    #- \n"
+    result = fill_template(template, collect_fields(_ListsOnly), values={}, schema={})
+    assert parse_yaml(result.text) == {"holder": {}}
+    assert "holder: {}  # delete {} before uncommenting a key" in result.text
 
 
 def test_index_template_paths() -> None:

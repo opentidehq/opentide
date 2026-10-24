@@ -25,13 +25,13 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 | Option | Purpose |
 |--------|---------|
 | `--name` | The object's `name`. The filename is its slug |
-| `--path` | A file to write, or a folder to write it in. Default: the family's folder from the workspace configuration (`objects/threats/`, `objects/objectives/`, `objects/rules/`) |
+| `--path` | A file to write, or a folder to write it in. A file name without `.yaml` or `.yml` gets `.yaml`, the only files the catalogue loads. Default: the family's folder from the workspace configuration (`objects/threats/`, `objects/objectives/`, `objects/rules/`) |
 | `--platform` | `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud` or `elastic` |
 | `--objective`, `--threat` | The UUID of an object already in the catalogue. A malformed UUID exits `2` with `usage_invalid_value`; one no object carries exits `2` with `reference_not_found` |
 
 ## What the new file holds
 
-`new` starts from `.opentide/templates/<family>.<major>.<minor>.template.yaml`, the template `opentide generate templates` writes, so the comments that list every optional key stay in the file. When the template or the family's JSON schema is missing, `new` runs `opentide generate templates schemas` first and says so in a warning.
+`new` starts from `.opentide/templates/<family>.<major>.<minor>.template.yaml` for the family's latest revision (`rule.1.1`), the template `opentide generate templates` writes, so the comments that list every optional key stay in the file. The editor's default revision in the workspace configuration can be older; a new object never starts on it, so `opentide rules unreviewed` does not list it for its schema. When the template or the family's JSON schema is missing, `new` runs `opentide generate templates schemas` first and says so in a warning.
 
 | Key | Value |
 |-----|-------|
@@ -41,11 +41,20 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 | `metadata.version` | `1` |
 | `metadata.tlp` | `amber`, so a new object is never cleared for sharing by accident |
 | `metadata.author` | `git config user.name`, read from the workspace. Left out, with a warning, when git has none |
-| `metadata.organisation` | The `{uuid, name}` most objects in the catalogue carry. Left out when none does |
-| Each `--platform` block | `enabled: true` and the first deployment status whose strategy is `INERT` (`DESIGN` by default), so the block deploys nothing until you move its status on |
-| Any other required value | A placeholder: the first value the generated schema allows, or `...` for free text |
+| `metadata.organisation` | The `{uuid, name}` most objects in the catalogue carry. Left out, with a warning, when none does |
+| Each `--platform` block | `enabled: true` and the first deployment status whose strategy is `INERT` (`DESIGN` by default), so the block deploys nothing until you move its status on. When no status has strategy `INERT`, the block is `enabled: false` and its status is a placeholder, with a warning |
+| Detection logic in each block | Placeholders for what the platform needs to deploy: the `query`, Defender's `scope`, SentinelOne's `condition.single_event.query`, HarfangLab's `sigma` block |
+| Any other required value | A placeholder: the first value the generated schema allows, or `...` for free text. A required block whose keys are all optional keeps the defaults the template shows, or else gets its first key as a placeholder, so uncommenting another key keeps the YAML valid |
 
-The filename follows the convention [`opentide lint`](./lint.md) checks: `slugify(name)`, with `-{uuid[:8]}` appended when that name is already taken in the folder. `new` never overwrites a file: a `--path` that exists exits `1` with `path_exists`.
+The filename follows the convention [`opentide lint`](./lint.md) checks: `slugify(name)`, with `-{uuid[:8]}` appended when that name is already taken in the folder. `new` never overwrites a file: a `--path` that exists, or a file that appears there while `new` runs, exits `1` with `path_exists`.
+
+### Placeholders
+
+Every line holding a placeholder ends in `# opentide:placeholder`. The file validates, so `validate` and the commit hook pass, but [`opentide lint`](./lint.md#placeholders) reports each marked line as a `placeholder` warning, and `lint --strict` in CI fails until you replace the value and delete the marker. An ATT&CK technique or a category picked to make the file valid is never mistaken for one somebody chose.
+
+### Outside a workspace
+
+`new` writes only into a workspace. When neither `.opentide/` nor `objects/` is in the directory `--repo` names, or the one discovery finds, it exits `1` with `workspace_not_found` and suggests `opentide setup`, the same test as `doctor`'s `workspace` check. Otherwise a stray `new` in your home directory would make it the workspace every folder below it discovers.
 
 ## Prompts
 
@@ -73,7 +82,7 @@ A rule block for a platform the workspace has not enabled is written anyway, wit
 | `path` | The new file, relative to the current directory when it is inside it, otherwise to the workspace |
 | `file_path` | The same file, absolute |
 | `uuid` | `metadata.uuid` |
-| `type`, `schema` | The family and its schema identifier (`rule`, `rule::1.0`) |
+| `type`, `schema` | The family and its schema identifier (`rule`, `rule::1.1`) |
 | `name`, `author`, `organisation`, `platforms` | What was written; `author` and `organisation` are `null` when left out |
 | `placeholders` | Dotted keys whose value is a placeholder to replace |
 | `detail` | The note human output prints under the outcome line; absent when there is no placeholder |

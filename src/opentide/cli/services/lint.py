@@ -37,6 +37,8 @@ class _ObjectRecord:
     parse_error: str | None = None
     expected_stem: str | None = None
     key_lines: dict[str, int] = field(default_factory=dict)
+    #: Zero-based line and key of each value ``opentide new`` marked as a placeholder.
+    placeholder_lines: list[tuple[int, str]] = field(default_factory=list)
 
 
 def _object_files(root: Path) -> list[Path]:
@@ -87,6 +89,25 @@ def _top_level_key_lines(text: str) -> dict[str, int]:
     return lines
 
 
+#: The trailing comment ``opentide new`` writes on a value it invented.
+_PLACEHOLDER = re.compile(r"\s#\s*opentide:placeholder\s*$")
+_MARKED_KEY = re.compile(r"^\s*(?:-\s+)?([A-Za-z_][\w.-]*)\s*:")
+
+PLACEHOLDER_CODE = "placeholder"
+PLACEHOLDER_HELP = "replace the value, then delete the '# opentide:placeholder' comment"
+
+
+def _placeholder_lines(text: str) -> list[tuple[int, str]]:
+    """Zero-based line and key (or ``list item``) of each placeholder marker."""
+    marked: list[tuple[int, str]] = []
+    for number, line in enumerate(text.splitlines()):
+        if _PLACEHOLDER.search(line) is None:
+            continue
+        key = _MARKED_KEY.match(line)
+        marked.append((number, key.group(1) if key else "list item"))
+    return marked
+
+
 def _load_record(root: Path, path: Path) -> _ObjectRecord:
     relative = path.relative_to(root).as_posix()
     record = _ObjectRecord(path=path, relative=relative)
@@ -97,6 +118,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
         record.parse_error = str(exc)
         return record
     record.key_lines = _top_level_key_lines(text)
+    record.placeholder_lines = _placeholder_lines(text)
     if not isinstance(data, dict):
         record.parse_error = "object YAML is not a mapping"
         return record
@@ -243,6 +265,24 @@ def _metadata_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
     return findings
 
 
+def _placeholder_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """One warning per value ``opentide new`` marked as a stand-in nobody chose."""
+    return [
+        _finding(
+            LintCheck.placeholders,
+            "warning",
+            record,
+            f"{key} holds a placeholder value written by opentide new",
+            yaml_line=line,
+            code=PLACEHOLDER_CODE,
+            help=PLACEHOLDER_HELP,
+        )
+        for record in records
+        if not record.parse_error
+        for line, key in record.placeholder_lines
+    ]
+
+
 def _rewrite_renamed_paths(findings: list[dict[str, object]]) -> None:
     """Point earlier findings at the path ``--fix`` just renamed the file to."""
     renamed = {
@@ -267,11 +307,17 @@ def run_lint(
 ) -> dict[str, object]:
     """Run catalogue hygiene checks without a full registry rebuild."""
     target = root.resolve()
-    selected = list(checks) if checks else [LintCheck.filenames, LintCheck.metadata]
+    selected = (
+        list(checks)
+        if checks
+        else [LintCheck.filenames, LintCheck.metadata, LintCheck.placeholders]
+    )
     records = [_load_record(target, path) for path in _object_files(target)]
     findings: list[dict[str, object]] = []
     if LintCheck.metadata in selected:
         findings.extend(_metadata_findings(records))
+    if LintCheck.placeholders in selected:
+        findings.extend(_placeholder_findings(records))
     if LintCheck.filenames in selected:
         findings.extend(_filename_findings(target, records, fix=fix))
         _rewrite_renamed_paths(findings)
@@ -320,3 +366,5 @@ def render_findings(findings: list[dict[str, object]]) -> None:
             markup=False,
             soft_wrap=True,
         )
+        if finding.get("help"):
+            console.print(f"  help: {finding['help']}", markup=False, soft_wrap=True)

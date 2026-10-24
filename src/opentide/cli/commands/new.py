@@ -11,7 +11,10 @@ import typer
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import DetectionPlatform
 from opentide.cli.output import CommandResult, emit_error, emit_result
-from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_NEEDS_INPUT
+from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_NEEDS_INPUT, NextAction
+
+#: ``failure.code`` when neither ``.opentide/`` nor ``objects/`` marks a workspace.
+WORKSPACE_NOT_FOUND = "workspace_not_found"
 
 new_app = typer.Typer(
     help=(
@@ -85,6 +88,18 @@ def _run(
 ) -> None:
     cli = get_context(ctx)
     cli.apply_environment()
+    from opentide.core.root import is_workspace_root
+
+    workspace = cli.repo.resolve()
+    if not is_workspace_root(workspace):
+        # Writing here would make this folder the workspace that every
+        # directory below it discovers.
+        emit_error(
+            cli,
+            f"No workspace at {workspace}: no .opentide/ or objects/ there or above it",
+            code=WORKSPACE_NOT_FOUND,
+            next_actions=[NextAction("opentide setup", "create a workspace first")],
+        )
     resolved_name = _ask_name(cli, family, name)
     chosen = _ask_platforms(platforms or []) if family == "rule" else []
 
@@ -100,7 +115,6 @@ def _run(
         workspace_artifacts,
     )
 
-    workspace = cli.repo.resolve()
     generated = missing_artifacts(workspace, family)
     if generated:
         outcome = run_generate(cli, phases=generated)
@@ -140,7 +154,7 @@ def _run(
             code=error.code,
             argument=error.argument,
         )
-    warnings: list[str] = []
+    warnings: list[str] = list(payload.pop("warnings", []))
     if generated:
         payload["generated"] = generated
         warnings.append(
@@ -158,6 +172,10 @@ def _run(
         )
     if not payload.get("author"):
         warnings.append("No git user.name is set, so metadata.author is left out")
+    if not payload.get("organisation"):
+        warnings.append(
+            "No object in the catalogue names an organisation, so metadata.organisation is left out"
+        )
     if warnings:
         payload["warnings"] = warnings
     emit_result(cli, CommandResult.from_payload(payload))

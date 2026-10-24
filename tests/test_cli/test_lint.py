@@ -299,7 +299,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload == {
         "path": str(tmp_path.resolve()),
-        "checks": ["filenames", "metadata"],
+        "checks": ["filenames", "metadata", "placeholders"],
         "findings": [
             {
                 "check": "metadata",
@@ -402,6 +402,65 @@ def test_lint_object_built_only_from_a_merge_has_no_lines(tmp_path: Path) -> Non
         ("objects/threats/b.yaml", "metadata", None),
         ("objects/threats/a.yaml", "filenames", None),
     ]
+
+
+_MARKED = """\
+name: Simulated Actor
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000001
+  schema: threat::1.0
+  author: SOC
+  organisation: Example
+threat:
+  mitre_attack:
+    - T1548  # opentide:placeholder
+  description: |  # opentide:placeholder
+    ...
+  note: "# opentide:placeholder is quoted, not a marker"
+"""
+
+
+def test_lint_placeholders_reports_each_marked_line(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _MARKED)
+    result = run_lint(tmp_path, checks=[LintCheck.placeholders])
+    assert result["checks"] == ["placeholders"]
+    # ``yaml_line`` is zero-based, as for the other checks; human output adds one.
+    assert [
+        (finding["code"], finding["severity"], finding["yaml_line"], finding["message"])
+        for finding in result["findings"]
+    ] == [
+        (
+            "placeholder",
+            "warning",
+            8,
+            "list item holds a placeholder value written by opentide new",
+        ),
+        (
+            "placeholder",
+            "warning",
+            9,
+            "description holds a placeholder value written by opentide new",
+        ),
+    ]
+    assert all("opentide:placeholder" in str(finding["help"]) for finding in result["findings"])
+
+
+def test_lint_placeholders_fail_strict_only(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _MARKED)
+    plain = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
+    assert plain.exit_code == 0, plain.stdout + plain.stderr
+    assert (
+        "objects/threats/simulated-actor.yaml:10: description holds a placeholder" in plain.stdout
+    )
+    assert (
+        "help: replace the value, then delete the '# opentide:placeholder' comment" in plain.stdout
+    )
+    strict = runner.invoke(app, ["--json", "--repo", str(tmp_path), "lint", "--strict"])
+    assert strict.exit_code == 1
+    other = runner.invoke(
+        app, ["--json", "--repo", str(tmp_path), "lint", "--strict", "--check", "metadata"]
+    )
+    assert other.exit_code == 0, other.stdout + other.stderr
 
 
 def test_top_level_key_lines_reads_column_zero_keys_only() -> None:

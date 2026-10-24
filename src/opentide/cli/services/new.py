@@ -50,12 +50,21 @@ _DEFAULTS: dict[str, Any] = {"tlp": "amber", "version": 1}
 #: What an empty free-text value becomes; a valid string nobody will mistake for content.
 _TEXT_PLACEHOLDER = "..."
 
-#: Keys a platform block needs beyond its model's required fields: Elastic's
-#: model validator wants a ``query`` for the default ``type: query``, and the
-#: Defender loader reads ``scope`` unconditionally.
+#: Trailing comment on every line whose value ``new`` invented. ``opentide lint``
+#: reports each marked line as a ``placeholder`` finding, so ``lint --strict``
+#: fails until a person replaces the value and deletes the marker.
+PLACEHOLDER_MARKER = "# opentide:placeholder"
+
+#: Keys a platform block needs beyond its model's required fields, so it holds
+#: detection logic: Elastic's validator wants a ``query`` for ``type: query``,
+#: the Defender loader reads ``scope`` unconditionally, a SentinelOne
+#: ``Single Event`` condition needs its query, and HarfangLab needs a sigma
+#: (or yara) detection.
 PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "defender_for_endpoint": (("scope",), ("scope", "selection")),
     "elastic": (("query",),),
+    "sentinel_one": (("condition", "single_event"), ("condition", "single_event", "query")),
+    "harfanglab": (("sigma",),),
 }
 
 _LINE = re.compile(r"^(?P<indent> *)(?P<hash>#?)(?P<dash>- ?)?(?P<rest>.*)$")
@@ -114,19 +123,26 @@ class WorkspaceArtifacts:
 
 
 def workspace_artifacts(workspace: Path, family: str) -> WorkspaceArtifacts:
-    """Resolve the configured template, schema and object folder for *family*."""
+    """The template and schema of *family*'s latest revision, and its object folder.
+
+    ``generate templates schemas`` writes one versioned artifact per revision
+    (``rule.1.1.template.yaml``). The configured ``artifacts`` names are the
+    editor's default revision, which can be older (``rule.1.0``, which
+    ``rules unreviewed`` reports by its schema alone), so a new object starts
+    on the latest revision instead.
+    """
     from opentide.core.files import resolve_configurations
+    from opentide.models.schema_registry import latest_identifier
+    from opentide.registry.artifacts import schema_artifact_name, template_artifact_name
     from opentide.registry.paths import resolve_workspace_paths
 
     configs = resolve_configurations(workspace)
     paths = resolve_workspace_paths(configs, workspace=workspace)
-    artifacts = paths["_artifacts"]
-    template_name = artifacts["templates"].get(family) or f"{family}.1.0.template.yaml"
-    schema_name = artifacts["schemas"].get(family) or f"{family}.1.0.schema.json"
+    latest = latest_identifier(family)
     objects = paths.get(family) or workspace / "objects" / f"{family}s"
     return WorkspaceArtifacts(
-        template=Path(paths["templates"]) / template_name,
-        schema=Path(paths["json_schemas"]) / schema_name,
+        template=Path(paths["templates"]) / template_artifact_name(latest),
+        schema=Path(paths["json_schemas"]) / schema_artifact_name(latest),
         objects=Path(objects),
     )
 
@@ -231,8 +247,11 @@ def target_path(objects: Path, name: str, object_uuid: str, path: Path | None) -
     if path is not None:
         if path.is_dir() or str(path).endswith(("/", "\\")):
             folder = path
-        else:
+        elif path.suffix.lower() in (".yaml", ".yml"):
             return path
+        else:
+            # The loader reads only .yaml and .yml files.
+            return path.with_name(f"{path.name}.yaml")
     stem = slugify(name)
     taken = any((folder / f"{stem}{suffix}").exists() for suffix in (".yaml", ".yml"))
     if taken:
@@ -461,39 +480,55 @@ def fill_template(
     *,
     values: Mapping[Path_, Any],
     schema: Mapping[str, Any],
+    marked: Iterable[Path_] = (),
     make_uuid: Any = None,
 ) -> ScaffoldResult:
     """Uncomment the keys in *fields*, fill their values, keep every other line.
 
-    *values* are the known answers (name, UUID, dates, author, references). A
-    required field with no answer and no template value gets a placeholder,
-    reported by its dotted path.
+    *values* are the known answers (name, UUID, dates, author, references);
+    the ones in *marked* are stand-ins too. A required field with no answer
+    gets a placeholder. Every placeholder line ends in :data:`PLACEHOLDER_MARKER`
+    and is reported by its dotted path.
     """
     make_uuid = make_uuid or (lambda: str(uuid_lib.uuid4()))
+    marked = set(marked)
     lines = template.splitlines()
     entries = index_template(lines)
     live_keys = {entry.path for entry in entries if entry.role == "key"}
     placeholders: list[str] = []
     replacements: dict[int, str] = {}
+    marked_lines: set[int] = set()
 
     def live(entry: _Line) -> bool:
         if entry.role == "key":
             return entry.path in fields
         return entry.path in fields and entry.path in live_keys
 
-    # Uncomment the keys this object needs, with their items and block text.
-    for entry in entries:
-        if entry.commented and live(entry):
+    def uncomment(entry: _Line) -> None:
+        if entry.commented:
             raw = lines[entry.index]
             lines[entry.index] = raw[: entry.indent] + raw[entry.indent + 1 :]
             entry.commented = False
             entry.column -= 1
+
+    def placeholder(entry: _Line) -> None:
+        placeholders.append(".".join(entry.path))
+        marked_lines.add(entry.index)
+
+    # Uncomment the keys this object needs, with their items and block text.
+    for entry in entries:
+        if entry.commented and live(entry):
+            uncomment(entry)
 
     def set_value(entry: _Line, value: Any) -> None:
         raw = lines[entry.index]
         head = raw[: entry.column]
         if entry.role == "key":
             replacements[entry.index] = f"{head}{entry.path[-1]}: {_scalar(value)}"
+            # A scalar replaces the list form the template shows for a
+            # ``str | list[str]`` key: drop its item lines.
+            for item in items_of(entry):
+                replacements[item.index] = ""
         else:
             replacements[entry.index] = f"{head}{_scalar(value)}"
 
@@ -542,41 +577,65 @@ def fill_template(
             return choices[0], True
         return _TEXT_PLACEHOLDER, True
 
+    def optional_child(entry: _Line, model: type[BaseModel] | None) -> bool:
+        """Fill the first scalar key of a required block whose keys are all optional.
+
+        ``key: {}`` above commented keys breaks the YAML as soon as one is
+        uncommented, so the block gets one live, marked key instead.
+        """
+        infos = {
+            _field_key(name, info): info
+            for name, info in (model.model_fields if model else {}).items()
+        }
+        for child in children(entry):
+            info = infos.get(child.path[-1])
+            if info is None or child.value == "|":
+                continue
+            shape = _shape(info.annotation)
+            if shape.kind != "scalar":
+                continue
+            uncomment(child)
+            if not child.value:
+                set_value(child, choose(child.path, shape)[0])
+            placeholder(child)
+            return True
+        return False
+
     for entry in entries:
         if entry.role != "key" or entry.commented or entry.path not in fields:
             continue
         shape = fields[entry.path]
-        dotted = ".".join(entry.path)
         given = values.get(entry.path)
         if shape.kind == "model":
             if entry.value or any(path[:-1] == entry.path for path in fields):
                 continue
             # A required block whose keys are all optional: keep the ones the
-            # template shows with a value (their defaults), else write {}.
+            # template shows with a value (their defaults), else fill one key.
             defaults = [child for child in children(entry) if child.value and child.value != "|"]
             for child in defaults:
-                raw = lines[child.index]
-                if child.commented:
-                    lines[child.index] = raw[: child.indent] + raw[child.indent + 1 :]
-                    child.commented = False
-            if not defaults:
-                replacements[entry.index] = f"{lines[entry.index].rstrip()} {{}}"
+                uncomment(child)
+            if not defaults and not optional_child(entry, shape.model):
+                replacements[entry.index] = (
+                    f"{lines[entry.index].rstrip()} {{}}  # delete {{}} before uncommenting a key"
+                )
             continue
         if shape.kind == "list":
             if shape.item_model is not None:
                 continue
             items = items_of(entry)
+            invented = entry.path in marked
             if given is not None:
                 answers = list(given) if isinstance(given, (list, tuple)) else [given]
             else:
                 if items and items[0].value:
                     continue
-                answer, placeholder = choose(entry.path, shape)
+                answer, invented = choose(entry.path, shape)
                 answers = [answer]
-                if placeholder:
-                    placeholders.append(dotted)
+            if invented:
+                placeholders.append(".".join(entry.path))
             indent = " " * (entry.indent + 2)
-            rendered = "\n".join(f"{indent}- {_scalar(answer)}" for answer in answers)
+            suffix = f"  {PLACEHOLDER_MARKER}" if invented else ""
+            rendered = "\n".join(f"{indent}- {_scalar(answer)}{suffix}" for answer in answers)
             if items:
                 replacements[items[0].index] = rendered
                 for extra in items[1:]:
@@ -586,6 +645,8 @@ def fill_template(
             continue
         if given is not None:
             set_value(entry, given)
+            if entry.path in marked:
+                placeholder(entry)
             continue
         if entry.value == "|":
             text = [
@@ -594,22 +655,23 @@ def fill_template(
                 if other.role == "text" and other.path == entry.path and other.index > entry.index
             ]
             if all(other.value == _TEXT_PLACEHOLDER for other in text):
-                placeholders.append(dotted)
+                placeholder(entry)
             continue
         if entry.value and entry.path[-1] != "uuid":
             continue
-        answer, placeholder = choose(entry.path, shape)
+        answer, invented = choose(entry.path, shape)
         set_value(entry, answer)
-        if placeholder:
-            placeholders.append(dotted)
+        if invented:
+            placeholder(entry)
 
     output: list[str] = []
     for index, raw in enumerate(lines):
-        if index in replacements:
-            if replacements[index]:
-                output.append(replacements[index])
+        line = replacements.get(index, raw)
+        if index in replacements and not line:
             continue
-        output.append(raw)
+        if index in marked_lines:
+            line = f"{line.rstrip()}  {PLACEHOLDER_MARKER}"
+        output.append(line)
     return ScaffoldResult("\n".join(output) + "\n", placeholders)
 
 
@@ -719,7 +781,9 @@ def scaffold_object(
         for platform in options.platforms:
             block = ("configurations", platform)
             overrides[block] = platform_model_for_key(platform)
-            values[(*block, "enabled")] = True
+            # Without an INERT status the block's status is a marked
+            # placeholder, and the block stays disabled so it never deploys.
+            values[(*block, "enabled")] = status is not None
             if status:
                 values[(*block, "status")] = status
             wanted.extend([block, (*block, "enabled")])
@@ -731,7 +795,16 @@ def scaffold_object(
     fields = collect_fields(model, wanted=wanted, overrides=overrides)
     filled = fill_template(template, fields, values=values, schema=schema)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(filled.text, encoding="utf-8")
+    try:
+        # "x": the file must not exist, even if one appeared since the check above.
+        with destination.open("x", encoding="utf-8") as handle:
+            handle.write(filled.text)
+    except FileExistsError:
+        raise NewError(
+            f"{_relative(destination, workspace)} already exists; new never overwrites a file",
+            code=PATH_EXISTS,
+            argument="--path" if options.path is not None else "--name",
+        ) from None
 
     shown = _relative(destination, workspace)
     count = len(filled.placeholders)
@@ -757,6 +830,11 @@ def scaffold_object(
             NextAction(f"opentide validate --file {shown}", f"check the new {family}"),
         ],
     }
+    if family == "rule" and options.platforms and status is None:
+        payload["warnings"] = [
+            "No deployment status has strategy INERT, so the new platform blocks are "
+            "disabled (enabled: false) and their status is a placeholder"
+        ]
     if count:
         # Printed as a note under the outcome line in human output.
         payload["detail"] = f"replace the placeholder value of {', '.join(filled.placeholders)}"

@@ -93,8 +93,21 @@ def test_every_family_and_platform_validates_after_new_and_generate(
     validate = invoke_cli("validate", "--strict", repo=tutorial)
     report = assert_json_ok(validate)["report"]
     assert report["ok"] is True, report
-    lint = assert_json_ok(invoke_cli("lint", "--strict", repo=tutorial))
-    assert lint["count"] == 0, lint["findings"]
+    # Placeholder values pass validation but are marked, so CI's lint --strict
+    # fails until someone replaces them.
+    marked = invoke_cli("lint", "--strict", repo=tutorial)
+    assert marked.exit_code == 1
+    findings = parse_cli_json(marked)["findings"]
+    assert findings
+    assert {finding["code"] for finding in findings} == {"placeholder"}
+    assert any(
+        finding["path"] == created[0]["path"] and finding["message"].startswith("list item")
+        for finding in findings
+    ), findings
+    clean = assert_json_ok(
+        invoke_cli("lint", "--strict", "--check", "filenames", "--check", "metadata", repo=tutorial)
+    )
+    assert clean["count"] == 0, clean["findings"]
 
 
 def test_rules_validate_when_every_platform_is_enabled(invoke_cli, tmp_path: Path) -> None:
@@ -108,6 +121,10 @@ def test_rules_validate_when_every_platform_is_enabled(invoke_cli, tmp_path: Pat
         )
         payload = assert_json_ok(rule)
         assert not any("not enabled" in warning for warning in payload.get("warnings", []))
+        # Every block holds detection logic to replace, not just enabled and status.
+        assert any(
+            path.startswith(f"configurations.{platform}.") for path in payload["placeholders"]
+        ), payload["placeholders"]
     assert_json_ok(invoke_cli("generate", repo=fresh))
     report = assert_json_ok(invoke_cli("validate", "--strict", repo=fresh))["report"]
     assert report["ok"] is True, report
