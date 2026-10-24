@@ -346,3 +346,6 @@ def test_watch_in_a_terminal_redraws_and_exits_0_on_ctrl_c(tutorial: Path) -> No
     assert "✗ 1 error in 1 file · 1 fixable with --fix · 3 objects checked" in screen
     assert "✓ 3 objects valid" in screen
     assert "Traceback" not in screen
+    # Ctrl-C leaves the terminal as it found it: the cursor shown again.
+    after_interrupt = run.output.rsplit("Ctrl-C to stop", 1)[-1]
+    assert "\x1b[?25h" in after_interrupt

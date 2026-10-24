@@ -1,29 +1,49 @@
 """Apply the safe ``fix`` edits of diagnostics to the files they point into.
 
 ``opentide validate --fix`` writes them; ``--fix --dry-run`` prints them as a
-unified diff. An edit replaces the text of one line from ``column`` up to
-``end_column`` (see :mod:`opentide.cli.ui.diagnostics`) and leaves every other
-byte of the file as it was, so comments, quoting, key order, indentation and
-line endings survive. Positions come from ruamel's round-trip loader when the
-diagnostic is built.
+unified diff. An edit replaces the text from (``line``, ``column``) up to
+(``end_line``, ``end_column``) (see :mod:`opentide.cli.ui.diagnostics`) and
+leaves every other byte of the file as it was, so comments, quoting, key
+order, indentation and line endings survive. Positions come from ruamel's
+round-trip loader when the diagnostic is built.
 
-Each edit is checked before it is kept: the file must still parse, and the
-parsed document must differ from the one before in exactly that value. An
-edit that fails the check (a value that would need quoting, a file that
-changed since it was read) is left out, and its finding stays reported.
+Each edit is checked before it is kept. The text it replaces, read again now,
+must still be a safe replacement for the fix's value
+(:func:`~opentide.cli.ui.diagnostics.is_safe_replacement`), so a value saved
+over the typo since validation read the file is never overwritten. The file
+must still parse, and the parsed document must differ from the one before in
+exactly that value. An edit that fails a check is left out, and its finding
+stays reported.
+
+A file is written to a temporary file beside it and moved into place, and
+only when it still holds the text the plan was made from.
 
 Kept free of Rich and Typer.
 """
 
 from __future__ import annotations
 
+import contextlib
 import difflib
+import os
+import re
+import shutil
+import tempfile
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from opentide.cli.ui.diagnostics import Diagnostic, TextEdit, split_yaml_lines
+from opentide.cli.ui.diagnostics import (
+    Diagnostic,
+    TextEdit,
+    is_safe_replacement,
+    split_yaml_lines,
+)
+
+#: Where a line ends with its break kept: after ``\r\n``, a lone ``\r`` or ``\n``,
+#: the breaks :func:`split_yaml_lines` splits on.
+_LINE_END = re.compile(r"(?<=\r\n)|(?<=\r)(?!\n)|(?<=\n)")
 
 
 @dataclass(frozen=True)
@@ -78,25 +98,60 @@ class FixPlan:
     def write(self) -> tuple[FixPlan, list[str]]:
         """Write each changed file; bytes outside the edits are written back unchanged.
 
+        Each file is written to a temporary file in its directory, given the
+        original's mode, and moved over it, so a write that fails partway
+        leaves the original whole. A symlink keeps pointing at the file it
+        names, which is the one updated. A file whose text is no longer the
+        text the plan was made from is left alone.
+
         Returns the plan of the files written, and one line per file that
-        could not be (``objects/rules/x.yaml: Permission denied``).
+        was not (``objects/rules/x.yaml: Permission denied``).
         """
         written: dict[Path, tuple[str, str, str]] = {}
         failed: list[str] = []
         for file_path, entry in self.files.items():
-            try:
-                file_path.write_bytes(entry[2].encode("utf-8"))
-            except OSError as exc:
-                failed.append(f"{entry[0]}: {exc.strerror or exc}")
+            path, before, after = entry
+            problem = _replace(file_path, before, after)
+            if problem is not None:
+                failed.append(f"{path}: {problem}")
                 continue
             written[file_path] = entry
         changes = tuple(change for change in self.changes if change.file_path in written)
         return FixPlan(changes=changes, files=written), failed
 
 
+def _replace(file_path: Path, before: str, after: str) -> str | None:
+    """Move *after* over *file_path* if it still holds *before*; why not, otherwise."""
+    try:
+        target = file_path.resolve(strict=True)
+        current = target.read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return _reason(exc)
+    if current != before:
+        return "it changed since it was read; run opentide validate --fix again"
+    handle, temporary = tempfile.mkstemp(
+        dir=target.parent, prefix=f".{target.name}.", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(after.encode("utf-8"))
+        shutil.copymode(target, temporary)
+        os.replace(temporary, target)
+    except OSError as exc:
+        with contextlib.suppress(OSError):
+            os.unlink(temporary)
+        return _reason(exc)
+    return None
+
+
+def _reason(exc: Exception) -> str:
+    return (exc.strerror if isinstance(exc, OSError) else None) or str(exc)
+
+
 def _diff_lines(text: str) -> list[str]:
-    lines = text.splitlines(keepends=True)
-    if lines and not lines[-1].endswith("\n"):
+    """*text* split as YAML numbers its lines, each with its own break."""
+    lines = [line for line in _LINE_END.split(text) if line]
+    if lines and not lines[-1].endswith(("\n", "\r")):
         lines[-1] += "\n\\ No newline at end of file\n"
     return lines
 
@@ -157,6 +212,10 @@ def _plan_file(
         if result is None:
             continue
         updated, before = result
+        # The file may have been saved since validation read it: replace only
+        # a value this fix is still a safe replacement for.
+        if not is_safe_replacement(diagnostic.code, before, edit.replacement):
+            continue
         new_document = _load(updated)
         if new_document is _UNPARSABLE or not _only_change(
             document, new_document, before, edit.replacement

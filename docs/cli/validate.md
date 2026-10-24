@@ -98,7 +98,7 @@ opentide validate --fix
 → opentide validate --fix · apply 1 safe fix
 ```
 
-`--fix` writes the safe fixes, validates again and prints a `fixed:` line per value, then the findings that are left. Only the replaced value changes in each file: comments, quoting, key order, indentation and line endings stay as they were. Each edit is checked before it is written: the file must still parse and differ in that value alone, or the edit is left out and its finding stays. A second run has nothing to apply. The outcome line says what it fixed and what is left:
+`--fix` writes the safe fixes, validates again and prints a `fixed:` line per value, then the findings that are left. Only the replaced value changes in each file: comments, quoting, key order, indentation and line endings stay as they were. Each edit is checked against the file as it is now, not as validation read it. The text it replaces must still be one the fix is safe for, so a value you saved over the typo in the meantime is kept. The file must still parse and differ in that value alone. Otherwise the edit is left out and its finding stays. Each file is written to a temporary file beside it and moved into place, so a write that fails (a full disk, a quota) leaves the original whole. A file that changed between the check and the write is left alone, with a warning. A second run has nothing to apply. The outcome line says what it fixed and what is left:
 
 ```text illustrative
 fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
@@ -116,7 +116,7 @@ error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-80
 ✗ 1 error in 1 file · fixed 2 values in 2 files · 3 objects checked · 1.8s
 ```
 
-The sample is illustrative because it carries the run time. When nothing is left, the line is `✓ Fixed 2 values in 2 files · 3 objects valid · 1.8s` and the run exits `0`. `--fix` honours `--file`, `--uuid`, `--type` and `--check`: it fixes what that run found.
+The sample is illustrative because it carries the run time. When nothing is left, the line is `✓ Fixed 2 values in 2 files · 3 objects valid · 1.8s` and the run exits `0`. When a file cannot be written, a `warning:` line names it and the outcome line says `could not write 1 fix`. `--fix` honours `--file`, `--uuid`, `--type` and `--check`: it fixes what that run found.
 
 With `--json` the document is the second run's, so `report` holds what is left, and it gains `fixed` and `summary.fixed`:
 
@@ -148,7 +148,7 @@ Under `--dry-run` the document is the first run's, with `would_fix` (the same en
 opentide validate --watch
 ```
 
-`--watch` validates once, then looks at the modification times of the object files every 0.5 seconds and validates again after a save. A save that keeps the UUIDs in the file re-checks that file alone; an added or removed file, or a changed UUID or reference, re-checks every object, since other objects' findings may change with it. Each run reports the whole workspace, findings from files it did not re-check included.
+`--watch` validates once, then looks at the modification times of the object files every 0.5 seconds and validates again after a save. A save that keeps the UUIDs in the file re-checks that file alone. Every object is re-checked instead, since other objects' findings may change with it, when a file is added or removed, when a UUID or reference in it changes, and when its object enters or leaves the catalogue: the file stops or starts parsing, or loses its `uuid`. Each run reports the whole workspace, findings from files it did not re-check included.
 
 In a terminal the findings and the outcome line are redrawn in place, with a footer naming the file it re-checked and how to stop. In plain output (a pipe, `NO_COLOR`, `TERM=dumb`, CI) each run prints the findings it produced and one outcome line, and nothing is redrawn. Ctrl-C stops it with exit `0`. `--watch` honours `--file`, `--uuid`, `--type`, `--check` and `--strict`; with a narrowed scope every run re-checks that scope. It cannot be combined with `--fix` (exit `2`, `failure.code` `usage_error`).
 

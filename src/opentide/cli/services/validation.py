@@ -341,6 +341,7 @@ def run_validate_fix(
             ]
         return result
     unwritten: list[str] = []
+    planned = len(plan.changes)
     if plan:
         plan, unwritten = plan.write()
         # run_validate rebuilds the registry, so it reads the files just written.
@@ -351,6 +352,7 @@ def run_validate_fix(
         warnings = cast(list[str], result.setdefault("warnings", []))
         warnings.extend(f"Could not write the fix to {line}" for line in unwritten)
         result["_unwritten"] = unwritten
+        result["_unwritten_fixes"] = planned - len(plan.changes)
     summary = cast(dict[str, int], result["_summary"])
     summary["fixed"] = len(plan.changes)
     result["fixed"] = [change.to_dict() for change in plan.changes]
@@ -467,12 +469,22 @@ def validate_outcome_line(
     return f"{counted}{where}{done}{hint}{checked}{sep}{took}"
 
 
-def fix_phrase(count: int, files: int, *, dry_run: bool = False) -> str:
-    """``Fixed 3 values in 2 files``, ``Would fix 1 value in 1 file``, ``No safe fix to apply``."""
+def fix_phrase(count: int, files: int, *, dry_run: bool = False, unwritten: int = 0) -> str:
+    """``Fixed 3 values in 2 files``, ``Would fix 1 value in 1 file``, ``No safe fix to apply``.
+
+    *unwritten* counts the fixes whose file could not be written:
+    ``Could not write 1 fix``, or ``Fixed 1 value in 1 file · could not write 1 fix``.
+    """
+    failed = (
+        f"could not write {unwritten} fix"
+        if unwritten == 1
+        else f"could not write {unwritten} fixes"
+    )
     if not count:
-        return "No safe fix to apply"
+        return failed.capitalize() if unwritten else "No safe fix to apply"
     verb = "Would fix" if dry_run else "Fixed"
-    return f"{verb} {plural(count, 'value')} in {plural(files, 'file')}"
+    done = f"{verb} {plural(count, 'value')} in {plural(files, 'file')}"
+    return f"{done} {glyph('separator')} {failed}" if unwritten else done
 
 
 def _exempt_warning_lines(report: ValidationReport) -> list[str]:

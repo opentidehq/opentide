@@ -202,7 +202,7 @@ def test_strict_fails_on_warnings_but_not_on_exempt_ones(disk: FakeDisk) -> None
 
 def test_safe_fixes_are_counted(tmp_path: Path, disk: FakeDisk) -> None:
     rule = tmp_path / "rule.yaml"
-    rule.write_text("metadata:\n  tlp: clearr\n")
+    rule.write_text("metadata:\n  tlp: Clear\n")
     fixable = Diagnostic(
         code="vocab_unknown",
         severity="error",
@@ -211,8 +211,8 @@ def test_safe_fixes_are_counted(tmp_path: Path, disk: FakeDisk) -> None:
         file_path=rule,
         line=2,
         column=8,
-        end_column=14,
-        fix=Fix(True, (TextEdit(2, 8, 14, "clear"),)),
+        end_column=13,
+        fix=Fix(True, (TextEdit(2, 8, 13, "clear"),)),
     )
     run = _watcher(disk, FakeValidator({rule: [fixable]})).start()
     assert run.fixable == 1
@@ -347,3 +347,66 @@ def _no_real_sleep(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     monkeypatch.setattr("opentide.cli.ui.watch.time.sleep", refuse)
     yield
+
+
+_OBJECTIVE = Path("/ws/objects/objectives/objective.yaml")
+
+
+def test_a_file_that_parses_again_validates_everything() -> None:
+    """Fixing a broken objective resolves the rule's reference to it: a full pass."""
+    disk = FakeDisk({_RULE: 1, _OBJECTIVE: 1})
+    validator = FakeValidator(
+        {
+            _OBJECTIVE: [_finding(_OBJECTIVE, code="yaml_parse")],
+            _RULE: [_finding(_RULE, code="invalid_ref")],
+        },
+        objects=1,
+    )
+    watcher = _watcher(disk, validator)
+    first = watcher.start()
+    assert (first.errors, first.objects) == (2, 1)
+    validator.findings = {}
+    validator.objects = 2
+    disk.touch(_OBJECTIVE)
+    run = watcher.poll()
+    assert run is not None and not run.scoped
+    assert validator.calls == [None, None]
+    assert (run.errors, run.objects) == (0, 2), "no stale invalid_ref, and the count is current"
+
+
+def test_a_file_that_stops_parsing_validates_everything() -> None:
+    """Breaking the objective leaves the rule's reference dangling: a full pass."""
+    disk = FakeDisk({_RULE: 1, _OBJECTIVE: 1})
+    validator = FakeValidator({})
+    watcher = _watcher(disk, validator)
+    watcher.start()
+    validator.findings = {
+        _OBJECTIVE: [_finding(_OBJECTIVE, code="yaml_parse")],
+        _RULE: [_finding(_RULE, code="invalid_ref")],
+    }
+    validator.objects = 1
+    disk.touch(_OBJECTIVE)
+    run = watcher.poll()
+    assert run is not None and not run.scoped
+    assert validator.calls == [None, (_OBJECTIVE,), None]
+    assert (run.errors, run.objects) == (2, 1)
+    assert {item.code for item in run.diagnostics} == {"yaml_parse", "invalid_ref"}
+
+
+def test_a_scoped_pass_that_loses_an_object_validates_everything(disk: FakeDisk) -> None:
+    """A file that no longer holds an object, with no finding saying why: a full pass."""
+
+    class Losing(FakeValidator):
+        def __call__(self, changed: Sequence[Path] | None) -> tuple[list[Diagnostic], int]:
+            found, objects = super().__call__(changed)
+            return found, objects if changed is None else 0
+
+    validator = Losing({})
+    watcher = _watcher(disk, validator)
+    watcher.start()
+    validator.objects = 1
+    disk.touch(_RULE)
+    run = watcher.poll()
+    assert run is not None and not run.scoped
+    assert validator.calls == [None, (_RULE,), None]
+    assert run.objects == 1

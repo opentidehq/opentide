@@ -670,6 +670,22 @@ def test_validate_outcome_line_after_fix(
     assert line == expected
 
 
+def test_fix_phrase_counts_the_fixes_it_could_not_write() -> None:
+    assert validation_service.fix_phrase(0, 0, unwritten=1) == "Could not write 1 fix"
+    assert validation_service.fix_phrase(0, 0, unwritten=2) == "Could not write 2 fixes"
+    assert (
+        validation_service.fix_phrase(1, 1, unwritten=2)
+        == "Fixed 1 value in 1 file · could not write 2 fixes"
+    )
+    line = validation_service.validate_outcome_line(
+        {"objects": 1, "errors": 1, "files": 1, "fixable": 1},
+        failed=True,
+        seconds=0.94,
+        fix=validation_service.fix_phrase(0, 0, unwritten=1),
+    )
+    assert line == "1 error in 1 file · could not write 1 fix · 1 object checked · 0.9s"
+
+
 @pytest.mark.parametrize(
     ("args", "expected"),
     [
@@ -825,6 +841,7 @@ def test_run_validate_fix_names_a_file_it_could_not_write(tmp_path: Path) -> Non
     assert result["fixed"] == []
     assert result["warnings"] == ["Could not write the fix to rule.yaml: Permission denied"]
     assert result["_unwritten"] == ["rule.yaml: Permission denied"]
+    assert result["_unwritten_fixes"] == 1
 
 
 def test_run_validate_fix_dry_run_writes_nothing(tmp_path: Path) -> None:

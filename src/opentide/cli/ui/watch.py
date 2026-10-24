@@ -1,10 +1,13 @@
 """``opentide validate --watch``: re-validate object files when they change on disk.
 
 :class:`Watcher` polls modification times under the object folders (every
-0.5 s), and on a change validates again: only the changed files when their
-references did not move, everything when a file was added or removed or a
-UUID in it changed, since another object's findings may then change too. It
-keeps the findings of every file, so each run reports the whole workspace.
+0.5 s), and on a change validates again: only the changed files when the
+registry's graph did not move, everything otherwise, since other objects'
+findings may then change too. The graph moves when a file is added or
+removed, when a UUID in a file changes, and when a file's object enters or
+leaves the registry (it stops or starts parsing, or loses its UUID). The
+watcher keeps the findings of every file, so each run reports the whole
+workspace.
 
 :class:`LiveView` draws the findings and the outcome line in a Rich ``Live``
 view (``human`` mode); :class:`PlainView` prints the frames a run found and
@@ -43,6 +46,10 @@ Snapshot = dict[Path, tuple[int, int]]
 #: Validates the given files, or the command's whole scope for ``None``;
 #: returns the findings and how many objects were checked.
 Validate = Callable[[Sequence[Path] | None], tuple[Sequence[Diagnostic], int]]
+
+#: Codes of findings whose object stays out of the registry, so other objects'
+#: references to it dangle while the finding stands.
+UNREGISTERED_CODES = frozenset({"yaml_parse", "missing_uuid"})
 
 _UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
@@ -182,10 +189,18 @@ class Watcher:
             if self._references.get(path) != refs:
                 moved = True
             self._references[path] = refs
+            if self._unregistered(path):
+                # Its object was out of the registry: back in, it may resolve
+                # other files' references.
+                moved = True
         changed = tuple(sorted(changes.added | changes.removed | changes.modified))
         if moved or not self.scoped_runs:
             return self._full(changed)
         return self._scoped(changed)
+
+    def _unregistered(self, path: Path) -> bool:
+        """Whether the last pass kept *path*'s object out of the registry."""
+        return _unregistered_in(self._findings.get(_key(path), ()))
 
     def run(self, show: Callable[[WatchRun], None]) -> None:
         """Validate, show, then poll forever. Ctrl-C (``KeyboardInterrupt``) ends it."""
@@ -205,11 +220,15 @@ class Watcher:
 
     def _scoped(self, changed: tuple[Path, ...]) -> WatchRun:
         started = self.clock()
-        diagnostics, _objects = self.validate(changed)
+        diagnostics, objects = self.validate(changed)
         targets = {_key(path) for path in changed}
-        if any(_key(item.file_path) not in targets for item in diagnostics):
-            # A finding outside the changed files: only a full pass can say
-            # what else it changed.
+        if (
+            any(_key(item.file_path) not in targets for item in diagnostics)
+            or _unregistered_in(diagnostics)
+            or objects != len(changed)
+        ):
+            # A finding outside the changed files, or an object that left the
+            # registry: only a full pass can say what else it changed.
             return self._full(changed)
         for target in targets:
             self._findings.pop(target, None)
@@ -249,6 +268,10 @@ class Watcher:
             scoped=scoped,
             changed=changed,
         )
+
+
+def _unregistered_in(findings: Iterable[Diagnostic]) -> bool:
+    return any(item.code in UNREGISTERED_CODES for item in findings)
 
 
 def _key(path: Path | None) -> Path | None:

@@ -108,6 +108,7 @@ def validate_group(
     plan = result.pop("_fix_plan", None)
     fixed = result.pop("_fixed", None)
     unwritten = result.pop("_unwritten", [])
+    unwritten_fixes = int(result.pop("_unwritten_fixes", 0))
     outcome = CommandResult.from_payload(result, default_message="Validation passed")
     if cli.json_output:
         emit_result(cli, outcome)
@@ -129,8 +130,10 @@ def validate_group(
     if not line.startswith("Validation passed, but"):
         done = plan if dry_run else fixed
         phrase = None
-        if fix and done is not None and (done or not outcome.ok):
-            phrase = fix_phrase(len(done.changes), done.file_count, dry_run=dry_run)
+        if fix and done is not None and (done or unwritten_fixes or not outcome.ok):
+            phrase = fix_phrase(
+                len(done.changes), done.file_count, dry_run=dry_run, unwritten=unwritten_fixes
+            )
         line = validate_outcome_line(
             outcome.summary, failed=not outcome.ok, seconds=elapsed_ms() / 1000, fix=phrase
         )
