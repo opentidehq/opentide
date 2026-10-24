@@ -6,7 +6,7 @@
 
 ## opentide detection repository
 
-This repository uses [opentide](https://pypi.org/project/opentide/) for detection-as-code.
+This repository uses [opentide](https://pypi.org/project/opentide/): spec-driven development for agentic detection engineering.
 
 ### Commands
 
@@ -22,8 +22,25 @@ opentide generate
 - Objectives: `objects/objectives/`
 - Rules: `objects/rules/`
 
+### Running opentide
+
+- Run `opentide --json <command>`. stdout is one JSON document; `opentide --json commands` lists every command, option and an example.
+- Branch on the exit code, then on `failure.code`: `0` success; `1` failure (`issues_found`, `command_failed`); `2` usage error (`usage_*`, with `failure.suggestion`) or a check that could not run (`no_tenant_reached`, `needs_human_decision`); `3` partial `share`.
+- Each finding (`report.issues` from `validate`, `findings` from `lint`) has `code`, `path`, `line`, `column`, `end_column` (1-based, end exclusive), `help` and `fix`. Each of `fix.edits` replaces the text from (`line`, `column`) up to (`end_line`, `end_column`) with `replacement`. Apply `safe: true` edits as they are (they only respell the same word); check the others against `help`. Without a fix, run `opentide explain <code>`.
+- Follow `next_actions` (`{command, reason}`).
+- opentide never prompts you: a command that needs input exits `2` with `usage_needs_input` and names the flags to pass.
+
+### Workflow
+
+1. Search: `opentide --json info rules`, `opentide --json info coverage --technique T1059`.
+2. Draft from `.opentide/templates/`.
+3. Validate until clean: `opentide --json validate --file <file>`, apply each `fix`, repeat until `ok` is `true`. Then `opentide --json lint`.
+4. Preview: `opentide --json deploy --dry-run --strategy PREVIEW --all`.
+
+People review and merge changes, and run real deployments. Do not deploy without `--dry-run` unless asked.
+
 ### Agent skills
 
 Project skills live under `.claude/skills/`. Start with `opentide-detection-rule` for validate/generate/deploy guidance.
 
-Run `opentide setup mcp` to connect Claude Code to the MCP server (`opentide mcp start`).
+Run `opentide setup mcp` to connect Claude Code to the MCP server (`opentide mcp start`). Its `validation_report` and `explain` tools return the same findings and pages.

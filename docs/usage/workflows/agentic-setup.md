@@ -16,7 +16,9 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 | Capability | Status |
 |-----------|--------|
 | Search catalogue, read objects, inspect chaining | Supported |
-| Validate objects (`validate_rule`, `validation_report`) | Supported |
+| Validate objects (`validate_rule`, `validation_report`), with positions, fixes and next actions | Supported |
+| Explain a diagnostic code (`explain`, or `opentide explain <code>`) | Supported |
+| List every CLI command and option (`opentide --json commands`) | Supported |
 | Dry-run deploy (`deploy_rule`, `dry_run=true`) | Supported |
 | Tenant query check via MCP (`validate_query`, `live: true`) | Supported — catalogue rules, not the `query` string |
 | Live query execution via MCP (`run_query`) | Not implemented |
@@ -67,7 +69,7 @@ opentide setup skills show opentide-detection-rule
 opentide setup skills --yes --generic \
   --name "SOC Detections" \
   --org "Example Corp" \
-  --description "Enterprise MDR content"
+  --description "Enterprise detection content"
 
 opentide setup skills --yes --install opentide-detection-rule --install detection-engineering
 ```
@@ -81,19 +83,32 @@ opentide setup skills --yes --install opentide-detection-rule --install detectio
 
 After setup, point your agent at the generated `AGENTS.md` at the repo root — it is rendered from the package template for this repository, not copied from the skills catalogue.
 
+### What the instruction files tell an agent
+
+`AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md` and the bundled skills teach an agent with a shell the same contract the [CLI reference](../../cli/index.md#coding-agents) describes:
+
+- Run `opentide --json <command>`; stdout is one JSON document. `opentide --json commands` lists every command, option and an example.
+- Branch on the exit code, then on `failure.code` (`issues_found`, `usage_invalid_choice`, `no_tenant_reached`, …).
+- Apply each finding's `fix` (`safe: true` edits only respell the same word; check the others against `help`), and run `opentide explain <code>` for a finding without one.
+- Follow `next_actions`.
+- Work in a loop: search, draft, validate until clean, preview the deployment with `--dry-run`. People review and merge the change, and run real deployments.
+
+An agent connected through MCP gets the same workflow from the server's `instructions`, and the same fields from `validation_report`.
+
 `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package so they match `rule::1.0`, `objective::1.0`, and `threat::1.0` under `objects/`. Other skills are downloaded as the full tree under `skills/<slug>/` from opentidehq/skills.
 
 ## A safe agent workflow
 
-Give agents this loop. It searches, validates, and only ever *previews* deploys.
+Give agents this loop. It searches, validates until clean, and only ever *previews* deploys. People review and merge the change, and run real deployments. The MCP server's `instructions` and the generated `AGENTS.md` describe the same loop.
 
 ```mermaid
 flowchart LR
   search["search()<br/>find relevant objects"] --> read["read object + get_chaining()"]
-  read --> edit["propose YAML edit"]
+  read --> edit["draft or edit YAML"]
   edit --> validate["validation_report()"]
-  validate -->|pass| dryrun["deploy_rule(dry_run=true)"]
-  validate -->|fail| edit
+  validate -->|ok| dryrun["deploy_rule(dry_run=true)"]
+  validate -->|"issues: apply fix, explain(code)"| edit
+  dryrun --> human["a person reviews and merges"]
 ```
 
 ### Example session
@@ -102,12 +117,13 @@ flowchart LR
 >
 > **Agent:** `search(query="T1059")` → finds the *Credential Access* objective `…8002…0001`.
 > `get_chaining(uuid="…8002…0001")` → confirms it covers the *Simulated Actor* threat and has no rule yet.
-> Proposes `objects/rules/sentinel-t1059.yaml` with `detection_model` pointing at the objective.
-> `validation_report()` → passes schema, uuid, chaining.
+> Writes `objects/rules/sentinel-t1059.yaml` from `opentide://templates/rule`, with `detection_model` pointing at the objective.
+> `validation_report(file="objects/rules/sentinel-t1059.yaml")` → one `vocab_unknown` issue at line 8, column 8: `tlp: clearr`, with a `fix` replacing it with `clear`. The fix is not `safe` (another spelling, not only another case), so the agent checks it against `help`: `did you mean 'clear'?`.
+> Applies the edit. `validation_report(file=…)` → `ok: true`.
 > Runs `opentide validate query --platform sentinel --live --file objects/rules/sentinel-t1059.yaml` (CLI), which checks that one rule's query against the tenant.
 > `deploy_rule(uuid=…, platform="sentinel", dry_run=true)` → shows the planned change.
 >
-> **You:** review the diff, then deploy for real.
+> **You:** review the diff, merge it, then deploy for real.
 
 ## Safe vs unsafe edit patterns
 
@@ -116,7 +132,7 @@ flowchart LR
 - Search, read, and summarise objects and coverage.
 - Draft new objects from templates, filling required fields.
 - Run `validation_report` and surface concrete errors.
-- Fix dangling references and vocabulary violations the validator flags.
+- Apply the `fix` edits the validator returns, and fix the dangling references and vocabulary violations it flags.
 - Preview deploys with `dry_run=true`.
 
 **Unsafe — keep a human in the loop**
@@ -129,12 +145,13 @@ flowchart LR
 
 ## Recommended guardrails in AGENTS.md
 
-Add rules like these to the generated `AGENTS.md` so the agent respects them:
+The generated `AGENTS.md` already tells the agent to validate until clean and to deploy only with `--dry-run`. Add rules like these for your own policies:
 
 ```md
-- Always run `validation_report` before proposing a rule as done.
-- `validate_query` checks structure only. Never report a rule as platform-ready
-  on its result alone; `run_query` is not implemented.
+- Always run `validation_report` (or `opentide --json validate --file …`) until it is
+  clean before proposing a rule as done.
+- `validate_query` with `live: true` checks the catalogue rules against the tenant.
+  Never report a rule as platform-ready on its result alone; `run_query` is not implemented.
 - Never claim query validation for CrowdStrike or HarfangLab — they are deploy-only.
 - Deploys are `dry_run=true` unless a human explicitly approves a real deploy.
 ```

@@ -4,6 +4,8 @@
 
 **Organisation:** {org}
 
+This repository uses [opentide](https://pypi.org/project/opentide/): spec-driven development for agentic detection engineering.
+
 ## Quick start
 
 ```bash
@@ -17,10 +19,35 @@ opentide generate
 
 - `objects/threats/` — threat vectors
 - `objects/objectives/` — detection objectives
-- `objects/rules/` — MDR rules
+- `objects/rules/` — detection rules
 - `.opentide/configurations/` — platform and visibility configuration
 - `.opentide/schemas/` — generated JSON schemas (via `opentide generate`)
 - `.opentide/templates/` — generated object templates
+
+## Running opentide as an agent
+
+Add `--json` to every command: stdout is then one JSON document and nothing else.
+
+```bash
+opentide --json commands                         # every command, option and an example
+opentide --json validate --file objects/rules/<rule>.yaml
+opentide --json lint
+opentide explain <code>                          # what a finding's code means and how to fix it
+```
+
+- **Branch on the exit code, then on `failure.code`.** `0` success. `1` failure: `issues_found` (findings to fix) or `command_failed`. `2` usage error (`usage_unknown_option`, `usage_invalid_choice`, …, with `failure.suggestion`) or a check that could not run (`no_tenant_reached`, `needs_human_decision`). `3` partial `share`.
+- **Read each finding's `fix`.** Findings (`report.issues` from `validate`, `findings` from `lint`) carry `code`, `path`, `line`, `column` and `end_column` (1-based, end exclusive), `help` and `fix`. Each of `fix.edits` replaces the text from (`line`, `column`) up to (`end_line`, `end_column`) with `replacement`. Apply `safe: true` edits as they are: they only respell the same word. Check the others against `help` first. When there is no fix, run `opentide explain <code>`.
+- **Follow `next_actions`.** Each is `{command, reason}`: the command to run next.
+- **Never answer a prompt.** opentide does not prompt agents: a command that needs input exits `2` with `usage_needs_input` and names the flags to pass.
+
+## Workflow
+
+1. **Search** what exists: `opentide --json info rules`, `opentide --json info coverage --technique T1059`.
+2. **Draft** the object from `.opentide/templates/`, against the schema in `.opentide/schemas/`.
+3. **Validate until clean**: `opentide --json validate --file <file>` and apply each `fix` until `ok` is `true` and the exit code is `0`. Then `opentide --json lint`.
+4. **Preview the deployment**: `opentide --json deploy --dry-run --strategy PREVIEW --all`. Nothing is sent.
+
+People review and merge the change, and run real deployments. Do not deploy without `--dry-run` unless a person asks.
 
 ## Skills
 
@@ -28,4 +55,4 @@ See `.agents/skills/opentide-detection-rule/SKILL.md` for detection engineering 
 
 ## MCP
 
-Run `opentide setup mcp` to write editor MCP config that runs `opentide mcp start`.
+Run `opentide setup mcp` to write editor MCP config that runs `opentide mcp start`. The server's `validation_report` returns the same findings, `fix` and `next_actions`; its `explain` tool returns the same pages.
