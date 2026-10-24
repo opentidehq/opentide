@@ -27,6 +27,8 @@ Run `opentide --help` for the live command tree.
 | [`deploy`](./deploy.md) | Platform rule deployment |
 | [`share`](./share.md) | Publish objects to a MISP destination |
 | [`info`](./info.md) | Repository and platform statistics |
+| [`new`](./new.md) | Scaffold a threat, objective or rule from the generated template |
+| [`doctor`](./doctor.md) | Check the installation, the workspace and its integrations |
 | [`mcp`](../mcp/index.md) | Stdio MCP server (`mcp start`); the editor owns the process |
 
 <Callout type="info">

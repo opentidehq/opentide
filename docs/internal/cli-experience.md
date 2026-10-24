@@ -277,6 +277,8 @@ The output contract (#619) is in place. Where it differs from the sections above
 | Outcome lines | The glyph grammar is in place; each command keeps its current message (`✓ Validation passed`). The counted wordings in the table above come with diagnostics and progress (PRs C and E). A skipped result prints `Skipped: <message>`. |
 | Soft wrap | Outcome, warning, error and next-step lines are soft-wrapped in `human` mode too, not only `plain`: Rich would otherwise break a long path mid-word on a TTY. |
 | `opentide --json` with no command | Still prints help (`no_args_is_help`), not a JSON document. |
+| `opentide new` (#628) | Subcommands `new threat`, `new objective` (`--threat`), `new rule` (`--platform`, `--objective`). The workspace configuration has no organisation key, so the organisation is the one most catalogue objects carry. Required values nobody chose are placeholders (the schema's first allowed value, or `...`), listed under `placeholders`, so the file validates at once. TLP starts at `amber`; a platform block starts at the first `INERT` status. Failure codes `path_exists`, `reference_not_found`, `template_missing`. |
+| `opentide doctor` (#628) | Statuses `pass`, `warn`, `fail`, `skip`; each check carries `subject` too. `--offline` skips the network checks. Schema freshness checks that every schema this version generates exists (schemas carry no version stamp); template freshness compares the files with a fresh render. Failure code `doctor_checks_failed`. |
 
 ## Code references
 

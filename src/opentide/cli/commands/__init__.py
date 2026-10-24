@@ -72,6 +72,20 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec("deploy", "opentide.cli.commands.deploy", "deploy_app", "Rule deployment"),
     CommandSpec(
+        "new",
+        "opentide.cli.commands.new",
+        "new_app",
+        "Scaffold a threat, objective or rule from the generated template.",
+        rich_help_panel="Author",
+    ),
+    CommandSpec(
+        "doctor",
+        "opentide.cli.commands.doctor",
+        "doctor_cmd",
+        "Check the installation, the workspace and its integrations.",
+        rich_help_panel="Workspace",
+    ),
+    CommandSpec(
         "document",
         "opentide.cli.commands.legacy",
         "document_app",
