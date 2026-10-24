@@ -73,6 +73,7 @@ def test_migrate_objects_dry_run_does_not_move(tmp_path: Path) -> None:
     result = run_migrate_objects(root, apply=False)
     assert result["dry_run"] is True
     assert result["planned"] == 6
+    assert result["message"] == "Would move 6 folders · pass --apply to migrate"
     assert result["applied"] is False
     assert (root / "Configurations" / "platforms" / "sentinel.toml").is_file()
     assert not (root / ".opentide" / "configurations").exists()
@@ -83,6 +84,7 @@ def test_migrate_objects_apply_moves_layout(tmp_path: Path) -> None:
     root = _legacy_repo(tmp_path)
     result = run_migrate_objects(root, apply=True)
     assert result["applied"] is True
+    assert result["message"] == "Moved 6 folders"
     assert result["dry_run"] is False
     assert (root / ".opentide" / "configurations" / "platforms" / "sentinel.toml").is_file()
     assert not (root / "Configurations").exists()

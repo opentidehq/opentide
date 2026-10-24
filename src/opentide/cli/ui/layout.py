@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
 
@@ -51,3 +52,16 @@ def columns(
         line.rstrip()
         text.append_text(line)
     return text
+
+
+class Cropped:
+    """*text* one terminal row per line: a line wider than the terminal ends in ``…``."""
+
+    def __init__(self, text: Text) -> None:
+        self.text = text
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        width = options.max_width
+        for line in self.text.split("\n", allow_blank=True):
+            line.truncate(width, overflow="ellipsis")
+            yield line
