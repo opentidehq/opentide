@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -24,10 +25,15 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
+import structlog
 from rich.console import Console
 from rich.text import Text
 
+from opentide.cli.enums import McpHost
+from opentide.cli.services.setup.mcp import MCP_OUTPUT_PATHS
 from opentide.cli.ui.glyphs import glyph
+
+logger = structlog.get_logger("opentide.cli.services.doctor")
 
 Status = Literal["pass", "warn", "fail", "skip"]
 
@@ -55,12 +61,13 @@ PLATFORM_SDKS: dict[str, tuple[str, ...]] = {
     "elastic": ("requests",),
 }
 
-#: MCP configuration files ``opentide setup mcp`` writes, by host label.
-MCP_FILES: dict[str, str] = {
-    "VS Code": ".vscode/mcp.json",
-    "Cursor": ".cursor/mcp.json",
-    "Claude Code": ".mcp.json",
-    "generic": "opentide.mcp.json",
+#: How the checklist names each host ``opentide setup mcp`` writes for; the
+#: files themselves are :data:`~opentide.cli.services.setup.mcp.MCP_OUTPUT_PATHS`.
+MCP_HOST_LABELS: dict[McpHost, str] = {
+    McpHost.vscode: "VS Code",
+    McpHost.cursor: "Cursor",
+    McpHost.claude_code: "Claude Code",
+    McpHost.generic: "generic",
 }
 
 _PROXY_VARIABLES = ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy")
@@ -105,14 +112,43 @@ class DoctorContext:
 # --------------------------------------------------------------------------- helpers
 
 
+#: What :func:`redact_url` returns for a URL it cannot take apart.
+UNPARSEABLE_URL = "<unparseable proxy URL>"
+
+
+def proxy_endpoint(url: str) -> tuple[str, str, int | None] | None:
+    """Scheme, host and port of a proxy URL, or ``None`` when it cannot be parsed.
+
+    The credentials are cut off at the *last* ``@`` before anything is parsed:
+    a password may hold an unencoded ``/``, ``#`` or ``?``, which would make
+    ``urlsplit`` end the host early and read part of the password as the port.
+    """
+    try:
+        scheme, separator, rest = url.strip().partition("://")
+        if not separator:
+            scheme, rest = "http", url.strip()
+        host_port = rest.rpartition("@")[2]
+        for delimiter in "/?#":
+            host_port = host_port.split(delimiter, 1)[0]
+        parts = urlsplit(f"{scheme}://{host_port}")
+        host = parts.hostname or ""
+        port = parts.port
+    except Exception:
+        return None
+    if not scheme.isalnum():
+        return None
+    return scheme, host, port
+
+
 def redact_url(url: str) -> str:
-    """*url* without its user and password: ``http://proxy:8080``."""
-    parts = urlsplit(url if "://" in url else f"http://{url}")
-    host = parts.hostname or ""
+    """*url* without its user and password: ``http://proxy:8080``. Never raises."""
+    endpoint = proxy_endpoint(url)
+    if endpoint is None:
+        return UNPARSEABLE_URL
+    scheme, host, port = endpoint
     if ":" in host:
         host = f"[{host}]"
-    port = f":{parts.port}" if parts.port else ""
-    return f"{parts.scheme}://{host}{port}"
+    return f"{scheme}://{host}{f':{port}' if port else ''}"
 
 
 def _version_key(text: str) -> Any:
@@ -308,6 +344,97 @@ def check_git(ctx: DoctorContext) -> list[Check]:
             )
         )
     return checks
+
+
+_TOML_POSITION = re.compile(r"\s*\(at (?:line (?P<line>\d+), column \d+|end of document)\)\s*$")
+
+
+def _configuration_files(workspace: Path) -> list[Path]:
+    """The workspace's configuration TOMLs, and its parent instance's, in load order."""
+    from opentide.registry.discovery import client_configurations_dir
+
+    folders = [
+        client_configurations_dir(workspace),
+        workspace.parent / ".opentide" / "configurations",
+    ]
+    files: list[Path] = []
+    for folder in dict.fromkeys(folders):
+        if folder.is_dir():
+            files.extend(
+                path
+                for path in sorted(folder.rglob("*.toml"))
+                if not any(
+                    part.startswith((".", "__")) for part in path.relative_to(folder).parts[:-1]
+                )
+            )
+    return files
+
+
+def _toml_problem(path: Path) -> tuple[int | None, str] | None:
+    """Line and reason *path* does not parse, or ``None`` when it does.
+
+    The reason is the parser's description only (``Invalid value``), never
+    the text around it, which may hold a credential.
+    """
+    from opentide.core.files import tomllib
+
+    try:
+        tomllib.loads(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        return None, "it is not UTF-8"
+    except OSError as exc:
+        return None, f"it cannot be read ({type(exc).__name__})"
+    except tomllib.TOMLDecodeError as exc:
+        message = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+        position = _TOML_POSITION.search(message)
+        line = position.group("line") if position else None
+        reason = message[: position.start()] if position else message
+        return (int(line) if line else None), reason
+    return None
+
+
+def check_configuration(ctx: DoctorContext) -> list[Check]:
+    """The merged configuration loads; when it does not, which file and line breaks it."""
+    files = _configuration_files(ctx.workspace)
+    try:
+        _configurations(ctx)
+    except Exception as exc:
+        for path in files:
+            problem = _toml_problem(path)
+            if problem is None:
+                continue
+            line, reason = problem
+            try:
+                shown = path.relative_to(ctx.workspace).as_posix()
+            except ValueError:
+                shown = str(path)
+            where = f"{shown} line {line}" if line else shown
+            return [
+                Check(
+                    "configuration",
+                    "fail",
+                    f"{where} is not valid TOML: {reason}",
+                    f"fix {where}; the checks that read the configuration are skipped until then",
+                )
+            ]
+        logger.debug("doctor_configuration_failed", exc_info=True)
+        return [
+            Check(
+                "configuration",
+                "fail",
+                f"The configuration does not load ({type(exc).__name__})",
+                "re-run with --debug for the traceback",
+            )
+        ]
+    if not files:
+        return [Check("configuration", "pass", "No workspace configuration: the defaults apply")]
+    return [
+        Check(
+            "configuration",
+            "pass",
+            f"{len(files)} configuration file{'s load' if len(files) != 1 else ' loads'}",
+        )
+    ]
 
 
 def check_templates(ctx: DoctorContext) -> list[Check]:
@@ -538,20 +665,19 @@ def check_proxy(ctx: DoctorContext) -> list[Check]:
         note = ""
     if ctx.offline:
         return [Check("proxy", "skip", f"Proxy {shown} not checked: --offline")]
-    parts = urlsplit(url if "://" in url else f"http://{url}")
-    host = parts.hostname
-    if not host:
+    endpoint = proxy_endpoint(url)
+    if endpoint is None or not endpoint[1]:
         return [
             Check(
                 "proxy",
                 "fail",
-                f"Proxy {shown} has no host",
+                f"Proxy {shown} has no host" if endpoint else "The proxy URL cannot be parsed",
                 "pass --proxy http://host:port",
             )
         ]
+    scheme, host, port = endpoint
     try:
-        port = parts.port or (443 if parts.scheme == "https" else 80)
-        connect(host, port)
+        connect(host, port or (443 if scheme == "https" else 80))
     except (OSError, ValueError) as exc:
         return [
             Check(
@@ -647,36 +773,42 @@ def _opentide_server(data: Any) -> Mapping[str, Any] | None:
 
 def check_mcp(ctx: DoctorContext) -> list[Check]:
     hosts: list[str] = []
-    broken: list[str] = []
+    #: Files that exist but configure no opentide server: often a host's own
+    #: file listing other servers only (``.mcp.json`` in Claude Code).
+    without: list[str] = []
     commands: set[str] = set()
-    for host, relative in MCP_FILES.items():
+    for host, relative in MCP_OUTPUT_PATHS.items():
         path = ctx.workspace / relative
         if not path.is_file():
             continue
         server = _opentide_server(_read_json(path))
         if server is None:
-            broken.append(relative)
+            without.append(relative)
             continue
-        hosts.append(host)
+        hosts.append(MCP_HOST_LABELS[host])
         commands.add(str(server.get("command") or ""))
-    if broken:
-        return [
-            Check(
-                "mcp_config",
-                "warn",
-                f"{', '.join(broken)} has no opentide server running 'mcp start'",
-                "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)",
-            )
-        ]
+    setup = "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)"
     if not hosts:
+        if without:
+            return [
+                Check(
+                    "mcp_config",
+                    "warn",
+                    f"{', '.join(without)} has no opentide server running 'mcp start'",
+                    setup,
+                )
+            ]
         return [
             Check(
                 "mcp_config",
                 "skip",
                 "No MCP configuration: agents in editors cannot call opentide tools",
-                "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)",
+                setup,
             )
         ]
+    configured = f"MCP configured for {', '.join(hosts)}"
+    if without:
+        configured += f" ({', '.join(without)} has no opentide server)"
     unresolved = sorted(
         command for command in commands if command and shutil.which(command) is None
     )
@@ -685,12 +817,11 @@ def check_mcp(ctx: DoctorContext) -> list[Check]:
             Check(
                 "mcp_config",
                 "warn",
-                f"MCP configured for {', '.join(hosts)}, but {', '.join(unresolved)} "
-                "is not on PATH for the editor to start",
+                f"{configured}, but {', '.join(unresolved)} is not on PATH for the editor to start",
                 "put opentide on PATH, or set the full path as the server command",
             )
         ]
-    return [Check("mcp_config", "pass", f"MCP configured for {', '.join(hosts)}")]
+    return [Check("mcp_config", "pass", configured)]
 
 
 #: In the order the checklist prints.
@@ -700,6 +831,7 @@ CHECKS: tuple[Callable[[DoctorContext], list[Check]], ...] = (
     check_latest_version,
     check_workspace,
     check_git,
+    check_configuration,
     check_templates,
     check_schemas,
     check_platforms,
@@ -710,20 +842,63 @@ CHECKS: tuple[Callable[[DoctorContext], list[Check]], ...] = (
     check_mcp,
 )
 
+#: The documented code (or codes) each check reports, used when it cannot run.
+CHECK_CODES: dict[Callable[[DoctorContext], list[Check]], tuple[str, ...]] = {
+    check_python: ("python_version",),
+    check_opentide_version: ("opentide_version",),
+    check_latest_version: ("opentide_latest",),
+    check_workspace: ("workspace",),
+    check_git: ("git", "git_repository"),
+    check_configuration: ("configuration",),
+    check_templates: ("templates_fresh",),
+    check_schemas: ("schemas_fresh",),
+    check_platforms: ("platforms_enabled",),
+    check_platform_sdks: ("platform_sdk",),
+    check_credentials: ("credentials",),
+    check_proxy: ("proxy",),
+    check_vscode: ("vscode_settings", "vscode_snippets"),
+    check_mcp: ("mcp_config",),
+}
+
+#: Checks that read the merged configuration: skipped when it does not load.
+NEEDS_CONFIGURATION = frozenset(
+    {
+        check_templates,
+        check_schemas,
+        check_platforms,
+        check_platform_sdks,
+        check_credentials,
+        check_vscode,
+    }
+)
+
+
+def _name(check: Callable[[DoctorContext], list[Check]]) -> str:
+    return str(getattr(check, "__name__", "check"))
+
+
+def _codes(check: Callable[[DoctorContext], list[Check]]) -> tuple[str, ...]:
+    return CHECK_CODES.get(check) or (_name(check).removeprefix("check_"),)
+
 
 def _guarded(check: Callable[[DoctorContext], list[Check]], ctx: DoctorContext) -> list[Check]:
-    """A check that raises reports a failure instead of stopping the checklist."""
+    """A check that raises reports a failure instead of stopping the checklist.
+
+    The message names the exception type only: its text can quote what the
+    check was reading, such as part of a proxy password.
+    """
     try:
         return check(ctx)
     except Exception as exc:
-        code = check.__name__.removeprefix("check_")
+        logger.debug("doctor_check_raised", check=_name(check), exc_info=True)
         return [
             Check(
                 code,
                 "fail",
-                f"The check itself failed: {type(exc).__name__}: {exc}",
-                "re-run with --debug and report it if it persists",
+                f"The check itself failed ({type(exc).__name__})",
+                "re-run with --debug for the traceback, and report it if it persists",
             )
+            for code in _codes(check)
         ]
 
 
@@ -732,8 +907,18 @@ def run_doctor(
 ) -> dict[str, Any]:
     """Run every check and build the ``CommandResult`` payload."""
     results: list[Check] = []
+    configuration_failed = False
     for check in CHECKS if checks is None else checks:
-        results.extend(_guarded(check, ctx))
+        if configuration_failed and check in NEEDS_CONFIGURATION:
+            results.extend(
+                Check(code, "skip", "Not checked: the configuration does not load")
+                for code in _codes(check)
+            )
+            continue
+        outcome = _guarded(check, ctx)
+        if check is check_configuration:
+            configuration_failed = any(item.status == "fail" for item in outcome)
+        results.extend(outcome)
     counts = {
         status: sum(1 for item in results if item.status == status)
         for status in ("pass", "warn", "fail", "skip")

@@ -390,10 +390,41 @@ def test_connect_opens_a_tcp_connection(monkeypatch: pytest.MonkeyPatch) -> None
         ("http://user:pass@proxy:8080", "http://proxy:8080"),
         ("proxy.internal:3128", "http://proxy.internal:3128"),
         ("http://[::1]:8080", "http://[::1]:8080"),
+        # An unencoded "/", "#" or "?" in the password must not end the host early.
+        ("http://alice:s3cr/etPW@proxy.example:8080", "http://proxy.example:8080"),
+        ("http://alice:s3cr#etPW@proxy.example:8080", "http://proxy.example:8080"),
+        ("http://alice:s3cr?etPW@proxy.example:8080", "http://proxy.example:8080"),
+        ("http://alice:p@ss@proxy.example:8080/", "http://proxy.example:8080"),
+        ("socks5h://proxy.example", "socks5h://proxy.example"),
+        ("http://proxy.example:notaport", doctor.UNPARSEABLE_URL),
+        ("http://proxy.example:99999", doctor.UNPARSEABLE_URL),
+        ("ht tp://alice:secret@proxy", doctor.UNPARSEABLE_URL),
     ],
 )
 def test_redact_url(url: str, shown: str) -> None:
     assert doctor.redact_url(url) == shown
+    assert "s3cr" not in shown and "secret" not in shown
+
+
+def test_proxy_with_a_slash_in_the_password_connects_to_the_host(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[tuple[str, int]] = []
+    monkeypatch.setattr(doctor, "connect", lambda host, port: seen.append((host, port)))
+    env = {"HTTPS_PROXY": "http://alice:s3cr/etPW@proxy.example:8080"}
+    check = _only(doctor.check_proxy(_ctx(workspace, env=env)))
+    assert check.status == "pass"
+    assert seen == [("proxy.example", 8080)]
+    assert "s3cr" not in check.message
+
+
+def test_unparseable_proxy_fails_without_echoing_it(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(doctor, "connect", pytest.fail)
+    env = {"HTTPS_PROXY": f"http://alice:{SECRET}@proxy.example:port"}
+    check = _only(doctor.check_proxy(_ctx(workspace, env=env)))
+    assert (check.status, check.message) == ("fail", "The proxy URL cannot be parsed")
 
 
 # --------------------------------------------------------------------------- editor and MCP
@@ -447,10 +478,96 @@ def test_mcp_config_states(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
     assert _only(doctor.check_mcp(_ctx(workspace))).status == "warn"
 
+    # A host's own file listing other servers only does not hide a working one.
     _mcp(workspace / ".mcp.json", args=["serve"])
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
+    mixed = _only(doctor.check_mcp(_ctx(workspace)))
+    assert mixed.status == "pass"
+    assert mixed.message == "MCP configured for Cursor (.mcp.json has no opentide server)"
+
+    (workspace / ".cursor" / "mcp.json").unlink()
     broken = _only(doctor.check_mcp(_ctx(workspace)))
     assert broken.status == "warn"
     assert ".mcp.json" in broken.message
+
+
+def test_mcp_check_reads_the_files_setup_writes() -> None:
+    from opentide.cli.services.setup.mcp import MCP_OUTPUT_PATHS
+
+    assert set(doctor.MCP_HOST_LABELS) == set(MCP_OUTPUT_PATHS)
+
+
+# --------------------------------------------------------------------------- configuration
+
+
+def _break_sentinel(root: Path) -> Path:
+    path = root / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
+    path.write_text(f'[platform]\nenabled = true\nsecret = "{SECRET}\nnext = 1\n', "utf-8")
+    clear_runtime_caches()
+    return path
+
+
+def test_configuration_loads(workspace: Path) -> None:
+    empty = _only(doctor.check_configuration(_ctx(workspace)))
+    assert (empty.code, empty.status) == ("configuration", "pass")
+    _enable_sentinel(workspace)
+    check = _only(doctor.check_configuration(_ctx(workspace)))
+    assert (check.status, check.message) == ("pass", "1 configuration file loads")
+
+
+def test_broken_configuration_names_the_file_and_line(workspace: Path) -> None:
+    _break_sentinel(workspace)
+    check = _only(doctor.check_configuration(_ctx(workspace)))
+    assert check.status == "fail"
+    assert check.message.startswith(
+        ".opentide/configurations/platforms/sentinel.toml line 3 is not valid TOML: "
+    )
+    assert SECRET not in check.message
+    assert check.fix and "sentinel.toml line 3" in check.fix
+
+
+def test_configuration_that_fails_elsewhere_names_the_exception_only(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def explode(ctx: DoctorContext) -> dict:
+        raise KeyError(SECRET)
+
+    monkeypatch.setattr(doctor, "_configurations", explode)
+    check = _only(doctor.check_configuration(_ctx(workspace)))
+    assert (check.status, check.message) == ("fail", "The configuration does not load (KeyError)")
+
+
+def test_toml_problem_reports_unreadable_files(tmp_path: Path) -> None:
+    path = tmp_path / "bad.toml"
+    path.write_bytes(b"\xff\xfe")
+    assert doctor._toml_problem(path) == (None, "it is not UTF-8")
+    assert doctor._toml_problem(tmp_path / "missing.toml") == (
+        None,
+        "it cannot be read (FileNotFoundError)",
+    )
+    path.write_text("a = 1\n", encoding="utf-8")
+    assert doctor._toml_problem(path) is None
+
+
+def test_broken_configuration_skips_the_checks_that_read_it(workspace: Path) -> None:
+    _break_sentinel(workspace)
+    payload = doctor.run_doctor(_ctx(workspace, offline=True, env={}))
+    statuses = {check["code"]: check["status"] for check in payload["checks"]}
+    assert statuses["configuration"] == "fail"
+    for code in (
+        "templates_fresh",
+        "schemas_fresh",
+        "platforms_enabled",
+        "platform_sdk",
+        "credentials",
+        "vscode_settings",
+        "vscode_snippets",
+    ):
+        assert statuses[code] == "skip", code
+    # Every code reported is one the documentation lists.
+    documented = {code for codes in doctor.CHECK_CODES.values() for code in codes}
+    assert set(statuses) <= documented
+    assert SECRET not in json.dumps(payload)
 
 
 # --------------------------------------------------------------------------- the whole run
@@ -491,12 +608,35 @@ def test_run_doctor_warnings_exit_zero(workspace: Path) -> None:
 
 def test_a_check_that_raises_is_reported_as_failed(workspace: Path) -> None:
     def check_boom(ctx: DoctorContext) -> list[Check]:
-        raise RuntimeError("kaput")
+        raise RuntimeError(f"kaput {SECRET}")
 
     payload = doctor.run_doctor(_ctx(workspace), [check_boom])
     assert payload["checks"][0]["code"] == "boom"
     assert payload["checks"][0]["status"] == "fail"
-    assert "RuntimeError: kaput" in payload["checks"][0]["message"]
+    # The exception text can quote what the check read, so only its type is shown.
+    assert payload["checks"][0]["message"] == "The check itself failed (RuntimeError)"
+    assert SECRET not in json.dumps(payload)
+
+
+def test_a_check_that_raises_reports_its_documented_codes(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(ctx: DoctorContext) -> dict:
+        raise ValueError("no")
+
+    monkeypatch.setattr(doctor, "_configurations", boom)
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.vscode.build_yaml_schema_mappings",
+        lambda **kwargs: boom(None),  # ty: ignore[invalid-argument-type]
+    )
+    (workspace / ".vscode").mkdir()
+    (workspace / ".vscode" / "settings.json").write_text("{}", encoding="utf-8")
+    checks = doctor._guarded(doctor.check_vscode, _ctx(workspace))
+    assert [(check.code, check.status) for check in checks] == [
+        ("vscode_settings", "fail"),
+        ("vscode_snippets", "fail"),
+    ]
+    assert set(doctor.CHECK_CODES) == set(doctor.CHECKS)
 
 
 def test_render_checks_prints_status_message_code_and_fix() -> None:
@@ -580,6 +720,7 @@ def test_doctor_real_checks_offline_never_print_secrets(
         "opentide_latest",
         "workspace",
         "git",
+        "configuration",
         "templates_fresh",
         "schemas_fresh",
         "platforms_enabled",
