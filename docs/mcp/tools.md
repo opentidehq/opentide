@@ -168,6 +168,8 @@ Structured validation report for agents. Full registry by default; narrow with f
 
 Prefer this tool for agent workflows — returns `model_dump_json_ready()` issue list.
 
+One cause is one issue, here and in `validate_rule`: a dangling reference (`detection_model`, `objective.threats`, `threat.chaining[].vector`) is an `invalid_ref`, not also a `vocab_unknown`, with the value in `context.value`. `opentide explain <code>` says what each code means.
+
 ## validate_query
 
 Tenant query check, the same path as `opentide validate query --live`.

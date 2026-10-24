@@ -532,19 +532,86 @@ def test_validate_query_live_with_a_broken_sdk_advises_a_reinstall() -> None:
     assert "[" not in str(result["advice"]) + str(result["message"])
 
 
-def test_run_validate_emits_console_issues_when_not_json() -> None:
+def test_run_validate_returns_diagnostics_and_prints_nothing() -> None:
+    """The service builds diagnostics; the command renders them as code frames."""
     ctx = CliContext(json_output=False)
     report = ValidationReport(
         ok=False,
-        issues=[ValidationIssue(code="schema", message="invalid field")],
+        issues=[ValidationIssue(code="schema_validation", message="invalid field")],
     )
     with (
         patch.object(validation_service, "run_validation", return_value=report),
         patch("opentide.cli.exit_codes.validation_outcome", return_value=FAILED_OUTCOME),
-        patch.object(validation_service.get_stdout_console(), "print") as mock_print,
     ):
-        validation_service.run_validate(ctx)
-    mock_print.assert_called_once()
+        result = validation_service.run_validate(ctx)
+    (diagnostic,) = result["_diagnostics"]
+    assert (diagnostic.code, diagnostic.message) == ("schema_validation", "invalid field")
+    (issue,) = result["report"]["issues"]
+    assert issue["explain"] == "opentide explain schema_validation"
+    assert result["_failure_code"] == "issues_found"
+    assert result["_summary"] == {
+        "objects": 0,
+        "errors": 1,
+        "warnings": 0,
+        "files": 0,
+        "warning_files": 0,
+    }
+
+
+def test_files_count_where_the_errors_are(tmp_path: Path) -> None:
+    """A file with only a warning is not one of the files with errors."""
+    ctx = CliContext(json_output=True)
+    report = ValidationReport(
+        ok=False,
+        issues=[
+            ValidationIssue(
+                code="vocab_unknown", file_path=tmp_path / "objective.yaml", message="e"
+            )
+        ],
+        warnings=[
+            ValidationIssue(
+                code="platform_not_enabled",
+                severity="warning",
+                file_path=tmp_path / "rule.yaml",
+                message="w",
+            )
+        ],
+        stats={"objects_checked": 3},
+    )
+    with (
+        patch.object(validation_service, "run_validation", return_value=report),
+        patch.object(validation_service, "discover_workspace", return_value=tmp_path),
+        patch("opentide.cli.exit_codes.validation_outcome", return_value=FAILED_OUTCOME),
+    ):
+        summary = validation_service.run_validate(ctx)["_summary"]
+    assert summary == {"objects": 3, "errors": 1, "warnings": 1, "files": 1, "warning_files": 1}
+    line = validation_service.validate_outcome_line(summary, failed=True, seconds=0.9)
+    assert line == "1 error in 1 file · 3 objects checked · 0.9s"
+
+
+@pytest.mark.parametrize(
+    ("summary", "failed", "expected"),
+    [
+        ({"objects": 3}, False, "3 objects valid · 0.9s"),
+        ({"objects": 1, "warnings": 2}, False, "1 object valid · 2 warnings · 0.9s"),
+        ({"objects": 0}, False, "Validation passed · 0.9s"),
+        (
+            {"objects": 3, "errors": 2, "files": 1},
+            True,
+            "2 errors in 1 file · 3 objects checked · 0.9s",
+        ),
+        (
+            {"objects": 3, "warnings": 1, "files": 0, "warning_files": 1},
+            True,
+            "1 warning in 1 file · 3 objects checked · 0.9s",
+        ),
+        ({"errors": 1}, True, "1 error · 0.9s"),
+    ],
+)
+def test_validate_outcome_line(summary: dict[str, int], failed: bool, expected: str) -> None:
+    assert (
+        validation_service.validate_outcome_line(summary, failed=failed, seconds=0.94) == expected
+    )
 
 
 def test_validate_query_platform_legacy_validator_signature() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,89 @@ def json_timestamp_default(value: Any) -> str:
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
+class DuplicateKeyError(yaml.MarkedYAMLError):
+    """A mapping repeats a key. Carries the repeated key's position like a parser error."""
+
+    #: Where the repeated key ends, so a diagnostic can underline all of it.
+    end_mark: yaml.Mark | None = None
+
+    def __str__(self) -> str:
+        mark = self.problem_mark
+        return f"{self.problem} at line {mark.line + 1}" if mark else str(self.problem)
+
+
+@dataclass(frozen=True)
+class YamlProblem:
+    """Why a YAML document did not parse, and where. Positions are 1-based."""
+
+    problem: str
+    line: int | None = None
+    column: int | None = None
+    #: What the parser was doing (``while parsing a flow sequence``), and where it started.
+    context: str | None = None
+    context_line: int | None = None
+    context_column: int | None = None
+    #: Just past the text at fault, when the error spans more than one character.
+    end_column: int | None = None
+
+    @property
+    def context_note(self) -> str | None:
+        """``while parsing a flow sequence that starts at line 8, column 8``."""
+        if not self.context:
+            return None
+        if self.context_line is None or (self.context_line, self.context_column) == (
+            self.line,
+            self.column,
+        ):
+            return self.context
+        where = f"line {self.context_line}, column {self.context_column}"
+        return f"{self.context} that starts at {where}"
+
+    @property
+    def message(self) -> str:
+        """One line naming the problem and its position, never ``<unicode string>``."""
+        text = self.problem
+        if self.line is not None:
+            text = f"{text} at line {self.line}, column {self.column}"
+        note = self.context_note
+        return f"{text} ({note})" if note else text
+
+
+def describe_yaml_error(exc: BaseException) -> YamlProblem:
+    """Read the problem and its position out of a PyYAML error.
+
+    PyYAML's own text names the stream ``<unicode string>`` when it parsed a
+    string, and spreads the problem over four lines.
+    """
+    if isinstance(exc, yaml.MarkedYAMLError):
+        problem_mark = exc.problem_mark
+        context_mark = exc.context_mark
+        mark = problem_mark or context_mark
+        problem = str(exc.problem or exc.context or type(exc).__name__)
+        context = str(exc.context) if exc.problem and exc.context else None
+        if context and problem.startswith("but "):
+            # "expected a single document in the stream" / "but found another
+            # document" reads as one sentence, not as a problem and a context.
+            problem, context = f"{context}, {problem}", None
+        end_mark = getattr(exc, "end_mark", None)
+        end_column = (
+            end_mark.column + 1
+            if mark is not None and end_mark is not None and end_mark.line == mark.line
+            else None
+        )
+        return YamlProblem(
+            problem=problem,
+            line=mark.line + 1 if mark else None,
+            column=mark.column + 1 if mark else None,
+            context=context,
+            context_line=context_mark.line + 1 if context_mark and context else None,
+            context_column=context_mark.column + 1 if context_mark and context else None,
+            end_column=end_column,
+        )
+    text = str(exc).strip()
+    return YamlProblem(problem=text.splitlines()[0] if text else type(exc).__name__)
+
+
 def _reject_duplicate_keys(node: yaml.Node) -> None:
     """Reject repeated mapping keys, naming the key and its line."""
     if isinstance(node, yaml.MappingNode):
@@ -70,8 +154,11 @@ def _reject_duplicate_keys(node: yaml.Node) -> None:
         for key_node, value_node in node.value:
             key = key_node.value if isinstance(key_node, yaml.ScalarNode) else repr(key_node)
             if key in seen:
-                line = key_node.start_mark.line + 1
-                raise yaml.YAMLError(f"duplicate key {key!r} at line {line}")
+                error = DuplicateKeyError(
+                    problem=f"duplicate key {key!r}", problem_mark=key_node.start_mark
+                )
+                error.end_mark = key_node.end_mark
+                raise error
             seen.add(str(key))
             _reject_duplicate_keys(value_node)
         return

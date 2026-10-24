@@ -9,6 +9,7 @@
     "global-options",
     "exit-codes",
     "json-output",
+    "diagnostics",
     "---Commands---",
     "setup",
     "migrate",

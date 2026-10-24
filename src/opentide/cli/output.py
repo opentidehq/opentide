@@ -29,6 +29,8 @@ from opentide.cli.ui.contract import (
 )
 from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
 from opentide.cli.ui.render import (
+    AGENT_TIP,
+    labelled_text,
     outcome_kind,
     render_error,
     render_next_actions,
@@ -66,6 +68,9 @@ class CommandResult:
     summary: dict[str, Any] = field(default_factory=dict)
     next_actions: tuple[NextAction, ...] = ()
     failure: Failure | None = None
+    #: The outcome line, when it says more than ``message`` (``✓ 3 objects valid · 0.9s``).
+    #: ``message`` keeps its JSON meaning; this one is only printed.
+    outcome: str | None = None
 
     @classmethod
     def from_payload(
@@ -75,8 +80,9 @@ class CommandResult:
 
         Services may also return ``_summary``, ``_next_actions`` (``NextAction``
         or ``{"command", "reason"}`` items), ``_failure_code``,
-        ``_failure_argument`` and ``_failure_suggestion``; they are moved into
-        the envelope rather than left in the payload.
+        ``_failure_argument``, ``_failure_suggestion`` and ``_outcome`` (the
+        printed outcome line); they are moved into the envelope, or into the
+        human view, rather than left in the payload.
         """
         data = dict(payload)
         exit_code = int(data.pop("_exit_code", 0))
@@ -88,6 +94,7 @@ class CommandResult:
         failure_code = data.pop("_failure_code", None)
         failure_argument = data.pop("_failure_argument", None)
         failure_suggestion = data.pop("_failure_suggestion", None)
+        outcome = data.pop("_outcome", None)
         ok = status != "failed"
         failure = None
         if not ok or exit_code:
@@ -108,6 +115,7 @@ class CommandResult:
             summary=summary,
             next_actions=next_actions,
             failure=failure,
+            outcome=None if outcome is None else str(outcome),
         )
 
     def payload(self) -> dict[str, Any]:
@@ -228,7 +236,8 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
     """Render a normalized command result and honor its exit code.
 
     Human order: warnings, then exactly one outcome line (an ``error:`` line
-    for a failure), then its notes and at most three next steps.
+    for a failure, a ``✗`` line when the command failed because of findings it
+    printed), then its notes and at most three next steps.
     """
     if ctx.json_output:
         print_document(result.payload())
@@ -246,7 +255,16 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
     if not ctx.quiet:
         render_warnings(stderr, result.warnings)
     kind = outcome_kind(result.status, ok=result.ok)
-    if kind == "failed":
+    line = result.outcome or result.message
+    if kind == "failed" and result.failure is not None and result.failure.code == ISSUES_FOUND:
+        # The findings are the error report; the outcome line counts them.
+        render_outcome(stderr, "failed", line)
+        render_notes(stderr, notes)
+        if mode is OutputMode.AGENT:
+            stderr.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
+        if not ctx.quiet:
+            render_next_actions(stderr, result.next_actions)
+    elif kind == "failed":
         suggestion = result.failure.suggestion if result.failure else None
         if suggestion and repr(suggestion) not in result.message:
             notes.append(("help", f"did you mean {suggestion!r}?"))
@@ -254,7 +272,7 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
         if not ctx.quiet:
             render_next_actions(stderr, result.next_actions)
     else:
-        render_outcome(stdout, kind, result.message)
+        render_outcome(stdout, kind, line)
         if not ctx.quiet:
             render_notes(stdout, notes)
             render_next_actions(stdout, result.next_actions)

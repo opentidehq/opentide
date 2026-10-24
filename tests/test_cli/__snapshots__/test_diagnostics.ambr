@@ -1,0 +1,85 @@
+# serializer version: 1
+# name: test_code_frame_snapshot[human-dangling-reference]
+  '''
+  [1;31merror[invalid_ref][0m[1m: [0m[1mUnknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'[0m
+     [34m╭─▶[0m objects/rules/sentinel-kql-rule.yaml:10:18
+  [34m   [0m[34m│[0m
+  [34m 9 [0m[34m│[0m techniques: [T1059, T9999]
+  [34m10 [0m[34m│[0m detection_model: 00000000-0000-4000-8002-DEADBEEF0000   # the objective from step 4
+  [34m   [0m[34m│[0m                  [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[1;31m no object has this id[0m
+  [34m   [0m[34m│[0m
+     [34m╰─[0m [1;36mhelp:[0m opentide info objectives lists the ones that exist
+  
+  
+  '''
+# ---
+# name: test_code_frame_snapshot[human-enum-typo]
+  '''
+  [1;31merror[vocab_unknown][0m[1m: [0m[1mValue 'clearr' is not a valid 'tlp::1.0' vocabulary entry[0m
+    [34m╭─▶[0m objects/rules/sentinel-kql-rule.yaml:7:8
+  [34m  [0m[34m│[0m
+  [34m6 [0m[34m│[0m   modified: 2026-01-02
+  [34m7 [0m[34m│[0m   tlp: clearr
+  [34m  [0m[34m│[0m        [1;31m━━━━━━[0m[1;31m not in tlp::1.0[0m
+  [34m  [0m[34m│[0m
+    [34m╰─[0m [1;36mhelp:[0m did you mean 'clear'?
+  
+  
+  '''
+# ---
+# name: test_code_frame_snapshot[human-yaml-syntax]
+  '''
+  [1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
+    [34m╭─▶[0m objects/rules/broken.yaml:8:9
+  [34m  [0m[34m│[0m
+  [34m7 [0m[34m│[0m   tlp: [clear
+  [34m8 [0m[34m│[0m   author: Tutorial Author
+  [34m  [0m[34m│[0m         [1;31m━[0m
+  [34m  [0m[34m│[0m
+    [34m╰─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 7, column 8
+  
+  
+  '''
+# ---
+# name: test_code_frame_snapshot[plain-dangling-reference]
+  '''
+  error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+     ╭─▶ objects/rules/sentinel-kql-rule.yaml:10:18
+     │
+   9 │ techniques: [T1059, T9999]
+  10 │ detection_model: 00000000-0000-4000-8002-DEADBEEF0000   # the objective from step 4
+     │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+     │
+     ╰─ help: opentide info objectives lists the ones that exist
+  
+  
+  '''
+# ---
+# name: test_code_frame_snapshot[plain-enum-typo]
+  '''
+  error[vocab_unknown]: Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry
+    ╭─▶ objects/rules/sentinel-kql-rule.yaml:7:8
+    │
+  6 │   modified: 2026-01-02
+  7 │   tlp: clearr
+    │        ━━━━━━ not in tlp::1.0
+    │
+    ╰─ help: did you mean 'clear'?
+  
+  
+  '''
+# ---
+# name: test_code_frame_snapshot[plain-yaml-syntax]
+  '''
+  error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'
+    ╭─▶ objects/rules/broken.yaml:8:9
+    │
+  7 │   tlp: [clear
+  8 │   author: Tutorial Author
+    │         ━
+    │
+    ╰─ note: while parsing a flow sequence that starts at line 7, column 8
+  
+  
+  '''
+# ---

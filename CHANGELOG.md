@@ -6,7 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`opentide explain <code>`** prints what a diagnostic code means, an example, and how to fix it; `opentide explain` lists every code, and `--json` returns the page. [Diagnostic codes](docs/cli/diagnostics.md) collects the pages.
+- **Diagnostic fields on every finding.** Each entry of `validate`'s `report.issues` and `report.warnings`, and of `lint`'s `findings`, gains `path` (workspace-relative), `line` (one-based), `column` and `end_column` (best effort), `help`, `fix` (`{ "safe", "edits" }`: a replacement for a suggested value, `safe` only when the two differ in case, spaces, `-` or `_` and hold no digit) and `explain`. Lint findings also gain `code` and `field_path`. Existing keys are unchanged: `yaml_line` stays zero-based and `file_path` absolute. `summary` carries the counts behind the outcome line.
+
 ### Changed
+
+- **Findings print as code frames.** `validate` and `lint` print each finding as `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and a `help:` line, grouped by file. This replaces the "Validation issues" panel and lint's `[check/severity] path: message` lines. The outcome line counts them: `✓ 3 objects valid · 0.9s`, `✗ 2 errors in 1 file · 3 objects checked · 0.9s`, `✓ 3 files clean`, `! 2 findings in 1 file`. `info` ends with `✓ 1 rule · 1 threat · 1 objective · 0 load errors`, and `info --strict` now says why it exits `1`. The JSON `message` of each command is unchanged.
+- **One finding per cause.** A dangling reference (`detection_model`, `objective.threats`, `threat.chaining[].vector`) is reported as `invalid_ref` only; the `vocab_unknown` it also raised is gone, in `validate` and in the MCP `validate_rule` and `validation_report` tools alike. A value repeated in a list is reported at each place it is written. `invalid_ref` issues carry the value in `context.value`.
+- **`checks.schema.status` counts `config_enum_unknown` and `external_id_shape`.** Both already failed the run; the `schema` entry of `checks` said `passed`.
+- **YAML errors name the line and column**, not `in "<unicode string>", line 8, column 8` over four lines: `did not find expected ',' or ']' at line 9, column 9 (while parsing a flow sequence that starts at line 8, column 8)`. `validate` reports an unreadable object file once, as its `yaml_parse` finding, instead of also logging it.
+- **`failure.code` is `issues_found`** when `validate` fails on its findings, and for `lint --strict` and `info --strict`; it was `command_failed`. `info` reports `status: issues` when an object file failed to load.
 
 - **Usage errors a command detects exit `2`, not `1`.** An unknown `info` section, an unknown `generate` phase, an invalid `validate --type`, a `share --target` that names no configured block, `info coverage` without `--technique`, `generate docs --changed` combined with a scope, and a `setup` prompt with no terminal (or under `--json`) now exit `2`, as [exit codes](docs/cli/exit-codes.md) already promised. A pipeline that tested for `1` on these should test for non-zero, or read `failure.code` from `--json`. A `share --target` naming a block that exists but is disabled still exits `1`.
 - **One JSON document for every `--json` run, usage errors included.** `opentide --json valdate` prints a document with `failure.code` `usage_unknown_command` and `failure.suggestion` `validate`, and exits `2`; it used to print a Rich panel on stderr. Every document gains `schema_version`, `command`, `duration_ms`, `exit_code`, `summary`, `next_actions` and `failure`. Existing keys are unchanged; `error` is still a string. See [JSON output](docs/cli/json-output.md).

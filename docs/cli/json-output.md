@@ -61,7 +61,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `share_partial` | 3 | `share`: some objects were shared and some failed |
 | `share_failed` | 1 | `share`: objects failed and none succeeded |
 | `scope_no_match`, `api_key_unset`, … | 1 | `share` preflight failures; the code is the `preflight` value |
-| `issues_found` | 1 | The command found issues it was asked to fail on (`--strict`) |
+| `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
 | `not_run` | non-zero | The command was skipped and says why in `message` |
 | `command_failed` | 1 | Any other failure |
 
@@ -129,9 +129,11 @@ opentide decides once per command who is reading. The first rule that matches wi
 Without `--json`, a command prints its warnings first (`warning: …` on stderr), then exactly one outcome line, then at most three next steps:
 
 ```text illustrative
-warning: /repo/objects/rules/imported.yaml:24: configurations.splunk: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
-✓ Validation passed
+warning: Query validation reported warnings for sentinel
+✓ Query validation passed for sentinel
 ```
+
+`validate` and `lint` print each finding as a code frame before the outcome line, and their outcome line counts them (`✗ 2 errors in 1 file · 3 objects checked · 0.9s`). See [Diagnostic codes](./diagnostics.md).
 
 | Line | Meaning |
 |------|---------|

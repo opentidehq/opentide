@@ -3,25 +3,31 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from contextlib import nullcontext
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
-from opentide.cli.ui.contract import USAGE_ERROR, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE
-from opentide.core.logging.config import get_stdout_console
+from opentide.cli.ui.contract import (
+    ISSUES_FOUND,
+    USAGE_ERROR,
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+)
+from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, annotate, diagnostics_from_issues
+from opentide.cli.ui.glyphs import glyph
 from opentide.core.logging.console import emit_section
+from opentide.registry.builder import parse_errors_reported_by_caller
 from opentide.registry.discovery import discover_workspace
-from opentide.validation.errors import format_issues_for_console
 from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.scope import ValidationScope
 from opentide.validation.session import run_validation
 
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from opentide.cli.context import CliContext
     from opentide.deployment.git_repo import RuleScope
     from opentide.platforms.transport import TenantUnreachableError
@@ -97,8 +103,10 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "missing_uuid",
             "invalid_ref",
             "vocab_unknown",
+            "config_enum_unknown",
             "chaining_relation_unknown",
             "external_id_in_rule",
+            "external_id_shape",
             "deployment_state_uuid_mismatch",
             "deployment_state_platform",
             "deployment_state_shape",
@@ -122,6 +130,19 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
         }
     ),
 }
+
+#: Warning codes each check can report. They never fail the check's status.
+_CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
+    ValidateCheck.schema.value: frozenset({"deprecated_field", "platform_not_enabled"}),
+    ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_integration"}),
+}
+
+#: Every code a ``validate`` finding can carry. ``tests/test_cli/test_explain.py``
+#: requires an ``opentide explain`` page for each, and fails on a code emitted
+#: in the source but missing here.
+VALIDATION_CODES: frozenset[str] = frozenset(
+    {"scope_no_match"}.union(*_CHECK_ISSUE_CODES.values(), *_CHECK_WARNING_CODES.values())
+)
 
 _OBJECT_CHECKS = frozenset({ValidateCheck.uuid_format.value, ValidateCheck.schema.value})
 
@@ -208,17 +229,27 @@ def run_validate(
     uuids: list[str] | None = None,
     object_types: list[str] | None = None,
 ) -> dict[str, object]:
-    """Entry point for validate command."""
-    ctx.apply_environment()
-    _reset_validation_env()
+    """Entry point for validate command.
 
+    Besides the JSON document, the result carries ``_diagnostics`` (one
+    :class:`Diagnostic` per issue and warning, for the code frames) and
+    ``_summary``; the command pops both before rendering.
+    """
     file_list = list(files or [])
     if file:
         file_list.append(file)
     scope = _build_scope(files=file_list or None, uuids=uuids, object_types=object_types)
     checks = _checks_for(check)
-
-    report = run_validation(scope=scope, checks=checks)
+    # The schema check turns each unreadable object file into a yaml_parse or
+    # missing_uuid diagnostic, so the registry need not also log it. Any other
+    # check would not report the file at all: then the log line stays.
+    reported = (
+        parse_errors_reported_by_caller() if ValidateCheck.schema in checks else nullcontext()
+    )
+    with reported:
+        ctx.apply_environment()
+        _reset_validation_env()
+        report = run_validation(scope=scope, checks=checks)
     if not report.ok:
         os.environ["VALIDATION_ERROR_RAISED"] = "1"
 
@@ -232,18 +263,7 @@ def run_validate(
         result["check"] = check.value
     workspace = discover_workspace()
     result["workspace"] = str(workspace)
-
-    if not ctx.json_output and report.issues:
-        from rich.panel import Panel
-        from rich.text import Text
-
-        get_stdout_console().print(
-            Panel(
-                Text(format_issues_for_console(report.issues)),
-                title="[bold red]Validation issues[/]",
-                border_style="red",
-            )
-        )
+    diagnostics = _annotate_report(result, report, workspace)
 
     from opentide.cli.exit_codes import validation_outcome
 
@@ -264,7 +284,82 @@ def run_validate(
     if warnings:
         result["warnings"] = warnings
     result["_exit_code"] = outcome.exit_code
+    if outcome.failed:
+        result["_failure_code"] = ISSUES_FOUND
+    result["_summary"] = _summary(report, diagnostics)
+    result["_diagnostics"] = diagnostics
     return result
+
+
+def _annotate_report(
+    result: dict[str, object], report: ValidationReport, workspace: Path
+) -> list[Diagnostic]:
+    """Add the diagnostic fields to each JSON issue and warning; return the diagnostics."""
+    sources = SourceFiles()
+    payload = cast(dict[str, Any], result["report"])
+    diagnostics: list[Diagnostic] = []
+    for bucket in ("issues", "warnings"):
+        found = diagnostics_from_issues(
+            getattr(report, bucket), workspace=workspace, sources=sources
+        )
+        for entry, diagnostic in zip(payload.get(bucket, []), found, strict=True):
+            annotate(entry, diagnostic)
+        diagnostics.extend(found)
+    return diagnostics
+
+
+def _summary(report: ValidationReport, diagnostics: Sequence[Diagnostic]) -> dict[str, int]:
+    """Counts behind the outcome line.
+
+    ``files`` counts the files with an error; ``warning_files`` those with a
+    warning (a file can be in both).
+    """
+
+    def files_with(severity: str) -> int:
+        return len(
+            {
+                item.path
+                for item in diagnostics
+                if item.path is not None and item.severity == severity
+            }
+        )
+
+    return {
+        "objects": int(report.stats.get("objects_checked") or 0),
+        "errors": len(report.errors),
+        "warnings": len(report.warnings),
+        "files": files_with("error"),
+        "warning_files": files_with("warning"),
+    }
+
+
+def plural(count: int, noun: str) -> str:
+    """``1 error``, ``2 errors``."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def validate_outcome_line(summary: Mapping[str, int], *, failed: bool, seconds: float) -> str:
+    """``3 objects valid · 0.9s`` or ``2 errors in 1 file · 3 objects checked · 0.9s``."""
+    sep = f" {glyph('separator')} "
+    objects = plural(summary.get("objects", 0), "object")
+    errors, warnings = summary.get("errors", 0), summary.get("warnings", 0)
+    took = f"{seconds:.1f}s"
+    if not failed and not summary.get("objects"):
+        # A check that reads no object (id-uniqueness, cve, sharing-config).
+        return f"Validation passed{sep}{took}"
+    if not failed:
+        line = f"{objects} valid"
+        if warnings:
+            line += f"{sep}{plural(warnings, 'warning')}"
+        return f"{line}{sep}{took}"
+    # Under --strict a run can fail on warnings alone; count where they are.
+    if errors:
+        counted, files = plural(errors, "error"), summary.get("files", 0)
+    else:
+        counted, files = plural(warnings, "warning"), summary.get("warning_files", 0)
+    where = f" in {plural(files, 'file')}" if files else ""
+    checked = f"{sep}{objects} checked" if summary.get("objects") else ""
+    return f"{counted}{where}{checked}{sep}{took}"
 
 
 def _exempt_warning_lines(report: ValidationReport) -> list[str]:
