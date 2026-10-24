@@ -7,6 +7,31 @@ description: Common opentide failures — validation errors, generation drift, p
 
 The failures you are most likely to hit, why they happen, and how to fix them. If your problem is a genuine bug, open an issue on [opentide](https://github.com/opentidehq/opentide/issues).
 
+## Unexpected errors
+
+### opentide stops with `error[internal]`
+
+An `error[internal]: <Type>: <message>` line is an exception opentide did not handle: a bug, not a mistake in your input. The run exits `1`. On stderr, under the error, opentide prints the path of a crash log and a link that opens a GitHub issue pre-filled with the opentide version, Python version, operating system and the command's name (never its arguments or any path). Under `--json` stdout still carries one document, with `failure.code` `internal` and `failure.crash_log`. Under `opentide mcp start` nothing is written to stdout.
+
+```text illustrative
+error[internal]: RuntimeError: index exploded
+  note: crash log, with credentials and tenant names redacted: /home/me/.local/state/opentide/crash-20261023T110335102704Z-648.log
+  help: this is a bug in opentide; report it: https://github.com/opentidehq/opentide/issues/new?title=Crash+in+opentide+info&body=…
+  help: add --debug to see the traceback
+```
+
+The crash log holds the version, the command line, the `OPENTIDE_*` and proxy variables, and the traceback. It is written to a private (`0700`) directory outside the repository, and the last ten are kept:
+
+| Platform | Directory |
+|----------|-----------|
+| Linux and other Unix | `$XDG_STATE_HOME/opentide`, or `~/.local/state/opentide` |
+| macOS | `~/Library/Logs/opentide` |
+| Windows | `%LOCALAPPDATA%\opentide\logs` |
+
+Before anything is printed or written, opentide removes: proxy and URL credentials (`http://user:pass@proxy` becomes `http://***@proxy`), the value of an `Authorization` or `Proxy-Authorization` header whatever its scheme (`Bearer`, `Basic`, `Token`, `ApiKey`, `ApiToken`, ...), well-known token formats, the values of environment variables, options and `key=value` pairs (URL query strings included) named like a secret (`*_TOKEN`, `*_SECRET`, `*PASSWORD*`, `*_KEY`), and, from `.opentide/configurations/platforms/*.toml` and `sharing.toml`, every secret value and each tenant's or destination's name, URLs, hosts, ids, resource group and Splunk app. Read the log before you attach it to the issue all the same: a value opentide cannot recognise as a secret is left as it is.
+
+Add `--debug` (or set `OPENTIDE_DEBUG=1`) to print the traceback on stderr too, redacted the same way.
+
 ## Setup and paths
 
 ### `Could not resolve repository root` / objects not found

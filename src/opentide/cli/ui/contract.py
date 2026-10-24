@@ -30,8 +30,15 @@ COMMAND_FAILED = "command_failed"
 ISSUES_FOUND = "issues_found"
 NOT_RUN = "not_run"
 
+#: ``failure.code`` for an unexpected exception: a bug in opentide. Exits 1, and
+#: ``failure.crash_log`` names the redacted log written for it.
+INTERNAL = "internal"
+
 #: Exit code of every usage error.
 USAGE_EXIT_CODE = 2
+
+#: Exit code of a run stopped by Ctrl-C (128 + SIGINT), as shells report it.
+INTERRUPTED_EXIT_CODE = 130
 
 
 @dataclass(frozen=True)
@@ -51,7 +58,7 @@ class Failure:
 
     ``code`` is stable snake_case. ``argument`` names the input at fault
     (``--type``, ``valdate``) and ``suggestion`` the closest valid value.
-    ``crash_log`` is reserved for unexpected exceptions.
+    ``crash_log`` is set only for unexpected exceptions (code :data:`INTERNAL`).
     """
 
     code: str
