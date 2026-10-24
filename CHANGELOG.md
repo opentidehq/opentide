@@ -18,6 +18,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - **The MCP server's stderr logs `WARNING` and above by default**, like `--json`; `--debug` (or `OPENTIDE_DEBUG=1`) shows everything.
 - **`opentide mcp start` keeps stdout for JSON-RPC alone.** A `print`, a console line or a child process writing to stdout while a tool runs lands on stderr instead of corrupting a frame.
 - **Faster start.** `opentide --version` answers before Typer, Rich or the detection registry load: about 30 ms instead of about 1 s. `opentide --help` and shell completion list the commands without importing them (about 0.3 s instead of 1 s); a command's module loads when it runs. `import opentide` no longer loads the registry; `from opentide import Opentide` still works and loads it then. Output, help text and JSON are unchanged.
+- **Long runs show their steps.** `generate` (every phase and subcommand), `validate query`, and the promotion and deploy steps of `deploy` print one line per finished step in a pipe or in CI (`✓ schemas · 6 files · 2.6s · .opentide/schemas/`) and a live checklist with a spinner at a terminal. They replace the `== Section ==` headers, which engine modules no longer print. `--quiet` and `--json` show no steps; the JSON document carries them under `steps`.
+- **Outcome lines carry counts.** `✓ Generated 21 files in 5.8s · 6 phases`, `✓ Imported 14 rules from sentinel · 2 skipped`, `✓ Shared 4 objects to misp-prod · 3 new, 1 updated`, `! 5 rules unreviewed for 90 days`, `Would move 3 folders · pass --apply to migrate`, `✓ Moved 6 vendor ids to .opentide/states/deployment/ · …`. The JSON `message` reads the same, and `summary` holds the numbers. Scripts that matched `Full generation pipeline completed`, `Deployment completed`, `Setup complete`, `Share finished: …` or `Listed N unreviewed rules` should read `ok`, `status` and `summary` from `--json`.
+- **`deploy --dry-run` prints a plan**: each rule on each tenant with `+ create`, `~ update`, `- disable` or `× delete`, then `Plan: 1 to create, 0 to update, 0 to disable, 0 to delete · 1 platform, 0 tenants`. Sentinel, Splunk, Elastic, Carbon Black and HarfangLab write a rule by its UUID, so their rows say `create or update` rather than guess. A real run ends with `✓ Deployed 3 rules to 2 tenants · 1 created, 2 updated · 12.4s`. `--json` adds `changes` (one entry per rule and tenant) and the tally in `summary`.
+- **`setup` has a welcome, a summary and next steps.** The interactive wizard opens with the opentide logo and the tagline, prompts in the brand style, and refuses an empty repository name on screen. Every `setup` command lists what it wrote, prints its warnings once before the outcome line (`✓ Created Tutorial Detections in ./tutorial-detections`, `✓ Wrote .github/workflows/opentide.yml`) and numbers the next steps. The "no default branch" warning is no longer printed twice.
+- **A bare `opentide` at a terminal shows a home screen**: the icon, the tagline, the workspace and its git state, catalogue counts, schema health, enabled platforms, and up to three next steps. In a pipe, in CI, under an agent or with `NO_COLOR` it prints the help, as before.
+- **Help is grouped and shorter.** `opentide --help` lists commands under Author, Ship, Workspace, and Agents and integrations, carries the tagline instead of "DetectionOps Engine", and every command's help ends with examples. Summaries are at most 60 characters. `--platform` shows `PLATFORM` and lists its values instead of eight names run together, and `--proxy` no longer shows a stray backslash.
+- **"MDR" is gone from what people read.** `TideMDRDataModelErrors` is now `TideRuleDataModelErrors`; the old name still works in `except` clauses, and error messages carry the new one. VS Code platform snippets are titled `Platform configuration : Microsoft Sentinel Template` instead of `MDR Systems Deployment : …`; their prefixes (`tide-sentinel`, …) are unchanged.
+
+### Deprecated
+
+- `opentide.core.logging.print_banner()` (also `opentide.cli.print_banner`) warns with a `DeprecationWarning`, draws the new icon and returns it with the tagline as text. It will be removed in a later release.
+
+### Removed
+
+- `coretide-logo.png` from the repository root.
 
 ## [0.17.2] — 2026-10-22
 

@@ -86,7 +86,7 @@ error: Metadata deployment is not implemented for splunk
 
 - the command is not in a shell fence on the same page, or is not one the harness runs (`validate`, `lint`, `info`, `generate`, `deploy`);
 - the command returns a code other than `exit=` (`0` when absent), or a non-zero `exit=` sits in a section that never says it exits `` `N` ``;
-- a `text` line is not printed whole and in order, reading stdout and stderr interleaved as a terminal shows them. Write the `--no-color` view; a colour run must carry the same lines, with its rules read back as `== Title ==`;
+- a `text` line is not printed whole and in order, reading stdout and stderr interleaved as a terminal shows them. Write the `--no-color` view; a colour run must carry the same lines, with its rules read back as `== Title ==`. A duration (`1.2s`, `2m05s`) matches any duration, because it changes on every run;
 - a `json` value differs from the document returned. Objects may return keys the sample leaves out, and `"..."` stands for any value.
 
 A sample of a failure the finished tutorial does not produce names the edit it needs with `state=NAME`, and the harness makes that edit to its copy of the repository before running the command:

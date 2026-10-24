@@ -450,7 +450,7 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
     deployer.deploy.assert_not_called()
     warning = f"1 {SUBFOLDER_RULES_LEAD}objects/rules/team-a/rule-0101-subfolder.yaml"
     if not json_output:
-        assert "✓ Deployment completed" in result.stdout
+        assert "Plan: " in result.stdout and "1 platform" in result.stdout
         stderr = " ".join(result.stderr.split())
         assert stderr.count(f"warning: {warning}") == 1
         assert stderr.count("in subfolders of") == 1

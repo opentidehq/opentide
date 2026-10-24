@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from opentide.core.files import resolve_paths
 from opentide.core.logging import get_logger, is_debug_enabled
-from opentide.core.logging.console import emit_section
+from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
 from opentide.generation.framework import get_type
 from opentide.generation.vocabulary import (
@@ -911,7 +911,7 @@ def _legacy_alias_tracks_latest(filename: str, schema_id: str) -> bool:
 def run():
     _refresh_runtime_context()
 
-    emit_section("Pydantic JSON Schema Assembler")
+    report_stage("JSON schema assembly")
     logger.info(
         "schema_assembler_started",
         detail=(
@@ -957,7 +957,7 @@ def run():
     config_json_schemas = GLOBAL_CONFIG.config_json_schemas
 
     if config_json_schemas:
-        emit_section("Configuration Schema Assembler")
+        report_stage("configuration schema assembly")
         logger.info(
             "config_schema_assembler_started",
             detail="Generates JSON Schemas from Pydantic configuration models.",

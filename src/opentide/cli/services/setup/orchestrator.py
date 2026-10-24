@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 import structlog
 import typer
-from rich.markup import escape
 
 from opentide.cli.enums import (
     CiPlatform,
@@ -28,6 +27,7 @@ from opentide.cli.services.setup.interactive import (
     ask_text,
     mcp_hosts_from_keys,
     require_interactive,
+    require_text,
     skill_targets_from_keys,
 )
 from opentide.cli.services.setup.mcp import McpSetupOptions, run_mcp_setup
@@ -266,19 +266,17 @@ def _ci_feature_choices(ci: CiPlatform | None) -> list[tuple[str, str]]:
 
 def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]:
     """Launch the full interactive setup wizard."""
-    from rich.panel import Panel
+    from opentide import __version__
+    from opentide.cli.ui.render import labelled_text
+    from opentide.cli.ui.setup import welcome
 
     require_interactive()
     console = get_stdout_console()
-    console.print(
-        Panel(
-            "[bold]opentide — Detection Repository Setup[/]",
-            title=" opentide",
-            border_style="blue",
-        )
-    )
+    welcome(console, version=__version__)
     options = SetupOptions(path=base_path, run_repo=True)
-    options.name = ask_text("Repository name", default=base_path.name)
+    options.name = ask_text(
+        "Repository name", default=base_path.resolve().name, validate=require_text("a name")
+    )
     options.org = ask_text("Organisation / team (optional)")
     options.description = ask_text("Description (optional)")
     options.platforms = ask_platforms()
@@ -341,9 +339,8 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
                 )
 
     _print_setup_plan(options)
-    if options.warnings:
-        for warning in options.warnings:
-            console.print(f"[yellow]WARNING[/] {escape(warning)}")
+    for warning in options.warnings:
+        console.print(labelled_text("warning", warning), soft_wrap=True)
     if not ask_confirm("Apply this setup plan?", default=True):
         return {
             "message": "Setup cancelled; no files were written",

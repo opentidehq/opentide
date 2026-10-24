@@ -10,7 +10,14 @@ from rich.markup import escape
 from typer._types import TyperChoice
 
 from opentide.cli.context import CliContext, get_context
-from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
+from opentide.cli.enums import (
+    PLATFORM_METAVAR,
+    CiPlatform,
+    DetectionPlatform,
+    McpHost,
+    SkillTarget,
+    platform_help,
+)
 from opentide.cli.output import emit, emit_deprecation, emit_error, emit_success
 from opentide.cli.services.setup.ci import CiSetupOptions, is_valid_branch_name, run_ci_setup
 from opentide.cli.services.setup.interactive import (
@@ -270,6 +277,25 @@ def _require_scripted_for_json(cli: CliContext, command: str, flags: str) -> Non
     )
 
 
+def _emit_setup(cli: CliContext, result: dict[str, object], *, name: str | None = None) -> None:
+    """Print what was written, then the outcome line and numbered next steps."""
+    from opentide.cli.ui.setup import render_summary, setup_outcome, warnings_once
+
+    payload = dict(result)
+    if not cli.json_output and not cli.quiet:
+        render_summary(get_stdout_console(), payload)
+    message, actions = setup_outcome(payload, name=name)
+    if message:
+        payload["message"] = message
+    if actions:
+        payload["_next_actions"] = actions
+        payload["_next_numbered"] = True
+    warnings = payload.get("warnings")
+    if isinstance(warnings, list):
+        payload["warnings"] = warnings_once(warnings)
+    emit_success(cli, payload)
+
+
 def _needs_input(cli: CliContext, message: str) -> NoReturn:
     """A prompt nobody can answer (no TTY, ``--json``, an agent): exit 2 naming the flags."""
     emit_error(cli, message, exit_code=USAGE_EXIT_CODE, code=USAGE_NEEDS_INPUT)
@@ -303,7 +329,8 @@ def setup_cmd(
     platform: list[DetectionPlatform] = typer.Option(
         [],
         "--platform",
-        help="Detection platforms — runs setup platforms step (repeatable)",
+        metavar=PLATFORM_METAVAR,
+        help=platform_help("Enable a detection platform (repeatable)"),
     ),
     ci: CiPlatform | None = typer.Option(None, "--ci"),
     staging: bool = typer.Option(True, "--staging/--no-staging"),
@@ -400,7 +427,7 @@ def setup_cmd(
             _needs_input(cli, str(exc))
         except RuntimeError as exc:
             emit_error(cli, str(exc))
-    emit_success(cli, result)
+    _emit_setup(cli, result, name=name)
 
 
 @setup_app.command("repo")
@@ -414,7 +441,8 @@ def setup_repo_cmd(
     platform: list[DetectionPlatform] = typer.Option(
         [],
         "--platform",
-        help="Detection platforms — writes enabled platform TOML (repeatable)",
+        metavar=PLATFORM_METAVAR,
+        help=platform_help("Enable a detection platform (repeatable)"),
     ),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
@@ -442,7 +470,7 @@ def setup_repo_cmd(
             result = run_interactive_repo_setup(cli, base)
         except InteractiveRequiredError as exc:
             _needs_input(cli, str(exc))
-    emit_success(cli, result)
+    _emit_setup(cli, result, name=name)
 
 
 @setup_app.command("platforms")
@@ -487,7 +515,7 @@ def setup_platforms_cmd(
         emit_success(cli, {"message": "Platform setup cancelled", "status": "skipped"})
         return
     cli.apply_environment()
-    emit_success(
+    _emit_setup(
         cli,
         run_platforms_setup(PlatformsSetupOptions(path=base, platforms=platforms, yes=yes)),
     )
@@ -554,7 +582,7 @@ def setup_ci_cmd(
         yes=yes,
     )
     cli.apply_environment()
-    emit_success(cli, run_ci_setup(options))
+    _emit_setup(cli, run_ci_setup(options))
 
 
 @setup_app.command("env")
@@ -574,7 +602,7 @@ def setup_env_cmd(
         emit_success(cli, {"message": "Environment setup cancelled", "status": "skipped"})
         return
     cli.apply_environment()
-    emit_success(cli, run_env_setup(EnvSetupOptions(path=base, yes=yes)))
+    _emit_setup(cli, run_env_setup(EnvSetupOptions(path=base, yes=yes)))
 
 
 @setup_app.command("hooks")
@@ -599,7 +627,7 @@ def setup_hooks_cmd(
         emit_success(cli, {"message": "Hook setup cancelled", "status": "skipped"})
         return
     cli.apply_environment()
-    emit_success(cli, run_hooks_setup(HooksSetupOptions(path=base, install=install, yes=yes)))
+    _emit_setup(cli, run_hooks_setup(HooksSetupOptions(path=base, install=install, yes=yes)))
 
 
 @setup_app.command("mcp")
@@ -648,7 +676,7 @@ def setup_mcp_cmd(
             result = run_interactive_mcp_setup(base)
         except InteractiveRequiredError as exc:
             _needs_input(cli, str(exc))
-    emit_success(cli, result)
+    _emit_setup(cli, result)
 
 
 @skills_app.callback(invoke_without_command=True)
@@ -723,7 +751,7 @@ def setup_skills_install_cmd(
             _needs_input(cli, str(exc))
         except (RuntimeError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
-    emit_success(cli, result)
+    _emit_setup(cli, result)
 
 
 @skills_app.command("discover")
@@ -828,4 +856,4 @@ def setup_vscode_cmd(
         merge=not no_merge,
         mcp=mcp,
     )
-    emit_success(cli, result)
+    _emit_setup(cli, result)

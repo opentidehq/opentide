@@ -373,12 +373,14 @@ def run_migrate_state(workspace: Path, rules_dir: Path) -> dict[str, object]:
             }
         )
 
+    ids = sum(len(item["bindings"]) for item in migrated)  # type: ignore[arg-type]
     result: dict[str, object] = {
         "migrated": migrated,
         "unused": unused,
         "errors": errors,
         "shards_written": shards_written,
         "rules_edited": len(migrated),
+        "_summary": {"ids": ids, "rules": len(migrated), "shards": shards_written},
     }
     if errors:
         result.update(
@@ -394,8 +396,9 @@ def run_migrate_state(workspace: Path, rules_dir: Path) -> dict[str, object]:
         result.update(
             status="completed",
             message=(
-                f"Moved vendor ids off {len(migrated)} rule(s); "
-                f"wrote {shards_written} deployment state shard(s)"
+                f"Moved {_count(ids, 'vendor id')} to .opentide/states/deployment/ · "
+                f"{_count(len(migrated), 'rule')} edited, "
+                f"{_count(shards_written, 'shard')} written"
             ),
             advice=COMMIT_ADVICE,
         )
@@ -408,6 +411,10 @@ def run_migrate_state(workspace: Path, rules_dir: Path) -> dict[str, object]:
             for u in unused
         ]
     return result
+
+
+def _count(number: int, noun: str) -> str:
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
 
 
 def _display(path: Path, workspace: Path) -> str:

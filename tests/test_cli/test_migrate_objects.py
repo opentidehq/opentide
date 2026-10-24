@@ -432,14 +432,14 @@ def test_migrate_objects_repairs_a_layout_an_earlier_release_migrated(
     assert planned["planned"] == 0
     assert planned["case_renamed"] == [{"from": "Objects", "to": "objects"}]
     assert planned["message"] == (
-        "Planned 1 folder case rename(s) (dry-run; pass --apply to execute)"
+        "Would rename 1 folder to the exact case · pass --apply to rename"
     )
     assert planned["applied"] is False
     assert renames == []
 
     result = run_migrate_objects(root, apply=True)
     assert result["case_renamed"] == [{"from": "Objects", "to": "objects"}]
-    assert result["message"] == "Renamed 1 folder(s) to the exact case"
+    assert result["message"] == "Renamed 1 folder to the exact case"
     assert result["applied"] is True
     assert "git rm -r --cached -q Objects` then `git add objects`" in str(result["advice"])
     assert renames == [

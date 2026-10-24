@@ -233,7 +233,7 @@ def iso_duration_timedelta(duration: str) -> timedelta:
         parts = {name: int(value) for name, value in iso.groupdict().items() if value}
         if parts:
             return timedelta(**parts)
-    raise Errors.TideMDRDataModelErrors(
+    raise Errors.TideRuleDataModelErrors(
         f'Duration {duration!r} is not an ISO 8601 duration (PT1H, PT30M, P1D) '
         'or a shorthand duration (30m, 1h, 1d, 1h10m)'
     )

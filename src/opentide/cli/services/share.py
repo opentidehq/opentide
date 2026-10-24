@@ -19,7 +19,7 @@ from opentide.sharing.constants import (
 from opentide.sharing.document import TideDocument, load_document
 from opentide.sharing.engine import ShareFilters, run_misp
 from opentide.sharing.ledger import ShareLedger, ledger_path
-from opentide.sharing.report import ShareRun
+from opentide.sharing.report import SUCCESS_ACTIONS, ShareRun
 from opentide.validation.checks.kinds import ValidateCheck
 from opentide.validation.scope import ValidationScope
 from opentide.validation.session import run_validation
@@ -152,7 +152,7 @@ def run_share(
     log.info(
         "share.completed", mode=effective, exit_code=outcome.exit_code, records=len(outcome.records)
     )
-    return _redact(_from_run(outcome, config), secrets)
+    return _redact(_from_run(outcome, config, mode=effective), secrets)
 
 
 def render_share(payload: dict[str, Any]) -> None:
@@ -439,15 +439,48 @@ def _restore_validation_env(previous: tuple[str | None, str | None]) -> None:
             os.environ[name] = value
 
 
-def _from_run(outcome: ShareRun, config: SharingConfig) -> dict[str, Any]:
+#: Record action → the word the outcome line counts it under.
+_ACTION_WORDS = {
+    "created": "new",
+    "updated": "updated",
+    "unchanged": "unchanged",
+    "retracted": "retracted",
+    "skipped_tlp": "skipped",
+    "skipped_status": "skipped",
+    "skipped_type": "skipped",
+    "failed": "failed",
+}
+
+
+def share_outcome(mode: str, outcome: ShareRun) -> tuple[str, dict[str, int]]:
+    """``Shared 4 objects to misp-prod · 3 new, 1 updated``, and the counts behind it."""
+    from collections import Counter
+
+    from opentide.cli.ui.progress import plural
+
+    records = outcome.records
+    targets = ", ".join(sorted({record.target for record in records})) or "no target"
+    counts = Counter(_ACTION_WORDS.get(record.action, record.action) for record in records)
+    done = len({record.object_uuid for record in records if record.action in SUCCESS_ACTIONS})
+    objects = plural(done, "object")
+    lead = {
+        "push": f"Shared {objects} to {targets}",
+        "preview": f"Would share {objects} to {targets}",
+        "retract": f"Retracted {objects} from {targets}",
+    }.get(mode, f"{plural(len({r.object_uuid for r in records}), 'object')} on {targets}")
+    order = ("new", "updated", "unchanged", "retracted", "skipped", "failed")
+    facts = ", ".join(f"{counts[word]} {word}" for word in order if counts.get(word))
+    summary = {"objects": done, **{word: counts.get(word, 0) for word in order}}
+    return (f"{lead} · {facts}" if facts else lead), summary
+
+
+def _from_run(outcome: ShareRun, config: SharingConfig, *, mode: str = "push") -> dict[str, Any]:
     if outcome.preflight:
         return _preflight(outcome.preflight, config, outcome)
     records = [record.as_dict() for record in outcome.records]
     code = outcome.exit_code
     failed = code != 0
-    created = sum(1 for record in outcome.records if record.action == "created")
-    updated = sum(1 for record in outcome.records if record.action == "updated")
-    message = f"Share finished: {len(records)} record(s), {created} created, {updated} updated"
+    message, summary = share_outcome(mode, outcome)
     payload = _result(
         message,
         exit_code=code,
@@ -455,6 +488,7 @@ def _from_run(outcome: ShareRun, config: SharingConfig) -> dict[str, Any]:
         records=records,
         warnings=tuple(issue.message for issue in config.issues if issue.severity == "warning"),
     )
+    payload["_summary"] = summary
     if failed:
         payload["_failure_code"] = _RUN_FAILURE_CODES.get(code, "share_failed")
     return payload
@@ -502,7 +536,7 @@ def _targets_payload(config: SharingConfig) -> dict[str, Any]:
         for block in config.blocks
     ]
     return _result(
-        f"{len(rows)} sharing target(s)",
+        f"{len(rows)} sharing target{'' if len(rows) == 1 else 's'}",
         exit_code=0,
         status="completed",
         targets=rows,

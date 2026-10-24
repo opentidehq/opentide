@@ -10,7 +10,7 @@ import re
 
 from opentide.core.files import resolve_configurations
 from opentide.core.logging import get_logger
-from opentide.core.logging.console import emit_section
+from opentide.core.progress import report_stage
 from opentide.deployment.git_repo import local_rule_files
 
 logger = get_logger(__name__)
@@ -148,10 +148,10 @@ class PromoteMDR:
         logger.info("mdr_promoted", target=PROMOTION_TARGET)
 
     def promote(self, deployment: list[Path]):
-        emit_section("MDR Status Promotion")
+        report_stage("status promotion")
         logger.info(
             "mdr_promotion_started",
-            detail="Promotes the status of modified MDR files according to configuration",
+            detail="Promotes the status of modified rule files according to configuration",
         )
 
         if PROMOTION_ENABLED:
@@ -205,5 +205,5 @@ class PromoteMDR:
         else:
             logger.info(
                 "mdr_promotion_disabled_in_config",
-                detail="You can enable MDR Promotion under config>deployment>status>promotion",
+                detail="Enable status promotion under [promotion] in deployment.toml",
             )

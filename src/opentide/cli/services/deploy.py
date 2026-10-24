@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
@@ -15,7 +16,6 @@ from opentide.cli.ui.contract import (
 )
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
-from opentide.core.logging.console import emit_section
 
 logger = structlog.get_logger("opentide.cli.services.deploy")
 if TYPE_CHECKING:
@@ -232,9 +232,15 @@ def _deploy(
             and not local_debug
             and not is_change_request(environment)
         ):
+            from opentide.cli.ui.progress import Checklist
+
             pre_deployment = modified_mdr_files()
-            emit_section("Pre-deployment Routine")
-            PromoteMDR().promote(pre_deployment)
+            with (
+                Checklist(total=1) as checklist,
+                checklist.step("status promotion", unit="rule") as step,
+            ):
+                step.done(len(pre_deployment))
+                PromoteMDR().promote(pre_deployment)
         deployment_list = make_deploy_plan(
             run,
             wide_scope=wide,
@@ -337,7 +343,19 @@ def _deploy(
             }
         except Exception as exc:  # noqa: BLE001 -- the deployer reports its own failure
             logger.warning("tenant_targets_failed", system=system, detail=str(exc))
-    for system, uuids in deployment_list.items():
+    from opentide.cli.services.deploy_plan import (
+        deployed_message,
+        plan_changes,
+        plan_message,
+        plan_summary,
+    )
+    from opentide.cli.ui.progress import Checklist
+
+    # Planned before anything is sent: a create records an id, which would
+    # make the same rule read as an update afterwards.
+    changes = plan_changes(deployment_list, targets)
+    started = time.perf_counter()
+    for system in deployment_list:
         if system not in mdr_deployers:
             return {
                 "status": "failed",
@@ -345,39 +363,56 @@ def _deploy(
                 "deployed": deployed,
                 "_exit_code": 1,
             }
-        emit_section("MDR Deployment")
-        deployer = cast(Any, mdr_deployers[system])
-        if dry_run:
-            logger.info("event", detail=f"Dry-run: would deploy {len(uuids)} rule(s) to {system}")
-            from opentide.deployment.preview import preview_platform_deployment
+    with Checklist(total=len(deployment_list)) as checklist:
+        for system, uuids in deployment_list.items():
+            deployer = cast(Any, mdr_deployers[system])
+            if dry_run:
+                logger.info(
+                    "event", detail=f"Dry-run: would deploy {len(uuids)} rule(s) to {system}"
+                )
+                from opentide.deployment.preview import preview_platform_deployment
 
-            payloads[system] = preview_platform_deployment(system, uuids)
-            if system not in missing_tenants:
-                deployed.append(system)
-            continue
-        try:
-            if wide:
-                from opentide.deployment.planning import wide_scope
+                payloads[system] = preview_platform_deployment(system, uuids)
+                if system not in missing_tenants:
+                    deployed.append(system)
+                continue
+            with checklist.step(system, unit="rule") as step:
+                step.done(len(uuids))
+                try:
+                    if wide:
+                        from opentide.deployment.planning import wide_scope
 
-                with wide_scope():
-                    deployer.deploy(mdr_deployment=uuids, strategies=run)
-            else:
-                deployer.deploy(mdr_deployment=uuids, strategies=run)
-        except TypeError:
-            logger.warning("switching_to_mdrv3_legacy_methods")
-            deployer.deploy(deployment=uuids)
-        deployed.append(system)
+                        with wide_scope():
+                            deployer.deploy(mdr_deployment=uuids, strategies=run)
+                    else:
+                        deployer.deploy(mdr_deployment=uuids, strategies=run)
+                except TypeError:
+                    logger.warning("switching_to_mdrv3_legacy_methods")
+                    deployer.deploy(deployment=uuids)
+            deployed.append(system)
     from opentide.cli.exit_codes import deployment_outcome
 
     outcome = deployment_outcome()
+    tenant_count = sum(len(tenants) for tenants in targets.values())
+    if dry_run:
+        message = plan_message(changes, list(deployment_list), tenant_count)
+    elif outcome.failed:
+        message = "Deployment finished with errors"
+    else:
+        reached = [change for change in changes if change.platform in deployed]
+        message = deployed_message(reached, time.perf_counter() - started)
     result: dict[str, object] = {
-        "message": "Deployment finished with errors" if outcome.failed else "Deployment completed",
+        "message": message,
         "status": "failed" if outcome.failed else "completed",
         "deployed": deployed,
         "dry_run": dry_run,
         "plan": plan_payload,
+        "changes": [change.to_dict() for change in changes],
+        "_summary": plan_summary(changes, list(deployment_list), tenant_count),
         "_exit_code": outcome.exit_code,
     }
+    if dry_run and not outcome.failed:
+        result["_outcome_kind"] = "plan"
     warnings = [f"{error}, so a real deploy would stop" for error in tenantless]
     if outcome.warned:
         warnings.append("Some rules reported deployment warnings")

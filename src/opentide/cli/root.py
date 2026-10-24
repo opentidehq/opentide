@@ -16,7 +16,11 @@ from opentide.core.root import get_repo_root
 app = typer.Typer(
     name="opentide",
     cls=LazyTyperGroup,
-    help="opentide — DetectionOps Engine",
+    help="Spec-driven development for agentic detection engineering",
+    epilog=(
+        "[dim]Examples[/dim]\n\n  [bold]$ opentide setup[/bold]\n\n"
+        "  [bold]$ opentide validate[/bold]\n\n  [bold]$ opentide --json validate[/bold]"
+    ),
     rich_markup_mode="rich",
     no_args_is_help=True,
 )
@@ -85,7 +89,7 @@ def main_callback(
         "--proxy",
         envvar="OPENTIDE_PROXY",
         help=(
-            "HTTP(S) proxy URL (http://\\[user:pass@\\]host:port) for platform and lookup "
+            "HTTP(S) proxy URL (http://\\[user:pass@]host:port) for platform and lookup "
             "calls. Overrides HTTP_PROXY and HTTPS_PROXY; hosts in NO_PROXY are still "
             "reached directly."
         ),

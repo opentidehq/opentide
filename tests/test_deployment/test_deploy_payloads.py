@@ -120,7 +120,7 @@ def test_sentinel_preview_fails_when_grouping_alert_is_missing(
     preview = preview_rule_deployment("sentinel", rule)
 
     assert preview["status"] == "failed"
-    assert preview["error"].startswith("TideMDRDataModelErrors: ")
+    assert preview["error"].startswith("TideRuleDataModelErrors: ")
     assert rule.metadata.uuid in preview["error"]
     assert "configurations.sentinel.grouping.alert is missing" in preview["error"]
     assert os.environ.get("DEPLOYMENT_ERROR_RAISED") == "1"
