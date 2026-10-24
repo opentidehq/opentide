@@ -77,7 +77,10 @@ def _modules_after(argv: list[str], **env: str) -> tuple[subprocess.CompletedPro
 
 
 def _engine_modules(modules: set) -> list[str]:
-    return sorted(m for m in modules if m.startswith(_ENGINE_PREFIXES))
+    """Engine modules, and Textual (``opentide tui`` only), that *modules* holds."""
+    return sorted(
+        m for m in modules if m.startswith(_ENGINE_PREFIXES) or m.split(".")[0] == "textual"
+    )
 
 
 def _root() -> LazyTyperGroup:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import structlog
 from rich.markup import escape
@@ -38,6 +38,9 @@ from opentide.cli.ui.render import (
 )
 from opentide.core.io import dump_json_text
 from opentide.core.logging.config import get_console, get_stdout_console, is_json_output
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 logger = structlog.get_logger("opentide.cli.output")
 
@@ -236,14 +239,36 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
             raise SystemExit(result.exit_code)
         return
 
-    mode = text_mode(ctx)
-    stdout, stderr = get_stdout_console(), get_console()
+    render_result(
+        result,
+        stdout=get_stdout_console(),
+        stderr=get_console(),
+        mode=text_mode(ctx),
+        quiet=ctx.quiet,
+    )
+    if result.exit_code:
+        raise SystemExit(result.exit_code)
+
+
+def render_result(
+    result: CommandResult,
+    *,
+    stdout: Console,
+    stderr: Console,
+    mode: OutputMode,
+    quiet: bool = False,
+) -> None:
+    """Print *result* as :func:`emit_result` does, to the given consoles; never exit.
+
+    ``opentide tui`` passes one recording console as both, to show a command's
+    result exactly as the command prints it.
+    """
     notes = [
         (_REMEDIATION_LABELS[name], str(result.data[name]))
         for name in REMEDIATION_FIELDS
         if result.data.get(name)
     ]
-    if not ctx.quiet:
+    if not quiet:
         render_warnings(stderr, result.warnings)
     kind = outcome_kind(result.status, ok=result.ok)
     if kind == "failed":
@@ -251,15 +276,13 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
         if suggestion and repr(suggestion) not in result.message:
             notes.append(("help", f"did you mean {suggestion!r}?"))
         render_error(stderr, result.message, notes=notes, mode=mode)
-        if not ctx.quiet:
+        if not quiet:
             render_next_actions(stderr, result.next_actions)
     else:
         render_outcome(stdout, kind, result.message)
-        if not ctx.quiet:
+        if not quiet:
             render_notes(stdout, notes)
             render_next_actions(stdout, result.next_actions)
-    if result.exit_code:
-        raise SystemExit(result.exit_code)
 
 
 def emit_error(

@@ -27,6 +27,7 @@ Run `opentide --help` for the live command tree.
 | [`deploy`](./deploy.md) | Platform rule deployment |
 | [`share`](./share.md) | Publish objects to a MISP destination |
 | [`info`](./info.md) | Repository and platform statistics |
+| [`tui`](./tui.md) | Terminal UI: catalogue tree, YAML and diagnostics, ATT&CK coverage, validate / generate / deploy dry run |
 | [`mcp`](../mcp/index.md) | Stdio MCP server (`mcp start`); the editor owns the process |
 
 <Callout type="info">
