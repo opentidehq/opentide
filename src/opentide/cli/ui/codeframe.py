@@ -26,6 +26,7 @@ import codecs
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 from rich.cells import cell_len
@@ -36,6 +37,9 @@ from rich.text import Text
 from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, relative_path
 from opentide.cli.ui.glyphs import glyph
 from opentide.cli.ui.mode import OutputMode, get_mode
+
+if TYPE_CHECKING:
+    from opentide.cli.ui.fixes import FixChange
 
 _SEVERITY_STYLE = {"error": "bold red", "warning": "bold yellow", "note": "bold blue"}
 _NOTE_STYLE = {"help": "bold cyan", "note": "bold blue", "expected": "bold", "fix": "bold cyan"}
@@ -249,3 +253,41 @@ def render_diagnostics(
         ):
             console.print(line, soft_wrap=True)
         console.print()
+
+
+# --------------------------------------------------------------------------
+# validate --fix
+# --------------------------------------------------------------------------
+
+_DIFF_STYLE = (("+++", "bold"), ("---", "bold"), ("@@", "cyan"), ("+", "green"), ("-", "red"))
+
+
+def render_diff(console: Console, diff: str) -> None:
+    """A unified diff, ``+`` lines green and ``-`` lines red, then a blank line."""
+    if not diff:
+        return
+    for raw in diff.splitlines():
+        style = next((style for prefix, style in _DIFF_STYLE if raw.startswith(prefix)), "")
+        console.print(Text(raw, style=style), soft_wrap=True)
+    console.print()
+
+
+def render_fixed(
+    console: Console, changes: Sequence[FixChange], *, cwd: Path | None = None
+) -> None:
+    """``fixed: objects/rules/x.yaml:8:8 'clearr' → 'clear'``, one line per value replaced."""
+    if not changes:
+        return
+    encoding = console.encoding or "utf-8"
+    base = Path.cwd() if cwd is None else cwd
+    for change in changes:
+        shown = relative_path(change.file_path, base)
+        if Path(shown).is_absolute():
+            shown = change.path
+        line = Text()
+        line.append("fixed:", style="bold green")
+        line.append(f" {shown}:{change.line}:{change.column} {change.before!r} ")
+        line.append(glyph("next", encoding=encoding))
+        line.append(f" {change.after!r}")
+        console.print(line, soft_wrap=True)
+    console.print()

@@ -12,6 +12,8 @@ from opentide.cli.context import CliContext
 from opentide.cli.enums import ValidateCheck
 from opentide.cli.exit_codes import CiOutcome
 from opentide.cli.services import validation as validation_service
+from opentide.cli.ui.contract import NextAction
+from opentide.cli.ui.fixes import FixChange, FixPlan
 from opentide.validation.issues import ValidationIssue, ValidationReport
 
 FAILED_OUTCOME = CiOutcome(exit_code=1, failed=True, warned=False)
@@ -555,6 +557,7 @@ def test_run_validate_returns_diagnostics_and_prints_nothing() -> None:
         "warnings": 0,
         "files": 0,
         "warning_files": 0,
+        "fixable": 0,
     }
 
 
@@ -584,7 +587,14 @@ def test_files_count_where_the_errors_are(tmp_path: Path) -> None:
         patch("opentide.cli.exit_codes.validation_outcome", return_value=FAILED_OUTCOME),
     ):
         summary = validation_service.run_validate(ctx)["_summary"]
-    assert summary == {"objects": 3, "errors": 1, "warnings": 1, "files": 1, "warning_files": 1}
+    assert summary == {
+        "objects": 3,
+        "errors": 1,
+        "warnings": 1,
+        "files": 1,
+        "warning_files": 1,
+        "fixable": 0,
+    }
     line = validation_service.validate_outcome_line(summary, failed=True, seconds=0.9)
     assert line == "1 error in 1 file · 3 objects checked · 0.9s"
 
@@ -606,11 +616,86 @@ def test_files_count_where_the_errors_are(tmp_path: Path) -> None:
             "1 warning in 1 file · 3 objects checked · 0.9s",
         ),
         ({"errors": 1}, True, "1 error · 0.9s"),
+        (
+            {"objects": 3, "errors": 4, "files": 2, "fixable": 3},
+            True,
+            "4 errors in 2 files · 3 fixable with --fix · 3 objects checked · 0.9s",
+        ),
+        (
+            {"objects": 3, "warnings": 1, "fixable": 1},
+            False,
+            "3 objects valid · 1 warning · 1 fixable with --fix · 0.9s",
+        ),
     ],
 )
 def test_validate_outcome_line(summary: dict[str, int], failed: bool, expected: str) -> None:
     assert (
         validation_service.validate_outcome_line(summary, failed=failed, seconds=0.94) == expected
+    )
+
+
+@pytest.mark.parametrize(
+    ("summary", "failed", "fix", "expected"),
+    [
+        (
+            {"objects": 3, "fixed": 3},
+            False,
+            "Fixed 3 values in 2 files",
+            "Fixed 3 values in 2 files · 3 objects valid · 0.9s",
+        ),
+        (
+            {"objects": 3, "errors": 1, "files": 1, "fixed": 3},
+            True,
+            "Fixed 3 values in 2 files",
+            "1 error in 1 file · fixed 3 values in 2 files · 3 objects checked · 0.9s",
+        ),
+        (
+            {"objects": 3, "errors": 4, "files": 2, "fixable": 3},
+            True,
+            "Would fix 3 values in 2 files",
+            "4 errors in 2 files · would fix 3 values in 2 files · 3 objects checked · 0.9s",
+        ),
+        (
+            {"objects": 3, "errors": 1, "files": 1},
+            True,
+            "No safe fix to apply",
+            "1 error in 1 file · no safe fix to apply · 3 objects checked · 0.9s",
+        ),
+    ],
+)
+def test_validate_outcome_line_after_fix(
+    summary: dict[str, int], failed: bool, fix: str, expected: str
+) -> None:
+    line = validation_service.validate_outcome_line(summary, failed=failed, seconds=0.94, fix=fix)
+    assert line == expected
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        ((3, 2), "Fixed 3 values in 2 files"),
+        ((1, 1), "Fixed 1 value in 1 file"),
+        ((0, 0), "No safe fix to apply"),
+    ],
+)
+def test_fix_phrase(args: tuple[int, int], expected: str) -> None:
+    assert validation_service.fix_phrase(*args) == expected
+    if args[0]:
+        assert validation_service.fix_phrase(*args, dry_run=True) == expected.replace(
+            "Fixed", "Would fix"
+        )
+
+
+def test_the_fix_command_keeps_the_scope_of_the_run() -> None:
+    assert validation_service.fix_command() == "opentide validate --fix"
+    assert validation_service.fix_command(
+        check=ValidateCheck.schema,
+        files=["objects/rules/my rule.yaml"],
+        uuids=["u1"],
+        object_types=["rule"],
+    ) == (
+        "opentide validate --fix --check schema --file 'objects/rules/my rule.yaml' "
+        "--uuid u1 --type rule"
     )
 
 
@@ -689,3 +774,69 @@ def test_validate_file_is_repeatable() -> None:
     assert result.exit_code == 0, result.stdout + result.stderr
     scope = mock_run.call_args.kwargs["scope"]
     assert scope.targets == frozenset({"rules/a.yaml", "rules/b.yaml"})
+
+
+def _fix_run(plan: object, *, errors: int = 1) -> dict[str, object]:
+    return {
+        "report": {"ok": not errors, "issues": []},
+        "_summary": {"objects": 1, "errors": errors, "warnings": 0, "files": 1, "fixable": 1},
+        "_fix_plan": plan,
+        "_next_actions": [{"command": "opentide validate --fix", "reason": "apply 1 safe fix"}],
+    }
+
+
+def _plan(target: Path) -> tuple[FixChange, FixPlan]:
+    change = FixChange("rule.yaml", target, 1, 6, "vocab_unknown", "clearr", "clear")
+    return change, FixPlan((change,), {target: ("rule.yaml", "tlp: clearr\n", "tlp: clear\n")})
+
+
+def test_run_validate_fix_validates_again_after_writing(tmp_path: Path) -> None:
+    target = tmp_path / "rule.yaml"
+    target.write_text("tlp: clearr\n")
+    change, plan = _plan(target)
+    runs = [_fix_run(plan), _fix_run(FixPlan(), errors=0)]
+    with patch.object(validation_service, "run_validate", side_effect=runs) as run:
+        result = validation_service.run_validate_fix(CliContext(), files=["rule.yaml"])
+    assert run.call_count == 2
+    assert target.read_text() == "tlp: clear\n"
+    assert result["fixed"] == [change.to_dict()]
+    assert result["_summary"] == {
+        "objects": 1,
+        "errors": 0,
+        "warnings": 0,
+        "files": 1,
+        "fixable": 1,
+        "fixed": 1,
+    }
+    assert "_next_actions" not in result
+    assert "warnings" not in result
+
+
+def test_run_validate_fix_names_a_file_it_could_not_write(tmp_path: Path) -> None:
+    _change, plan = _plan(tmp_path / "rule.yaml")
+    unwritten = (FixPlan(), ["rule.yaml: Permission denied"])
+    with (
+        patch.object(FixPlan, "write", return_value=unwritten),
+        patch.object(
+            validation_service, "run_validate", side_effect=[_fix_run(plan), _fix_run(FixPlan())]
+        ),
+    ):
+        result = validation_service.run_validate_fix(CliContext())
+    assert result["fixed"] == []
+    assert result["warnings"] == ["Could not write the fix to rule.yaml: Permission denied"]
+    assert result["_unwritten"] == ["rule.yaml: Permission denied"]
+
+
+def test_run_validate_fix_dry_run_writes_nothing(tmp_path: Path) -> None:
+    target = tmp_path / "rule.yaml"
+    target.write_text("tlp: clearr\n")
+    change, plan = _plan(target)
+    with patch.object(validation_service, "run_validate", return_value=_fix_run(plan)) as run:
+        result = validation_service.run_validate_fix(CliContext(), dry_run=True, uuids=["u1"])
+    run.assert_called_once()
+    assert target.read_text() == "tlp: clearr\n"
+    assert result["would_fix"] == [change.to_dict()]
+    assert str(result["diff"]).startswith("--- a/rule.yaml\n+++ b/rule.yaml\n")
+    assert result["_next_actions"] == [
+        NextAction("opentide validate --fix --uuid u1", "apply 1 safe fix")
+    ]

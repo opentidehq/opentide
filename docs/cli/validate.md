@@ -16,6 +16,9 @@ opentide validate --file objects/rules/example.yaml
 opentide validate --uuid <uuid> --uuid <uuid2>
 opentide validate --type rule
 opentide validate --check schema
+opentide validate --fix
+opentide validate --fix --dry-run
+opentide validate --watch
 ```
 
 ### Options
@@ -27,6 +30,9 @@ opentide validate --check schema
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` |
+| `--fix` | Apply every safe fix, then validate again (see [Fixing typos](#fixing-typos---fix)) |
+| `--dry-run` | With `--fix`: print the edits as a unified diff and change nothing |
+| `--watch` | Validate again each time an object file is saved, until Ctrl-C (see [Watching](#watching---watch)) |
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. The one exception is `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), which `--strict` reports without failing. Validation failures in `--json` mode include the complete report before the process exits.
 
@@ -64,7 +70,89 @@ Each entry of `report.issues` and `report.warnings` keeps its keys (`yaml_line` 
 | `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_line", "end_column", "replacement" }] }`: replace the text from (`line`, `column`) up to (`end_line`, `end_column`). Every suggested value gets a fix. `safe` is `true` only when the two values spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit, so an ATT&CK id, a UUID or `clearr` → `clear` is left for a person or an agent to confirm. A reference fix is never safe |
 | `explain` | `opentide explain <code>` |
 
-`summary` counts `objects`, `errors`, `warnings`, `files` (files with an error) and `warning_files` (files with a warning). A run that fails on its findings has `failure.code` `issues_found`.
+`summary` counts `objects`, `errors`, `warnings`, `files` (files with an error), `warning_files` (files with a warning) and `fixable` (the values `--fix` would replace). A run that fails on its findings has `failure.code` `issues_found`.
+
+### Fixing typos: `--fix`
+
+`--fix` applies the fixes whose `safe` is `true` (see [Diagnostic fields](#diagnostic-fields)), such as `clear` for `tlp: Clear` or `Data Breach` for `Data-Breach`, and never one whose `safe` is `false`: `clear` for `clearr`, an ATT&CK id, a reference (`invalid_ref`). A person or an agent decides those. When a run finds safe fixes, its outcome line counts them (`2 fixable with --fix`) and its next step is the same command with `--fix`, also in `next_actions`.
+
+```bash
+opentide validate --fix --dry-run
+opentide validate --fix
+```
+
+`--fix --dry-run` prints the edits as a unified diff, then the findings no safe fix resolves, and writes nothing. The files are unchanged, so the run exits `1` while they have errors. With `tlp: Clear` in the tutorial rule:
+
+```text output-of="opentide validate --fix --dry-run" exit=1 state=vocabulary-case
+--- a/objects/rules/sentinel-kql-rule.yaml
++++ b/objects/rules/sentinel-kql-rule.yaml
+@@ -5,7 +5,7 @@
+   version: 1
+   created: 2026-01-01
+   modified: 2026-01-02
+-  tlp: Clear
++  tlp: clear
+   author: Tutorial Author
+   organisation:
+     uuid: 00000000-0000-4000-8000-000000000099
+→ opentide validate --fix · apply 1 safe fix
+```
+
+`--fix` writes the safe fixes, validates again and prints a `fixed:` line per value, then the findings that are left. Only the replaced value changes in each file: comments, quoting, key order, indentation and line endings stay as they were. Each edit is checked before it is written: the file must still parse and differ in that value alone, or the edit is left out and its finding stays. A second run has nothing to apply. The outcome line says what it fixed and what is left:
+
+```text illustrative
+fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
+fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'
+
+error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+   ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
+   │
+16 │ techniques: [T1059]
+17 │ detection_model: 00000000-0000-4000-8002-DEADBEEF0000   # the objective from step 4
+   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+   │
+   ╰─ help: opentide info objectives lists the ones that exist
+
+✗ 1 error in 1 file · fixed 2 values in 2 files · 3 objects checked · 1.8s
+```
+
+The sample is illustrative because it carries the run time. When nothing is left, the line is `✓ Fixed 2 values in 2 files · 3 objects valid · 1.8s` and the run exits `0`. `--fix` honours `--file`, `--uuid`, `--type` and `--check`: it fixes what that run found.
+
+With `--json` the document is the second run's, so `report` holds what is left, and it gains `fixed` and `summary.fixed`:
+
+```bash
+opentide --json validate --fix
+```
+
+```json output-of="opentide --json validate --fix" state=vocabulary-case
+{
+  "fixed": [
+    {
+      "path": "objects/rules/sentinel-kql-rule.yaml",
+      "line": 8,
+      "code": "vocab_unknown",
+      "before": "Clear",
+      "after": "clear"
+    }
+  ],
+  "ok": true,
+  "summary": { "objects": 3, "errors": 0, "fixable": 0, "fixed": 1 }
+}
+```
+
+Under `--dry-run` the document is the first run's, with `would_fix` (the same entries) and `diff` (the text above) instead of `fixed`.
+
+### Watching: `--watch`
+
+```bash
+opentide validate --watch
+```
+
+`--watch` validates once, then looks at the modification times of the object files every 0.5 seconds and validates again after a save. A save that keeps the UUIDs in the file re-checks that file alone; an added or removed file, or a changed UUID or reference, re-checks every object, since other objects' findings may change with it. Each run reports the whole workspace, findings from files it did not re-check included.
+
+In a terminal the findings and the outcome line are redrawn in place, with a footer naming the file it re-checked and how to stop. In plain output (a pipe, `NO_COLOR`, `TERM=dumb`, CI) each run prints the findings it produced and one outcome line, and nothing is redrawn. Ctrl-C stops it with exit `0`. `--watch` honours `--file`, `--uuid`, `--type`, `--check` and `--strict`; with a narrowed scope every run re-checks that scope. It cannot be combined with `--fix` (exit `2`, `failure.code` `usage_error`).
+
+`--watch` never ends, so it is refused where nobody watches: under `--json`, a coding agent or `OPENTIDE_OUTPUT=agent`. It exits `2` at once with `failure.code` `usage_watch_needs_tty`, and the next step is `opentide validate`.
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 
