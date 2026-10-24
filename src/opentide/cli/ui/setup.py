@@ -10,8 +10,11 @@ numbered next steps.
 
 from __future__ import annotations
 
+import os
+import shlex
+import subprocess
 from collections.abc import Iterable, Mapping
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from rich.console import Console
@@ -127,6 +130,25 @@ def render_summary(console: Console, result: Mapping[str, Any]) -> None:
     console.print()
 
 
+def _where(shown: str) -> str:
+    """``./tutorial-detections`` for a relative path; an absolute one as it is."""
+    bare = shown.rstrip("/") or shown
+    if Path(bare).is_absolute() or PureWindowsPath(bare).is_absolute() or bare.startswith("."):
+        return bare
+    return f"./{bare}"
+
+
+def shell_quote(argument: str, *, windows: bool | None = None) -> str:
+    """*argument* as one word a shell reads back unchanged: ``'My Detections'``.
+
+    POSIX shells get ``shlex.quote``; Windows gets double quotes
+    (``subprocess.list2cmdline``), which ``cmd`` and PowerShell both accept.
+    """
+    if windows if windows is not None else os.name == "nt":
+        return subprocess.list2cmdline([argument])
+    return shlex.quote(argument)
+
+
 def _target(result: Mapping[str, Any]) -> Path | None:
     path = result.get("path")
     return Path(str(path)) if path else None
@@ -153,10 +175,10 @@ def setup_outcome(
             or str(repo_step.get("name") or "")
             or (target.name if target is not None else "the repository")
         )
-        message = f"Created {title} in {shown if shown.startswith(('.', '/')) else './' + shown}"
+        message = f"Created {title} in {_where(shown)}"
         actions: list[NextAction] = []
         if target is not None and target.resolve() != Path.cwd().resolve():
-            actions.append(NextAction(f"cd {display_path(target).rstrip('/')}"))
+            actions.append(NextAction(f"cd {shell_quote(shown.rstrip('/'))}"))
         actions.append(NextAction("opentide generate", "schemas, templates and editor snippets"))
         actions.append(NextAction("opentide validate", "check every object before you commit"))
         return message.rstrip("/"), actions[:3]

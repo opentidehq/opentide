@@ -147,7 +147,11 @@ def checklist_table(
 ) -> RenderableType:
     """The checklist as ``human`` mode draws it: one row per step, the running one last."""
     if running is None:
-        return columns([_row(step, encoding) for step in steps], indent=2, right=(2, 3))
+        # One terminal row per step: a narrow terminal cuts the row, it never wraps it.
+        rows = columns([_row(step, encoding) for step in steps], indent=2, right=(2, 3))
+        rows.no_wrap = True
+        rows.overflow = "ellipsis"
+        return rows
     grid = Table.grid(padding=(0, 2))
     grid.add_column(no_wrap=True)
     grid.add_column(style="bold", no_wrap=True)

@@ -13,30 +13,20 @@ from typing import Any
 #: The longest summary a listing shows.
 MAX_SUMMARY = 60
 
-#: Rich help panels the root listing groups commands under.
-PANEL_AUTHOR = "Author"
-PANEL_SHIP = "Ship"
-PANEL_WORKSPACE = "Workspace"
-PANEL_AGENTS = "Agents and integrations"
-
 #: Command path → the summary listings show, where the help's first sentence is too long.
 SUMMARIES: dict[str, str] = {
-    "lint": "Check file names and recommended metadata",
     "mcp": "Run the opentide MCP server for editors and agents",
     "mcp start": "Serve MCP on stdio until the host closes stdin",
-    "setup": "Set up a detection repository and its tooling",
     "setup platforms": "Enable platform configuration files",
     "setup ci": "Write CI/CD pipeline files",
     "setup env": "Write .env.example and ignore .env",
     "setup hooks": "Validate objects on every commit",
     "setup vscode": "Write VS Code schemas and snippets (deprecated)",
     "setup skills": "Discover and install agent skills",
-    "share": "Publish objects to intelligence platforms",
     "share preview": "Show what push would do, without a request",
     "share status": "Compare the local ledger with object versions",
     "share retract": "Unpublish or delete a shared event",
     "rules unreviewed": "List rules not reviewed within a window",
-    "generate": "Generate schemas, templates, docs and exports",
     "generate explorer": "Write the explorer bundle and search index",
     "generate docs rules": "Generate rule documentation",
     "generate docs objectives": "Generate objective documentation",
@@ -49,10 +39,7 @@ SUMMARIES: dict[str, str] = {
     "generate extract defender": "Import Defender custom detections",
     "generate extract elastic": "Import Elastic Security detection rules",
     "generate inflight prune": "Remove inflight shards already on the default branch",
-    "validate": "Validate objects and queries",
-    "deploy": "Deploy rules to platform tenants",
     "deploy migrate-state": "Move vendor ids from rules into deployment state",
-    "migrate": "Migrate legacy repository layouts",
     "migrate objects": "Move a legacy layout into objects/ and .opentide/",
     "migrate vocab-scope": "Re-prefix stage-scoped vocabulary values",
 }

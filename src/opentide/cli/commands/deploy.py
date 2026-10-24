@@ -20,7 +20,7 @@ DEPLOY_STRATEGY_HELP = (
     "PRODUCTION are not strategies"
 )
 
-deploy_app = typer.Typer(help="Rule deployment")
+deploy_app = typer.Typer(help="Deploy rules to platform tenants")
 
 
 @deploy_app.callback(invoke_without_command=True)

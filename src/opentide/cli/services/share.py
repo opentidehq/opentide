@@ -19,7 +19,7 @@ from opentide.sharing.constants import (
 from opentide.sharing.document import TideDocument, load_document
 from opentide.sharing.engine import ShareFilters, run_misp
 from opentide.sharing.ledger import ShareLedger, ledger_path
-from opentide.sharing.report import SUCCESS_ACTIONS, ShareRun
+from opentide.sharing.report import ShareRun
 from opentide.validation.checks.kinds import ValidateCheck
 from opentide.validation.scope import ValidationScope
 from opentide.validation.session import run_validation
@@ -452,6 +452,10 @@ _ACTION_WORDS = {
 }
 
 
+#: Actions that send something to the destination.
+_SENT_ACTIONS = frozenset({"created", "updated", "retracted"})
+
+
 def share_outcome(mode: str, outcome: ShareRun) -> tuple[str, dict[str, int]]:
     """``Shared 4 objects to misp-prod · 3 new, 1 updated``, and the counts behind it."""
     from collections import Counter
@@ -461,13 +465,16 @@ def share_outcome(mode: str, outcome: ShareRun) -> tuple[str, dict[str, int]]:
     records = outcome.records
     targets = ", ".join(sorted({record.target for record in records})) or "no target"
     counts = Counter(_ACTION_WORDS.get(record.action, record.action) for record in records)
-    done = len({record.object_uuid for record in records if record.action in SUCCESS_ACTIONS})
+    # "unchanged" succeeds but sends nothing, so it is not a shared object.
+    done = len({record.object_uuid for record in records if record.action in _SENT_ACTIONS})
     objects = plural(done, "object")
     lead = {
         "push": f"Shared {objects} to {targets}",
         "preview": f"Would share {objects} to {targets}",
         "retract": f"Retracted {objects} from {targets}",
     }.get(mode, f"{plural(len({r.object_uuid for r in records}), 'object')} on {targets}")
+    if not done and records and mode in ("push", "preview", "retract"):
+        lead = "Nothing to retract" if mode == "retract" else "Nothing to share"
     order = ("new", "updated", "unchanged", "retracted", "skipped", "failed")
     facts = ", ".join(f"{counts[word]} {word}" for word in order if counts.get(word))
     summary = {"objects": done, **{word: counts.get(word, 0) for word in order}}

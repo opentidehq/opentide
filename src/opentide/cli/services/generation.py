@@ -185,16 +185,13 @@ class WrittenFiles:
 
     def __init__(self, *roots: Path) -> None:
         self.roots = tuple(dict.fromkeys(root.resolve() for root in roots))
-        self.started_ns = time.time_ns()
         self.before = _snapshot(self.roots)
 
     def changes(self) -> tuple[list[Path], list[Path]]:
         after = _snapshot(self.roots)
-        written = [
-            Path(path)
-            for path, stamp in after.items()
-            if self.before.get(path) != stamp or stamp[0] >= self.started_ns
-        ]
+        # Compared with the snapshot alone: a file stamped in the future (clock
+        # skew, a checkout from another machine) is not written by every phase.
+        written = [Path(path) for path, stamp in after.items() if self.before.get(path) != stamp]
         removed = [Path(path) for path in self.before if path not in after]
         return sorted(written), sorted(removed)
 
@@ -294,9 +291,14 @@ def run_generate_docs(
         elif objectives:
             scope = DocumentScope.objectives.value
     try:
-        with Checklist(total=1) as checklist, generation_step(checklist, "docs", outputs=(output,)):
+        with (
+            Checklist(total=1) as checklist,
+            generation_step(checklist, "docs", outputs=(output,)) as step,
+        ):
             with failing_phase("docs"):
                 result = dict(run_docs(scope=scope, output=output, flavor=flavor, changed=changed))
+            if result.get("status") == "failed":
+                step.status = "failed"
     except GenerationPhaseError as exc:
         return phase_failure(exc)
     if result.get("status") == "failed":

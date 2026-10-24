@@ -76,29 +76,50 @@ def _git_state(path: Path) -> str | None:
     branch = run("rev-parse", "--abbrev-ref", "HEAD")
     if branch is None:
         return None
+    name = branch.strip() or "no branch"
     status = run("status", "--porcelain")
-    changed = len([line for line in (status or "").splitlines() if line.strip()])
+    if status is None:
+        # git did not answer (timeout, error): say nothing about the tree.
+        return name
+    changed = len([line for line in status.splitlines() if line.strip()])
     state = "clean" if changed == 0 else f"{changed} changed"
-    return f"{branch.strip() or 'no branch'}, {state}"
+    return f"{name}, {state}"
 
 
-def _tenants(path: Path) -> int:
+def _platforms(directory: Path) -> dict[str, int]:
+    """Enabled platform → ``[[tenants]]`` count, read straight from the TOML files.
+
+    Read here rather than through ``opentide.ci.discovery``: importing that
+    package loads the validation engine and the registry, and the home screen
+    has to cost what ``--help`` does.
+    """
     from opentide.core.io import load_toml
 
-    try:
-        tenants = load_toml(path).get("tenants")
-    except Exception:  # noqa: BLE001 -- a broken file is validate's to report
-        return 0
-    return len(tenants) if isinstance(tenants, list) else 0
+    platforms: dict[str, int] = {}
+    for path in sorted(directory.glob("*.toml")) if directory.is_dir() else ():
+        try:
+            document = load_toml(path)
+        except Exception:  # noqa: BLE001 -- a broken file is validate's to report
+            continue
+        platform = document.get("platform")
+        if not isinstance(platform, dict) or platform.get("enabled") is not True:
+            continue
+        tenants = document.get("tenants")
+        platforms[path.stem] = len(tenants) if isinstance(tenants, list) else 0
+    return platforms
 
 
 def gather(version: str, start: Path | None = None) -> HomeFacts:
     """Read the facts for the directory *start* (the current one by default)."""
-    from opentide.ci.discovery import discover_enabled_platforms, platforms_config_dir
-    from opentide.core.root import find_workspace_root, is_workspace_root
-    from opentide.registry.discovery import OPENTIDE_DIR
+    from opentide.core.root import (
+        OPENTIDE_DIR,
+        find_workspace_root,
+        get_repo_root,
+        is_workspace_root,
+    )
 
-    root = find_workspace_root(start)
+    # OPENTIDE_REPO_ROOT names the workspace for every command; honour it here too.
+    root = find_workspace_root(start) if start is not None else get_repo_root()
     if not is_workspace_root(root):
         return HomeFacts(version=version, workspace=None, git=_git_state(root))
     catalogue = {
@@ -108,10 +129,7 @@ def gather(version: str, start: Path | None = None) -> HomeFacts:
         for kind, _ in _KINDS
     }
     schemas = any((root / OPENTIDE_DIR / "schemas").glob("*.schema.json"))
-    platforms = {
-        name: _tenants(platforms_config_dir(root) / f"{name}.toml")
-        for name in discover_enabled_platforms(root)
-    }
+    platforms = _platforms(root / OPENTIDE_DIR / "configurations" / "platforms")
     return HomeFacts(
         version=version,
         workspace=root,
@@ -151,6 +169,14 @@ def _home_path(path: Path) -> str:
         return path.as_posix()
 
 
+#: A longer workspace path keeps its tail, so what follows it stays visible.
+MAX_PATH = 40
+
+
+def _shorten(path: str, limit: int = MAX_PATH) -> str:
+    return path if len(path) <= limit else "…" + path[-(limit - 1) :]
+
+
 def facts_table(facts: HomeFacts, *, encoding: str = "utf-8") -> Text:
     """``workspace``, ``catalogue``, ``health`` and ``platforms`` as label/value rows."""
     separator = f" {glyph('separator', encoding=encoding)} "
@@ -162,7 +188,7 @@ def facts_table(facts: HomeFacts, *, encoding: str = "utf-8") -> Text:
     if facts.workspace is None:
         rows.append((label("workspace"), Text("none here", style="yellow")))
     else:
-        where = Text(_home_path(facts.workspace), style="underline")
+        where = Text(_shorten(_home_path(facts.workspace)), style="underline")
         if facts.git:
             where.append(f"  git: {facts.git}", style="dim")
         rows.append((label("workspace"), where))
