@@ -919,3 +919,50 @@ def test_python_dash_m_opentide_reports_a_crash(tmp_path: Path) -> None:
     assert document["failure"]["code"] == INTERNAL
     assert Path(document["failure"]["crash_log"]).is_file()
     assert "Traceback" not in done.stderr
+
+
+def _splunk_app_workspace(root: Path, app: str) -> Path:
+    platforms = root / ".opentide" / "configurations" / "platforms"
+    platforms.mkdir(parents=True)
+    (platforms / "splunk.toml").write_text(
+        f'[[tenants]]\nname = "acme-splunk"\n[tenants.setup]\napp = "{app}"\n',
+        encoding="utf-8",
+    )
+    return root
+
+
+@pytest.mark.parametrize(
+    "app",
+    [
+        "search",
+        "Search",
+        "launcher",
+        "SplunkEnterpriseSecuritySuite",
+        "SA-ThreatIntelligence",
+        "DA-ESS-EndpointProtection",
+        "TA-windows",
+        "ta-nix",
+        "splunk_monitoring_console",
+        "Splunk_SA_CIM",
+    ],
+)
+def test_built_in_splunk_apps_are_not_redacted(tmp_path: Path, app: str) -> None:
+    redactor = workspace_redactor([_splunk_app_workspace(tmp_path, app)], env={})
+    text = f"app {app} failed in opentide.search for acme-splunk"
+    assert redactor(text) == f"app {app} failed in opentide.search for ***"
+
+
+@pytest.mark.parametrize("app", ["acme_detections", "SOC-Content", "tasks-acme"])
+def test_custom_splunk_apps_are_redacted(tmp_path: Path, app: str) -> None:
+    redactor = workspace_redactor([_splunk_app_workspace(tmp_path, app)], env={})
+    assert redactor(f"/servicesNS/nobody/{app}/saved/searches") == (
+        "/servicesNS/nobody/***/saved/searches"
+    )
+
+
+def test_built_in_app_names_count_only_under_an_app_key(tmp_path: Path) -> None:
+    """A tenant named ``search`` is still a tenant name."""
+    platforms = tmp_path / ".opentide" / "configurations" / "platforms"
+    platforms.mkdir(parents=True)
+    (platforms / "splunk.toml").write_text('[[tenants]]\nname = "launcher"\n', encoding="utf-8")
+    assert workspace_redactor([tmp_path], env={})("tenant launcher") == "tenant ***"

@@ -138,6 +138,20 @@ def is_secret_name(name: str) -> bool:
     return any(part in _SECRET_PARTS or part.endswith(_SECRET_SUFFIXES) for part in parts)
 
 
+#: Splunk apps every deployment has: they name no tenant, and ``search`` as a
+#: whole word would blank every ``opentide.search`` in a traceback.
+_BUILTIN_SPLUNK_APPS = frozenset({"search", "launcher", "splunkenterprisesecuritysuite"})
+_BUILTIN_SPLUNK_APP_PREFIXES = ("sa-", "da-", "ta-", "splunk_")
+
+
+def _is_builtin_splunk_app(key: str, value: str) -> bool:
+    """Whether *value*, under an ``app`` key, is a built-in Splunk app (any case)."""
+    if "app" not in re.split(r"[^a-z0-9]+", key.lower()):
+        return False
+    name = value.strip().lower()
+    return name in _BUILTIN_SPLUNK_APPS or name.startswith(_BUILTIN_SPLUNK_APP_PREFIXES)
+
+
 def _identifies_tenant(key: str) -> bool:
     lowered = key.lower()
     if any(word in lowered for word in _IDENTIFYING_WORDS):
@@ -292,7 +306,8 @@ def _walk(
         if is_secret_name(key):
             secrets.append(value)
         elif tenant and (key == "name" or _identifies_tenant(key)):
-            identifiers.append(value)
+            if not _is_builtin_splunk_app(key, value):
+                identifiers.append(value)
             identifiers.extend(hosts)
 
 
