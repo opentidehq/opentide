@@ -23,6 +23,7 @@ RULE_A = "00000000-0000-4000-8003-000000000001"
 RULE_B = "00000000-0000-4000-8003-000000000002"
 THREAT = "00000000-0000-4000-8001-000000000001"
 OBJECTIVE = "00000000-0000-4000-8002-000000000001"
+ORGANISATION = "00000000-0000-4000-8000-000000000099"
 
 
 def _object(path: Path, uuid: str, name: str, *, schema: str = "rule::1.0") -> None:
@@ -157,7 +158,12 @@ def test_object_folders_follow_paths_toml(workspace: Path) -> None:
     [
         (f"name: Plain\nmetadata:\n  uuid: {RULE_A}\n", (RULE_A, "Plain")),
         (f"name: 'Quoted # not a comment'\nuuid: \"{RULE_A}\"\n", (RULE_A, "Quoted # not a comment")),
-        (f'# header\nname: "Esc \\" quote" # comment\nmetadata:\n  uuid: {RULE_A} # c\n', (RULE_A, 'Esc \\" quote')),
+        (f'# header\nname: "Esc \\" quote" # comment\nmetadata:\n  uuid: {RULE_A} # c\n', (RULE_A, 'Esc " quote')),
+        ('name: "line\\nbreak \\u00e9\\x41\\\\"\n', (None, "line\nbreak éA\\")),
+        ("name: 'Detect: user''s \"admin\"' # c\n", (None, 'Detect: user\'s "admin"')),
+        # Only metadata's own uuid, never one nested deeper (an alphabetical dump puts it first).
+        (f"name: Rule 1\nmetadata:\n  organisation:\n    uuid: {ORGANISATION}\n    name: Example Corp\n  uuid: {RULE_A}\n", (RULE_A, "Rule 1")),
+        (f"name: Four spaces\nmetadata:\n    organisation:\n        uuid: {ORGANISATION}\n    uuid: {RULE_A}\n", (RULE_A, "Four spaces")),
         ("description: |\n  name: nested\nname: Late\nconfigurations:\n  uuid: wrong\n", (None, "Late")),
         ("name: |\n  block scalar\n", (None, None)),
         ("", (None, None)),
@@ -171,6 +177,80 @@ def test_read_header(tmp_path: Path, text: str, expected: tuple[str | None, str 
 
 def test_read_header_of_a_missing_file(tmp_path: Path) -> None:
     assert read_header(tmp_path / "gone.yaml") == (None, None)
+
+
+def test_rules_sharing_an_organisation_keep_their_own_uuids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``metadata.organisation.uuid`` first, then ``metadata.uuid``: three rules, three UUIDs."""
+    rules = tmp_path / "objects/rules"
+    rules.mkdir(parents=True)
+    expected = []
+    for number in range(1, 4):
+        uuid = f"00000000-0000-4000-8003-00000000000{number}"
+        expected.append((uuid, f"Rule {number} (rule)"))
+        (rules / f"rule-{number}.yaml").write_text(
+            f"name: Rule {number}\nmetadata:\n  organisation:\n    uuid: {ORGANISATION}\n"
+            f"    name: Example Corp\n  uuid: {uuid}\n",
+            encoding="utf-8",
+        )
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(tmp_path))
+    assert list(completion.object_uuids()(None, "")) == expected
+
+
+def test_uuid_skips_a_header_that_is_not_a_uuid(workspace: Path) -> None:
+    (workspace / "objects/rules/garbled.yaml").write_bytes(b"name: Garbled\nuuid: \xff\n")
+    (workspace / "objects/rules/typo.yaml").write_text("name: Typo\nuuid: 1234\n", "utf-8")
+    assert _values("validate --type rule --uuid ") == [RULE_A, RULE_B]
+
+
+def test_file_never_offers_a_directory(workspace: Path) -> None:
+    (workspace / "objects/rules/dir.yaml").mkdir()
+    assert _values("validate --file objects/rules/") == [
+        "objects/rules/sentinel-rule.yaml",
+        "objects/rules/splunk-rule.yaml",
+    ]
+    assert _values("validate --file dir") == []
+
+
+def test_file_reads_only_the_headers_of_matching_paths(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    read: list[str] = []
+    original = completion.read_header
+
+    def counted(path: Path) -> tuple[str | None, str | None]:
+        read.append(path.name)
+        return original(path)
+
+    monkeypatch.setattr(completion, "read_header", counted)
+    assert _helps("validate --file objects/rules/spl") == {
+        "objects/rules/splunk-rule.yaml": "Splunk: SPL Rule"
+    }
+    assert read == ["splunk-rule.yaml"]
+
+
+def test_bash_gets_spaces_and_metacharacters_escaped(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Typer's bash script inserts candidates verbatim; zsh and fish quote them themselves."""
+    _object(workspace / "objects/rules/team a/my rule: v2 (old)&$x.yaml", RULE_A, "Spaced")
+    (workspace / "objects/rules/sentinel-rule.yaml").unlink()
+    words = "validate --file objects/rules/team"
+    assert _values(words) == ["objects/rules/team a/my rule: v2 (old)&$x.yaml"]
+    monkeypatch.setenv("_OPENTIDE_COMPLETE", "complete_bash")
+    assert _values(words) == ["objects/rules/team\\ a/my\\ rule:\\ v2\\ \\(old\\)\\&\\$x.yaml"]
+    # Plain candidates are unchanged.
+    assert set(_values("validate --type rule --uuid ")) == {RULE_A, RULE_B}
+    assert completion.bash_word("T1059.001") == "T1059.001"
+    assert completion.bash_word("it's") == "it\\'s"
+
+
+def test_bash_skips_a_candidate_with_a_line_break(monkeypatch: pytest.MonkeyPatch) -> None:
+    complete = completion._shell_complete(lambda ctx, incomplete: [("a\nb", ""), ("ok", "")])  # noqa: SLF001
+    assert [item.value for item in complete(None, None, "")] == ["a\nb", "ok"]
+    monkeypatch.setenv("_OPENTIDE_COMPLETE", "complete_bash")
+    assert [item.value for item in complete(None, None, "")] == ["ok"]
 
 
 # --------------------------------------------------------------------------

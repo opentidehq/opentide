@@ -45,6 +45,18 @@ Source = Callable[[Any, str], Iterable[Candidate]]
 
 _TOP_KEY = re.compile(r"^([A-Za-z_][\w-]*)\s*:(.*)$")
 _NESTED_UUID = re.compile(r"^\s+uuid\s*:(.*)$")
+_UUID = re.compile(r"^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$")
+# YAML double-quoted escapes that stand for one character (``\x``, ``\u``, ``\U`` aside).
+_YAML_ESCAPES = {
+    "0": "\0", "a": "\a", "b": "\b", "t": "\t", "\t": "\t", "n": "\n", "v": "\v",
+    "f": "\f", "r": "\r", "e": "\x1b", " ": " ", '"': '"', "/": "/", "\\": "\\",
+    "N": "\x85", "_": "\xa0", "L": " ", "P": " ",
+}  # fmt: skip
+_YAML_ESCAPE = re.compile(r"\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)", re.DOTALL)
+# A character bash reads back unchanged without a backslash in front of it.
+_BASH_PLAIN = re.compile(r"[\w./:@%+,=-]")
+#: The variable Typer sets to ask for completions; ``complete_bash`` for bash.
+COMPLETE_ENV = "_OPENTIDE_COMPLETE"
 _PLATFORM_SECTION = re.compile(r"^\[platform\]\s*$", re.MULTILINE)
 _ENABLED = re.compile(r"^enabled\s*=\s*true\s*$", re.MULTILINE | re.IGNORECASE)
 # A ``[[keys]]`` entry of the vocabulary: ``id = "T1059.001"`` then ``name = "..."``.
@@ -91,30 +103,43 @@ def object_folders(root: Path) -> dict[str, Path]:
     return {kind: root / folder for kind, folder in folders.items()}
 
 
-def iter_objects(root: Path, kinds: Sequence[str] = tuple(OBJECT_FOLDERS)) -> Iterator[ObjectEntry]:
-    """Every object file of *kinds* under *root*, with the UUID and name from its first lines."""
+def iter_object_paths(
+    root: Path, kinds: Sequence[str] = tuple(OBJECT_FOLDERS)
+) -> Iterator[tuple[str, Path]]:
+    """``(kind, path)`` for every object file of *kinds* under *root*, without reading it."""
     folders = object_folders(root)
     for kind in OBJECT_FOLDERS:
         if kind not in kinds or not folders[kind].is_dir():
             continue
-        # A folder named like a YAML file reads as an empty header, not a crash.
         paths = sorted(
             path for pattern in ("*.yaml", "*.yml") for path in folders[kind].rglob(pattern)
         )
+        # A folder named like a YAML file is not an object.
         for path in paths:
-            uuid, name = read_header(path)
-            yield ObjectEntry(kind=kind, path=path, uuid=uuid, name=name)
+            if path.is_file():
+                yield kind, path
+
+
+def iter_objects(root: Path, kinds: Sequence[str] = tuple(OBJECT_FOLDERS)) -> Iterator[ObjectEntry]:
+    """Every object file of *kinds* under *root*, with the UUID and name from its first lines."""
+    for kind, path in iter_object_paths(root, kinds):
+        uuid, name = read_header(path)
+        yield ObjectEntry(kind=kind, path=path, uuid=uuid, name=name)
 
 
 def read_header(path: Path) -> tuple[str | None, str | None]:
     """``(uuid, name)`` from the top of an object file, without parsing the YAML.
 
     ``name`` is the top-level key; the UUID is ``metadata.uuid`` (or a
-    top-level ``uuid``). Reading stops once both are found.
+    top-level ``uuid``): a ``uuid`` key one level under ``metadata``, never a
+    deeper one such as ``metadata.organisation.uuid``. Reading stops once both
+    are found.
     """
     uuid: str | None = None
     name: str | None = None
     section: str | None = None
+    # The indentation of metadata's own keys, taken from its first nested line.
+    level: int | None = None
     try:
         with path.open(encoding="utf-8", errors="replace") as handle:
             for number, line in enumerate(handle):
@@ -125,13 +150,17 @@ def read_header(path: Path) -> tuple[str | None, str | None]:
                 top = _TOP_KEY.match(line)
                 if top is not None:
                     section, value = top.group(1), top.group(2)
+                    level = None
                     if section == "name" and name is None:
                         name = _scalar(value)
                     elif section == "uuid" and uuid is None:
                         uuid = _scalar(value)
                     continue
                 if section == "metadata" and uuid is None:
-                    nested = _NESTED_UUID.match(line)
+                    indent = len(line) - len(line.lstrip(" \t"))
+                    if level is None:
+                        level = indent
+                    nested = _NESTED_UUID.match(line) if indent == level else None
                     if nested is not None:
                         uuid = _scalar(nested.group(1))
     except OSError:
@@ -140,19 +169,44 @@ def read_header(path: Path) -> tuple[str | None, str | None]:
 
 
 def _scalar(raw: str) -> str | None:
-    """A one-line YAML scalar: quotes removed, a trailing ``# comment`` dropped."""
+    """A one-line YAML scalar: quotes and escapes decoded, a trailing ``# comment`` dropped."""
     value = raw.strip()
-    if value[:1] in {'"', "'"}:
-        quote = value[0]
-        end = value.find(quote, 1)
-        while quote == '"' and end > 0 and value[end - 1] == "\\":
-            end = value.find(quote, end + 1)
-        value = value[1:end] if end > 0 else value[1:]
+    if value[:1] == "'":
+        value = _single_quoted(value)
+    elif value[:1] == '"':
+        value = _double_quoted(value)
     else:
         value = value.split(" #", 1)[0].strip()
     if value in {"", "|", ">", "|-", ">-"}:
         return None
     return value
+
+
+def _single_quoted(value: str) -> str:
+    """``'user''s'`` -> ``user's``: inside single quotes ``''`` is the only escape."""
+    index = 1
+    while index < len(value):
+        if value[index] == "'":
+            if value[index + 1 : index + 2] != "'":
+                return value[1:index].replace("''", "'")
+            index += 1
+        index += 1
+    return value[1:].replace("''", "'")
+
+
+def _double_quoted(value: str) -> str:
+    """``"a\\nb"`` -> ``a``, newline, ``b``: YAML escapes decoded up to the closing quote."""
+    index = 1
+    while index < len(value) and value[index] != '"':
+        index += 2 if value[index] == "\\" else 1
+    return _YAML_ESCAPE.sub(_unescape, value[1:index])
+
+
+def _unescape(match: re.Match[str]) -> str:
+    code = match.group(1)
+    if code[0] in "xuU" and len(code) > 1:
+        return chr(int(code[1:], 16))
+    return _YAML_ESCAPES.get(code, match.group(0))
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -189,10 +243,14 @@ def object_uuids(kinds: Sequence[str] = tuple(OBJECT_FOLDERS)) -> Source:
         seen: set[str] = set()
         prefix = incomplete.lower()
         for entry in iter_objects(workspace_root(ctx), _selected_kinds(ctx, kinds)):
-            if not entry.uuid or entry.uuid in seen or not entry.uuid.lower().startswith(prefix):
+            uuid = entry.uuid
+            # An unreadable or hand-mangled header is never offered as a UUID.
+            if not uuid or not _UUID.match(uuid) or uuid in seen:
                 continue
-            seen.add(entry.uuid)
-            yield entry.uuid, f"{entry.name or entry.path.name} ({entry.kind})"
+            if not uuid.lower().startswith(prefix):
+                continue
+            seen.add(uuid)
+            yield uuid, f"{entry.name or entry.path.name} ({entry.kind})"
 
     return source
 
@@ -204,25 +262,23 @@ def object_files(kinds: Sequence[str] = tuple(OBJECT_FOLDERS)) -> Source:
     which ``--file`` also accepts. When the typed text has no slash and no
     path starts with it, bare file names are matched instead, which
     ``--file`` accepts too. No match at all leaves the shell to complete
-    file names itself.
+    file names itself. Paths are matched first, and only the matches' headers
+    are read, for their names.
     """
 
     def source(ctx: Any, incomplete: str) -> list[Candidate]:
         # Resolved once: the object paths found under the root then need no resolving.
         root = workspace_root(ctx).resolve()
         cwd = Path.cwd().resolve()
-        entries = list(iter_objects(root, _selected_kinds(ctx, kinds)))
-        paths = [(_shown_path(entry.path, cwd, root), entry) for entry in entries]
+        paths = [path for _, path in iter_object_paths(root, _selected_kinds(ctx, kinds))]
         found = [
-            (shown, entry.name or "") for shown, entry in paths if shown.startswith(incomplete)
+            (shown, path)
+            for path in paths
+            if (shown := _shown_path(path, cwd, root)).startswith(incomplete)
         ]
-        if found or "/" in incomplete or os.sep in incomplete:
-            return found
-        return [
-            (entry.path.name, entry.name or "")
-            for entry in entries
-            if entry.path.name.startswith(incomplete)
-        ]
+        if not found and "/" not in incomplete and os.sep not in incomplete:
+            found = [(path.name, path) for path in paths if path.name.startswith(incomplete)]
+        return [(shown, read_header(path)[1] or "") for shown, path in found]
 
     return source
 
@@ -390,16 +446,29 @@ def _shell_complete(source: Source) -> Callable[[Any, Any, str], list[Any]]:
     def complete(ctx: Any, param: Any, incomplete: str) -> list[Any]:
         from typer._click.shell_completion import CompletionItem
 
+        bash = os.environ.get(COMPLETE_ENV) == "complete_bash"
         try:
             return [
-                CompletionItem(value, help=help_text or None)
+                CompletionItem(bash_word(value) if bash else value, help=help_text or None)
                 for value, help_text in source(ctx, incomplete or "")
+                # A line break cannot be escaped: bash would split the candidate.
+                if not (bash and "\n" in value)
             ]
         except Exception:  # noqa: BLE001 -- a traceback in the shell helps nobody
             return []
 
     complete.__doc__ = source.__doc__
     return complete
+
+
+def bash_word(value: str) -> str:
+    """*value* with a backslash before each space and shell metacharacter.
+
+    Typer's bash script inserts candidates as they are, so a path with a
+    space would otherwise reach the command as several arguments. zsh and
+    fish quote candidates themselves.
+    """
+    return "".join(char if _BASH_PLAIN.fullmatch(char) else f"\\{char}" for char in value)
 
 
 def attach(command: Any, path: str) -> Any:
