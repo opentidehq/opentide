@@ -304,11 +304,21 @@ _CHANGE = {
         _envelope(command="validate", would_fix=[_FIXED], diff="--- a/x\n+++ b/x\n"),
         # deploy plan, generate steps and the setup repo scaffold (#643)
         _envelope(command="deploy", changes=[_CHANGE]),
+        # A platform with no [[tenants]] yet plans its rules with a null tenant.
+        _envelope(command="deploy", changes=[{**_CHANGE, "tenant": None, "action": "upsert"}]),
         _envelope(command="generate", steps=[_STEP]),
         _envelope(command="generate exports navigator", target="navigator", steps=[_STEP]),
         _envelope(command="setup repo", name="detections", scaffolded=True),
     ],
-    ids=["fix", "fix-dry-run", "deploy-changes", "generate-steps", "export-steps", "repo"],
+    ids=[
+        "fix",
+        "fix-dry-run",
+        "deploy-changes",
+        "deploy-changes-no-tenant",
+        "generate-steps",
+        "export-steps",
+        "repo",
+    ],
 )
 def test_keys_from_pull_requests_not_merged_yet_are_declared(document: dict[str, Any]) -> None:
     assert document_problems(document) == []

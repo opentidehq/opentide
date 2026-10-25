@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -25,11 +25,11 @@ class PlannedChange(ResultModel):
     """What a deploy does, or would do, to one rule on one tenant (#643)."""
 
     platform: str
-    tenant: str
+    tenant: str | None = Field(description="null when the platform has no tenant configured yet")
     uuid: str
     name: str
     status: str
-    action: str = Field(description="create, update, upsert, disable or delete")
+    action: Literal["create", "update", "upsert", "disable", "delete"]
 
 
 class DeployResult(CommandDocument):
