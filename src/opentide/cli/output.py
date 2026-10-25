@@ -215,7 +215,11 @@ def document_text(document: Mapping[str, Any]) -> str:
 
 
 def print_document(document: Mapping[str, Any]) -> None:
-    """Write one finished JSON document to stdout."""
+    """Write one finished JSON document to stdout, ending in exactly one newline.
+
+    ``dump_json_text`` already appends the newline; ``print`` would add a
+    second, which a JSON-lines reader sees as an empty record.
+    """
     sys.stdout.write(document_text(document))
     sys.stdout.flush()
 

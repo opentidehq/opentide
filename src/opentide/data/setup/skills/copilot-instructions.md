@@ -23,7 +23,7 @@ opentide generate
 ## Running opentide
 
 - Run `opentide --json <command>`: stdout is one JSON document. `opentide --json commands` lists every command and option.
-- Branch on the exit code, then on `failure.code`: `0` success, `1` failure (`issues_found`, `command_failed`), `2` usage error or a check that could not run, `3` partial `share`.
+- Branch on the exit code first: `0` success, `1` failure, `2` usage error or a check that could not run, `3` partial `share`. Then read `failure.code` for the detail, for example `issues_found` or `command_failed`.
 - Apply each finding's `fix.edits`: replace the text from (`line`, `column`) up to (`end_line`, `end_column`), 1-based, with `replacement`. `safe: true` edits only respell the same word; check the others against `help`. Run `opentide explain <code>` for a finding without a fix.
 - Follow `next_actions` (`{command, reason}`).
 - Loop: draft, then `opentide --json validate --file <file>` until `ok` is `true`, then `opentide --json deploy --dry-run --strategy PREVIEW --all`. People review, merge and deploy.

@@ -152,6 +152,22 @@ def test_usage_errors_print_one_json_document(
     assert result.stderr == ""
 
 
+@pytest.mark.parametrize(
+    ("argv", "exit_code"),
+    [(("--json", "valdate"), 2), (("--json", "info"), 0)],
+    ids=["usage-error", "result"],
+)
+def test_a_json_document_ends_with_exactly_one_newline(
+    tmp_path: Path, argv: tuple[str, ...], exit_code: int
+) -> None:
+    """A trailing blank line reads as an empty record to a JSON-lines consumer."""
+    result = _invoke("--repo", str(tmp_path), *argv)
+    assert result.exit_code == exit_code, result.output
+    assert result.stdout.endswith("}\n")
+    assert not result.stdout.endswith("\n\n")
+    _document(result)
+
+
 def test_usage_error_in_plain_mode_is_an_error_line(tmp_path: Path) -> None:
     result = _invoke("--repo", str(tmp_path), "valdate")
     assert result.exit_code == 2

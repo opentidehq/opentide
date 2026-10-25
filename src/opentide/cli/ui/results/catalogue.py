@@ -239,11 +239,20 @@ class CommandsSummary(ResultModel):
     groups: int = 0
 
 
+class EnvironmentVariable(ResultModel):
+    name: str
+    meaning: str
+
+
 class CommandsResult(CommandDocument):
     """``opentide commands``: the command tree, with each command's output schema."""
 
     program: str
+    version: str = Field(description="The installed opentide version")
     global_options: list[OptionInfo]
+    environment: list[EnvironmentVariable] = Field(
+        description="Variables that change every command but are not options"
+    )
     commands: list[CommandInfo]
     defs: dict[str, Any] = Field(
         alias="$defs", description="The schemas each output_schema refers to"

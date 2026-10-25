@@ -166,6 +166,8 @@ class LazyTyperGroup(TyperGroup):
         panel: dict[str, Any] = {}
         if spec.rich_help_panel:
             panel["rich_help_panel"] = spec.rich_help_panel
+        if spec.epilog:
+            panel["epilog"] = spec.epilog
         if isinstance(target, typer.Typer):
             holder.add_typer(target, name=spec.name, **panel)
         else:

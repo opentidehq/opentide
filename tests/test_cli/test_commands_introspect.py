@@ -257,3 +257,55 @@ def test_commands_json_imports_no_registry() -> None:
     )
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout)["command"] == "commands"
+
+
+def test_document_names_the_version_and_the_environment(tree: dict) -> None:
+    from opentide import __version__
+    from opentide.cli.ui.mode import AGENT_VARIABLES
+
+    assert tree["version"] == __version__
+    names = [entry["name"] for entry in tree["environment"]]
+    assert names[:4] == ["OPENTIDE_OUTPUT", "OPENTIDE_DEBUG", "NO_COLOR", "OPENTIDE_JSON_INDENT"]
+    assert set(AGENT_VARIABLES) <= set(names)
+    assert all(entry["meaning"] for entry in tree["environment"])
+
+
+@pytest.mark.parametrize(
+    ("path", "name", "bad_argv"),
+    [
+        ("validate", "object_type", ["validate", "--type", "rulez"]),
+        ("deploy", "strategy", ["deploy", "--dry-run", "--all", "--strategy", "STAGINGG"]),
+        ("info", "section", ["info", "rulez"]),
+    ],
+)
+def test_choices_the_command_checks_itself_are_listed(
+    tree: dict, path: str, name: str, bad_argv: list[str]
+) -> None:
+    """The listed values are the ones the command names when it refuses another."""
+    entry = _entry(tree, path)
+    (param,) = [item for item in entry["options"] + entry["arguments"] if item["name"] == name]
+    assert param["choices"]
+    result = runner.invoke(app, ["--json", *bad_argv], env=_ENV)
+    assert result.exit_code == 2, result.output
+    message = json.loads(result.stdout)["failure"]["message"]
+    for value in param["choices"]:
+        assert value in message, (value, message)
+
+
+def test_option_help_has_no_rich_escapes(tree: dict) -> None:
+    helps = [
+        option["help"]
+        for entry in tree["commands"]
+        for option in entry["options"]
+        if option["help"]
+    ]
+    assert not [text for text in helps if "\\[" in text]
+    skip = _option(_entry(tree, "deploy"), "--skip-unconfigured")
+    assert "[[tenants]]" in skip["help"]
+
+
+def test_commands_has_a_short_summary_and_an_examples_epilog(tree: dict) -> None:
+    entry = _entry(tree, "commands")
+    assert entry["summary"] == "List every command and option, for agents"
+    assert len(entry["summary"]) <= 60
+    assert entry["example"] == "opentide commands"

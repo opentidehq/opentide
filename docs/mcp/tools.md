@@ -122,7 +122,7 @@ ATT&CK coverage analysis with gap identification. Use it to answer "what do we d
 | `technique` | string | `""` | When set, return coverage for that technique only |
 | `tactic` | string | `""` | Echoed as `tactic_filter` when no technique is set; **does not filter** the matrix today |
 
-Coverage reads the same technique locations as `opentide info coverage --technique`:
+Coverage reads the same technique locations as `opentide info coverage --technique <id>`:
 top-level `techniques`, `tags.techniques`, `tags.attack`, and `threat.att&ck`.
 
 Matching is case-insensitive, and a parent technique covers its sub-techniques:
@@ -174,14 +174,14 @@ Validate a single rule against its schema and cross-object checks.
     {
       "tool": "deploy_rule",
       "arguments": { "uuid": "00000000-0000-4000-8003-000000000001", "platform": "sentinel", "dry_run": true },
-      "command": "opentide --json deploy --dry-run --platform sentinel",
+      "command": "opentide --json deploy --dry-run --strategy PREVIEW --all --platform sentinel",
       "reason": "preview the sentinel deployment; nothing is sent"
     }
   ]
 }
 ```
 
-`errors` and `warnings` are strings. `issues` are the report's issues with the [diagnostic fields](#diagnostic-fields), as `validation_report` returns them. A rule that fails points `next_actions` at `explain` for each error code (three at most) and then at `validate_rule` again; a valid rule points at a dry-run `deploy_rule` for each platform it has a configuration block for (the CLI's `deploy --dry-run` previews the rules the last commit changed, as it has no `--uuid`). An unknown UUID points at `search`.
+`errors` and `warnings` are strings. `issues` are the report's issues with the [diagnostic fields](#diagnostic-fields), as `validation_report` returns them. A rule that fails points `next_actions` at `explain` for each error code (three at most) and then at `validate_rule` again; a valid rule points at a dry-run `deploy_rule` for each platform it has a configuration block for, unless its status there maps to `INERT`. The `command` passes the `--strategy` values that deploy the rule's status (`PREVIEW` for a `STAGING` rule, `RELEASE` for a `PRODUCTION` one) and `--all`, because the CLI has no `--uuid`: it previews every rule those strategies deploy, this one among them. An unknown UUID points at `search` with an empty query, which lists every rule with its title (the `command`, `opentide --json info rules`, lists UUIDs only).
 
 ## validation_report
 
@@ -290,7 +290,7 @@ One cause is one issue, here and in `validate_rule`: a dangling reference (`dete
 
 ## validate_query
 
-Tenant query check, the same path as `opentide validate query --live`.
+Tenant query check, the same path as `opentide validate query --platform <platform> --live`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -314,7 +314,7 @@ cannot reach is a failed live check.
       "tool": "validate_query",
       "arguments": { "query": "SecurityEvent | where Account == \"oops", "platform": "sentinel", "live": true },
       "command": "opentide --json validate query --platform sentinel --live",
-      "reason": "check the catalogue's sentinel rules against the tenant"
+      "reason": "check the catalogue's sentinel rules: this contacts the sentinel tenant with the configured credentials, so ask a person first"
     }
   ]
 }
@@ -332,7 +332,7 @@ cannot reach is a failed live check.
 }
 ```
 
-Supported: `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud`.
+Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set). The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 
