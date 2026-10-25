@@ -203,8 +203,8 @@ def test_validate_failure_emits_json_before_exit() -> None:
         result = runner.invoke(app, ["--json", "validate"])
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
-    assert payload["ok"] is False
-    assert "report" in payload
+    assert payload["exit_code"] == 1
+    assert payload["report"]["ok"] is False
 
 
 def test_validate_query_supported_platform() -> None:
