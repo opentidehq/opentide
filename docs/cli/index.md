@@ -76,7 +76,7 @@ Commands set a process exit code so CI can gate without parsing output: `0` succ
 An agent in a shell drives the same commands as a person. Four rules cover it, and `opentide setup skills` writes them into `AGENTS.md`, `CLAUDE.md` and `.github/copilot-instructions.md`:
 
 1. Run `opentide --json <command>`. stdout is one [JSON document](./json-output.md) and nothing else.
-2. Branch on the exit code, then on `failure.code` (`issues_found`, `usage_invalid_choice`, `no_tenant_reached`, …). A usage error carries the closest valid value in `failure.suggestion`.
+2. Branch on the exit code first, then read `failure.code` for the detail, for example `issues_found`, `usage_invalid_choice` or `no_tenant_reached`. A usage error carries the closest valid value in `failure.suggestion`.
 3. Apply each finding's `fix`: every edit replaces the text from (`line`, `column`) up to (`end_line`, `end_column`), 1-based, with `replacement`. `safe: true` edits only respell the same word and can be applied as they are; check the others against `help`. For a finding with no fix, `opentide explain <code>` says what it means and how to fix it.
 4. Follow `next_actions`, each a `{command, reason}`.
 
@@ -93,6 +93,7 @@ opentide --json commands
 ```json illustrative
 {
   "program": "opentide",
+  "version": "0.17.2",
   "global_options": [
     {
       "name": "repo",
@@ -142,12 +143,14 @@ opentide --json commands
 
 | Key | Meaning |
 |-----|---------|
+| `version` | The installed opentide version: key a cached copy of the tree on it. |
 | `global_options` | The root options (`--repo`, `--json`, …). `--json`, `--no-color`, `--debug` and `--quiet` may also follow the command. |
+| `environment` | `[{name, meaning}]`: variables that change every command but are not options: `OPENTIDE_OUTPUT`, `OPENTIDE_DEBUG`, `NO_COLOR` and the agent-detection variables (`AI_AGENT`, `CLAUDECODE`, …). |
 | `commands` | Flat and depth-first, in `--help` order. `path` is the words to type; a group's `subcommands` are the entries whose path extends it. Hidden commands and options are left out. |
 | `runs_alone` | `false` for a group that only prints its help (`opentide mcp`): run one of its subcommands. |
-| `options[].type` | `string`, `integer`, `number`, `boolean`, `choice` (with `choices`), `path`, … |
+| `options[].type` | `string`, `integer`, `number`, `boolean`, `choice` (with `choices`), `path`, … A `string` the command checks itself lists its values in `choices` too: `validate --type`, `deploy --strategy`, `info`'s section. `share --target` takes the configured targets, so it has none. |
 | `options[].envvars` | Environment variables that set the option. |
-| `example` | A command line to paste: the first example in the command's `--help`, or the command with its required arguments and options filled in. |
+| `example` | The first example in the command's `--help`. A command whose help has none yet gets a placeholder: the command with its required arguments and options filled in. A placeholder names the command but may not run as it is (`opentide deploy` still needs `--strategy`). |
 
 Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 49 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
 

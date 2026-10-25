@@ -139,7 +139,10 @@ def test_clean_rule_points_at_a_dry_run_deploy(tide_corpus_repo: Path) -> None:
         {
             "tool": "deploy_rule",
             "arguments": {"uuid": _UUID, "platform": "sentinel", "dry_run": True},
-            "command": "opentide --json deploy --dry-run --platform sentinel",
+            # The corpus rule is STAGING on sentinel, which a PREVIEW run deploys.
+            "command": (
+                "opentide --json deploy --dry-run --strategy PREVIEW --all --platform sentinel"
+            ),
             "reason": "preview the sentinel deployment; nothing is sent",
         }
     ]
@@ -151,7 +154,11 @@ def test_validate_rule_for_a_missing_rule_points_at_search(tide_corpus_repo: Pat
 
     assert payload["valid"] is False
     assert payload["errors"] == [f"Rule {missing} not found"]
-    assert payload["next_actions"][0]["tool"] == "search"
+    (action,) = payload["next_actions"]
+    assert action["tool"] == "search"
+    assert action["arguments"] == {"query": "", "type": "rule"}
+    # An empty query lists every rule with its title.
+    assert tools.tool_search(**action["arguments"])
 
 
 def test_explain_returns_the_cli_page() -> None:
@@ -196,7 +203,10 @@ def test_validate_query_refusal_points_at_the_live_check() -> None:
             "tool": "validate_query",
             "arguments": {"query": "SecurityEvent", "platform": "sentinel", "live": True},
             "command": "opentide --json validate query --platform sentinel --live",
-            "reason": "check the catalogue's sentinel rules against the tenant",
+            "reason": (
+                "check the catalogue's sentinel rules: this contacts the sentinel tenant "
+                "with the configured credentials, so ask a person first"
+            ),
         }
     ]
 
@@ -212,3 +222,16 @@ def test_server_instructions_carry_the_tagline_and_workflow() -> None:
     for step in ("search", "validation_report", "explain(code)", "dry_run true"):
         assert step in INSTRUCTIONS
     assert "People review and merge" in INSTRUCTIONS
+
+
+def test_validate_query_description_lists_every_query_platform() -> None:
+    import asyncio
+
+    from opentide.mcp_server.constants import QUERY_VALIDATION_PLATFORMS
+    from opentide.mcp_server.server import mcp
+
+    (tool,) = [tool for tool in asyncio.run(mcp.list_tools()) if tool.name == "validate_query"]
+    assert "elastic" in QUERY_VALIDATION_PLATFORMS
+    for platform in QUERY_VALIDATION_PLATFORMS:
+        assert platform in (tool.description or ""), platform
+    assert "ask a person first" in (tool.description or "")

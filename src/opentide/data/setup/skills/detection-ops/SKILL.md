@@ -60,7 +60,7 @@ opentide --json validate --file objects/rules/<rule>.yaml
 opentide explain <code>
 ```
 
-- Branch on the exit code, then on `failure.code`: `0` success; `1` failure (`issues_found`, `command_failed`); `2` usage error (`usage_*`, with `failure.suggestion`) or a check that could not run (`no_tenant_reached`, `needs_human_decision`); `3` partial `share`.
+- Branch on the exit code first: `0` success; `1` failure; `2` usage error or a check that could not run; `3` partial `share`. Then read `failure.code` for the detail, for example `issues_found` or `command_failed` on `1`, `usage_invalid_choice` (with `failure.suggestion`) or `no_tenant_reached` on `2`.
 - Each finding (`report.issues` from `validate`, `findings` from `lint`) has `code`, `path`, `line`, `column`, `end_column` (1-based, end exclusive), `help` and `fix`. Each of `fix.edits` replaces the text from (`line`, `column`) up to (`end_line`, `end_column`) with `replacement`; apply `safe: true` edits as they are (they only respell the same word) and check the others against `help`. For a finding with no fix, `opentide explain <code>` says what it means and how to fix it.
 - Follow `next_actions`: `[{command, reason}]`.
 - Loop: search (`opentide --json info coverage --technique <id>`), draft, `opentide --json validate --file <file>` until `ok` is `true`, then `opentide --json deploy --dry-run --strategy PREVIEW --all`. People review, merge and deploy.

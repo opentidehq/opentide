@@ -16,6 +16,7 @@ from typing import TextIO
 from mcp.server.fastmcp import FastMCP
 
 from opentide.mcp_server import resources as res
+from opentide.mcp_server.constants import QUERY_VALIDATION_PLATFORMS
 from opentide.mcp_server.tools import (
     tool_coverage,
     tool_deploy_rule,
@@ -56,10 +57,12 @@ a code means. Repeat until ok is true.
 
 People review and merge changes and run real deployments. Call deploy_rule with \
 dry_run false only when a person asks for it. validate_query with live true \
-contacts the tenant. run_query is not implemented and never returns rows.
+contacts the tenant with the configured credentials: ask first. run_query is not \
+implemented and never returns rows.
 
 Results may carry next_actions: [{{tool, arguments, command, reason}}], the next \
-call to make (command is the same step as an opentide command line).\
+call to make (command is the same step as an opentide command line). Read the \
+reason before following one.\
 """
 
 mcp = FastMCP("opentide", instructions=INSTRUCTIONS)
@@ -94,8 +97,9 @@ def get_chaining(uuid: str) -> dict:
     """Threat -> objective -> rule lineage of any object, before you edit or add one.
 
     Returns {uuid, found, type, graph, lineage: {threats, objectives, rules},
-    chaining_index}. graph is {relation: [threat uuids]} for a threat with
-    threat.chaining entries. An unknown UUID returns found false and graph {}.
+    chaining_index}. graph is the lineage, or {relation: [threat uuids]} for a
+    threat with threat.chaining entries. An unknown UUID returns only {uuid,
+    found: false, graph: {}}.
     """
     return tool_get_chaining(uuid)
 
@@ -117,7 +121,8 @@ def validate_rule(uuid: str) -> dict:
 
     Returns {valid, errors, warnings, issues, next_actions}. errors and warnings
     are strings; issues are structured like validation_report's. Prefer
-    validation_report, which also takes a file path and reports warnings as issues.
+    validation_report, which also takes a file path and returns warnings as
+    structured entries.
     """
     return tool_validate_rule(uuid)
 
@@ -159,15 +164,21 @@ def explain(code: str = "") -> dict:
     return tool_explain(code)
 
 
-@mcp.tool()
-def validate_query(query: str, platform: str, live: bool = False) -> dict:
-    """Check the catalogue's rules for a platform against the tenant (live true only).
+#: The platform list comes from the constant the tool checks, so the two cannot disagree.
+VALIDATE_QUERY_DESCRIPTION = f"""\
+Check the catalogue's rules for a platform against the tenant (live true only).
 
-    live false refuses without a check: {valid: null, supported: true, status:
-    "failed"}. live true contacts the tenant and validates the catalogue rules
-    for platform, not query. Platforms: sentinel, defender_for_endpoint, splunk,
-    sentinel_one, carbon_black_cloud; others return supported false.
-    """
+live false refuses without a check: {{valid: null, supported: true, status:
+"failed"}}. live true contacts the tenant with the configured credentials and
+validates the catalogue rules for platform, not query; ask a person first.
+Platforms: {", ".join(sorted(QUERY_VALIDATION_PLATFORMS))}; others return
+supported false.\
+"""
+
+
+@mcp.tool(description=VALIDATE_QUERY_DESCRIPTION)
+def validate_query(query: str, platform: str, live: bool = False) -> dict:
+    """See :data:`VALIDATE_QUERY_DESCRIPTION`, the description agents read."""
     return tool_validate_query(query, platform, live=live)
 
 

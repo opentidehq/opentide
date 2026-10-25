@@ -88,7 +88,7 @@ After setup, point your agent at the generated `AGENTS.md` at the repo root — 
 `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md` and the bundled skills teach an agent with a shell the same contract the [CLI reference](../../cli/index.md#coding-agents) describes:
 
 - Run `opentide --json <command>`; stdout is one JSON document. `opentide --json commands` lists every command, option and an example.
-- Branch on the exit code, then on `failure.code` (`issues_found`, `usage_invalid_choice`, `no_tenant_reached`, …).
+- Branch on the exit code first, then read `failure.code` for the detail, for example `issues_found`, `usage_invalid_choice` or `no_tenant_reached`.
 - Apply each finding's `fix` (`safe: true` edits only respell the same word; check the others against `help`), and run `opentide explain <code>` for a finding without one.
 - Follow `next_actions`.
 - Work in a loop: search, draft, validate until clean, preview the deployment with `--dry-run`. People review and merge the change, and run real deployments.

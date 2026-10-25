@@ -9,7 +9,12 @@ from opentide.cli.output import emit_success
 
 
 def commands_cmd(ctx: typer.Context) -> None:
-    """List every command with its options, defaults and an example. Use --json for the tree."""
+    """List every command and option, for agents
+
+    Each command comes with its arguments, options (types, choices, defaults,
+    environment variables) and an example. Add --json for the whole tree in one
+    document.
+    """
     from opentide.cli.services.introspect import command_tree, tree_lines
 
     cli = get_context(ctx)

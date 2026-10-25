@@ -2,8 +2,8 @@
 
 Walks the root group the way Click would run it: each root command's module
 is imported once, through :meth:`LazyTyperGroup.load`, and nothing else is.
-Hidden commands and options are left out. Every entry carries an example to
-paste: the first one its ``--help`` shows, or one built from its required
+Hidden commands and options are left out. Every entry carries an example:
+the first one its ``--help`` shows, or a placeholder built from its required
 arguments and options.
 """
 
@@ -29,17 +29,54 @@ _TYPE_NAMES = {"str": "string", "text": "string", "int": "integer", "float": "nu
 _EPILOG_EXAMPLE = re.compile(r"^\s*(?:\[[^\]]*\])*\$\s+(opentide\b.*?)(?:\[/[^\]]*\])*\s*$")
 
 
+def _app_choices() -> dict[tuple[str, str], tuple[str, ...]]:
+    """Values a command checks itself, for parameters Click types as plain strings.
+
+    ``(command path, parameter name)`` → the values the command accepts.
+    ``share --target`` is left out: its values are the configured targets.
+    ``tests/test_cli/test_commands_introspect.py`` checks each against the command.
+    """
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+
+    return {
+        ("validate", "object_type"): ("rule", "threat", "objective"),
+        ("deploy", "strategy"): tuple(strategy.name for strategy in DEPLOYABLE_STRATEGIES),
+        ("info", "section"): ("rules", "threats", "objectives", "coverage"),
+    }
+
+
+def environment() -> list[dict[str, str]]:
+    """Environment variables that change every command but are not options."""
+    from opentide.cli.ui.mode import AGENT_VARIABLES, OUTPUT_ENV_VALUES
+
+    modes = "|".join(sorted(OUTPUT_ENV_VALUES))
+    return [
+        {"name": "OPENTIDE_OUTPUT", "meaning": f"Output mode: {modes}"},
+        {"name": "OPENTIDE_DEBUG", "meaning": "1 for debug logging, like --debug"},
+        {"name": "NO_COLOR", "meaning": "Any value turns colour off, like --no-color"},
+        *(
+            {"name": name, "meaning": "Set by a coding agent: selects agent output mode"}
+            for name in AGENT_VARIABLES
+        ),
+    ]
+
+
 def command_tree(root: Any, *, program: str = "opentide") -> dict[str, Any]:
     """The payload of ``opentide commands``: global options and every visible command.
 
     *root* is the ``opentide`` group. ``commands`` is flat and depth-first, in
     the order ``--help`` lists them; ``path`` and ``subcommands`` give the tree.
     """
-    entries = list(_walk(root, ()))
+    from opentide import __version__
+
+    choices = _app_choices()
+    entries = list(_walk(root, (), choices))
     groups = sum(1 for entry in entries if entry["group"])
     return {
         "program": program,
+        "version": __version__,
         "global_options": [_option(param, root=True) for param in _visible_options(root)],
+        "environment": environment(),
         "commands": entries,
         "_summary": {"commands": len(entries), "groups": groups},
     }
@@ -62,23 +99,31 @@ def _children(group: Any) -> Iterator[tuple[str, Any]]:
             yield name, command
 
 
-def _walk(group: Any, prefix: tuple[str, ...]) -> Iterator[dict[str, Any]]:
+_AppChoices = Mapping[tuple[str, str], tuple[str, ...]]
+
+
+def _walk(group: Any, prefix: tuple[str, ...], choices: _AppChoices) -> Iterator[dict[str, Any]]:
     for name, command in _children(group):
         path = (*prefix, name)
-        entry = _command(command, path)
+        entry = _command(command, path, choices)
         yield entry
         if entry["group"]:
-            yield from _walk(command, path)
+            yield from _walk(command, path, choices)
 
 
 def _is_group(command: Any) -> bool:
     return isinstance(getattr(command, "commands", None), Mapping)
 
 
-def _command(command: Any, path: tuple[str, ...]) -> dict[str, Any]:
+def _command(command: Any, path: tuple[str, ...], choices: _AppChoices) -> dict[str, Any]:
     group = _is_group(command)
     subcommands = [name for name, _ in _children(command)] if group else []
     help_text = inspect.cleandoc(command.help or "")
+    key = " ".join(path)
+
+    def checked(param: Any) -> tuple[str, ...] | None:
+        return choices.get((key, str(param.name)))
+
     return {
         "path": " ".join(path),
         "name": path[-1],
@@ -90,8 +135,10 @@ def _command(command: Any, path: tuple[str, ...]) -> dict[str, Any]:
         "runs_alone": not group or bool(getattr(command, "invoke_without_command", False)),
         "subcommands": subcommands,
         "deprecated": bool(getattr(command, "deprecated", False)),
-        "arguments": [_argument(param) for param in _arguments(command)],
-        "options": [_option(param) for param in _visible_options(command)],
+        "arguments": [_argument(param, checked(param)) for param in _arguments(command)],
+        "options": [
+            _option(param, app_choices=checked(param)) for param in _visible_options(command)
+        ],
         "example": example(command, path),
     }
 
@@ -131,11 +178,15 @@ def _type_name(param: Any) -> str:
     return _TYPE_NAMES.get(name, name)
 
 
-def _choices(param: Any) -> list[Any] | None:
-    choices = getattr(param.type, "choices", None)
+def _choices(param: Any, app_choices: tuple[str, ...] | None = None) -> list[Any] | None:
+    choices = getattr(param.type, "choices", None) or app_choices
     if not choices:
         return None
     return [_json_value(choice) for choice in choices]
+
+
+def _help(param: Any) -> str | None:
+    return _unescape(" ".join(str(getattr(param, "help", None) or "").split())) or None
 
 
 def _json_value(value: Any) -> Any:
@@ -162,43 +213,46 @@ def _envvars(param: Any, *, root: bool) -> list[str]:
     return found
 
 
-def _option(param: Any, *, root: bool = False) -> dict[str, Any]:
+def _option(
+    param: Any, *, root: bool = False, app_choices: tuple[str, ...] | None = None
+) -> dict[str, Any]:
     flag = _type_name(param) == "boolean"
     return {
         "name": param.name,
         "flags": list(param.opts),
         "secondary_flags": list(param.secondary_opts),
         "type": _type_name(param),
-        "choices": _choices(param),
+        "choices": _choices(param, app_choices),
         "default": _json_value(param.default),
         "required": bool(param.required),
         "multiple": bool(getattr(param, "multiple", False)),
         "is_flag": flag,
         "envvars": _envvars(param, root=root),
-        "help": " ".join(str(getattr(param, "help", None) or "").split()) or None,
+        "help": _help(param),
     }
 
 
-def _argument(param: Any) -> dict[str, Any]:
+def _argument(param: Any, app_choices: tuple[str, ...] | None = None) -> dict[str, Any]:
     nargs = int(getattr(param, "nargs", 1))
     return {
         "name": param.name,
         "type": _type_name(param),
-        "choices": _choices(param),
+        "choices": _choices(param, app_choices),
         "default": _json_value(param.default),
         "required": bool(param.required),
         "multiple": nargs != 1,
         "envvars": _envvars(param, root=False),
-        "help": " ".join(str(getattr(param, "help", None) or "").split()) or None,
+        "help": _help(param),
     }
 
 
 def example(command: Any, path: tuple[str, ...], *, program: str = "opentide") -> str:
-    """A command line to paste: the first example its help shows, or one built here.
+    """The first example its help shows, or a placeholder built here.
 
-    The built one fills each required argument and option with its first
-    choice or a ``<name>`` placeholder. A group that only prints its help
-    gives the example of its first subcommand.
+    The placeholder is the command with each required argument and option
+    filled with its first choice or ``<name>``. It names the command but may
+    not run: options a command requires itself (``deploy --strategy``) are not
+    filled. A group that only prints its help gives its first subcommand's.
     """
     for line in str(getattr(command, "epilog", None) or "").splitlines():
         match = _EPILOG_EXAMPLE.match(line)

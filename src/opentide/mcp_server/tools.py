@@ -96,6 +96,28 @@ def _rule_platforms(uuid: str) -> list[str]:
     return [name for name in configs if name in Opentide.Platforms]
 
 
+def _run_strategies(rule: Any, platform: str) -> list[str]:
+    """The ``--strategy`` values whose run deploys *rule* to *platform*; none for ``INERT``.
+
+    The status is the platform block's, as a real deploy reads it. A status
+    the deployment configuration does not define falls back to ``PREVIEW``,
+    so the command still runs.
+    """
+    from opentide.deployment.utils import check_status
+    from opentide.models.deployment_enums import deployed_by
+
+    block = getattr(getattr(rule, "configurations", None), platform, None)
+    status = str(getattr(block, "status", None) or getattr(rule, "status", ""))
+    defined = {item.name for item in Opentide.Configurations.Deployment.statuses}
+    if status not in defined:
+        return ["PREVIEW"]
+    try:
+        rule_strategy = check_status(status)
+    except (KeyError, TypeError, ValueError):
+        return ["PREVIEW"]
+    return [strategy.name for strategy in deployed_by(rule_strategy)]
+
+
 def tool_validate_rule(uuid: str) -> dict[str, Any]:
     ensure_initialised()
     from opentide.validation.scope import ValidationScope
@@ -112,9 +134,12 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
             "next_actions": [
                 next_action(
                     "search",
-                    {"query": uuid, "type": "rule"},
-                    command="opentide info rules",
-                    reason="find the rule's UUID",
+                    {"query": "", "type": "rule"},
+                    command="opentide --json info rules",
+                    reason=(
+                        "list the catalogue's rules to find the UUID: search returns "
+                        "each rule's title, the command only the UUIDs"
+                    ),
                 )
             ],
         }
@@ -129,16 +154,23 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
     )
     actions = _validation_next_actions(diagnostics, again=again)
     if report.ok:
-        actions.extend(
-            next_action(
-                "deploy_rule",
-                {"uuid": uuid, "platform": platform, "dry_run": True},
-                # The CLI has no --uuid: it previews the rules the last commit changed.
-                command=f"opentide --json deploy --dry-run --platform {platform}",
-                reason=f"preview the {platform} deployment; nothing is sent",
+        for platform in _rule_platforms(uuid):
+            strategies = _run_strategies(rule, platform)
+            if not strategies:
+                continue  # INERT: no run deploys it
+            flags = " ".join(f"--strategy {name}" for name in strategies)
+            actions.append(
+                next_action(
+                    "deploy_rule",
+                    {"uuid": uuid, "platform": platform, "dry_run": True},
+                    # The CLI has no --uuid: --all previews every rule these
+                    # strategies deploy, this one among them.
+                    command=(
+                        f"opentide --json deploy --dry-run {flags} --all --platform {platform}"
+                    ),
+                    reason=f"preview the {platform} deployment; nothing is sent",
+                )
             )
-            for platform in _rule_platforms(uuid)
-        )
     return {
         "valid": report.ok,
         "errors": [issue.to_legacy_string() for issue in report.errors],
@@ -233,7 +265,11 @@ def tool_validate_query(query: str, platform: str, live: bool = False) -> dict[s
                     "validate_query",
                     {"query": query, "platform": platform, "live": True},
                     command=f"opentide --json validate query --platform {platform} --live",
-                    reason=f"check the catalogue's {platform} rules against the tenant",
+                    reason=(
+                        f"check the catalogue's {platform} rules: this contacts the "
+                        f"{platform} tenant with the configured credentials, so ask a "
+                        "person first"
+                    ),
                 )
             ],
         }
