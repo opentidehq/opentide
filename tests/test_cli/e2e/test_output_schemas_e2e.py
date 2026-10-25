@@ -71,6 +71,11 @@ CASES: list[tuple[str, tuple[str, ...]]] = [
     ("migrate vocab-scope", ("migrate", "vocab-scope")),
     ("share targets", ("share", "targets")),
     ("share preview", ("share", "preview")),
+    # Groups that only print their help print a document only for a usage error.
+    ("rules", ("rules", "bogus")),
+    ("migrate", ("migrate",)),
+    ("mcp", ("mcp", "bogus")),
+    ("generate extract", ("generate", "extract", "bogus")),
 ]
 
 
@@ -98,3 +103,22 @@ def test_a_document_that_breaks_its_schema_is_caught(
     document["summary"]["objects"] = "nine"
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(document, _schema_for(commands_document, "validate"))
+
+
+def test_a_hidden_command_usage_error_matches_command_error(
+    invoke_cli: Callable[..., Result],
+) -> None:
+    result = invoke_cli("deploy", "replay-state", "--bogus")
+    assert result.exit_code == 2
+    document = json.loads(result.stdout)
+    assert document["command"] == "deploy replay-state"
+    assert document["failure"]["code"] == "usage_unknown_option"
+    assert_matches_model(document)
+
+
+def test_mcp_start_prints_no_document_even_for_a_usage_error(
+    invoke_cli: Callable[..., Result],
+) -> None:
+    result = invoke_cli("mcp", "start", "--bogus")
+    assert result.exit_code == 2
+    assert result.stdout == ""

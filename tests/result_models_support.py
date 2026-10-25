@@ -45,6 +45,23 @@ def _undeclared(value: Any, path: str = "$") -> Iterator[str]:
             yield from _undeclared(item, f"{path}[{index}]")
 
 
+@cache
+def _is_group(path: str) -> bool:
+    """Whether *path* names a command group of the ``opentide`` app."""
+    import typer
+
+    from opentide.cli import app
+
+    command = typer.main.get_command(app)
+    ctx = typer.Context(command)
+    for word in path.split(" "):
+        get = getattr(command, "get_command", None)
+        command = get(ctx, word) if get is not None else None
+        if command is None:
+            return False
+    return callable(getattr(command, "get_command", None))
+
+
 def document_problems(document: Mapping[str, Any]) -> list[str]:
     """Why *document* does not match its command's model and schema; empty when it does."""
     import jsonschema
@@ -70,6 +87,9 @@ def document_problems(document: Mapping[str, Any]) -> list[str]:
             return [f"{command!r} does not carry the envelope:\n{exc}"]
         return []
     model = RESULT_MODELS.get(command)
+    if model is None and _is_group(command):
+        # A group that only prints its help prints a document only for a usage error.
+        model = CommandError
     if model is None:
         return [f"no result model for {command!r}: add it to RESULT_MODELS"]
     try:

@@ -90,11 +90,14 @@ def test_every_entry_has_the_documented_keys(tree: dict) -> None:
 
 
 def test_each_command_that_runs_names_its_output_schema(tree: dict) -> None:
-    """A $ref into the document's $defs; null for a group that only prints help."""
+    """A $ref into the document's $defs; CommandError alone for a group that only prints help."""
     for entry in tree["commands"]:
         schema = entry["output_schema"]
-        if not entry["runs_alone"] or entry["path"] == "mcp start":
-            assert schema is None, entry["path"]
+        if entry["path"] == "mcp start":
+            assert schema is None
+            continue
+        if not entry["runs_alone"]:
+            assert schema == {"$ref": "#/$defs/CommandError"}, entry["path"]
             continue
         refs = [option["$ref"] for option in schema["anyOf"]]
         assert refs[-1] == "#/$defs/CommandError", entry["path"]

@@ -71,8 +71,9 @@ def command_tree(root: Any, *, program: str = "opentide", schemas: bool = True) 
     *root* is the ``opentide`` group. ``commands`` is flat and depth-first, in
     the order ``--help`` lists them; ``path`` and ``subcommands`` give the tree.
     Each command's ``output_schema`` is the JSON Schema of its ``--json``
-    document, a ``$ref`` into ``$defs`` (``null`` for a group that only prints
-    its help, or a command with no model yet). *schemas* false leaves both
+    document, a ``$ref`` into ``$defs``: ``CommandError`` for a group that
+    only prints its help, ``null`` for ``mcp start`` or a command with no
+    model yet. *schemas* false leaves both
     out, for the human tree.
     """
     from opentide import __version__
@@ -91,7 +92,10 @@ def command_tree(root: Any, *, program: str = "opentide", schemas: bool = True) 
     if schemas:
         from opentide.cli.ui.results import output_schemas
 
-        found, defs = output_schemas([entry["path"] for entry in entries if entry["runs_alone"]])
+        found, defs = output_schemas(
+            [entry["path"] for entry in entries],
+            help_only=frozenset(entry["path"] for entry in entries if not entry["runs_alone"]),
+        )
         for entry in entries:
             entry["output_schema"] = found.get(entry["path"])
         payload["$defs"] = defs

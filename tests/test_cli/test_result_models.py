@@ -82,6 +82,43 @@ def test_every_registered_path_is_a_command() -> None:
         _click_command(path)
 
 
+def test_a_pending_command_is_not_a_command_yet() -> None:
+    """Merging a pending command fails here until it has a model and leaves the list."""
+    roots = {spec.name for spec in ROOT_COMMANDS}
+    assert roots.isdisjoint(PENDING_MODELS)
+
+
+def test_a_help_only_group_and_a_hidden_command_publish_command_error() -> None:
+    schemas, _ = output_schemas(
+        ["rules", "mcp", "mcp start", "deploy replay-state", "new"],
+        help_only=frozenset({"rules", "mcp"}),
+    )
+    error = {"$ref": "#/$defs/CommandError"}
+    assert schemas["rules"] == schemas["mcp"] == schemas["deploy replay-state"] == error
+    assert schemas["mcp start"] is None
+    assert schemas["new"] is None
+
+
+def test_a_help_only_group_document_is_checked_as_command_error() -> None:
+    failure = {
+        "code": "usage_unknown_command",
+        "message": "No such command 'bogus'.",
+        "argument": "bogus",
+        "suggestion": None,
+        "crash_log": None,
+    }
+    document = {
+        **_envelope(command="rules"),
+        "ok": False,
+        "status": "failed",
+        "error": failure["message"],
+        "exit_code": 2,
+        "failure": failure,
+    }
+    assert document_problems(document) == []
+    assert document_problems({**document, "records": []}) != []
+
+
 def test_a_pending_command_has_no_model() -> None:
     roots = {path.split(" ")[0] for path in RESULT_MODELS}
     assert roots.isdisjoint(PENDING_MODELS)
@@ -98,8 +135,8 @@ def test_every_schema_is_valid_json_schema() -> None:
 
 
 def test_a_path_with_no_model_has_no_schema() -> None:
-    schemas, _ = output_schemas(["mcp", "validate"])
-    assert schemas["mcp"] is None
+    schemas, _ = output_schemas(["mcp start", "validate"])
+    assert schemas["mcp start"] is None
     assert schemas["validate"] == {
         "anyOf": [{"$ref": "#/$defs/ValidateResult"}, {"$ref": "#/$defs/CommandError"}]
     }

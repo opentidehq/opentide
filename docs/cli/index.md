@@ -158,7 +158,7 @@ opentide --json commands
 | `options[].type` | `string`, `integer`, `number`, `boolean`, `choice` (with `choices`), `path`, … A `string` the command checks itself lists its values in `choices` too: `validate --type`, `deploy --strategy`, `info`'s section. `share --target` takes the configured targets, so it has none. |
 | `options[].envvars` | Environment variables that set the option. |
 | `example` | The first example in the command's `--help`. A command whose help has none yet gets a placeholder: the command with its required arguments and options filled in. A placeholder names the command but may not run as it is (`opentide deploy` still needs `--strategy`). |
-| `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. `null` for a group that only prints its help, and for `mcp start`, which prints JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
+| `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. A group that only prints its help prints a document only for a usage error (`opentide --json rules bogus`), so its schema is `CommandError`. `null` for `mcp start`, which prints JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
 | `$defs` | The schemas each `output_schema` refers to. |
 
 Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 49 commands`. Listing the tree imports every command's module once; it never loads the detection registry.

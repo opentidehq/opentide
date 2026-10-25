@@ -85,6 +85,8 @@ RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "deploy": DeployResult,
     "deploy migrate-state": MigrateStateResult,
     "deploy metadata": CommandError,
+    # Hands over to the replay script; only a usage error prints a document.
+    "deploy replay-state": CommandError,
     "setup": SetupResult,
     "setup repo": SetupRepoResult,
     "setup platforms": SetupPlatformsResult,
@@ -111,16 +113,22 @@ RESULT_MODELS: dict[str, type[CommandDocument]] = {
 }
 
 #: Root commands whose documents have no model yet, and the pull request that
-#: adds the command. Their subcommands are pending too.
+#: adds the command. Their subcommands are pending too. An entry is a to-do,
+#: not an exemption: ``tests/test_cli/test_result_models.py`` fails once the
+#: command is in ``ROOT_COMMANDS``, so the PR that merges it adds its model.
+#:
+#: New keys on commands that already have a model go in that model. The keys
+#: #643 (flow: deploy plan, generate steps, progress) and #646 (validate --fix
+#: and --watch) add are declared already, so either order of merge stays green.
 PENDING_MODELS: dict[str, str] = {
     "new": "#642",
     "doctor": "#642",
     "tui": "#639",
 }
 
-#: Commands that never print a JSON document: stdout is JSON-RPC, or the
-#: command hands over to another program.
-NO_DOCUMENT = frozenset({"mcp start", "deploy replay-state"})
+#: Commands that never print a JSON document, not even for a usage error:
+#: stdout is JSON-RPC.
+NO_DOCUMENT = frozenset({"mcp start"})
 
 
 def result_model(path: str) -> type[CommandDocument] | None:
@@ -128,12 +136,16 @@ def result_model(path: str) -> type[CommandDocument] | None:
     return RESULT_MODELS.get(path)
 
 
-def output_schemas(paths: list[str]) -> tuple[dict[str, dict[str, Any] | None], dict[str, Any]]:
+def output_schemas(
+    paths: list[str], *, help_only: frozenset[str] = frozenset()
+) -> tuple[dict[str, dict[str, Any] | None], dict[str, Any]]:
     """Each path's output schema as a ``$ref``, and the ``$defs`` they refer to.
 
     A command's document is either its own result or a :class:`CommandError`
     (a usage error, or an error with nothing else to say), so each schema is
-    ``anyOf`` the two. A path with no model gets ``None``.
+    ``anyOf`` the two. A group in *help_only* prints only a usage error
+    (``opentide --json rules bogus``), so its schema is ``CommandError``. A
+    pending path, or one that prints no document, gets ``None``.
     """
     models: list[type[BaseModel]] = [CommandError]
     for path in paths:
@@ -148,7 +160,9 @@ def output_schemas(paths: list[str]) -> tuple[dict[str, dict[str, Any] | None], 
     schemas: dict[str, dict[str, Any] | None] = {}
     for path in paths:
         model = RESULT_MODELS.get(path)
-        if model is None:
+        if model is None and path in help_only and path not in NO_DOCUMENT:
+            model = CommandError
+        if model is None or path.split(" ")[0] in PENDING_MODELS:
             schemas[path] = None
         elif model is CommandError:
             schemas[path] = dict(error_ref)
