@@ -19,6 +19,9 @@ class SetupFiles(ResultModel):
 class RepoFields(SetupFiles):
     platforms: list[str] | None = Field(None, description="Platforms enabled")
     platform_files: list[str] | None = Field(None, description="Platform configurations written")
+    # Added by #643 (flow), declared ahead so either merge order stays green.
+    name: str | None = Field(None, description="The repository name")
+    scaffolded: bool | None = Field(None, description="Whether the scaffold was written")
 
 
 class CiFields(RepoFields):

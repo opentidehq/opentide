@@ -26,12 +26,25 @@ class CheckVerdict(ResultModel):
     status: Literal["passed", "failed"]
 
 
+class FixedValue(ResultModel):
+    """One value a safe fix replaces."""
+
+    path: str
+    line: int
+    code: str
+    before: str
+    after: str
+
+
 class ValidateSummary(ResultModel):
     objects: int = Field(0, description="Objects checked")
     errors: int = 0
     warnings: int = 0
     files: int = Field(0, description="Files with an error")
     warning_files: int = Field(0, description="Files with a warning")
+    # From validate --fix (#646), declared ahead so either merge order stays green.
+    fixable: int = Field(0, description="Findings a safe fix resolves")
+    fixed: int = Field(0, description="With --fix: values replaced")
 
 
 class ValidateResult(CommandDocument):
@@ -45,6 +58,12 @@ class ValidateResult(CommandDocument):
     )
     check: str | None = Field(None, description="The check selected with --check")
     workspace: str | None = Field(None, description="The workspace that was validated")
+    # From validate --fix (#646).
+    fixed: list[FixedValue] | None = Field(None, description="With --fix: the values replaced")
+    would_fix: list[FixedValue] | None = Field(
+        None, description="With --fix --dry-run: the values --fix would replace"
+    )
+    diff: str | None = Field(None, description="With --fix --dry-run: a unified diff")
     summary: ValidateSummary
 
 

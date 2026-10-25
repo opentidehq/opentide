@@ -21,6 +21,17 @@ class RulePayload(ResultModel):
     error: str | None = None
 
 
+class PlannedChange(ResultModel):
+    """What a deploy does, or would do, to one rule on one tenant (#643)."""
+
+    platform: str
+    tenant: str
+    uuid: str
+    name: str
+    status: str
+    action: str = Field(description="create, update, upsert, disable or delete")
+
+
 class DeployResult(CommandDocument):
     """``opentide deploy``: the plan, and what was deployed or would be."""
 
@@ -39,6 +50,8 @@ class DeployResult(CommandDocument):
     )
     platform: str | None = Field(None, description="The platform selected with --platform")
     advice: str | None = None
+    # Added by #643 (flow), declared ahead so either merge order stays green.
+    changes: list[PlannedChange] | None = Field(None, description="One entry per rule and tenant")
 
 
 class StateBinding(ResultModel):

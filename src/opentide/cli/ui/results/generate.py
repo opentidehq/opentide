@@ -7,14 +7,30 @@ from pydantic import Field
 from opentide.cli.ui.results.base import CommandDocument, Counts, ResultModel
 
 
-class GenerateResult(CommandDocument):
+class GenerationStep(ResultModel):
+    """One phase of a generation run, as its progress line printed it (#643)."""
+
+    name: str
+    status: str
+    count: int | None = None
+    unit: str | None = None
+    seconds: float
+    where: str | None = None
+
+
+class Steps(ResultModel):
+    # Added by #643 (flow), declared ahead so either merge order stays green.
+    steps: list[GenerationStep] | None = Field(None, description="Each phase that ran")
+
+
+class GenerateResult(CommandDocument, Steps):
     """A generation phase, several phases or the full pipeline."""
 
     phases: list[str] | None = Field(None, description="The phases that ran, in order")
     phase: str | None = Field(None, description="The phase that ran, or the one that failed")
 
 
-class DocsResult(CommandDocument):
+class DocsResult(CommandDocument, Steps):
     """``generate docs``: Markdown pages for detection objects."""
 
     counts: Counts | None = Field(None, description="Pages written, by object family")
@@ -27,7 +43,7 @@ class DocsResult(CommandDocument):
     removed: int | None = Field(None, description="With --changed: pages of deleted objects")
 
 
-class ExportResult(CommandDocument):
+class ExportResult(CommandDocument, Steps):
     """``generate exports <target>``: one catalogue export."""
 
     target: str | None = Field(None, description="navigator, objects or revisions")
