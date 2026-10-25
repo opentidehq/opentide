@@ -93,7 +93,7 @@ def deploy_cmd(
     from opentide.cli.findings import publish_summary
     from opentide.cli.ui.summary import deploy_summary
 
-    publish_summary(cli, deploy_summary(result), command="deploy")
+    publish_summary(cli, deploy_summary(result, dry_run=dry_run), command="deploy", payload=result)
     emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 
 

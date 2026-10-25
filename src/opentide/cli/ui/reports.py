@@ -20,6 +20,7 @@ import re
 from collections.abc import Callable, Sequence
 from enum import Enum
 from typing import Any
+from urllib.parse import quote
 
 from opentide.cli.ui.diagnostics import LINT_CODES, Diagnostic
 from opentide.cli.ui.summary import DIAGNOSTICS_DOCS_URL, explain_url
@@ -31,6 +32,13 @@ SARIF_VERSION = "2.1.0"
 CODEQUALITY_SEVERITY = {"error": "major", "warning": "minor", "note": "info"}
 
 _PAGE_SEVERITY = re.compile(r"^Severity: (error|warning|note)\b", re.MULTILINE)
+
+#: SARIF resolves every ``artifactLocation.uri`` against this base, which
+#: code scanning maps to the repository root.
+SRCROOT = "%SRCROOT%"
+
+_LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]*)\)")
+_EMPHASIS = re.compile(r"(\*\*|__)(.+?)\1")
 
 
 class ReportFormat(str, Enum):
@@ -65,6 +73,32 @@ def _fingerprint(diagnostic: Diagnostic, path: str, seen: dict[str, int]) -> str
 # --------------------------------------------------------------------------
 
 
+def artifact_location(path: str) -> dict[str, str]:
+    """A repository-relative path as a SARIF ``artifactLocation``.
+
+    ``uri`` is a URI reference (SARIF 2.1.0 section 3.4.3), so a space, ``#``
+    or ``%`` in a file name is percent-encoded; ``/`` stays a separator.
+    """
+    return {"uri": quote(path, safe="/"), "uriBaseId": SRCROOT}
+
+
+def plain_text(markdown: str) -> str:
+    """An explain page as the plain text SARIF wants in ``help.text``.
+
+    Drops heading marks, code fences, backticks and emphasis, and writes a
+    link as ``text (url)``. The Markdown itself goes in ``help.markdown``.
+    """
+    lines: list[str] = []
+    for line in markdown.splitlines():
+        if line.lstrip().startswith("```"):
+            continue
+        line = re.sub(r"^#{1,6}\s+", "", line)
+        line = _LINK.sub(lambda found: f"{found.group(1)} ({found.group(2)})", line)
+        line = _EMPHASIS.sub(r"\2", line)
+        lines.append(line.replace("`", ""))
+    return "\n".join(lines).strip()
+
+
 def _rule_name(code: str) -> str:
     return "".join(part.capitalize() for part in code.split("_"))
 
@@ -79,7 +113,7 @@ def sarif_rule(code: str) -> dict[str, Any]:
         return rule
     rule["shortDescription"] = {"text": page.summary}
     rule["fullDescription"] = {"text": page.summary}
-    rule["help"] = {"text": page.markdown, "markdown": page.markdown}
+    rule["help"] = {"text": plain_text(page.markdown), "markdown": page.markdown}
     if found := _PAGE_SEVERITY.search(page.markdown):
         rule["defaultConfiguration"] = {"level": found.group(1)}
     return rule
@@ -119,7 +153,9 @@ def _sarif_fixes(diagnostic: Diagnostic, path: str) -> list[dict[str, Any]]:
     return [
         {
             "description": {"text": description},
-            "artifactChanges": [{"artifactLocation": {"uri": path}, "replacements": replacements}],
+            "artifactChanges": [
+                {"artifactLocation": artifact_location(path), "replacements": replacements}
+            ],
         }
     ]
 
@@ -156,7 +192,7 @@ def sarif_report(
         path = path_for(diagnostic)
         if path is None:
             continue
-        physical: dict[str, Any] = {"artifactLocation": {"uri": path}}
+        physical: dict[str, Any] = {"artifactLocation": artifact_location(path)}
         region = _region(diagnostic)
         if region is not None:
             physical["region"] = region

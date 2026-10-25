@@ -33,7 +33,7 @@ Lint walks `objects/{threats,objectives,rules}/**/*.yaml` and does not rebuild t
 | `--fix` | Apply safe filename renames |
 | `--strict` | Exit `1` when any finding exists (CI gate). Default is report-only |
 | `--format` | `text` (code frames, the default), `sarif` or `codequality`: the findings as a SARIF 2.1.0 or GitLab Code Quality report, as for [`validate`](./validate.md#reports-and-ci-annotations) |
-| `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json` |
+| `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json`. Needs `--format sarif` or `codequality`: with `text` it exits `2` |
 
 `--fix` is idempotent.
 

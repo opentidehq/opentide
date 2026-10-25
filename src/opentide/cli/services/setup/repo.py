@@ -105,6 +105,8 @@ def _write_gitignore(target: Path) -> None:
                 # Only the sharing cache. ``states/deployment/`` holds vendor rule
                 # ids and must be committed (RFC 0010).
                 f"{OPENTIDE_DIR}/states/sharing.jsonl",
+                # Findings reports and the GitLab summary that CI runs write.
+                "opentide-reports/",
             ]
         )
         + "\n",

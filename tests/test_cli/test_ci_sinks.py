@@ -14,8 +14,10 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+from urllib.parse import unquote
 
 import pytest
+from markdown_it import MarkdownIt
 from typer.testing import CliRunner, Result
 
 from opentide.cli import app
@@ -173,6 +175,50 @@ def test_annotations_are_off_in_json_and_mcp(mode: OutputMode, written: int) -> 
     assert len(stream.getvalue().splitlines()) == written
 
 
+def _many(severity: str, count: int) -> list[Diagnostic]:
+    return [
+        Diagnostic(
+            code="vocab_unknown", severity=severity, message=f"{severity} {index}", path="a.yaml"
+        )
+        for index in range(count)
+    ]
+
+
+def test_github_annotations_stop_at_the_per_level_limit() -> None:
+    limit = ci.GITHUB_ANNOTATIONS_PER_LEVEL
+    assert limit == 10
+    # Notes and warnings first in the input: the output still starts with errors.
+    findings = _many("note", 12) + _many("warning", 15) + _many("error", 300)
+    lines = ci.annotation_lines(findings, "github")
+    levels = [line.split(" ", 1)[0].split("::")[1] for line in lines]
+    assert levels == ["error"] * limit + ["warning"] * limit + ["notice"] * limit
+    assert lines[0].endswith("::error 0")
+    # One notice slot is kept for the line that counts the rest.
+    hidden = len(findings) - (3 * limit - 1)
+    assert lines[-1] == (
+        f"::notice title=opentide::{hidden} more findings: see the job summary or code scanning"
+    )
+
+
+def test_github_annotations_within_the_limit_are_all_written() -> None:
+    findings = _many("error", 10) + _many("note", 10)
+    lines = ci.annotation_lines(findings, "github")
+    assert len(lines) == 20
+    assert not any("title=opentide::" in line for line in lines)
+
+
+def test_github_overflow_counts_one_finding() -> None:
+    lines = ci.annotation_lines(_many("warning", 11), "github")
+    assert lines[-1] == (
+        "::notice title=opentide::1 more finding: see the job summary or code scanning"
+    )
+
+
+def test_azure_annotations_are_not_capped() -> None:
+    lines = ci.annotation_lines(_many("error", 300), "azure")
+    assert len(lines) == 300
+
+
 def test_azure_writes_no_issue_for_a_note_and_gitlab_none_at_all() -> None:
     lines = ci.annotation_lines([_typo(), _NOTE], "azure")
     assert len(lines) == 1
@@ -326,6 +372,47 @@ def test_findings_summary_takes_paths_from_the_caller() -> None:
     assert "`ws/a.yaml:8:8`" in markdown
 
 
+_MARKDOWN = MarkdownIt("commonmark", {"html": True}).enable(["table", "strikethrough"])
+
+
+def _rendered_cell(markdown: str) -> str:
+    """The HTML of the one body cell of a two-column table whose first cell is *markdown*."""
+    rendered = _MARKDOWN.render(f"| A | B |\n|---|---|\n| {markdown} | x |\n")
+    found = re.search(r"<tbody>\s*<tr>\s*<td>(.*?)</td>", rendered, re.DOTALL)
+    assert found, rendered
+    return found.group(1)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Value '<clear>' is not a valid entry",
+        "*em* and _em_ and **strong**",
+        "see [l](https://example.com) and ![i](x.png)",
+        "a | b",
+        "a ` tick and ``two``",
+        "<script>x</script> & <details> ~~gone~~ \\ back",
+    ],
+)
+def test_cells_render_user_text_literally(text: str) -> None:
+    cell = summary.cell(text)
+    assert "<" not in cell.replace("<br>", "")
+    # Rendered, the cell is the text itself: no tag, emphasis, link or new cell.
+    assert _rendered_cell(cell) == text.replace("&", "&amp;").replace("<", "&lt;").replace(
+        ">", "&gt;"
+    )
+
+
+def test_code_spans_show_html_and_markdown_literally() -> None:
+    span = summary.code("<clear> *em* [l](u) | `x`")
+    assert _rendered_cell(span) == "<code>&lt;clear&gt; *em* [l](u) | `x`</code>"
+
+
+def test_details_labels_are_html_escaped() -> None:
+    markdown = summary.deploy_summary(_deploy(plan={"a<b>_c": ["u1"]}, tenants={}))
+    assert "<details><summary>a&lt;b&gt;_c: 1 rule</summary>" in markdown
+
+
 def test_cells_and_code_spans_are_table_safe() -> None:
     assert summary.cell("a | b\nc") == "a \\| b<br>c"
     assert summary.cell("") == " "
@@ -387,6 +474,35 @@ def test_deploy_summary_dry_run_without_tenants_and_long_plans() -> None:
     markdown = summary.deploy_summary(_deploy(tenants={}, plan={"elastic": uuids}, payloads={}))
     assert f"| `elastic` | none | {len(uuids)} |" in markdown
     assert "- … and 2 more" in markdown
+
+
+def test_deploy_summary_takes_dry_run_from_the_command() -> None:
+    early_failure = {"status": "failed", "ok": False, "message": "Not a git checkout"}
+    markdown = summary.deploy_summary(early_failure, dry_run=True)
+    assert markdown.startswith("### ✗ opentide deploy --dry-run\n")
+    assert summary.deploy_summary(_deploy(), dry_run=False).startswith("### ✓ opentide deploy\n")
+
+
+def test_deploy_summary_shortens_a_long_error() -> None:
+    error = "line one\nline two\nline three\n" + "x" * 1000
+    payloads = {"sentinel": [{"uuid": "u1", "name": "R", "status": "failed", "error": error}]}
+    markdown = summary.deploy_summary(_deploy(payloads=payloads))
+    (line,) = [item for item in markdown.splitlines() if "would fail:" in item]
+    assert line.endswith("would fail: line one<br>line two …")
+    assert summary.shorten("x" * 1000).endswith(" …")
+    assert len(summary.shorten("x" * 1000)) <= summary.MAX_ERROR_CHARS + 2
+    assert summary.shorten("short") == "short"
+
+
+def test_fit_keeps_a_summary_under_its_byte_budget() -> None:
+    body = "\n".join(f"- rule {index} {'é' * 40}" for index in range(5000))
+    markdown = f"### opentide deploy\n\n<details><summary>s</summary>\n\n{body}\n\n</details>\n"
+    assert len(markdown.encode("utf-8")) > summary.MAX_SUMMARY_BYTES
+    fitted = summary.fit(markdown)
+    assert len(fitted.encode("utf-8")) <= summary.MAX_SUMMARY_BYTES
+    assert fitted.count("<details>") == fitted.count("</details>") == 1
+    assert fitted.endswith("… summary truncated; the job log has everything.\n")
+    assert summary.fit("small\n") == "small\n"
 
 
 def test_deploy_summary_of_a_skip_has_no_table() -> None:
@@ -468,7 +584,10 @@ def test_sarif_result_carries_position_fix_and_fingerprint() -> None:
     assert result["message"]["text"].endswith("\nhelp: did you mean 'clear'?")
     location = result["locations"][0]["physicalLocation"]
     assert location == {
-        "artifactLocation": {"uri": "objects/rules/sentinel-kql-rule.yaml"},
+        "artifactLocation": {
+            "uri": "objects/rules/sentinel-kql-rule.yaml",
+            "uriBaseId": "%SRCROOT%",
+        },
         "region": {"startLine": 8, "startColumn": 8, "endColumn": 14},
     }
     (fix,) = result["fixes"]
@@ -504,6 +623,47 @@ def test_sarif_names_the_object_and_a_fix_across_lines() -> None:
         "endColumn": 5,
     }
     assert result["fixes"][0]["description"]["text"] == "Replace with '- clear'"
+
+
+def test_sarif_uris_are_percent_encoded_against_srcroot() -> None:
+    path = "objects/rules/Sentinel KQL #1 50%.yaml"
+    diagnostic = Diagnostic(
+        code="vocab_unknown",
+        severity="error",
+        message="m",
+        path=path,
+        line=8,
+        column=8,
+        end_column=14,
+        fix=Fix(True, (TextEdit(8, 8, 14, "clear"),)),
+    )
+    (result,) = _sarif([diagnostic])["runs"][0]["results"]
+    location = result["locations"][0]["physicalLocation"]["artifactLocation"]
+    assert location == {
+        "uri": "objects/rules/Sentinel%20KQL%20%231%2050%25.yaml",
+        "uriBaseId": "%SRCROOT%",
+    }
+    assert unquote(location["uri"]) == path
+    (change,) = result["fixes"][0]["artifactChanges"]
+    assert change["artifactLocation"] == location
+    # Code Quality takes a path, not a URI.
+    (issue,) = reports.codequality_report([diagnostic])
+    assert issue["location"]["path"] == path
+
+
+def test_sarif_help_text_is_plain_and_markdown_is_kept() -> None:
+    rules = _sarif([])["runs"][0]["tool"]["driver"]["rules"]
+    rule = next(rule for rule in rules if rule["id"] == "vocab_unknown")
+    page = load_page("vocab_unknown")
+    assert page is not None
+    assert rule["help"]["markdown"] == page.markdown
+    text = rule["help"]["text"]
+    assert "```" not in text
+    assert "`" not in text
+    assert not any(line.startswith("#") for line in text.splitlines())
+    assert reports.plain_text("## How\n\nSee [docs](https://e.org) and **this** `code`.\n") == (
+        "How\n\nSee docs (https://e.org) and this code."
+    )
 
 
 def test_sarif_lists_a_code_that_has_no_page() -> None:
@@ -660,6 +820,50 @@ def test_a_report_on_json_stdout_is_a_usage_error(repo: Path, command: str) -> N
     failure = json.loads(result.stdout)["failure"]
     assert failure["code"] == "usage_invalid_value"
     assert failure["argument"] == "--output"
+
+
+@pytest.mark.parametrize("command", ["validate", "lint"])
+@pytest.mark.parametrize("json_output", [False, True])
+def test_output_without_a_report_format_is_a_usage_error(
+    repo: Path, command: str, json_output: bool
+) -> None:
+    output = repo / "out" / "forgot.sarif"
+    argv = ["--json"] if json_output else []
+    result = _invoke(repo, *argv, command, "--output", str(output))
+    assert result.exit_code == 2, result.output
+    assert "--output needs --format sarif or --format codequality" in result.output
+    if json_output:
+        failure = json.loads(result.stdout)["failure"]
+        assert failure["code"] == "usage_invalid_value"
+        assert failure["argument"] == "--output"
+    assert not output.parent.exists()
+
+
+def test_a_usage_failure_writes_no_summary(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.setenv("CI_PROJECT_DIR", str(repo))
+    usage = {
+        "status": "failed",
+        "ok": False,
+        "message": "Pass --strategy",
+        "_exit_code": 2,
+        "_failure_code": "usage_missing_option",
+    }
+    with patch("opentide.cli.commands.deploy.run_deploy", return_value=usage):
+        result = _invoke(repo, "deploy", "--dry-run")
+    assert result.exit_code == 2, result.output
+    assert not (repo / ci.GITLAB_SUMMARY).exists()
+
+
+def test_deploy_summary_title_follows_the_flag(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.setenv("CI_PROJECT_DIR", str(repo))
+    early = {"status": "failed", "ok": False, "message": "Not a git checkout", "_exit_code": 1}
+    with patch("opentide.cli.commands.deploy.run_deploy", return_value=early):
+        result = _invoke(repo, "deploy", "--dry-run")
+    assert result.exit_code == 1, result.output
+    written = (repo / ci.GITLAB_SUMMARY).read_text(encoding="utf-8")
+    assert written.startswith("### ✗ opentide deploy --dry-run\n")
 
 
 def _lint_result(repo: Path, findings: list[dict[str, Any]]) -> dict[str, Any]:

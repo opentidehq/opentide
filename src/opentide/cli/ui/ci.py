@@ -203,20 +203,65 @@ def azure_annotation(diagnostic: Diagnostic, *, root: Path | None = None) -> str
 # --------------------------------------------------------------------------
 
 
+#: GitHub shows at most this many annotations of each level (error, warning,
+#: notice) per step, and 50 per job; later ones stay plain log lines. See
+#: "Annotations" in the GitHub Actions limits reference,
+#: https://docs.github.com/en/actions/reference/limits . One opentide command
+#: is one step, and three levels of 10 stay under the job's 50.
+GITHUB_ANNOTATIONS_PER_LEVEL = 10
+
+_SEVERITY_ORDER = {"error": 0, "warning": 1, "note": 2}
+
+
+def github_overflow_notice(count: int) -> str:
+    """The notice that says how many findings had no annotation of their own."""
+    noun = "finding" if count == 1 else "findings"
+    return github_command(
+        "notice",
+        f"{count} more {noun}: see the job summary or code scanning",
+        (("title", "opentide"),),
+    )
+
+
+def _github_capped(diagnostics: Iterable[Diagnostic]) -> tuple[list[Diagnostic], int]:
+    """Errors, then warnings, then notes, each cut to what GitHub shows; and how many were cut.
+
+    When anything is cut, one notice slot is kept for the overflow notice.
+    """
+    ordered = sorted(diagnostics, key=lambda item: _SEVERITY_ORDER.get(item.severity, 3))
+    by_level: dict[str, list[Diagnostic]] = {}
+    for item in ordered:
+        by_level.setdefault(item.severity, []).append(item)
+    limit = GITHUB_ANNOTATIONS_PER_LEVEL
+    overflow = any(len(items) > limit for items in by_level.values())
+    shown: list[Diagnostic] = []
+    for level, items in by_level.items():
+        keep = limit - 1 if overflow and level == "note" else limit
+        shown.extend(items[:keep])
+    return shown, len(ordered) - len(shown)
+
+
 def annotation_lines(
     diagnostics: Iterable[Diagnostic],
     provider: CiProvider | None,
     *,
     root: Path | None = None,
 ) -> list[str]:
-    """The inline commands for *provider*; none on GitLab, which reads a report file."""
-    lines: list[str] = []
-    for diagnostic in diagnostics:
-        if provider == "github":
-            lines.append(github_annotation(diagnostic, root=root))
-        elif provider == "azure" and (line := azure_annotation(diagnostic, root=root)):
-            lines.append(line)
-    return lines
+    """The inline commands for *provider*; none on GitLab, which reads a report file.
+
+    GitHub gets errors first, then warnings, then notices, at most
+    :data:`GITHUB_ANNOTATIONS_PER_LEVEL` of each, and one notice counting the
+    rest. Azure gets every finding: it has no such limit.
+    """
+    if provider == "github":
+        shown, hidden = _github_capped(diagnostics)
+        lines = [github_annotation(diagnostic, root=root) for diagnostic in shown]
+        if hidden:
+            lines.append(github_overflow_notice(hidden))
+        return lines
+    if provider == "azure":
+        return [line for item in diagnostics if (line := azure_annotation(item, root=root))]
+    return []
 
 
 def _write(lines: Iterable[str], stream: TextIO | None) -> int:

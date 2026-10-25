@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
 
 from opentide.ci.azure import SARIF_ARTIFACT, render_azure
-from opentide.ci.github import VALIDATE_PERMISSIONS, render_github
+from opentide.ci.github import CODE_SCANNING_IF, render_github
 from opentide.ci.gitlab import render_gitlab
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import object_validate_commands, report_path
@@ -34,10 +35,10 @@ def _step(steps: list[dict[str, Any]], name: str) -> dict[str, Any]:
     return next(step for step in steps if step.get("name") == name)
 
 
-def test_github_validate_job_writes_and_uploads_sarif() -> None:
+def test_github_validate_job_writes_sarif_and_keeps_it() -> None:
     validate = _github()["validate"]
-    assert validate["permissions"] == yaml.safe_load(VALIDATE_PERMISSIONS)
-    assert validate["permissions"]["security-events"] == "write"
+    # The validate job holds the platform secrets, so it gets no write scope.
+    assert "permissions" not in validate
     runs = [step["run"] for step in validate["steps"] if "run" in step]
     assert object_validate_commands("sarif")[0] in runs
     assert object_validate_commands("sarif")[1] in runs
@@ -49,16 +50,28 @@ def test_github_validate_job_writes_and_uploads_sarif() -> None:
         "path": "opentide-reports/",
         "if-no-files-found": "ignore",
     }
+    assert not any("upload-sarif" in str(step.get("uses")) for step in validate["steps"])
+
+
+def test_github_code_scanning_job_uploads_the_sarif() -> None:
+    job = _github()["code_scanning"]
+    assert job["needs"] == "validate"
+    assert job["if"] == CODE_SCANNING_IF
+    assert "!cancelled()" in job["if"]
+    assert "!github.event.repository.private" in job["if"]
+    assert job["permissions"] == {"security-events": "write"}
+    assert "env" not in job
+    download = _step(job["steps"], "Download opentide reports")
+    assert download["uses"] == "actions/download-artifact@v4"
+    assert download["with"] == {"name": "opentide-reports", "path": "opentide-reports/"}
     for command in ("validate", "lint"):
-        upload = _step(validate["steps"], f"Upload {command} findings to code scanning")
+        upload = _step(job["steps"], f"Upload {command} findings to code scanning")
         sarif = report_path(command, "sarif")
-        assert upload["uses"] == "github/codeql-action/upload-sarif@v3"
+        assert upload["uses"] == "github/codeql-action/upload-sarif@v4"
         assert upload["continue-on-error"] is True
-        assert upload["with"] == {"sarif_file": sarif, "category": f"opentide-{command}"}
-        assert upload["if"] == (
-            "${{ !cancelled() && !github.event.repository.private && "
-            f"hashFiles('{sarif}') != '' }}}}"
-        )
+        # The category comes from the run's automationDetails.id (opentide/<command>/).
+        assert upload["with"] == {"sarif_file": sarif}
+        assert upload["if"] == f"${{{{ hashFiles('{sarif}') != '' }}}}"
 
 
 def test_github_uploads_come_after_every_check() -> None:
@@ -154,3 +167,11 @@ def test_azure_validate_job_publishes_sarif() -> None:
             "ArtifactName": SARIF_ARTIFACT,
         },
     }
+
+
+def test_setup_ignores_the_reports_folder(tmp_path: Path) -> None:
+    from opentide.cli.services.setup.repo import _write_gitignore
+
+    _write_gitignore(tmp_path)
+    lines = (tmp_path / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert f"{REPORTS_DIR}/" in lines

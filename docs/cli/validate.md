@@ -28,7 +28,7 @@ opentide validate --check schema
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` |
 | `--format` | `text` (code frames, the default), `sarif` (SARIF 2.1.0 for code scanning) or `codequality` (GitLab Code Quality). See [Reports and CI annotations](#reports-and-ci-annotations) |
-| `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json` |
+| `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json`. Needs `--format sarif` or `codequality`: with `text` it exits `2` |
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. The one exception is `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), which `--strict` reports without failing. Validation failures in `--json` mode include the complete report before the process exits.
 

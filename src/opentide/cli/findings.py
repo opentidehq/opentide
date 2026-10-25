@@ -1,6 +1,6 @@
 """Where results go besides the terminal: a report file and the CI sinks.
 
-``validate`` and ``lint`` call :func:`refuse_report_on_json_stdout` before
+``validate`` and ``lint`` call :func:`check_report_options` before
 they run, :func:`write_report_file` with the diagnostics they built, then
 :func:`publish_findings` in the text modes. ``deploy`` and ``validate query``
 call :func:`publish_summary`. Under ``--json`` no sink writes anything.
@@ -8,7 +8,7 @@ call :func:`publish_summary`. Under ``--json`` no sink writes anything.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import NoReturn
 
@@ -22,11 +22,11 @@ from opentide.cli.ui.ci import (
     emit_annotations,
     repository_path,
 )
-from opentide.cli.ui.contract import USAGE_INVALID_VALUE
+from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_INVALID_VALUE
 from opentide.cli.ui.diagnostics import Diagnostic
 from opentide.cli.ui.render import outcome_kind
 from opentide.cli.ui.reports import ReportFormat, build_report
-from opentide.cli.ui.summary import diagnostics_summary
+from opentide.cli.ui.summary import diagnostics_summary, fit
 from opentide.core.io import dump_json_text
 
 FORMAT_HELP = (
@@ -36,10 +36,21 @@ FORMAT_HELP = (
 OUTPUT_HELP = "Write the --format report to this file and print the usual text output too"
 
 
-def refuse_report_on_json_stdout(
-    cli: CliContext, report_format: ReportFormat, output: Path | None
-) -> None:
-    """``--json`` owns stdout, so a report needs ``--output`` there (exit 2)."""
+def check_report_options(cli: CliContext, report_format: ReportFormat, output: Path | None) -> None:
+    """Refuse report options that would silently write nothing or break stdout (exit 2).
+
+    ``--output`` writes the ``--format`` report, so it needs a report format:
+    without one the file would never be written, and a CI upload step that
+    looks for it would quietly skip. ``--json`` owns stdout, so a report needs
+    ``--output`` there.
+    """
+    if report_format is ReportFormat.text and output is not None:
+        emit_usage_error(
+            cli,
+            "--output needs --format sarif or --format codequality",
+            argument="--output",
+            code=USAGE_INVALID_VALUE,
+        )
     if cli.json_output and report_format is not ReportFormat.text and output is None:
         emit_usage_error(
             cli,
@@ -91,11 +102,24 @@ def print_report(
     raise SystemExit(result.exit_code)
 
 
-def publish_summary(cli: CliContext, markdown: str, *, command: str) -> None:
-    """Add *markdown* to this run's CI job summary; nothing outside CI or under ``--json``."""
+def publish_summary(
+    cli: CliContext,
+    markdown: str,
+    *,
+    command: str,
+    payload: Mapping[str, object] | None = None,
+) -> None:
+    """Add *markdown* to this run's CI job summary; nothing outside CI or under ``--json``.
+
+    A usage failure (exit 2, from the service *payload*) writes no section: the
+    command did not run, and the log says why. The summary is cut to
+    :data:`~opentide.cli.ui.summary.MAX_SUMMARY_BYTES`.
+    """
     if cli.json_output:
         return
-    append_summary(markdown, command=command, mode=text_mode(cli))
+    if payload is not None and payload.get("_exit_code") == USAGE_EXIT_CODE:
+        return
+    append_summary(fit(markdown), command=command, mode=text_mode(cli))
 
 
 def publish_findings(

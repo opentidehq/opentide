@@ -13,10 +13,10 @@ from opentide.cli.enums import DetectionPlatform, ValidateCheck
 from opentide.cli.findings import (
     FORMAT_HELP,
     OUTPUT_HELP,
+    check_report_options,
     print_report,
     publish_findings,
     publish_summary,
-    refuse_report_on_json_stdout,
     write_report_file,
 )
 from opentide.cli.output import (
@@ -61,7 +61,7 @@ def validate_group(
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
-    refuse_report_on_json_stdout(cli, report_format, output)
+    check_report_options(cli, report_format, output)
     valid_object_types = ("rule", "threat", "objective")
     unknown_types = sorted(set(object_type or []) - set(valid_object_types))
     if unknown_types:
@@ -145,5 +145,5 @@ def validate_query_cmd(
     )
     from opentide.cli.ui.summary import query_summary
 
-    publish_summary(cli, query_summary(result), command="validate query")
+    publish_summary(cli, query_summary(result), command="validate query", payload=result)
     emit_success(cli, result)

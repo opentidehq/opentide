@@ -308,8 +308,10 @@ In a GitHub Actions, GitLab CI or Azure Pipelines job (`GITHUB_ACTIONS`, `GITLAB
 | Provider | Each finding of `validate` and `lint` | Job summary |
 |----------|----------------------------------------|-------------|
 | GitHub Actions | A workflow command on stdout, which GitHub shows on the line of the pull request's diff: `::error file=objects/rules/sentinel-kql-rule.yaml,line=8,endLine=8,col=8,endColumn=13,title=vocab_unknown::Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry%0Ahelp: did you mean 'clear'?` | Markdown appended to `$GITHUB_STEP_SUMMARY` |
-| GitLab CI | None inline: GitLab shows the Code Quality report in the merge request and its diff | Markdown appended to `opentide-reports/summary.md` in the checkout, kept as an artifact |
+| GitLab CI | None inline: GitLab shows the Code Quality report in the merge request widget on every tier, and on the lines of the diff on GitLab Ultimate | Markdown appended to `opentide-reports/summary.md` in the checkout, kept as an artifact |
 | Azure Pipelines | `##vso[task.logissue type=error;sourcepath=…;linenumber=8;columnnumber=8;code=vocab_unknown;]…` (notes have no Azure level and are not sent) | A Markdown file attached with `##vso[task.uploadsummary]` |
+
+On GitHub, which shows 10 annotations of each level per step, opentide writes the errors first, then the warnings, then the notices, 10 of each, and one notice counting the rest; the job summary and code scanning have them all.
 
 The summary of `validate` and `lint` is the outcome line and a table of findings (severity, code linked to its [explanation](../../cli/diagnostics.md), location, message), at most 100 rows. `deploy` adds its plan: the strategies, the rules per platform and tenant, and the rule names. `validate query` adds the queries sent per tenant. A `deploy` that found no rule to deploy adds a run warning on GitHub and Azure. Paths are relative to the checkout (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`, `BUILD_SOURCESDIRECTORY`), so they stay right when the workspace is a folder of the repository.
 
@@ -326,7 +328,7 @@ opentide lint --strict --format codequality --output opentide-reports/lint.codeq
 
 | Provider | Validate job |
 |----------|--------------|
-| GitHub Actions | `--format sarif` reports, uploaded as the `opentide-reports` artifact, and on a public repository sent to code scanning with `github/codeql-action/upload-sarif` (category `opentide-validate` and `opentide-lint`; a failed upload never fails the job). The job gets `security-events: write`. Code scanning on a private repository needs GitHub Advanced Security: once it is on, remove `!github.event.repository.private` from the two upload steps |
+| GitHub Actions | `--format sarif` reports, uploaded as the `opentide-reports` artifact, and on a public repository sent to code scanning by a `code_scanning` job that needs `validate`, downloads the artifact and runs `github/codeql-action/upload-sarif@v4`. That job holds only `security-events: write`, so the token that writes alerts never sits next to the platform secrets. The alerts are in the categories `opentide/validate/` and `opentide/lint/` (each SARIF run's `automationDetails.id`); a failed upload never fails the run. Code scanning on a private repository needs GitHub Advanced Security: once it is on, remove `!github.event.repository.private` from the job's `if` |
 | GitLab CI | `--format codequality` reports under `artifacts:reports:codequality`, and `opentide-reports/` exposed in the merge request as "opentide reports". The query, staging and production jobs keep `opentide-reports/summary.md` |
 | Azure Pipelines | `--format sarif` reports published as the `CodeAnalysisLogs` artifact, which the SARIF SAST Scans Tab extension reads |
 

@@ -10,6 +10,8 @@ Standard library only.
 
 from __future__ import annotations
 
+import html
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
@@ -21,6 +23,18 @@ DIAGNOSTICS_DOCS_URL = "https://opentide.org/docs/cli/diagnostics"
 #: Rows per table. GitHub caps a step summary at 1 MiB.
 MAX_ROWS = 100
 
+#: Bytes one summary may take. GitHub refuses a step summary over 1 MiB, and
+#: one step can run several commands, so each stays well under it.
+MAX_SUMMARY_BYTES = 256 * 1024
+
+#: Lines and characters of a deploy error shown after ``would fail:``.
+MAX_ERROR_LINES = 2
+MAX_ERROR_CHARS = 300
+
+#: Inline Markdown that user text must not start: emphasis, code, links,
+#: images, strikethrough, autolinks and table cells.
+_MARKDOWN_PUNCTUATION = re.compile(r"([\\`*_\[\]()!~|#])")
+
 _GLYPHS = {"ok": "✓", "failed": "✗", "warning": "!", "skipped": "–"}
 
 
@@ -30,13 +44,25 @@ def explain_url(code: str) -> str:
 
 
 def cell(value: object) -> str:
-    """Text safe inside a Markdown table cell: no ``|``, no line break."""
-    text = str(value).replace("\\", "\\\\").replace("|", "\\|")
+    """User text as literal Markdown, safe inside a table cell.
+
+    ``&``, ``<`` and ``>`` become entities, so a value such as ``<clear>``
+    shows instead of being dropped as an unknown tag. Inline Markdown
+    punctuation is backslash-escaped, so ``*em*`` or ``[l](url)`` stays text,
+    and ``|`` cannot end the cell. Line breaks become ``<br>``.
+    """
+    text = html.escape(str(value), quote=False)
+    text = _MARKDOWN_PUNCTUATION.sub(r"\\\1", text)
     return "<br>".join(part.strip() for part in text.splitlines()) or " "
 
 
 def code(value: object) -> str:
-    """``value`` as inline code, fenced with more backticks than it contains."""
+    """``value`` as inline code, fenced with more backticks than it contains.
+
+    A code span shows HTML and Markdown literally, and entities would show as
+    ``&lt;``, so only ``|`` is escaped (a table splits cells before it reads
+    code spans).
+    """
     text = str(value).replace("|", "\\|")
     fence = "`"
     while fence in text:
@@ -136,18 +162,57 @@ def _rule_names(result: Mapping[str, Any], platform: str) -> dict[str, Mapping[s
     return {str(entry.get("uuid")): entry for entry in entries if isinstance(entry, Mapping)}
 
 
+def shorten(text: object, *, lines: int = MAX_ERROR_LINES, chars: int = MAX_ERROR_CHARS) -> str:
+    """The first *lines* lines of *text*, at most *chars* characters, with ``…`` when cut."""
+    full = str(text).strip()
+    kept = "\n".join(full.splitlines()[:lines])
+    if len(kept) > chars:
+        kept = kept[: chars - 1].rstrip()
+    return kept if kept == full else kept + " …"
+
+
+def fit(markdown: str, *, limit: int = MAX_SUMMARY_BYTES) -> str:
+    """*markdown* cut at a line to at most *limit* bytes, saying so.
+
+    An open ``<details>`` block is closed, so the rest of the job summary
+    still renders.
+    """
+    if len(markdown.encode("utf-8")) <= limit:
+        return markdown
+    note = "\n… summary truncated; the job log has everything.\n"
+    budget = limit - len(note.encode("utf-8")) - len("\n</details>\n")
+    kept: list[str] = []
+    used = 0
+    for line in markdown.splitlines():
+        size = len(line.encode("utf-8")) + 1
+        if used + size > budget:
+            break
+        kept.append(line)
+        used += size
+    text = "\n".join(kept)
+    if text.count("<details>") > text.count("</details>"):
+        text += "\n</details>"
+    return text + "\n" + note
+
+
 def _rule_line(uuid: str, entry: Mapping[str, Any] | None) -> str:
     if entry is None or not entry.get("name"):
         return f"- {code(uuid)}"
     line = f"- {cell(entry['name'])} ({code(uuid)})"
     if entry.get("status") == "failed" and entry.get("error"):
-        line += f" — would fail: {cell(entry['error'])}"
+        line += f" — would fail: {cell(shorten(entry['error']))}"
     return line
 
 
-def deploy_summary(result: Mapping[str, Any], *, message: str | None = None) -> str:
-    """The deploy plan: rules per platform and tenant, then the rules themselves."""
-    dry_run = bool(result.get("dry_run"))
+def deploy_summary(
+    result: Mapping[str, Any], *, message: str | None = None, dry_run: bool | None = None
+) -> str:
+    """The deploy plan: rules per platform and tenant, then the rules themselves.
+
+    *dry_run* is the command's flag; a payload from a deploy that failed early
+    may not carry it.
+    """
+    dry_run = bool(result.get("dry_run")) if dry_run is None else dry_run
     title = "opentide deploy --dry-run" if dry_run else "opentide deploy"
     lines = [heading(_status_kind(result), title), "", cell(message or result.get("message", ""))]
     strategies = result.get("strategies")
@@ -179,7 +244,9 @@ def deploy_summary(result: Mapping[str, Any], *, message: str | None = None) -> 
         names = _rule_names(result, platform)
         count = len(uuids)
         noun = "rule" if count == 1 else "rules"
-        lines.extend(["", f"<details><summary>{cell(platform)}: {count} {noun}</summary>", ""])
+        # An HTML block: Markdown escapes would show, so HTML escaping only.
+        label = html.escape(str(platform))
+        lines.extend(["", f"<details><summary>{label}: {count} {noun}</summary>", ""])
         lines.extend(_rule_line(str(uuid), names.get(str(uuid))) for uuid in uuids[:MAX_ROWS])
         if count > MAX_ROWS:
             lines.append(f"- … and {count - MAX_ROWS} more")

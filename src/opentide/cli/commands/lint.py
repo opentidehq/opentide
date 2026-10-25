@@ -11,9 +11,9 @@ from opentide.cli.enums import LintCheck
 from opentide.cli.findings import (
     FORMAT_HELP,
     OUTPUT_HELP,
+    check_report_options,
     print_report,
     publish_findings,
-    refuse_report_on_json_stdout,
     write_report_file,
 )
 from opentide.cli.output import CommandResult, emit_result, text_mode
@@ -37,7 +37,7 @@ def lint_cmd(
     from opentide.cli.ui.diagnostics import SourceFiles, diagnostic_from_lint_finding
 
     cli = get_context(ctx)
-    refuse_report_on_json_stdout(cli, report_format, output)
+    check_report_options(cli, report_format, output)
     cli.apply_environment()
     result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)
     outcome = CommandResult.from_payload(result, default_message="Catalogue lint passed")
