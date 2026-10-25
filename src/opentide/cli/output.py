@@ -7,6 +7,7 @@ one JSON document (``--json``) or as warnings, one outcome line and next steps
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, NoReturn
@@ -198,8 +199,13 @@ def envelope(
 
 
 def print_document(document: Mapping[str, Any]) -> None:
-    """Write one finished JSON document to stdout."""
-    print(dump_json_text(document, indent=True, default=str))
+    """Write one finished JSON document to stdout, ending in exactly one newline.
+
+    ``dump_json_text`` already appends the newline; ``print`` would add a
+    second, which a JSON-lines reader sees as an empty record.
+    """
+    sys.stdout.write(dump_json_text(document, indent=True, default=str))
+    sys.stdout.flush()
 
 
 def emit(ctx: CliContext, payload: dict[str, Any], *, exit_code: int = 0) -> None:
