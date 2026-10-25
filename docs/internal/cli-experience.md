@@ -261,10 +261,6 @@ Tests assert the import graph (which modules a command imports), not wall-clock 
 
 Generated JSON schemas carry `title` and `description` for every field, `markdownDescription` where Markdown helps, and per-value descriptions for vocabulary enums (`enumDescriptions` for VS Code, `x-enumDescriptions` mirrored for other editors), taken from the vocabulary TOML. The schema `$comment` and title name the tagline. Snippets carry descriptions.
 
-## Docs
-
-`docs/tapes/*.tape` (VHS) record the tutorial path, a validation failure, the plan view and the home screen. The docs workflow renders them to GIF and SVG and fails when a tape no longer runs, so screenshots never drift from the product.
-
 ## Built so far, and deviations
 
 The output contract (#619) is in place. Where it differs from the sections above, the code is right and this list says how:
@@ -277,6 +273,7 @@ The output contract (#619) is in place. Where it differs from the sections above
 | Outcome lines | The glyph grammar is in place; each command keeps its current message (`✓ Validation passed`). The counted wordings in the table above come with diagnostics and progress (PRs C and E). A skipped result prints `Skipped: <message>`. |
 | Soft wrap | Outcome, warning, error and next-step lines are soft-wrapped in `human` mode too, not only `plain`: Rich would otherwise break a long path mid-word on a TTY. |
 | `opentide --json` with no command | Still prints help (`no_args_is_help`), not a JSON document. |
+| Recorded CLI demos | Recorded CLI GIFs/tapes (#633) dropped; a web animation may follow. |
 
 ## Code references
 
