@@ -74,9 +74,7 @@ CASES: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("path", "argv"), CASES, ids=[" ".join(argv) for _, argv in CASES]
-)
+@pytest.mark.parametrize(("path", "argv"), CASES, ids=[" ".join(argv) for _, argv in CASES])
 def test_document_matches_the_published_schema(
     invoke_cli: Callable[..., Result],
     commands_document: dict[str, Any],
