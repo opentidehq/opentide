@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -71,8 +72,9 @@ def test_setup_env_cli_json(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     assert (tmp_path / ".env.example").is_file()
-    assert '"ok": true' in result.stdout
-    assert ".env.example" in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert any(name.endswith(".env.example") for name in payload["files"])
 
 
 def test_setup_env_cli_requires_yes_without_tty(tmp_path: Path) -> None:

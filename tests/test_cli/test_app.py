@@ -202,8 +202,9 @@ def test_validate_failure_emits_json_before_exit() -> None:
     with patch("opentide.cli.commands.validate.run_validate", return_value=result_payload):
         result = runner.invoke(app, ["--json", "validate"])
     assert result.exit_code == 1
-    assert '"ok": false' in result.stdout
-    assert '"report"' in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert "report" in payload
 
 
 def test_validate_query_supported_platform() -> None:

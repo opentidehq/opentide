@@ -197,7 +197,7 @@ def test_json_is_indented_on_a_tty_unless_the_variable_says(
     assert json_indent(env=env, stdout=_Stream(tty)) is indented
 
 
-@pytest.mark.parametrize(("value", "lines"), [("0", 1), ("2", 4)])
+@pytest.mark.parametrize(("value", "lines"), [("0", 1), ("2", 6)])
 def test_a_document_ends_in_exactly_one_newline(
     monkeypatch: pytest.MonkeyPatch, value: str, lines: int
 ) -> None:

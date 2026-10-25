@@ -89,7 +89,7 @@ Interactive terminals receive Rich colours. Redirected or captured streams, CI l
 
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 
-With `--json`, stdout is one machine-readable JSON document, usage errors included. Logs use stderr, at `WARNING` and above unless `--debug`.
+With `--json`, stdout is one machine-readable JSON document, usage errors included: indented at a terminal, one compact line otherwise, and `OPENTIDE_JSON_INDENT=0` or `2` chooses either way. Logs use stderr, at `WARNING` and above unless `--debug`.
 
 Without `--json`, a result prints its warnings first (`warning: …`), then one outcome line (`✓ message`, `! message` when there are issues, `Skipped: message`), then any `detail` and `advice` from the payload as indented `note:` / `help:` lines, then at most three next steps (`→ command`). A failure prints `error: message` on stderr instead of the outcome line; a command that failed on findings it printed (`validate`, `lint --strict`, `info --strict`) prints its outcome line as `✗ …` on stderr instead. The text is printed as-is: brackets such as `[error]` or `[deploy, validate]` are shown, never read as Rich markup. `--quiet` keeps only the outcome line and errors: it drops section headers, progress lines, warnings, notes and next steps, but keeps the result tables a command prints as its output, such as `info` and `setup skills discover`.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -465,7 +466,7 @@ def test_migrate_objects_cli_dry_run(tmp_path: Path) -> None:
         ["--json", "--repo", str(root), "migrate", "objects"],
     )
     assert result.exit_code == 0, result.stdout + result.stderr
-    assert '"dry_run": true' in result.stdout
+    assert json.loads(result.stdout)["dry_run"] is True
     assert (root / "Configurations").is_dir()
 
 
@@ -476,7 +477,7 @@ def test_migrate_objects_cli_apply(tmp_path: Path) -> None:
         ["--json", "--repo", str(root), "migrate", "objects", "--apply"],
     )
     assert result.exit_code == 0, result.stdout + result.stderr
-    assert '"applied": true' in result.stdout
+    assert json.loads(result.stdout)["applied"] is True
     assert (root / "objects" / "rules" / "rule.yaml").is_file()
 
 

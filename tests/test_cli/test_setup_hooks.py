@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
@@ -143,8 +144,9 @@ def test_setup_hooks_cli_json(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout + result.stderr
     assert (tmp_path / ".pre-commit-config.yaml").is_file()
     assert (tmp_path / ".git" / "hooks" / "pre-commit").is_file()
-    assert '"ok": true' in result.stdout
-    assert '"installed": true' in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["installed"] is True
 
 
 def test_setup_hooks_cli_requires_yes_without_tty(tmp_path: Path) -> None:
