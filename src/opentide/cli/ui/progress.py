@@ -40,7 +40,7 @@ from rich.table import Table
 from rich.text import Text
 
 from opentide.cli.ui.glyphs import glyph
-from opentide.cli.ui.layout import columns
+from opentide.cli.ui.layout import Cropped, columns
 from opentide.cli.ui.mode import OutputMode, get_mode
 from opentide.cli.ui.terminal_progress import TerminalProgress
 from opentide.core import progress as engine_progress
@@ -152,7 +152,8 @@ def checklist_table(
 ) -> RenderableType:
     """The checklist as ``human`` mode draws it: one row per step, the running one last."""
     if running is None:
-        return columns([_row(step, encoding) for step in steps], indent=2, right=(2, 3))
+        # One terminal row per step: a narrow terminal cuts the row, it never wraps it.
+        return Cropped(columns([_row(step, encoding) for step in steps], indent=2, right=(2, 3)))
     grid = Table.grid(padding=(0, 2))
     grid.add_column(no_wrap=True)
     grid.add_column(style="bold", no_wrap=True)

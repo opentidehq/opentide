@@ -9,6 +9,7 @@ from __future__ import annotations
 import typer
 
 from opentide.cli.context import CliContext, sync_typer_rendering
+from opentide.cli.help import epilog
 from opentide.cli.lazy import LazyTyperGroup
 from opentide.core.logging import LoggingConfig, init_logging
 from opentide.core.root import get_repo_root
@@ -17,10 +18,7 @@ app = typer.Typer(
     name="opentide",
     cls=LazyTyperGroup,
     help="Spec-driven development for agentic detection engineering",
-    epilog=(
-        "[dim]Examples[/dim]\n\n  [bold]$ opentide setup[/bold]\n\n"
-        "  [bold]$ opentide validate[/bold]\n\n  [bold]$ opentide --json validate[/bold]"
-    ),
+    epilog=epilog(""),
     rich_markup_mode="rich",
     no_args_is_help=True,
 )

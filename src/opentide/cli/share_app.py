@@ -9,7 +9,7 @@ from opentide.cli.output import CommandResult, emit_result
 from opentide.cli.services.share import render_share, run_share
 
 share_app = typer.Typer(
-    help="Publish Tide objects to intelligence platforms",
+    help="Publish objects to intelligence platforms",
     no_args_is_help=False,
 )
 

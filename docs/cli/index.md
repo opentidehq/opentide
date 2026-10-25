@@ -21,7 +21,7 @@ Run `opentide --help` for the live command tree.
 | [`setup`](./setup.md) | Onboard detection repositories (repo, platforms, CI, MCP, skills) |
 | [`migrate`](./migrate.md) | Move legacy `Configurations/` and `Objects/` into the greenfield layout |
 | [`generate`](./generate.md) | Documentation, exports, framework artifacts, optional platform import |
-| [`validate`](./validate.md) | Object and query validation |
+| [`validate`](./validate.md) | Validate objects and queries |
 | [`lint`](./lint.md) | Catalogue hygiene (filename slugs, recommended metadata) |
 | [`rules`](./rules.md) | Review staleness for detection rules |
 | [`deploy`](./deploy.md) | Platform rule deployment |

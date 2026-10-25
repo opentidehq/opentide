@@ -363,3 +363,12 @@ def test_gather_reads_counts_from_disk(tmp_path: Path) -> None:
     assert facts.catalogue == {"rules": 1, "threats": 0, "objectives": 0}
     assert facts.platforms == {"sentinel": 1}
     assert facts.schemas is False
+
+
+def test_checklist_rows_are_cut_not_wrapped_on_a_narrow_terminal() -> None:
+    console = _console(OutputMode.HUMAN, width=30)
+    console.print(checklist_table(_STEPS))
+    lines = console.export_text().splitlines()
+    assert len(lines) == len(_STEPS)
+    assert all(len(line) <= 30 for line in lines)
+    assert lines[2].startswith("  ✓  schemas") and lines[2].endswith("…")

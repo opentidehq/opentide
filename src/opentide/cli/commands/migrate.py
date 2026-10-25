@@ -9,7 +9,7 @@ import typer
 from opentide.cli.context import get_context
 from opentide.cli.output import emit_error, emit_success
 
-migrate_app = typer.Typer(help="Migrate legacy client repository layouts")
+migrate_app = typer.Typer(help="Migrate legacy repository layouts")
 
 
 @migrate_app.command("objects")

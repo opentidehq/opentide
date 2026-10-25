@@ -45,13 +45,15 @@ def run_document(
     try:
         with (
             Checklist(total=1) as checklist,
-            generation_step(checklist, "docs", outputs=(output,)),
+            generation_step(checklist, "docs", outputs=(output,)) as step,
             failing_phase("docs"),
         ):
             if scope is None:
                 result = run_document_all(output=output, flavor=flavor)
             else:
                 result = run_document_scope(scope, output=output, flavor=flavor)
+            if result.get("status") == "failed":
+                step.status = "failed"
     except GenerationPhaseError as exc:
         return phase_failure(exc)
     data = {key: value for key, value in dict(result).items() if key != "message"}

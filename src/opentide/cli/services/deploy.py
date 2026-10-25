@@ -378,6 +378,9 @@ def _deploy(
                 continue
             with checklist.step(system, unit="rule") as step:
                 step.done(len(uuids))
+                # A deployer reports a failed rule through the environment, not
+                # an exception; the step must not read as done.
+                failed_before = os.environ.get("DEPLOYMENT_ERROR_RAISED")
                 try:
                     if wide:
                         from opentide.deployment.planning import wide_scope
@@ -389,6 +392,8 @@ def _deploy(
                 except TypeError:
                     logger.warning("switching_to_mdrv3_legacy_methods")
                     deployer.deploy(deployment=uuids)
+                if os.environ.get("DEPLOYMENT_ERROR_RAISED") and not failed_before:
+                    step.status = "failed"
             deployed.append(system)
     from opentide.cli.exit_codes import deployment_outcome
 

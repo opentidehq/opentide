@@ -50,7 +50,7 @@ generate_app = typer.Typer(
     # No square brackets: Rich parses them as console markup and silently
     # renders the contents as nothing.
     help=(
-        "Framework generation and documentation pipeline.\n\n"
+        "Generate schemas, templates, docs and exports\n\n"
         "Run with no argument for the full pipeline, or name one or more "
         "phases to run only those, in the order given: "
         "schemas, templates, vocabs, snippets.\n\n"

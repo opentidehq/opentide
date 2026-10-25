@@ -20,7 +20,10 @@ def lint_cmd(
         [], "--check", help="Limit to one check: filenames or metadata (repeatable)"
     ),
 ) -> None:
-    """Catalogue hygiene: filename slugs and recommended metadata (not schema validation)."""
+    """Check file names and recommended metadata
+
+    Catalogue hygiene: filename slugs and recommended metadata, not schema validation.
+    """
     cli = get_context(ctx)
     cli.apply_environment()
     result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)

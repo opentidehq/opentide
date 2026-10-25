@@ -10,7 +10,7 @@ from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, ValidateChec
 from opentide.cli.output import CommandResult, emit_result, emit_success, emit_usage_error
 from opentide.cli.services.validation import run_validate, validate_query_platform
 
-validate_app = typer.Typer(help="Object and query validation")
+validate_app = typer.Typer(help="Validate objects and queries")
 
 QUERY_STRATEGY_HELP = (
     "Check only rules a run with this strategy deploys (repeatable), on the tenants that "

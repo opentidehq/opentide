@@ -52,7 +52,7 @@ from opentide.cli.services.setup.vscode import run_vscode_setup
 from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_MISSING_OPTION, USAGE_NEEDS_INPUT
 from opentide.core.logging.config import get_console, get_stdout_console
 
-setup_app = typer.Typer(help="Repository and tooling setup")
+setup_app = typer.Typer(help="Set up a detection repository and its tooling")
 skills_app = typer.Typer(help="Agent skills discovery and installation")
 setup_app.add_typer(skills_app, name="skills")
 

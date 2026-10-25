@@ -54,7 +54,7 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "info",
         "opentide.cli.commands.info",
         "info_cmd",
-        "Show repository and platform information.",
+        "Show repository and platform information",
         rich_help_panel=AUTHOR,
     ),
     CommandSpec(

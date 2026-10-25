@@ -25,7 +25,7 @@ def info_cmd(
         False, "--strict", help="Exit non-zero when any object failed to load"
     ),
 ) -> None:
-    """Show repository and platform information."""
+    """Show repository and platform information"""
     cli = get_context(ctx)
     sections = ("rules", "threats", "objectives", "coverage")
     if section is not None and section not in sections:
