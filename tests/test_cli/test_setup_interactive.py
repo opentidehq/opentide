@@ -131,7 +131,16 @@ def test_prompt_cancel_raises_keyboard_interrupt(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "token",
-    ["answer", "question", "pointer", "highlighted", "selected", "text", "instruction", "separator"],
+    [
+        "answer",
+        "question",
+        "pointer",
+        "highlighted",
+        "selected",
+        "text",
+        "instruction",
+        "separator",
+    ],
 )
 def test_prompt_style_inherits_no_questionary_colour(token: str) -> None:
     """questionary merges its own style under ours; its amber answer must not survive."""
