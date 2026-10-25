@@ -157,7 +157,7 @@ def _envelope(**payload: Any) -> dict[str, Any]:
         "command": payload.pop("command", "info"),
         "duration_ms": 1,
         "exit_code": 0,
-        "summary": {},
+        "summary": payload.get("summary", {}),
         "next_actions": [],
         "failure": None,
     }
@@ -265,3 +265,50 @@ def test_every_document_honours_the_variable(argv: list[str], value: str) -> Non
     assert out.endswith("\n") and not out.endswith("\n\n"), repr(out[-20:])
     assert (out.count("\n") == 1) is (value == "0")
     assert json.loads(out)["schema_version"] == 1
+
+
+# --------------------------------------------------------------------------
+# Keys that #643 and #646 add, declared ahead of their merge
+# --------------------------------------------------------------------------
+
+_FIXED = {
+    "path": "objects/rules/r.yaml",
+    "line": 8,
+    "code": "vocab_unknown",
+    "before": "x",
+    "after": "y",
+}
+_STEP = {
+    "name": "schemas",
+    "status": "done",
+    "count": 7,
+    "unit": "file",
+    "seconds": 1.6,
+    "where": None,
+}
+_CHANGE = {
+    "platform": "sentinel",
+    "tenant": "prod",
+    "uuid": "00000000-0000-4000-8000-000000000001",
+    "name": "Rule",
+    "status": "PRODUCTION",
+    "action": "create",
+}
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        # validate --fix and --fix --dry-run (#646)
+        _envelope(command="validate", fixed=[_FIXED], summary={"fixable": 1, "fixed": 1}),
+        _envelope(command="validate", would_fix=[_FIXED], diff="--- a/x\n+++ b/x\n"),
+        # deploy plan, generate steps and the setup repo scaffold (#643)
+        _envelope(command="deploy", changes=[_CHANGE]),
+        _envelope(command="generate", steps=[_STEP]),
+        _envelope(command="generate exports navigator", target="navigator", steps=[_STEP]),
+        _envelope(command="setup repo", name="detections", scaffolded=True),
+    ],
+    ids=["fix", "fix-dry-run", "deploy-changes", "generate-steps", "export-steps", "repo"],
+)
+def test_keys_from_pull_requests_not_merged_yet_are_declared(document: dict[str, Any]) -> None:
+    assert document_problems(document) == []
