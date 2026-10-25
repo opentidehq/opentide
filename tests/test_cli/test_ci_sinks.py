@@ -805,6 +805,19 @@ def test_validate_report_to_a_file_keeps_the_text(repo: Path) -> None:
 
 
 @pytest.mark.usefixtures("validate_result")
+@pytest.mark.parametrize("report_format", ["sarif", "codequality"])
+def test_reports_end_in_exactly_one_newline(repo: Path, report_format: str) -> None:
+    output = repo / f"report.{report_format}"
+    to_file = _invoke(repo, "validate", "--format", report_format, "--output", str(output))
+    assert to_file.exit_code == 1, to_file.output
+    written = output.read_text(encoding="utf-8")
+    assert written.endswith("\n") and not written.endswith("\n\n")
+    to_stdout = _invoke(repo, "validate", "--format", report_format)
+    assert to_stdout.stdout.endswith("\n") and not to_stdout.stdout.endswith("\n\n")
+    json.loads(to_stdout.stdout)
+
+
+@pytest.mark.usefixtures("validate_result")
 def test_validate_json_with_a_report_file(repo: Path) -> None:
     output = repo / "validate.sarif"
     result = _invoke(repo, "--json", "validate", "--format", "sarif", "--output", str(output))
