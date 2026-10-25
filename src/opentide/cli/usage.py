@@ -9,7 +9,6 @@ otherwise. Exit code 2 either way.
 from __future__ import annotations
 
 import re
-import sys
 from collections.abc import Sequence
 from typing import Any
 
@@ -100,13 +99,11 @@ def render_usage_error(
     error: _click.exceptions.UsageError, *, mode: OutputMode | None = None
 ) -> int:
     """Print *error* for the current mode and return the exit code to use."""
-    from opentide.cli.output import command_path, envelope
+    from opentide.cli.output import command_path, envelope, print_document
 
     failure = describe(error)
     mode = mode or get_mode()
     if mode is OutputMode.JSON:
-        from opentide.core.io import dump_json_text
-
         document = envelope(
             {
                 "error": failure.message,
@@ -118,8 +115,7 @@ def render_usage_error(
             failure=failure,
             command=command_path(error.ctx),
         )
-        sys.stdout.write(dump_json_text(document, indent=True, default=str) + "\n")
-        sys.stdout.flush()
+        print_document(document)
         return USAGE_EXIT_CODE
 
     from opentide.cli.ui.render import render_error
