@@ -241,6 +241,7 @@ def test_new_rule_with_platforms_warns_about_disabled_ones(workspace: Path) -> N
         workspace, "rule", "--name", "Rule", "--platform", "sentinel", "--platform", "splunk"
     )
     payload = parse_cli_json(result)
+    assert_matches_model(payload)
     assert payload["platforms"] == ["sentinel", "splunk"]
     assert payload["warnings"] == [
         "splunk is not enabled in this workspace, so this block will not deploy; "
