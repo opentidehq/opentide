@@ -187,23 +187,8 @@ def fetch_github_bytes(
         return None
 
 
-def list_github_paths(
-    prefix: str,
-    *,
-    source: str = _DEFAULT_SOURCE,
-    ref: str = _DEFAULT_REF,
-) -> list[str] | None:
-    """List blob paths under *prefix* in a public GitHub tree.
-
-    ``None`` means the tree could not be read. An empty list means the prefix
-    has no blobs. A truncated tree is treated as unreadable so a skill is not
-    installed with files missing.
-    """
-    folder_path = _repo_file_path(prefix.rstrip("/"))
-    if source != _DEFAULT_SOURCE or not ref_is_contained(ref) or folder_path is None:
-        logger.warning("skills_tree_url_rejected", source=source, ref=ref, prefix=prefix)
-        return None
-    folder = f"{folder_path}/"
+def _fetch_github_blobs(source: str, ref: str) -> list[str] | None:
+    """Every blob path in the repository at *ref*, from one trees API call."""
     url = _contained_github_url(
         f"https://{_API_HOST}/repos/{source}/git/trees/{ref}?recursive=1",
         host=_API_HOST,
@@ -211,7 +196,7 @@ def list_github_paths(
         query="recursive=1",
     )
     if url is None:
-        logger.warning("skills_tree_url_rejected", source=source, ref=ref, prefix=prefix)
+        logger.warning("skills_tree_url_rejected", source=source, ref=ref)
         return None
     request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
     try:
@@ -227,12 +212,58 @@ def list_github_paths(
     tree = data.get("tree")
     if not isinstance(tree, list):
         return None
+    blobs = (item for item in tree if isinstance(item, dict) and item.get("type") == "blob")
+    return [item["path"] for item in blobs if isinstance(item.get("path"), str)]
+
+
+class GithubTree:
+    """The skills repository's file list at one ref, fetched on first use, once.
+
+    The trees API allows 60 unauthenticated calls an hour, and every skill's
+    install fetched the whole recursive tree again: ``setup skills --all``
+    ran out part way through the catalogue.
+    """
+
+    def __init__(self, *, source: str = _DEFAULT_SOURCE, ref: str = _DEFAULT_REF) -> None:
+        self.source = source
+        self.ref = ref
+        self._blobs: list[str] | None = None
+        self._fetched = False
+
+    def blobs(self) -> list[str] | None:
+        """Every blob path, or ``None`` when the tree could not be read."""
+        if not self._fetched:
+            self._blobs = _fetch_github_blobs(self.source, self.ref)
+            self._fetched = True
+        return self._blobs
+
+
+def list_github_paths(
+    prefix: str,
+    *,
+    source: str = _DEFAULT_SOURCE,
+    ref: str = _DEFAULT_REF,
+    tree: GithubTree | None = None,
+) -> list[str] | None:
+    """List blob paths under *prefix* in a public GitHub tree.
+
+    ``None`` means the tree could not be read. An empty list means the prefix
+    has no blobs. A truncated tree is treated as unreadable so a skill is not
+    installed with files missing. Pass *tree* to share one fetch between calls.
+    """
+    folder_path = _repo_file_path(prefix.rstrip("/"))
+    if source != _DEFAULT_SOURCE or not ref_is_contained(ref) or folder_path is None:
+        logger.warning("skills_tree_url_rejected", source=source, ref=ref, prefix=prefix)
+        return None
+    if tree is None or (tree.source, tree.ref) != (source, ref):
+        tree = GithubTree(source=source, ref=ref)
+    blobs = tree.blobs()
+    if blobs is None:
+        return None
+    folder = f"{folder_path}/"
     paths: list[str] = []
-    for item in tree:
-        if not isinstance(item, dict) or item.get("type") != "blob":
-            continue
-        path = item.get("path")
-        if not isinstance(path, str) or not path.startswith(folder):
+    for path in blobs:
+        if not path.startswith(folder):
             continue
         if _repo_file_path(path[len(folder) :]) is None:
             logger.warning("skills_tree_path_rejected", path=path)

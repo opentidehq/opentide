@@ -53,7 +53,7 @@ def _git(cwd: Path, *args: str) -> str:
 
 
 def _github_env(repo: Path, head: str) -> dict[str, str | None]:
-    env: dict[str, str | None] = {key: None for key in _HIDDEN}
+    env: dict[str, str | None] = dict.fromkeys(_HIDDEN)
     env.update(
         {
             "GITHUB_ACTIONS": "true",

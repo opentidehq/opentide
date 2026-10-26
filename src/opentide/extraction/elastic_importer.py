@@ -51,7 +51,7 @@ _VALID_FIELD_TYPES = frozenset(
 class IndentedYamlDumper(yaml.SafeDumper):
     """YAML dumper preserving list indents and formatting."""
 
-    def increase_indent(self, flow: bool = False, indentless: bool = False):
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
         return super().increase_indent(flow, False)
 
 
@@ -510,7 +510,10 @@ def kibana_to_opentide(
             "version": 1,
             "created": created,
             "modified": modified,
-            "tlp": "clear",
+            # A cluster's rules are the organisation's own detections. CLEAR
+            # would let `share push` publish them to anyone; the Sentinel
+            # importer defaults to amber too.
+            "tlp": "amber",
             "author": author,
             "contributors": contributors or None,
         },

@@ -11,6 +11,7 @@ from typing import Any
 import orjson
 import tomli_w
 import yaml
+from yaml.constructor import SafeConstructor
 
 try:
     from yaml import CSafeLoader as YamlLoader
@@ -63,34 +64,77 @@ def json_timestamp_default(value: Any) -> str:
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
-def _reject_duplicate_keys(node: yaml.Node) -> None:
-    """Reject repeated mapping keys, naming the key and its line."""
-    if isinstance(node, yaml.MappingNode):
-        seen: set[str] = set()
-        for key_node, value_node in node.value:
-            key = key_node.value if isinstance(key_node, yaml.ScalarNode) else repr(key_node)
-            if key in seen:
-                line = key_node.start_mark.line + 1
-                raise yaml.YAMLError(f"duplicate key {key!r} at line {line}")
-            seen.add(str(key))
-            _reject_duplicate_keys(value_node)
-        return
-    if isinstance(node, yaml.SequenceNode):
-        for item in node.value:
-            _reject_duplicate_keys(item)
+def _reject_duplicate_keys(root: yaml.Node) -> None:
+    """Reject repeated mapping keys, naming the key and its line.
+
+    An alias is the very node its anchor names, so each node is checked once.
+    Walking the document as a tree took exponential time on nested aliases (a
+    368-byte file took 23 s) and recursed forever on a recursive alias, which
+    is rejected here instead: nothing downstream can walk a cyclic document.
+    """
+    checked: set[yaml.Node] = set()
+    # Nodes on the path from the root to the node being expanded.
+    open_nodes: set[yaml.Node] = set()
+    stack: list[tuple[yaml.Node, bool]] = [(root, False)]
+    while stack:
+        node, leaving = stack.pop()
+        if leaving:
+            open_nodes.discard(node)
+            checked.add(node)
+            continue
+        if node in checked:
+            continue
+        if node in open_nodes:
+            raise yaml.YAMLError(f"recursive alias at line {node.start_mark.line + 1}")
+        if isinstance(node, yaml.MappingNode):
+            seen: set[str] = set()
+            for key_node, _value_node in node.value:
+                key = key_node.value if isinstance(key_node, yaml.ScalarNode) else repr(key_node)
+                if key in seen:
+                    line = key_node.start_mark.line + 1
+                    raise yaml.YAMLError(f"duplicate key {key!r} at line {line}")
+                seen.add(str(key))
+            children = [value_node for _key_node, value_node in node.value]
+        elif isinstance(node, yaml.SequenceNode):
+            children = list(node.value)
+        else:
+            checked.add(node)
+            continue
+        open_nodes.add(node)
+        stack.append((node, True))
+        # Reversed, so children are checked in document order.
+        stack.extend((child, False) for child in reversed(children))
+
+
+def _construct_timestamp_text(loader: SafeConstructor, node: yaml.ScalarNode) -> Any:
+    return stringify_yaml_temporals(loader.construct_yaml_timestamp(node))
+
+
+class _TideYamlLoader(YamlLoader):  # ty: ignore[unsupported-base]  # libyaml or pure-Python safe loader
+    """The safe loader, reading YAML timestamps as ISO-8601 strings.
+
+    Converting while constructing, rather than copying the finished document,
+    keeps an aliased node one shared object; the copy expanded every alias and
+    grew exponentially with nested ones.
+    """
+
+
+_TideYamlLoader.add_constructor("tag:yaml.org,2002:timestamp", _construct_timestamp_text)
 
 
 def parse_yaml(text: str) -> Any:
-    """Parse YAML text using the fast safe loader when available."""
-    loader = YamlLoader(text)
+    """Parse YAML text using the fast safe loader when available.
+
+    Timestamps load as ISO-8601 strings (see :func:`stringify_yaml_temporals`).
+    """
+    loader = _TideYamlLoader(text)
     try:
         node = loader.get_single_node()
         if node is not None:
             _reject_duplicate_keys(node)
-        document = loader.construct_document(node)
+        return loader.construct_document(node)
     finally:
         loader.dispose()
-    return stringify_yaml_temporals(document)
 
 
 def load_yaml(path: Path) -> Any:
