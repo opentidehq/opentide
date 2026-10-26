@@ -118,6 +118,10 @@ def test_splice_form_moves_to_a_shard_and_only_that_line_goes(workspace: Path) -
 
     assert result["status"] == "completed"
     assert "_exit_code" not in result
+    assert result["message"] == (
+        "Moved 1 vendor id to .opentide/states/deployment/ · 1 rule edited, 1 shard written"
+    )
+    assert result["_summary"] == {"ids": 1, "rules": 1, "shards": 1}
     assert _removed_lines(SPLICED, path.read_text(encoding="utf-8")) == [
         "    rule_id::IIG::Production: 7590\n"
     ]

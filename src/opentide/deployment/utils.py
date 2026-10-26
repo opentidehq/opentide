@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from opentide.core import registry
-from opentide.core.io import load_yaml
+from opentide.core.errors import ObjectFileError
+from opentide.core.io import first_content_span, load_yaml, root_mapping_problem
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
 from opentide.deployment.git_repo import (
@@ -150,7 +152,7 @@ def _report_nested_rules(nested: tuple[str, ...], warnings: list[str] | None) ->
         logger.warning("deploy_nested_rules_skipped", **fields)
         return
     # The caller prints the message: a warning-level log would print it twice.
-    logger.info("deploy_nested_rules_skipped", **fields)
+    logger.debug("deploy_nested_rules_skipped", **fields)
     warnings.append(_nested_rules_warning(nested))
 
 
@@ -211,6 +213,8 @@ def make_deploy_plan(
     refused: list[str] = []
     for rule in scope.files:
         data = load_yaml(rule)
+        if (problem := root_mapping_problem(data)) is not None:
+            raise _object_file_error(Path(rule), problem)
         name = data["name"]
         conf_data = data["configurations"]
         mdr_uuid = object_uuid(data)
@@ -251,7 +255,7 @@ def make_deploy_plan(
             if any(deploys(strategy, run) for run in strategies):
                 selected.append(system)
                 logger.info(
-                    "mdr_selected_for_deploy",
+                    "rule_selected_for_deploy",
                     system=system.upper(),
                     status=platform_status,
                     strategy=strategy.name,
@@ -260,7 +264,7 @@ def make_deploy_plan(
                 )
             else:
                 logger.warning(
-                    "mdr_skipped_for_strategy",
+                    "rule_skipped_for_strategy",
                     system=system.upper(),
                     status=platform_status,
                     strategy=strategy.name,
@@ -284,6 +288,15 @@ def make_deploy_plan(
     return deploy_mdr
 
 
+def _object_file_error(path: Path, problem: str) -> ObjectFileError:
+    """A rule file that is not one mapping, pointing at where its document starts."""
+    position = first_content_span(path.read_text(encoding="utf-8"))
+    if position is None:
+        return ObjectFileError(path, problem)
+    line, column, end_column = position
+    return ObjectFileError(path, problem, line=line, column=column, end_column=end_column)
+
+
 class ExternalIdInRuleError(ValueError):
     """Every rule in the plan was refused for carrying vendor ids on the rule."""
 
@@ -297,7 +310,7 @@ def _refuse_external_ids(
     error = legacy_key_error(uuid, data)
     if error is None:
         return False
-    report_failure(error, object_uuid=uuid, platform="*")
+    report_failure(error, object_uuid=uuid, platform="*", reported=warnings is not None)
     if warnings is not None:
         warnings.append(f"{error} -- {rule} was not deployed to any platform")
     return True

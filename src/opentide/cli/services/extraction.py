@@ -79,20 +79,37 @@ def run_extract(
     **kwargs: object,
 ) -> dict[str, object]:
     """Entry point for extract import command."""
+    from opentide.cli.services.generation import WrittenFiles
+    from opentide.cli.ui.progress import Checklist, plural
+    from opentide.core.root import get_repo_root
+
     ctx.apply_environment()
     captured = StringIO()
     run_res = None
-    if ctx.json_output:
-        with redirect_stdout(captured):
+    watch = WrittenFiles(get_repo_root())
+    with (
+        Checklist(total=1) as checklist,
+        checklist.step(f"import from {import_target.value}", unit="rule") as step,
+    ):
+        if ctx.json_output:
+            with redirect_stdout(captured):
+                run_res = run_extract_import(import_target, **kwargs)
+        else:
             run_res = run_extract_import(import_target, **kwargs)
-    else:
-        run_res = run_extract_import(import_target, **kwargs)
-    result: dict[str, object] = {
-        "message": f"Imported {import_target.value}",
-        "import": import_target.value,
-    }
+        written = [path for path in watch.changes()[0] if path.suffix in (".yaml", ".yml")]
+        step.done(len(written))
+    result: dict[str, object] = {"import": import_target.value}
     if isinstance(run_res, dict):
         result.update(run_res)
+    imported = result.get("extracted_count")
+    count = imported if isinstance(imported, int) else len(written)
+    skipped = result.get("skipped")
+    skipped_count = len(skipped) if isinstance(skipped, list) else 0
+    message = f"Imported {plural(count, 'rule')} from {import_target.value}"
+    if skipped_count:
+        message += f" · {skipped_count} skipped"
+    result["message"] = message
+    result["_summary"] = {"imported": count, "skipped": skipped_count}
     if captured.getvalue().strip():
         result["output"] = captured.getvalue().strip()
     return result

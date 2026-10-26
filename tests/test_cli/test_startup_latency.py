@@ -64,4 +64,4 @@ def test_console_script_help_works_without_workspace(tmp_path: Path) -> None:
         env={**os.environ, "OPENTIDE_TIDE_WORKSPACE": str(empty)},
     )
     assert result.returncode == 0, result.stderr
-    assert "DetectionOps" in result.stdout or "validate" in result.stdout
+    assert "validate" in result.stdout

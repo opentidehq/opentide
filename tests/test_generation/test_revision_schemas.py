@@ -129,11 +129,18 @@ def test_rule_1_1_schema_declares_reviewed_and_1_0_does_not(corpus: dict[str, An
     assert metadata["rule::1.0"]["additionalProperties"] is False
     for schema_id, node in metadata.items():
         assert node["properties"]["schema"]["const"] == schema_id
-    # Everything but `reviewed` (and the pinned identifier) matches rule::1.0.
+    # Everything but `reviewed` (and the pinned identifier, and the hover text
+    # naming both) matches rule::1.0.
     current = copy.deepcopy(corpus["schemas"]["rule::1.1"])
-    del current["properties"]["metadata"]["properties"]["reviewed"]
-    current["properties"]["metadata"]["properties"]["schema"]["const"] = "rule::1.0"
     legacy = copy.deepcopy(corpus["schemas"]["rule::1.0"])
+    current_metadata = current["properties"]["metadata"]
+    legacy_metadata = legacy["properties"]["metadata"]
+    del current_metadata["properties"]["reviewed"]
+    current_metadata["properties"]["schema"] = legacy_metadata["properties"]["schema"]
+    for annotation in ("description", "markdownDescription"):
+        current_metadata.pop(annotation, None)
+        if annotation in legacy_metadata:
+            current_metadata[annotation] = legacy_metadata[annotation]
     # Pydantic leaves the (inlined, unreferenced) metadata model in $defs.
     assert current["$defs"].pop("RuleMetadata")
     assert legacy["$defs"].pop("ObjectMetadata")

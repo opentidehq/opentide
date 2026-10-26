@@ -8,9 +8,10 @@ after the subcommand instead of before it, ``opentide explorer build`` which
 was never registered at all (#247, #270).
 
 Resolution here mirrors Click's own parse order rather than shelling out:
-options bind to the command whose token span they appear in, so
-``opentide --json validate`` and ``opentide validate --json`` are different
-questions and only the first one has an answer.
+options bind to the command whose token span they appear in. The boolean root
+flags (``--json``, ``--no-color``, ``--debug``, ``--quiet``) are the exception:
+the root group hoists them from anywhere before ``--``, so
+``opentide validate --json`` resolves like ``opentide --json validate``.
 
 Output samples had the same gap: a ``text`` block under a command was never
 compared with what the command prints, so the deploy dry-run sample went on
@@ -30,7 +31,10 @@ from typing import TYPE_CHECKING
 
 from typer.main import get_command
 
-from opentide.cli import _NAMED_GENERATE_PHASES, app
+from opentide.cli import app
+from opentide.cli.commands.generate import _NAMED_GENERATE_PHASES
+from opentide.cli.completion import SHELLS
+from opentide.cli.lazy import HOISTED_FLAGS
 
 if TYPE_CHECKING:  # pragma: no cover - import only for annotations
     import click
@@ -357,9 +361,13 @@ def documented_outputs(paths: list[Path] | None = None) -> list[DocOutput]:
 #: Pairing is opt-in, so the guard below reads every fence a sample could sit
 #: in: the two languages ``output-of`` accepts, and none at all.
 GUARDED_LANGUAGES = OUTPUT_LANGUAGES | {""}
-#: Lines only opentide's renderer starts: ``emit_result``'s status words and
-#: ``emit_deprecation``'s, the ``--no-color`` FATAL line, and a phase header.
-_CLI_LINE = re.compile(r"^\s*(?:(?:OK|SKIPPED|WARNING|DEPRECATED)\s|FATAL\b|==\s.*\s==\s*$)")
+#: Lines only opentide's renderer starts: ``emit_result``'s outcome glyphs and
+#: severity words, ``emit_deprecation``'s word, a phase header, and the labels
+#: older releases printed (``OK``, ``SKIPPED``, ``WARNING``, ``FATAL``).
+_CLI_LINE = re.compile(
+    r"^\s*(?:(?:OK|SKIPPED|WARNING|DEPRECATED|[✓✗!→])\s|(?:error|warning|Skipped):\s"
+    r"|FATAL\b|==\s.*\s==\s*$)"
+)
 #: A key of the result envelope every ``--json`` command writes.
 _ENVELOPE_KEY = re.compile(r'"(?:ok|status)"\s*:')
 #: A sample that shows output no command in the golden repository can print.
@@ -467,6 +475,9 @@ def _choice_problem(param: click.Parameter, value: str, where: str) -> str | Non
     return f"{where!r} {label} does not accept {value!r} (choose from {', '.join(names)})"
 
 
+_SHELL_FLAGS = frozenset({"--install-completion", "--show-completion"})
+
+
 def resolve(argv: tuple[str, ...]) -> list[str]:
     """Return the reasons *argv* would not parse, empty when it is valid.
 
@@ -496,12 +507,17 @@ def resolve(argv: tuple[str, ...]) -> list[str]:
                 continue
             name, separator, inline = token.partition("=")
             param = _option_lookup(command).get(name)
+            if param is None and token in HOISTED_FLAGS:
+                continue
             if param is None:
                 problems.append(f"{where!r} has no option {name!r}")
                 continue
             if not _takes_value(param):
                 if separator:
                     problems.append(f"{where!r} {name} is a flag and takes no value")
+                # `--show-completion zsh`: these two root flags read a shell after them.
+                if name in _SHELL_FLAGS and index < len(tokens) and tokens[index] in SHELLS:
+                    index += 1
                 continue
             if separator:
                 value = inline

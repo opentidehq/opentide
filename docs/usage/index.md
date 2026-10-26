@@ -6,7 +6,7 @@ icon: BookOpen
 
 # Usage
 
-opentide is the **DetectionOps engine**: a versioned toolchain for building, validating, deploying, and documenting detection content as code across enterprise security platforms. This section takes you from "what is it?" to a working, CI-gated detection repository.
+opentide is a versioned toolchain for building, validating, deploying, and documenting detection content as code across enterprise security platforms. This section takes you from "what is it?" to a working, CI-gated detection repository.
 
 <Callout type="info">
 New here? Read [Why opentide](./why-opentide.md) and [How opentide works](./how-it-works.md) first — they give you the mental model that every other page assumes.

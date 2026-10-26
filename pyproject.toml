@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "opentide"
 dynamic = ["version"]
-description = "DetectionOps engine: validate, generate, deploy, and document detection-as-code across eight security platforms."
+description = "Spec-driven development for agentic detection engineering: validate, generate, deploy, and document detection-as-code across eight security platforms."
 readme = "README.md"
 license = "EUPL-1.2"
 license-files = ["LICENSE"]
@@ -39,6 +39,10 @@ dependencies = [
     "typer>=0.27.0",
     "ruamel.yaml",
     "questionary>=2.1.1",
+    # `opentide tui`. A dependency, not an extra, because `pip install opentide`
+    # is the only install. Imported only by opentide.cli.tui_app when the UI
+    # opens, so no command, nor `opentide tui --help`, pays for it at start-up.
+    "textual>=8.0",
     "requests>=2.34.2",
     "pymisp>=2.5.34.4",
     # The MCP server (`opentide mcp start`) imports `mcp.server.fastmcp`, which
@@ -182,6 +186,7 @@ allowed-confusables = ["–", "×"]
 [tool.ruff.lint.per-file-ignores]
 # Entry points whose job is to print: the CLI's JSON writer and small `main()`s.
 "src/opentide/cli/output.py" = ["T201"]
+"src/opentide/cli/findings.py" = ["T201"]
 "src/opentide/ci/state_replay.py" = ["T201"]
 "src/opentide/mcp_server/launcher.py" = ["T201"]
 "src/opentide/vocabulary/sync_upstream.py" = ["T201"]
@@ -198,7 +203,7 @@ allowed-confusables = ["–", "×"]
 
 [tool.ruff.lint.flake8-bugbear]
 # Typer declares CLI parameters as call defaults; they are immutable markers.
-extend-immutable-calls = ["typer.Option", "typer.Argument"]
+extend-immutable-calls = ["typer.Option", "typer.Argument", "opentide.cli.enums.platform_help"]
 
 [tool.ty.src]
 include = ["src/opentide"]

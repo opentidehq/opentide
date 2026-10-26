@@ -52,8 +52,8 @@
   
   ```
   
-  ## Signal MDR coverage
-  | Signal | Downstream MDR rules |
+  ## Signal rule coverage
+  | Signal | Downstream rules |
   | --- | --- |
   | Unusual cloud directory enumeration | [Shai-Hulud Sentinel Rule](../rules/shai-hulud-sentinel-rule.md) (`00000000-0000-4000-8103-000000000001`) |
   

@@ -6,7 +6,9 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from opentide.cli.services.rules import run_unreviewed
+import pytest
+
+from opentide.cli.services.rules import run_unreviewed, window_text
 from opentide.models.review import parse_window
 
 
@@ -44,7 +46,35 @@ def test_run_unreviewed_classifies_rules(tmp_path: Path) -> None:
     assert reasons["objects/rules/stale.yaml"] == "stale"
     assert "objects/rules/fresh.yaml" not in reasons
     assert payload["count"] == 3
+    assert payload["message"] == "3 rules unreviewed for 90 days"
+    assert payload["_outcome_kind"] == "warning"
+    assert payload["_summary"] == {"unreviewed": 3}
     assert parse_window("90d").days == 90
+
+
+def test_every_rule_reviewed_reads_as_a_pass(tmp_path: Path) -> None:
+    rules = tmp_path / "objects" / "rules"
+    rules.mkdir(parents=True)
+    _write(rules / "fresh.yaml", "rule::1.1", "2026-09-15")
+    payload = run_unreviewed(
+        tmp_path, older_than="90d", now=datetime(2026, 10, 2, tzinfo=timezone.utc)
+    )
+    assert payload["message"] == "Every rule reviewed in the last 90 days"
+    assert "_outcome_kind" not in payload
+
+
+@pytest.mark.parametrize(
+    ("window", "text"),
+    [
+        ("90d", "90 days"),
+        ("1d", "1 day"),
+        ("12h", "12 hours"),
+        ("30m", "30 minutes"),
+        ("7", "7 days"),
+    ],
+)
+def test_window_text(window: str, text: str) -> None:
+    assert window_text(window) == text
 
 
 def test_cli_unreviewed_json(tmp_path: Path, invoke_cli) -> None:
@@ -57,6 +87,21 @@ def test_cli_unreviewed_json(tmp_path: Path, invoke_cli) -> None:
     assert payload["ok"] is True
     assert payload["count"] == 1
     assert payload["rules"][0]["reason"] == "schema"
+
+
+def test_an_empty_catalogue_suggests_opentide_new_rule(tmp_path: Path, invoke_cli) -> None:
+    """With #642's `new` merged, the first step is `opentide new rule`, not the templates."""
+    (tmp_path / "objects" / "rules").mkdir(parents=True)
+    result = invoke_cli("rules", "unreviewed", repo=tmp_path)
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "skipped"
+    assert payload["next_actions"] == [
+        {"command": "opentide --json new rule", "reason": "scaffold your first rule"}
+    ]
+    human = invoke_cli("rules", "unreviewed", repo=tmp_path, json_output=False)
+    assert "Skipped: No rules yet" in human.stdout
+    assert "→ opentide new rule · scaffold your first rule" in human.stdout
 
 
 def test_cli_unreviewed_prints_a_human_line(tmp_path: Path, invoke_cli) -> None:

@@ -38,7 +38,7 @@ def _walk_wizard(repo: Path, *, apply: bool) -> PtyRun:
         cwd=repo.parent,
         timeout=180,
     )
-    session.expect("Detection Repository Setup")
+    session.expect("opentide setup")
 
     session.expect("Repository name")
     session.send(ENTER)
@@ -104,7 +104,7 @@ def test_json_setup_on_a_tty_emits_one_document(tmp_path: Path) -> None:
     assert "--json" in payload["message"]
     assert "--yes" in payload["message"]
     assert "Repository name" not in result.clean, result.clean
-    assert "Detection Repository Setup" not in result.clean, result.clean
+    assert "A few questions" not in result.clean, result.clean
     assert not (repo / "objects").exists()
 
 
@@ -167,3 +167,60 @@ def test_wizard_without_a_terminal_explains_itself(tmp_path: Path) -> None:
     assert result.returncode != 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
+
+
+def _human_env() -> dict[str, str]:
+    env = {**clean_env(), "OPENTIDE_OUTPUT": "human"}
+    env.pop("NO_COLOR", None)
+    return env
+
+
+def test_branded_wizard_validates_and_ends_with_next_steps(tmp_path: Path) -> None:
+    """The welcome draws the logo, an empty name is refused on screen, and the
+    run ends with what it wrote, the outcome line and numbered next steps."""
+    repo = tmp_path / "branded-detections"
+    repo.mkdir(parents=True)
+    session = PtySession(
+        ["setup", "--path", str(repo)], env=_human_env(), cwd=tmp_path, timeout=180
+    )
+    session.expect("Spec-driven development for agentic detection engineering")
+
+    session.expect("Repository name")
+    session.send("\x15")  # clear the suggested name
+    session.send(ENTER)
+    session.expect("cannot be empty")
+    session.send("Branded Detections" + ENTER)
+    session.expect("Organisation")
+    session.send(ENTER)
+    session.expect("Description")
+    session.send(ENTER)
+    session.expect("Detection platforms")
+    session.send(SPACE)
+    session.send(ENTER)
+    session.expect("CI/CD platform")
+    session.send(ENTER)
+    session.expect("Configure opentide MCP")
+    session.send(ENTER)
+    session.expect("Install agent skills")
+    session.send(ENTER)
+    session.expect("Apply this setup plan")
+    session.send(ENTER)
+    session.expect("Created Branded Detections in")
+    session.expect("Next steps")
+    result = session.finish()
+
+    assert result.exit_status == 0, result.clean
+    assert "▄▄████" in result.clean  # the pill logo
+    assert "objects/{threats,objectives,rules}/" in result.clean
+    assert "opentide generate" in result.clean
+    assert (repo / "README.md").read_text(encoding="utf-8").startswith("# Branded Detections")
+
+
+def test_bare_opentide_on_a_terminal_shows_the_home_screen(tmp_path: Path) -> None:
+    result = run_on_pty([], cwd=tmp_path, env=_human_env())
+
+    assert result.exit_status == 0, result.clean
+    assert "Spec-driven development for agentic detection engineering" in result.clean
+    assert "Suggested next" in result.clean
+    assert "opentide setup" in result.clean
+    assert "Usage:" not in result.clean
