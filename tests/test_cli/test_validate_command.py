@@ -296,6 +296,12 @@ def test_a_dry_run_prints_the_diff_and_frames_only_what_it_would_not_fix(
     [
         (("validate", "--dry-run"), "usage_error", "--dry-run"),
         (("validate", "--watch", "--fix"), "usage_error", "--watch"),
+        # #646 + #648: the watch loop would write no report and say nothing.
+        (
+            ("validate", "--watch", "--format", "sarif", "--output", "r.sarif"),
+            "usage_error",
+            "--watch",
+        ),
         (("validate", "--watch"), "usage_watch_needs_tty", "--watch"),
     ],
 )
@@ -308,3 +314,17 @@ def test_combinations_that_cannot_run_exit_2(
     assert result.exit_code == 2
     failure = json.loads(result.stdout)["failure"]
     assert (failure["code"], failure["argument"]) == (code, argument)
+
+
+@pytest.mark.parametrize("report", ["sarif", "codequality"])
+def test_watch_refuses_a_report_format_and_writes_nothing(tmp_path: Path, report: str) -> None:
+    """``--watch --format`` exits 2 before the watch starts, in human output too."""
+    output = tmp_path / "report.json"
+    with patch("opentide.cli.services.validation.run_validate") as run:
+        result = _invoke(
+            tmp_path, "validate", "--watch", "--format", report, "--output", str(output)
+        )
+    run.assert_not_called()
+    assert result.exit_code == 2
+    assert "--watch cannot be combined with --format" in _text(result)
+    assert not output.exists()
