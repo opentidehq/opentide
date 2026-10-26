@@ -717,12 +717,16 @@ def _run_live_validator(
     if early is not None:
         return early
     from opentide.cli.exit_codes import validation_outcome
+    from opentide.cli.ui.progress import plural
 
     outcome = validation_outcome()
+    queries = sum(reach.values())
+    # The validators report a rejection as a run flag, not per query, so a
+    # failure counts what was checked rather than what was rejected.
     message = (
-        f"Query validation failed for {platform}"
+        f"Queries rejected on {platform} · {queries} checked on {plural(len(reach), 'tenant')}"
         if outcome.failed
-        else f"Query validation passed for {platform}"
+        else f"{plural(queries, 'query', 'queries')} valid on {plural(len(reach), 'tenant')}"
     )
     result: dict[str, object] = {
         "platform": platform,
@@ -731,6 +735,7 @@ def _run_live_validator(
         "supported": True,
         **counts,
         "message": message,
+        "_summary": {"queries": queries, "tenants": len(reach)},
         "_exit_code": outcome.exit_code,
     }
     if outcome.failed:

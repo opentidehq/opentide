@@ -153,7 +153,7 @@ opentide --json deploy --dry-run --strategy PREVIEW
 opentide --json deploy --dry-run --strategy RELEASE --all   # every rule file
 ```
 
-Every selection and every skip is logged with the rule's status, the strategy it maps to, the run's strategies, and the tenant's strategies (`mdr_selected_for_deploy`, `mdr_skipped_for_strategy`, `adding_tenant`, `skipping_tenant`).
+Every selection and every skip is logged with the rule's status, the strategy it maps to, the run's strategies, and the tenant's strategies (`rule_selected_for_deploy`, `rule_skipped_for_strategy`, `adding_tenant`, `skipping_tenant`).
 
 ## Live query validation follows the same rules
 

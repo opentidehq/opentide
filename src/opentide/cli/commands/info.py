@@ -20,7 +20,9 @@ def info_cmd(
         None, "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
     ),
     section: str | None = typer.Argument(None),
-    technique: str | None = typer.Option(None, "--technique"),
+    technique: str | None = typer.Option(
+        None, "--technique", help="ATT&CK technique ID for the coverage section (T1059)"
+    ),
     strict: bool = typer.Option(
         False, "--strict", help="Exit non-zero when any object failed to load"
     ),

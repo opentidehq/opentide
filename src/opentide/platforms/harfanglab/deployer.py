@@ -28,7 +28,7 @@ class HarfangLabDeploy(RuleDeployer):
         """
         mdr_config = data.configurations.harfanglab
         if not mdr_config:
-            logger.critical('missing_harfanglab_configuration_in_mdr', detail=data.metadata.uuid)
+            logger.critical('missing_harfanglab_configuration_in_rule', detail=data.metadata.uuid)
             raise Exception('Missing HarfangLab configuration')
         if not mdr_config.sigma:
             logger.critical('sigma_configuration_expected_but_not_found', detail=data.metadata.uuid)
@@ -68,7 +68,7 @@ class HarfangLabDeploy(RuleDeployer):
         """
         mdr_config = data.configurations.harfanglab
         if not mdr_config:
-            logger.critical('missing_harfanglab_configuration_in_mdr', detail=data.metadata.uuid)
+            logger.critical('missing_harfanglab_configuration_in_rule', detail=data.metadata.uuid)
             raise Exception('Missing HarfangLab configuration')
         if not mdr_config.yara:
             logger.critical('yara_configuration_expected_but_not_found', detail=data.metadata.uuid)
@@ -173,7 +173,7 @@ class HarfangLabDeploy(RuleDeployer):
         is_sigma = mdr_config.sigma is not None
         is_yara = mdr_config.yara is not None
         if not is_sigma and (not is_yara):
-            logger.critical('mdr_must_contain_either_sigma_or_yara_configuration', detail=data.metadata.uuid)
+            logger.critical('rule_must_contain_either_sigma_or_yara_configuration', detail=data.metadata.uuid)
             raise Exception('Invalid HarfangLab configuration')
         if check_status(mdr_config.status) is StatusStrategy.DELETION:
             logger.info('step_in_progress', detail=f'Proceeding with deletion of rule against tenant {tenant_config.name}', context=str(rule_id))
@@ -211,7 +211,7 @@ class HarfangLabDeploy(RuleDeployer):
             for mdr in tenant_deployment.rules:
                 mdr_config = mdr.configurations.harfanglab
                 if not mdr_config:
-                    logger.warning('skipping_mdr_no_harfanglab_config', detail=mdr.name)
+                    logger.warning('skipping_rule_no_harfanglab_config', detail=mdr.name)
                     continue
                 is_sigma = mdr_config.sigma is not None
                 is_yara = mdr_config.yara is not None

@@ -77,7 +77,7 @@ def main_callback(
         "--no-color",
         is_eager=True,
         callback=_no_color_before_help,
-        help="Disable Rich colour output",
+        help="Disable colour",
     ),
     json_output: bool = typer.Option(
         False, "--json", help="Machine-readable output: one JSON object on stdout"

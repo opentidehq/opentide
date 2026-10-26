@@ -206,6 +206,7 @@ def test_agent_mode_never_prompts(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     plain = _invoke("setup", "repo", str(tmp_path), env={"AI_AGENT": "test-agent"})
     assert plain.exit_code == 2, plain.output
     assert "does not prompt in a coding agent (test-agent)" in plain.stderr
+    assert "(--name, --platform)" in " ".join(plain.stderr.split())
     assert "--yes" in plain.stderr
     assert not (tmp_path / "objects").exists()
 

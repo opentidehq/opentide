@@ -331,6 +331,9 @@ def run_migrate_objects(
         "applied": bool(apply and (actionable or case_renamed)),
         "_summary": {"folders": len(actionable), "case_renamed": len(case_renamed)},
     }
+    if not apply and (actionable or case_renamed):
+        # "Would move …": a dry run moved nothing, so the line takes no ✓.
+        result["_outcome_kind"] = "plan"
     if case_renamed:
         result["case_renamed"] = case_renamed
         if apply:

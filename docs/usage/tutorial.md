@@ -279,13 +279,13 @@ opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
 ```text output-of="opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all"
-Deploy plan · strategy PREVIEW · dry run, nothing is sent
+Deploy plan · strategy PREVIEW · 1 platform, 0 tenants · dry run, nothing is sent
 
 sentinel · 0 tenants
   + create or update  Sentinel KQL Rule  …000000000001  status STAGING
 
 warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
-Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete · 1 platform, 0 tenants
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
   help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
 ```
 

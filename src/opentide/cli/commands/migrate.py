@@ -113,4 +113,7 @@ def migrate_vocab_scope_cmd(
         )
         payload["_exit_code"] = 2
         payload["_failure_code"] = "needs_human_decision"
+    elif not apply:
+        # "Would rewrite …": a dry run wrote nothing, so the line takes no ✓.
+        payload["_outcome_kind"] = "plan"
     emit_success(cli, payload)

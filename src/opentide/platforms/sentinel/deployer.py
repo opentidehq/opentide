@@ -61,9 +61,24 @@ def _technique_tactics(technique: str) -> list[str]:
     return tactics
 
 
-def _missing_field(data: DetectionRule, field: str, requirement: str) -> Errors.TideRuleDataModelErrors:
-    return Errors.TideRuleDataModelErrors(
-        f'Rule {data.metadata.uuid} ({data.name}): configurations.sentinel.{field} is missing; {requirement}'
+class SentinelCompileError(Errors.TideRuleDataModelErrors):
+    """A rule Sentinel cannot compile, with a stable *code*, the *reason* alone and a *hint*.
+
+    ``str()`` names the rule, for a live deploy's log; a dry run already knows
+    the rule and its file, so it shows *reason* under *code* instead.
+    """
+
+    def __init__(self, data: DetectionRule, code: str, reason: str, hint: str | None = None) -> None:
+        self.code = code
+        self.reason = reason
+        self.hint = hint
+        detail = f'{reason}; {hint}' if hint else reason
+        super().__init__(f'Rule {data.metadata.uuid} ({data.name}): {detail}')
+
+
+def _missing_field(data: DetectionRule, field: str, requirement: str) -> SentinelCompileError:
+    return SentinelCompileError(
+        data, 'compile_missing_field', f'configurations.sentinel.{field} is missing', requirement
     )
 
 
@@ -112,7 +127,12 @@ class SentinelDeploy(RuleDeployer):
             properties['suppressionEnabled'] = False
             properties['suppressionDuration'] = duration('1h')
         else:
-            raise Errors.TideRuleDataModelErrors('Suppression set to true, must be false or int')
+            raise SentinelCompileError(
+                data,
+                'compile_invalid_value',
+                'configurations.sentinel.alert.suppression is true',
+                'set it to false or a duration such as PT1H',
+            )
         if configuration.scheduling.nrt is True:
             rule['kind'] = 'NRT'
         else:
@@ -181,6 +201,14 @@ class SentinelDeploy(RuleDeployer):
                 }
                 for entity in entity_data
             ]
+        if not configuration.alert.severity and data.response is None:
+            # An empty `response:` block loads as None (#643).
+            raise SentinelCompileError(
+                data,
+                'compile_empty_block',
+                '`response` is empty, so Sentinel cannot read `alert_severity`',
+                'set response.alert_severity, or configurations.sentinel.alert.severity',
+            )
         severity = configuration.alert.severity or data.response.alert_severity
         if severity == 'Critical':
             severity = 'High'
@@ -218,7 +246,7 @@ class SentinelDeploy(RuleDeployer):
         alert_rule = self.compile_deployment(data=data, service=service, tenant=tenant_config.name)
         logger.info('deploying_rule_to_sentinel')
         service.alert_rules.create_or_update(resource_group_name=tenant_config.setup.resource_group, workspace_name=tenant_config.setup.workspace_name, rule_id=mdr_uuid, alert_rule=alert_rule)
-        logger.info('deployed_mdr_successfully', arg0=mdr_name)
+        logger.info('deployed_rule_successfully', arg0=mdr_name)
         return True
 
     def deploy(self, mdr_deployment: Sequence[DetectionRule] | list[str], strategies: RunStrategies):

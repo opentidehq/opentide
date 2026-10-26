@@ -141,9 +141,9 @@ def test_info_summary_lists_each_platform_capability(tutorial: Path) -> None:
     """#292: the capability cell `[deploy, validate]` was parsed as a markup tag."""
     lines = _human(tutorial, "info").splitlines()
     assert any(
-        "Microsoft Sentinel" in line and "enabled=True [deploy, validate]" in line for line in lines
+        "Microsoft Sentinel" in line and "enabled · deploy, validate" in line for line in lines
     )
-    assert any("CrowdStrike" in line and "enabled=False [deploy]" in line for line in lines)
+    assert any("CrowdStrike" in line and "disabled · deploy" in line for line in lines)
 
 
 def test_failing_validate_keeps_the_severity_tag(tutorial: Path) -> None:

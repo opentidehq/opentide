@@ -145,12 +145,12 @@ class PromoteMDR:
             for line in buffer:
                 file.write(line)
 
-        logger.info("mdr_promoted", target=PROMOTION_TARGET)
+        logger.info("rule_promoted", target=PROMOTION_TARGET)
 
     def promote(self, deployment: list[Path]):
         report_stage("status promotion")
         logger.info(
-            "mdr_promotion_started",
+            "rule_promotion_started",
             detail="Promotes the status of modified rule files according to configuration",
         )
 
@@ -187,11 +187,11 @@ class PromoteMDR:
 
                 if not system_promotion:
                     logger.info(
-                        "nothing_to_promote_mdr_already_in_production_status", detail=mdr_name
+                        "nothing_to_promote_rule_already_in_production_status", detail=mdr_name
                     )
                 else:
                     logger.info(
-                        "detected_statuses_needing_promotion_for_the_following_mdr", detail=mdr_name
+                        "detected_statuses_needing_promotion_for_the_following_rule", detail=mdr_name
                     )
                     logger.info(
                         "promoting_the_following_systems_statuses",
@@ -204,6 +204,6 @@ class PromoteMDR:
 
         else:
             logger.info(
-                "mdr_promotion_disabled_in_config",
+                "rule_promotion_disabled_in_config",
                 detail="Enable status promotion under [promotion] in deployment.toml",
             )

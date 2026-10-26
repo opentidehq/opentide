@@ -21,13 +21,17 @@ QUERY_STRATEGY_HELP = (
 @validate_app.callback(invoke_without_command=True)
 def validate_group(
     ctx: typer.Context,
-    check: ValidateCheck | None = typer.Option(None, "--check"),
+    check: ValidateCheck | None = typer.Option(None, "--check", help="Run one check only"),
     file: list[str] | None = typer.Option(
         None, "--file", help="Validate only this file (repeatable)"
     ),
-    uuid: list[str] | None = typer.Option(None, "--uuid"),
-    object_type: list[str] | None = typer.Option(None, "--type"),
-    strict: bool = typer.Option(False, "--strict"),
+    uuid: list[str] | None = typer.Option(
+        None, "--uuid", help="Validate only the object with this UUID (repeatable)"
+    ),
+    object_type: list[str] | None = typer.Option(
+        None, "--type", help="Validate only this type: rule, threat or objective (repeatable)"
+    ),
+    strict: bool = typer.Option(False, "--strict", help="Fail on warnings too"),
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
     if ctx.invoked_subcommand is not None:

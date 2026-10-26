@@ -131,7 +131,7 @@ class AttackNavigatorLayer:
                 continue
             mdr_mapping_detail = mdr_techniques[technique]
             logger.info(
-                "technique_mdr_only",
+                "technique_rule_only",
                 technique=technique,
                 objects=str(mdr_mapping_detail.objects_names),
             )
@@ -149,7 +149,7 @@ class AttackNavigatorLayer:
         legend = list()
         legend.append(LegendEntry(label="TVM Only", color=LayerColor.red))
         legend.append(LegendEntry(label="Full Coverage", color=LayerColor.green))
-        legend.append(LegendEntry(label="MDR Only - Needs to be checked", color=LayerColor.blue))
+        legend.append(LegendEntry(label="Rule Only - Needs to be checked", color=LayerColor.blue))
         return NavigatorLayer(
             versions={"layer": "4.5"}, techniques=technique_layer, legendItems=legend
         )

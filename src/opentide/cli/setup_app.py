@@ -179,6 +179,15 @@ def _renderable_branch(value: str | None) -> str | None:
     return value
 
 
+#: Help shared by several ``setup`` commands.
+_YES_HELP = "Write without asking for confirmation"
+_NAME_HELP = "Repository name, used in the README"
+_ORG_HELP = "Organisation or team, used in the README"
+_DESCRIPTION_HELP = "One-line description, used in the README"
+_STAGING_HELP = "Deploy to staging tenants from pull requests"
+_PYTHON_HELP = "Python version the pipeline installs"
+_REFRESH_HELP = "Download the skills catalogue again instead of using the cache"
+
 DEFAULT_BRANCH_OPTION = typer.Option(
     None,
     "--default-branch",
@@ -272,8 +281,8 @@ def _require_scripted_for_json(cli: CliContext, command: str, flags: str) -> Non
         return
     _needs_input(
         cli,
-        f"--json cannot drive the interactive wizard. Run '{command}' with --yes "
-        f"and explicit flags ({flags}), or drop --json to use the wizard.",
+        f"--json cannot drive the interactive wizard. {_scripted_flags(command, flags)} "
+        "Or drop --json to use the wizard.",
     )
 
 
@@ -294,6 +303,18 @@ def _emit_setup(cli: CliContext, result: dict[str, object], *, name: str | None 
     if isinstance(warnings, list):
         payload["warnings"] = warnings_once(warnings)
     emit_success(cli, payload)
+
+
+def _scripted_flags(command: str, flags: str) -> str:
+    """The sentence naming the flags that answer a wizard's prompts."""
+    return f"Run '{command}' with --yes and explicit flags ({flags})."
+
+
+def _refuse_wizard(
+    cli: CliContext, exc: InteractiveRequiredError, command: str, flags: str
+) -> NoReturn:
+    """No prompt can be answered here: exit 2 naming *flags*, in every output mode."""
+    _needs_input(cli, f"{exc} {_scripted_flags(command, flags)}")
 
 
 def _needs_input(cli: CliContext, message: str) -> NoReturn:
@@ -323,17 +344,19 @@ def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) ->
 def setup_cmd(
     ctx: typer.Context,
     path: str = typer.Option(".", "--path", "-C", help="Repository path"),
-    name: str | None = typer.Option(None, "--name"),
-    org: str | None = typer.Option(None, "--org"),
-    description: str | None = typer.Option(None, "--description"),
+    name: str | None = typer.Option(None, "--name", help=_NAME_HELP),
+    org: str | None = typer.Option(None, "--org", help=_ORG_HELP),
+    description: str | None = typer.Option(None, "--description", help=_DESCRIPTION_HELP),
     platform: list[DetectionPlatform] = typer.Option(
         [],
         "--platform",
         metavar=PLATFORM_METAVAR,
         help=platform_help("Enable a detection platform (repeatable)"),
     ),
-    ci: CiPlatform | None = typer.Option(None, "--ci"),
-    staging: bool = typer.Option(True, "--staging/--no-staging"),
+    ci: CiPlatform | None = typer.Option(
+        None, "--ci", help="CI/CD pipeline to write: github, gitlab, azure or none"
+    ),
+    staging: bool = typer.Option(True, "--staging/--no-staging", help=_STAGING_HELP),
     inflight: bool = typer.Option(
         True,
         "--inflight/--no-inflight",
@@ -354,7 +377,7 @@ def setup_cmd(
         "--promotion-target",
         help="Status deploy promotes rules to. Omit to keep the repository's setting.",
     ),
-    python_version: str = typer.Option("3.12", "--python-version"),
+    python_version: str = typer.Option("3.12", "--python-version", help=_PYTHON_HELP),
     explorer_pages: bool = typer.Option(
         False,
         "--explorer-pages/--no-explorer-pages",
@@ -424,7 +447,7 @@ def setup_cmd(
         try:
             result = run_interactive_setup(cli, base)
         except InteractiveRequiredError as exc:
-            _needs_input(cli, str(exc))
+            _refuse_wizard(cli, exc, "opentide setup", "--platform, --ci")
         except RuntimeError as exc:
             emit_error(cli, str(exc))
     _emit_setup(cli, result, name=name)
@@ -435,16 +458,16 @@ def setup_repo_cmd(
     ctx: typer.Context,
     path: str = PATH_ARGUMENT,
     path_flag: str = PATH_OPTION,
-    name: str | None = typer.Option(None, "--name"),
-    org: str | None = typer.Option(None, "--org"),
-    description: str | None = typer.Option(None, "--description"),
+    name: str | None = typer.Option(None, "--name", help=_NAME_HELP),
+    org: str | None = typer.Option(None, "--org", help=_ORG_HELP),
+    description: str | None = typer.Option(None, "--description", help=_DESCRIPTION_HELP),
     platform: list[DetectionPlatform] = typer.Option(
         [],
         "--platform",
         metavar=PLATFORM_METAVAR,
         help=platform_help("Enable a detection platform (repeatable)"),
     ),
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Scaffold a detection repository."""
     cli = get_context(ctx)
@@ -469,7 +492,7 @@ def setup_repo_cmd(
         try:
             result = run_interactive_repo_setup(cli, base)
         except InteractiveRequiredError as exc:
-            _needs_input(cli, str(exc))
+            _refuse_wizard(cli, exc, "opentide setup repo", "--name, --platform")
     _emit_setup(cli, result, name=name)
 
 
@@ -478,15 +501,19 @@ def setup_platforms_cmd(
     ctx: typer.Context,
     path: str = PATH_ARGUMENT,
     path_flag: str = PATH_OPTION,
-    sentinel: bool = typer.Option(False, "--sentinel"),
-    splunk: bool = typer.Option(False, "--splunk"),
-    crowdstrike: bool = typer.Option(False, "--crowdstrike"),
-    defender_for_endpoint: bool = typer.Option(False, "--defender-for-endpoint"),
-    sentinel_one: bool = typer.Option(False, "--sentinel-one"),
-    carbon_black_cloud: bool = typer.Option(False, "--carbon-black-cloud"),
-    harfanglab: bool = typer.Option(False, "--harfanglab"),
-    elastic: bool = typer.Option(False, "--elastic"),
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    sentinel: bool = typer.Option(False, "--sentinel", help="Enable Microsoft Sentinel"),
+    splunk: bool = typer.Option(False, "--splunk", help="Enable Splunk Enterprise Security"),
+    crowdstrike: bool = typer.Option(False, "--crowdstrike", help="Enable CrowdStrike Falcon"),
+    defender_for_endpoint: bool = typer.Option(
+        False, "--defender-for-endpoint", help="Enable Microsoft Defender for Endpoint"
+    ),
+    sentinel_one: bool = typer.Option(False, "--sentinel-one", help="Enable SentinelOne"),
+    carbon_black_cloud: bool = typer.Option(
+        False, "--carbon-black-cloud", help="Enable Carbon Black Cloud"
+    ),
+    harfanglab: bool = typer.Option(False, "--harfanglab", help="Enable HarfangLab"),
+    elastic: bool = typer.Option(False, "--elastic", help="Enable Elastic Security"),
+    yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Create and enable platform configuration files under ``.opentide/configurations/platforms/``."""
     cli = get_context(ctx)
@@ -530,7 +557,7 @@ def setup_ci_cmd(
         click_type=_CiProvider(),
     ),
     path: str = PATH_OPTION,
-    staging: bool = typer.Option(True, "--staging/--no-staging"),
+    staging: bool = typer.Option(True, "--staging/--no-staging", help=_STAGING_HELP),
     inflight: bool = typer.Option(
         True,
         "--inflight/--no-inflight",
@@ -551,14 +578,14 @@ def setup_ci_cmd(
         "--promotion-target",
         help="Status deploy promotes rules to. Omit to keep the repository's setting.",
     ),
-    python_version: str = typer.Option("3.12", "--python-version"),
+    python_version: str = typer.Option("3.12", "--python-version", help=_PYTHON_HELP),
     explorer_pages: bool = typer.Option(
         False,
         "--explorer-pages/--no-explorer-pages",
         help="Include GitHub Pages explorer build and deploy jobs",
     ),
     default_branch: str | None = DEFAULT_BRANCH_OPTION,
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
     cli = get_context(ctx)
@@ -590,7 +617,7 @@ def setup_env_cmd(
     ctx: typer.Context,
     path: str = PATH_ARGUMENT,
     path_flag: str = PATH_OPTION,
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Write ``.env.example`` with ``OPENTIDE_REPO_ROOT`` and ignore ``.env``."""
     from opentide.cli.services.setup.env import EnvSetupOptions, run_env_setup
@@ -615,7 +642,7 @@ def setup_hooks_cmd(
         "--install/--no-install",
         help="Install .git/hooks/pre-commit when this path is a Git repository",
     ),
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Configure validate-on-commit hooks (pre-commit config + Git hook)."""
     from opentide.cli.services.setup.hooks import HooksSetupOptions, run_hooks_setup
@@ -635,11 +662,15 @@ def setup_mcp_cmd(
     ctx: typer.Context,
     path: str = PATH_ARGUMENT,
     path_flag: str = PATH_OPTION,
-    vscode: bool = typer.Option(False, "--vscode"),
-    cursor: bool = typer.Option(False, "--cursor"),
-    claude_code: bool = typer.Option(False, "--claude-code"),
-    generic: bool = typer.Option(False, "--generic"),
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    vscode: bool = typer.Option(False, "--vscode", help="Configure VS Code (.vscode/mcp.json)"),
+    cursor: bool = typer.Option(False, "--cursor", help="Configure Cursor (.cursor/mcp.json)"),
+    claude_code: bool = typer.Option(
+        False, "--claude-code", help="Configure Claude Code (.mcp.json)"
+    ),
+    generic: bool = typer.Option(
+        False, "--generic", help="Configure any MCP host (opentide.mcp.json)"
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Write opentide MCP configuration for editors and agents."""
     cli = get_context(ctx)
@@ -675,7 +706,7 @@ def setup_mcp_cmd(
         try:
             result = run_interactive_mcp_setup(base)
         except InteractiveRequiredError as exc:
-            _needs_input(cli, str(exc))
+            _refuse_wizard(cli, exc, "opentide setup mcp", "--vscode, --cursor, --claude-code")
     _emit_setup(cli, result)
 
 
@@ -683,16 +714,24 @@ def setup_mcp_cmd(
 def setup_skills_install_cmd(
     ctx: typer.Context,
     path: str = typer.Option(".", "--path", "-C", help="Repository path"),
-    cursor: bool = typer.Option(False, "--cursor"),
-    claude_code: bool = typer.Option(False, "--claude-code"),
-    generic: bool = typer.Option(False, "--generic"),
-    github_copilot: bool = typer.Option(False, "--github-copilot"),
+    cursor: bool = typer.Option(False, "--cursor", help="Install for Cursor"),
+    claude_code: bool = typer.Option(False, "--claude-code", help="Install for Claude Code"),
+    generic: bool = typer.Option(False, "--generic", help="Install for any agent (AGENTS.md)"),
+    github_copilot: bool = typer.Option(
+        False, "--github-copilot", help="Install for GitHub Copilot"
+    ),
     install: list[str] = typer.Option([], "--install", help="Skill slugs to install (repeatable)"),
     all_skills: bool = typer.Option(False, "--all", help="Install full skills catalogue"),
-    name: str | None = typer.Option(None, "--name"),
-    org: str | None = typer.Option(None, "--org"),
-    description: str | None = typer.Option(None, "--description"),
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    name: str | None = typer.Option(
+        None, "--name", help="Repository name in the skills entrypoint"
+    ),
+    org: str | None = typer.Option(
+        None, "--org", help="Organisation or team in the skills entrypoint"
+    ),
+    description: str | None = typer.Option(
+        None, "--description", help="Description in the skills entrypoint"
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Install detection engineering agent skills from opentidehq/skills.
 
@@ -748,7 +787,7 @@ def setup_skills_install_cmd(
         try:
             result = run_interactive_skills_setup(base)
         except InteractiveRequiredError as exc:
-            _needs_input(cli, str(exc))
+            _refuse_wizard(cli, exc, "opentide setup skills", "--skill, --all")
         except (RuntimeError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     _emit_setup(cli, result)
@@ -759,9 +798,11 @@ def setup_skills_discover_cmd(
     ctx: typer.Context,
     path: str = PATH_ARGUMENT,
     path_flag: str = PATH_OPTION,
-    query: str | None = typer.Option(None, "--query", "-q"),
-    installed: bool = typer.Option(False, "--installed"),
-    refresh: bool = typer.Option(False, "--refresh"),
+    query: str | None = typer.Option(
+        None, "--query", "-q", help="Show only skills whose name or description matches"
+    ),
+    installed: bool = typer.Option(False, "--installed", help="Show only skills installed here"),
+    refresh: bool = typer.Option(False, "--refresh", help=_REFRESH_HELP),
 ) -> None:
     """List skills from the opentidehq/skills catalogue."""
     cli = get_context(ctx)
@@ -796,8 +837,8 @@ def setup_skills_discover_cmd(
 def setup_skills_show_cmd(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Skill slug or name"),
-    path: str = typer.Option(".", "--path", "-C"),
-    refresh: bool = typer.Option(False, "--refresh"),
+    path: str = typer.Option(".", "--path", "-C", help="Repository path"),
+    refresh: bool = typer.Option(False, "--refresh", help=_REFRESH_HELP),
 ) -> None:
     """Show details for one skill from the catalogue."""
     cli = get_context(ctx)
@@ -828,10 +869,16 @@ def setup_vscode_cmd(
     ctx: typer.Context,
     path: str = PATH_ARGUMENT,
     path_flag: str = PATH_OPTION,
-    settings: bool = typer.Option(False, "--settings"),
-    snippets: bool = typer.Option(False, "--snippets"),
-    no_merge: bool = typer.Option(False, "--no-merge"),
-    no_generate: bool = typer.Option(False, "--no-generate"),
+    settings: bool = typer.Option(
+        False, "--settings", help="Write .vscode/settings.json schema mappings and extensions.json"
+    ),
+    snippets: bool = typer.Option(False, "--snippets", help="Write object template snippets"),
+    no_merge: bool = typer.Option(
+        False, "--no-merge", help="Replace settings.json and extensions.json instead of merging"
+    ),
+    no_generate: bool = typer.Option(
+        False, "--no-generate", help="Do not run opentide generate first"
+    ),
     mcp: bool = typer.Option(
         False, "--mcp", help="Also write .vscode/mcp.json (same as setup mcp --vscode)"
     ),

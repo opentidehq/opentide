@@ -152,13 +152,13 @@ class TideDeployment:
                 mdr_config = data.configurations.elastic
             case _:
                 logger.critical(
-                    "could_not_resolve_mdr_configuration_for_system", detail=str(system)
+                    "could_not_resolve_rule_configuration_for_system", detail=str(system)
                 )
                 raise Exception(NotImplemented)
 
         if not mdr_config:
             logger.error(
-                "was_not_able_to_retrieve_mdr_configuration_for_targeted_system",
+                "was_not_able_to_retrieve_rule_configuration_for_targeted_system",
                 detail=f"[{data.metadata.uuid}] {data.name} - Available configurations : [{data.configurations!s}]",
             )
             raise Exception(NotImplemented)

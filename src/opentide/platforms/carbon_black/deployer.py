@@ -132,7 +132,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
         """Deploy a single typed MDR to Carbon Black Cloud."""
         config = data.configurations.carbon_black_cloud
         if not config or not config.query:
-            logger.info("mdr_skipped", mdr_name=data.name, reason="no typed CBC configuration")
+            logger.info("rule_skipped", mdr_name=data.name, reason="no typed CBC configuration")
             return None
 
         config_data = {
@@ -166,7 +166,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
                 loaded_mdr.append(mdr)
         loaded_mdr = without_legacy_external_ids(loaded_mdr, platform="carbon_black_cloud")
         if not loaded_mdr:
-            logger.info("no_mdrs_to_deploy_for_carbon_black_cloud")
+            logger.info("no_rules_to_deploy_for_carbon_black_cloud")
             return
 
         tide_deployment = TideDeployment(

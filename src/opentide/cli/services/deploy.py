@@ -42,6 +42,53 @@ def _tenant_targets(system: str, uuids: list[str], run: Any, wide: bool) -> dict
     }
 
 
+def unset_variables_warning(names: list[str]) -> str:
+    """``a real deploy would need $A and $B, which are unset``."""
+    shown = [f"${name}" for name in names]
+    listed = shown[0] if len(shown) == 1 else f"{', '.join(shown[:-1])} and {shown[-1]}"
+    which = "which is unset" if len(shown) == 1 else "which are unset"
+    return f"a real deploy would need {listed}, {which}"
+
+
+def compile_diagnostics(payloads: dict[str, list[dict[str, object]]]) -> list[dict[str, object]]:
+    """One diagnostic per rule a dry run could not compile, from its preview payloads.
+
+    ``path`` is workspace-relative, like every diagnostic's; ``file_path``
+    stays absolute.
+    """
+    from pathlib import Path
+
+    from opentide.core.root import get_repo_root
+
+    root = get_repo_root()
+    diagnostics: list[dict[str, object]] = []
+    for platform, previews in payloads.items():
+        for preview in previews:
+            if preview.get("status") != "failed":
+                continue
+            source = preview.get("file")
+            path = None
+            if isinstance(source, str):
+                try:
+                    path = Path(source).resolve().relative_to(root.resolve()).as_posix()
+                except (OSError, ValueError):
+                    path = None  # outside the workspace: only file_path says where
+            diagnostics.append(
+                {
+                    "code": preview.get("code") or "compile_failed",
+                    "severity": "error",
+                    "message": preview.get("error"),
+                    "help": preview.get("help"),
+                    "path": path,
+                    "file_path": source,
+                    "platform": platform,
+                    "uuid": preview.get("uuid"),
+                    "name": preview.get("name"),
+                }
+            )
+    return diagnostics
+
+
 def _nothing_to_deploy(message: str, *, dry_run: bool, **fields: object) -> dict[str, object]:
     """A skipped deploy, in the same envelope as one that planned rules.
 
@@ -142,19 +189,29 @@ def run_deploy(
         os.environ[PERSIST_EXTERNALLY_ENV] = "1"
     else:
         os.environ.pop(PERSIST_EXTERNALLY_ENV, None)
+    from contextlib import nullcontext
+
+    from opentide.core.environment import defer_missing_envvars
+
     plan_warnings: list[str] = []
-    result = _deploy(
-        ctx,
-        plan_warnings,
-        strategies=strategies,
-        all_files=all_files,
-        platform=platform,
-        dry_run=dry_run,
-        skip_promotion=skip_promotion,
-        keep_deprecated=keep_deprecated,
-        wide=wide,
-        skip_unconfigured=skip_unconfigured,
-    )
+    # Nothing live runs in a dry run: an unset credential is what a real deploy
+    # would need, said once as a warning, not an error.
+    unset: list[str]
+    with defer_missing_envvars() if dry_run else nullcontext([]) as unset:
+        result = _deploy(
+            ctx,
+            plan_warnings,
+            strategies=strategies,
+            all_files=all_files,
+            platform=platform,
+            dry_run=dry_run,
+            skip_promotion=skip_promotion,
+            keep_deprecated=keep_deprecated,
+            wide=wide,
+            skip_unconfigured=skip_unconfigured,
+        )
+    if unset:
+        plan_warnings.append(unset_variables_warning(unset))
     if plan_warnings:
         result["warnings"] = [*plan_warnings, *cast(list[str], result.get("warnings", []))]
     return result
@@ -349,7 +406,7 @@ def _deploy(
         plan_message,
         plan_summary,
     )
-    from opentide.cli.ui.progress import Checklist
+    from opentide.cli.ui.progress import Checklist, plural
 
     # Planned before anything is sent: a create records an id, which would
     # make the same rule read as an update afterwards.
@@ -400,7 +457,7 @@ def _deploy(
     outcome = deployment_outcome()
     tenant_count = sum(len(tenants) for tenants in targets.values())
     if dry_run:
-        message = plan_message(changes, list(deployment_list), tenant_count)
+        message = plan_message(changes)
     elif outcome.failed:
         message = "Deployment finished with errors"
     else:
@@ -416,8 +473,14 @@ def _deploy(
         "_summary": plan_summary(changes, list(deployment_list), tenant_count),
         "_exit_code": outcome.exit_code,
     }
-    if dry_run and not outcome.failed:
+    if dry_run:
+        # The tally is a plan even when a rule would fail: the diagnostics say
+        # so above it, and the exit code carries the failure.
         result["_outcome_kind"] = "plan"
+        diagnostics = compile_diagnostics(payloads)
+        if diagnostics:
+            result["diagnostics"] = diagnostics
+            result["error"] = f"{plural(len(diagnostics), 'rule')} would fail to deploy"
     warnings = [f"{error}, so a real deploy would stop" for error in tenantless]
     if outcome.warned:
         warnings.append("Some rules reported deployment warnings")

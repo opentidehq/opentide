@@ -497,13 +497,13 @@ def keep_active_rules(rule_list: list[str]) -> list[str]:
         try:
             mdr_data = Opentide.Models.Index["rule"][mdr]
         except Exception:
-            logger.error("could_not_retrieve_uuid_in_mdr_index", detail=mdr)
+            logger.error("could_not_retrieve_uuid_in_rule_index", detail=mdr)
             continue
         deprecated = False
         for system in mdr_data["configurations"]:
             system_data = mdr_data["configurations"][system]
             if check_status(system_data["status"]) in DEPRECATED_STATUSES:
-                logger.info("skipping_mdr_as_is_in_a_deprecated_status", detail=mdr)
+                logger.info("skipping_rule_as_is_in_a_deprecated_status", detail=mdr)
                 deprecated = True
         if deprecated is False:
             active_rules.append(mdr)

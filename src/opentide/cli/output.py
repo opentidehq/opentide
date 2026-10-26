@@ -29,7 +29,9 @@ from opentide.cli.ui.contract import (
 )
 from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
 from opentide.cli.ui.render import (
+    AGENT_TIP,
     OutcomeKind,
+    labelled_text,
     outcome_kind,
     render_error,
     render_next_actions,
@@ -257,7 +259,9 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
     if not ctx.quiet:
         render_warnings(stderr, result.warnings)
     kind = outcome_kind(result.status, ok=result.ok)
-    if result.outcome is not None and kind != "failed":
+    # A plan's tally never takes a glyph or ``error:``, even when a rule would
+    # fail: the diagnostics above it say so, and the exit code carries it.
+    if result.outcome is not None and (kind != "failed" or result.outcome == "plan"):
         kind = result.outcome
     if kind == "failed":
         suggestion = result.failure.suggestion if result.failure else None
@@ -271,6 +275,8 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
         if not ctx.quiet:
             render_notes(stdout, notes)
             render_next_actions(stdout, result.next_actions, numbered=result.numbered_next)
+        if not result.ok and mode is OutputMode.AGENT:
+            stderr.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
     if result.exit_code:
         raise SystemExit(result.exit_code)
 

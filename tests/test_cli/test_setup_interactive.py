@@ -59,14 +59,14 @@ def test_require_interactive_rejects_redirected_stdin(monkeypatch) -> None:
 
 
 def _construct_and_stub_ask(monkeypatch, prompt_name: str, result):
-    """Build the real Questionary prompt, then stub ``.ask()`` (issue #177)."""
+    """Build the real Questionary prompt, then stub ``.unsafe_ask()`` (issue #177)."""
     real = getattr(interactive.questionary, prompt_name)
     mock_ask = MagicMock(return_value=result)
 
     def wrap(*args, **kwargs):
         assert kwargs.get("validate") is not None or "validate" not in kwargs
         built = real(*args, **kwargs)
-        built.ask = mock_ask
+        built.unsafe_ask = mock_ask
         return built
 
     monkeypatch.setattr(interactive.questionary, prompt_name, wrap)
@@ -103,7 +103,7 @@ def test_ask_checkbox_required_constructs_with_callable_validator(monkeypatch) -
     def wrap(*args, **kwargs):
         captured.update(kwargs)
         built = real_checkbox(*args, **kwargs)
-        built.ask = mock_ask
+        built.unsafe_ask = mock_ask
         return built
 
     monkeypatch.setattr(interactive.questionary, "checkbox", wrap)

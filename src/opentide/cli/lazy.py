@@ -180,8 +180,16 @@ class LazyTyperGroup(TyperGroup):
         return command
 
     def format_help(self, ctx: _click.Context, formatter: _click.HelpFormatter) -> None:
+        from opentide.cli.help import EXAMPLES, render_help
+
+        self.opentide_examples = EXAMPLES.get("", ())
         with self._list_from_index():
-            super().format_help(ctx, formatter)
+            render_help(self, ctx, formatter, super().format_help)
+
+    def get_help_option(self, ctx: _click.Context) -> _click.Option | None:
+        from opentide.cli.help import help_option
+
+        return help_option(super().get_help_option(ctx))
 
     def shell_complete(self, ctx: _click.Context, incomplete: str) -> list[Any]:
         with self._list_from_index():

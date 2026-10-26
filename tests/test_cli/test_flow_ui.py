@@ -244,13 +244,10 @@ def test_plan_and_deploy_tallies() -> None:
         for change in _CHANGES
     ]
     platforms = ["sentinel", "defender_for_endpoint"]
-    assert plan_message(changes, platforms, 1) == (
+    assert plan_message(changes) == (
         "Plan: 0 to create, 1 to update, 1 to create or update, 0 to disable, 1 to delete"
-        " · 2 platforms, 1 tenant"
     )
-    assert plan_message(changes[1:], platforms[1:], 1) == (
-        "Plan: 0 to create, 1 to update, 0 to disable, 1 to delete · 1 platform, 1 tenant"
-    )
+    assert plan_message(changes[1:]) == "Plan: 0 to create, 1 to update, 0 to disable, 1 to delete"
     assert plan_summary(changes, platforms, 1)["delete"] == 1
     assert deployed_message(changes[1:2], 12.4) == (
         "Deployed 1 rule to 1 tenant · 1 updated · 12.4s"
@@ -260,8 +257,8 @@ def test_plan_and_deploy_tallies() -> None:
 def test_plan_outcome_line_has_no_glyph() -> None:
     from opentide.cli.ui.render import outcome_text
 
-    line = outcome_text("plan", "Plan: 1 to create · 1 platform, 0 tenants")
-    assert line.plain == "Plan: 1 to create · 1 platform, 0 tenants"
+    line = outcome_text("plan", "Plan: 1 to create, 0 to update")
+    assert line.plain == "Plan: 1 to create, 0 to update"
 
 
 # --------------------------------------------------------------------------

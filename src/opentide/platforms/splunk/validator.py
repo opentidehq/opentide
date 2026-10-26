@@ -33,7 +33,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
         splunk_config = data.configurations.splunk
         if not splunk_config or not splunk_config.query:
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
-            logger.critical("missing_query_in_mdr", mdr_name=data.name, uuid=data.metadata.uuid)
+            logger.critical("missing_query_in_rule", mdr_name=data.name, uuid=data.metadata.uuid)
             return
         query = create_query(data)
         self._validate_spl_query(query, data.name, data.metadata.uuid, service)
@@ -115,7 +115,7 @@ class SplunkQueryValidator(SplunkConnection, QueryValidator):
                         self.check_query(mdr, service)
                     else:
                         logger.info(
-                            "mdr_skipped", mdr_name=mdr.name, reason="no Splunk configuration"
+                            "rule_skipped", mdr_name=mdr.name, reason="no Splunk configuration"
                         )
 
 

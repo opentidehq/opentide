@@ -28,7 +28,7 @@ class SentinelQueryValidator(QueryValidator):
         query: str = mdr.configurations.sentinel.query
         if not query:
             os.environ['VALIDATION_ERROR_RAISED'] = 'True'
-            logger.critical('missing_query_in_mdr', detail=f'{mdr.name} ({mdr_uuid})')
+            logger.critical('missing_query_in_rule', detail=f'{mdr.name} ({mdr_uuid})')
             return
         query += ' | limit 1'
         try:

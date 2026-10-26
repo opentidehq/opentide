@@ -659,7 +659,7 @@ def test_render_signal_mdr_coverage_uses_catalog_rules(metadata: dict[str, Any])
         resolve_name=lambda uuid: f"Rule {uuid[-4:]}",
     )
 
-    assert "## Signal MDR coverage" in coverage
-    assert "| Signal | Downstream MDR rules |" in coverage
+    assert "## Signal rule coverage" in coverage
+    assert "| Signal | Downstream rules |" in coverage
     assert "Rule 0031" in coverage
     assert "Rule 0032" in coverage

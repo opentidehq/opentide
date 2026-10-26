@@ -44,7 +44,9 @@ def deploy_cmd(
         "--wide",
         help="Deploy the rule files read whatever their status strategy, INERT included",
     ),
-    dry_run: bool = typer.Option(False, "--dry-run"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the plan and compile each rule; send nothing"
+    ),
     keep_deprecated: bool | None = typer.Option(
         None,
         "--keep-deprecated/--drop-deprecated",
@@ -53,7 +55,9 @@ def deploy_cmd(
             "disables or deletes them. Default: on, off with --all"
         ),
     ),
-    skip_promotion: bool = typer.Option(False, "--skip-promotion"),
+    skip_promotion: bool = typer.Option(
+        False, "--skip-promotion", help="Skip the status promotion of a RELEASE run on a push"
+    ),
     skip_unconfigured: bool = typer.Option(
         False,
         "--skip-unconfigured",
@@ -92,11 +96,14 @@ def deploy_cmd(
         skip_unconfigured=skip_unconfigured,
         persist_state_externally=persist_state_externally,
     )
-    if dry_run and not cli.json_output and not cli.quiet:
-        from opentide.cli.ui.plan import render_plan
-        from opentide.core.logging.config import get_stdout_console
+    if dry_run and not cli.json_output:
+        from opentide.cli.ui.plan import render_plan, render_plan_diagnostics
+        from opentide.core.logging.config import get_console, get_stdout_console
 
-        render_plan(get_stdout_console(), result)
+        if not cli.quiet:
+            render_plan(get_stdout_console(), result)
+        # Errors print under --quiet too; the tally follows them.
+        render_plan_diagnostics(get_console(), result)
     emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 
 

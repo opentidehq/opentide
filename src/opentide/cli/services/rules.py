@@ -65,6 +65,25 @@ def window_text(older_than: str) -> str:
     return f"{number} {word}" if number == "1" else f"{number} {word}s"
 
 
+def _has_rule_files(repo: Path) -> bool:
+    root = repo / "objects" / "rules"
+    return root.is_dir() and any(
+        path.is_file() and path.suffix.lower() in _YAML_SUFFIXES for path in root.rglob("*")
+    )
+
+
+def _first_rule_step() -> dict[str, str]:
+    """The command that writes a first rule: ``new rule`` where this build has it."""
+    from opentide.cli.commands import ROOT_COMMANDS
+
+    if any(spec.name == "new" for spec in ROOT_COMMANDS):
+        return {"command": "opentide new rule", "reason": "scaffold your first rule"}
+    return {
+        "command": "opentide generate templates",
+        "reason": "rule templates to copy into objects/rules/",
+    }
+
+
 def run_unreviewed(repo: Path, *, older_than: str, now: datetime | None = None) -> dict[str, Any]:
     """Build the ``rules unreviewed`` payload. Raises ``ValueError`` on a bad window."""
     window = parse_window(older_than)
@@ -72,15 +91,22 @@ def run_unreviewed(repo: Path, *, older_than: str, now: datetime | None = None) 
     rules = list_unreviewed_rules(repo, window=window, now=evaluated_at)
     count = len(rules)
     span = window_text(older_than)
+    extra: dict[str, Any] = {}
     if count:
         noun = "rule" if count == 1 else "rules"
         message = f"{count} {noun} unreviewed for {span}"
+        extra["_outcome_kind"] = "warning"
+    elif not _has_rule_files(repo):
+        # Nothing was checked, so nothing can be called reviewed.
+        message = "No rules yet"
+        extra["status"] = "skipped"
+        extra["_next_actions"] = [_first_rule_step()]
     else:
         message = f"Every rule reviewed in the last {span}"
     return {
         "message": message,
         "_summary": {"unreviewed": count},
-        **({"_outcome_kind": "warning"} if count else {}),
+        **extra,
         "evaluated_at": evaluated_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
         "window": older_than.strip(),
         "count": count,

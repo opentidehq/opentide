@@ -248,7 +248,7 @@ def make_deploy_plan(
             if any(deploys(strategy, run) for run in strategies):
                 selected.append(system)
                 logger.info(
-                    "mdr_selected_for_deploy",
+                    "rule_selected_for_deploy",
                     system=system.upper(),
                     status=platform_status,
                     strategy=strategy.name,
@@ -257,7 +257,7 @@ def make_deploy_plan(
                 )
             else:
                 logger.warning(
-                    "mdr_skipped_for_strategy",
+                    "rule_skipped_for_strategy",
                     system=system.upper(),
                     status=platform_status,
                     strategy=strategy.name,

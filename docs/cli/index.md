@@ -45,7 +45,7 @@ All commands inherit [global options](./global-options.md):
 | `--data` | `OPENTIDE_DATA_ROOT` | Bundled data root override |
 | `--debug` | `OPENTIDE_DEBUG` | Debug logging |
 | `--quiet` | — | Only the outcome line and errors |
-| `--no-color` | `NO_COLOR` | Disable Rich colour |
+| `--no-color` | `NO_COLOR` | Disable colour |
 | `--json` | `OPENTIDE_OUTPUT=json` | One [JSON document](./json-output.md) on stdout |
 | `--version`, `-V` | — | Print the installed version and exit |
 

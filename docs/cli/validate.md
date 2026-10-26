@@ -250,16 +250,18 @@ When an explicit `--strategy` leaves every rule without a tenant (for example, o
 
 Through 0.16.1 a live check without `--plan` reached every tenant a rule could reach, whatever the tenant's `deployment` class. Since 0.17.0 it follows deploy: a `PREVIEW` rule is not checked on a tenant that only accepts `RELEASE`. The pull request that moves the rule to a `RELEASE` status checks it there, before that change merges.
 
-`--json` reports the run's strategies and how many queries each tenant received. The sample is illustrative, because a live run needs tenant credentials:
+A passing run ends with `✓ 4 queries valid on 2 tenants`; a failing one with `error: Queries rejected on sentinel · 4 checked on 2 tenants`, below the rejections the validator logged. `--json` reports the run's strategies and how many queries each tenant received, and the totals in `summary`. The sample is illustrative, because a live run needs tenant credentials:
 
 ```json illustrative
 {
   "platform": "sentinel",
   "mode": "live",
   "status": "passed",
+  "message": "4 queries valid on 2 tenants",
   "strategies": ["PREVIEW", "RELEASE"],
   "queries_validated": 4,
-  "queries_per_tenant": { "Staging": 2, "Production": 2 }
+  "queries_per_tenant": { "Staging": 2, "Production": 2 },
+  "summary": { "queries": 4, "tenants": 2 }
 }
 ```
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from opentide.cli.enums import DetectionPlatform, platform_label
+from opentide.cli.ui.glyphs import glyph
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.object_fields import as_body, matches_technique, object_platforms
@@ -109,10 +110,10 @@ def _summary_table(payload: dict[str, Any]) -> Table:
             display_name = platform_label(DetectionPlatform(plat["name"]))
         except ValueError:
             display_name = plat["name"]
-        table.add_row(
-            Text(display_name),
-            Text(f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]"),
-        )
+        # "enabled · deploy, validate": the reader's words, not a Python repr.
+        state = "enabled" if plat["enabled"] else "disabled"
+        separator = f" {glyph('separator', get_stdout_console().file)} "
+        table.add_row(Text(display_name), Text(f"{state}{separator}{', '.join(caps) or 'none'}"))
     return table
 
 

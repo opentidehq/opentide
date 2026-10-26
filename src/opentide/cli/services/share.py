@@ -498,6 +498,9 @@ def _from_run(outcome: ShareRun, config: SharingConfig, *, mode: str = "push") -
     payload["_summary"] = summary
     if failed:
         payload["_failure_code"] = _RUN_FAILURE_CODES.get(code, "share_failed")
+    elif mode == "preview":
+        # "Would share …": nothing was sent, so the line takes no ✓.
+        payload["_outcome_kind"] = "plan"
     return payload
 
 

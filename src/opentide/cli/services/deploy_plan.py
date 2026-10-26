@@ -148,16 +148,24 @@ def plan_summary(
     return {**tally(changes), "platforms": len(platforms), "tenants": tenants}
 
 
-def plan_message(changes: Sequence[PlannedChange], platforms: Sequence[str], tenants: int) -> str:
-    """``Plan: 1 to create, 0 to update, 0 to disable, 0 to delete · 1 platform, 0 tenants``."""
+def plan_scope(platforms: int, tenants: int) -> str:
+    """``1 platform, 0 tenants``: what a plan covers, printed on its header."""
+    return f"{plural(platforms, 'platform')}, {plural(tenants, 'tenant')}"
+
+
+def plan_message(changes: Sequence[PlannedChange]) -> str:
+    """``Plan: 1 to create, 0 to update, 0 to disable, 0 to delete``.
+
+    The platforms and tenants it covers are on the plan's header and in
+    ``summary``, so the tally fits a 100-column line.
+    """
     counts = tally(changes)
     parts = [
         f"{counts[action]} {_PLANNED[action]}"
         for action in ACTIONS
         if action != "upsert" or counts[action]
     ]
-    scope = f"{plural(len(platforms), 'platform')}, {plural(tenants, 'tenant')}"
-    return f"Plan: {', '.join(parts)} · {scope}"
+    return f"Plan: {', '.join(parts)}"
 
 
 def deployed_message(changes: Sequence[PlannedChange], seconds: float) -> str:
