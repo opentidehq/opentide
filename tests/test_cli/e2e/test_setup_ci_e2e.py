@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import re
+import json
 from pathlib import Path
 
 import pytest
@@ -80,5 +80,6 @@ def test_setup_ci_rejects_a_default_branch_it_cannot_render(
     run_repo_setup(RepoSetupOptions(path=fresh, name="Fresh", yes=True))
     result = invoke_cli(*entry, "github", "--path", str(fresh), "--default-branch", branch, "--yes")
     assert result.exit_code == 2, result.stdout + result.stderr
-    assert "--default-branch" in re.sub(r"\x1b\[[0-9;]*m", "", result.stderr)
+    # invoke_cli passes --json: the usage error is the JSON document on stdout.
+    assert json.loads(result.stdout)["failure"]["argument"] == "--default-branch"
     assert not (fresh / ".github" / "workflows" / "opentide.yml").exists()

@@ -1,6 +1,6 @@
 ---
 title: Releases
-description: Public package versions of the opentide DetectionOps engine on PyPI.
+description: Public package versions of opentide on PyPI.
 ---
 
 # Releases

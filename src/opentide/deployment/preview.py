@@ -25,20 +25,60 @@ def _config_preview(platform: str, rule: DetectionRule) -> dict[str, Any]:
 _PREVIEW_TENANT = "corpus-tenant"
 
 
+def compile_diagnostic(exc: Exception) -> tuple[str, str, str | None]:
+    """``(code, message, help)`` for a rule that does not compile, in the reader's words.
+
+    A compiler error that knows its cause carries ``code``, ``reason`` and
+    ``hint``. A Python error (an ``AttributeError`` on an empty block, say) is
+    described, never printed as ``ClassName: text``.
+    """
+    code = getattr(exc, "code", None)
+    reason = getattr(exc, "reason", None)
+    if isinstance(code, str) and isinstance(reason, str):
+        hint = getattr(exc, "hint", None)
+        return code, reason, hint if isinstance(hint, str) else None
+    if isinstance(exc, AttributeError) and exc.name and getattr(exc, "obj", object()) is None:
+        return (
+            "compile_empty_block",
+            f"a block this rule needs is empty, so Sentinel cannot read `{exc.name}`",
+            None,
+        )
+    from opentide.core.errors import Errors
+
+    text = str(exc).strip()
+    if isinstance(exc, Errors.TideRuleDataModelErrors) and text:
+        return "compile_invalid_rule", text, None
+    return (
+        "compile_failed",
+        f"Sentinel cannot compile this rule: {text or 'no detail given'}",
+        None,
+    )
+
+
 def _compile_failure(rule: DetectionRule, exc: Exception) -> dict[str, Any]:
-    """Record a rule that would fail to deploy, and fail the dry-run with it."""
-    error = f"{type(exc).__name__}: {exc}" if str(exc).strip() else type(exc).__name__
-    logger.error(
+    """Record a rule that would fail to deploy, and fail the dry-run with it.
+
+    The deploy result reports it once, as a diagnostic above the plan tally;
+    the Python error stays in the ``--debug`` log.
+    """
+    code, message, hint = compile_diagnostic(exc)
+    logger.debug(
         "sentinel_preview_compile_failed",
-        detail=f"{rule.name} ({rule.metadata.uuid}) would fail to deploy: {error}",
+        uuid=str(rule.metadata.uuid),
+        code=code,
+        error=f"{type(exc).__name__}: {exc}",
     )
     # Read by deployment_outcome(): the dry-run reports failed and exits 1.
     os.environ["DEPLOYMENT_ERROR_RAISED"] = "1"
+    source = getattr(rule, "file", None)
     return {
         "uuid": rule.metadata.uuid,
         "name": rule.name,
         "status": "failed",
-        "error": error,
+        "code": code,
+        "error": message,
+        "help": hint,
+        "file": str(source) if source else None,
         "api_request": None,
     }
 

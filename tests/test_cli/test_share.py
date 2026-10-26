@@ -123,9 +123,17 @@ def test_unknown_target_and_unconfirmed_delete_are_preflight(
     _write_sharing(tide_corpus_repo)
     monkeypatch.setenv("MISP_LAB_KEY", KEY)
     monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
-    unknown = invoke_cli("share", "push", "--target", "missing", repo=tide_corpus_repo)
-    assert unknown.exit_code == 1
-    assert "No sharing target matched" in unknown.stdout
+    unknown = invoke_cli("share", "push", "--target", "labb", repo=tide_corpus_repo)
+    assert unknown.exit_code == 2
+    payload = json.loads(unknown.stdout)
+    assert payload["preflight"] == "scope_no_match"
+    assert payload["records"] == []
+    assert payload["error"] == payload["message"]
+    failure = payload["failure"]
+    assert failure["code"] == "usage_invalid_choice"
+    assert failure["argument"] == "--target"
+    assert failure["suggestion"] == "lab"
+    assert "Unknown sharing target 'labb'" in failure["message"]
     assert _Persistent.events == []
     unconfirmed = invoke_cli(
         "share", "retract", "--delete", "--type", "objective", repo=tide_corpus_repo
@@ -242,7 +250,8 @@ def test_human_tables_and_retract(
     empty = invoke_cli(
         "share", "status", "--target", "missing", repo=tide_corpus_repo, json_output=False
     )
-    assert empty.exit_code == 1
+    assert empty.exit_code == 2
+    assert "error: Unknown sharing target 'missing'" in empty.stderr
 
     removed = invoke_cli(
         "share",
@@ -474,8 +483,11 @@ def test_changed_stops_before_git_or_http(
         repo=tide_corpus_repo,
         extra_env=_GITHUB_PUSH,
     )
-    assert unknown.exit_code == 1
-    assert json.loads(unknown.stdout)["preflight"] == "scope_no_match"
+    assert unknown.exit_code == 2
+    payload = json.loads(unknown.stdout)
+    assert payload["preflight"] == "scope_no_match"
+    assert payload["records"] == []
+    assert payload["failure"]["code"] == "usage_invalid_choice"
 
     _write_sharing(tide_corpus_repo, enabled=False)
     idle = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
@@ -643,3 +655,72 @@ def test_changed_path_filter_keeps_direct_yaml_children(
     narrowed, stop = _changed_files(tmp_path, None)
     assert narrowed is None
     assert stop == _PREFLIGHT["changed_diff"]
+
+
+@pytest.mark.parametrize(
+    ("actions", "exit_code", "code"),
+    [
+        pytest.param(
+            [("failed", "authentication"), ("failed", "connectivity")],
+            2,
+            "share_unreachable",
+            id="unreachable",
+        ),
+        pytest.param([("created", None), ("failed", "server")], 3, "share_partial", id="partial"),
+        pytest.param([("failed", "server")], 1, "share_failed", id="failed"),
+    ],
+)
+def test_a_failed_run_names_its_failure_code(
+    invoke_cli,
+    tide_corpus_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    actions: list[tuple[str, str | None]],
+    exit_code: int,
+    code: str,
+) -> None:
+    """``failure.code`` tells share's exit 1, 2 and 3 apart."""
+    from opentide.sharing.report import ShareRecord, ShareRun
+
+    _write_sharing(tide_corpus_repo)
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    records = tuple(
+        ShareRecord(object_uuid=f"uuid-{index}", target="lab", action=action, kind=kind)
+        for index, (action, kind) in enumerate(actions)
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.share.run_misp", lambda *args, **kwargs: ShareRun(records)
+    )
+    result = invoke_cli("share", "push", "--type", "objective", repo=tide_corpus_repo)
+    assert result.exit_code == exit_code, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["exit_code"] == exit_code
+    assert payload["failure"]["code"] == code
+
+
+def test_share_runs_inside_terminal_progress(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A share run sits inside one tab or taskbar progress block; listing targets does not."""
+    from opentide.cli.ui import terminal_progress
+
+    seen: list[str] = []
+
+    class _Recorder(terminal_progress.TerminalProgress):
+        def __enter__(self) -> terminal_progress.TerminalProgress:
+            seen.append("enter")
+            return super().__enter__()
+
+        def __exit__(self, *exc: object) -> None:
+            seen.append("exit")
+            super().__exit__(None, None, None)
+
+    monkeypatch.setattr(terminal_progress, "TerminalProgress", _Recorder)
+    _write_sharing(tide_corpus_repo)
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    preview = invoke_cli("share", "preview", "--type", "objective", repo=tide_corpus_repo)
+    assert preview.exit_code == 0, preview.stdout
+    assert seen == ["enter", "exit"]
+    listed = invoke_cli("share", "targets", repo=tide_corpus_repo)
+    assert listed.exit_code == 0, listed.stdout
+    assert seen == ["enter", "exit"]

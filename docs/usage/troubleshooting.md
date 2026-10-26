@@ -7,6 +7,38 @@ description: Common opentide failures — validation errors, generation drift, p
 
 The failures you are most likely to hit, why they happen, and how to fix them. If your problem is a genuine bug, open an issue on [opentide](https://github.com/opentidehq/opentide/issues).
 
+Start with `opentide doctor`. It checks the installation, the workspace, git, the generated templates and schemas, enabled platforms and their SDKs, tenant credentials (set or unset, never printed), the proxy, editor settings and MCP configuration, and prints the command that fixes each problem it finds. See [`opentide doctor`](../cli/doctor.md).
+
+```bash
+opentide doctor
+opentide --json doctor --offline
+```
+
+## Unexpected errors
+
+### opentide stops with `error[internal]`
+
+An `error[internal]: <Type>: <message>` line is an exception opentide did not handle: a bug, not a mistake in your input. The run exits `1`. On stderr, under the error, opentide prints the path of a crash log and a link that opens a GitHub issue pre-filled with the opentide version, Python version, operating system and the command's name (never its arguments or any path). Under `--json` stdout still carries one document, with `failure.code` `internal` and `failure.crash_log`. Under `opentide mcp start` nothing is written to stdout.
+
+```text illustrative
+error[internal]: RuntimeError: index exploded
+  note: crash log, with credentials and tenant names redacted: /home/me/.local/state/opentide/crash-20261023T110335102704Z-648.log
+  help: this is a bug in opentide; report it: https://github.com/opentidehq/opentide/issues/new?title=Crash+in+opentide+info&body=…
+  help: add --debug to see the traceback
+```
+
+The crash log holds the version, the command line, the `OPENTIDE_*` and proxy variables, and the traceback. It is written to a private (`0700`) directory outside the repository, and the last ten are kept:
+
+| Platform | Directory |
+|----------|-----------|
+| Linux and other Unix | `$XDG_STATE_HOME/opentide`, or `~/.local/state/opentide` |
+| macOS | `~/Library/Logs/opentide` |
+| Windows | `%LOCALAPPDATA%\opentide\logs` |
+
+Before anything is printed or written, opentide removes: proxy and URL credentials (`http://user:pass@proxy` becomes `http://***@proxy`), the value of an `Authorization` or `Proxy-Authorization` header whatever its scheme (`Bearer`, `Basic`, `Token`, `ApiKey`, `ApiToken`, ...), well-known token formats, the values of environment variables, options and `key=value` pairs (URL query strings included) named like a secret (`*_TOKEN`, `*_SECRET`, `*PASSWORD*`, `*_KEY`), and, from `.opentide/configurations/platforms/*.toml` and `sharing.toml`, every secret value and each tenant's or destination's name, URLs, hosts, ids, resource group and Splunk app (built-in apps such as `search`, `launcher`, `SA-*`, `TA-*` and `splunk_*` name no tenant and are kept). Read the log before you attach it to the issue all the same: a value opentide cannot recognise as a secret is left as it is.
+
+Add `--debug` (or set `OPENTIDE_DEBUG=1`) to print the traceback on stderr too, redacted the same way.
+
 ## Setup and paths
 
 ### `Could not resolve repository root` / objects not found
@@ -209,9 +241,7 @@ opentide --json setup --yes --platform sentinel --ci github
 ### `opentide generate` warns `Vocab identifier not found` or `Vocab parameter not found` for `criticality`
 
 ```text illustrative
-WARNING   Vocab identifier not found
-          identifier: Critical
-          vocab: criticality
+warning: Vocab identifier not found · identifier: Critical · vocab: criticality
 ```
 
 The editor schemas describe each objective with its `priority`, and through 0.16.1 looked that value up in the `criticality` vocabulary for an icon. No vocabulary defines `icon` (`Vocab parameter not found` for `High`), and an objective's `priority` is free text, commonly an `alert_severity` value such as `Critical`, which `criticality` does not have (`Vocab identifier not found`). Nothing failed; the warnings repeated for every objective on every run. The sample above is illustrative: a current release no longer prints it. The description now prints the value as authored, labelled **Priority** (objectives), **Severity** (signals) or **Criticality** (threats), with no lookup. Upgrade and run `opentide generate`.
@@ -478,7 +508,7 @@ A tenant now lists the strategies it accepts. Replace the `deployment` line the 
 
 ### A changed rule was not deployed
 
-Check three things, all named in the `mdr_skipped_for_strategy` and `skipping_tenant` log lines:
+Check three things, all named in the `rule_skipped_for_strategy` and `skipping_tenant` log lines:
 
 1. The strategy its status maps to. A `PREVIEW` run skips a rule in `PRODUCTION` (it maps to `RELEASE`); a `RELEASE` run skips one in `DEVELOPMENT` (`PREVIEW`) unless promotion rewrites it first; `INERT` rules never deploy.
 2. The tenant's `strategies`. A tenant with `strategies = ["RELEASE"]` never receives a `PREVIEW` run, and a `manual` tenant only receives rules that list it.
@@ -549,7 +579,7 @@ opentide deploy metadata --platform splunk
 ```
 
 ```text output-of="opentide deploy metadata --platform splunk" exit=2
-FATAL: Metadata deployment is not implemented for splunk
+error: Metadata deployment is not implemented for splunk
 ```
 
 With `--json` it prints one document with `"ok": false` and the same message. Remove the step from your pipeline; lookup tables are not deployed by opentide yet. See [`deploy metadata`](../cli/deploy.md#deploy-metadata).
@@ -638,7 +668,7 @@ Through **0.7.0** `get_chaining` returned an empty graph unless the threat itsel
 
 ### `lint` prints `OK` while findings are listed
 
-Through **0.7.0** human `lint` printed `OK` when findings existed, and the exit code stayed 0. **0.8.0** prints `ISSUES` in that case. The exit code stays 0 unless you pass `--strict`. JSON keeps `"ok": true`.
+Through **0.7.0** human `lint` printed `OK` when findings existed, and the exit code stayed 0. **0.8.0** prints `ISSUES` in that case; later releases print the `!` outcome glyph instead. The exit code stays 0 unless you pass `--strict`. JSON keeps `"ok": true`.
 
 ### Installation pages name 0.6.1 as the latest release
 
@@ -687,6 +717,7 @@ ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense Impairm
 
 ## Still stuck?
 
-- Re-run with debug logging: `DEBUG=1 opentide validate --strict`.
+- Run `opentide doctor` and fix what it reports first.
+- Re-run with debug logging: `OPENTIDE_DEBUG=1 opentide validate --strict`.
 - Compare your object against a known-good [fixture](https://github.com/opentidehq/specifications/blob/main/fixtures/valid).
 - Check the [CLI reference](../cli/index.md) for the exact flags and [exit codes](../cli/exit-codes.md).

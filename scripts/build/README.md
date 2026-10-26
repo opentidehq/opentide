@@ -57,3 +57,10 @@ the opentide PR. The lockfile's `specifications_git_sha` records which
 specifications commit was synced. It is provenance only and `--check` does not
 compare it, so the check still passes after specifications `main` moves on
 without a vocabulary or pin change.
+
+## Diagnostic code reference
+
+`render_diagnostics_docs.py` writes `docs/cli/diagnostics.md` from the
+`opentide explain` pages in `src/opentide/data/diagnostics/`. Edit a page
+there, then run it; `--check` exits 1 when the committed reference is stale.
+`tests/test_cli/test_explain.py` fails on drift too.

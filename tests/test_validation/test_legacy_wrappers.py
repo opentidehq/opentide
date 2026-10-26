@@ -14,7 +14,7 @@ def test_id_uniqueness_run_delegates_to_session() -> None:
     with (
         patch.object(id_uniqueness, "Opentide") as mock_tide,
         patch("opentide.validation.id_uniqueness.run_validation", return_value=report) as mock_run,
-        patch.object(id_uniqueness, "emit_section"),
+        patch.object(id_uniqueness, "report_stage"),
     ):
         id_uniqueness.run()
     mock_tide.initialise.assert_called_once()
@@ -26,7 +26,7 @@ def test_uuid_v4_run_delegates_to_session() -> None:
     with (
         patch.object(uuid_v4, "Opentide") as mock_tide,
         patch("opentide.validation.uuid_v4.run_validation", return_value=report) as mock_run,
-        patch.object(uuid_v4, "emit_section"),
+        patch.object(uuid_v4, "report_stage"),
     ):
         uuid_v4.run()
     mock_tide.initialise.assert_called_once()
@@ -38,7 +38,7 @@ def test_cve_run_delegates_to_session() -> None:
     with (
         patch.object(cve, "Opentide") as mock_tide,
         patch("opentide.validation.cve.run_validation", return_value=report) as mock_run,
-        patch.object(cve, "emit_section"),
+        patch.object(cve, "report_stage"),
     ):
         cve.run()
     mock_tide.initialise.assert_called_once()

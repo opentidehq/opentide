@@ -80,8 +80,16 @@ def test_render_gitlab_is_parseable_yaml(options: CiRenderOptions) -> None:
     assert "generate" in parsed["stages"]
     assert "validate" in parsed
     assert parsed["validate"]["script"] == [
-        "opentide validate --strict",
-        "opentide lint --strict",
+        "opentide validate --strict --format codequality"
+        " --output opentide-reports/validate.codequality.json",
+        "opentide lint --strict --format codequality"
+        " --output opentide-reports/lint.codequality.json",
+    ]
+    artifacts = parsed["validate"]["artifacts"]
+    assert artifacts["when"] == "always"
+    assert artifacts["reports"]["codequality"] == [
+        "opentide-reports/validate.codequality.json",
+        "opentide-reports/lint.codequality.json",
     ]
     if options.inflight:
         assert "inflight_shards" in parsed

@@ -50,7 +50,7 @@ _LEAKY_ENV = (
 _GENERIC_MESSAGES = {"Completed successfully"}
 
 #: Top-level string fields that hold data for scripts rather than prose for a reader.
-_DATA_FIELDS = frozenset({"path", "repo", "workspace", "version", "status"})
+_DATA_FIELDS = frozenset({"path", "repo", "workspace", "version", "status", "command"})
 
 _RULE = "00000000-0000-4000-8003-000000000001"
 _THREAT = "00000000-0000-4000-8001-000000000001"
@@ -141,21 +141,20 @@ def test_info_summary_lists_each_platform_capability(tutorial: Path) -> None:
     """#292: the capability cell `[deploy, validate]` was parsed as a markup tag."""
     lines = _human(tutorial, "info").splitlines()
     assert any(
-        "Microsoft Sentinel" in line and "enabled=True [deploy, validate]" in line for line in lines
+        "Microsoft Sentinel" in line and "enabled · deploy, validate" in line for line in lines
     )
-    assert any("CrowdStrike" in line and "enabled=False [deploy]" in line for line in lines)
+    assert any("CrowdStrike" in line and "disabled · deploy" in line for line in lines)
 
 
-def test_failing_validate_keeps_the_severity_tag(tutorial: Path) -> None:
-    """#292: the panel printed ` detection_model: …` with the `[error]` tag gone.
-
-    A recorded ``yaml_line`` inserts ``file:line`` after the severity tag, and a
-    narrow console wraps the message. The tag and the field message still show.
-    """
+def test_failing_validate_prints_a_code_frame(tutorial: Path) -> None:
+    """#292: the severity and the field message must survive; now as a code frame."""
     _break_objective_reference(tutorial)
-    collapsed = _panel_text(_human(tutorial, "validate", "--strict"))
-    assert "[error]" in collapsed
-    assert "detection_model: Unknown objective or signal reference" in collapsed
+    output = _human(tutorial, "validate", "--strict")
+    assert "error[invalid_ref]: Unknown objective or signal reference" in output
+    assert "╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18" in output
+    assert "17 │ detection_model: " in output
+    assert "error[vocab_unknown]" not in output, "one finding per cause"
+    assert "✗ 1 error in 1 file · 3 objects checked · " in output
 
 
 def test_extract_with_a_broken_sdk_prints_the_reinstall_advice(tutorial: Path) -> None:
@@ -177,7 +176,7 @@ def test_live_validation_with_a_broken_sdk_prints_the_advice(tutorial: Path) -> 
     uncomment_tenants(tutorial / ".opentide/configurations/platforms/sentinel.toml")
     with _without_azure():
         output = _human(tutorial, "validate", "query", "--platform", "sentinel", "--live", "--wide")
-    assert "advice: reinstall opentide: pip install --force-reinstall opentide" in output
+    assert "help: reinstall opentide: pip install --force-reinstall opentide" in output
     assert "opentide[" not in output
 
 
@@ -211,8 +210,8 @@ def test_info_sections_render_their_payload(
 
 def test_info_rejects_an_unknown_section(tutorial: Path) -> None:
     result = _run(tutorial, "info", "platforms", json_output=False)
-    assert result.exit_code == 1
-    assert "Unknown info section: platforms" in result.output
+    assert result.exit_code == 2
+    assert "error: Unknown info section: platforms" in result.output
 
 
 # --------------------------------------------------------------------------
@@ -227,7 +226,8 @@ class Case:
     context: Callable[[], AbstractContextManager[None]] = nullcontext
     marks: tuple[pytest.MarkDecorator, ...] = ()
     #: Run the human form on a copy. A second ``setup platforms`` reports files
-    #: already present (#350), so the two forms must start from the same tree.
+    #: already present (#350), and a second ``setup skills`` keeps the agent
+    #: entrypoint the first wrote, so the two forms must start from the same tree.
     separate_trees: bool = False
 
 
@@ -262,7 +262,7 @@ _CASES = {
     "lint-findings-strict": Case(("lint", "--strict"), _drop_author),
     "setup-mcp-generic": Case(("setup", "mcp", "--generic", "--yes")),
     "setup-mcp-no-host": Case(("setup", "mcp", "--yes")),
-    "setup-skills": Case(("setup", "skills", "--generic", "--yes")),
+    "setup-skills": Case(("setup", "skills", "--generic", "--yes"), separate_trees=True),
     "setup-platforms": Case(("setup", "platforms", "--splunk", "--yes"), separate_trees=True),
 }
 
@@ -283,8 +283,7 @@ def _info_expectations(payload: dict[str, Any]) -> list[Expectation]:
         expected.append(
             (
                 platform_label(DetectionPlatform(plat["name"])),
-                f"enabled={plat['enabled']}",
-                f"[{', '.join(caps) or 'none'}]",
+                f"{'enabled' if plat['enabled'] else 'disabled'} · {', '.join(caps) or 'none'}",
             )
         )
     return expected
@@ -296,6 +295,12 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     Any top-level prose string counts, not only the fields named here, so a new
     field a renderer does not know about (``setup mcp`` once had ``note``) fails.
     """
+    # Where findings print as code frames, the outcome line counts them in
+    # place of the message, and each warning is a frame, not a warning line.
+    framed = payload.get("command") in {"validate", "lint"}
+    # A run that found issues repeats its message as `error`; a usage error
+    # has no findings, and prints its `error`.
+    counted = framed and ("report" in payload or "findings" in payload)
     expected: list[Expectation] = [
         value
         for key, value in payload.items()
@@ -303,18 +308,32 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
         and " " in value.strip()
         and key not in _DATA_FIELDS
         and value not in _GENERIC_MESSAGES
+        and not (framed and key == "message")
+        and not (counted and key == "error")
     ]
-    expected.extend(payload.get("warnings") or [])
-    for issue in (payload.get("report") or {}).get("issues", []):
-        expected.append((f"[{issue['severity']}]", issue["message"]))
+    if not framed:
+        expected.extend(payload.get("warnings") or [])
+    report = payload.get("report") or {}
+    for issue in [*report.get("issues", []), *report.get("warnings", [])]:
+        expected.append((f"{issue['severity']}[{issue['code']}]: {issue['message']}",))
+        if issue.get("line") is not None:
+            expected.append((f"{issue['path']}:{issue['line']}",))
     expected.extend(
-        (f"[{finding['check']}/{finding['severity']}]", finding["message"])
+        (f"{_SEVERITY_WORD[finding['severity']]}[{finding['code']}]: {finding['message']}",)
         for finding in payload.get("findings") or []
     )
+    summary = payload.get("summary") or {}
+    if framed and "findings" in summary:
+        expected.append(f"{summary['findings']} finding" if summary["findings"] else "clean")
+    if framed and "objects" in summary:
+        expected.append(f"{summary['objects']} object")
     if "counts" in payload and "platforms" in payload:
         expected.extend(_info_expectations(payload))
     return expected
 
+
+#: Lint's JSON severity, and the word its code frame prints.
+_SEVERITY_WORD = {"error": "error", "warning": "warning", "info": "note"}
 
 _PANEL_CHROME = str.maketrans(dict.fromkeys("│╭╮╰╯─", " "))
 

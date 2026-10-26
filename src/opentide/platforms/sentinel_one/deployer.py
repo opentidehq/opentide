@@ -90,7 +90,7 @@ class SentinelOneDeploy(RuleDeployer):
         if mdr_config.condition.type == "Single Event":
             single_event_data = mdr_config.condition.single_event
             if not single_event_data:
-                logger.error("missing_single_event_section_in_mdr", detail=data.metadata.uuid)
+                logger.error("missing_single_event_section_in_rule", detail=data.metadata.uuid)
                 raise Exception
             query = single_event_data.query
             rule_data = SentinelOneApiRule.Data(
@@ -109,7 +109,7 @@ class SentinelOneDeploy(RuleDeployer):
         elif mdr_config.condition.type == "Correlation":
             correlation_data = mdr_config.condition.correlation
             if not correlation_data:
-                logger.error("missing_correlation_section_in_mdr", detail=data.metadata.uuid)
+                logger.error("missing_correlation_section_in_rule", detail=data.metadata.uuid)
                 raise Exception
             sub_queries = []
             for sub_query in correlation_data.sub_queries:
