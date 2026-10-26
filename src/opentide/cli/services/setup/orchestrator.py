@@ -213,8 +213,11 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
 
     if results.get("status") != "failed":
         results["message"] = "Setup complete"
-    if options.run_repo and steps and isinstance(steps[0], dict):
-        results["platforms"] = steps[0].get("platforms", [])
+    # Looked up by name: with --no-promotion the promotion step comes first,
+    # and `platforms` read it and came out empty.
+    repo_step = next((step for step in steps if step["step"] == "repo"), None)
+    if options.run_repo and repo_step is not None:
+        results["platforms"] = repo_step.get("platforms", [])
     return results
 
 

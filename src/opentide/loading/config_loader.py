@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from opentide.core.logging import get_logger
 from opentide.models.system_config import ConfigurationModels
@@ -55,9 +55,7 @@ class ConfigurationsLoader:
 
             for source_config in config.get("logsources", []):
                 if source_assets := source_config.get("assets"):
-                    invalid_assets = [
-                        asset for asset in source_assets if asset not in asset_names
-                    ]
+                    invalid_assets = [asset for asset in source_assets if asset not in asset_names]
                     if invalid_assets:
                         logger.error(
                             "logsource_invalid_assets",
@@ -83,4 +81,4 @@ class ConfigurationsLoader:
                 "visibility_config_load_failed",
                 detail=str(exc),
             )
-            raise ValueError(f"Failed to load visibility configuration: {str(exc)}") from exc
+            raise ValueError(f"Failed to load visibility configuration: {exc!s}") from exc

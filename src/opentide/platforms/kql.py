@@ -1,12 +1,30 @@
-from typing import Optional, Sequence, Union
-from opentide.models.platform_configs import DefenderExclusion, SentinelExclusion
+from collections.abc import Sequence
+
 import structlog
-logger = structlog.get_logger('opentide.platforms.kql')
+
+from opentide.models.platform_configs import DefenderExclusion, SentinelExclusion
+
+logger = structlog.get_logger("opentide.platforms.kql")
 MDE_Exclusion = DefenderExclusion
 Sentinel_Exclusion = SentinelExclusion
-KQLExclusion = Union[MDE_Exclusion, Sentinel_Exclusion]
+KQLExclusion = MDE_Exclusion | Sentinel_Exclusion
 
-def compile_kql_query(base_query: str, exclusions: Optional[Sequence[KQLExclusion]], tenant: str) -> str:
+#: What a double-quoted KQL string literal escapes. Unescaped, a value ending
+#: in a backslash (``C:\Windows\Temp\``) ended the literal early, and ``\t`` in
+#: ``C:\temp`` became a tab.
+_KQL_STRING_ESCAPES = str.maketrans(
+    {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+)
+
+
+def kql_string(value: str) -> str:
+    """*value* as a double-quoted KQL string literal."""
+    return '"' + value.translate(_KQL_STRING_ESCAPES) + '"'
+
+
+def compile_kql_query(
+    base_query: str, exclusions: Sequence[KQLExclusion] | None, tenant: str
+) -> str:
     """Compile a KQL query by prepending let statements and appending exclusion filters.
 
     Iterates through the provided exclusions and, for each one that matches the
@@ -35,28 +53,35 @@ def compile_kql_query(base_query: str, exclusions: Optional[Sequence[KQLExclusio
     if exclusions:
         for exclusion in exclusions:
             if exclusion.tenant == tenant or not exclusion.tenant:
-                logger.info('applying_exclusion', detail=exclusion.query)
+                logger.info("applying_exclusion", detail=exclusion.query)
                 exclusion_queries.append(exclusion.query)
                 if exclusion.let:
                     for variable, value in exclusion.let.items():
                         if isinstance(value, bool):
-                            formatted_value = 'true' if value else 'false'
+                            formatted_value = "true" if value else "false"
                         elif isinstance(value, (int, float)):
                             formatted_value = str(value)
                         elif isinstance(value, str):
-                            formatted_value = f'"{value}"'
+                            formatted_value = kql_string(value)
                         else:
-                            logger.warning('event', detail=f"Unsupported type for KQL let variable '{variable}'", context_1=f'Got {type(value).__name__}, expected str, int, float or bool — skipping')
+                            logger.warning(
+                                "event",
+                                detail=f"Unsupported type for KQL let variable '{variable}'",
+                                context_1=(
+                                    f"Got {type(value).__name__}, expected str, int, float or "
+                                    "bool — skipping"
+                                ),
+                            )
                             continue
                         let_kql_literals[variable] = formatted_value
     let_statements = []
     for var, val in let_kql_literals.items():
-        statement = f'let {var} = {val};'
-        logger.info('applying_let_statement', arg0=statement)
+        statement = f"let {var} = {val};"
+        logger.info("applying_let_statement", arg0=statement)
         let_statements.append(statement)
     query = base_query
     if let_statements:
-        query = '\n'.join(let_statements) + '\n' + query
+        query = "\n".join(let_statements) + "\n" + query
     if exclusion_queries:
-        query = query + '\n' + '\n'.join(exclusion_queries)
+        query = query + "\n" + "\n".join(exclusion_queries)
     return query

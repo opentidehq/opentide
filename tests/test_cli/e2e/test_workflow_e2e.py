@@ -12,8 +12,8 @@ This module uses in-process ``CliRunner``. The matching console-script chain
 lives in ``test_workflow_subprocess_e2e.py``.
 
 Does not inject CI=true on deploy/query steps (issue #164): the deploy runs
-``--strategy PREVIEW --all`` as the tutorial does. Populated generate must survive object ``threat.actors``
-(name / optional sighting / references).
+``--strategy PREVIEW --all`` as the tutorial does. Populated generate must survive object
+``threat.actors`` (name / optional sighting / references).
 """
 
 from __future__ import annotations
@@ -143,7 +143,7 @@ def test_first_user_cli_workflow(
         "sentinel",
         repo=fresh,
     )
-    assert query.exit_code == 1, query.stdout + query.stderr
+    assert query.exit_code == 2, query.stdout + query.stderr
     query_payload = parse_cli_json(query)
     assert query_payload.get("supported") is True
     assert "--live" in query_payload["message"]
