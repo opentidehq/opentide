@@ -87,7 +87,7 @@ def run_cve_validation() -> None:
 
 # Issue codes produced by each named check. JSON status is per-check, not overall ok.
 _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
-    ValidateCheck.id_uniqueness.value: frozenset({"duplicate_id", "duplicate_signal_uuid"}),
+    ValidateCheck.id_uniqueness.value: frozenset({"duplicate_id"}),
     ValidateCheck.uuid_format.value: frozenset({"invalid_uuid"}),
     ValidateCheck.schema.value: frozenset(
         {

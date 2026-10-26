@@ -147,7 +147,7 @@ The check no longer scrapes NVD through `mitrecve`. If Vulnerability-Lookup is u
 
 When no `--check` is specified, the pipeline runs:
 
-- `id-uniqueness` (object `metadata.uuid`, code `duplicate_id`; and signal UUIDs across all objectives, code `duplicate_signal_uuid`)
+- `id-uniqueness`
 - `uuid-format`
 - `schema` (includes vocabulary and cross-object references)
 

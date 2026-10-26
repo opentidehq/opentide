@@ -41,7 +41,7 @@ def index_objective_signals(
     Each entry is a copy of the authored signal plus ``owner``. A UUID already
     indexed under a *different* objective, or repeated within this objective,
     keeps its first definition; the clash is reported by ``opentide validate``
-    as ``duplicate_signal_uuid``. A re-ingest of the same objective replaces
+    as ``duplicate_id`` on the signal. A re-ingest of the same objective replaces
     its own signals; see :func:`drop_objective_signals` for removing the ones
     it no longer defines.
     """

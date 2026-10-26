@@ -134,7 +134,7 @@ def test_reingesting_the_same_objective_replaces_its_own_signals() -> None:
     assert bucket[signal_uuid]["name"] == "v2"
 
 
-def test_duplicate_signal_uuid_across_objectives_fails_validate(
+def test_duplicate_signal_uuid_across_objectives_is_reported_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     first, second, shared = str(uuid4()), str(uuid4()), str(uuid4())
@@ -149,12 +149,11 @@ def test_duplicate_signal_uuid_across_objectives_fails_validate(
 
     report = run_validation(checks=frozenset({ValidateCheck.id_uniqueness}), workers=0)
 
-    duplicates = [issue for issue in report.issues if issue.code == "duplicate_signal_uuid"]
-    assert not report.ok
-    assert len(duplicates) == 1
-    assert duplicates[0].object_uuid == second
-    assert duplicates[0].context["signal_uuid"] == shared
-    assert duplicates[0].context["original"]["objective"] == first
+    # Exactly one issue: the ID scan reports it, nothing reports it twice.
+    assert [(i.code, i.object_type, i.object_uuid) for i in report.errors] == [
+        ("duplicate_id", "signal", shared)
+    ]
+    duplicates = report.errors
     assert duplicates[0].file_path is not None
     assert duplicates[0].file_path.name == "b.yaml"
 
@@ -173,7 +172,7 @@ def test_distinct_signal_uuids_pass_validate(
 
     report = run_validation(checks=frozenset({ValidateCheck.id_uniqueness}), workers=0)
 
-    assert not [issue for issue in report.issues if issue.code == "duplicate_signal_uuid"]
+    assert not [issue for issue in report.issues if issue.code == "duplicate_id"]
 
 
 class TestRelationsUseOwner:
@@ -320,4 +319,6 @@ def test_duplicate_signal_uuid_within_one_objective_fails_validate(
 
     report = run_validation(checks=frozenset({ValidateCheck.id_uniqueness}), workers=0)
 
-    assert [issue.code for issue in report.issues].count("duplicate_signal_uuid") == 1
+    assert [(i.code, i.object_type, i.object_uuid) for i in report.errors] == [
+        ("duplicate_id", "signal", shared)
+    ]

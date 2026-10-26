@@ -151,7 +151,6 @@ def run_validation(
                 already_reported=indexed_parse_failures,
             )
         )
-        issues.extend(_check_signal_uuid_uniqueness(objects, graph, scope))
 
     if ValidateCheck.cve in checks:
         from opentide.validation.cve_check import check_cve_issues
@@ -664,82 +663,6 @@ def _signal_id_rows(model_file: Path, body: dict[str, Any]) -> list[_IdScanRow]:
         for signal in signals
         if isinstance(signal, dict) and signal.get("uuid")
     ]
-
-
-def _check_signal_uuid_uniqueness(
-    objects: dict[str, Any],
-    graph: PreflightGraph,
-    scope: ValidationScope,
-) -> list[ValidationIssue]:
-    """Report a signal UUID defined more than once across objectives.
-
-    Signals are nested in objectives, so the file-level ``metadata.uuid`` scan
-    never sees them, while the index keys them by UUID and can hold only one.
-    Reads the indexed objectives, so an inflight overlay is covered too.
-    """
-    from opentide.registry.signals import objective_signals
-
-    seen: dict[str, tuple[str, str]] = {}
-    issues: list[ValidationIssue] = []
-    objectives = objects.get("objective") or {}
-    for objective_uuid, body in objectives.items():
-        if not isinstance(body, dict):
-            continue
-        for signal in objective_signals(body):
-            signal_uuid = signal.get("uuid")
-            if not signal_uuid:
-                continue
-            key = str(signal_uuid)
-            name = str(signal.get("name", ""))
-            if key not in seen:
-                seen[key] = (str(objective_uuid), name)
-                continue
-            first_owner, first_name = seen[key]
-            if not _signal_duplicate_in_scope(scope, graph, key, first_owner, objective_uuid):
-                continue
-            first_ref = graph.resolve(first_owner)
-            owner_ref = graph.resolve(objective_uuid)
-            first_label = first_ref.name if first_ref else first_owner
-            owner_label = owner_ref.name if owner_ref else objective_uuid
-            issues.append(
-                ValidationIssue(
-                    code="duplicate_signal_uuid",
-                    severity="error",
-                    object_uuid=str(objective_uuid),
-                    object_type="objective",
-                    file_path=owner_ref.file_path if owner_ref else None,
-                    field_path=("objective", "signals"),
-                    message=(
-                        f"Duplicated signal UUID {key} on {name!r} in objective "
-                        f"{owner_label!r}; already used by {first_name!r} in objective "
-                        f"{first_label!r}"
-                    ),
-                    context={
-                        "signal_uuid": key,
-                        "original": {"objective": first_owner, "name": first_name},
-                    },
-                )
-            )
-    return issues
-
-
-def _signal_duplicate_in_scope(
-    scope: ValidationScope,
-    graph: PreflightGraph,
-    signal_uuid: str,
-    *objective_uuids: str,
-) -> bool:
-    if scope.mode == "full" or not scope.targets:
-        return True
-    if scope.targets & {signal_uuid, *objective_uuids}:
-        return True
-    for objective_uuid in objective_uuids:
-        ref = graph.resolve(objective_uuid)
-        if ref is not None and scope.matches_file(
-            ref.file_path.name if ref.file_path else None, ref.file_path
-        ):
-            return True
-    return False
 
 
 def _merge_id_duplicates(scans: list[_IdScanRow], scope: ValidationScope) -> list[ValidationIssue]:
