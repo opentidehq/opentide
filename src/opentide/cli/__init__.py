@@ -33,7 +33,12 @@ from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate, run_generate_docs
-from opentide.cli.services.info import UnknownVocabularyError, collect_info, render_info
+from opentide.cli.services.info import (
+    InvalidVocabularyLifecycleError,
+    UnknownVocabularyError,
+    collect_info,
+    render_info,
+)
 from opentide.cli.services.lint import render_findings, run_lint
 from opentide.cli.services.validation import run_validate, validate_query_platform
 from opentide.cli.setup_app import setup_app
@@ -938,7 +943,7 @@ def info_cmd(
         result = collect_info(
             cli, platform=platform, section=section, technique=technique, vocab=name
         )
-    except UnknownVocabularyError as exc:
+    except (UnknownVocabularyError, InvalidVocabularyLifecycleError) as exc:
         emit_error(cli, str(exc))
     strict_failure = strict and int(result.get("parse_error_count") or 0) > 0
     if strict_failure:

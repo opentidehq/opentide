@@ -102,7 +102,7 @@ opentide --json info vocab surface
 | `info vocab` | One row per vocabulary: entries, keys carrying `removed`, the latest revision its lifecycle defines, and whether it is staged |
 | `info vocab <name>` | The vocabulary's title, key field, entry count, removed-key count, stage ids, then two tables: **Revisions** and **Pins** |
 
-The name is the vocabulary's `field`, which is also its file name without `.vocab.toml` (`surface`, `signal.entities`, `att&ck`). An unknown name exits `1` and lists the available names. The vocabularies listed are the ones bundled with the engine; the object vocabularies (`rule`, `threat`, `objective`) built from your repository have no key lifecycle and are not listed. A name typed after any other section (`info rules surface`) also exits `1`.
+The name is the vocabulary's `field`, which is also its file name without `.vocab.toml` (`surface`, `signal.entities`, `att&ck`). An unknown name exits `1` and lists the available names. A key whose `version` or `removed` is not `M` or `M.m` (`1`, `1.2`) also exits `1`, naming the vocabulary and the key. The vocabularies listed are the ones bundled with the engine; the object vocabularies (`rule`, `threat`, `objective`) built from your repository have no key lifecycle and are not listed. A name typed after any other section (`info rules surface`) also exits `1`.
 
 **Revisions** lists each revision the key lifecycle defines, oldest first: the keys it introduces, the keys it removes, and how many keys a pin to it admits (introduced at or before it, and not removed at or before it).
 

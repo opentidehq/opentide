@@ -36,6 +36,10 @@ class UnknownVocabularyError(LookupError):
         super().__init__(f"Unknown vocabulary: {name}. Available: {', '.join(available)}")
 
 
+class InvalidVocabularyLifecycleError(ValueError):
+    """A key's ``version`` or ``removed`` is not ``M`` or ``M.m``."""
+
+
 def collect_info(
     ctx: CliContext,
     *,
@@ -47,7 +51,8 @@ def collect_info(
     """Collect system information about the detection repository.
 
     Raises :class:`UnknownVocabularyError` when the ``vocab`` section names a
-    vocabulary that is not loaded.
+    vocabulary that is not loaded, and :class:`InvalidVocabularyLifecycleError`
+    when a key's ``version`` or ``removed`` cannot be parsed.
     """
     ctx.apply_environment()
     Opentide.reload()
@@ -207,6 +212,17 @@ def _revision(raw: str) -> str:
     return f"{major}.{minor}"
 
 
+def _entry_revision(definition: VocabularyDefinition, key: str, label: str, raw: str) -> str:
+    """:func:`_revision` of one key's lifecycle field, naming the key when it does not parse."""
+    try:
+        return _revision(raw)
+    except ValueError as exc:
+        raise InvalidVocabularyLifecycleError(
+            f"Vocabulary {definition.metadata.field}: key {key!r} has an invalid "
+            f"{label} {raw!r} (expected M or M.m)"
+        ) from exc
+
+
 def _admitted(definition: VocabularyDefinition, revision: str) -> int:
     """How many keys a pin to *revision* admits."""
     return sum(
@@ -224,11 +240,11 @@ def _vocab_revisions(definition: VocabularyDefinition) -> list[dict[str, Any]]:
     """
     introduced: dict[str, int] = {}
     retired: dict[str, int] = {}
-    for entry in definition.entries.values():
-        version = _revision(entry.version)
+    for key, entry in definition.entries.items():
+        version = _entry_revision(definition, key, "version", entry.version)
         introduced[version] = introduced.get(version, 0) + 1
         if entry.removed:
-            removed = _revision(entry.removed)
+            removed = _entry_revision(definition, key, "removed", entry.removed)
             retired[removed] = retired.get(removed, 0) + 1
     return [
         {

@@ -216,3 +216,40 @@ def test_cli_info_name_only_with_vocab_section() -> None:
     result = runner.invoke(app, ["--json", "info", "rules", "surface"])
     assert result.exit_code == 1
     assert "Only the vocab section takes a name" in result.stdout
+
+
+def _malformed_definition() -> VocabularyDefinition:
+    return parse_vocabulary_document(
+        {
+            "name": "Broken",
+            "field": "broken",
+            "keys": [{"name": "a", "version": "1.0"}, {"name": "b", "version": "next"}],
+        }
+    )
+
+
+@pytest.mark.parametrize("vocab", [None, "broken"])
+def test_collect_info_malformed_lifecycle_version_names_the_key(vocab: str | None) -> None:
+    with patch.object(info_service, "Opentide") as mock_ot:
+        mock_ot.Platforms.items.return_value = []
+        mock_ot.Models.rules = {}
+        mock_ot.Models.threats = {}
+        mock_ot.Models.objectives = {}
+        mock_ot.Vocabularies.Index = {"broken": _malformed_definition()}
+        mock_ot.Configuration.Global.objects = []
+        with pytest.raises(info_service.InvalidVocabularyLifecycleError) as excinfo:
+            info_service.collect_info(CliContext(json_output=True), section="vocab", vocab=vocab)
+    assert str(excinfo.value) == (
+        "Vocabulary broken: key 'b' has an invalid version 'next' (expected M or M.m)"
+    )
+
+
+def test_cli_info_vocab_malformed_lifecycle_version_emits_json_error() -> None:
+    with patch.object(
+        info_service, "_file_vocabularies", return_value={"broken": _malformed_definition()}
+    ):
+        result = runner.invoke(app, ["--json", "info", "vocab"])
+    assert result.exit_code == 1
+    body = json.loads(result.stdout)
+    assert body["ok"] is False
+    assert body["message"].startswith("Vocabulary broken: key 'b' has an invalid version")
