@@ -547,6 +547,13 @@ def crash_log_text(
     return redactor("\n".join(lines))
 
 
+def _is_terminal(stream: TextIO | None) -> bool:
+    try:
+        return stream is not None and stream.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
 def _write(stream: TextIO | None, text: str) -> None:
     if stream is None:
         return
@@ -627,7 +634,13 @@ def handle_crash(
             )
         else:
             lines.append(f"  note: no crash log written: {redactor(log_problem)}")
-        lines.append(f"  help: this is a bug in opentide; report it: {issue_url(command, facts)}")
+        link = issue_url(command, facts)
+        links = env.get("OPENTIDE_LINKS", "").strip().lower() != "none"
+        if mode is OutputMode.HUMAN and links and _is_terminal(err):
+            # The pre-filled link is about 800 characters, 8 rows at 100
+            # columns: a person at a terminal clicks the short text instead.
+            link = f"\x1b]8;;{link}\x1b\\{ISSUES_URL}\x1b]8;;\x1b\\"
+        lines.append(f"  help: this is a bug in opentide; report it: {link}")
         if not debug:
             lines.append("  help: add --debug to see the traceback")
         _write(err, "\n".join(lines) + "\n")

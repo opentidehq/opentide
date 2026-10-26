@@ -31,6 +31,7 @@ from opentide.cli.ui.crash import (
     workspace_redactor,
     write_crash_log,
 )
+from opentide.cli.ui.mode import OutputMode
 
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
@@ -313,9 +314,46 @@ def test_handle_crash_survives_an_unwritable_log_dir(tmp_path: Path) -> None:
     assert "no crash log written" in err.getvalue()
 
 
+@pytest.mark.parametrize(
+    ("mode", "terminal", "short"),
+    [
+        (OutputMode.HUMAN, True, True),
+        (OutputMode.HUMAN, False, False),
+        (OutputMode.PLAIN, True, False),
+        (OutputMode.AGENT, True, False),
+    ],
+)
+def test_a_person_at_a_terminal_gets_a_short_issue_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: OutputMode, terminal: bool, short: bool
+) -> None:
+    """The pre-filled link was about 800 characters, 8 rows of the terminal
+    (post-merge end-to-end run). Elsewhere it stays whole, to copy or open."""
+    import opentide.cli.ui.crash as crash_module
+
+    monkeypatch.setattr(crash_module, "get_mode", lambda: mode)
+    out, err = _Capture(), _Capture(terminal=terminal)
+    handle_crash(
+        ValueError("boom"), argv=["info"], command="info", log_dir=tmp_path / "logs",
+        env={}, stdout=out, stderr=err,
+    )  # fmt: skip
+    (line,) = [text for text in err.getvalue().splitlines() if "report it:" in text]
+    full = issue_url("info")
+    if short:
+        assert line.endswith(
+            f"\x1b]8;;{full}\x1b\\https://github.com/opentidehq/opentide/issues/new\x1b]8;;\x1b\\"
+        )
+        assert len(line) - len(full) < 160
+    else:
+        assert line.endswith(f"report it: {full}")
+
+
 class _Capture:
-    def __init__(self) -> None:
+    def __init__(self, *, terminal: bool = False) -> None:
         self.parts: list[str] = []
+        self.terminal = terminal
+
+    def isatty(self) -> bool:
+        return self.terminal
 
     def write(self, text: str) -> int:
         self.parts.append(text)
