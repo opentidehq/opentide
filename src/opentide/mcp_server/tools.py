@@ -62,23 +62,30 @@ def _validation_next_actions(
     """Explain the first error's code, then validate again once the fixes are written.
 
     One ``explain`` (each issue's own ``explain`` field names the rest) and the
-    re-run: within the three next steps a CLI result prints.
+    re-run: within the three next steps a CLI result prints. When a fix is
+    safe, the re-run's command is ``opentide --json validate --fix …``, which
+    writes the safe fixes and validates again in one step (#646); the MCP call
+    stays the report, for an agent that applies the edits itself.
     """
     first = next((item.code for item in diagnostics if item.severity == "error"), None)
     if first is None:
         return []
-    reason = (
-        "validate again after applying the fix edits"
-        if any(item.fix is not None for item in diagnostics)
-        else "validate again after fixing the issues"
-    )
     explain = next_action(
         "explain",
         {"code": first},
         command=f"opentide explain {first}",
         reason=f"what {first} means and how to fix it",
     )
-    return [explain, {**again, "reason": reason}]
+    rerun = {**again, "reason": "validate again after fixing the issues"}
+    if any(item.fix is not None and item.fix.safe for item in diagnostics):
+        prefix = "opentide --json validate"
+        command = str(again["command"])
+        if command.startswith(prefix):
+            command = f"{prefix} --fix{command[len(prefix) :]}"
+        rerun.update(command=command, reason="apply the safe fixes, then validate again")
+    elif any(item.fix is not None for item in diagnostics):
+        rerun["reason"] = "validate again after applying the fix edits"
+    return [explain, rerun]
 
 
 def _rule_platforms(uuid: str) -> list[str]:

@@ -110,6 +110,45 @@ def test_validation_report_next_actions_explain_then_validate_again(broken_rule:
     }
 
 
+@pytest.fixture
+def safe_typo_rule(tide_corpus_repo: Path) -> Path:
+    """The Sentinel rule with ``tlp: Clear``: only the case differs, so the fix is safe."""
+    path = tide_corpus_repo / _RULE
+    text = path.read_text(encoding="utf-8")
+    assert "  tlp: clear\n" in text
+    path.write_text(text.replace("  tlp: clear\n", "  tlp: Clear\n", 1), encoding="utf-8")
+    clear_runtime_caches()
+    return path
+
+
+def test_a_safe_fix_makes_the_rerun_validate_fix(safe_typo_rule: Path) -> None:
+    """With a safe fix, the re-run is ``validate --fix`` with the same scope (#646)."""
+    import json
+    import shlex
+
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+
+    payload = tools.tool_validation_report(file=str(_RULE))
+    assert _tlp_issue(payload["issues"])["fix"]["safe"] is True
+    rerun = payload["next_actions"][-1]
+    assert rerun == {
+        "tool": "validation_report",
+        "arguments": {"file": str(_RULE)},
+        "command": f"opentide --json validate --fix --file {_RULE}",
+        "reason": "apply the safe fixes, then validate again",
+    }
+    rule = tools.tool_validate_rule(uuid=_UUID)
+    assert rule["next_actions"][-1]["command"] == (f"opentide --json validate --fix --uuid {_UUID}")
+    # The command is one the CLI runs: it writes the fix and validates clean.
+    argv = shlex.split(rerun["command"])[1:]
+    result = CliRunner().invoke(app, argv)
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["ok"] is True
+    assert "  tlp: clear\n" in safe_typo_rule.read_text(encoding="utf-8")
+
+
 def test_validation_next_actions_explain_only_the_first_error_code() -> None:
     """One explain step, then the re-run: within the CLI's three next steps."""
     from types import SimpleNamespace

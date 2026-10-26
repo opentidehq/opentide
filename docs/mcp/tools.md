@@ -247,7 +247,7 @@ Returns the validation report (`ok`, `issues`, `warnings`, `stats`) plus `next_a
 }
 ```
 
-A report with errors points at `explain` for the first error code, then at `validation_report` again. A clean report has `ok: true` and an empty `next_actions`.
+A report with errors points at `explain` for the first error code, then at `validation_report` again. When any fix is `safe`, that last step's `command` is `opentide --json validate --fix` with the same `--file`, `--uuid` or `--type`, which writes the safe fixes and validates again in one run, and its `reason` is `apply the safe fixes, then validate again`; `validate_rule` does the same with `--uuid`. A clean report has `ok: true` and an empty `next_actions`.
 
 ### Diagnostic fields
 
