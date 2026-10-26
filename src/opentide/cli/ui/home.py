@@ -122,10 +122,18 @@ def gather(version: str, start: Path | None = None) -> HomeFacts:
     root = find_workspace_root(start) if start is not None else get_repo_root()
     if not is_workspace_root(root):
         return HomeFacts(version=version, workspace=None, git=_git_state(root))
-    from opentide.registry.catalogue import catalogue_files
-
-    # Only files directly in each folder are objects (#584).
-    catalogue = {kind: len(catalogue_files(root / "objects" / kind)) for kind, _ in _KINDS}
+    # Only files directly in each folder are objects (#584), as
+    # ``opentide.registry.catalogue`` reads them; not imported, because the
+    # home screen loads no engine module.
+    catalogue = {
+        kind: sum(
+            1
+            for suffix in ("*.yaml", "*.yml")
+            for path in (root / "objects" / kind).glob(suffix)
+            if not path.name.endswith((".debug.yaml", ".debug.yml")) and path.is_file()
+        )
+        for kind, _ in _KINDS
+    }
     schemas = any((root / OPENTIDE_DIR / "schemas").glob("*.schema.json"))
     platforms = _platforms(root / OPENTIDE_DIR / "configurations" / "platforms")
     return HomeFacts(
