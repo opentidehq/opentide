@@ -88,6 +88,8 @@ INDEXED_OPTIONS: dict[tuple[str, ...], frozenset[str]] = {
     ("share", "preview"): _OBJECT_OPTIONS,
     ("share", "status"): _OBJECT_OPTIONS,
     ("share", "retract"): _OBJECT_OPTIONS,
+    # `opentide new rule` (#642): enabled platforms first, like every --platform.
+    ("new", "rule"): frozenset({"--platform"}),
 }
 
 #: The shells Typer writes a completion script for.
