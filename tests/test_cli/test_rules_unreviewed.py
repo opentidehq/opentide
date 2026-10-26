@@ -89,6 +89,21 @@ def test_cli_unreviewed_json(tmp_path: Path, invoke_cli) -> None:
     assert payload["rules"][0]["reason"] == "schema"
 
 
+def test_an_empty_catalogue_suggests_opentide_new_rule(tmp_path: Path, invoke_cli) -> None:
+    """With #642's `new` merged, the first step is `opentide new rule`, not the templates."""
+    (tmp_path / "objects" / "rules").mkdir(parents=True)
+    result = invoke_cli("rules", "unreviewed", repo=tmp_path)
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "skipped"
+    assert payload["next_actions"] == [
+        {"command": "opentide --json new rule", "reason": "scaffold your first rule"}
+    ]
+    human = invoke_cli("rules", "unreviewed", repo=tmp_path, json_output=False)
+    assert "Skipped: No rules yet" in human.stdout
+    assert "→ opentide new rule · scaffold your first rule" in human.stdout
+
+
 def test_cli_unreviewed_prints_a_human_line(tmp_path: Path, invoke_cli) -> None:
     rules = tmp_path / "objects" / "rules"
     rules.mkdir(parents=True)
