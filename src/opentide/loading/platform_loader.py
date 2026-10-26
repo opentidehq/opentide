@@ -159,7 +159,10 @@ def load_defender_config(mdr_config: dict[str, Any]) -> DefenderConfig:
 
     alert = DefenderAlert.model_validate(remaining.pop("alert"))
     impacted_entities = DefenderImpactedEntities.model_validate(remaining.pop("impacted_entities"))
-    scope = DefenderGroupScoping.model_validate(remaining.pop("scope"))
+    # ``scope`` is optional on the model and in the schema, so a rule without it
+    # validates; it must load too, or the whole catalogue fails to load.
+    scope_raw = remaining.pop("scope", None)
+    scope = DefenderGroupScoping.model_validate(scope_raw) if scope_raw is not None else None
     actions_raw = remaining.pop("actions", None)
     response_actions = None
     if actions_raw:

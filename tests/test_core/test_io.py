@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time as time_module
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 
@@ -31,6 +32,48 @@ def test_yaml_loader_is_csafe_or_safe() -> None:
 def test_parse_yaml_rejects_duplicate_keys() -> None:
     with pytest.raises(yaml.YAMLError, match="duplicate key 'name' at line 2"):
         parse_yaml("name: one\nname: two\n")
+
+
+def test_parse_yaml_rejects_a_duplicate_key_under_an_alias() -> None:
+    with pytest.raises(yaml.YAMLError, match="duplicate key 'k' at line 1"):
+        parse_yaml("a: &x {k: 1, k: 2}\nb: *x\n")
+
+
+def _alias_fan_out(levels: int) -> str:
+    """Each level is a list of nine references to the previous level."""
+    lines = ['l0: &l0 ["x", 2026-01-01, "x", "x", "x", "x", "x", "x", "x"]']
+    for level in range(1, levels + 1):
+        refs = ", ".join([f"*l{level - 1}"] * 9)
+        lines.append(f"l{level}: &l{level} [{refs}]")
+    return "\n".join(lines) + "\n"
+
+
+def test_parse_yaml_is_linear_in_nested_aliases() -> None:
+    """Both the duplicate-key walk and the timestamp pass expanded every alias.
+
+    Each level multiplied the work by nine: six levels took seconds, seven
+    (368 bytes) took 23 s. Linear parsing takes well under a millisecond.
+    """
+    started = time_module.perf_counter()
+    payload = parse_yaml(_alias_fan_out(6))
+    elapsed = time_module.perf_counter() - started
+
+    assert payload["l1"][0] is payload["l0"]
+    assert payload["l0"][1] == "2026-01-01"
+    assert elapsed < 1.0
+
+
+def test_parse_yaml_rejects_a_recursive_alias() -> None:
+    """A recursive alias used to raise RecursionError, which no caller caught."""
+    with pytest.raises(yaml.YAMLError, match="recursive alias at line 1"):
+        parse_yaml("a: &x [1, *x]\n")
+
+
+def test_parse_yaml_reads_a_deeply_nested_document() -> None:
+    """The recursive walks raised RecursionError where the C loader copes."""
+    depth = 3000
+    payload = parse_yaml("a: " + "[" * depth + "]" * depth + "\n")
+    assert isinstance(payload["a"], list)
 
 
 def test_load_yaml_roundtrip(tmp_path: Path) -> None:

@@ -32,7 +32,7 @@ def _no_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     no `enum`, and a unit test has no workspace. Tests that care about the
     configured set override this explicitly.
     """
-    monkeypatch.setitem(CONFIG_ENUM_RESOLVERS, KEYWORD, lambda: [])
+    monkeypatch.setitem(CONFIG_ENUM_RESOLVERS, KEYWORD, list)
 
 
 def _schema(allowed: list[str] | None, *, as_array: bool = False) -> dict[str, Any]:

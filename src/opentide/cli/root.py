@@ -6,6 +6,8 @@ modules; :class:`~opentide.cli.lazy.LazyTyperGroup` imports one only when it run
 
 from __future__ import annotations
 
+import os
+
 import typer
 
 from opentide.cli.context import CliContext, sync_typer_rendering
@@ -54,6 +56,20 @@ def _came_from_command_line(ctx: typer.Context, name: str) -> bool:
     return getattr(source, "name", "") == "COMMANDLINE"
 
 
+#: Click's words for false; any other ``DEBUG`` value turns debug logging on.
+_DEBUG_OFF = frozenset({"", "0", "f", "false", "n", "no", "off"})
+
+
+def _debug_from_environment() -> bool:
+    """Read ``DEBUG`` as a switch rather than a strict boolean.
+
+    As the option's envvar, Click refused anything but a boolean word, so
+    ``DEBUG=*`` or ``DEBUG=express:*`` (the Node ``debug`` package's
+    convention, often exported shell-wide) failed every command with exit 2.
+    """
+    return os.environ.get("DEBUG", "").strip().lower() not in _DEBUG_OFF
+
+
 @app.callback()
 def main_callback(
     ctx: typer.Context,
@@ -63,7 +79,11 @@ def main_callback(
     data: str | None = typer.Option(
         None, "--data", envvar="OPENTIDE_DATA_ROOT", help="Bundled data root"
     ),
-    debug: bool = typer.Option(False, "--debug", envvar="DEBUG", help="Enable debug logging"),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        help="Enable debug logging. DEBUG set to anything but 0, false, no or off does too",
+    ),
     no_color: bool = typer.Option(
         False,
         "--no-color",
@@ -97,7 +117,7 @@ def main_callback(
         repo=Path(repo) if repo else get_repo_root(),
         data=Path(data) if data else None,
         json_output=json_output,
-        debug=debug,
+        debug=debug or _debug_from_environment(),
         no_color=no_color,
         repo_explicit=_came_from_command_line(ctx, "repo"),
         proxy=proxy,

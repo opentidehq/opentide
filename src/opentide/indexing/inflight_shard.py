@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 
 def _object_version(body: dict[str, Any]) -> int:
-    raw = (body.get("metadata") or {}).get("version")
+    # A missing version reads as 0, as an unparsable one does.
+    raw = (body.get("metadata") or {}).get("version", 0)
     try:
         return int(raw)
     except (TypeError, ValueError):
@@ -52,7 +53,11 @@ def shard_precedence_key(body: dict[str, Any]) -> tuple[int, datetime]:
     try:
         parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
     except ValueError:
-        parsed = datetime.min
+        parsed = datetime.min.replace(tzinfo=timezone.utc)
+    # Keys are compared on a version tie; a naive key (a stamp without an
+    # offset) next to an aware one raised TypeError instead of picking a winner.
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
     return version, parsed
 
 

@@ -8,9 +8,9 @@ def reset_opentide_singletons() -> None:
     from opentide.core.index_manager import IndexManager
     from opentide.core.registry import Opentide
 
-    Opentide._initialised = False  # noqa: SLF001
-    Opentide._objects_loaded = False  # noqa: SLF001
-    Opentide._index = None  # noqa: SLF001
+    Opentide._initialised = False
+    Opentide._objects_loaded = False
+    Opentide._index = None
     Opentide._rules = {}
     Opentide._threats = {}
     Opentide._objectives = {}
@@ -23,4 +23,4 @@ def reset_opentide_singletons() -> None:
     # grouping changes and it surfaces. The metaclass cascades this assignment
     # to `_flat_cache` and `_flat_cache_index`, so clearing `_cache` is the
     # whole clear-set.
-    IndexManager._cache = None  # noqa: SLF001
+    IndexManager._cache = None

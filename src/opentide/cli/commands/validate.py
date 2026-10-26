@@ -7,6 +7,7 @@ import typer
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
 from opentide.cli.enums import DetectionPlatform, ValidateCheck
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import CommandResult, emit_error, emit_result, emit_success
 from opentide.cli.services.validation import run_validate, validate_query_platform
 
@@ -31,6 +32,7 @@ def validate_group(
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     cli = get_context(ctx)
     valid_object_types = {"rule", "threat", "objective"}
@@ -83,6 +85,7 @@ def validate_query_cmd(
     ),
 ) -> None:
     """Query validation checks the tenant. Pass --live."""
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)
     result = validate_query_platform(

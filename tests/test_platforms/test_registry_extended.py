@@ -42,7 +42,7 @@ def test_registry_getattr_private_raises() -> None:
     registry = PlatformsRegistry()
     registry._loaded = True
     with pytest.raises(AttributeError):
-        _ = registry._missing  # noqa: SLF001
+        _ = registry._missing
 
 
 def test_registry_enabled_iterator() -> None:

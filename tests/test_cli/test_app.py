@@ -72,6 +72,37 @@ def test_version_flag_exits_before_the_command_runs() -> None:
     mock_logging.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("argv", "value", "debug"),
+    [
+        ([], "*", True),
+        ([], "express:*", True),
+        ([], "1", True),
+        ([], "True", True),
+        ([], "0", False),
+        ([], "false", False),
+        ([], "off", False),
+        ([], "", False),
+        (["--debug"], "0", True),
+    ],
+)
+def test_debug_env_var_is_read_as_a_switch(argv: list[str], value: str, debug: bool) -> None:
+    """``DEBUG`` was Click's envvar for ``--debug``, which refused anything but a
+    boolean word: ``DEBUG=*`` (the Node ``debug`` convention) failed every command."""
+    seen: list[bool] = []
+    with (
+        patch("opentide.cli.run_generate", return_value={"status": "ok"}),
+        patch("opentide.cli.init_logging"),
+        patch(
+            "opentide.cli.LoggingConfig.from_cli_context",
+            side_effect=lambda cli: seen.append(cli.debug),
+        ),
+    ):
+        result = runner.invoke(app, [*argv, "--json", "generate"], env={"DEBUG": value})
+    assert result.exit_code == 0, result.output
+    assert seen == [debug]
+
+
 def test_validate_query_crowdstrike_not_supported() -> None:
     result = runner.invoke(app, ["--json", "validate", "query", "--platform", "crowdstrike"])
     assert result.exit_code != 0

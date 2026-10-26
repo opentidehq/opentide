@@ -182,6 +182,15 @@ def test_yaml_parse_issues_honor_an_explicit_code_and_message() -> None:
     assert issues[0].file_path == Path("/repo/objects/rules/no-uuid.yaml")
 
 
+def test_a_parse_error_without_an_object_type_is_reported_not_raised() -> None:
+    """A failure recorded before the family was known used to fail ValidationIssue."""
+    issues = _yaml_parse_issues(
+        [{"path": "/repo/objects/rules/broken.yaml", "error": "boom"}],
+        ValidationScope.full(),
+    )
+    assert [(issue.code, issue.object_type) for issue in issues] == [("yaml_parse", "")]
+
+
 def test_yaml_parse_issues_reported_for_full_scope() -> None:
     issues = _yaml_parse_issues(
         [{"path": "/repo/objects/rules/broken.yaml", "object_type": "rule", "error": "boom"}],
@@ -235,3 +244,22 @@ def test_scan_id_file_reports_unparseable_yaml(tmp_path: Path) -> None:
     assert isinstance(result, _IdScanParseError)
     assert result.meta_name == "rule"
     assert result.error
+
+
+def test_scan_id_file_reports_a_document_too_deep_to_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RecursionError escaped the scan and aborted the whole run.
+
+    The pure-Python loader still recurses per nesting level, so a pathological
+    document can exhaust the stack; it is a parse error like any other.
+    """
+    import opentide.core.io as io_module
+
+    def _too_deep(_path: Path) -> object:
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(io_module, "load_yaml", _too_deep)
+    result = _scan_id_file((tmp_path / "deep.yaml", "rule"))
+    assert isinstance(result, _IdScanParseError)
+    assert result.error == "maximum recursion depth exceeded"
