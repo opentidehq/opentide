@@ -18,7 +18,7 @@ WORKSPACE_NOT_FOUND = "workspace_not_found"
 
 new_app = typer.Typer(
     help=(
-        "Scaffold a threat, objective or rule from the generated template.\n\n"
+        "Scaffold a threat, objective or rule from its template\n\n"
         "The new file gets a fresh UUID, today's date, your git author and the "
         "catalogue's organisation, and is named the way opentide lint expects. "
         "Required values nobody has chosen yet are placeholders, listed in the "

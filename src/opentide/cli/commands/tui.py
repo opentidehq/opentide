@@ -21,7 +21,7 @@ from opentide.cli.ui.mode import OutputMode, detect_ci, get_mode
 
 
 def tui_cmd(ctx: typer.Context) -> None:
-    """Browse the catalogue, its diagnostics and ATT&CK coverage in a terminal UI.
+    """Browse the catalogue and its diagnostics in a terminal UI
 
     A tree of threats, objectives and rules, each object's YAML and the
     diagnostics from the last validate run, and coverage by ATT&CK technique.

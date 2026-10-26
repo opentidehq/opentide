@@ -63,7 +63,7 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "new",
         "opentide.cli.commands.new",
         "new_app",
-        "Scaffold a threat, objective or rule from the generated template.",
+        "Scaffold a threat, objective or rule from its template",
         rich_help_panel=AUTHOR,
     ),
     CommandSpec(
@@ -105,7 +105,7 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "doctor",
         "opentide.cli.commands.doctor",
         "doctor_cmd",
-        "Check the installation, the workspace and its integrations.",
+        "Check the installation, the workspace and its integrations",
         rich_help_panel=WORKSPACE,
     ),
     CommandSpec(
@@ -119,7 +119,7 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "tui",
         "opentide.cli.commands.tui",
         "tui_cmd",
-        "Browse the catalogue, its diagnostics and ATT&CK coverage in a terminal UI.",
+        "Browse the catalogue and its diagnostics in a terminal UI",
         rich_help_panel=WORKSPACE,
     ),
     CommandSpec(

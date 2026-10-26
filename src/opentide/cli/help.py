@@ -50,6 +50,17 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "": ("opentide setup", "opentide validate", "opentide --json validate"),
     "lint": ("opentide lint", "opentide lint --fix"),
     "info": ("opentide info", "opentide info --platform sentinel"),
+    "new": ('opentide new threat --name "Credential Dumping"',),
+    "new threat": ('opentide new threat --name "Credential Dumping"',),
+    "new objective": (
+        'opentide new objective --name "Detect Credential Dumping" --threat <threat-uuid>',
+    ),
+    "new rule": (
+        'opentide new rule --name "Suspicious LSASS Access" --platform sentinel '
+        "--objective <objective-uuid>",
+    ),
+    "doctor": ("opentide doctor", "opentide doctor --offline", "opentide --json doctor"),
+    "tui": ("opentide tui", "opentide --repo path/to/detections tui"),
     "explain": ("opentide explain vocab_unknown", "opentide explain"),
     "commands": ("opentide commands", "opentide --json commands"),
     "mcp": ("opentide mcp start",),

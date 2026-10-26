@@ -14,7 +14,7 @@ def doctor_cmd(
         False, "--offline", help="Skip the network checks (PyPI release, proxy reachability)"
     ),
 ) -> None:
-    """Check the installation, the workspace and its integrations.
+    """Check the installation, the workspace and its integrations
 
     Each check prints a status, what it found and, when something needs doing,
     the command that fixes it. Credentials are reported as set or unset, never
