@@ -83,7 +83,8 @@ def test_every_family_and_platform_validates_after_new_and_generate(
         assert payload["author"] == "Tutorial Author"
         assert payload["organisation"]["name"] == "Example Corp"
         assert (
-            payload["next_actions"][0]["command"] == f"opentide validate --file {payload['path']}"
+            payload["next_actions"][0]["command"]
+            == f"opentide --json validate --file {payload['path']}"
         )
     assert created[0]["path"] == "objects/threats/credential-dumping.yaml"
     assert created[1]["path"] == "objects/objectives/detect-credential-dumping.yaml"

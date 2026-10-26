@@ -101,7 +101,10 @@ PLACEHOLDER_HELP = "replace the value, then delete the '# opentide:placeholder' 
 
 
 class _Marked(NamedTuple):
-    """A value ``opentide new`` marked. ``line`` is zero-based; columns are 1-based, end exclusive."""
+    """A value ``opentide new`` marked.
+
+    ``line`` is zero-based; columns are 1-based, end exclusive.
+    """
 
     line: int
     #: The key, or ``key[index]`` for an item of a list.

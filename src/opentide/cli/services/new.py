@@ -817,7 +817,7 @@ def scaffold_object(
             argument="--path" if options.path is not None else "--name",
         )
 
-    today = options.today or dt.date.today()
+    today = options.today or dt.datetime.now().astimezone().date()
     values: dict[Path_, Any] = {
         ("name",): options.name,
         ("metadata", "uuid"): object_uuid,

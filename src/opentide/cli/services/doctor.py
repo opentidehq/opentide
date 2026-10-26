@@ -678,10 +678,7 @@ def check_proxy(ctx: DoctorContext) -> list[Check]:
         return [Check("proxy", "skip", "No proxy set (--proxy, HTTPS_PROXY)")]
     shown = redact_url(url)
     no_proxy = environ.get("NO_PROXY") or environ.get("no_proxy") or ""
-    if _bypasses_proxy("pypi.org", no_proxy):
-        note = "; pypi.org bypasses it (NO_PROXY)"
-    else:
-        note = ""
+    note = "; pypi.org bypasses it (NO_PROXY)" if _bypasses_proxy("pypi.org", no_proxy) else ""
     if ctx.offline:
         return [Check("proxy", "skip", f"Proxy {shown} not checked: --offline")]
     endpoint = proxy_endpoint(url)

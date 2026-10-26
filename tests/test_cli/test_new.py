@@ -105,13 +105,13 @@ def test_new_threat_json(workspace: Path) -> None:
     assert payload["summary"] == {"created": 1, "placeholders": len(payload["placeholders"])}
     assert "threat.mitre_attack" in payload["placeholders"]
     assert payload["next_actions"] == [
-        {"command": f"opentide validate --file {payload['path']}", "reason": "check it"}
+        {"command": f"opentide --json validate --file {payload['path']}", "reason": "check it"}
     ]
     data = parse_yaml(path.read_text(encoding="utf-8"))
     assert data["name"] == "Credential Dumping"
     assert data["metadata"]["uuid"] == payload["uuid"]
     assert data["metadata"]["tlp"] == "amber"
-    assert data["metadata"]["created"] == dt.date.today().isoformat()
+    assert data["metadata"]["created"] == dt.datetime.now().astimezone().date().isoformat()
     assert data["metadata"]["author"] == "Jane Analyst"
     assert data["metadata"]["organisation"] == ORG
     # The template's comments for optional keys stay in the file.
