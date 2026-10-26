@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, development]
   pull_request:
-    # All base branches — required for jj stacks (PRs target parent bookmarks, not only development)
+    # All base branches: a stacked PR targets the branch below it, not development.
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -40,10 +40,10 @@ jobs:
         run: uv sync --group dev
 
       - name: Ruff check
-        run: uv run ruff check tests src/opentide
+        run: uv run ruff check src/opentide tests scripts --output-format github
 
       - name: Ruff format
-        run: uv run ruff format --check tests src/opentide
+        run: uv run ruff format --check src/opentide tests scripts
 
       - name: Ty type check
         run: uv run ty check src/opentide --output-format github

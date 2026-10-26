@@ -90,6 +90,39 @@ metadata:
     )
 
 
+def _case_insensitive_lookups(monkeypatch: pytest.MonkeyPatch, directory: Path) -> None:
+    """Resolve names in *directory* ignoring case, as macOS and Windows do."""
+    exists, samefile = Path.exists, Path.samefile
+
+    def _on_disk(path: Path) -> Path:
+        if path.parent != directory:
+            return path
+        for entry in directory.iterdir():
+            if entry.name.casefold() == path.name.casefold():
+                return entry
+        return path
+
+    monkeypatch.setattr(
+        Path, "exists", lambda self, *args, **kwargs: exists(_on_disk(self), *args, **kwargs)
+    )
+    monkeypatch.setattr(
+        Path, "samefile", lambda self, other: samefile(_on_disk(self), _on_disk(Path(other)))
+    )
+
+
+def test_lint_fix_renames_a_case_only_mismatch_on_a_case_insensitive_filesystem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``simulated-actor.yaml`` "existed" because it is the file itself, so --fix skipped it."""
+    src = _write_object(tmp_path, "threats", "Simulated-Actor.yaml", _THREAT)
+    _case_insensitive_lookups(monkeypatch, src.parent)
+
+    result = run_lint(tmp_path, checks=[LintCheck.filenames], fix=True)
+
+    assert result["fixed"] == 1
+    assert [entry.name for entry in src.parent.iterdir()] == ["simulated-actor.yaml"]
+
+
 def test_lint_fix_collision_uses_uuid_suffix(tmp_path: Path) -> None:
     _write_object(tmp_path, "threats", "simulated-actor.yaml", _THREAT)
     other = """\
@@ -166,7 +199,7 @@ def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
         "  ╰─ help: rename it to objects/threats/simulated-actor.yaml\n"
     ) in result.output
     assert result.stdout.endswith(
-        "! 1 finding in 1 file\n→ opentide lint --fix · rename 1 file(s) to match their names\n"
+        "! 1 finding in 1 file\n→ opentide lint --fix · rename 1 file to match their names\n"
     )
 
 
@@ -190,7 +223,8 @@ def test_lint_cli_human_names_the_renamed_file(tmp_path: Path) -> None:
         "  ╭─▶ objects/threats/simulated-actor.yaml\n"
         "  ╰─ note: renamed from objects/threats/Simulated Actor.yaml\n"
     ) in result.output
-    assert result.stdout.endswith("! 1 finding in 1 file · 1 fixed\n")
+    # The fixed finding is shown, and no longer counted (D23).
+    assert result.stdout.endswith("✓ 1 file clean · 1 fixed\n")
 
 
 def test_lint_cli_strict(tmp_path: Path) -> None:
@@ -404,9 +438,10 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "message": "Could not parse object YAML: object YAML is not a mapping",
                 "code": "yaml_parse",
                 "field_path": [],
-                "line": None,
-                "column": None,
-                "end_column": None,
+                # The frame points at where the document starts.
+                "line": 1,
+                "column": 1,
+                "end_column": 16,
                 "help": None,
                 "fix": None,
                 "explain": "opentide explain yaml_parse",
@@ -421,11 +456,18 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
         "command": "lint",
         "duration_ms": payload["duration_ms"],
         "exit_code": 0,
-        "summary": {"files": 3, "findings": 4, "fixed": 0},
+        "summary": {
+            "files": 3,
+            "findings": 4,
+            "errors": 2,
+            "warnings": 1,
+            "notes": 1,
+            "fixed": 0,
+        },
         "next_actions": [
             {
-                "command": "opentide lint --fix",
-                "reason": "rename 1 file(s) to match their names",
+                "command": "opentide --json lint --fix",
+                "reason": "rename 1 file to match their names",
             }
         ],
         "failure": None,

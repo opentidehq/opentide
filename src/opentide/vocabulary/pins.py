@@ -74,7 +74,7 @@ def bump_pin_contents(
     lines: list[str] = []
     for line in text.splitlines(keepends=True):
         newline = "\n" if line.endswith("\n") else ""
-        core = line[:-1] if line.endswith("\n") else line
+        core = line.removesuffix("\n")
         if core.endswith("\r"):
             core = core[:-1]
             if newline:

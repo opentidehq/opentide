@@ -53,7 +53,7 @@ _RULE = textwrap.dedent(
 
     description: A rule whose detection model is not in the catalogue.
     status: STAGING
-    severity: Substantial incident
+    severity: High
     techniques:
       - T1059
     detection_model: {model}

@@ -402,6 +402,18 @@ def test_setup_vscode_mcp_flag_writes_mcp_json(tmp_path) -> None:
     assert (tmp_path / ".vscode" / "settings.json").is_file()
 
 
+def test_setup_vscode_mcp_flag_leaves_an_unreadable_mcp_json(tmp_path) -> None:
+    (tmp_path / ".vscode").mkdir()
+    (tmp_path / ".vscode" / "mcp.json").write_text("{broken", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        ["--json", "setup", "vscode", str(tmp_path), "--settings", "--mcp", "--no-generate"],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert (tmp_path / ".vscode" / "mcp.json").read_text(encoding="utf-8") == "{broken"
+    assert ".vscode/mcp.json is not valid JSON" in result.stdout
+
+
 def test_setup_vscode_snippets_command_fails_without_templates(tmp_path) -> None:
     result = runner.invoke(
         app,

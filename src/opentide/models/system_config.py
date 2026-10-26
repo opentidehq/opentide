@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 from opentide.models.deployment_enums import (
     DEPLOYABLE_STRATEGIES,
@@ -69,7 +69,9 @@ class SystemConfig:
     class Tenant:
         @dataclass
         class Setup:
-            ssl: bool
+            #: An unset ``$VAR`` stays a string until a live call refuses it
+            #: (``platforms.transport.tenant_tls_verify``).
+            ssl: bool | str
 
         @dataclass
         class Parameters:
@@ -250,6 +252,21 @@ class ConfigurationModels:
 class DeploymentBatch:
     tenant: SystemConfig.Tenant
     rules: Sequence[DetectionRule]
+
+
+TenantT = TypeVar("TenantT", bound=SystemConfig.Tenant)
+
+
+def batch_tenant(batch: DeploymentBatch, kind: type[TenantT]) -> TenantT:
+    """*batch*'s tenant as the platform's own tenant class.
+
+    The planner builds a batch from that platform's configuration, whose
+    loader instantiates *kind*; anything else is a programming error.
+    """
+    tenant = batch.tenant
+    if not isinstance(tenant, kind):
+        raise TypeError(f"expected a {kind.__qualname__} tenant, got {type(tenant).__qualname__}")
+    return tenant
 
 
 class TenantDeployment:

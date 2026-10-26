@@ -26,17 +26,18 @@ def lint_cmd(
     cli = get_context(ctx)
     cli.apply_environment()
     result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)
-    if not cli.json_output:
+    findings = result["findings"]
+    if not cli.json_output and isinstance(findings, list):
         from opentide.cli.ui.codeframe import render_diagnostics
         from opentide.cli.ui.diagnostics import SourceFiles, diagnostic_from_lint_finding
         from opentide.core.logging.config import get_stdout_console
 
-        root, sources = Path(result["path"]), SourceFiles()
+        root, sources = Path(str(result["path"])), SourceFiles()
         render_diagnostics(
             get_stdout_console(),
             [
                 diagnostic_from_lint_finding(finding, root=root, sources=sources)
-                for finding in result["findings"]
+                for finding in findings
             ],
             sources=sources,
             mode=text_mode(cli),

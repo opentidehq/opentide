@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from opentide.core import registry
-from opentide.core.io import load_yaml
+from opentide.core.errors import ObjectFileError
+from opentide.core.io import first_content_span, load_yaml, root_mapping_problem
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
 from opentide.deployment.git_repo import (
@@ -35,9 +37,10 @@ def __getattr__(name: str) -> Any:
         return registry.Opentide.Configurations.Systems.Index
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
 __all__ = [
     "DEPRECATED_STATUSES",
-    "SYSTEMS_CONFIGS_INDEX",
+    "SYSTEMS_CONFIGS_INDEX",  # noqa: F822 -- served lazily by __getattr__ above
     "ExternalIdInRuleError",
     "Proxy",
     "check_status",
@@ -210,13 +213,17 @@ def make_deploy_plan(
     refused: list[str] = []
     for rule in scope.files:
         data = load_yaml(rule)
+        if (problem := root_mapping_problem(data)) is not None:
+            raise _object_file_error(Path(rule), problem)
         name = data["name"]
         conf_data = data["configurations"]
         mdr_uuid = object_uuid(data)
         selected: list[str] = []
 
         for system in conf_data:
-            platform_status = _platform_status(conf_data[system], system=system, rule=name, uuid=mdr_uuid)
+            platform_status = _platform_status(
+                conf_data[system], system=system, rule=name, uuid=mdr_uuid
+            )
 
             if system not in systems_deployment:
                 # Not a failure: a catalogue may carry rules for platforms this
@@ -279,6 +286,15 @@ def make_deploy_plan(
             "Run 'opentide deploy migrate-state' and commit the result."
         )
     return deploy_mdr
+
+
+def _object_file_error(path: Path, problem: str) -> ObjectFileError:
+    """A rule file that is not one mapping, pointing at where its document starts."""
+    position = first_content_span(path.read_text(encoding="utf-8"))
+    if position is None:
+        return ObjectFileError(path, problem)
+    line, column, end_column = position
+    return ObjectFileError(path, problem, line=line, column=column, end_column=end_column)
 
 
 class ExternalIdInRuleError(ValueError):

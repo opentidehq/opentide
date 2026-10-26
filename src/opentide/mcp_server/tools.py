@@ -115,13 +115,15 @@ def _run_strategies(rule: Any, platform: str) -> list[str]:
 
 
 def tool_validate_rule(uuid: str) -> dict[str, Any]:
-    ensure_initialised()
+    # The server outlives any edit an agent makes; validating the index built at
+    # start-up would report the content the author has already changed.
+    Opentide.reload()
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 
-    _ = Opentide.Rules
-    rule = Opentide.Rules.get(uuid)
-    if rule is None:
+    # The raw index, not ``Opentide.Rules``: typed loading raises for the whole
+    # catalogue when one rule does not load, which is what validation reports.
+    if uuid not in Opentide.Models.rules:
         return {
             "valid": False,
             "errors": [f"Rule {uuid} not found"],
@@ -150,6 +152,12 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
     )
     actions = _validation_next_actions(diagnostics, again=again)
     if report.ok:
+        try:
+            rule = Opentide.Rules.get(uuid)
+        except Exception:
+            # Typed loading fails for the whole catalogue when another rule
+            # does not load; the status then falls back to PREVIEW.
+            rule = None
         for platform in _rule_platforms(uuid):
             strategies = _run_strategies(rule, platform)
             if not strategies:
@@ -183,7 +191,8 @@ def tool_validation_report(
     object_type: str | None = None,
 ) -> dict[str, Any]:
     """Structured validation report for agents (headless API)."""
-    ensure_initialised()
+    # Re-read the workspace, as ``tool_validate_rule`` does.
+    Opentide.reload()
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 

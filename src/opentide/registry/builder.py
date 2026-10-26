@@ -9,9 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core.files import resolve_configurations
-from opentide.core.io import describe_yaml_error, parse_json
+from opentide.core.io import describe_yaml_error, parse_json, root_mapping_problem
 from opentide.core.logging import get_logger
-from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
+from opentide.registry.paths import (
+    legacy_path_aliases,
+    object_yaml_files,
+    resolve_workspace_paths,
+)
 
 logger = get_logger(__name__)
 
@@ -43,6 +47,15 @@ def _log_parse_error(event: str, **fields: str) -> None:
         logger.debug(event, **fields)
     else:
         logger.error(event, **fields)
+
+
+def _shown_path(path_str: str) -> str:
+    """*path_str* relative to the current directory when inside it, for a log line."""
+    path = Path(path_str)
+    try:
+        return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except (OSError, ValueError):
+        return path_str
 
 
 def reset_missing_object_folder_log_cache() -> None:
@@ -87,8 +100,8 @@ def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | N
         body = parse_yaml(text)
     except Exception as exc:
         return path_str, None, describe_yaml_error(exc).message, "yaml"
-    if not isinstance(body, dict):
-        return path_str, None, "YAML root must be a mapping", "yaml"
+    if (problem := root_mapping_problem(body)) is not None:
+        return path_str, None, problem, "yaml"
     return path_str, body, None, "ok"
 
 
@@ -135,9 +148,13 @@ class RegistryBuilder:
 
         objects_index, files_index = self._load_objects(paths, metaschemas)
         index["parse_errors"] = self.parse_errors
-        from opentide.indexing.inflight import apply_inflight_overlay
+        from opentide.indexing.inflight import apply_inflight_overlay, inflight_preview_enabled
 
-        apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
+        # Shards are other pull requests' unreviewed objects. Deploy and
+        # validate resolve rules from this index, so only preview output
+        # (``inflight_preview``) may read them.
+        if inflight_preview_enabled():
+            apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
         index["objects"] = objects_index
         index["files"] = files_index
         index["file_paths"] = self.file_paths
@@ -302,13 +319,11 @@ class RegistryBuilder:
                 _log_missing_object_folder(object_dir, error=True, reason="not_a_directory")
                 continue
             try:
-                model_paths = sorted(object_dir.rglob("*.yaml"))
+                model_paths = object_yaml_files(object_dir)
             except OSError as exc:
                 _log_missing_object_folder(object_dir, error=True, reason=str(exc))
                 continue
             for model_path in model_paths:
-                if model_path.name.endswith(".debug.yaml"):
-                    continue
                 yaml_files.append((meta_name, str(model_path)))
 
         if not yaml_files:
@@ -385,12 +400,12 @@ class RegistryBuilder:
             _, body, error, kind = _parse_yaml_file(path_str)
             if error or body is None:
                 event = "unreadable_object_file" if kind == "oserror" else "malformed_object_yaml"
-                _log_parse_error(event, path=path_str, error=error or "")
+                _log_parse_error(event, path=_shown_path(path_str), error=error or "")
                 self.parse_errors.append(
                     {
                         "path": path_str,
                         "object_type": meta_name,
-                        "error": error or "YAML root must be a mapping",
+                        "error": error or root_mapping_problem(body) or "",
                     }
                 )
                 continue

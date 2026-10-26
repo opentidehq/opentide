@@ -104,24 +104,27 @@ def _plan_operation(
     return base
 
 
-def _merge_into(src: Path, dest: Path, *, copy: bool) -> None:
+def _merge_into(src: Path, dest: Path, *, copy: bool, apply: bool = True) -> list[Path]:
     """Place *src* children into an existing *dest* directory.
 
     ``shutil.move`` of a directory onto an existing directory nests the source
     inside the destination. A second legacy tree that shares ``objects/…`` has
     to be merged instead.
+
+    Returns the source paths left out because *dest* already has that name.
+    Without *apply*, nothing is moved: the dry run reports the same paths.
     """
+    collisions: list[Path] = []
     for child in sorted(src.iterdir(), key=lambda path: path.name):
         target = dest / child.name
         if child.is_dir() and target.is_dir():
-            _merge_into(child, target, copy=copy)
+            collisions += _merge_into(child, target, copy=copy, apply=apply)
             continue
         if target.exists():
-            logger.warning(
-                "migrate_destination_exists",
-                source=str(child),
-                destination=str(target),
-            )
+            logger.debug("migrate_destination_exists", source=str(child), destination=str(target))
+            collisions.append(child)
+            continue
+        if not apply:
             continue
         if copy:
             if child.is_dir():
@@ -130,23 +133,65 @@ def _merge_into(src: Path, dest: Path, *, copy: bool) -> None:
                 shutil.copy2(child, target)
         else:
             shutil.move(str(child), str(target))
-    if not copy and _is_empty_dir(src):
+    if apply and not copy and _is_empty_dir(src):
         src.rmdir()
+    return collisions
 
 
-def _apply_operation(root: Path, operation: dict[str, object], *, copy: bool) -> None:
+def _merge_collisions(root: Path, operation: dict[str, object], *, copy: bool) -> list[Path]:
+    """The source paths a merge would leave out, without moving anything."""
+    src = root / str(operation["from"])
+    dest = root / str(operation["to"])
+    if not (src.is_dir() and dest.is_dir()) or _is_empty_dir(dest):
+        return []
+    return _merge_into(src, dest, copy=copy, apply=False)
+
+
+def _apply_operation(root: Path, operation: dict[str, object], *, copy: bool) -> list[Path]:
+    """Carry out *operation*; returns the source paths a merge left out."""
     src = root / str(operation["from"])
     dest = root / str(operation["to"])
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and _is_empty_dir(dest):
         dest.rmdir()
     if dest.exists() and dest.is_dir() and src.is_dir():
-        _merge_into(src, dest, copy=copy)
-        return
+        return _merge_into(src, dest, copy=copy)
     if copy:
         shutil.copytree(src, dest)
-        return
+        return []
     shutil.move(str(src), str(dest))
+    return []
+
+
+#: Skips that leave nothing behind: there is no source, or it is already in place.
+_SILENT_SKIPS = frozenset({"source missing", "source and destination are the same"})
+
+
+def _left_behind(
+    root: Path, operations: list[dict[str, object]], collisions: list[Path], *, copy: bool
+) -> list[str]:
+    """Name every legacy path the run does not migrate.
+
+    A skipped mapping used to show only in the ``--json`` operations list, so
+    ``Configurations/`` stayed behind a ``.opentide/configurations/`` that
+    ``setup platforms`` had created while the human output said ``OK``.
+    """
+    warnings = [
+        f"Left {item['from']}/ in place: {item['to']}/ already exists, and only object "
+        f"folders are merged. Move what you still need from {item['from']}/ into "
+        f"{item['to']}/ by hand, then delete {item['from']}/."
+        if item["reason"] == "destination already exists"
+        else f"Left {item['from']} in place: {item['reason']}."
+        for item in operations
+        if item["action"] == "skip" and item.get("reason") not in _SILENT_SKIPS
+    ]
+    verb = "copied" if copy else "moved"
+    for path in collisions:
+        warnings.append(
+            f"{path.relative_to(root).as_posix()} was not {verb}: its destination "
+            "already has a file or folder of that name."
+        )
+    return warnings
 
 
 def _case_variant(parent: Path, name: str) -> str | None:
@@ -285,9 +330,13 @@ def run_migrate_objects(
     actionable = [item for item in operations if item["action"] != "skip"]
     skipped = [item for item in operations if item["action"] == "skip"]
     removed: list[str] = []
-    if apply:
-        for operation in actionable:
-            _apply_operation(target, operation, copy=copy)
+    collisions: list[Path] = []
+    for operation in actionable:
+        if apply:
+            collisions += _apply_operation(target, operation, copy=copy)
+        else:
+            collisions += _merge_collisions(target, operation, copy=copy)
+    left_behind = _left_behind(target, operations, collisions, copy=copy)
     # A repository an earlier release migrated on macOS or Windows has no
     # legacy sources left, but its object folders can still sit in ``Objects/``.
     migrated = [folder for folder in sorted(_MERGE_DESTINATIONS) if (target / folder).is_dir()]
@@ -334,6 +383,11 @@ def run_migrate_objects(
             result["advice"] = _case_rename_advice(case_renamed)
     if removed:
         result["removed_empty"] = removed
+    if left_behind and apply:
+        result["status"] = "issues"
+        result["message"] = f"{message}; {len(left_behind)} legacy path(s) left in place"
+        result["_exit_code"] = 1
+    warnings = [*left_behind, *warnings]
     if warnings:
         result["warnings"] = warnings
     return result
