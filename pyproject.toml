@@ -40,8 +40,8 @@ dependencies = [
     "ruamel.yaml",
     "questionary>=2.1.1",
     # `opentide tui`. A dependency, not an extra, because `pip install opentide`
-    # is the only install. Imported only inside opentide.cli.commands.tui, so
-    # no other command pays for it at start-up.
+    # is the only install. Imported only by opentide.cli.tui_app when the UI
+    # opens, so no command, nor `opentide tui --help`, pays for it at start-up.
     "textual>=8.0",
     "requests>=2.34.2",
     "pymisp>=2.5.34.4",

@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from rich.console import Console
+from rich.text import Text
 from tests.test_cli.e2e.helpers import write_tutorial_objects
 from textual.pilot import Pilot
 from textual.widgets import DataTable, RichLog, Static, TabbedContent, Tree
@@ -25,8 +26,8 @@ from textual.worker import WorkerFailed
 from typer.testing import CliRunner
 
 from opentide.cli import app as cli_app
+from opentide.cli import tui_app
 from opentide.cli.commands import tui as tui_command
-from opentide.cli.commands.tui import OpentideTui, diagnostic_text, outcome_text, pill
 from opentide.cli.context import CliContext
 from opentide.cli.services import tui as tui_service
 from opentide.cli.services.tui import (
@@ -37,6 +38,16 @@ from opentide.cli.services.tui import (
     Diagnostic,
     load_catalogue,
     run_action,
+)
+from opentide.cli.tui_app import (
+    TAGLINE,
+    OpentideTui,
+    diagnostic_text,
+    empty_state,
+    fit_label,
+    masthead_brand,
+    outcome_text,
+    pill,
 )
 from opentide.core.root import get_data_root
 
@@ -105,12 +116,16 @@ def _break_tlp(repo: Path) -> None:
     )
 
 
-def _drive(repo: Path, script: Callable[[OpentideTui, Pilot[None]], Awaitable[None]]) -> None:
+def _drive(
+    repo: Path,
+    script: Callable[[OpentideTui, Pilot[None]], Awaitable[None]],
+    size: tuple[int, int] = (140, 40),
+) -> None:
     """Run the app headless on *repo*, wait for the catalogue, then run *script*."""
 
     async def main() -> None:
         app = OpentideTui(CliContext(repo=repo))
-        async with app.run_test(size=(140, 40)) as pilot:
+        async with app.run_test(size=size) as pilot:
             await _settle(app, pilot)
             await script(app, pilot)
 
@@ -202,7 +217,7 @@ def test_select_a_rule_run_validate_and_see_its_diagnostic(tutorial_repo: Path) 
         await _settle(app, pilot)
         detail = _text(app, "#diagnostics")
         assert "error[vocab_unknown]:" in detail
-        assert f"--> {RULE_FILE}:8 · metadata.tlp" in detail
+        assert f"╭─▶ {RULE_FILE}:8\n" in detail
         assert "help: did you mean 'clear'?" in detail
         assert "Sentinel KQL Rule  ✗ 1" in _labels(app.query_one("#tree", Tree).root)[-1]
         assert "opentide validate: Validation failed" in _text(app, "#status")
@@ -369,7 +384,7 @@ def test_a_worker_that_raises_is_reported(
         def explode(ctx: CliContext) -> Catalogue:
             raise RuntimeError("index unreadable")
 
-        monkeypatch.setattr(tui_command, "load_catalogue", explode)
+        monkeypatch.setattr(tui_app, "load_catalogue", explode)
         app.action_reload()
         await _settle(app, pilot)
         assert "error[internal]: RuntimeError: index unreadable" in await _results(app, pilot)
@@ -385,7 +400,7 @@ def test_a_failed_reload_keeps_the_outcome(
         def explode(ctx: CliContext) -> Catalogue:
             raise RuntimeError("index unreadable")
 
-        monkeypatch.setattr(tui_command, "load_catalogue", explode)
+        monkeypatch.setattr(tui_app, "load_catalogue", explode)
         app.action_run("validate")
         await _settle(app, pilot)
         assert app.validated
@@ -400,6 +415,115 @@ def test_a_failed_reload_keeps_the_outcome(
         assert app.running is None
 
     _drive(tutorial_repo, script)
+
+
+# -- layout at 100 columns --------------------------------------------------
+
+LONG_RULE = "LSASS memory read by an unsigned process from a user-writable directory"
+
+
+def _tree_lines(app: OpentideTui) -> list[str]:
+    """The tree as drawn: guides and labels, without the padding."""
+    tree = app.query_one("#tree", Tree)
+    return [tree.render_line(y).text.rstrip() for y in range(len(_labels(tree.root)))]
+
+
+def test_the_tagline_shows_whole_or_not_at_all() -> None:
+    summary = Text("acme-detections · 0 threats · 0 objectives · 0 rules")
+    assert masthead_brand(98, summary).plain == "▐ ≋ opentide ▌"
+    wide = masthead_brand(200, summary).plain
+    assert wide == f"▐ ≋ opentide ▌  {TAGLINE}"
+    # Exactly wide enough, and one cell short of it.
+    fits = len(wide) + 2 + summary.cell_len
+    assert masthead_brand(fits, summary).plain == wide
+    assert masthead_brand(fits - 1, summary).plain == "▐ ≋ opentide ▌"
+
+
+@pytest.mark.parametrize(
+    ("label", "width", "tail", "fitted"),
+    [
+        ("Spec-driven development for agentic", 28, 0, "Spec-driven development for…"),
+        # A cut after a space reads the same as one after a letter.
+        ("Spec-driven development for agentic", 29, 0, "Spec-driven development for…"),
+        ("Credential Access Objective  1 rule", 26, 8, "Credential Access…  1 rule"),
+        ("Simulated Actor  0 objectives · 0 rules", 30, 24, "Simul…  0 objectives · 0 rules"),
+        ("Short  1 rule", 13, 8, "Short  1 rule"),
+        # No room for the name: the whole label is cut.
+        ("Name  0 objectives · 0 rules", 10, 24, "Name  0 o…"),
+    ],
+)
+def test_fit_label_cuts_with_an_ellipsis_and_keeps_the_counts(
+    label: str, width: int, tail: int, fitted: str
+) -> None:
+    result = fit_label(Text(label), width, tail)
+    assert result.plain == fitted
+    assert result.cell_len <= width
+
+
+def test_fit_label_keeps_the_style_of_the_cell_it_cuts() -> None:
+    label = Text("Credential Access Objective")
+    label.stylize("reverse")  # as the tree marks the cursor line
+    cut = fit_label(label, 10)
+    assert cut.plain == "Credentia…"
+    assert all(span.style == "reverse" for span in cut.spans)
+    assert cut.spans[-1].end == len(cut)
+
+
+def test_at_100_columns_names_end_in_an_ellipsis_and_nothing_scrolls_sideways(
+    tutorial_repo: Path,
+) -> None:
+    rule = tutorial_repo / RULE_FILE
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace(
+            "name: Sentinel KQL Rule", f"name: {LONG_RULE}", 1
+        ),
+        encoding="utf-8",
+    )
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        tree = app.query_one("#tree", Tree)
+        width = tree.scrollable_content_region.width
+        lines = _tree_lines(app)
+        assert all(len(line) <= width for line in lines), lines
+        threat, objective, leaf = lines
+        # The counts stay whole; the name gives way.
+        assert threat.endswith("  1 objective · 1 rule"), threat
+        assert objective.endswith("…  1 rule"), objective
+        assert leaf.endswith("…") and " …" not in leaf, leaf
+        assert LONG_RULE not in leaf
+        assert tree.virtual_size.width <= width
+        assert not tree.show_horizontal_scrollbar
+        # The tagline does not fit beside the counts: it goes, whole.
+        brand = _text(app, "#brand").strip()
+        assert brand == "▐ ≋ opentide ▌"
+        await pilot.press("down", "down")
+        assert app.selected == RULE
+        # The detail pane shows the full name.
+        assert LONG_RULE in " ".join(_text(app, "#heading").split())
+
+    _drive(tutorial_repo, script, size=(100, 30))
+
+
+def test_an_empty_workspace_names_its_path_relative_to_the_current_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "acme-detections"
+    (repo / "objects").mkdir(parents=True)
+    assert empty_state(repo, repo) == "No detection objects in this workspace"
+    assert empty_state(repo, tmp_path) == "No detection objects under acme-detections"
+    assert empty_state(repo, repo / "objects") == "No detection objects in this workspace"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    assert empty_state(repo, elsewhere) == "No detection objects in this workspace"
+    monkeypatch.chdir(tmp_path)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        [line] = _labels(app.query_one("#tree", Tree).root)
+        assert line == "No detection objects under acme-detections"
+        assert str(tmp_path) not in line
+        assert not app.query_one("#tree", Tree).show_horizontal_scrollbar
+
+    _drive(repo, script, size=(100, 30))
 
 
 # -- actions and renderers --------------------------------------------------
@@ -470,9 +594,40 @@ def test_help_asks_did_you_mean_only_for_a_value() -> None:
         {"code": "invalid_cve", "message": "m", "suggestion": advice}
     )
     assert _plain(diagnostic_text(diagnostic, Path(".")).plain).splitlines()[-1] == (
-        f"  help: {advice}"
+        f"  ╰─ help: {advice}"
     )
     assert Diagnostic.from_issue({"code": "x", "message": "m"}).help_text() is None
+
+
+def test_a_diagnostic_reads_as_the_spec_frame_without_its_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "detections"
+    rule = repo / RULE_FILE
+    issue = {
+        "code": "vocab_unknown",
+        "message": "Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry",
+        "suggestion": "clear",
+        "file_path": str(rule),
+        "yaml_line": 7,
+        "field_path": ["metadata", "tlp"],
+    }
+    monkeypatch.chdir(tmp_path)
+    framed = _plain(diagnostic_text(Diagnostic.from_issue(issue), repo).plain)
+    # Relative to the current directory when the file is inside it.
+    assert framed.splitlines() == [
+        "error[vocab_unknown]: Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry",
+        f"  ╭─▶ detections/{RULE_FILE}:8",
+        "  ╰─ help: did you mean 'clear'?",
+    ]
+    (tmp_path / "elsewhere").mkdir()
+    monkeypatch.chdir(tmp_path / "elsewhere")
+    # Elsewhere, relative to the workspace; no help closes the location; no
+    # line, the field says where.
+    bare = Diagnostic.from_issue({**issue, "suggestion": None, "yaml_line": None})
+    assert _plain(diagnostic_text(bare, repo).plain).splitlines()[1:] == [
+        f"  ╰─▶ {RULE_FILE} · metadata.tlp"
+    ]
 
 
 def test_results_text_carries_no_line_breaks_of_its_own(tutorial_repo: Path) -> None:
@@ -598,3 +753,49 @@ def test_the_service_module_does_not_import_textual() -> None:
         check=False,
     )
     assert done.returncode == 0, done.stderr
+
+
+def _modules_after(code: str) -> set[str]:
+    """The modules a fresh interpreter has loaded once *code* ran."""
+    done = subprocess.run(
+        [sys.executable, "-c", f"{code}\nimport sys\nprint(' '.join(sorted(sys.modules)))"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    return set(done.stdout.splitlines()[-1].split())
+
+
+def _textual(modules: set[str]) -> set[str]:
+    return {name for name in modules if name.split(".")[0] == "textual"}
+
+
+def test_tui_help_does_not_import_textual() -> None:
+    """Textual loads when the UI opens, never for the command's help."""
+    modules = _modules_after(
+        "import contextlib, io\n"
+        "from opentide.cli import app\n"
+        "with contextlib.redirect_stdout(io.StringIO()), contextlib.suppress(SystemExit):\n"
+        "    app(['tui', '--help'])"
+    )
+    assert "opentide.cli.commands.tui" in modules
+    assert not _textual(modules)
+
+
+def test_walking_the_command_tree_does_not_import_textual() -> None:
+    """What introspection does (``opentide commands``, completion): build every command."""
+    modules = _modules_after(
+        "import typer\n"
+        "from typer import _click\n"
+        "from opentide.cli import app\n"
+        "def walk(command, ctx):\n"
+        "    command.get_params(ctx)\n"
+        "    for name in getattr(command, 'list_commands', lambda ctx: [])(ctx):\n"
+        "        child = command.get_command(ctx, name)\n"
+        "        walk(child, _click.Context(child, parent=ctx, info_name=name))\n"
+        "group = typer.main.get_command(app)\n"
+        "walk(group, _click.Context(group, info_name='opentide'))"
+    )
+    assert "opentide.cli.commands.tui" in modules
+    assert not _textual(modules)

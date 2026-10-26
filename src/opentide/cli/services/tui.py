@@ -4,7 +4,7 @@ The catalogue comes from the registry (:func:`collect_info` reloads it), the
 coverage table from the same lookup as ``opentide info --technique … coverage``,
 and the actions call the service functions behind ``validate``, ``generate``
 and ``deploy --dry-run``, so the terminal UI cannot disagree with the CLI.
-Textual is imported only by :mod:`opentide.cli.commands.tui`.
+Textual is imported only by :mod:`opentide.cli.tui_app`.
 """
 
 from __future__ import annotations

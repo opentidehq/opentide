@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
-- **`opentide tui`**, a terminal UI: the catalogue as a tree (threats → objectives → rules, with counts), each object's YAML with the diagnostics from the last validate run, coverage by ATT&CK technique, and `validate`, `generate` and `deploy --dry-run` from the command palette (`ctrl+p`) or a key, with their results printed as the commands print them. It runs only at an interactive terminal; under `--json`, in a pipe, in CI or under a coding agent it exits `2` with `failure.code` `usage_tui_needs_tty`. See [opentide tui](docs/cli/tui.md). It needs [Textual](https://textual.textualize.io/), now a dependency of `opentide` (there are no extras); no other command imports it, so start-up is unchanged.
+- **`opentide tui`**, a terminal UI: the catalogue as a tree (threats → objectives → rules, with counts), each object's YAML with the diagnostics from the last validate run, coverage by ATT&CK technique, and `validate`, `generate` and `deploy --dry-run` from the command palette (`ctrl+p`) or a key, with their results printed as the commands print them. It runs only at an interactive terminal; under `--json`, in a pipe, in CI or under a coding agent it exits `2` with `failure.code` `usage_tui_needs_tty`. See [opentide tui](docs/cli/tui.md). It needs [Textual](https://textual.textualize.io/), now a dependency of `opentide` (there are no extras); it loads only when the UI opens (not for `opentide tui --help` or a walk of the command tree), so start-up is unchanged. The header shows the tagline only where it fits whole, a long name ends in `…` and gives way before its counts (the detail pane shows it in full), and the tree never scrolls sideways.
 
 ### Changed
 
