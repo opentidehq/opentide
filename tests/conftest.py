@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Iterator
+from functools import partial
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -177,6 +178,29 @@ def rule_payload(metadata: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _restore_environment(saved: dict[str, str]) -> None:
+    if dict(os.environ) != saved:
+        os.environ.clear()
+        os.environ.update(saved)
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_fixture_setup(fixturedef: Any, request: pytest.FixtureRequest) -> Iterator[Any]:
+    """Give every module-, class-, package- or session-scoped fixture its own environment.
+
+    Such a fixture runs before any test's ``_restore_process_environment``
+    snapshot, so what it leaves in ``os.environ`` would outlive its scope: an
+    in-process CLI call exports ``OPENTIDE_REPO_ROOT``, ``OPENTIDE_DATA_ROOT``
+    and ``OPENTIDE_TIDE_WORKSPACE``, which ``CliRunner(env=...)`` does not
+    take back, and tests in other modules then depend on the order they run in
+    (#642 and #647 each fixed one). The environment is restored when the
+    fixture is torn down, after its own teardown, so it holds for its scope.
+    """
+    if fixturedef.scope != "function":
+        fixturedef.addfinalizer(partial(_restore_environment, dict(os.environ)))
+    return (yield)
+
+
 @pytest.fixture(autouse=True)
 def _restore_process_environment() -> Iterator[None]:
     """Undo ``os.environ`` writes a test makes outside ``monkeypatch``.
@@ -187,9 +211,7 @@ def _restore_process_environment() -> Iterator[None]:
     """
     saved = dict(os.environ)
     yield
-    if dict(os.environ) != saved:
-        os.environ.clear()
-        os.environ.update(saved)
+    _restore_environment(saved)
 
 
 @pytest.fixture(autouse=True)
