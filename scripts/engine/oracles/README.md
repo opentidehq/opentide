@@ -83,4 +83,4 @@ Nothing from this reference is shipped or vendored; the image is pulled at run t
 
 ## Not shipped
 
-Kusto.Language, Splunk, Splunk SDKs, and the Elastic and Lucene references never enter a release artifact. `ci-oracle.sh` fails if a shipped manifest depends on one, and `release.yml` runs `scripts/license-scan.sh` over every artifact (unpacking wheels and zips) before it attaches them.
+Kusto.Language, Splunk, Splunk SDKs, and the Elastic and Lucene references never enter a release artifact. `ci-oracle.sh` fails if a shipped manifest depends on one, and `release.yml` runs `scripts/license-scan.sh` over every artifact (unpacking zips and `.crate` files) before it attaches or publishes them.

@@ -1,6 +1,6 @@
 ---
 name: wasm-hosts
-description: Build opentide highlight hosts. Covers wasm32-unknown-unknown with wasm-bindgen 0.2 (never mixed with WASI), a separate wasm32-wasip1 artifact, maturin, and createOpentideClient. Use when editing crates/opentide-wasm, packages/lsp-client, packages/lsp-worker, or pyproject.toml.
+description: Build opentide highlight hosts. Covers wasm32-unknown-unknown with wasm-bindgen 0.2 (never mixed with WASI), a separate wasm32-wasip1 artifact, and createOpentideClient. Use when editing crates/opentide-wasm, packages/lsp-client, or packages/lsp-worker.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -71,19 +71,11 @@ node --experimental-strip-types --test packages/lsp-client/src/index.test.ts
 
 The client is TypeScript ESM (`"type": "module"`). Do not add a compile step or a bundler config to this repo for a one-line change.
 
-## maturin
+## Packaging
 
-`pyproject.toml` builds the **native** binary with maturin `>=1.7,<2`:
+This repository publishes no Python package. The Python bindings and the `opentide` command that wraps the server live in `opentidehq/opentide`. Do not add `pyproject.toml`, maturin, or PyO3 here.
 
-```toml
-[tool.maturin]
-manifest-path = "crates/opentide-lsp/Cargo.toml"
-bindings = "bin"
-```
-
-`maturin build` produces a Python package that ships `opentide-lsp`. It is not a PyO3 extension module. Do not add `pyo3` or `bindings = "pyo3"` to make `import opentide_lsp` work; the Python extra that calls the engine lives in `opentidehq/opentide` (`#16`), not here.
-
-CI job `package` runs `pip install "maturin>=1.7,<2"` and `maturin build`. A change that breaks the lsp manifest as a bin crate fails that job.
+The native binary ships on crates.io (`cargo install opentide-lsp`) and as per-target binaries on each GitHub Release. CI job `package` runs `scripts/release.py vendor` and `cargo package --workspace`, which builds every crate from its packaged sources. A crate that reads a file outside `OPENTIDE_ASSETS` fails that job.
 
 ## Names
 

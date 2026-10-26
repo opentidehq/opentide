@@ -3,54 +3,146 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
-const VOCAB_ACTORS: &str = include_str!("../../../catalogs/tide/vocabs/actors.vocab.toml");
-const VOCAB_ALERT_SEVERITY: &str =
-    include_str!("../../../catalogs/tide/vocabs/alert_severity.vocab.toml");
-const VOCAB_ATT_AND_CK_GROUPS: &str =
-    include_str!("../../../catalogs/tide/vocabs/att&ck.groups.vocab.toml");
-const VOCAB_ATT_AND_CK: &str = include_str!("../../../catalogs/tide/vocabs/att&ck.vocab.toml");
-const VOCAB_CHAINING_RELATIONS: &str =
-    include_str!("../../../catalogs/tide/vocabs/chaining_relations.vocab.toml");
-const VOCAB_COLLECTION: &str = include_str!("../../../catalogs/tide/vocabs/collection.vocab.toml");
-const VOCAB_CRITICALITY: &str =
-    include_str!("../../../catalogs/tide/vocabs/criticality.vocab.toml");
-const VOCAB_DATASOURCES: &str =
-    include_str!("../../../catalogs/tide/vocabs/datasources.vocab.toml");
-const VOCAB_DETECTION_COMPOSITION: &str =
-    include_str!("../../../catalogs/tide/vocabs/detection.composition.vocab.toml");
-const VOCAB_DETECTION_METHODOLOGY: &str =
-    include_str!("../../../catalogs/tide/vocabs/detection.methodology.vocab.toml");
-const VOCAB_DETECTION_TYPES: &str =
-    include_str!("../../../catalogs/tide/vocabs/detection.types.vocab.toml");
-const VOCAB_EFFORTS: &str = include_str!("../../../catalogs/tide/vocabs/efforts.vocab.toml");
-const VOCAB_FEASIBILITY: &str =
-    include_str!("../../../catalogs/tide/vocabs/feasibility.vocab.toml");
-const VOCAB_IMPACT: &str = include_str!("../../../catalogs/tide/vocabs/impact.vocab.toml");
-const VOCAB_KILLCHAIN: &str = include_str!("../../../catalogs/tide/vocabs/killchain.vocab.toml");
-const VOCAB_LEVEL: &str = include_str!("../../../catalogs/tide/vocabs/level.vocab.toml");
-const VOCAB_LEVERAGE: &str = include_str!("../../../catalogs/tide/vocabs/leverage.vocab.toml");
-const VOCAB_MALAPI: &str = include_str!("../../../catalogs/tide/vocabs/malapi.vocab.toml");
-const VOCAB_MATURITY: &str = include_str!("../../../catalogs/tide/vocabs/maturity.vocab.toml");
-const VOCAB_MITIGATIONS: &str =
-    include_str!("../../../catalogs/tide/vocabs/mitigations.vocab.toml");
-const VOCAB_OBJECTIVES: &str = include_str!("../../../catalogs/tide/vocabs/objectives.vocab.toml");
-const VOCAB_PAP: &str = include_str!("../../../catalogs/tide/vocabs/pap.vocab.toml");
-const VOCAB_RESOURCES: &str = include_str!("../../../catalogs/tide/vocabs/resources.vocab.toml");
-const VOCAB_RSIT: &str = include_str!("../../../catalogs/tide/vocabs/rsit.vocab.toml");
-const VOCAB_SCHEDULING: &str = include_str!("../../../catalogs/tide/vocabs/scheduling.vocab.toml");
-const VOCAB_SECTORS: &str = include_str!("../../../catalogs/tide/vocabs/sectors.vocab.toml");
-const VOCAB_SEVERITY: &str = include_str!("../../../catalogs/tide/vocabs/severity.vocab.toml");
-const VOCAB_SIGNAL_ENTITIES: &str =
-    include_str!("../../../catalogs/tide/vocabs/signal.entities.vocab.toml");
-const VOCAB_SOPHISTICATION: &str =
-    include_str!("../../../catalogs/tide/vocabs/sophistication.vocab.toml");
-const VOCAB_STAKEHOLDERS: &str =
-    include_str!("../../../catalogs/tide/vocabs/stakeholders.vocab.toml");
-const VOCAB_SURFACE: &str = include_str!("../../../catalogs/tide/vocabs/surface.vocab.toml");
-const VOCAB_TIER: &str = include_str!("../../../catalogs/tide/vocabs/tier.vocab.toml");
-const VOCAB_TLP: &str = include_str!("../../../catalogs/tide/vocabs/tlp.vocab.toml");
-const VOCAB_VIABILITY: &str = include_str!("../../../catalogs/tide/vocabs/viability.vocab.toml");
-const VOCAB_VIOLATION: &str = include_str!("../../../catalogs/tide/vocabs/violation.vocab.toml");
+const VOCAB_ACTORS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/actors.vocab.toml"
+));
+const VOCAB_ALERT_SEVERITY: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/alert_severity.vocab.toml"
+));
+const VOCAB_ATT_AND_CK_GROUPS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/att&ck.groups.vocab.toml"
+));
+const VOCAB_ATT_AND_CK: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/att&ck.vocab.toml"
+));
+const VOCAB_CHAINING_RELATIONS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/chaining_relations.vocab.toml"
+));
+const VOCAB_COLLECTION: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/collection.vocab.toml"
+));
+const VOCAB_CRITICALITY: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/criticality.vocab.toml"
+));
+const VOCAB_DATASOURCES: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/datasources.vocab.toml"
+));
+const VOCAB_DETECTION_COMPOSITION: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/detection.composition.vocab.toml"
+));
+const VOCAB_DETECTION_METHODOLOGY: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/detection.methodology.vocab.toml"
+));
+const VOCAB_DETECTION_TYPES: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/detection.types.vocab.toml"
+));
+const VOCAB_EFFORTS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/efforts.vocab.toml"
+));
+const VOCAB_FEASIBILITY: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/feasibility.vocab.toml"
+));
+const VOCAB_IMPACT: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/impact.vocab.toml"
+));
+const VOCAB_KILLCHAIN: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/killchain.vocab.toml"
+));
+const VOCAB_LEVEL: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/level.vocab.toml"
+));
+const VOCAB_LEVERAGE: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/leverage.vocab.toml"
+));
+const VOCAB_MALAPI: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/malapi.vocab.toml"
+));
+const VOCAB_MATURITY: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/maturity.vocab.toml"
+));
+const VOCAB_MITIGATIONS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/mitigations.vocab.toml"
+));
+const VOCAB_OBJECTIVES: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/objectives.vocab.toml"
+));
+const VOCAB_PAP: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/pap.vocab.toml"
+));
+const VOCAB_RESOURCES: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/resources.vocab.toml"
+));
+const VOCAB_RSIT: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/rsit.vocab.toml"
+));
+const VOCAB_SCHEDULING: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/scheduling.vocab.toml"
+));
+const VOCAB_SECTORS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/sectors.vocab.toml"
+));
+const VOCAB_SEVERITY: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/severity.vocab.toml"
+));
+const VOCAB_SIGNAL_ENTITIES: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/signal.entities.vocab.toml"
+));
+const VOCAB_SOPHISTICATION: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/sophistication.vocab.toml"
+));
+const VOCAB_STAKEHOLDERS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/stakeholders.vocab.toml"
+));
+const VOCAB_SURFACE: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/surface.vocab.toml"
+));
+const VOCAB_TIER: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/tier.vocab.toml"
+));
+const VOCAB_TLP: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/tlp.vocab.toml"
+));
+const VOCAB_VIABILITY: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/viability.vocab.toml"
+));
+const VOCAB_VIOLATION: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/vocabs/violation.vocab.toml"
+));
 
 const ALL_VOCABS: &[&str] = &[
     VOCAB_ACTORS,

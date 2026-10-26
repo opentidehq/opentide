@@ -2,7 +2,7 @@
 # License scan: release artifacts must not contain an oracle reference
 # (Microsoft Kusto.Language, a Splunk SDK, an Elastic or Lucene parser). The
 # oracles are CI-only.
-# Usage: license-scan.sh <file-or-dir>...  (wheels, zips and tarballs are unpacked)
+# Usage: license-scan.sh <file-or-dir>...  (zips, tarballs and .crate files are unpacked)
 set -euo pipefail
 if [[ $# -eq 0 ]]; then
   echo "usage: $0 <file-or-dir>..."
@@ -18,7 +18,7 @@ while IFS= read -r -d '' file; do
   case "$file" in
     *.whl | *.zip | *.nupkg | *.vsix)
       mkdir -p "$scratch/$n" && unzip -q "$file" -d "$scratch/$n" ;;
-    *.tar.gz | *.tgz)
+    *.tar.gz | *.tgz | *.crate)
       mkdir -p "$scratch/$n" && tar -xzf "$file" -C "$scratch/$n" ;;
   esac
 done < <(find "$@" -type f -print0)

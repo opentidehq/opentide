@@ -9,7 +9,7 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 | Any `crates/**/*.rs`, `Cargo.toml`, `Cargo.lock` | `skills/rust-engine/SKILL.md` |
 | `grammars/`, `crates/opentide-syntax`, `highlights/queries/` | `skills/tree-sitter/SKILL.md` |
 | `crates/opentide-lsp`, `editors/`, stdio tests | `skills/lsp-host/SKILL.md` |
-| `crates/opentide-wasm`, `packages/`, `pyproject.toml` | `skills/wasm-hosts/SKILL.md` |
+| `crates/opentide-wasm`, `packages/`, packaging and releases | `skills/wasm-hosts/SKILL.md` |
 | `catalogs/`, `highlights/spec.toml`, `testdata/conformance`, `testdata/oracles`, `scripts/oracles`, schema sync | `skills/catalogs/SKILL.md` |
 | A new query language (S1QL, Sigma, YARA) | `skills/add-language/SKILL.md` (then the rows above) |
 

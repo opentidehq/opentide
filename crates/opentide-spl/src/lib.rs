@@ -12,11 +12,26 @@ use serde::Deserialize;
 use std::sync::OnceLock;
 use tree_sitter::Node;
 
-const COMMANDS_TOML: &str = include_str!("../../../catalogs/spl/commands.toml");
-const FIELDS_TOML: &str = include_str!("../../../catalogs/spl/fields.toml");
-const DATAMODELS_TOML: &str = include_str!("../../../catalogs/spl/datamodels.toml");
-const MACROS_TOML: &str = include_str!("../../../catalogs/spl/macros.toml");
-const OPTIONS_TOML: &str = include_str!("../../../catalogs/spl/command-options.toml");
+const COMMANDS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/spl/commands.toml"
+));
+const FIELDS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/spl/fields.toml"
+));
+const DATAMODELS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/spl/datamodels.toml"
+));
+const MACROS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/spl/macros.toml"
+));
+const OPTIONS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/spl/command-options.toml"
+));
 
 #[derive(Debug, Clone, Deserialize)]
 struct CommandsFile {
@@ -1475,7 +1490,10 @@ mod tests {
 
     #[test]
     fn argument_completion_matches_search_reference_fixture() {
-        let raw = include_str!("../../../testdata/conformance/spl/argument-completion.toml");
+        let raw = include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/testdata/conformance/spl/argument-completion.toml"
+        ));
         let fixture: ArgumentFixture = toml::from_str(raw).expect("argument fixture");
         let required = ["tstats", "stats", "rex", "lookup", "join", "timechart"];
         for command in required {

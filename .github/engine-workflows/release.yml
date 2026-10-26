@@ -9,7 +9,24 @@ permissions:
   contents: write
 
 jobs:
+  # The tag, the crate pins, and CHANGELOG.md agree, and every crate builds from
+  # its packaged sources, before anything is built or published.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/release.py check "${GITHUB_REF_NAME}"
+      - run: python3 scripts/release.py vendor
+      - run: cargo package --workspace --allow-dirty
+      - name: license scan (no oracle references)
+        run: bash scripts/license-scan.sh target/package/*.crate
+
   native:
+    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -24,7 +41,8 @@ jobs:
             target: aarch64-unknown-linux-musl
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-13
+          # GitHub retired the Intel macOS runners; cross-compile on Apple silicon.
+          - os: macos-latest
             target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -53,13 +71,24 @@ jobs:
           size=$(wc -c < "$bin")
           echo "$bin is $size bytes"
           test "$size" -lt 31457280
+      # Every target's binary is named opentide-lsp: name each by its target, or
+      # the release job's merged download keeps only one.
+      - name: rename
+        shell: bash
+        run: |
+          set -euo pipefail
+          ext=""
+          case "${{ matrix.target }}" in *windows*) ext=".exe" ;; esac
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/opentide-lsp${ext}" "dist/opentide-lsp-${GITHUB_REF_NAME}-${{ matrix.target }}${ext}"
       - name: upload
         uses: actions/upload-artifact@v4
         with:
           name: opentide-lsp-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/opentide-lsp*
+          path: dist/*
 
   wasm:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +116,7 @@ jobs:
           path: dist/*
 
   highlights:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -104,34 +134,8 @@ jobs:
           name: highlights-zip
           path: highlights-v*.zip
 
-  # Wheel is always attached to the GitHub Release. PyPI upload runs when
-  # PYPI_API_TOKEN is set. abi3-py310; 3.14 free-threaded stays best-effort.
-  pypi:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install "maturin>=1.7,<2"
-      - run: maturin build --release -m crates/opentide-lsp/Cargo.toml
-      - uses: actions/upload-artifact@v4
-        with:
-          name: opentide-lsp-wheel
-          path: target/wheels/*.whl
-      - name: publish to PyPI
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          if [ -z "${MATURIN_PYPI_TOKEN}" ]; then
-            echo "PYPI_API_TOKEN is unset; the wheel is attached to the GitHub Release only"
-            exit 0
-          fi
-          maturin publish -m crates/opentide-lsp/Cargo.toml
-
   release:
-    needs: [native, wasm, highlights, pypi]
+    needs: [native, wasm, highlights]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -164,8 +168,36 @@ jobs:
           set -euo pipefail
           test -n "$(find dist -name 'highlights-*.zip' -print -quit)"
           test -s dist/THIRD-PARTY-LICENSES.html && test -s dist/NOTICE && test -s dist/WASI-LIBC-LICENSES.txt
+          python3 scripts/release.py notes "${GITHUB_REF_NAME}" > notes.md
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
-            --title "${GITHUB_REF_NAME}" \
-            --notes "opentide language server ${GITHUB_REF_NAME}. Tags are independent of the opentide package. npm @opentide/lsp-client is tracked separately." \
+            --title "opentide-lsp ${GITHUB_REF_NAME}" \
+            --notes-file notes.md \
             || gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+
+  # crates.io is permanent: publish only once the GitHub Release exists. The
+  # crates go up in dependency order, each pinned to this version; a crate
+  # already published is skipped, so a re-run resumes. crates.io rate-limits
+  # new crates (one every ten minutes after the first few), which only the
+  # first release meets. Configure trusted publishing on crates.io after it
+  # to drop the token.
+  crates:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/release.py vendor
+      - name: publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN}" ]; then
+            echo "::error::CARGO_REGISTRY_TOKEN is unset; the crates were not published"
+            exit 1
+          fi
+          python3 scripts/release.py publish

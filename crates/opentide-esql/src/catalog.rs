@@ -9,10 +9,22 @@ use crate::version::Availability;
 use serde::Deserialize;
 use std::sync::OnceLock;
 
-const COMMANDS_TOML: &str = include_str!("../../../catalogs/esql/commands.toml");
-const FUNCTIONS_TOML: &str = include_str!("../../../catalogs/esql/functions.toml");
-const OPERATORS_TOML: &str = include_str!("../../../catalogs/esql/operators.toml");
-const TYPES_TOML: &str = include_str!("../../../catalogs/esql/types.toml");
+const COMMANDS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/esql/commands.toml"
+));
+const FUNCTIONS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/esql/functions.toml"
+));
+const OPERATORS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/esql/operators.toml"
+));
+const TYPES_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/esql/types.toml"
+));
 
 #[derive(Debug, Deserialize)]
 struct CommandsFile {

@@ -37,6 +37,8 @@ jobs:
       - name: generate-highlights --check
         run: cargo run -p opentide-lsp -- generate-highlights --check
 
+  # Every crate builds from its packaged sources, as it will from crates.io:
+  # a crate that reads a file outside OPENTIDE_ASSETS fails here, not at release.
   package:
     runs-on: ubuntu-latest
     steps:
@@ -45,12 +47,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install "maturin>=1.7,<2"
-      - run: maturin build
-      # The wheel carries the binary and its embedded catalogs; catch an oracle
-      # reference here rather than at release time.
+      - run: python3 scripts/release.py vendor
+      - run: cargo package --workspace --allow-dirty
+      # The crates carry the embedded catalogs; catch an oracle reference here
+      # rather than at release time.
       - name: license scan (no oracle references)
-        run: bash scripts/license-scan.sh target/wheels
+        run: bash scripts/license-scan.sh target/package/*.crate
 
   grammars:
     runs-on: ubuntu-latest

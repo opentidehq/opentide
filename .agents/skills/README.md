@@ -7,7 +7,7 @@ Agent procedures for working in this repository. Detection-engineering skills ar
 | `rust-engine` | Editing the Rust workspace, edition 2024 code, or `Cargo.lock` |
 | `tree-sitter` | Grammars, the syntax crate, or `highlights.scm` |
 | `lsp-host` | The stdio server, editor samples, or protocol tests |
-| `wasm-hosts` | `wasm-bindgen`, WASI, the TypeScript client, or maturin |
+| `wasm-hosts` | `wasm-bindgen`, WASI, the TypeScript client, or packaging |
 | `catalogs` | Compiled catalogs, HighlightSpec, or conformance corpora |
 | `add-language` | Adding S1QL, Lucene, Sigma, or YARA |
 

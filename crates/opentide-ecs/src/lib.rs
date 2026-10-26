@@ -10,7 +10,10 @@
 use serde::Deserialize;
 use std::sync::OnceLock;
 
-const FIELDS_JSON: &str = include_str!("../../../catalogs/ecs/fields.json");
+const FIELDS_JSON: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/ecs/fields.json"
+));
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct EcsField {

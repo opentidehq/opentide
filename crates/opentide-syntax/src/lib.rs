@@ -200,7 +200,10 @@ mod tests {
         let caps = query_captures(
             LanguageId::Kql,
             src,
-            include_str!("../../../highlights/queries/kql/highlights.scm"),
+            include_str!(concat!(
+                env!("OPENTIDE_ASSETS"),
+                "/highlights/queries/kql/highlights.scm"
+            )),
         )
         .expect("query");
         let keywords: Vec<_> = caps
@@ -310,7 +313,10 @@ mod highlight_cst_dump {
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(&lang).unwrap();
         let tree = parser.parse(src, None).unwrap();
-        let scm = include_str!("../../../highlights/queries/kql/highlights.scm");
+        let scm = include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/highlights/queries/kql/highlights.scm"
+        ));
         let query = Query::new(&lang, scm).expect("compile kql highlights.scm");
         let mut cursor = QueryCursor::new();
         let mut iter = cursor.matches(&query, tree.root_node(), src.as_bytes());

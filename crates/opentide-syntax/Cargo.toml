@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
 description = "Tree-sitter language bindings for opentide KQL, SPL, ES|QL, EQL, kuery, and Lucene"
 build = "build.rs"
 
@@ -16,3 +19,15 @@ cc.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+
+# build.rs compiles these. scripts/release.py copies them into assets/ at publish
+# time, beside the files the crate's include_str! calls name.
+[package.metadata.opentide]
+assets = [
+    "grammars/tree-sitter-opentide-kql/src",
+    "grammars/tree-sitter-opentide-spl/src",
+    "grammars/tree-sitter-opentide-esql/src",
+    "grammars/tree-sitter-opentide-eql/src",
+    "grammars/tree-sitter-opentide-kuery/src",
+    "grammars/tree-sitter-opentide-lucene/src",
+]

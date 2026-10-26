@@ -13,17 +13,46 @@ use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use tree_sitter::Node;
 
-const OPERATORS_TOML: &str = include_str!("../../../catalogs/kql/core/operators.toml");
-const FUNCTIONS_TOML: &str = include_str!("../../../catalogs/kql/core/functions.toml");
-const TYPES_TOML: &str = include_str!("../../../catalogs/kql/core/types.toml");
-const SCALAR_OPERATORS_TOML: &str =
-    include_str!("../../../catalogs/kql/core/operators-scalar.toml");
-const PLUGINS_TOML: &str = include_str!("../../../catalogs/kql/core/evaluate-plugins.toml");
-const SENTINEL_TABLES: &str = include_str!("../../../catalogs/kql/sentinel/tables.toml");
-const DEFENDER_TABLES: &str = include_str!("../../../catalogs/kql/defender/tables.toml");
-const SENTINEL_COLUMNS: &str = include_str!("../../../catalogs/kql/sentinel/columns.toml");
-const DEFENDER_COLUMNS: &str = include_str!("../../../catalogs/kql/defender/columns.toml");
-const OPERATOR_OPTIONS: &str = include_str!("../../../catalogs/kql/core/operator-options.toml");
+const OPERATORS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/core/operators.toml"
+));
+const FUNCTIONS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/core/functions.toml"
+));
+const TYPES_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/core/types.toml"
+));
+const SCALAR_OPERATORS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/core/operators-scalar.toml"
+));
+const PLUGINS_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/core/evaluate-plugins.toml"
+));
+const SENTINEL_TABLES: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/sentinel/tables.toml"
+));
+const DEFENDER_TABLES: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/defender/tables.toml"
+));
+const SENTINEL_COLUMNS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/sentinel/columns.toml"
+));
+const DEFENDER_COLUMNS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/defender/columns.toml"
+));
+const OPERATOR_OPTIONS: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/kql/core/operator-options.toml"
+));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Profile {

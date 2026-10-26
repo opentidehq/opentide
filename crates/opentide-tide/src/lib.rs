@@ -28,11 +28,18 @@ pub use intel::{
 pub use vocabs::{Vocab, VocabKey, bundled_vocabs, vocab_for_field};
 pub use yaml_path::{YamlCursor, object_schema_kind, uuid_span, yaml_cursor};
 
-const RULE_TEMPLATE: &str = include_str!("../../../catalogs/tide/templates/rule.1.0.template.yaml");
-const OBJECTIVE_TEMPLATE: &str =
-    include_str!("../../../catalogs/tide/templates/objective.1.0.template.yaml");
-const THREAT_TEMPLATE: &str =
-    include_str!("../../../catalogs/tide/templates/threat.1.0.template.yaml");
+const RULE_TEMPLATE: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/templates/rule.1.0.template.yaml"
+));
+const OBJECTIVE_TEMPLATE: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/templates/objective.1.0.template.yaml"
+));
+const THREAT_TEMPLATE: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/templates/threat.1.0.template.yaml"
+));
 
 /// Map a YAML field path to an injected query language.
 /// CrowdStrike is unsupported — never fake validation. Elastic is not a
@@ -1195,7 +1202,10 @@ fn tide_key_capture_at_or(field: Option<&TideField>) -> &'static str {
     }
 }
 
-const DEPRECATIONS_JSON: &str = include_str!("../../../catalogs/tide/generated/deprecations.json");
+const DEPRECATIONS_JSON: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/generated/deprecations.json"
+));
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct FieldDeprecation {

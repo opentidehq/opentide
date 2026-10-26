@@ -14,20 +14,40 @@ use thiserror::Error;
 
 pub use markdown::highlight_markdown_line;
 
-pub const SPEC_TOML: &str = include_str!("../../../highlights/spec.toml");
+pub const SPEC_TOML: &str = include_str!(concat!(env!("OPENTIDE_ASSETS"), "/highlights/spec.toml"));
 /// Tide field catalog generated from opentide JSON Schema (`scripts/sync_opentide_schemas.py`).
-pub const TIDE_FIELDS_JSON: &str = include_str!("../../../catalogs/tide/generated/fields.json");
-pub const KQL_HIGHLIGHTS_SCM: &str = include_str!("../../../highlights/queries/kql/highlights.scm");
-pub const SPL_HIGHLIGHTS_SCM: &str = include_str!("../../../highlights/queries/spl/highlights.scm");
-pub const TIDE_HIGHLIGHTS_SCM: &str =
-    include_str!("../../../highlights/queries/tide/highlights.scm");
-pub const ESQL_HIGHLIGHTS_SCM: &str =
-    include_str!("../../../highlights/queries/esql/highlights.scm");
-pub const EQL_HIGHLIGHTS_SCM: &str = include_str!("../../../highlights/queries/eql/highlights.scm");
-pub const KUERY_HIGHLIGHTS_SCM: &str =
-    include_str!("../../../highlights/queries/kuery/highlights.scm");
-pub const LUCENE_HIGHLIGHTS_SCM: &str =
-    include_str!("../../../highlights/queries/lucene/highlights.scm");
+pub const TIDE_FIELDS_JSON: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/generated/fields.json"
+));
+pub const KQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/kql/highlights.scm"
+));
+pub const SPL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/spl/highlights.scm"
+));
+pub const TIDE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/tide/highlights.scm"
+));
+pub const ESQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/esql/highlights.scm"
+));
+pub const EQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/eql/highlights.scm"
+));
+pub const KUERY_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/kuery/highlights.scm"
+));
+pub const LUCENE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/lucene/highlights.scm"
+));
 
 /// The tree-sitter highlight query for a language.
 pub fn highlights_scm(language: LanguageId) -> &'static str {
@@ -798,29 +818,45 @@ mod tests {
         let copies = [
             (
                 LanguageId::Kql,
-                include_str!("../../../grammars/tree-sitter-opentide-kql/queries/highlights.scm"),
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-kql/queries/highlights.scm"
+                )),
             ),
             (
                 LanguageId::Spl,
-                include_str!("../../../grammars/tree-sitter-opentide-spl/queries/highlights.scm"),
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-spl/queries/highlights.scm"
+                )),
             ),
             (
                 LanguageId::Esql,
-                include_str!("../../../grammars/tree-sitter-opentide-esql/queries/highlights.scm"),
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-esql/queries/highlights.scm"
+                )),
             ),
             (
                 LanguageId::Eql,
-                include_str!("../../../grammars/tree-sitter-opentide-eql/queries/highlights.scm"),
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-eql/queries/highlights.scm"
+                )),
             ),
             (
                 LanguageId::Kuery,
-                include_str!("../../../grammars/tree-sitter-opentide-kuery/queries/highlights.scm"),
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-kuery/queries/highlights.scm"
+                )),
             ),
             (
                 LanguageId::Lucene,
-                include_str!(
-                    "../../../grammars/tree-sitter-opentide-lucene/queries/highlights.scm"
-                ),
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-lucene/queries/highlights.scm"
+                )),
             ),
         ];
         for (language, copy) in copies {
@@ -930,7 +966,10 @@ mod tests {
 mod tm_language_stub_bug {
     #[test]
     fn generated_kql_tm_language_has_executable_match_rules() {
-        let tm = include_str!("../../../highlights/generated/kql.tmLanguage.json");
+        let tm = include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/highlights/generated/kql.tmLanguage.json"
+        ));
         let v: serde_json::Value = serde_json::from_str(tm).expect("json");
         let patterns = v["patterns"].as_array().expect("patterns");
         let has_match = patterns

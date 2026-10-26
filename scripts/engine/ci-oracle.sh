@@ -15,14 +15,18 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 languages=("$@")
 [[ ${#languages[@]} -gt 0 ]] || languages=(kql spl esql eql kuery lucene)
 
-# The oracles are the only place the references may appear. No Rust, npm or
-# Python manifest that feeds a release may depend on them.
+# The oracles are the only place the references may appear. No Rust or npm
+# manifest that feeds a release may depend on them.
 manifests=(
-  "$root/Cargo.lock" "$root/pyproject.toml" "$root"/crates/*/Cargo.toml
+  "$root/Cargo.lock" "$root"/crates/*/Cargo.toml
   "$root"/packages/*/package.json "$root"/grammars/*/package.json
 )
-if grep -IilE 'kusto[._-]language|splunklib|splunk[-_]sdk|@elastic/esql|antlr-ng|peggy|lucene-queryparser' "${manifests[@]}"; then
-  echo "a shipped manifest depends on an oracle reference"
+# grep exits 1 for no match and 2 when it cannot read a manifest: only 1 passes,
+# so a missing file can never hide a match.
+rc=0
+grep -IilE 'kusto[._-]language|splunklib|splunk[-_]sdk|@elastic/esql|antlr-ng|peggy|lucene-queryparser' "${manifests[@]}" || rc=$?
+if [[ $rc -ne 1 ]]; then
+  [[ $rc -eq 0 ]] && echo "a shipped manifest depends on an oracle reference" || echo "could not read every shipped manifest"
   exit 1
 fi
 

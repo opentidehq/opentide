@@ -94,7 +94,7 @@ Issue `#64` (children `#65`–`#68`) will vendor Pydantic JSON Schema for `.open
 
 - Do not hand-write a JSON Schema, a tree-sitter TOML grammar, or HighlightSpec captures for TOML.
 - Do not validate `sharing.toml` inside `opentide-tide`.
-- `Cargo.toml`, `pyproject.toml`, and `catalogs/**/*.toml` are not `opentide-config` documents.
+- `Cargo.toml` and `catalogs/**/*.toml` are not `opentide-config` documents.
 
 ## Checks
 

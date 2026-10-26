@@ -10,6 +10,28 @@ v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations
 2. **Tide objects** — DetectionOps product (schema, vocabs, UUID graph, CLI-equivalent diagnostics).
 3. **Hosts** consume the engine plus frozen HighlightSpec artifacts.
 
+## Install
+
+```bash
+cargo install opentide-lsp          # from crates.io
+opentide-lsp --version
+```
+
+Each [GitHub Release](https://github.com/opentidehq/language-server/releases) also carries a prebuilt binary per target (`opentide-lsp-<version>-<target>`), the browser WASM build, and the highlights zip. The `opentide` Python package wraps the server in its own CLI; this repository publishes no Python package.
+
+## Releases
+
+Versions follow [Semantic Versioning](https://semver.org/) and are listed in [CHANGELOG.md](CHANGELOG.md). Every crate shares the workspace version, and the internal crates pin each other to it. To cut a release:
+
+```bash
+python3 scripts/release.py bump 0.6.0     # workspace version, internal pins, Cargo.lock
+# write the 0.6.0 section of CHANGELOG.md; its first paragraph is the summary
+python3 scripts/release.py check v0.6.0
+git commit -am "chore: release 0.6.0" && git tag v0.6.0 && git push origin main v0.6.0
+```
+
+The tag runs `.github/workflows/release.yml`: it checks the version, builds every target, opens the GitHub Release with the changelog notes, then publishes the crates to crates.io (`CARGO_REGISTRY_TOKEN`). The crates embed catalogs and grammars from the repository root; `scripts/release.py vendor` copies them into each crate first, and CI packages every crate on each pull request so a missing file fails there.
+
 ## Quick start
 
 ```bash
