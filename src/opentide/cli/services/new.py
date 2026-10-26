@@ -41,6 +41,8 @@ FAMILIES = ("threat", "objective", "rule")
 
 #: ``failure.code`` when the target file already exists. ``new`` never overwrites.
 PATH_EXISTS = "path_exists"
+#: ``failure.code`` when the folder or file cannot be written (read-only checkout, permissions).
+PATH_NOT_WRITABLE = "path_not_writable"
 #: ``failure.code`` when ``--objective`` or ``--threat`` names no object in the catalogue.
 REFERENCE_NOT_FOUND = "reference_not_found"
 #: ``failure.code`` when the template or schema is still missing after generating it.
@@ -869,8 +871,8 @@ def scaffold_object(
         filled.text = keep_platform_blocks(
             filled.text, options.platforms, _workspace_relative(artifacts.template, workspace)
         )
-    destination.parent.mkdir(parents=True, exist_ok=True)
     try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
         # "x": the file must not exist, even if one appeared since the check above.
         with destination.open("x", encoding="utf-8") as handle:
             handle.write(filled.text)
@@ -879,6 +881,14 @@ def scaffold_object(
             f"{_relative(destination, workspace)} already exists; new never overwrites a file",
             code=PATH_EXISTS,
             argument="--path" if options.path is not None else "--name",
+        ) from None
+    except OSError as exc:
+        # A read-only checkout or folder: say which file, and why, not a crash.
+        reason = exc.strerror or str(exc)
+        raise NewError(
+            f"Could not write {_relative(destination, workspace)}: {reason}",
+            code=PATH_NOT_WRITABLE,
+            argument="--path" if options.path is not None else None,
         ) from None
 
     shown = _relative(destination, workspace)

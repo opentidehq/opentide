@@ -129,9 +129,13 @@ def _replace(file_path: Path, before: str, after: str) -> str | None:
         return _reason(exc)
     if current != before:
         return "it changed since it was read; run opentide validate --fix again"
-    handle, temporary = tempfile.mkstemp(
-        dir=target.parent, prefix=f".{target.name}.", suffix=".tmp"
-    )
+    try:
+        # A folder the user cannot write refuses the temporary file itself.
+        handle, temporary = tempfile.mkstemp(
+            dir=target.parent, prefix=f".{target.name}.", suffix=".tmp"
+        )
+    except OSError as exc:
+        return _reason(exc)
     try:
         with os.fdopen(handle, "wb") as stream:
             stream.write(after.encode("utf-8"))

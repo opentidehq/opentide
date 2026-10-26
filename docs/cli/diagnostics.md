@@ -64,6 +64,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`organisation_uuid_invalid`](#organisation_uuid_invalid) | A `sharing.toml` block's `organisation_uuid` is not a UUID. |
 | [`organisation_uuid_mismatch`](#organisation_uuid_mismatch) | The organisation configured for a sharing target is not the one its API key belongs to. |
 | [`path_exists`](#path_exists) | `opentide new` would write a file that already exists, and it never overwrites one. |
+| [`path_not_writable`](#path_not_writable) | `opentide new` could not create the folder or the file it scaffolds, because the operating system refused the write: a read-only checkout, a folder another user owns, or a full disk. |
 | [`placeholder`](#placeholder) | A value still holds the stand-in `opentide new` wrote for a required field nobody chose yet. |
 | [`platform_not_enabled`](#platform_not_enabled) | A rule has a block for a platform this workspace has not enabled, so it will not deploy there. |
 | [`platform_sdk`](#platform_sdk) | Each enabled platform's SDK imports. |
@@ -977,6 +978,22 @@ opentide new threat --name "Credential Dumping" --path objects/threats/credentia
 ### How to fix
 
 Pass another `--path`, or leave `--path` out: without it, `new` appends `-<uuid[:8]>` to the file name when the name is taken. To start over, delete or move the existing file first.
+
+## path_not_writable
+
+`opentide new` could not create the folder or the file it scaffolds, because the operating system refused the write: a read-only checkout, a folder another user owns, or a full disk.
+
+Exit 1, as `failure.code`. The message names the file and the system's reason (`Permission denied`, `Read-only file system`).
+
+### Example
+
+```text illustrative
+error: Could not write objects/threats/credential-dumping.yaml: Permission denied
+```
+
+### How to fix
+
+Make the folder writable (`ls -ld objects/threats` shows its owner and mode), run `opentide new` from a checkout you can write, or pass `--path` to write the file somewhere you can and move it later.
 
 ## placeholder
 
