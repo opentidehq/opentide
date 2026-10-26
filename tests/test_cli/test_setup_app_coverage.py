@@ -180,8 +180,7 @@ def test_setup_scripted_full_flags(tmp_path: Path, mock_skill_download) -> None:
 
 def test_setup_repo_interactive(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        setup_app_module,
-        "run_interactive_repo_setup",
+        "opentide.cli.services.setup.repo.run_interactive_repo_setup",
         lambda cli, base: {"message": "repo-wizard", "path": str(base)},
     )
     # No --json: the wizard and a JSON-only stdout are mutually exclusive (#255).
@@ -233,8 +232,7 @@ def test_setup_mcp_all_hosts(tmp_path: Path) -> None:
 
 def test_setup_mcp_interactive(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        setup_app_module,
-        "run_interactive_mcp_setup",
+        "opentide.cli.services.setup.mcp.run_interactive_mcp_setup",
         lambda base: {"message": "mcp-wizard", "files": []},
     )
     result = runner.invoke(app, ["setup", "mcp", str(tmp_path)])
@@ -273,8 +271,7 @@ def test_setup_skills_all_targets(tmp_path: Path, mock_skill_download) -> None:
 
 def test_setup_skills_interactive(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        setup_app_module,
-        "run_interactive_skills_setup",
+        "opentide.cli.services.setup.skills.run_interactive_skills_setup",
         lambda base, given=None: {"message": "skills-wizard", "files": []},
     )
     result = runner.invoke(app, ["setup", "skills", "--path", str(tmp_path)])
@@ -294,7 +291,7 @@ def test_setup_skills_wizard_receives_the_flags_typed_with_it(tmp_path: Path, mo
         seen.append(given)
         return {"message": "skills-wizard", "files": []}
 
-    monkeypatch.setattr(setup_app_module, "run_interactive_skills_setup", _wizard)
+    monkeypatch.setattr("opentide.cli.services.setup.skills.run_interactive_skills_setup", _wizard)
     result = runner.invoke(
         app,
         [
@@ -355,8 +352,7 @@ def test_setup_vscode_flags(tmp_path: Path) -> None:
 
 def test_setup_vscode_snippets_success_message(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        setup_app_module,
-        "run_vscode_setup",
+        "opentide.cli.services.setup.vscode.run_vscode_setup",
         lambda *args, **kwargs: {
             "message": "VS Code setup complete (deprecated)",
             "files": [".vscode/model-templates.code-snippets"],
@@ -403,13 +399,15 @@ def test_json_refuses_the_interactive_wizard(
     def _unreachable(*args: object, **kwargs: object) -> dict[str, object]:
         raise AssertionError("--json must not reach the interactive wizard")
 
-    for name in (
-        "run_interactive_setup",
-        "run_interactive_repo_setup",
-        "run_interactive_mcp_setup",
-        "run_interactive_skills_setup",
+    # The setup commands import their services when they run, so the stubs go
+    # where each wizard is defined.
+    for target in (
+        "opentide.cli.services.setup.orchestrator.run_interactive_setup",
+        "opentide.cli.services.setup.repo.run_interactive_repo_setup",
+        "opentide.cli.services.setup.mcp.run_interactive_mcp_setup",
+        "opentide.cli.services.setup.skills.run_interactive_skills_setup",
     ):
-        monkeypatch.setattr(setup_app_module, name, _unreachable)
+        monkeypatch.setattr(target, _unreachable)
 
     result = runner.invoke(app, ["--json", *command, str(tmp_path)])
 

@@ -11,10 +11,6 @@ from opentide.cli.context import get_context
 from opentide.cli.enums import DocumentScope, ExportTarget, ExtractImport
 from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import emit_error, emit_success, emit_usage_error
-from opentide.cli.services.document import run_document
-from opentide.cli.services.export import run_export
-from opentide.cli.services.extraction import run_extract
-from opentide.cli.services.generation import run_generate, run_generate_docs
 from opentide.cli.ui.contract import USAGE_ERROR
 from opentide.core.errors import UserFileError
 
@@ -84,6 +80,8 @@ def generate_all(ctx: typer.Context) -> None:
     those phases. ``docs``, ``exports``, ``extract``, ``inflight``, and
     ``explorer`` stay subcommands.
     """
+    from opentide.cli.services.generation import run_generate
+
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
@@ -108,6 +106,8 @@ def generate_all(ctx: typer.Context) -> None:
 @generate_app.command("explorer")
 def generate_explorer_cmd(ctx: typer.Context) -> None:
     """Write explorer.bundle.json and explorer.search.json under .opentide/exports/."""
+    from opentide.cli.services.generation import run_generate
+
     cli = get_context(ctx)
     emit_success(cli, run_generate(cli, phase="explorer"))
 
@@ -119,6 +119,8 @@ generate_app.add_typer(inflight_app, name="inflight")
 @inflight_app.callback(invoke_without_command=True)
 def generate_inflight_cmd(ctx: typer.Context) -> None:
     """Write per-UUID preview shards under ``.opentide/inflight/`` for changed objects."""
+    from opentide.cli.services.generation import run_generate
+
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
@@ -128,6 +130,8 @@ def generate_inflight_cmd(ctx: typer.Context) -> None:
 @inflight_app.command("prune")
 def generate_inflight_prune_cmd(ctx: typer.Context) -> None:
     """Remove inflight shards superseded by committed objects on the default branch."""
+    from opentide.cli.services.generation import run_generate
+
     cli = get_context(ctx)
     emit_success(cli, run_generate(cli, phase="inflight-prune"))
 
@@ -143,6 +147,9 @@ def _emit_docs(
     objectives: bool = False,
     changed: bool = False,
 ) -> None:
+    from opentide.cli.services.document import run_document
+    from opentide.cli.services.generation import run_generate_docs
+
     refuse_dropped(ctx)
     cli = get_context(ctx)
     cli.apply_environment()
@@ -239,6 +246,8 @@ def generate_docs_index(
 @exports_app.callback(invoke_without_command=True)
 def generate_exports_all(ctx: typer.Context) -> None:
     """Export navigator layer, objects dump, and revisions snapshot."""
+    from opentide.cli.services.generation import run_generate
+
     if ctx.invoked_subcommand is not None:
         return
     cli = get_context(ctx)
@@ -247,24 +256,32 @@ def generate_exports_all(ctx: typer.Context) -> None:
 
 @exports_app.command("navigator")
 def generate_exports_navigator(ctx: typer.Context) -> None:
+    from opentide.cli.services.export import run_export
+
     cli = get_context(ctx)
     emit_success(cli, run_export(cli, target=ExportTarget.navigator))
 
 
 @exports_app.command("objects")
 def generate_exports_objects(ctx: typer.Context) -> None:
+    from opentide.cli.services.export import run_export
+
     cli = get_context(ctx)
     emit_success(cli, run_export(cli, target=ExportTarget.objects))
 
 
 @exports_app.command("revisions")
 def generate_exports_revisions(ctx: typer.Context) -> None:
+    from opentide.cli.services.export import run_export
+
     cli = get_context(ctx)
     emit_success(cli, run_export(cli, target=ExportTarget.revisions))
 
 
 def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
     """Run one importer, turning every failure into a single result document."""
+    from opentide.cli.services.extraction import run_extract
+
     cli = get_context(ctx)
     try:
         result = run_extract(cli, import_target=target)
@@ -309,6 +326,8 @@ def generate_extract_elastic(
     ),
 ) -> None:
     """Import Elastic Security detection rules (needs tenant credentials)."""
+    from opentide.cli.services.extraction import run_extract
+
     cli = get_context(ctx)
     try:
         from opentide.cli.services.extraction import run_extract

@@ -9,7 +9,6 @@ from opentide.cli.context import get_context
 from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
 from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import CommandResult, emit_error, emit_result
-from opentide.cli.services.deploy import run_deploy
 
 #: A status (DEVELOPMENT, STAGING, PRODUCTION, ... in the default configuration)
 #: maps to a strategy; a run names the strategy it deploys, never a status.
@@ -81,6 +80,8 @@ def deploy_cmd(
     whose 'strategies' accept it. The pull or merge request job runs
     --strategy PREVIEW; the default-branch job runs --strategy RELEASE.
     """
+    from opentide.cli.services.deploy import run_deploy
+
     if ctx.invoked_subcommand is not None:
         hand_down(ctx)
         return

@@ -7,7 +7,6 @@ and ``deploy --dry-run migrate-state`` edited rule files.
 
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -22,11 +21,10 @@ runner = CliRunner()
 
 @pytest.fixture
 def run_share(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
-    # `opentide.cli.share_app` the attribute is the Typer app, not the module.
-    share_app = importlib.import_module("opentide.cli.share_app")
+    # `share` imports its service when it runs: patch the service module.
     mock = MagicMock(return_value={"message": "ok", "status": "completed"})
-    monkeypatch.setattr(share_app, "run_share", mock)
-    monkeypatch.setattr(share_app, "render_share", lambda _payload: None)
+    monkeypatch.setattr("opentide.cli.services.share.run_share", mock)
+    monkeypatch.setattr("opentide.cli.services.share.render_share", lambda _payload: None)
     return mock
 
 
@@ -109,7 +107,7 @@ def test_validate_strict_before_query_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     query = MagicMock(return_value={"status": "passed"})
-    monkeypatch.setattr("opentide.cli.commands.validate.validate_query_platform", query)
+    monkeypatch.setattr("opentide.cli.services.validation.validate_query_platform", query)
 
     result = _invoke(tmp_path, "validate", "--strict", "query", "--platform", "sentinel")
 
@@ -121,7 +119,7 @@ def test_validate_file_before_query_reaches_query(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     query = MagicMock(return_value={"status": "passed"})
-    monkeypatch.setattr("opentide.cli.commands.validate.validate_query_platform", query)
+    monkeypatch.setattr("opentide.cli.services.validation.validate_query_platform", query)
 
     result = _invoke(tmp_path, "validate", "--file", "r.yaml", "query", "--platform", "sentinel")
 
@@ -134,7 +132,7 @@ def test_docs_output_before_a_scope_reaches_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, group: list[str]
 ) -> None:
     document = MagicMock(return_value={"message": "ok"})
-    monkeypatch.setattr("opentide.cli.commands.generate.run_document", document)
+    monkeypatch.setattr("opentide.cli.services.document.run_document", document)
 
     result = _invoke(tmp_path, *group, "--output", "out", "--flavor", "plain", "rules")
 
@@ -147,7 +145,7 @@ def test_docs_scope_flag_before_another_scope_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     document = MagicMock(return_value={"message": "ok"})
-    monkeypatch.setattr("opentide.cli.commands.generate.run_document", document)
+    monkeypatch.setattr("opentide.cli.services.document.run_document", document)
 
     result = _invoke(tmp_path, "generate", "docs", "--threats", "rules")
 

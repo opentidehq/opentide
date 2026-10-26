@@ -15,7 +15,6 @@ import typer
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.output import CommandResult, emit_result
-from opentide.cli.services.tui import USAGE_TUI_NEEDS_TTY
 from opentide.cli.ui.contract import USAGE_EXIT_CODE, Failure, NextAction
 from opentide.cli.ui.mode import OutputMode, detect_ci, get_mode
 
@@ -29,6 +28,8 @@ def tui_cmd(ctx: typer.Context) -> None:
     (ctrl+p) or their keys. Needs an interactive terminal: it exits 2 under
     --json, in a pipe, in CI or under a coding agent.
     """
+    from opentide.cli.services.tui import USAGE_TUI_NEEDS_TTY
+
     cli = get_context(ctx)
     mode = get_mode()
     interactive = _interactive()

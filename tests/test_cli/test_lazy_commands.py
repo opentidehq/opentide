@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 import typer.main
@@ -261,6 +262,88 @@ def test_completing_a_value_imports_no_engine_module(
     )
     assert added == []
     assert built is False
+
+
+#: The engine proper: what a command's callback loads to do its work. A command
+#: module itself may load (Click needs its options to complete them), the
+#: engine may not (spec: "`opentide --help`, completion: import no engine module").
+_ENGINE = (
+    "opentide.registry",
+    "opentide.core.registry",
+    "opentide.core.index_manager",
+    "opentide.models",
+    "opentide.platforms",
+    "opentide.deployment",
+    "opentide.sharing",
+    "opentide.generation",
+    "opentide.loading",
+    "opentide.cli.services",
+    "pydantic",
+)
+#: Constant-only modules of the validation package that ``opentide.cli.enums``
+#: reads (``ValidateCheck``, the query platforms); the package itself is lazy.
+_VALIDATION_CONSTANTS = frozenset(
+    {
+        "opentide.validation",
+        "opentide.validation.checks",
+        "opentide.validation.checks.kinds",
+        "opentide.validation.query_platforms",
+    }
+)
+
+
+def _engine(modules: set) -> list[str]:
+    return sorted(
+        m
+        for m in modules
+        if m.startswith(_ENGINE)
+        or (m.startswith("opentide.validation") and m not in _VALIDATION_CONSTANTS)
+    )
+
+
+def _visible_paths() -> list[tuple[str, bool]]:
+    """Every visible command path, and whether it is a group (it has subcommands)."""
+    paths: list[tuple[str, bool]] = []
+
+    # Typer vendors its own Click, so a group is told by its methods.
+    def walk(command: Any, words: tuple[str, ...]) -> None:
+        group = callable(getattr(command, "list_commands", None))
+        if words:
+            paths.append((" ".join(words), group))
+        if group:
+            ctx = command.context_class(command)
+            for name in command.list_commands(ctx):
+                child = command.get_command(ctx, name)
+                if child is not None and not child.hidden:
+                    walk(child, (*words, name))
+
+    walk(typer.main.get_command(cli_package.app), ())
+    return paths
+
+
+_PATHS = _visible_paths()
+
+
+@pytest.mark.parametrize(("path", "group"), _PATHS, ids=[path for path, _ in _PATHS])
+def test_completing_an_option_or_subcommand_name_imports_no_engine_module(
+    path: str, group: bool
+) -> None:
+    """``opentide <path> --<TAB>`` (and ``<TAB>`` for a group) loads the command, not the engine.
+
+    The command modules import their services inside the callbacks, and the
+    ``opentide.validation`` package resolves its exports lazily.
+    """
+    for words in [f"opentide {path} --", *([f"opentide {path} "] if group else [])]:
+        output, modules, built = _complete_bash(words)
+        assert output.strip(), words
+        assert _engine(modules) == [], words
+        assert built is False
+
+
+def test_validate_help_imports_no_engine_module() -> None:
+    done, modules = _modules_after(["validate", "--help"])
+    assert "--fix" in done.stdout, done.stderr
+    assert _engine(modules) == []
 
 
 def test_completing_after_an_unindexed_option_still_answers(tmp_path: Path) -> None:

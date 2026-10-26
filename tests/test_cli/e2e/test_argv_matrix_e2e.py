@@ -256,19 +256,17 @@ def test_setup_group_path_and_yes_reach_the_subcommand(
 def test_setup_group_path_reaches_nested_skills_commands(
     cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import importlib
 
     from opentide.cli import app
 
     _, target = _elsewhere(tmp_path, monkeypatch)
-    setup_module = importlib.import_module("opentide.cli.setup_app")
     seen: list[Path] = []
 
     def _discover(base: Path, **_kwargs):
         seen.append(base)
         return {"message": "0 skills", "skills": [], "source": "test", "count": 0}
 
-    monkeypatch.setattr(setup_module, "discover_skills", _discover)
+    monkeypatch.setattr("opentide.cli.services.setup.skills_registry.discover_skills", _discover)
     for argv in (
         ["setup", "--path", str(target), "skills", "discover"],
         ["setup", "skills", "--path", str(target), "discover"],
@@ -379,15 +377,12 @@ def test_setup_positional_deprecation_keeps_json_parseable(
     cli_runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``--json`` gets a structured log event, never a Rich ``DEPRECATED`` line."""
-    import importlib
 
     from opentide import cli as cli_module
 
-    # `opentide.cli.setup_app` the attribute is the Typer app; this is the module.
-    setup_module = importlib.import_module("opentide.cli.setup_app")
+    # `setup skills discover` imports its service when it runs: patch the service.
     monkeypatch.setattr(
-        setup_module,
-        "discover_skills",
+        "opentide.cli.services.setup.skills_registry.discover_skills",
         lambda *_args, **_kwargs: {"skills": [], "count": 0, "source": "opentidehq/skills@main"},
     )
     result = cli_runner.invoke(

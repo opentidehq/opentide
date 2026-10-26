@@ -17,7 +17,6 @@ from opentide.cli.findings import (
     write_report_file,
 )
 from opentide.cli.output import CommandResult, emit_result, text_mode
-from opentide.cli.services.lint import run_lint
 from opentide.cli.ui.reports import ReportFormat
 
 
@@ -37,6 +36,7 @@ def lint_cmd(
 
     Catalogue hygiene: filename slugs and recommended metadata, not schema validation.
     """
+    from opentide.cli.services.lint import run_lint
     from opentide.cli.ui.diagnostics import SourceFiles, diagnostic_from_lint_finding
 
     cli = get_context(ctx)

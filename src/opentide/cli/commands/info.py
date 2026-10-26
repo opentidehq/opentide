@@ -7,7 +7,6 @@ import typer
 from opentide.cli.context import get_context
 from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
 from opentide.cli.output import CommandResult, emit_result, emit_usage_error
-from opentide.cli.services.info import collect_info, info_outcome, info_summary, render_info
 from opentide.cli.ui.contract import ISSUES_FOUND, USAGE_MISSING_OPTION, NextAction
 
 
@@ -28,6 +27,8 @@ def info_cmd(
     ),
 ) -> None:
     """Show repository and platform information"""
+    from opentide.cli.services.info import collect_info, info_outcome, info_summary, render_info
+
     cli = get_context(ctx)
     sections = ("rules", "threats", "objectives", "coverage")
     if section is not None and section not in sections:

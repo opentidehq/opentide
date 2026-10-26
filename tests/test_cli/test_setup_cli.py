@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import json
 import re
 from pathlib import Path
@@ -381,8 +380,7 @@ def test_setup_skills_download_failure_is_normalized_json(tmp_path, monkeypatch)
     def fail_download(options: object) -> None:
         raise SkillsDownloadError("network unavailable")
 
-    setup_module = importlib.import_module("opentide.cli.setup_app")
-    monkeypatch.setattr(setup_module, "run_skills_setup", fail_download)
+    monkeypatch.setattr("opentide.cli.services.setup.skills.run_skills_setup", fail_download)
     result = runner.invoke(
         app,
         [
@@ -586,10 +584,8 @@ def test_json_setup_quotes_a_dot_target(tmp_path: Path, monkeypatch) -> None:
 
 def test_setup_ci_none_alone_is_not_noop(tmp_path, monkeypatch) -> None:
     """Only --ci none should not silently succeed with zero steps."""
-    setup_module = importlib.import_module("opentide.cli.setup_app")
     monkeypatch.setattr(
-        setup_module,
-        "run_interactive_setup",
+        "opentide.cli.services.setup.orchestrator.run_interactive_setup",
         lambda cli, base: {"message": "interactive", "path": str(base)},
     )
     result = runner.invoke(

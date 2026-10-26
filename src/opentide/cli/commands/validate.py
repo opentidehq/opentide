@@ -31,13 +31,6 @@ from opentide.cli.output import (
     emit_usage_error,
     text_mode,
 )
-from opentide.cli.services.validation import (
-    fix_phrase,
-    run_validate,
-    run_validate_fix,
-    validate_outcome_line,
-    validate_query_platform,
-)
 from opentide.cli.ui.codeframe import render_diagnostics, render_diff, render_fixed
 from opentide.cli.ui.contract import (
     USAGE_ERROR,
@@ -90,6 +83,13 @@ def validate_group(
     output: Path | None = typer.Option(None, "--output", help=OUTPUT_HELP),
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
+    from opentide.cli.services.validation import (
+        fix_phrase,
+        run_validate,
+        run_validate_fix,
+        validate_outcome_line,
+    )
+
     if ctx.invoked_subcommand is not None:
         hand_down(ctx)
         return
@@ -192,6 +192,8 @@ def _watch(
     object_types: list[str] | None,
 ) -> None:
     """``validate --watch``: a Live view in ``human`` mode, an outcome line per run in ``plain``."""
+    from opentide.cli.services.validation import run_validate, validate_outcome_line
+
     mode = get_mode()
     if mode in (OutputMode.JSON, OutputMode.AGENT, OutputMode.MCP):
         emit_error(
@@ -299,6 +301,8 @@ def validate_query_cmd(
     ),
 ) -> None:
     """Check rule queries on the platform's tenants (needs --live)."""
+    from opentide.cli.services.validation import validate_query_platform
+
     refuse_dropped(ctx)
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)

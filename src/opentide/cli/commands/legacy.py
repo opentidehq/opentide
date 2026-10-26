@@ -9,8 +9,6 @@ from opentide.cli.context import get_context
 from opentide.cli.enums import DocumentScope, ExportTarget, ExtractImport
 from opentide.cli.group_options import hand_down
 from opentide.cli.output import emit_deprecation, emit_error, emit_success
-from opentide.cli.services.export import run_export
-from opentide.cli.services.extraction import run_extract
 
 _deprecate = emit_deprecation
 
@@ -78,6 +76,8 @@ def document_index_cmd(
 
 @export_legacy_app.command("navigator")
 def export_navigator(ctx: typer.Context) -> None:
+    from opentide.cli.services.export import run_export
+
     _deprecate("opentide export navigator", "opentide generate exports navigator")
     cli = get_context(ctx)
     emit_success(cli, run_export(cli, target=ExportTarget.navigator))
@@ -85,6 +85,8 @@ def export_navigator(ctx: typer.Context) -> None:
 
 @export_legacy_app.command("objects")
 def export_objects(ctx: typer.Context) -> None:
+    from opentide.cli.services.export import run_export
+
     _deprecate("opentide export objects", "opentide generate exports objects")
     cli = get_context(ctx)
     emit_success(cli, run_export(cli, target=ExportTarget.objects))
@@ -92,6 +94,8 @@ def export_objects(ctx: typer.Context) -> None:
 
 @export_legacy_app.command("revisions")
 def export_revisions(ctx: typer.Context) -> None:
+    from opentide.cli.services.export import run_export
+
     _deprecate("opentide export revisions", "opentide generate exports revisions")
     cli = get_context(ctx)
     emit_success(cli, run_export(cli, target=ExportTarget.revisions))
@@ -113,6 +117,8 @@ def export_playbook_map_legacy(ctx: typer.Context) -> None:
 
 @extract_legacy_app.command("sentinel")
 def import_sentinel(ctx: typer.Context) -> None:
+    from opentide.cli.services.extraction import run_extract
+
     _deprecate("opentide extract sentinel", "opentide generate extract sentinel")
     cli = get_context(ctx)
     try:
@@ -124,6 +130,8 @@ def import_sentinel(ctx: typer.Context) -> None:
 
 @extract_legacy_app.command("defender")
 def import_defender(ctx: typer.Context) -> None:
+    from opentide.cli.services.extraction import run_extract
+
     _deprecate("opentide extract defender", "opentide generate extract defender")
     cli = get_context(ctx)
     try:

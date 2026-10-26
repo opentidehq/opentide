@@ -86,7 +86,7 @@ def watch(tmp_path: Path) -> Iterator[list[dict[str, Any]]]:
     folders = {"rule": rules, "threat": tmp_path / "objects" / "missing"}
     with (
         patch.object(validate_command, "Watcher", FakeWatcher),
-        patch.object(validate_command, "run_validate", side_effect=run_validate),
+        patch("opentide.cli.services.validation.run_validate", side_effect=run_validate),
         patch("opentide.registry.paths.resolve_workspace_paths", return_value=folders),
     ):
         yield calls
@@ -218,7 +218,7 @@ def test_a_fix_that_could_not_be_written_says_so(tmp_path: Path) -> None:
         _unwritten=["objects/rules/rule.yaml: Permission denied"],
         _unwritten_fixes=1,
     )
-    with patch.object(validate_command, "run_validate_fix", return_value=payload):
+    with patch("opentide.cli.services.validation.run_validate_fix", return_value=payload):
         result = _invoke(tmp_path, "validate", "--fix")
     assert result.exit_code == 1
     text = _text(result)
@@ -236,8 +236,9 @@ def test_quiet_fix_prints_the_outcome_line_alone(tmp_path: Path) -> None:
         failed=False, summary={"fixable": 0, "fixed": 1}, fixed=[change.to_dict()], _fixed=fixed
     )
     # The command pops the private keys, so each run gets its own copy.
-    with patch.object(
-        validate_command, "run_validate_fix", side_effect=lambda *_, **__: dict(payload)
+    with patch(
+        "opentide.cli.services.validation.run_validate_fix",
+        side_effect=lambda *_, **__: dict(payload),
     ):
         loud = _invoke(tmp_path, "validate", "--fix")
         quiet = _invoke(tmp_path, "--quiet", "validate", "--fix")
@@ -250,7 +251,7 @@ def test_quiet_fix_prints_the_outcome_line_alone(tmp_path: Path) -> None:
 
 def test_a_dry_run_with_nothing_to_fix_prints_no_diff(tmp_path: Path) -> None:
     payload = _payload(failed=False, summary={"fixable": 0}, would_fix=[], diff="")
-    with patch.object(validate_command, "run_validate_fix", return_value=payload) as run:
+    with patch("opentide.cli.services.validation.run_validate_fix", return_value=payload) as run:
         result = _invoke(tmp_path, "validate", "--fix", "--dry-run")
     assert run.call_args.kwargs["dry_run"] is True
     assert result.exit_code == 0, result.output
@@ -280,7 +281,7 @@ def test_a_dry_run_prints_the_diff_and_frames_only_what_it_would_not_fix(
         _fix_plan=plan,
         _diagnostics=[fixable, left],
     )
-    with patch.object(validate_command, "run_validate_fix", return_value=payload):
+    with patch("opentide.cli.services.validation.run_validate_fix", return_value=payload):
         result = _invoke(tmp_path, "validate", "--fix", "--dry-run")
     assert result.exit_code == 1
     text = _text(result)
@@ -301,7 +302,7 @@ def test_a_dry_run_prints_the_diff_and_frames_only_what_it_would_not_fix(
 def test_combinations_that_cannot_run_exit_2(
     tmp_path: Path, argv: tuple[str, ...], code: str, argument: str
 ) -> None:
-    with patch.object(validate_command, "run_validate") as run:
+    with patch("opentide.cli.services.validation.run_validate") as run:
         result = _invoke(tmp_path, "--json", *argv)
     run.assert_not_called()
     assert result.exit_code == 2

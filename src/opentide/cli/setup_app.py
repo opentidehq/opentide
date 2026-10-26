@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import NoReturn
+from typing import TYPE_CHECKING, NoReturn
 
 import typer
 from rich.markup import escape
@@ -25,38 +25,11 @@ from opentide.cli.output import (
     emit_result,
     emit_success,
 )
-from opentide.cli.services.setup.ci import CiSetupOptions, is_valid_branch_name, run_ci_setup
-from opentide.cli.services.setup.interactive import (
-    InteractiveRequiredError,
-    ask_confirm,
-    require_interactive,
-)
-from opentide.cli.services.setup.mcp import (
-    McpSetupOptions,
-    run_interactive_mcp_setup,
-    run_mcp_setup,
-)
-from opentide.cli.services.setup.orchestrator import SetupOptions, run_interactive_setup, run_setup
-from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
-from opentide.cli.services.setup.repo import (
-    RepoSetupOptions,
-    run_interactive_repo_setup,
-    run_repo_setup,
-)
-from opentide.cli.services.setup.skills import (
-    SkillsDownloadError,
-    SkillsSetupOptions,
-    run_interactive_skills_setup,
-    run_skills_setup,
-)
-from opentide.cli.services.setup.skills_registry import (
-    SkillsManifestError,
-    discover_skills,
-    show_skill,
-)
-from opentide.cli.services.setup.vscode import run_vscode_setup
 from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_MISSING_OPTION, USAGE_NEEDS_INPUT
 from opentide.core.logging.config import get_console, get_stdout_console
+
+if TYPE_CHECKING:
+    from opentide.cli.services.setup.interactive import InteractiveRequiredError
 
 setup_app = typer.Typer(help="Set up a detection repository and its tooling")
 skills_app = typer.Typer(help="Agent skills discovery and installation")
@@ -180,7 +153,13 @@ REFRESH_OPTION = typer.Option(
 
 
 def _renderable_branch(value: str | None) -> str | None:
-    if value is not None and not is_valid_branch_name(value):
+    # Click runs this callback for every parse, completion included: import the
+    # service only when there is a branch to check.
+    if value is None:
+        return None
+    from opentide.cli.services.setup.ci import is_valid_branch_name
+
+    if not is_valid_branch_name(value):
         raise typer.BadParameter(
             f"{value!r} cannot be written into a pipeline; "
             "use letters, digits, '.', '_', '/' and '-'"
@@ -333,6 +312,12 @@ def _needs_input(cli: CliContext, message: str) -> NoReturn:
 
 def _confirm_write(cli: CliContext, target: Path, message: str, *, yes: bool) -> bool:
     """Confirm a scripted write unless explicit non-interactive consent was given."""
+    from opentide.cli.services.setup.interactive import (
+        InteractiveRequiredError,
+        ask_confirm,
+        require_interactive,
+    )
+
     if yes:
         return True
     if cli.json_output:
@@ -401,6 +386,13 @@ def setup_cmd(
     yes: bool = typer.Option(False, "--yes", "-y", help="Non-interactive mode"),
 ) -> None:
     """Interactive or scripted detection repository onboarding."""
+    from opentide.cli.services.setup.interactive import InteractiveRequiredError
+    from opentide.cli.services.setup.orchestrator import (
+        SetupOptions,
+        run_interactive_setup,
+        run_setup,
+    )
+
     if ctx.invoked_subcommand is not None:
         _hand_down(ctx)
         return
@@ -481,6 +473,13 @@ def setup_repo_cmd(
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Scaffold a detection repository."""
+    from opentide.cli.services.setup.interactive import InteractiveRequiredError
+    from opentide.cli.services.setup.repo import (
+        RepoSetupOptions,
+        run_interactive_repo_setup,
+        run_repo_setup,
+    )
+
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
     yes = _consented(ctx, yes)
@@ -527,6 +526,8 @@ def setup_platforms_cmd(
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Create and enable platform configuration files in ``.opentide/configurations/platforms/``."""
+    from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
+
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
     yes = _consented(ctx, yes)
@@ -601,6 +602,8 @@ def setup_ci_cmd(
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
+    from opentide.cli.services.setup.ci import CiSetupOptions, run_ci_setup
+
     cli = get_context(ctx)
     provider = CiPlatform(ci_platform)
     target = _option_path(ctx, cli, path)
@@ -686,6 +689,13 @@ def setup_mcp_cmd(
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Write opentide MCP configuration for editors and agents."""
+    from opentide.cli.services.setup.interactive import InteractiveRequiredError
+    from opentide.cli.services.setup.mcp import (
+        McpSetupOptions,
+        run_interactive_mcp_setup,
+        run_mcp_setup,
+    )
+
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
     yes = _consented(ctx, yes)
@@ -759,6 +769,15 @@ def setup_skills_install_cmd(
     The group callback must not take a positional PATH: Click would consume
     ``discover`` / ``show`` as that argument and skip those subcommands.
     """
+    from opentide.cli.services.setup.interactive import InteractiveRequiredError
+    from opentide.cli.services.setup.skills import (
+        SkillsDownloadError,
+        SkillsSetupOptions,
+        run_interactive_skills_setup,
+        run_skills_setup,
+    )
+    from opentide.cli.services.setup.skills_registry import SkillsManifestError
+
     if ctx.invoked_subcommand is not None:
         _hand_down(ctx)
         return
@@ -840,6 +859,8 @@ def setup_skills_discover_cmd(
     refresh: bool = REFRESH_OPTION,
 ) -> None:
     """List skills from the opentidehq/skills catalogue."""
+    from opentide.cli.services.setup.skills_registry import SkillsManifestError, discover_skills
+
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag, deprecate_positional=True)
     try:
@@ -911,6 +932,8 @@ def setup_skills_show_cmd(
     refresh: bool = REFRESH_OPTION,
 ) -> None:
     """Show details for one skill from the catalogue."""
+    from opentide.cli.services.setup.skills_registry import SkillsManifestError, show_skill
+
     cli = get_context(ctx)
     base = _option_path(ctx, cli, path)
     try:
@@ -962,6 +985,8 @@ def setup_vscode_cmd(
     ),
 ) -> None:
     """Write VS Code yaml.schemas and snippets (deprecated). Default: both."""
+    from opentide.cli.services.setup.vscode import run_vscode_setup
+
     cli = get_context(ctx)
     cli.apply_environment()
     target = _setup_path(ctx, cli, path, path_flag)

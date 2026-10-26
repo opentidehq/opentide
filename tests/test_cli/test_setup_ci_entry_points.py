@@ -338,7 +338,7 @@ def ci_options_seen(monkeypatch: pytest.MonkeyPatch) -> list[CiSetupOptions]:
         seen.append(options)
         return {"message": "recorded", "files": []}
 
-    for module in ("opentide.cli.setup_app", "opentide.cli.services.setup.orchestrator"):
+    for module in ("opentide.cli.services.setup.ci", "opentide.cli.services.setup.orchestrator"):
         monkeypatch.setattr(importlib.import_module(module), "run_ci_setup", _record)
     return seen
 

@@ -745,7 +745,7 @@ def validate_result(repo: Path) -> Iterator[dict[str, Any]]:
         "_summary": {"objects": 3, "errors": 1, "warnings": 0, "files": 1},
         "_diagnostics": [_typo(repo)],
     }
-    with patch("opentide.cli.commands.validate.run_validate", return_value=result):
+    with patch("opentide.cli.services.validation.run_validate", return_value=result):
         yield result
 
 
@@ -862,7 +862,7 @@ def test_a_usage_failure_writes_no_summary(repo: Path, monkeypatch: pytest.Monke
         "_exit_code": 2,
         "_failure_code": "usage_missing_option",
     }
-    with patch("opentide.cli.commands.deploy.run_deploy", return_value=usage):
+    with patch("opentide.cli.services.deploy.run_deploy", return_value=usage):
         result = _invoke(repo, "deploy", "--dry-run")
     assert result.exit_code == 2, result.output
     assert not (repo / ci.GITLAB_SUMMARY).exists()
@@ -872,7 +872,7 @@ def test_deploy_summary_title_follows_the_flag(repo: Path, monkeypatch: pytest.M
     monkeypatch.setenv("GITLAB_CI", "true")
     monkeypatch.setenv("CI_PROJECT_DIR", str(repo))
     early = {"status": "failed", "ok": False, "message": "Not a git checkout", "_exit_code": 1}
-    with patch("opentide.cli.commands.deploy.run_deploy", return_value=early):
+    with patch("opentide.cli.services.deploy.run_deploy", return_value=early):
         result = _invoke(repo, "deploy", "--dry-run")
     assert result.exit_code == 1, result.output
     written = (repo / ci.GITLAB_SUMMARY).read_text(encoding="utf-8")
@@ -908,7 +908,7 @@ def test_lint_annotates_on_azure_and_writes_a_report(
     monkeypatch.setenv("AGENT_TEMPDIRECTORY", str(repo / "agent"))
     output = repo / "lint.codequality.json"
     with patch(
-        "opentide.cli.commands.lint.run_lint", return_value=_lint_result(repo, [_LINT_FINDING])
+        "opentide.cli.services.lint.run_lint", return_value=_lint_result(repo, [_LINT_FINDING])
     ):
         result = _invoke(repo, "lint", "--format", "codequality", "--output", str(output))
     assert result.exit_code == 0, result.output
@@ -925,7 +925,7 @@ def test_lint_annotates_on_azure_and_writes_a_report(
 
 
 def test_lint_codequality_on_stdout(repo: Path) -> None:
-    with patch("opentide.cli.commands.lint.run_lint", return_value=_lint_result(repo, [])):
+    with patch("opentide.cli.services.lint.run_lint", return_value=_lint_result(repo, [])):
         result = _invoke(repo, "lint", "--format", "codequality")
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout) == []
@@ -933,7 +933,7 @@ def test_lint_codequality_on_stdout(repo: Path) -> None:
 
 def test_lint_outside_ci_writes_no_sink(repo: Path) -> None:
     with patch(
-        "opentide.cli.commands.lint.run_lint", return_value=_lint_result(repo, [_LINT_FINDING])
+        "opentide.cli.services.lint.run_lint", return_value=_lint_result(repo, [_LINT_FINDING])
     ):
         result = _invoke(repo, "lint")
     assert result.exit_code == 0, result.output
@@ -944,7 +944,7 @@ def test_lint_outside_ci_writes_no_sink(repo: Path) -> None:
 def test_deploy_summarises_the_plan_on_gitlab(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITLAB_CI", "true")
     monkeypatch.setenv("CI_PROJECT_DIR", str(repo))
-    with patch("opentide.cli.commands.deploy.run_deploy", return_value=_deploy()):
+    with patch("opentide.cli.services.deploy.run_deploy", return_value=_deploy()):
         result = _invoke(repo, "deploy", "--dry-run")
     assert result.exit_code == 0, result.output
     written = (repo / ci.GITLAB_SUMMARY).read_text(encoding="utf-8")
@@ -962,7 +962,7 @@ def test_validate_query_summarises_results(repo: Path, monkeypatch: pytest.Monke
         "message": "Query validation passed for sentinel",
         "queries_per_tenant": {"prod": 4},
     }
-    with patch("opentide.cli.commands.validate.validate_query_platform", return_value=outcome):
+    with patch("opentide.cli.services.validation.validate_query_platform", return_value=outcome):
         result = _invoke(repo, "validate", "query", "--platform", "sentinel", "--live")
     assert result.exit_code == 0, result.output
     assert "| prod | 4 |" in step_summary.read_text(encoding="utf-8")

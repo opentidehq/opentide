@@ -6,9 +6,7 @@ import typer
 
 from opentide.cli.context import get_context
 from opentide.cli.output import CommandResult, emit_error, emit_result, emit_usage_error
-from opentide.cli.services.rules import render_unreviewed, run_unreviewed
 from opentide.cli.ui.contract import USAGE_INVALID_VALUE
-from opentide.models.review import parse_window
 
 rules_app = typer.Typer(help="Detection rule maintenance")
 
@@ -28,6 +26,9 @@ def rules_unreviewed(
     is absent or strictly earlier than now minus the window. This command does not
     modify rules.
     """
+    from opentide.cli.services.rules import render_unreviewed, run_unreviewed
+    from opentide.models.review import parse_window
+
     cli = get_context(ctx)
     cli.apply_environment()
     try:

@@ -81,12 +81,11 @@ def workspace(tmp_path: Path) -> Path:
 
 def _crash_in_info(monkeypatch: pytest.MonkeyPatch, error: BaseException) -> None:
     """Make ``opentide info`` raise *error* from inside the command."""
-    import opentide.cli.commands.info as info_command
 
     def explode(*args: object, **kwargs: object) -> None:
         raise error
 
-    monkeypatch.setattr(info_command, "collect_info", explode)
+    monkeypatch.setattr("opentide.cli.services.info.collect_info", explode)
 
 
 def _run_main(monkeypatch: pytest.MonkeyPatch, *argv: str) -> int:
@@ -513,12 +512,12 @@ def test_crash_in_a_console_script_process(tmp_path: Path) -> None:
     script = textwrap.dedent(
         """
         import sys
-        import opentide.cli.commands.info as info_command
+        import opentide.cli.services.info as info_service
 
         def explode(*args, **kwargs):
             raise RuntimeError("index exploded")
 
-        info_command.collect_info = explode
+        info_service.collect_info = explode
         from opentide.cli import main
         sys.argv = ["opentide", "--json", "info"]
         main()
@@ -912,12 +911,12 @@ def test_python_dash_m_opentide_reports_a_crash(tmp_path: Path) -> None:
         """
         import runpy
         import sys
-        import opentide.cli.commands.info as info_command
+        import opentide.cli.services.info as info_service
 
         def explode(*args, **kwargs):
             raise RuntimeError("index exploded")
 
-        info_command.collect_info = explode
+        info_service.collect_info = explode
         sys.argv = ["opentide", "--json", "info"]
         runpy.run_module("opentide", run_name="__main__", alter_sys=True)
         """
