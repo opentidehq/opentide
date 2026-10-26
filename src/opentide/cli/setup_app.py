@@ -11,7 +11,13 @@ from typer._types import TyperChoice
 
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import CiPlatform, DetectionPlatform, McpHost, SkillTarget
-from opentide.cli.output import emit, emit_deprecation, emit_error, emit_success
+from opentide.cli.output import (
+    CommandResult,
+    emit_deprecation,
+    emit_error,
+    emit_result,
+    emit_success,
+)
 from opentide.cli.services.setup.ci import CiSetupOptions, is_valid_branch_name, run_ci_setup
 from opentide.cli.services.setup.interactive import (
     InteractiveRequiredError,
@@ -854,7 +860,9 @@ def setup_skills_show_cmd(
         emit_error(cli, str(exc))
     if cli.json_output:
         if "error" in payload:
-            emit(cli, {"ok": False, **payload}, exit_code=1)
+            # status and message too, as every document carries them.
+            failed = {**payload, "status": "failed", "message": payload["error"], "_exit_code": 1}
+            emit_result(cli, CommandResult.from_payload(failed))
         else:
             emit_success(cli, payload)
         return

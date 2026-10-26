@@ -234,7 +234,7 @@ def test_lint_cli_strict(tmp_path: Path) -> None:
         ["--json", "--repo", str(tmp_path), "lint", "--check", "filenames", "--strict"],
     )
     assert result.exit_code == 1
-    assert '"ok": false' in result.stdout
+    assert json.loads(result.stdout)["ok"] is False
 
 
 #: Keys every finding gains for the diagnostic contract.

@@ -18,7 +18,7 @@ def commands_cmd(ctx: typer.Context) -> None:
     from opentide.cli.services.introspect import command_tree, tree_lines
 
     cli = get_context(ctx)
-    payload = command_tree(ctx.find_root().command, program="opentide")
+    payload = command_tree(ctx.find_root().command, program="opentide", schemas=cli.json_output)
     count = payload["_summary"]["commands"]
     payload["message"] = f"{count} commands"
     if not cli.json_output:

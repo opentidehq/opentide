@@ -36,9 +36,10 @@ def test_setup_without_tty_fails_with_scripted_guidance(tmp_path) -> None:
         ["--json", "--repo", str(tmp_path), "setup"],
     )
     assert result.exit_code == 2
-    assert '"ok": false' in result.stdout
-    assert '"code": "usage_needs_input"' in result.stdout
-    assert "--yes" in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert payload["failure"]["code"] == "usage_needs_input"
+    assert "--yes" in payload["message"]
 
 
 def test_setup_repo_scripted(tmp_path) -> None:
@@ -395,8 +396,9 @@ def test_setup_skills_download_failure_is_normalized_json(tmp_path, monkeypatch)
         ],
     )
     assert result.exit_code == 1
-    assert '"ok": false' in result.stdout
-    assert "network unavailable" in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert "network unavailable" in payload["error"]
 
 
 def test_setup_vscode_mcp_flag_writes_mcp_json(tmp_path) -> None:
@@ -427,9 +429,10 @@ def test_setup_vscode_snippets_command_fails_without_templates(tmp_path) -> None
         ["--json", "setup", "vscode", str(tmp_path), "--snippets", "--no-generate"],
     )
     assert result.exit_code != 0
-    assert '"status": "failed"' in result.stdout
-    assert '"ok": false' in result.stdout
-    assert '"files": []' in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "failed"
+    assert payload["ok"] is False
+    assert payload["files"] == []
 
 
 def test_setup_yes_ci_none_still_scaffolds(tmp_path: Path) -> None:

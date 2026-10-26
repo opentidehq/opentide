@@ -60,6 +60,10 @@ def environment() -> list[dict[str, str]]:
         {"name": "OPENTIDE_OUTPUT", "meaning": f"Output mode: {modes}"},
         {"name": "OPENTIDE_DEBUG", "meaning": "1 for debug logging, like --debug"},
         {"name": "NO_COLOR", "meaning": "Any value turns colour off, like --no-color"},
+        {
+            "name": "OPENTIDE_JSON_INDENT",
+            "meaning": "0 for one-line JSON, 2 for indented; default: indented on a terminal",
+        },
         {"name": "OPENTIDE_REPO_ROOT", "meaning": "Repository root, like --repo"},
         {"name": "OPENTIDE_DATA_ROOT", "meaning": "Bundled data root, like --data"},
         {"name": "OPENTIDE_PROXY", "meaning": "HTTP(S) proxy, like --proxy"},
@@ -87,18 +91,23 @@ def environment() -> list[dict[str, str]]:
     ]
 
 
-def command_tree(root: Any, *, program: str = "opentide") -> dict[str, Any]:
+def command_tree(root: Any, *, program: str = "opentide", schemas: bool = True) -> dict[str, Any]:
     """The payload of ``opentide commands``: global options and every visible command.
 
     *root* is the ``opentide`` group. ``commands`` is flat and depth-first, in
     the order ``--help`` lists them; ``path`` and ``subcommands`` give the tree.
+    Each command's ``output_schema`` is the JSON Schema of its ``--json``
+    document, a ``$ref`` into ``$defs``: ``CommandError`` for a group that
+    only prints its help, ``null`` for ``mcp start`` or a command with no
+    model yet. *schemas* false leaves both
+    out, for the human tree.
     """
     from opentide import __version__
 
     choices = _app_choices()
     entries = list(_walk(root, (), choices))
     groups = sum(1 for entry in entries if entry["group"])
-    return {
+    payload: dict[str, Any] = {
         "program": program,
         "version": __version__,
         "global_options": [_option(param, root=True) for param in _visible_options(root)],
@@ -106,6 +115,17 @@ def command_tree(root: Any, *, program: str = "opentide") -> dict[str, Any]:
         "commands": entries,
         "_summary": {"commands": len(entries), "groups": groups},
     }
+    if schemas:
+        from opentide.cli.ui.results import output_schemas
+
+        found, defs = output_schemas(
+            [entry["path"] for entry in entries],
+            help_only=frozenset(entry["path"] for entry in entries if not entry["runs_alone"]),
+        )
+        for entry in entries:
+            entry["output_schema"] = found.get(entry["path"])
+        payload["$defs"] = defs
+    return payload
 
 
 def _children(group: Any) -> Iterator[tuple[str, Any]]:

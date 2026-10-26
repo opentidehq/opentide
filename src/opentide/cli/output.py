@@ -30,7 +30,7 @@ from opentide.cli.ui.contract import (
     did_you_mean,
 )
 from opentide.cli.ui.glyphs import can_encode
-from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
+from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode, json_indent
 from opentide.cli.ui.render import (
     AGENT_TIP,
     labelled_text,
@@ -237,6 +237,14 @@ def envelope(
     return document
 
 
+def document_text(document: Mapping[str, Any]) -> str:
+    """*document* as JSON ending in exactly one newline: indented on a TTY, else one line.
+
+    ``OPENTIDE_JSON_INDENT=0|2`` overrides the terminal check.
+    """
+    return dump_json_text(document, indent=json_indent(), default=str)
+
+
 _NON_ASCII = re.compile(r"[^\x00-\x7f]")
 
 
@@ -248,7 +256,7 @@ def print_document(document: Mapping[str, Any]) -> None:
     cannot encode the text (``PYTHONIOENCODING=ascii``) gets every non-ASCII
     character as a ``\\uXXXX`` escape: the same JSON, without a ``UnicodeEncodeError``.
     """
-    text = dump_json_text(document, indent=True, default=str)
+    text = document_text(document)
     if not can_encode(text, sys.stdout):
         text = _NON_ASCII.sub(_json_escape, text)
     sys.stdout.write(text)

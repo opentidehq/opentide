@@ -14,6 +14,8 @@ opentide validate --json
 opentide --json info --platform sentinel
 ```
 
+The document is indented when stdout is a terminal, and one compact line otherwise: in a pipe, a file, CI or a coding agent's shell. `OPENTIDE_JSON_INDENT=0` prints one line everywhere and `OPENTIDE_JSON_INDENT=2` indents by two spaces everywhere; any other value is ignored. Either way the document ends in exactly one newline, so `opentide --json validate | jq .summary` and `json.loads` read it the same.
+
 ## The envelope
 
 Every document carries these keys next to the command's own. Keys that existed before keep their name, type and meaning; new information is only ever added under new keys.
@@ -181,6 +183,20 @@ A console that cannot encode `✓`, `✗` or `→` (a Windows code page, `PYTHON
 ## The command tree
 
 `opentide --json commands` describes every command an agent can run, with its options, types, choices, defaults, environment variables and an example. See [Command tree for agents](./index.md#command-tree-for-agents).
+
+## Output schemas
+
+Each command in `opentide --json commands` carries `output_schema`: the [JSON Schema](https://json-schema.org/draft/2020-12) of the document it prints, generated from the typed result models in `src/opentide/cli/ui/results/`. It is a `$ref` into the `$defs` of the same document, `anyOf` the command's own result and `CommandError`, the document of a usage error. To check a document against its command's schema:
+
+```bash
+opentide --json commands > commands.json
+jq '{"$defs": ."$defs"} + (.commands[] | select(.path == "validate") | .output_schema)' \
+  commands.json > validate.schema.json
+opentide --json validate > validate.json
+check-jsonschema --schemafile validate.schema.json validate.json
+```
+
+The schemas allow keys they do not name, because new keys are added without notice. A key a schema names keeps its type.
 
 ## Related
 
