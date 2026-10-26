@@ -435,7 +435,10 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "path": "objects/rules/broken.yaml",
                 "yaml_line": None,
                 "uuid": None,
-                "message": "Could not parse object YAML: expected a mapping at the top of the file, found a list",
+                "message": (
+                    "Could not parse object YAML: expected a mapping at the top of the file, "
+                    "found a list"
+                ),
                 "code": "yaml_parse",
                 "field_path": [],
                 # The frame points at where the document starts.

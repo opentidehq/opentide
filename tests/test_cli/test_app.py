@@ -74,9 +74,7 @@ def test_version_flag_exits_before_the_command_runs() -> None:
 
 
 @pytest.mark.parametrize("command", [["validate"], ["lint"], ["info"], ["deploy", "--dry-run"]])
-def test_a_repo_that_does_not_exist_is_a_usage_error(
-    tmp_path: Path, command: list[str]
-) -> None:
+def test_a_repo_that_does_not_exist_is_a_usage_error(tmp_path: Path, command: list[str]) -> None:
     # A mistyped --repo read as an empty workspace: validate printed
     # "Validation passed" and exited 0 (post-merge end-to-end run).
     missing = tmp_path / "nope"

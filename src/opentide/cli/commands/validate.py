@@ -55,6 +55,8 @@ QUERY_STRATEGY_HELP = (
     "accept it. Default: PREVIEW and RELEASE"
 )
 
+CHECK_HELP = "Run one check only: " + ", ".join(item.value for item in ValidateCheck)
+
 
 @validate_app.callback(invoke_without_command=True)
 def validate_group(
@@ -63,7 +65,7 @@ def validate_group(
         None,
         "--check",
         metavar="CHECK",
-        help="Run one check only: " + ", ".join(item.value for item in ValidateCheck),
+        help=CHECK_HELP,
     ),
     file: list[str] | None = typer.Option(
         None, "--file", help="Validate only this file (repeatable)"

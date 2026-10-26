@@ -20,7 +20,7 @@ from opentide.core.io import parse_yaml
 
 
 def _rule(repo: Path) -> Path:
-    return sorted((repo / "objects" / "rules").rglob("*.yaml"))[0]
+    return min((repo / "objects" / "rules").rglob("*.yaml"))
 
 
 def _codes(result: Result) -> list[str]:

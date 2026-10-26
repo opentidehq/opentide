@@ -12,7 +12,7 @@ from typing import Any
 import orjson
 import tomli_w
 import yaml
-from yaml.constructor import SafeConstructor
+from yaml.constructor import ConstructorError, SafeConstructor
 
 try:
     from yaml import CSafeLoader as YamlLoader
@@ -200,7 +200,7 @@ def _construct_timestamp_text(loader: SafeConstructor, node: yaml.ScalarNode) ->
         # ``2026-13-45`` matches YAML's timestamp pattern, and ``datetime``
         # refuses it with a bare ValueError. Report it like any other parse
         # problem, at the value, instead of letting it escape as a crash.
-        error = yaml.constructor.ConstructorError(
+        error = ConstructorError(
             problem=f"{node.value!r} is not a valid date ({exc})",
             problem_mark=node.start_mark,
         )
