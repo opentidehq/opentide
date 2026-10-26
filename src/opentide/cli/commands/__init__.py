@@ -26,6 +26,8 @@ class CommandSpec(NamedTuple):
     help: str
     hidden: bool = False
     rich_help_panel: str | None = None
+    #: Text after the command's own ``--help``, such as its ``Examples`` block.
+    epilog: str | None = None
 
 
 #: In the order ``opentide --help`` lists them.
@@ -47,6 +49,17 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "opentide.cli.commands.explain",
         "explain_cmd",
         "Explain a diagnostic code: what it means, an example, and how to fix it.",
+    ),
+    CommandSpec(
+        "commands",
+        "opentide.cli.commands.introspect",
+        "commands_cmd",
+        "List every command and option, for agents",
+        epilog=(
+            "[dim]Examples[/dim]\n\n"
+            "  [bold]$ opentide commands[/bold]\n\n"
+            "  [bold]$ opentide --json commands[/bold]"
+        ),
     ),
     CommandSpec(
         "mcp",

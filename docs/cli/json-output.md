@@ -178,6 +178,10 @@ warning: Query validation reported warnings for sentinel
 
 A console that cannot encode `✓`, `✗` or `→` (a Windows code page, `PYTHONIOENCODING=ascii`) gets `ok`, `x` and `->`.
 
+## The command tree
+
+`opentide --json commands` describes every command an agent can run, with its options, types, choices, defaults, environment variables and an example. See [Command tree for agents](./index.md#command-tree-for-agents).
+
 ## Related
 
 - [Exit codes](./exit-codes.md)

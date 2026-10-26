@@ -161,6 +161,9 @@ def _setup_path(
 
 PATH_OPTION = typer.Option(".", "--path", "-C", help="Repository path")
 PATH_ARGUMENT = typer.Argument(".", help="Repository path (alias for --path)", hidden=True)
+REFRESH_OPTION = typer.Option(
+    False, "--refresh", help="Fetch the catalogue again, not the in-process copy of the last 30s"
+)
 
 
 def _renderable_branch(value: str | None) -> str | None:
@@ -659,16 +662,32 @@ def setup_mcp_cmd(
 def setup_skills_install_cmd(
     ctx: typer.Context,
     path: str = typer.Option(".", "--path", "-C", help="Repository path"),
-    cursor: bool = typer.Option(False, "--cursor"),
-    claude_code: bool = typer.Option(False, "--claude-code"),
-    generic: bool = typer.Option(False, "--generic"),
-    github_copilot: bool = typer.Option(False, "--github-copilot"),
-    install: list[str] = typer.Option([], "--install", help="Skill slugs to install (repeatable)"),
-    all_skills: bool = typer.Option(False, "--all", help="Install full skills catalogue"),
-    name: str | None = typer.Option(None, "--name"),
-    org: str | None = typer.Option(None, "--org"),
-    description: str | None = typer.Option(None, "--description"),
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    cursor: bool = typer.Option(False, "--cursor", help="Copy the skills to .cursor/skills/"),
+    claude_code: bool = typer.Option(
+        False, "--claude-code", help="Write CLAUDE.md and copy the skills to .claude/skills/"
+    ),
+    generic: bool = typer.Option(
+        False, "--generic", help="Write AGENTS.md for any agent that reads .agents/skills/"
+    ),
+    github_copilot: bool = typer.Option(
+        False,
+        "--github-copilot",
+        help="Write .github/copilot-instructions.md, and AGENTS.md as --generic does",
+    ),
+    install: list[str] = typer.Option(
+        [],
+        "--install",
+        help="Skill slug to install (repeatable); default: the rule and engineering skills",
+    ),
+    all_skills: bool = typer.Option(False, "--all", help="Install every skill in the catalogue"),
+    name: str | None = typer.Option(
+        None, "--name", help="Heading of the agent files; default: the folder name"
+    ),
+    org: str | None = typer.Option(None, "--org", help="Organisation named in the agent files"),
+    description: str | None = typer.Option(
+        None, "--description", help="One paragraph under the heading of the agent files"
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Install without asking"),
 ) -> None:
     """Install detection engineering agent skills from opentidehq/skills.
 
@@ -721,7 +740,9 @@ def setup_skills_install_cmd(
             emit_error(cli, str(exc))
     else:
         _require_scripted_for_json(
-            cli, "opentide setup skills", "--generic or another target, --install, --all"
+            cli,
+            "opentide setup skills",
+            "--claude-code, --cursor, --generic, --github-copilot, --install, --all",
         )
         given = SkillsSetupOptions(
             path=base,
@@ -745,9 +766,13 @@ def setup_skills_discover_cmd(
     ctx: typer.Context,
     path: str = PATH_ARGUMENT,
     path_flag: str = PATH_OPTION,
-    query: str | None = typer.Option(None, "--query", "-q"),
-    installed: bool = typer.Option(False, "--installed"),
-    refresh: bool = typer.Option(False, "--refresh"),
+    query: str | None = typer.Option(
+        None, "--query", "-q", help="Keep skills whose name, slug or description holds this text"
+    ),
+    installed: bool = typer.Option(
+        False, "--installed", help="Keep only the skills installed in .agents/skills/"
+    ),
+    refresh: bool = REFRESH_OPTION,
 ) -> None:
     """List skills from the opentidehq/skills catalogue."""
     cli = get_context(ctx)
@@ -756,34 +781,69 @@ def setup_skills_discover_cmd(
         payload = discover_skills(base, query=query, installed_only=installed, refresh=refresh)
     except SkillsManifestError as exc:
         emit_error(cli, str(exc))
-    if cli.json_output:
-        emit_success(cli, payload)
-        return
+    installed_count = sum(1 for item in payload["skills"] if item.get("installed"))
+    payload["_summary"] = {"skills": payload["count"], "installed": installed_count}
+    payload["_outcome"] = _discover_outcome(
+        payload["count"], installed_count, source=payload["source"], query=query
+    )
+    if not cli.json_output and payload["skills"]:
+        _print_skills_table(payload["skills"])
+    emit_success(cli, payload)
+
+
+#: Characters of a description ``setup skills discover`` shows; ``show`` prints all of it.
+_DESCRIPTION_WIDTH = 80
+
+
+def _shorten(text: str, width: int, ellipsis: str) -> str:
+    """*text* cut at the last word that fits in *width*, then *ellipsis*."""
+    text = " ".join(text.split())
+    if len(text) <= width:
+        return text
+    cut = text[: width - len(ellipsis) + 1]
+    head, space, _ = cut.rpartition(" ")
+    # A single word longer than the column is cut where it overflows.
+    kept = head if space and head else cut[:-1]
+    return kept.rstrip(" ,;:.—-") + ellipsis
+
+
+def _print_skills_table(skills: list[dict[str, object]]) -> None:
     from rich.table import Table
     from rich.text import Text
 
+    from opentide.cli.ui.glyphs import glyph
+
+    console = get_stdout_console()
+    ellipsis = glyph("ellipsis", console.file)
     table = Table(title="opentide Skills")
     table.add_column("Name")
     table.add_column("Installed")
     table.add_column("Description")
-    for item in payload["skills"]:
+    for item in skills:
         table.add_row(
             Text(str(item["name"])),
             "yes" if item.get("installed") else "no",
-            Text(str(item.get("description", ""))[:80]),
+            Text(_shorten(str(item.get("description", "")), _DESCRIPTION_WIDTH, ellipsis)),
         )
-    get_stdout_console().print(table)
-    get_stdout_console().print(
-        f"Source: {payload['source']} ({payload['count']} skills)", markup=False
-    )
+    console.print(table)
+
+
+def _discover_outcome(count: int, installed: int, *, source: str, query: str | None) -> str:
+    """``31 skills available · 2 installed · opentidehq/skills@main``."""
+    from opentide.cli.ui.glyphs import glyph
+
+    noun = "skill" if count == 1 else "skills"
+    counted = f"{count} {noun} match '{query}'" if query else f"{count} {noun} available"
+    separator = f" {glyph('separator')} "
+    return separator.join((counted, f"{installed} installed", source))
 
 
 @skills_app.command("show")
 def setup_skills_show_cmd(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Skill slug or name"),
-    path: str = typer.Option(".", "--path", "-C"),
-    refresh: bool = typer.Option(False, "--refresh"),
+    path: str = PATH_OPTION,
+    refresh: bool = REFRESH_OPTION,
 ) -> None:
     """Show details for one skill from the catalogue."""
     cli = get_context(ctx)

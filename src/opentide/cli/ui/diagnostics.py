@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from opentide.core.io import YamlProblem
-    from opentide.validation.issues import ValidationIssue
+    from opentide.validation.issues import ValidationIssue, ValidationReport
 
 Severity = Literal["error", "warning", "note"]
 
@@ -630,6 +630,32 @@ def diagnostics_from_issues(
                 issue, workspace=workspace, sources=sources, occurrence=occurrence
             )
         )
+    return diagnostics
+
+
+def annotate_report(
+    payload: Mapping[str, Any],
+    report: ValidationReport,
+    *,
+    workspace: Path | None,
+    buckets: Sequence[str] = ("issues", "warnings"),
+    sources: SourceFiles | None = None,
+) -> list[Diagnostic]:
+    """Add the diagnostic fields to each issue of a dumped *report*; return the diagnostics.
+
+    *payload* is ``report.model_dump_json_ready()``, or the part of it a
+    surface returns: each list under *buckets* is annotated in place, entry
+    for entry with the report's own list of that name.
+    """
+    sources = sources or SourceFiles()
+    diagnostics: list[Diagnostic] = []
+    for bucket in buckets:
+        found = diagnostics_from_issues(
+            getattr(report, bucket), workspace=workspace, sources=sources
+        )
+        for entry, diagnostic in zip(payload.get(bucket, []), found, strict=True):
+            annotate(entry, diagnostic)
+        diagnostics.extend(found)
     return diagnostics
 
 

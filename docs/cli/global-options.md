@@ -81,6 +81,25 @@ opentide exports `OPENTIDE_DEBUG=1` to the processes it starts when debugging, n
 
 When opentide stops on an unexpected error, `--debug` also prints the traceback, above the `error[internal]` line. Without it the traceback is only in the crash log; see [Troubleshooting](../usage/troubleshooting.md#opentide-stops-with-errorinternal).
 
+## Environment variables
+
+`opentide --json commands` lists these under `environment`, and a test fails when the code reads an `OPENTIDE_*` variable the list leaves out.
+
+| Variable | Effect |
+|----------|--------|
+| `OPENTIDE_OUTPUT` | Output mode: `human`, `plain`, `agent` or `json`; see [Output modes](./json-output.md#output-modes) |
+| `OPENTIDE_DEBUG` | `1` for debug logging, like `--debug` |
+| `NO_COLOR` | Any value turns colour off, like `--no-color` |
+| `OPENTIDE_REPO_ROOT` | Repository root, like `--repo` |
+| `OPENTIDE_DATA_ROOT` | Bundled data root, like `--data` |
+| `OPENTIDE_PROXY` | HTTP(S) proxy, like `--proxy` |
+| `OPENTIDE_TIDE_WORKSPACE` | Folder whose objects are read, when it is not the repository root; see [Repository root resolution](#repository-root-resolution) |
+| `OPENTIDE_LINKS` | Link scheme of code-frame paths: `file`, `vscode`, `cursor` or `none`; default `vscode` inside VS Code, else `file` |
+| `OPENTIDE_LOG_JSON` | `1` for one JSON object per log line on stderr |
+| `OPENTIDE_VALIDATE_WORKERS` | Most threads `validate` uses: a number, or `auto` |
+| `OPENTIDE_VALIDATE_PARALLEL_THRESHOLD` | Fewest objects before `validate` runs in parallel (default 32) |
+| `CLAUDECODE`, `AI_AGENT`, … | Set by a coding agent: selects `agent` output mode |
+
 ## Environment propagation
 
 The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.

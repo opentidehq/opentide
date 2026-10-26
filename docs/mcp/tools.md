@@ -7,7 +7,24 @@ description: Tool reference for the opentide MCP server — parameters, behaviou
 
 Registered in `src/opentide/mcp_server/server.py`. Implementations in `src/opentide/mcp_server/tools.py`.
 
-Each tool below lists its parameters, an example call, and an example response so an agent knows exactly what to expect.
+Each tool below lists its parameters, an example call, and an example response so an agent knows exactly what to expect. The tool descriptions an agent reads in `tools/list` say the same in a few lines each.
+
+The server's `instructions`, sent with the `initialize` response, open with the tagline (*Spec-driven development for agentic detection engineering*) and give the agent its workflow: search, draft from a template, call `validation_report` until it is clean, then preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments.
+
+### Next actions
+
+`validate_rule`, `validation_report` and a refused `validate_query` add a `next_actions` list: the calls worth making next.
+
+```json
+{
+  "tool": "explain",
+  "arguments": { "code": "vocab_unknown" },
+  "command": "opentide explain vocab_unknown",
+  "reason": "what vocab_unknown means and how to fix it"
+}
+```
+
+`tool` and `arguments` are the MCP call. `command` is the same step as an `opentide` command line, for an agent with a shell (the CLI's own `next_actions` are `{command, reason}`). The list is empty when there is nothing to do. Every other key of these payloads is unchanged.
 
 ## search
 
@@ -105,7 +122,7 @@ ATT&CK coverage analysis with gap identification. Use it to answer "what do we d
 | `technique` | string | `""` | When set, return coverage for that technique only |
 | `tactic` | string | `""` | Echoed as `tactic_filter` when no technique is set; **does not filter** the matrix today |
 
-Coverage reads the same technique locations as `opentide info coverage --technique`:
+Coverage reads the same technique locations as `opentide info coverage --technique <id>`:
 top-level `techniques`, `tags.techniques`, `tags.attack`, and `threat.att&ck`.
 
 Matching is case-insensitive, and a parent technique covers its sub-techniques:
@@ -152,13 +169,23 @@ Validate a single rule against its schema and cross-object checks.
   "valid": true,
   "errors": [],
   "warnings": [],
-  "issues": []
+  "issues": [],
+  "next_actions": [
+    {
+      "tool": "deploy_rule",
+      "arguments": { "uuid": "00000000-0000-4000-8003-000000000001", "platform": "sentinel", "dry_run": true },
+      "command": "opentide --json deploy --dry-run --strategy PREVIEW --all --platform sentinel",
+      "reason": "preview the sentinel deployment; nothing is sent"
+    }
+  ]
 }
 ```
 
+`errors` and `warnings` are strings. `issues` are the report's issues with the [diagnostic fields](#diagnostic-fields), as `validation_report` returns them. A rule that fails points `next_actions` at `explain` for its first error code (each issue's `explain` field names its own code), and then at `validate_rule` again; a valid rule points at a dry-run `deploy_rule` for each platform it has a configuration block for, unless its status there maps to `INERT`. The `command` passes the `--strategy` values that deploy the rule's status (`PREVIEW` for a `STAGING` rule, `RELEASE` for a `PRODUCTION` one) and `--all`, because the CLI has no `--uuid`: it previews every rule those strategies deploy, this one among them. An unknown UUID points at `search` with an empty query, which lists every rule with its title (the `command`, `opentide --json info rules`, lists UUIDs only).
+
 ## validation_report
 
-Structured validation report for agents. Full registry by default; narrow with filters.
+Structured validation report for agents. Full registry by default; narrow with filters. Call it after every edit, until `ok` is `true`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -166,13 +193,104 @@ Structured validation report for agents. Full registry by default; narrow with f
 | `uuid` | string | `""` | Single UUID |
 | `object_type` | string | `""` | `rule`, `threat`, or `objective` |
 
-Prefer this tool for agent workflows — returns `model_dump_json_ready()` issue list.
+Returns the validation report (`ok`, `issues`, `warnings`, `stats`) plus `next_actions`. A rule with `tlp: clearr`:
+
+```json
+// call
+{ "file": "objects/rules/sentinel-kql-rule.yaml" }
+
+// returns (one issue shown)
+{
+  "ok": false,
+  "issues": [
+    {
+      "code": "vocab_unknown",
+      "severity": "error",
+      "object_uuid": "00000000-0000-4000-8003-000000000001",
+      "object_type": "rule",
+      "file_path": "/work/detections/objects/rules/sentinel-kql-rule.yaml",
+      "yaml_line": 7,
+      "field_path": ["metadata", "tlp"],
+      "message": "Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry",
+      "suggestion": "clear",
+      "context": { "vocab": "tlp::1.0", "value": "clearr" },
+      "path": "objects/rules/sentinel-kql-rule.yaml",
+      "line": 8,
+      "column": 8,
+      "end_column": 14,
+      "help": "did you mean 'clear'?",
+      "fix": {
+        "safe": false,
+        "edits": [
+          { "line": 8, "column": 8, "end_line": 8, "end_column": 14, "replacement": "clear" }
+        ]
+      },
+      "explain": "opentide explain vocab_unknown"
+    }
+  ],
+  "warnings": [],
+  "stats": { "objects_checked": 1 },
+  "next_actions": [
+    {
+      "tool": "explain",
+      "arguments": { "code": "vocab_unknown" },
+      "command": "opentide explain vocab_unknown",
+      "reason": "what vocab_unknown means and how to fix it"
+    },
+    {
+      "tool": "validation_report",
+      "arguments": { "file": "objects/rules/sentinel-kql-rule.yaml" },
+      "command": "opentide --json validate --file objects/rules/sentinel-kql-rule.yaml",
+      "reason": "validate again after applying the fix edits"
+    }
+  ]
+}
+```
+
+A report with errors points at `explain` for the first error code, then at `validation_report` again. A clean report has `ok: true` and an empty `next_actions`.
+
+### Diagnostic fields
+
+Each entry of `issues` and `warnings` (and of `validate_rule`'s `issues`) carries the same fields as [`opentide --json validate`](../cli/json-output.md). They are added; every existing key keeps its value.
+
+| Field | Meaning |
+|-------|---------|
+| `path` | Workspace-relative, `/`-separated. `file_path` stays absolute. |
+| `line` | 1-based. `yaml_line` stays 0-based. |
+| `object_uuid` | Already on every issue: the object at fault, or `""` |
+| `column`, `end_column` | 1-based Unicode code points, best effort; `end_column` is one past the last character. `null` when unknown. |
+| `help` | A suggestion in prose (`did you mean 'clear'?`), or `null` |
+| `fix` | `{safe, edits: [{line, column, end_line, end_column, replacement}]}` or `null`. Each edit replaces the text from (`line`, `column`) up to (`end_line`, `end_column`). `safe` is `true` only when the value and the replacement spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit: apply those as they are. Check any other edit against `help` first; `clearr` → `clear` is not safe, and an ATT&CK id or an `invalid_ref` fix never is. See [`validate`](../cli/validate.md). |
+| `explain` | `opentide explain <code>`; the `explain` tool returns the same page |
+
+## explain
+
+What a diagnostic code means, an example, and how to fix it: the page `opentide explain <code>` prints. Codes are listed in [Diagnostic codes](../cli/diagnostics.md).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `code` | string | `""` | An issue's `code`. Empty lists every code |
+
+```json
+// call
+{ "code": "vocab_unknown" }
+
+// returns
+{
+  "found": true,
+  "code": "vocab_unknown",
+  "meaning": "A value is not in the vocabulary its field uses.",
+  "markdown": "# vocab_unknown\n\n…"
+}
+```
+
+An unknown code returns `{"found": false, "code", "message", "suggestion"}`, with the closest code as `suggestion` (or `null`). An empty `code` returns `{"found": true, "codes": [{"code", "meaning"}, …]}`.
 
 One cause is one issue, here and in `validate_rule`: a dangling reference (`detection_model`, `objective.threats`, `threat.chaining[].vector`) is an `invalid_ref`, not also a `vocab_unknown`, with the value in `context.value`. `opentide explain <code>` says what each code means.
 
 ## validate_query
 
-Tenant query check, the same path as `opentide validate query --live`.
+Tenant query check, the same path as `opentide validate query --platform <platform> --live`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -190,7 +308,15 @@ cannot reach is a failed live check.
   "supported": true,
   "status": "failed",
   "message": "Query validation checks the tenant. Pass live: true.",
-  "query_preview": "SecurityEvent | where Account == \"oops"
+  "query_preview": "SecurityEvent | where Account == \"oops",
+  "next_actions": [
+    {
+      "tool": "validate_query",
+      "arguments": { "query": "SecurityEvent | where Account == \"oops", "platform": "sentinel", "live": true },
+      "command": "opentide --json validate query --platform sentinel --live",
+      "reason": "check the catalogue's sentinel rules: this contacts the sentinel tenant with the configured credentials, so ask a person first"
+    }
+  ]
 }
 ```
 
@@ -206,7 +332,7 @@ cannot reach is a failed live check.
 }
 ```
 
-Supported: `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud`.
+Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set). The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 
@@ -317,10 +443,12 @@ Chain the tools into safe, end-to-end recipes.
 ```text
 search(query="T1059")                     → find or confirm the objective
 get_chaining(uuid=<objective>)            → inspect graph + chaining_index
-# propose objects/rules/<name>.yaml with detection_model=<objective>
-validation_report(uuid=<new rule>)        → must pass before proposing as done
+# write objects/rules/<name>.yaml from opentide://templates/rule, detection_model=<objective>
+validation_report(file=<new rule file>)   → apply each issue's fix.edits, explain(code) the rest
+validation_report(file=<new rule file>)   → repeat until ok is true
 # (tenant check: validate_query with live true, or opentide validate query --platform sentinel --live)
 deploy_rule(uuid=<new rule>, platform="sentinel", dry_run=true)   → preview
+# a person reviews, merges and deploys
 ```
 
 ### Audit coverage
@@ -343,11 +471,12 @@ get_chaining(uuid=<rule>)                 → inspect related objects in chainin
 
 ## Agent guidelines
 
-1. Call `validation_report` before suggesting YAML edits.
-2. Use `search` before `get_chaining` when the UUID is unknown.
-3. Default to `dry_run=true` for `deploy_rule`; require explicit human approval for a real deploy.
-4. Never claim query validation for unsupported platforms. `validate_query` refuses unless `live` is true, and that call checks catalogue rules against the tenant; `run_query` is not implemented at all.
-5. Do not assume `coverage(tactic=…)` filters results — pass `technique` for a filtered answer.
+1. Call `validation_report` before suggesting YAML edits, and again after each edit until `ok` is `true`.
+2. Apply `fix.edits` from the issue rather than guessing; `safe: true` edits need no review, the others need a look at `help`. Call `explain` for a code you do not know.
+3. Use `search` before `get_chaining` when the UUID is unknown.
+4. Default to `dry_run=true` for `deploy_rule`; require explicit human approval for a real deploy. People review and merge changes.
+5. Never claim query validation for unsupported platforms. `validate_query` refuses unless `live` is true, and that call checks catalogue rules against the tenant; `run_query` is not implemented at all.
+6. Do not assume `coverage(tactic=…)` filters results — pass `technique` for a filtered answer.
 
 ## Troubleshooting
 

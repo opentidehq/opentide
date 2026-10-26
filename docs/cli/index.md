@@ -31,6 +31,7 @@ Run `opentide --help` for the live command tree.
 | [`new`](./new.md) | Scaffold a threat, objective or rule from the generated template |
 | [`doctor`](./doctor.md) | Check the installation, the workspace and its integrations |
 | [`explain`](./diagnostics.md) | What a diagnostic code means, an example, and how to fix it |
+| [`commands`](#command-tree-for-agents) | Every command with its options, defaults and an example; `--json` for the tree |
 | [`mcp`](../mcp/index.md) | Stdio MCP server (`mcp start`); the editor owns the process |
 
 <Callout type="info">
@@ -72,6 +73,89 @@ With `--json`, every command writes exactly one JSON document to stdout. Success
 ## Exit codes
 
 Commands set a process exit code so CI can gate without parsing output: `0` success, `1` error, `2` usage error. Full reference: [Exit codes](./exit-codes.md).
+
+## Coding agents
+
+An agent in a shell drives the same commands as a person. Four rules cover it, and `opentide setup skills` writes them into `AGENTS.md`, `CLAUDE.md` and `.github/copilot-instructions.md`:
+
+1. Run `opentide --json <command>`. stdout is one [JSON document](./json-output.md) and nothing else.
+2. Branch on the exit code first, then read `failure.code` for the detail, for example `issues_found`, `usage_invalid_choice` or `no_tenant_reached`. A usage error carries the closest valid value in `failure.suggestion`.
+3. Apply each finding's `fix`: every edit replaces the text from (`line`, `column`) up to (`end_line`, `end_column`), 1-based, with `replacement`. `safe: true` edits only respell the same word and can be applied as they are; check the others against `help`. For a finding with no fix, `opentide explain <code>` says what it means and how to fix it.
+4. Follow `next_actions`, each a `{command, reason}`.
+
+The loop: search what exists (`opentide --json info coverage --technique T1059`), draft from `.opentide/templates/`, run `opentide --json validate --file <file>` until `ok` is `true`, then preview with `opentide --json deploy --dry-run --strategy PREVIEW --all`. People review and merge the change and run real deployments. An agent never gets a prompt: a command that needs input exits `2` with `usage_needs_input` and names the flags to pass.
+
+### Command tree for agents
+
+`opentide --json commands` prints every visible command, read from the CLI itself, so it never drifts from what the CLI accepts:
+
+```bash
+opentide --json commands
+```
+
+```json illustrative
+{
+  "program": "opentide",
+  "version": "0.17.2",
+  "global_options": [
+    {
+      "name": "repo",
+      "flags": ["--repo"],
+      "secondary_flags": [],
+      "type": "string",
+      "choices": null,
+      "default": null,
+      "required": false,
+      "multiple": false,
+      "is_flag": false,
+      "envvars": ["OPENTIDE_REPO_ROOT"],
+      "help": "Repository root"
+    }
+  ],
+  "commands": [
+    {
+      "path": "validate query",
+      "name": "query",
+      "summary": "Query validation checks the tenant. Pass --live.",
+      "help": "Query validation checks the tenant. Pass --live. …",
+      "group": false,
+      "runs_alone": true,
+      "subcommands": [],
+      "deprecated": false,
+      "arguments": [],
+      "options": [
+        {
+          "name": "platform",
+          "flags": ["--platform"],
+          "type": "choice",
+          "choices": ["sentinel", "splunk", "crowdstrike", "…"],
+          "required": true,
+          "…": "…"
+        }
+      ],
+      "example": "opentide validate query --platform sentinel"
+    }
+  ],
+  "ok": true,
+  "status": "completed",
+  "message": "49 commands",
+  "summary": { "commands": 49, "groups": 13 },
+  "…": "envelope keys"
+}
+```
+
+| Key | Meaning |
+|-----|---------|
+| `version` | The installed opentide version: key a cached copy of the tree on it. |
+| `global_options` | The root options (`--repo`, `--json`, …). `--json`, `--no-color`, `--debug` and `--quiet` may also follow the command. |
+| `environment` | `[{name, meaning}]`: every `OPENTIDE_*` variable opentide reads, those behind `--repo`, `--data` and `--proxy` included, plus `NO_COLOR` and the agent-detection variables (`AI_AGENT`, `CLAUDECODE`, …). [Global options](./global-options.md#environment-variables) lists them. |
+| `commands` | Flat and depth-first, in `--help` order. `path` is the words to type; a group's `subcommands` are the entries whose path extends it. Hidden commands and options are left out. |
+| `runs_alone` | `false` for a group that only prints its help (`opentide mcp`): run one of its subcommands. |
+| `options[].type` | `string`, `integer`, `number`, `boolean`, `choice` (with `choices`), `path`, … A `string` the command checks itself lists its values in `choices` too: `validate --type`, `deploy --strategy`, `info`'s section. `share --target` takes the configured targets, so it has none. |
+| `options[].envvars` | Environment variables that set the option. |
+| `example` | The first example in the command's `--help`. A command whose help has none yet gets a placeholder: the command with its required arguments and options filled in. A placeholder names the command but may not run as it is (`opentide deploy` still needs `--strategy`). |
+
+Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 49 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
 
 ## Choosing between CLI, SDK, and MCP
 

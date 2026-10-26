@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 from typing import Any
 
 from opentide.core.registry import Opentide
@@ -36,6 +37,83 @@ def tool_coverage(technique: str = "", tactic: str = "") -> dict[str, Any]:
     return coverage_analysis(technique=technique, tactic=tactic)
 
 
+def next_action(
+    tool: str, arguments: dict[str, Any], *, command: str, reason: str
+) -> dict[str, Any]:
+    """A tool call worth making next: the CLI's ``{command, reason}`` plus the MCP call.
+
+    ``command`` is the same step as an ``opentide`` command line, for an
+    agent that has a shell rather than this server.
+    """
+    return {"tool": tool, "arguments": arguments, "command": command, "reason": reason}
+
+
+def _annotate(payload: dict[str, Any], report: Any, buckets: tuple[str, ...]) -> list[Any]:
+    """Add the CLI's diagnostic fields to each dumped issue; the issues keep every key."""
+    from opentide.cli.ui.diagnostics import annotate_report
+    from opentide.registry.discovery import discover_workspace
+
+    return annotate_report(payload, report, workspace=discover_workspace(), buckets=buckets)
+
+
+def _validation_next_actions(
+    diagnostics: list[Any], *, again: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Explain the first error's code, then validate again once the fixes are written.
+
+    One ``explain`` (each issue's own ``explain`` field names the rest) and the
+    re-run: within the three next steps a CLI result prints.
+    """
+    first = next((item.code for item in diagnostics if item.severity == "error"), None)
+    if first is None:
+        return []
+    reason = (
+        "validate again after applying the fix edits"
+        if any(item.fix is not None for item in diagnostics)
+        else "validate again after fixing the issues"
+    )
+    explain = next_action(
+        "explain",
+        {"code": first},
+        command=f"opentide explain {first}",
+        reason=f"what {first} means and how to fix it",
+    )
+    return [explain, {**again, "reason": reason}]
+
+
+def _rule_platforms(uuid: str) -> list[str]:
+    """Platforms the rule has a configuration block for, that this install knows."""
+    body = Opentide.Models.rules.get(uuid)
+    if body is not None and not isinstance(body, dict):
+        body = body.model_dump(by_alias=True) if hasattr(body, "model_dump") else {}
+    configs = (body or {}).get("configurations") or {}
+    if not isinstance(configs, dict):
+        return []
+    return [name for name in configs if name in Opentide.Platforms]
+
+
+def _run_strategies(rule: Any, platform: str) -> list[str]:
+    """The ``--strategy`` values whose run deploys *rule* to *platform*; none for ``INERT``.
+
+    The status is the platform block's, as a real deploy reads it. A status
+    the deployment configuration does not define falls back to ``PREVIEW``,
+    so the command still runs.
+    """
+    from opentide.deployment.utils import check_status
+    from opentide.models.deployment_enums import deployed_by
+
+    block = getattr(getattr(rule, "configurations", None), platform, None)
+    status = str(getattr(block, "status", None) or getattr(rule, "status", ""))
+    defined = {item.name for item in Opentide.Configurations.Deployment.statuses}
+    if status not in defined:
+        return ["PREVIEW"]
+    try:
+        rule_strategy = check_status(status)
+    except (KeyError, TypeError, ValueError):
+        return ["PREVIEW"]
+    return [strategy.name for strategy in deployed_by(rule_strategy)]
+
+
 def tool_validate_rule(uuid: str) -> dict[str, Any]:
     # The server outlives any edit an agent makes; validating the index built at
     # start-up would report the content the author has already changed.
@@ -46,13 +124,63 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
     # The raw index, not ``Opentide.Rules``: typed loading raises for the whole
     # catalogue when one rule does not load, which is what validation reports.
     if uuid not in Opentide.Models.rules:
-        return {"valid": False, "errors": [f"Rule {uuid} not found"], "warnings": [], "issues": []}
+        return {
+            "valid": False,
+            "errors": [f"Rule {uuid} not found"],
+            "warnings": [],
+            "issues": [],
+            "next_actions": [
+                next_action(
+                    "search",
+                    {"query": "", "type": "rule"},
+                    command="opentide --json info rules",
+                    reason=(
+                        "list the catalogue's rules to find the UUID: search returns "
+                        "each rule's title, the command only the UUIDs"
+                    ),
+                )
+            ],
+        }
     report = run_validation(scope=ValidationScope.narrow(uuids=frozenset({uuid})))
+    dumped = report.model_dump_json_ready()
+    diagnostics = _annotate(dumped, report, ("issues",))
+    again = next_action(
+        "validate_rule",
+        {"uuid": uuid},
+        command=f"opentide --json validate --uuid {shlex.quote(uuid)}",
+        reason="",
+    )
+    actions = _validation_next_actions(diagnostics, again=again)
+    if report.ok:
+        try:
+            rule = Opentide.Rules.get(uuid)
+        except Exception:
+            # Typed loading fails for the whole catalogue when another rule
+            # does not load; the status then falls back to PREVIEW.
+            rule = None
+        for platform in _rule_platforms(uuid):
+            strategies = _run_strategies(rule, platform)
+            if not strategies:
+                continue  # INERT: no run deploys it
+            flags = " ".join(f"--strategy {name}" for name in strategies)
+            actions.append(
+                next_action(
+                    "deploy_rule",
+                    {"uuid": uuid, "platform": platform, "dry_run": True},
+                    # The CLI has no --uuid: --all previews every rule these
+                    # strategies deploy, this one among them.
+                    command=(
+                        f"opentide --json deploy --dry-run {flags} --all --platform {platform}"
+                    ),
+                    reason=f"preview the {platform} deployment; nothing is sent",
+                )
+            )
     return {
         "valid": report.ok,
         "errors": [issue.to_legacy_string() for issue in report.errors],
         "warnings": [issue.to_legacy_string() for issue in report.warnings],
-        "issues": report.model_dump_json_ready().get("issues", []),
+        "issues": dumped.get("issues", []),
+        "next_actions": actions,
     }
 
 
@@ -76,7 +204,45 @@ def tool_validation_report(
             types=frozenset({object_type}) if object_type else None,
         )
     report = run_validation(scope=scope)
-    return report.model_dump_json_ready()
+    payload = report.model_dump_json_ready()
+    diagnostics = _annotate(payload, report, ("issues", "warnings"))
+    arguments = {
+        key: value
+        for key, value in (("file", file), ("uuid", uuid), ("object_type", object_type))
+        if value
+    }
+    flags = "".join(
+        f" --{'type' if key == 'object_type' else key} {shlex.quote(value)}"
+        for key, value in arguments.items()
+    )
+    again = next_action(
+        "validation_report", arguments, command=f"opentide --json validate{flags}", reason=""
+    )
+    payload["next_actions"] = _validation_next_actions(diagnostics, again=again)
+    return payload
+
+
+def tool_explain(code: str = "") -> dict[str, Any]:
+    """The ``opentide explain`` page for *code*; every code with its meaning when empty."""
+    from opentide.cli.services.explain import all_pages, diagnostic_codes, load_page
+    from opentide.cli.ui.contract import did_you_mean
+
+    wanted = code.strip()
+    if not wanted:
+        pages = all_pages()
+        return {
+            "found": True,
+            "codes": [{"code": page.code, "meaning": page.summary} for page in pages],
+        }
+    page = load_page(wanted)
+    if page is None:
+        return {
+            "found": False,
+            "code": wanted,
+            "message": f"No diagnostic code {wanted!r}. Call explain with no code to list them.",
+            "suggestion": did_you_mean(wanted, diagnostic_codes()),
+        }
+    return {"found": True, **page.to_dict()}
 
 
 def tool_validate_query(query: str, platform: str, live: bool = False) -> dict[str, Any]:
@@ -99,6 +265,18 @@ def tool_validate_query(query: str, platform: str, live: bool = False) -> dict[s
             "status": "failed",
             "message": "Query validation checks the tenant. Pass live: true.",
             "query_preview": query[:200],
+            "next_actions": [
+                next_action(
+                    "validate_query",
+                    {"query": query, "platform": platform, "live": True},
+                    command=f"opentide --json validate query --platform {platform} --live",
+                    reason=(
+                        f"check the catalogue's {platform} rules: this contacts the "
+                        f"{platform} tenant with the configured credentials, so ask a "
+                        "person first"
+                    ),
+                )
+            ],
         }
     from opentide.cli.context import CliContext
     from opentide.cli.services.validation import validate_query_platform
