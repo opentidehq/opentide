@@ -49,6 +49,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`object_type_unknown`](#object_type_unknown) | A `sharing.toml` block lists an object type opentide cannot share. |
 | [`organisation_uuid_invalid`](#organisation_uuid_invalid) | A `sharing.toml` block's `organisation_uuid` is not a UUID. |
 | [`organisation_uuid_mismatch`](#organisation_uuid_mismatch) | The organisation configured for a sharing target is not the one its API key belongs to. |
+| [`placeholder`](#placeholder) | A value still holds the stand-in `opentide new` wrote for a required field nobody chose yet. |
 | [`platform_not_enabled`](#platform_not_enabled) | A rule has a block for a platform this workspace has not enabled, so it will not deploy there. |
 | [`retract_unconfirmed`](#retract_unconfirmed) | `share retract` would delete a remote event, and was not confirmed. |
 | [`rule_status_unknown`](#rule_status_unknown) | A `sharing.toml` block lists a rule status your configuration does not declare. |
@@ -693,6 +694,26 @@ opentide share push --target misp-prod
 ### How to fix
 
 Set the target's organisation UUID in `sharing.toml` to the one the API key belongs to, or use that organisation's key.
+
+## placeholder
+
+A value still holds the stand-in `opentide new` wrote for a required field nobody chose yet.
+
+Severity: warning. Reported by `opentide lint` (placeholders check).
+
+### Example
+
+```yaml
+threat:
+  mitre_attack:
+    - T1548  # opentide:placeholder
+  description: |  # opentide:placeholder
+    ...
+```
+
+### How to fix
+
+Replace the value with the real one, then delete the `# opentide:placeholder` comment on that line. The object validates with the stand-in, so only `lint` notices it; `lint --strict` fails until every marker is gone.
 
 ## platform_not_enabled
 

@@ -29,6 +29,7 @@ _EMITTERS = (
     SRC / "states" / "deployment.py",
     SRC / "loading" / "object_loader.py",
     SRC / "registry" / "builder.py",
+    SRC / "cli" / "services" / "lint.py",
 )
 _LITERAL = re.compile(r"""\bcode\s*=\s*"([a-z_]+)"|"code":\s*"([a-z_]+)\"""")
 _NAMED = re.compile(r"\bcode\s*=\s*([A-Z_]+)\b")
@@ -49,9 +50,12 @@ def emitted_codes() -> set[str]:
         if path.name == "config.py":
             codes.update(_UNKNOWN_CODE.findall(text))
         for name in _NAMED.findall(text):
+            if name == "LINT_CODES":
+                continue  # code=LINT_CODES["…"]: its values are in already
             constant = re.search(rf'^{name}\s*=\s*"([a-z_]+)"', text, re.MULTILINE)
-            assert constant, f"{path}: code={name} is not a string constant in that file"
-            codes.add(constant.group(1))
+            entry = re.search(rf'^{name}\s*=\s*LINT_CODES\["([a-z_]+)"\]', text, re.MULTILINE)
+            assert constant or entry, f"{path}: code={name} is not a string constant in that file"
+            codes.add(constant.group(1) if constant else LINT_CODES[entry.group(1)])
     return codes
 
 
@@ -76,6 +80,7 @@ def test_the_scan_finds_the_codes_it_protects() -> None:
         "external_id_shape",
         "missing_uuid",
         "schema_missing",
+        "placeholder",
     } <= codes
 
 

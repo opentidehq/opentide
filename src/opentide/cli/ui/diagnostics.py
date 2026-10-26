@@ -55,6 +55,7 @@ LINT_CODES = {
     "name": "name_missing",
     "filename": "filename_mismatch",
     "metadata": "metadata_recommended",
+    "placeholder": "placeholder",
 }
 
 
@@ -700,6 +701,9 @@ def diagnostic_from_lint_finding(
         help_text = "add a name: the file name is derived from it"
     elif code == LINT_CODES["metadata"]:
         help_text = "add the missing keys under metadata"
+    elif finding.get("help"):
+        # A check that words its own step, such as a placeholder's.
+        help_text = str(finding["help"])
     if finding.get("fixed") is True and finding.get("from"):
         notes.append(("note", f"renamed from {finding['from']}"))
     if note := finding.get("note"):

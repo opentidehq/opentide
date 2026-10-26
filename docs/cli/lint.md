@@ -82,7 +82,7 @@ When more than one severity is left, the count splits them. When a filename find
 | `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`. `null` when the finding is about the whole file, or the key comes from a `<<:` merge and has no line of its own |
 | `uuid` | The object's `metadata.uuid`. `null` when the file did not parse or has no UUID |
 | `message` | What is wrong |
-| `code` | `filename_mismatch`, `name_missing`, `metadata_recommended`, or `yaml_parse`. `opentide explain <code>` describes it |
+| `code` | `filename_mismatch`, `name_missing`, `metadata_recommended`, `placeholder`, or `yaml_parse`. `opentide explain <code>` describes it |
 | `field_path` | The key the finding is about (`["metadata"]`), or `[]` |
 | `line`, `column`, `end_column` | One-based position of that key, or of the YAML error. `null` when unknown |
 | `help` | What to do, or `null` |
@@ -91,7 +91,7 @@ When more than one severity is left, the count splits them. When a filename find
 
 `summary` counts the object `files` read, the `findings` and the `fixed` ones.
 
-A placeholder adds `code` (`placeholder`) and `help`, the step that clears it. A filename mismatch adds `expected`, the path the file should have. Under `--fix` it also has `fixed`, and `from` (the old path) when the file was renamed. `fixed` is `false` when a file already exists at `expected`.
+A placeholder's `help` is the step that clears it. A filename mismatch adds `expected`, the path the file should have. Under `--fix` it also has `fixed`, and `from` (the old path) when the file was renamed. `fixed` is `false` when a file already exists at `expected`.
 
 | Finding | `severity` | `yaml_line` |
 |---------|------------|-------------|
@@ -108,8 +108,14 @@ Severity is for sorting and triage only. `--strict` exits `1` on any finding, wh
 `opentide new` writes a valid object at once, so a required value nobody has chosen yet gets a stand-in: the first value the schema allows (an ATT&CK technique, a category) or `...` for free text. Each such line ends in `# opentide:placeholder`, and `lint` reports it as a `placeholder` warning. The message names the key, or the key and index for an item of a list (`mitre_attack[0]`), and the finding carries `line`, `column` and `end_column` (1-based, end exclusive) around the value, or around the key of a block scalar:
 
 ```text illustrative
-[placeholders/warning] objects/threats/credential-dumping.yaml:12:7: mitre_attack[0] holds a placeholder value written by opentide new
-  help: replace the value, then delete the '# opentide:placeholder' comment
+warning[placeholder]: mitre_attack[0] holds a placeholder value written by opentide new
+   ╭─▶ objects/threats/credential-dumping.yaml:30:7
+   │
+29 │   mitre_attack:
+30 │     - T1548  # opentide:placeholder
+   │       ━━━━━
+   │
+   ╰─ help: replace the value, then delete the '# opentide:placeholder' comment
 ```
 
 Plain `lint` and `validate` still pass, so a draft can be committed: the commit hook runs `validate --strict` only. The CI pipeline from `opentide setup ci` also runs `lint --strict`, which fails until every marked value is replaced and its marker deleted. A placeholder looks like a real choice, so until then `generate` exports it like one (an ATT&CK technique in the coverage layer, for instance).

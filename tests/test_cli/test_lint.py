@@ -594,14 +594,20 @@ def test_lint_placeholders_fail_strict_only(tmp_path: Path) -> None:
     _write_object(tmp_path, "threats", "simulated-actor.yaml", _MARKED)
     plain = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
     assert plain.exit_code == 0, plain.stdout + plain.stderr
-    assert (
-        "objects/threats/simulated-actor.yaml:10:3: description holds a placeholder" in plain.stdout
-    )
+    # Findings print as code frames (#641), with the check's own help line.
+    assert "warning[placeholder]: description holds a placeholder" in plain.stdout
+    assert "objects/threats/simulated-actor.yaml:10:3" in plain.stdout
     assert (
         "help: replace the value, then delete the '# opentide:placeholder' comment" in plain.stdout
     )
     strict = runner.invoke(app, ["--json", "--repo", str(tmp_path), "lint", "--strict"])
     assert strict.exit_code == 1
+    [finding, *_] = json.loads(strict.stdout)["findings"]
+    assert finding["code"] == "placeholder"
+    assert finding["help"].startswith("replace the value")
+    assert finding["explain"] == "opentide explain placeholder"
+    page = runner.invoke(app, ["--json", "explain", finding["code"]])
+    assert page.exit_code == 0, page.stdout
     other = runner.invoke(
         app, ["--json", "--repo", str(tmp_path), "lint", "--strict", "--check", "metadata"]
     )

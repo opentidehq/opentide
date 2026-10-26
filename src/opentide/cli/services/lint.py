@@ -104,7 +104,7 @@ _PLACEHOLDER = re.compile(r"\s#\s*opentide:placeholder\s*$")
 _MARKED_KEY = re.compile(r"^(?P<lead>\s*(?:-\s+)?)(?P<key>[A-Za-z_][\w.-]*)\s*:(?:\s+|$)")
 _ITEM = re.compile(r"^(?P<lead>(?P<indent>\s*)-\s+)")
 
-PLACEHOLDER_CODE = "placeholder"
+PLACEHOLDER_CODE = LINT_CODES["placeholder"]
 PLACEHOLDER_HELP = "replace the value, then delete the '# opentide:placeholder' comment"
 
 
