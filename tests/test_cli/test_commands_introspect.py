@@ -20,7 +20,18 @@ from opentide.cli.services.introspect import example
 runner = CliRunner()
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m|\x1b\]8;[^\x1b]*\x1b\\")
-_ENV = {"NO_COLOR": "1", "OPENTIDE_OUTPUT": None, "CLAUDECODE": None, "AI_AGENT": None}
+#: The root callback exports the workspace variables for the engine modules.
+#: Naming them here makes CliRunner put them back after each run: left set to
+#: the checkout, OPENTIDE_TIDE_WORKSPACE made a later test in the worker merge
+#: tests/fixtures/generation and fail schema generation with KeyError: 'name'.
+_CLI_EXPORTS = ("OPENTIDE_REPO_ROOT", "OPENTIDE_TIDE_WORKSPACE", "OPENTIDE_DATA_ROOT")
+_ENV = {
+    "NO_COLOR": "1",
+    "OPENTIDE_OUTPUT": None,
+    "CLAUDECODE": None,
+    "AI_AGENT": None,
+    **dict.fromkeys(_CLI_EXPORTS),
+}
 
 _COMMAND_KEYS = {
     "path",
@@ -63,6 +74,14 @@ def _entry(tree: dict, path: str) -> dict:
 
 def _option(entry: dict, flag: str) -> dict:
     return next(option for option in entry["options"] if flag in option["flags"])
+
+
+def test_a_run_leaves_no_workspace_export_behind(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in _CLI_EXPORTS:
+        monkeypatch.delenv(name, raising=False)
+    result = runner.invoke(app, ["--json", "commands"], env=_ENV)
+    assert result.exit_code == 0, result.output
+    assert not [name for name in _CLI_EXPORTS if name in os.environ]
 
 
 def test_document_carries_the_envelope_and_counts(tree: dict) -> None:
