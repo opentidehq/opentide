@@ -97,7 +97,7 @@ class _SpacedOptional(TideModel):
 
 
 def test_required_only_metadata_tlp_is_scalar() -> None:
-    text = render_model_template(ObjectMetadata, required_only=True)
+    text = render_model_template(ObjectMetadata, required_only=True, required_metadata=())
     loaded = yaml.safe_load(text)
     _assert_no_null(text)
     assert not isinstance(loaded["tlp"], dict)
@@ -108,7 +108,7 @@ def test_required_only_metadata_tlp_is_scalar() -> None:
 
 
 def test_object_metadata_schema_alias_and_dates() -> None:
-    text = render_model_template(ObjectMetadata, schema_id="threat::1.0")
+    text = render_model_template(ObjectMetadata, schema_id="threat::1.0", required_metadata=())
     _assert_comment_style(text)
     assert "schema: threat::1.0" in text
     assert "created: YYYY-MM-DD" in text
@@ -126,7 +126,7 @@ def test_object_metadata_schema_alias_and_dates() -> None:
 
 
 def test_optional_organisation_uncomment_is_valid_yaml() -> None:
-    text = render_model_template(ObjectMetadata)
+    text = render_model_template(ObjectMetadata, required_metadata=())
     recovered = uncomment_optional_blocks(text)
     loaded = yaml.safe_load(recovered)
     assert loaded["organisation"]["uuid"] in (None, "")
@@ -511,3 +511,34 @@ def test_comment_and_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
 
     union_text = sk._scalar_placeholder("n", int | str, {}, sk.RenderOptions())
     assert union_text == "3"
+
+
+def test_default_render_keeps_lint_required_metadata_live() -> None:
+    """Templates agree with ``opentide lint``'s default ``metadata.required`` (#489)."""
+    text = render_model_template(ThreatVector, schema_id="threat::1.0")
+    _assert_comment_style(text)
+    assert re.search(r"(?m)^  author: $", text)
+    assert re.search(r"(?m)^  organisation:\n    uuid: \n    name: $", text)
+    assert "#contributors:" in text
+    loaded = yaml.safe_load(text)
+    assert set(loaded["metadata"]) >= {"author", "organisation"}
+
+
+def test_required_metadata_follows_the_configured_keys() -> None:
+    text = render_model_template(
+        DetectionRule_v1_1, schema_id="rule::1.1", required_metadata=("contributors", "reviewed")
+    )
+    _assert_comment_style(text)
+    assert "#author:" in text
+    assert "#organisation:" in text
+    assert re.search(r"(?m)^  contributors:\n    - $", text)
+    assert re.search(r"(?m)^  reviewed: ", text)
+
+
+def test_required_metadata_only_promotes_metadata_keys() -> None:
+    """A model field outside ``metadata`` that shares a key name stays optional."""
+
+    class _Other(TideModel):
+        author: str | None = None
+
+    assert render_model_template(_Other, required_metadata=("author",)) == "#author: \n"
