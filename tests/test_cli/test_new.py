@@ -183,10 +183,6 @@ def test_outcome_separator_follows_the_stream_encoding(
     assert " - " in payload["message"]
 
 
-@pytest.mark.xfail(
-    reason="needs #638: lazy.py routes no_args_is_help to a usage_error document in JSON mode",
-    strict=False,
-)
 def test_json_new_without_a_kind_is_a_usage_error(workspace: Path) -> None:
     clear_runtime_caches()
     result = CliRunner().invoke(app, ["--json", "--repo", str(workspace), "new"])
