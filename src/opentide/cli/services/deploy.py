@@ -294,7 +294,7 @@ def _report_skipped(result: dict[str, object], skipped: list[dict[str, str]]) ->
     )
     if result.get("status") == "skipped" and not result.get("plan"):
         result["_outcome"] = (
-            f"no rule has a status {run_names} deploys {glyph('separator')} {in_status}"
+            f"No rule has a status {run_names} deploys {glyph('separator')} {in_status}"
         )
         result.setdefault("advice", advice)
     else:

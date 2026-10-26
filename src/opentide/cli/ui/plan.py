@@ -38,7 +38,7 @@ _ROWS: dict[str, tuple[str, str, str]] = {
 }
 
 
-def _short_uuid(uuid: str, encoding: str = "utf-8") -> str:
+def short_uuid(uuid: str, encoding: str = "utf-8") -> str:
     """The UUID's tail, after ``…`` (``...`` on a stream that cannot encode it)."""
     if len(uuid) <= 12:
         return uuid
@@ -96,7 +96,7 @@ def plan_view(
                     (
                         Text(f"{glyph(name, encoding=encoding)} {label}", style=style),
                         Text(str(row.get("name") or row["uuid"]), style="bold"),
-                        Text(_short_uuid(str(row["uuid"]), encoding), style="dim"),
+                        Text(short_uuid(str(row["uuid"]), encoding), style="dim"),
                         Text(f"status {row['status']}" if row.get("status") else "", style="dim"),
                     )
                 )

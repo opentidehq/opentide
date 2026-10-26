@@ -692,7 +692,7 @@ def test_an_empty_plan_counts_the_rules_a_status_kept_out() -> None:
     assert result["status"] == "skipped"
     assert result["message"] == EMPTY_SELECTION
     assert result["_outcome"] == (
-        "no rule has a status PREVIEW deploys · 3 rules left out: 2 in DESIGN, 1 in DISABLED"
+        "No rule has a status PREVIEW deploys · 3 rules left out: 2 in DESIGN, 1 in DISABLED"
     )
     assert result["advice"] == (
         "set a platform block's status to DEVELOPMENT or STAGING for PREVIEW to deploy it"
